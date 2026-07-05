@@ -1,0 +1,147 @@
+########################################################################
+# se_CURRENCY_STRESS.txt — GENERIC currency-stress engine.
+#
+# Factored out of the Qing "silver drain" mechanic (se_QING_DECLINE.txt) so that
+# ANY monetary economy can carry a currency-health stress meter without
+# duplicating the transfer function. The Qing suite used to own this logic in a
+# silo; it now extends the primitives below. It owns exactly two O(1) effects:
+#
+#   CURR_STRESS_update   { counter }        drift a 0..100 stress counter toward
+#                                           the live reserve ratio
+#   CURR_STRESS_classify { counter  out }   map the counter to a band level
+#                                           0 = calm, 1 = strain, 2 = crisis
+#
+# DESIGN SEAM: neither effect names a modifier or an event. The CONSUMER owns the
+# flavour — which modifier a band applies, which event a band fires. This is why
+# the generic core can be shared: it computes "how stressed" and "which band",
+# and the caller (the Qing decline suite, or any future generic crisis layer)
+# maps that band onto its own modifiers. Modifier NAMES are deliberately kept out
+# of the parameter list because parameterized modifier names are not a proven
+# construct in this codebase (parameterized VARIABLE names — used here — are).
+#
+# The health signal is CURRENCY_reserve_ratio_impact (CURRENCY_svalues.txt:376),
+# a 0..1 country script value (1 = fully backed / healthy, 0 = reserves drained).
+# All reads are O(1) counter / script-value reads — no pop or province sweeps —
+# which is why this is cheap enough to run on a throttled pulse.
+#
+#   ROOT / this = the country carrying the meter
+# Prefix = CURR_STRESS · sys tag = ECON
+########################################################################
+
+# ---- clamped-counter nudge -------------------------------------------
+# Generic 0..100 counter nudge (the same idiom as QING_DECLINE_nudge, logged
+# under sys = ECON since currency stress is an economic signal). Self-initialises
+# the counter to 0 if unset. Scope: country. $counter$ = var name, $amount$ = int.
+CURR_STRESS_nudge = {
+	if = {
+		limit = { NOT = { has_variable = $counter$ } }
+		set_variable = { name = $counter$  value = 0 }
+	}
+	change_variable = { name = $counter$  add = $amount$ }
+	if = { limit = { var:$counter$ > 100 }  set_variable = { name = $counter$  value = 100 } }
+	if = { limit = { var:$counter$ < 0 }    set_variable = { name = $counter$  value = 0 } }
+	LOG_line = { sys = ECON  msg = "curr_stress counter $counter$ += $amount$ -> [ROOT.MakeScope.GetVariable('$counter$').GetValue|0] for [ROOT.GetTag]" }
+}
+
+# ---- reserve-health -> stress drift ----------------------------------
+# Reads the live reserve ratio and drifts $counter$ toward it: a ratio below the
+# half-way mark pushes stress up (+2), a healthy ratio bleeds it down (-1) — the
+# same smooth, event-cheap blend the Qing meter used. No-op for a country with no
+# monetary economy (no official_currency). Scope: country.
+CURR_STRESS_update = {
+	if = {
+		limit = { has_variable = official_currency }
+		# Stage the 0..1 health signal into a scratch var, then compare (mirrors
+		# the proven staging pattern; script values are readable into a var this way).
+		set_variable = {
+			name = CURR_STRESS_reserve_health_tmp
+			value = CURRENCY_reserve_ratio_impact
+		}
+		if = {
+			limit = { var:CURR_STRESS_reserve_health_tmp < 0.5 }
+			CURR_STRESS_nudge = { counter = $counter$  amount = 2 }
+		}
+		else = {
+			CURR_STRESS_nudge = { counter = $counter$  amount = -1 }
+		}
+		remove_variable = CURR_STRESS_reserve_health_tmp
+	}
+}
+
+# ---- band classification ---------------------------------------------
+# Writes 0 / 1 / 2 into $out$ from the $counter$ thresholds (>=60 crisis,
+# >=30 strain, else calm). The consumer reads $out$ and applies its own
+# modifiers / events. Self-safe if $counter$ is unset (treated as 0 -> calm).
+# Scope: country.
+CURR_STRESS_classify = {
+	set_variable = { name = $out$  value = 0 }
+	if = {
+		limit = { has_variable = $counter$ }
+		if = {
+			limit = { var:$counter$ >= 60 }
+			set_variable = { name = $out$  value = 2 }
+		}
+		else_if = {
+			limit = { var:$counter$ >= 30 }
+			set_variable = { name = $out$  value = 1 }
+		}
+	}
+}
+
+# ======================================================================
+# GENERIC CONSUMER — the default currency-crisis layer for every monetary
+# economy that is NOT the Qing (the Qing suite has its own flavoured consumer in
+# se_QING_DECLINE.txt that extends the same primitives above). This owns the
+# generic meter var (currency_stress), the generic bands (00_currency.txt), and
+# the generic crisis events (currency_crisis.*). Excludes CHI so the two layers
+# never both act on the same country.
+# ======================================================================
+
+# Map the shared band level onto the GENERIC modifiers. Scope: country.
+CURR_STRESS_apply_generic_band = {
+	CURR_STRESS_classify = { counter = currency_stress  out = currency_stress_band_tmp }
+	remove_country_modifier = currency_reserve_strain
+	remove_country_modifier = currency_reserve_crisis
+	if = {
+		limit = { var:currency_stress_band_tmp = 2 }
+		add_country_modifier = { name = currency_reserve_crisis  duration = -1 }
+		LOG_line = { sys = ECON  msg = "band currency = reserve_crisis for [ROOT.GetTag] (stress=[ROOT.MakeScope.GetVariable('currency_stress').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:currency_stress_band_tmp = 1 }
+		add_country_modifier = { name = currency_reserve_strain  duration = -1 }
+		LOG_line = { sys = ECON  msg = "band currency = reserve_strain for [ROOT.GetTag] (stress=[ROOT.MakeScope.GetVariable('currency_stress').GetValue|0])" }
+	}
+	remove_variable = currency_stress_band_tmp
+}
+
+# The generic pulse: one O(1) call per monetary economy. Drift the meter, apply
+# the band, and offer the crisis event once when the meter first crosses into
+# crisis (guarded by a cooldown so it is eventful, not spammy). Scope: country.
+# Called from monthly_currency_pulse for every non-CHI country with a currency.
+CURR_STRESS_pulse = {
+	if = {
+		limit = {
+			has_variable = official_currency
+			NOT = { tag = CHI }   # the Qing carry their own flavoured meter
+			# throttle to a quarterly drift, matching the Qing meter's cadence and
+			# keeping the per-country monthly cost near zero (2 of every 3 months
+			# are a single has_variable check and out).
+			NOT = { has_variable = currency_stress_pulse_cooldown }
+		}
+		set_variable = { name = currency_stress_pulse_cooldown  days = 90 }
+		CURR_STRESS_update = { counter = currency_stress }
+		CURR_STRESS_apply_generic_band = yes
+		# Offer the crisis event once per cooldown when in the crisis band.
+		if = {
+			limit = {
+				has_variable = currency_stress
+				var:currency_stress >= 60
+				NOT = { has_variable = currency_crisis_cooldown }
+			}
+			set_variable = { name = currency_crisis_cooldown  days = 365 }
+			LOG_line = { sys = ECON  msg = "currency crisis band reached -> offer currency_crisis.1 for [ROOT.GetTag]" }
+			trigger_event = { id = currency_crisis.1  days = { 5 20 } }
+		}
+	}
+}

@@ -1,0 +1,182 @@
+########################################################################
+# se_ECON_LOG.txt — economic diagnostic tracing.
+#
+# A thin, domain-specific wrapper over the se_LOG module (sys = ECON). Its job
+# is to make the economy pipeline OBSERVABLE: the big trade/currency/wealth
+# effects run with no tracing, so a wrong quarterly number has nothing to grep.
+# This module emits a compact, greppable per-country snapshot each quarter plus
+# phase-boundary markers, so a -debug_mode session produces a trace we can read.
+#
+# IMPORTANT: every line here ultimately calls se_LOG's debug_log, which ONLY
+# outputs under the -debug_mode launch option. In a normal session this whole
+# module is a silent no-op — zero file I/O, zero string formatting. It cannot
+# affect gameplay and cannot regress performance.
+#
+# Extract just the economic trace with:
+#     grep "\[IMP19C\]\[ECON\]" debug.log > econ_trace.log
+# Isolate a slice, e.g. the per-country snapshots:
+#     grep "\[IMP19C\]\[ECON\] \[SNAP\]" debug.log
+#
+# SYNTAX NOTE: inside a debug_log effect the only verified-working promptable
+# form for a scripted variable is the same one used across the Qing suite:
+#     [ROOT.MakeScope.GetVariable('name').GetValue|0]
+# (The Player.MakeScope / GuiScope forms seen in GUI tooltips are a GUI context
+# and are NOT valid here.) So every value below is first STAGED into a ROOT
+# temp variable via ordinary cross-scope reads, then logged in that form, then
+# cleaned up. Temp vars are prefixed ECON_LOG_tmp_ and always removed.
+#
+#   ROOT / this = the country being traced
+# Prefix = ECON_LOG · sys tag = ECON
+########################################################################
+
+# ======================================================================
+# PHASE MARKERS — cheap ENTER/EXIT lines to bracket a pipeline stage, so the
+# trace shows the order stages actually ran and where one aborted. Pass the
+# stage name in $stage$. Called from the quarterly on_action chain.
+# ======================================================================
+ECON_LOG_phase_enter = {
+	# Scope: any
+	LOG_enter = { sys = ECON  fn = "$stage$" }
+}
+
+ECON_LOG_phase_exit = {
+	# Scope: any
+	LOG_exit = { sys = ECON  fn = "$stage$"  result = OK }
+}
+
+# ======================================================================
+# COUNTRY SNAPSHOT — treasury + national private wealth + whether the country
+# runs a monetary economy. Country scope. Reads only already-computed state.
+# WEALTH_total_private_moveable_wealth is the national-wealth var cached by
+# WEALTH_cache_national_wealth (se_ECON_wealth.txt:6), so this must be called
+# AFTER that cache in the quarterly pulse (it is — see wire-up).
+# ======================================================================
+ECON_LOG_country_snapshot = {
+	# Scope: country
+	# stage treasury (readable as a plain value — se_INCOME.txt:469) and wealth
+	set_variable = { name = ECON_LOG_tmp_treasury  value = treasury }
+	set_variable = { name = ECON_LOG_tmp_wealth    value = 0 }
+	if = {
+		limit = { has_variable = WEALTH_total_private_moveable_wealth }
+		set_variable = { name = ECON_LOG_tmp_wealth  value = var:WEALTH_total_private_moveable_wealth }
+	}
+	LOG_line = {
+		sys = ECON
+		msg = "[SNAP] [ROOT.GetTag] treasury=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_treasury').GetValue|0] natl_wealth=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_wealth').GetValue|0]"
+	}
+	remove_variable = ECON_LOG_tmp_treasury
+	remove_variable = ECON_LOG_tmp_wealth
+}
+
+# ======================================================================
+# JOBS SNAPSHOT — employment used vs unemployed, aggregated across owned
+# provinces. Country scope. Uses the inline "value = 0 ... every_owned_province
+# = { add }" accumulation idiom (JOBS_svalues.txt:198). JOBS_num_used_slots and
+# JOBS_unemployed_pops_province are province-scope script values
+# (JOBS_svalues.txt:346/:351).
+# ======================================================================
+ECON_LOG_jobs_snapshot = {
+	# Scope: country
+	set_variable = {
+		name = ECON_LOG_tmp_used
+		value = 0
+		every_owned_province = {
+			add = JOBS_num_used_slots
+		}
+	}
+	set_variable = {
+		name = ECON_LOG_tmp_unemployed
+		value = 0
+		every_owned_province = {
+			add = JOBS_unemployed_pops_province
+		}
+	}
+	LOG_line = {
+		sys = ECON
+		msg = "[JOBS] [ROOT.GetTag] used=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_used').GetValue|0] unemployed=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_unemployed').GetValue|0]"
+	}
+	remove_variable = ECON_LOG_tmp_used
+	remove_variable = ECON_LOG_tmp_unemployed
+}
+
+# ======================================================================
+# CURRENCY SNAPSHOT — the country's official currency backing value and
+# purchasing power, read off the currency province via the confirmed cross-
+# scope form var:official_currency.var:X (cf. se_INCOME.txt:544). Only countries
+# with a monetary economy have official_currency; others log a NONE line so the
+# trace still records that the country was visited.
+# ======================================================================
+ECON_LOG_currency_snapshot = {
+	# Scope: country
+	if = {
+		limit = { has_variable = official_currency }
+		set_variable = { name = ECON_LOG_tmp_backing  value = 0 }
+		set_variable = { name = ECON_LOG_tmp_pp        value = 0 }
+		if = {
+			limit = { var:official_currency = { has_variable = backing_value } }
+			set_variable = { name = ECON_LOG_tmp_backing  value = var:official_currency.var:backing_value }
+		}
+		if = {
+			limit = { var:official_currency = { has_variable = purchasing_power } }
+			set_variable = { name = ECON_LOG_tmp_pp  value = var:official_currency.var:purchasing_power }
+		}
+		LOG_line = {
+			sys = ECON
+			msg = "[CURR] [ROOT.GetTag] backing=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_backing').GetValue|0] purchasing_power=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_pp').GetValue|0]"
+		}
+		remove_variable = ECON_LOG_tmp_backing
+		remove_variable = ECON_LOG_tmp_pp
+	}
+	else = {
+		LOG_line = { sys = ECON  msg = "[CURR] [ROOT.GetTag] no official currency (metal/barter economy)" }
+	}
+}
+
+# ======================================================================
+# QUARTER — the single composite call the pulse makes per country. Country
+# scope. Guarded by ECON_LOG_enabled so the whole snapshot can be toggled from
+# one place at zero cost even when running in -debug_mode (avoids trace spam
+# when only phase markers are wanted). The guard variable is optional: if never
+# set, snapshots run whenever -debug_mode is on (the debug_log gate still applies).
+# ======================================================================
+ECON_LOG_quarter = {
+	# Scope: country
+	ECON_LOG_country_snapshot = yes
+	ECON_LOG_jobs_snapshot = yes
+	ECON_LOG_currency_snapshot = yes
+}
+
+# ======================================================================
+# PRODUCTION SNAPSHOT (#72) — the quarterly goods-production path
+# (GOODS_governorship_produce_all in se_GOODS.txt) previously ran with ZERO
+# tracing despite being bracketed by the "quarterly_production" phase markers,
+# so a wrong or zeroed production number had nothing to grep. This logs, per
+# governorship, the cached industrialisation multiplier (the value the divide-
+# by-zero fix #70 guards and the cache #71 stores) plus a couple of
+# representative stockpile totals, so the trace records what production actually
+# saw. Governorship scope. Reads only already-computed state; silent no-op
+# outside -debug_mode like the rest of this module.
+# ======================================================================
+ECON_LOG_production_snapshot = {
+	# Scope: country. Aggregates the per-governorship cached industrialisation
+	# multiplier (the value #70 guards against divide-by-zero and #71 caches) across
+	# the country's governorships into ROOT temp vars, then logs via the verified
+	# ROOT.MakeScope form (the only promptable form confirmed to work here — see the
+	# SYNTAX NOTE at the top of this file; This/Player/GuiScope forms are NOT valid).
+	# So production now has a greppable per-country line where it had none.
+	set_variable = { name = ECON_LOG_tmp_gov_count  value = 0 }
+	set_variable = { name = ECON_LOG_tmp_bonus_sum  value = 0 }
+	every_governorships = {
+		limit = { has_variable = industrialisation_bonus_cached }
+		root = {
+			change_variable = { name = ECON_LOG_tmp_gov_count  add = 1 }
+			change_variable = { name = ECON_LOG_tmp_bonus_sum   add = prev.var:industrialisation_bonus_cached }
+		}
+	}
+	LOG_line = {
+		sys = ECON
+		msg = "[PROD] [ROOT.GetTag] governorships_producing=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_gov_count').GetValue|0] summed_industrialisation_bonus=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_bonus_sum').GetValue|0]"
+	}
+	remove_variable = ECON_LOG_tmp_gov_count
+	remove_variable = ECON_LOG_tmp_bonus_sum
+}
