@@ -224,3 +224,22 @@ Audit agent verdict: no CRITICAL; mechanism sound (progress clamped [0..5], puls
 - **MEDIUM (FIXED):** zombie-subject reaction. At progress 5, SUBJ_QING_advance_integration absorbs the subject inline (LAND_transfer_provinces empties it) but the integrate button THEN calls SUBJ_QING_roll_reaction guarded only by is_subject_of=ROOT — true for the landless tag in the same tick before engine cleanup, scheduling qing_integ.* whose .a re-advances integration → stuck loop / broken portrait. FIX: guarded the roll_reaction chokepoint (exists + is_subject_of + any_owned_province count>=1) with an else LOG_fail. Central fix covers the button + any future caller; the ambient pulse was already safe (absorb clears SUBJ_integration_active which the pulse filters on). My own code → new-feature tier.
 - **LOW (FIXED):** added else-LOG_fail guard-miss branches to reduce/suspend/resume_integration (standing log rule; were silent no-ops).
 - **LOW (ACCEPTED, not fixed):** (a) promote/demote/incorporate charge influence before the rung if/else chain, so an unreachable-via-is_shown else would charge for a no-op — accepted because is_shown makes it unreachable and re-verifying risks the common path; (b) event top-level portrait/goto scopes lack exists-guards for the 3-10d annex window — the zombie primary-trigger is now closed by the roll guard; residual is cosmetic/rare.
+
+## #80 Napoleon rework — AMHERST-ANCHORED KICKOFF ARC (2026-07-05)
+Reworked the #65 Emperor Emeritus (Napoleon at the Qing court) chain so Napoleon's arrival is no longer conjured by the frontier flavour roll, but reached through a historically-anchored embassy arc.
+
+**New flow:** RECEIVE the Amherst embassy (qing_embassy.2) -> qing_napoleon.5 "A Word of Waterloo" (envoy mentions Waterloo, court expresses interest) -> qing_napoleon.6 "The Rock in the Southern Ocean" (envoy calls at St Helena — as Amherst historically did in 1817 — relays invitation to Napoleon AND London, who humour the Qing hoping for the influence the embassy failed to win) -> qing_napoleon.1 reframed: Napoleon comes for a "brief" visit, is captivated, resolves to STAY at Qing invitation, Britain hesitantly consents -> existing .2/.3/.4 chain.
+
+**Changes:**
+- events/qing_napoleon_events.txt (BOM,LF): ADDED qing_napoleon.5 + .6; reframed .1 (comes-to-stay, .1.b now "let him return to St Helena" not "turned away"); header + section comments rewritten.
+- localization/qing_napoleon_l_english.yml (BOM,LF): reframed .1.desc/.1.b/.1.b.tt; ADDED .5.*/.6.* keys; header chain-flow updated.
+- events/qing_embassy_events.txt (no-BOM,LF): hooked qing_napoleon.5 onto the Amherst (.2) receive option. Macartney (.1) marked NO-LONGER-FIRED (1793 predates the 1815 start — user note); definition retained as legacy, referenced narratively in Amherst text.
+- se_QING_DECLINE.txt (no-BOM,LF): removed the flavour-roll direct spawn of qing_napoleon.1 (replaced w/ explanatory comment); British embassy roll now offers ONLY Amherst (.2), not a Macartney/Amherst coin-flip.
+
+**Code-review (code-review agent) findings addressed:**
+- MEDIUM (FIXED): downstream date guards could strand the chain. The <1821.5.5 window guard was on .5 AND .6 AND .1, but .5->.6 (60-150d) + .6->.1 (90-200d) delays span ~1yr; a late-window Amherst reception could schedule .6/.1 past the guard, silently dead-ending a promised arrival. FIX: removed current_date guard from .6 and .1 — the overture (.5) is now the SOLE early-window gate; once committed the chain runs to completion, once-only held by NOT qing_napoleon_arrived.
+- LOW (FIXED): stale ".1 re-check the roll's guards" comment + .yml header doc-drift both corrected.
+- Confirmed sound by review: once-only guards, no double-fire, all loc keys resolve, scope safety (no right_portrait before Napoleon exists), se_QING_DECLINE cleanup complete.
+
+Validation: brace balance OK on all 3 script files; byte conventions (BOM/LF) preserved per file; 10 new loc keys present. My own session-authored feature -> ordinary new-feature tier.
+
