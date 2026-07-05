@@ -239,3 +239,100 @@ QING_MIGR_move_one_nomad = {
 		LOG_line = { sys = QING  msg = "nomad in-gathering: no steppe source pop left to move; spawned a tribesmen pop at [scope:qing_nomad_dest.GetName] (fallback)" }
 	}
 }
+
+# ======================================================================
+# NEW WORLD CROP CARRYING-CAPACITY SWEEP (#78, 2026-07-05).
+# The structural half of the crop→population coupling. The narrative boom
+# (qing_migration.20/.21/.22 + qing_migr_crop_boom) already drives empire-wide
+# GROWTH; this stamps the per-province CAPACITY lift (qing_nwcrop_abundance,
+# local_population_capacity) on every province that actually grows a New World
+# food crop, so the extra people have somewhere to live instead of hitting the
+# ceiling. Capacity is a property of the CROP (calorie-dense, thrives on marginal
+# land) not the polity, so the sweep is GLOBAL — the Qing boom emerges naturally
+# because the crop provinces are overwhelmingly Chinese.
+#
+# IDEMPOTENT + SELF-CORRECTING: adds the modifier where a crop is grown and it is
+# missing; removes it where present but the good has since changed (colonisation
+# re-seeding, land transfer). Safe to re-run any number of times. Scope: none
+# needed (global every_province) — call bare: QING_COLON_apply_nwcrop_capacity = yes
+# ======================================================================
+QING_COLON_apply_nwcrop_capacity = {
+	LOG_enter = { sys = QING  fn = QING_COLON_apply_nwcrop_capacity }
+	every_province = {
+		limit = {
+			OR = {
+				trade_goods = maize
+				trade_goods = sweet_potato
+				trade_goods = potato
+				trade_goods = peanut
+				trade_goods = chili
+			}
+			NOT = { has_province_modifier = qing_nwcrop_abundance }
+		}
+		add_province_modifier = { name = qing_nwcrop_abundance  duration = -1 }
+		LOG_line = { sys = QING  msg = "NWCROP capacity lift applied to [this.GetName] (grows [this.GetTradeGoods.GetName])" }
+	}
+	# lift the modifier from any province that no longer grows a New World crop
+	# (e.g. a re-seeded / transferred province) so it never lingers falsely
+	every_province = {
+		limit = {
+			has_province_modifier = qing_nwcrop_abundance
+			NOR = {
+				trade_goods = maize
+				trade_goods = sweet_potato
+				trade_goods = potato
+				trade_goods = peanut
+				trade_goods = chili
+			}
+		}
+		remove_province_modifier = qing_nwcrop_abundance
+		LOG_line = { sys = QING  msg = "NWCROP capacity lift removed from [this.GetName] (no longer a New World crop)" }
+	}
+	LOG_exit = { sys = QING  fn = QING_COLON_apply_nwcrop_capacity  result = OK }
+}
+
+# ======================================================================
+# COLONISATION → CROP-SPREAD ACCELERATOR (#78, 2026-07-05).
+# "Qing colonisation of the New World accelerates the historical trend" — the
+# trend being the crops spreading THROUGH CHINA. On a New World colonisation
+# milestone, a handful of MARGINAL heartland provinces take up the sweet potato
+# (historically the marginal hill-land crop, Chen Zhenlong's introduction), which
+# both represents the crops physically spreading and — via the capacity sweep
+# below — raises those provinces' ceilings, accelerating the boom.
+#
+# CONSERVATIVE + STAPLE-SAFE: converts only livestock / wood provinces (never
+# grain/rice/wheat — the staple breadbasket must stay intact) and only $count$ of
+# them, so it nudges the trend without rebalancing the food supply. Runtime
+# set_trade_goods is a proven province effect (used in oa_economy_setup.txt).
+# Re-runs the capacity sweep so the freshly-seeded provinces get their lift.
+# ROOT = CHI. Args: count = how many marginal provinces to convert (keep small).
+# ======================================================================
+QING_COLON_spread_newworld_crops = {
+	LOG_enter = { sys = QING  fn = "QING_COLON_spread_newworld_crops x$count$" }
+	if = {
+		limit = {
+			any_owned_province = {
+				is_capital = no
+				OR = { trade_goods = livestock  trade_goods = wood }
+			}
+		}
+		ordered_owned_province = {
+			limit = {
+				is_capital = no
+				OR = { trade_goods = livestock  trade_goods = wood }
+			}
+			# prefer the more crowded marginal provinces — where the hill-land crop
+			# bites hardest historically
+			order_by = total_population
+			max = $count$
+			set_trade_goods = sweet_potato
+			LOG_line = { sys = QING  msg = "NWCROP spread: [this.GetName] takes up the sweet potato (colonisation) for [ROOT.GetTag]" }
+		}
+		# stamp the capacity lift on the newly-converted provinces (and reconcile all)
+		QING_COLON_apply_nwcrop_capacity = yes
+		LOG_exit = { sys = QING  fn = QING_COLON_spread_newworld_crops  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = QING_COLON_spread_newworld_crops  reason = "no marginal (livestock/wood) heartland province to convert for [ROOT.GetTag]" }
+	}
+}
