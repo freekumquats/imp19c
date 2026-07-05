@@ -266,6 +266,10 @@ SUBJ_QING_reduce_integration = {
 			}
 		}
 	}
+	else = {
+		# audit-fix (#79): trace the guard-miss instead of silently no-op'ing
+		LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_reduce_integration"  reason = "scope:target does not exist" }
+	}
 }
 
 # Suspend the process (scope: country, scope:target = subject).
@@ -276,6 +280,10 @@ SUBJ_QING_suspend_integration = {
 			set_variable = { name = SUBJ_integration_suspended  value = 1 }
 			LOG_line = { sys = SUBJ  msg = "integration SUSPENDED subject=[this.GetTag]" }
 		}
+	}
+	else = {
+		# audit-fix (#79): trace the guard-miss instead of silently no-op'ing
+		LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_suspend_integration"  reason = "scope:target does not exist" }
 	}
 }
 
@@ -293,6 +301,10 @@ SUBJ_QING_resume_integration = {
 			set_variable = { name = SUBJ_integration_active  value = 1 }
 			LOG_line = { sys = SUBJ  msg = "integration RESUMED subject=[this.GetTag]" }
 		}
+	}
+	else = {
+		# audit-fix (#79): trace the guard-miss instead of silently no-op'ing
+		LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_resume_integration"  reason = "scope:target does not exist" }
 	}
 }
 
@@ -325,6 +337,22 @@ SUBJ_QING_add_integration = {
 # $ambient$ = yes on the pulse (adds a "nothing happens" weight so quiet years
 # are common); omit / no when called right after a deliberate push.
 SUBJ_QING_roll_reaction = {
+	# audit-fix (#79, subject rework): guard the reaction chokepoint against a
+	# ZOMBIE subject. When integration reaches 5, SUBJ_QING_advance_integration
+	# calls SUBJ_QING_absorb_subject inline (transferring away all provinces), and
+	# the integrate button THEN calls roll_reaction guarded only by is_subject_of.
+	# In the same tick the just-emptied subject can still test is_subject_of=ROOT
+	# before the engine deletes the landless country, so a reaction would schedule
+	# qing_integ.* on a dying tag (whose .a option re-advances integration →
+	# stuck loop / broken portrait). Requiring a live province closes that window;
+	# it also protects any future caller (the ambient pulse already filters on
+	# SUBJ_integration_active, which absorb clears, so the pulse was already safe).
+	if = {
+		limit = {
+			exists = scope:target
+			scope:target = { is_subject_of = ROOT }
+			scope:target = { any_owned_province = { count >= 1 } }
+		}
 	LOG_line = {
 		sys = SUBJ
 		msg = "roll_reaction overlord=[ROOT.GetTag] subject=[scope:target.GetTag] ambient=$ambient$"
@@ -375,6 +403,10 @@ SUBJ_QING_roll_reaction = {
 			LOG_line = { sys = SUBJ  msg = "reaction=FESTIVAL(qing_integ.21) subject=[scope:target.GetTag]" }
 			trigger_event = { id = qing_integ.21  days = { 3 10 } }
 		}
+	}
+	}
+	else = {
+		LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_roll_reaction"  reason = "target missing, no longer a subject, or landless (post-absorb) — reaction suppressed" }
 	}
 }
 
