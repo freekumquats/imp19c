@@ -38,6 +38,24 @@
 # ENTRY — run once per country per decade pulse. ROOT / this = the country.
 # ======================================================================
 MIGRATION_country_pulse = {
+	# FRICTION DECAY (light): our own provinces cool one notch of accumulated
+	# migrant-influx strain each decade. A province still receiving newcomers
+	# gains faster than this bleeds (arrival = +2, decay = -1), so sustained
+	# migration escalates while a burst that stops fades and its strain
+	# modifiers lapse. Guarded on has_variable so it costs nothing on the
+	# overwhelming majority of provinces that never received a foreign influx.
+	#
+	# audit-fix (#79, migration LOW): the decay loop runs UNCONDITIONALLY, not
+	# nested in the num_of_provinces >= 2 emigration guard below. A province that
+	# accrued migr_influx + a migration_strain modifier and then ended up owned by
+	# a one-province micro-state would otherwise never decay — freezing the strain
+	# modifier and influx tally forever. Decay must not depend on the owner being
+	# large enough to also SHED emigrants.
+	every_owned_province = {
+		limit = { has_variable = migr_influx }
+		MIGRATION_decay_border_friction = yes
+	}
+
 	# Skip countries too small or empty to have meaningful internal movement.
 	if = {
 		limit = {
@@ -45,17 +63,6 @@ MIGRATION_country_pulse = {
 			num_of_provinces >= 2
 		}
 		LOG_enter = { sys = MIGR  fn = MIGRATION_country_pulse }
-
-		# FRICTION DECAY (light): our own provinces cool one notch of accumulated
-		# migrant-influx strain each decade. A province still receiving newcomers
-		# gains faster than this bleeds (arrival = +2, decay = -1), so sustained
-		# migration escalates while a burst that stops fades and its strain
-		# modifiers lapse. Guarded on has_variable so it costs nothing on the
-		# overwhelming majority of provinces that never received a foreign influx.
-		every_owned_province = {
-			limit = { has_variable = migr_influx }
-			MIGRATION_decay_border_friction = yes
-		}
 
 		# The worst-off provinces we own are where people start leaving from.
 		ordered_owned_province = {
@@ -85,6 +92,7 @@ MIGRATION_country_pulse = {
 #   this = the source province (owned by the pulsing country).
 # ======================================================================
 MIGRATION_try_emigrate_from_province = {
+	LOG_enter = { sys = MIGR  fn = "MIGRATION_try_emigrate_from_province" }   # audit-fix (#79): standing LOG rule
 	save_scope_as = migr_source
 	LOG_line = { sys = MIGR  msg = "migration: evaluating emigration from [this.GetName] ([ROOT.GetTag]); no subsequent move line means no viable destination qualified" }
 
@@ -167,6 +175,7 @@ MIGRATION_try_emigrate_from_province = {
 		# Did the newcomers reshape the destination? If so, settler colonialism.
 		MIGRATION_seed_claim_if_flipped = yes
 	}
+	LOG_exit = { sys = MIGR  fn = "MIGRATION_try_emigrate_from_province"  result = OK }   # audit-fix (#79)
 }
 
 # ======================================================================
@@ -181,6 +190,7 @@ MIGRATION_try_emigrate_from_province = {
 #   TIER 3 (influx >=5)  BREAKING POINT — a diplomatic play, then bleed back down
 # ======================================================================
 MIGRATION_border_friction_on_arrival = {
+	LOG_enter = { sys = MIGR  fn = "MIGRATION_border_friction_on_arrival" }   # audit-fix (#79): standing LOG rule
 	save_scope_as = migr_friction_prov
 	owner = { save_scope_as = migr_receiver }        # the state receiving the influx
 	ROOT = { save_scope_as = migr_sender }           # the state the pop left (pulsing country)
@@ -235,6 +245,7 @@ MIGRATION_border_friction_on_arrival = {
 		MIGRATION_border_friction_opinions = yes
 		LOG_line = { sys = MIGR  msg = "border friction: modest strain in [this.GetName] (influx from [scope:migr_sender.GetTag])" }
 	}
+	LOG_exit = { sys = MIGR  fn = "MIGRATION_border_friction_on_arrival"  result = OK }   # audit-fix (#79)
 }
 
 # Two-way relations knock between the receiving and sending governments. Mild and
@@ -250,6 +261,7 @@ MIGRATION_border_friction_opinions = {
 		scope:migr_sender = {
 			add_opinion = { modifier = migrant_emigration_opinion  target = scope:migr_receiver }
 		}
+		LOG_line = { sys = MIGR  msg = "border friction: two-way opinion knock [scope:migr_receiver.GetTag]<->[scope:migr_sender.GetTag]" }   # audit-fix (#79): standing LOG rule
 	}
 }
 
@@ -293,30 +305,37 @@ MIGRATION_border_friction_breaking_point = {
 					primary_culture = scope:migr_friction_prov.dominant_province_culture
 					NOT = { this = scope:migr_receiver }
 				}
+				# audit-fix (#79, migration MEDIUM): launch the play INSIDE the
+				# random_country block (as the seed-claim paths do), NOT in a sibling
+				# `if exists = scope:migr_irredentist`. Saved scopes persist for the whole
+				# on_action execution and are NOT cleared between provinces, so a sibling
+				# exists-check could read a PRIOR flipped province's stale migr_irredentist
+				# and fire a play with the wrong claimant when a later breaking point in the
+				# same pulse found no kin-state. Acting inside random_country runs the launch
+				# only on a genuine match this iteration; the found_kin flag drives the
+				# clean-fail log for the no-match case.
 				save_scope_as = migr_irredentist
+				root = { set_variable = { name = migr_found_irredentist_kin  value = 1 } }
+				LOG_line = { sys = MIGR  msg = "BREAKING POINT (irredentist): settlers of [scope:migr_irredentist.GetTag]'s culture now dominate [scope:migr_friction_prov.GetName]; [scope:migr_irredentist.GetTag] presses a play vs [scope:migr_receiver.GetTag]" }
+				AI_begin_diplomatic_play = {
+					play_instigator = scope:migr_irredentist
+					play_target_area = scope:migr_friction_prov
+					play_target_country = scope:migr_receiver
+					play_goal = flag:get_territory
+					play_type = manual
+				}
+				# years of settler pressure already back this aim: open with a baseline
+				# success head-start (still below the fizzle floor) rather than cold.
+				DIPLOMACY_seed_feature_play_success = yes
 			}
 			if = {
-				limit = { exists = scope:migr_irredentist }
-				LOG_line = { sys = MIGR  msg = "BREAKING POINT (irredentist): settlers of [scope:migr_irredentist.GetTag]'s culture now dominate [this.GetName]; [scope:migr_irredentist.GetTag] presses a play vs [scope:migr_receiver.GetTag]" }
-				scope:migr_irredentist = {
-					AI_begin_diplomatic_play = {
-						play_instigator = scope:migr_irredentist
-						play_target_area = scope:migr_friction_prov
-						play_target_country = scope:migr_receiver
-						play_goal = flag:get_territory
-						play_type = manual
-					}
-					# years of settler pressure already back this aim: open with a baseline
-					# success head-start (still below the fizzle floor) rather than cold.
-					DIPLOMACY_seed_feature_play_success = yes
-				}
-			}
-			else = {
+				limit = { NOT = { has_variable = migr_found_irredentist_kin } }
 				# the flipped culture speaks for no state (or only for the owner):
 				# no coherent irredentist claimant — the strain + opinion hit stand,
 				# but no play fires.
 				LOG_fail = { sys = MIGR  fn = "MIGRATION_border_friction_breaking_point"  reason = "province flipped to a culture with no kin-state to press an irredentist play; opinions banked, no play" }
 			}
+			if = { limit = { has_variable = migr_found_irredentist_kin }  remove_variable = migr_found_irredentist_kin }
 		}
 		else = {
 			# NOT FLIPPED — a resented foreign minority who have NOT taken over; the
@@ -345,6 +364,7 @@ MIGRATION_border_friction_breaking_point = {
 # When the tally empties, drop the strain modifiers so a province whose influx has
 # stopped returns to calm. Scope: the owned province (has_variable = migr_influx).
 MIGRATION_decay_border_friction = {
+	LOG_enter = { sys = MIGR  fn = "MIGRATION_decay_border_friction" }   # audit-fix (#79): standing LOG rule
 	change_variable = { name = migr_influx  subtract = 1 }
 	if = {
 		limit = { var:migr_influx <= 0 }
@@ -362,6 +382,7 @@ MIGRATION_decay_border_friction = {
 		remove_province_modifier = migration_strain_high
 		add_province_modifier = { name = migration_strain  duration = 3650 }
 	}
+	LOG_exit = { sys = MIGR  fn = "MIGRATION_decay_border_friction"  result = OK }   # audit-fix (#79)
 }
 
 # ======================================================================
@@ -375,6 +396,7 @@ MIGRATION_decay_border_friction = {
 #   this = the destination province (scope:migr_dest).
 # ======================================================================
 MIGRATION_seed_claim_if_flipped = {
+	LOG_enter = { sys = MIGR  fn = "MIGRATION_seed_claim_if_flipped" }   # audit-fix (#79): standing LOG rule
 	if = {
 		limit = {
 			exists = owner
@@ -398,5 +420,27 @@ MIGRATION_seed_claim_if_flipped = {
 			}
 			LOG_line = { sys = MIGR  msg = "settler claim: [scope:migr_kin.GetTag] now claims [scope:migr_flip_prov.GetName] after its people became the plurality" }
 		}
+	}
+	LOG_exit = { sys = MIGR  fn = "MIGRATION_seed_claim_if_flipped"  result = OK }   # audit-fix (#79)
+}
+
+# ======================================================================
+# OWNERSHIP CHANGE — clear the state-set frontier pull when a province changes
+# hands. audit-fix (#79, migration LOW): migr_gov_pull is a durable PROVINCE
+# variable set by a state to attract settlers to its OWN frontier (se_QING_COLON
+# QING_COLON_frontier_pull[_here]). Nothing removed it, so if the frontier province
+# was later lost or transferred, the NEW owner inherited a permanent phantom +12
+# pull it never established — silently biasing the generic migration destination
+# score toward land the conqueror never developed. The incentive is the setting
+# state's, not the soil's, so it must not survive a change of owner. migr_gov_push
+# already has an explicit clear (QING_COLON_clear_heartland_push); this closes the
+# matching gap on the pull. Wired into on_ownership_change (00_specific_from_code).
+#   this = the province that just changed owner.
+# ======================================================================
+MIGRATION_on_ownership_change = {
+	if = {
+		limit = { has_variable = migr_gov_pull }
+		remove_variable = migr_gov_pull
+		LOG_line = { sys = MIGR  msg = "ownership change: cleared inherited frontier pull on [this.GetName] (state incentive does not transfer with the land)" }
 	}
 }
