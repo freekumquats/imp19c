@@ -322,34 +322,58 @@ DIPLOMACY_test_event = {
 
 DIPLOMACY_kickoff_play_event = {
 	# Saves 1 line in triggering play events when called in the random selection
+	LOG_enter = { sys = DIPLO  fn = "DIPLOMACY_kickoff_play_event" }
 	if = {
 		limit = {
 			$pov$ = c:BAR
 		}
-		random_in_list = {
-			variable = play_observers_support_target
-
-			save_scope_as = pov_scope
+		# audit-fix (#79, diplomacy): guard the empty-list case. If no country
+		# supports the target side, random_in_list leaves scope:pov_scope unset
+		# (or STALE from a prior play in the same update sweep), and the event
+		# would fire with the wrong/invalid POV. Fall back to the target country.
+		if = {
+			limit = { any_in_list = { variable = play_observers_support_target  count >= 1 } }
+			random_in_list = {
+				variable = play_observers_support_target
+				save_scope_as = pov_scope
+			}
+			DIPLOMACY_trigger_play_event = {
+				pov = scope:pov_scope
+				id = $id$
+				days = FUNC_random_days_month
+			}
 		}
-		DIPLOMACY_trigger_play_event = {
-			pov = scope:pov_scope
-			id = $id$
-			days = FUNC_random_days_month
+		else = {
+			DIPLOMACY_trigger_play_event = {
+				pov = var:play_target_country
+				id = $id$
+				days = FUNC_random_days_month
+			}
 		}
 	}
 	else_if = {
 		limit = {
 			$pov$ = flag:random_supporter_instigator
 		}
-		random_in_list = {
-			variable = play_observers_support_instigator
-
-			save_scope_as = pov_scope
+		# audit-fix (#79, diplomacy): same empty/stale-list guard, instigator side.
+		if = {
+			limit = { any_in_list = { variable = play_observers_support_instigator  count >= 1 } }
+			random_in_list = {
+				variable = play_observers_support_instigator
+				save_scope_as = pov_scope
+			}
+			DIPLOMACY_trigger_play_event = {
+				pov = scope:pov_scope
+				id = $id$
+				days = FUNC_random_days_month
+			}
 		}
-		DIPLOMACY_trigger_play_event = {
-			pov = scope:pov_scope
-			id = $id$
-			days = FUNC_random_days_month
+		else = {
+			DIPLOMACY_trigger_play_event = {
+				pov = var:play_instigator
+				id = $id$
+				days = FUNC_random_days_month
+			}
 		}
 	}
 	else = {
@@ -359,14 +383,15 @@ DIPLOMACY_kickoff_play_event = {
 			days = FUNC_random_days_month
 		}
 	}
-
+	LOG_exit = { sys = DIPLO  fn = "DIPLOMACY_kickoff_play_event"  result = OK }
 }
 
 DIPLOMACY_trigger_play_event = {
 	# Scope: Province
 	# Function Triggers the given $id$ event with all the necessary scopes for a diplomatic play event
-	
+
 	# TODO: Extend this to select an event random-weighted based on the conditions in the play, attitude of the foreign minister or ruler, and any other factors.
+	LOG_enter = { sys = DIPLO  fn = "DIPLOMACY_trigger_play_event" }
 
 	save_scope_as = diplomatic_play
 	var:play_target_country = {
@@ -409,7 +434,7 @@ DIPLOMACY_trigger_play_event = {
 			days = $days$
 		}
 	}
-	
+	LOG_exit = { sys = DIPLO  fn = "DIPLOMACY_trigger_play_event"  result = OK }
 }
 
 DIPLOMACY_notify_player = {
@@ -522,6 +547,14 @@ DIPLOMACY_modify_play_success = {
 				multiply = -1
 				# Add to 1
 				add = 1
+				# audit-fix (#79, diplomacy): floor the multiplier at a positive value.
+				# The formula is (2 - 1/balance); balance = instigator_power/target_power
+				# is clamped high (max 90) in se_AI but NOT low, so a weaker instigator
+				# (balance < 0.5) produced a ZERO or NEGATIVE multiplier — every positive
+				# success event got nulled/reversed and the play could never succeed.
+				# 0.25 keeps a weak instigator accruing success slowly (and bounds the
+				# negative-event divide branch below to a x4 penalty rather than a blow-up).
+				min = 0.25
 			}
 		}
 
@@ -632,8 +665,13 @@ DIPLOMACY_trigger_diplomatic_play_war = {
 			}
 	    }
 	}
-	# TODO: End the play
-	
+	# audit-fix (#79, diplomacy): tear the play down once it has been resolved by
+	# war. Previously the play's state (is_diplomatic_play + play_* vars) was left
+	# live, so DIPLOMACY_update_all_diplomatic_plays kept ticking it and, on
+	# reaching max progression, DIPLOMACY_complete_play would ADDITIONALLY hand out
+	# territory / subjugation on top of whatever the war produced. Reuse the same
+	# canonical teardown the completion path (#58) uses. Scope is the play province.
+	AI_remove_diplomatic_play = yes
 }
 
 DIPLOMACY_trigger_diplomatic_play_event = {
@@ -964,6 +1002,7 @@ DIPLOMACY_resolve_subjugate = {
 DIPLOMACY_add_state_foreign_influence = {
 	# Scope: State
 	# Function: Add influence from $influencer$ to the given state
+	LOG_enter = { sys = DIPLO  fn = "DIPLOMACY_add_state_foreign_influence" }
 	save_scope_as = target_state
 
 	set_variable = {
@@ -991,6 +1030,9 @@ DIPLOMACY_add_state_foreign_influence = {
 						multiply = 5
 					}
 				}
+				# audit-fix (#79, diplomacy): floor the denominator so a degenerate
+				# owner (0 population, 0 upper strata) can't divide-by-zero → NaN.
+				min = 1
 			}
 		}
 	}
@@ -1045,11 +1087,13 @@ DIPLOMACY_add_state_foreign_influence = {
 	}
 
 	# TODO: Trigger event explaining influence has been added
+	LOG_exit = { sys = DIPLO  fn = "DIPLOMACY_add_state_foreign_influence"  result = OK }
 }
 
 DIPLOMACY_remove_state_foreign_influence = {
 	# Scope: State
 	# Function: Remove a foreign influence from the state
+	LOG_enter = { sys = DIPLO  fn = "DIPLOMACY_remove_state_foreign_influence" }
 	save_scope_as = influenced_state
 	if = {
 		limit = {
@@ -1095,8 +1139,11 @@ DIPLOMACY_remove_state_foreign_influence = {
 
 		remove_variable = DIPLOMACY_influenced_by
 		remove_variable = DIPLOMACY_state_influence_percent_of_country
+		LOG_exit = { sys = DIPLO  fn = "DIPLOMACY_remove_state_foreign_influence"  result = OK }
 	}
-	
+	else = {
+		LOG_fail = { sys = DIPLO  fn = "DIPLOMACY_remove_state_foreign_influence"  reason = "state has no DIPLOMACY_influenced_by to remove" }
+	}
 }
 
 DIPLOMACY_test_influence_province = {
