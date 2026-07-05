@@ -1,0 +1,159 @@
+########################################################################
+# se_QING_SUMMER_PALACE.txt — THE GARDEN OF GARDENS (圓明園／頤和園, task #74).
+#
+# Verbs behind qing_summer_palace_missions.txt + qing_summer_palace_events.txt.
+# The imperial garden-palaces north-west of Beijing (Haidian, p:8363's capital
+# region): the 圓明園 raised by Qianlong, sacked by the Anglo-French in 1860, and
+# rebuilt by Cixi in 1888 as the 頤和園 with money taken from the Beiyang fleet.
+#
+# All verbs country-scope, ROOT = CHI. Every path logged sys = QING; guard-misses
+# emit LOG_fail so a silent no-op surfaces (standing error-logging rule).
+#
+#   ROOT / this = the Qing (CHI).
+#
+# Sources: Young-tsu Wong, A Paradise Lost (2001); Hevia, English Lessons (2003);
+#   on the navy-funds diversion, the Beiyang historiography + CHOC v.11.
+########################################################################
+
+# ======================================================================
+# THE SACK OF 1860 — strip the garden's glories and leave a lasting scar.
+# Called from qing_summer_palace.1 when the Anglo-French burn the Yuanmingyuan.
+# The material splendour is gone (its modifiers removed), replaced by a permanent
+# humiliation modifier; but the shock GALVANISES reform pressure AND forges civic
+# (national) feeling — the sack became a founding wound of modern Chinese
+# nationalism. The garden flag flips to "burnt" so the capstone rebuilds it.
+# ======================================================================
+QING_sp_sack_of_1860 = {
+	LOG_enter = { sys = QING  fn = QING_sp_sack_of_1860 }
+	# The 1860 Anglo-French expedition burned BOTH the Yuanmingyuan (圓明園) AND the
+	# Qingyi Yuan (清漪園) — two SEPARATE sites, 2.5km apart. Strip both sets of modifiers.
+	if = {
+		limit = { has_variable = qing_sp_built }
+		# the Yuanmingyuan glories are looted and put to the torch
+		remove_country_modifier = qing_sp_garden_of_brightness
+		remove_country_modifier = qing_sp_european_marvels
+		remove_country_modifier = qing_sp_imperial_library
+		# the scar that will not heal
+		add_country_modifier = { name = qing_sp_burnt_ruins  duration = -1 }
+		remove_variable = qing_sp_built
+		set_variable = qing_sp_burnt
+		LOG_line = { sys = QING  msg = "SUMMER PALACE: the Yuanmingyuan is SACKED (1860) for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = QING_sp_sack_of_1860  reason = "no standing Yuanmingyuan to sack (flag qing_sp_built unset) for [ROOT.GetTag]" }
+	}
+	# ALSO burn the Qingyi Yuan if it exists (it was burned in the SAME 1860 expedition)
+	if = {
+		limit = { has_variable = qing_sp_qingyi_built }
+		remove_country_modifier = qing_sp_qingyi_garden
+		remove_variable = qing_sp_qingyi_built
+		set_variable = qing_sp_qingyi_burnt
+		LOG_line = { sys = QING  msg = "SUMMER PALACE: the Qingyi Yuan is ALSO burned (1860) for [ROOT.GetTag]" }
+	}
+	# a shock to the throne's standing
+	current_ruler = { add_prestige = -20 }
+	add_stability = -1
+	# ...but the outrage feeds reform and forges a nation
+	QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 12 }
+	QING_DECLINE_nudge = { var = qing_civic_identity  amount = 8 }
+	LOG_exit = { sys = QING  fn = QING_sp_sack_of_1860  result = OK }
+}
+
+
+# ======================================================================
+# REBUILD BY DIVERTING THE NAVY FUNDS — the historical Cixi choice (1888).
+# Court splendour bought now with the Beiyang fleet's budget: a magnificent
+# 頤和園 and a burst of dynastic prestige, at the price of a hollow navy (the
+# Yalu, 1894). Applies the garden-restored modifier AND the starved-fleet malus.
+# Called from qing_summer_palace.2 option A.
+# ======================================================================
+QING_sp_yiheyuan_divert_navy = {
+	LOG_enter = { sys = QING  fn = QING_sp_yiheyuan_divert_navy }
+	# The Yiheyuan rises on the Qingyi Yuan site (Branch B, a SEPARATE garden from the
+	# Yuanmingyuan). The funds are diverted from the Beiyang fleet (Cixi's historical
+	# choice, 1888) — but per scholarly consensus (Chen Yue 陳悅, 2010), ONLY ~2.6M taels
+	# raised "in the navy's name" and the INTEREST funded the palace; the real cause of
+	# fleet stagnation was Weng Tonghe's 1888 arms-purchase ban + Board-of-Revenue cuts.
+	# So the naval penalty is MODEST, and the flavor will name those co-causes.
+	if = {
+		limit = { has_variable = qing_sp_qingyi_burnt }
+		# the Qingyi was burned in 1860; clear that scar
+		remove_variable = qing_sp_qingyi_burnt
+	}
+	# The Yuanmingyuan burnt-ruins scar is PERMANENT (Branch A never rebuilds) — leave it.
+	set_variable = qing_sp_yiheyuan_built
+	add_country_modifier = { name = qing_sp_yiheyuan_splendour  duration = -1 }
+	current_ruler = { add_prestige = 30 }
+	# Set a flag so the post-1894 Marble Boat blame event can fire
+	set_variable = qing_sp_diverted_navy
+	# the price: the fleet's money spent on marble boats (MODEST malus, per research)
+	add_country_modifier = { name = qing_sp_starved_fleet  duration = -1 }
+	# if the Self-Strengthening navy exists, the diversion bites its progress (SOFTENED: -8→-4)
+	if = {
+		limit = { has_variable = qing_selfstr_progress }
+		QING_DECLINE_nudge = { var = qing_selfstr_progress  amount = -4 }
+	}
+	LOG_line = { sys = QING  msg = "SUMMER PALACE: Yiheyuan BUILT by DIVERTING navy funds for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = QING_sp_yiheyuan_divert_navy  result = OK }
+}
+
+
+# ======================================================================
+# REBUILD PAYING HONESTLY FROM THE TREASURY — the reformed-Qing counterfactual.
+# The state that has the fiscal depth to afford both splendour and a fleet.
+# Costs real treasury, grants the garden splendour, and — because the throne did
+# NOT rob the navy — eases reform pressure instead of hollowing the fleet.
+# Called from qing_summer_palace.2 option B (gated on a full treasury).
+# ======================================================================
+QING_sp_yiheyuan_from_treasury = {
+	LOG_enter = { sys = QING  fn = QING_sp_yiheyuan_from_treasury }
+	add_treasury = -250
+	# The Yiheyuan rises on the Qingyi Yuan site (Branch B).
+	if = {
+		limit = { has_variable = qing_sp_qingyi_burnt }
+		remove_variable = qing_sp_qingyi_burnt
+	}
+	# The Yuanmingyuan burnt-ruins scar is PERMANENT (Branch A never rebuilds).
+	set_variable = qing_sp_yiheyuan_built
+	add_country_modifier = { name = qing_sp_yiheyuan_splendour  duration = -1 }
+	current_ruler = { add_prestige = 25 }
+	# a state that funds its pleasures without robbing its defences reassures reformers
+	QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -6 }
+	LOG_line = { sys = QING  msg = "SUMMER PALACE: Yiheyuan BUILT paid from the TREASURY for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = QING_sp_yiheyuan_from_treasury  result = OK }
+}
+
+# ======================================================================
+# THE TONGZHI RESTORATION ATTEMPT (1873) — likely to fail.
+# The historical attempt to rebuild the Yuanmingyuan collapsed after 11 months for
+# lack of funds and official opposition. This verb is called from qing_summer_palace.4
+# if the player chose to fund the attempt. It costs treasury + political influence,
+# has a low success chance, and on failure gives only a small consolation (prestige).
+# ======================================================================
+QING_sp_tongzhi_attempt = {
+	LOG_enter = { sys = QING  fn = QING_sp_tongzhi_attempt }
+	# Historical odds: the restoration collapsed. Model as a low-chance success.
+	random_list = {
+		20 = {
+			# SUCCESS — the garden rises from the ashes (rare counterfactual)
+			remove_country_modifier = qing_sp_burnt_ruins
+			remove_variable = qing_sp_burnt
+			set_variable = qing_sp_built
+			add_country_modifier = { name = qing_sp_garden_of_brightness  duration = -1 }
+			current_ruler = { add_prestige = 40 }
+			add_stability = 2
+			QING_DECLINE_nudge = { var = qing_civic_identity  amount = 6 }
+			LOG_line = { sys = QING  msg = "SUMMER PALACE: Tongzhi restoration SUCCEEDS (rare) for [ROOT.GetTag]" }
+		}
+		80 = {
+			# FAILURE — the attempt collapses (historical; funds and political capital wasted)
+			current_ruler = { add_prestige = -10 }
+			add_stability = -1
+			# small consolation: the attempt itself fed reform pressure (showed the dynasty cared)
+			QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
+			LOG_line = { sys = QING  msg = "SUMMER PALACE: Tongzhi restoration FAILS (historical) for [ROOT.GetTag]" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = QING_sp_tongzhi_attempt  result = OK }
+}
+

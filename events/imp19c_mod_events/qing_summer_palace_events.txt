@@ -1,0 +1,198 @@
+﻿########################################################################
+# qing_summer_palace_events.txt — THE GARDEN'S TWO FATES (圓明園／頤和園, task #74).
+#
+# Two events behind the Summer Palace mission tree (qing_summer_palace_missions.txt):
+#   .1  火燒圓明園 — the Anglo-French sack of 1860. Reactive: offered through
+#       QING_frontier_flavour_roll only if the garden stands (var qing_sp_built)
+#       and the Qing is at war with Britain or France after 1856. Elgin's men
+#       loot and burn the Yuanmingyuan; the garden's glories are stripped and a
+#       lasting scar left — but the outrage feeds reform and forges a nation.
+#   .2  頤和園之議 — the navy-funds dilemma of 1888. Fired by the capstone task
+#       (qing_sp_yiheyuan): rebuild the garden by diverting the Beiyang fleet's
+#       budget (Cixi's historical choice — splendour now, the Yalu later), or pay
+#       honestly from a full treasury (the reformed Qing that can afford both).
+#
+#   ROOT / this = the Qing overlord (CHI, player).
+#
+# Machinery: se_QING_SUMMER_PALACE.txt (QING_sp_* verbs). All paths logged sys = QING.
+#
+# Namespace = qing_summer_palace
+#
+# Sources: Young-tsu Wong, A Paradise Lost (2001); Hevia, English Lessons (2003);
+#   on the navy-funds diversion, the Beiyang historiography + CHOC v.11.
+########################################################################
+
+namespace = qing_summer_palace
+
+########################################################################
+# .1  火燒圓明園 — THE SACK OF THE YUANMINGYUAN (1860)
+# The Anglo-French expedition, at the close of the Second Opium War, reaches the
+# garden-palace north-west of Beijing and puts it to the torch. Reactive: the
+# roll only offers it while the garden stands and the Qing is at war with Britain
+# or France; the event re-checks that guard so a stale pick is a no-op.
+########################################################################
+qing_summer_palace.1 = {
+	type = country_event
+	title = "qing_summer_palace.1.t"
+	desc = "qing_summer_palace.1.desc"
+	picture = revolt
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	# The garden must stand, and an Anglo-French war must be raging (the historical
+	# trigger of the 1860 burning). Re-checked here in case the roll's pick is stale.
+	trigger = {
+		tag = CHI
+		has_variable = qing_sp_built
+		current_date >= 1856.1.1
+		OR = {
+			war_with = c:GBR
+			war_with = c:FRA
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_summer_palace.1 (the sack of 1860) for [ROOT.GetTag]" }
+	}
+
+	# --- The garden is lost — but the wound will not be forgotten ---------
+	option = {
+		name = "qing_summer_palace.1.a"
+		custom_tooltip = "qing_summer_palace.1.a.tt"
+		QING_sp_sack_of_1860 = yes
+	}
+}
+
+########################################################################
+# .2  頤和園之議 — THE DEBATE OVER THE GARDEN OF NURTURED HARMONY (1888)
+# The capstone task has resolved to rebuild the garden. How to pay? The court
+# faces Cixi's historical choice: rob the Beiyang naval budget for marble
+# splendour, or fund it honestly from the treasury.
+########################################################################
+qing_summer_palace.2 = {
+	type = country_event
+	title = "qing_summer_palace.2.t"
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { has_variable = qing_sp_burnt }
+				desc = "qing_summer_palace.2.desc.ashes"
+			}
+			desc = "qing_summer_palace.2.desc.adorn"
+		}
+	}
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_summer_palace.2 (the navy-funds dilemma) for [ROOT.GetTag]" }
+	}
+
+	# --- Divert the Beiyang naval budget — Cixi's choice -------------------
+	option = {
+		name = "qing_summer_palace.2.a"
+		custom_tooltip = "qing_summer_palace.2.a.tt"
+		QING_sp_yiheyuan_divert_navy = yes
+	}
+
+	# --- Pay honestly from the treasury — the reformed Qing ----------------
+	# Only the state with the fiscal depth to spare can take this road.
+	option = {
+		name = "qing_summer_palace.2.b"
+		custom_tooltip = "qing_summer_palace.2.b.tt"
+		trigger = {
+			treasury >= 250
+		}
+		QING_sp_yiheyuan_from_treasury = yes
+	}
+}
+
+########################################################################
+# .3  石舫之非 — THE MARBLE BOAT BLAME (post-1894, conditional)
+# If the Qing diverted the navy funds (qing_sp_diverted_navy) AND then lost a war
+# after 1894, critics RETROACTIVELY pin the defeat on the 石舫 Marble Boat and the
+# palace splendour — a scapegoating that was not documented as a 1888 scandal but
+# became part of the post-1894 historiography. Small legitimacy/prestige sting +
+# civic-identity flavor (the retroactive blame itself is a historical phenomenon).
+# Fires from QING_frontier_flavour_roll (one-time reactive roll).
+########################################################################
+qing_summer_palace.3 = {
+	type = country_event
+	title = "qing_summer_palace.3.t"
+	desc = "qing_summer_palace.3.desc"
+	picture = revolt
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	# Guard: must have diverted navy funds, and must have lost a war after 1894.
+	# Proxy for "lost a war": check if at peace + has the starved_fleet modifier + date.
+	trigger = {
+		tag = CHI
+		has_variable = qing_sp_diverted_navy
+		current_date >= 1894.1.1
+		is_at_war = no
+		has_country_modifier = qing_sp_starved_fleet
+		NOT = { has_variable = qing_sp_marble_boat_blame_done }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_summer_palace.3 (Marble Boat blame) for [ROOT.GetTag]" }
+		set_variable = qing_sp_marble_boat_blame_done
+	}
+
+	# --- The critics are not wholly wrong ------------------------------
+	option = {
+		name = "qing_summer_palace.3.a"
+		custom_tooltip = "qing_summer_palace.3.a.tt"
+		current_ruler = { add_prestige = -15 }
+		add_stability = -1
+		# the scapegoating feeds reform pressure (demand for accountability)
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 6 }
+		QING_DECLINE_nudge = { var = qing_civic_identity  amount = 3 }
+	}
+}
+
+########################################################################
+# .4  同治中興 — THE TONGZHI RESTORATION ATTEMPT (1873)
+# The player has chosen to fund the historical (failed) attempt to rebuild the
+# Yuanmingyuan ruins. Costs treasury + political capital, likely fails (80% historical),
+# and on failure gives only a small consolation (the attempt itself fed reform pressure).
+########################################################################
+qing_summer_palace.4 = {
+	type = country_event
+	title = "qing_summer_palace.4.t"
+	desc = "qing_summer_palace.4.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_sp_burnt
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_summer_palace.4 (Tongzhi restoration) for [ROOT.GetTag]" }
+	}
+
+	# --- Commit to the restoration attempt ------------------------------
+	option = {
+		name = "qing_summer_palace.4.a"
+		custom_tooltip = "qing_summer_palace.4.a.tt"
+		QING_sp_tongzhi_attempt = yes
+	}
+}
+
