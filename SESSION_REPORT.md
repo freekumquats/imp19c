@@ -243,3 +243,7 @@ Reworked the #65 Emperor Emeritus (Napoleon at the Qing court) chain so Napoleon
 
 Validation: brace balance OK on all 3 script files; byte conventions (BOM/LF) preserved per file; 10 new loc keys present. My own session-authored feature -> ordinary new-feature tier.
 
+## #80 follow-up — AMHERST PINNED TO 1816 (2026-07-05)
+User question surfaced that the Amherst embassy (the Napoleon-chain kickoff) did NOT reliably fire in 1816: qing_embassy.2 was reached only via QING_frontier_flavour_roll (30%/month gate, then one weight-10 branch among ~25 in a random_list summing >200) → per-month odds ~1.4%, median wait ~4 years, frequently past the <1821.5.5 Napoleon window → the counterfactual was substantially left to chance.
+FIX (user decision "Pin to 1816"): added a dated one-shot in qing_mechanics_on_actions.txt on_game_initialized (CHI + is_ai=no): trigger_event = { id = qing_embassy.2  days = { 410 430 } }. START_DATE is 1815.7.1; +410-430d ≈ late Aug 1816 (Amherst's historical arrival at Peking). Event re-checks its own trigger at fire; flavour-roll branch left as harmless self-guarded fallback. Proven idiom: on_game_initialized effect-block already used for QING_*_init; long days-offset trigger_event used throughout. Byte convention BOM/LF preserved. My own feature → new-feature tier.
+
