@@ -1,0 +1,123 @@
+########################################################################
+# qing_students_events.txt — THE EDUCATIONAL MISSION & STUDENTS ABROAD
+# (留學生 / 留美幼童). The player-facing surface of the students engine
+# (se_QING_STUDENTS.txt): launch the mission, send further cohorts, and weather
+# the conservative recall crisis (the 1881 dissolution). CHI-only.
+#
+# .1   the mission hub (launch, or send another cohort while it runs)
+# .10  the recall crisis (fired by the pulse when alarm + reform pressure spike)
+#
+# Sources: se_QING_STUDENTS.txt header (Rhoads 2011; LaFargue 1942).
+########################################################################
+
+namespace = qing_students
+
+# ======================================================================
+# .1  THE EDUCATIONAL MISSION HUB — opened from the mechanics-panel verb
+# (qing_action_students_mission). Launch the mission if none runs; otherwise send
+# a further cohort. Options are shown by state.
+# ======================================================================
+qing_students.1 = {
+	type = country_event
+	title = "qing_students.1.t"
+	desc = "qing_students.1.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_students.1 (educational mission hub) [ROOT.GetTag]" }
+		QING_students_init = yes
+	}
+
+	# --- Launch the mission (幼童出洋肄業局) — shown when none runs and it was not
+	# recalled shut.
+	option = {
+		name = "qing_students.1.launch"
+		custom_tooltip = "qing_students.1.launch.tt"
+		trigger = {
+			NOT = { has_variable = qing_students_mission_active }
+			NOT = { has_variable = qing_students_recalled }
+		}
+		QING_students_launch = yes
+	}
+
+	# --- Send another cohort — shown while the mission runs.
+	option = {
+		name = "qing_students.1.cohort"
+		custom_tooltip = "qing_students.1.cohort.tt"
+		trigger = {
+			has_variable = qing_students_mission_active
+			NOT = { has_variable = qing_students_recalled }
+		}
+		QING_students_send_cohort = yes
+	}
+
+	# --- Re-found a recalled mission (a later reformist court reopens it) — shown
+	# only if it was previously recalled. Clears the recalled mark and relaunches.
+	option = {
+		name = "qing_students.1.refound"
+		custom_tooltip = "qing_students.1.refound.tt"
+		trigger = { has_variable = qing_students_recalled }
+		remove_variable = qing_students_recalled
+		QING_students_launch = yes
+	}
+
+	# --- Hold ---
+	option = {
+		name = "qing_students.1.decline"
+	}
+}
+
+# ======================================================================
+# .10  THE RECALL CRISIS (the 1881 dissolution). Fired by QING_students_pulse when
+# conservative alarm and reform pressure both spike. The court demands the mission
+# be dissolved; the player defends it (spending political capital) or yields (the
+# historical recall, forfeiting the cohort abroad).
+# ======================================================================
+qing_students.10 = {
+	type = country_event
+	title = "qing_students.10.t"
+	desc = "qing_students.10.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_students_mission_active
+		NOT = { has_variable = qing_students_recalled }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_students.10 (recall crisis) [ROOT.GetTag] alarm=[ROOT.MakeScope.GetVariable('qing_students_alarm').GetValue|0]" }
+	}
+
+	# --- Defend the mission — spend political capital to face down the censors. The
+	# alarm subsides and the mission survives; the reform faction is emboldened.
+	option = {
+		name = "qing_students.10.defend"
+		custom_tooltip = "qing_students.10.defend.tt"
+		trigger = { political_influence >= 40 }
+		add_political_influence = -40
+		QING_DECLINE_nudge = { var = qing_students_alarm  amount = -45 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -4 }
+		add_prestige = 15
+		# clear the pending flag so a later spike can raise the crisis afresh.
+		remove_variable = qing_students_recall_pending
+		LOG_line = { sys = QING  msg = "students: recall crisis faced down for [ROOT.GetTag]" }
+	}
+
+	# --- Yield to the conservatives — recall the mission (the 1881 outcome). The
+	# cohort abroad is dissolved; a heavy prestige + reform-pressure blow.
+	option = {
+		name = "qing_students.10.yield"
+		custom_tooltip = "qing_students.10.yield.tt"
+		QING_students_recall = yes
+		remove_variable = qing_students_recall_pending
+	}
+}

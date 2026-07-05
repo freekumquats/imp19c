@@ -1,0 +1,251 @@
+﻿########################################################################
+# se_QING_ROSTER.txt — THE ANACHRONISTIC HISTORICAL-CHARACTER ROSTER (task #13).
+#
+# Real late-Qing and reform/revolutionary figures step onto the stage to fill
+# council seats and great offices, patronise the Self-Strengthening movement,
+# drive the reform track, or raise rebellion — and they arrive keyed to MECHANIC
+# CONTEXT, not to their real birth date. Sun Yat-sen (孫中山) can walk into the
+# court in 1820 if the reform pressure is ripe; Li Hongzhang (李鴻章) appears the
+# moment the Self-Strengthening movement stirs, whatever the year. This is the
+# "anachronistic spawn" the design calls for.
+#
+# ENGINE REALITY (verified — the mod's create_character takes no name argument,
+# and there is no set_first_name effect): a conjured character gets a random,
+# culture-appropriate GetName. We therefore carry the historical identity TWO
+# ways, both of which the engine supports:
+#   (1) add_nickname = "<loc key>" pins the real name as the character's epithet,
+#       so he is findable in the court list as e.g. Giolo "Li Hongzhang".
+#   (2) every arrival event writes the full historical name (Chinese + pinyin)
+#       directly into its title/desc/options, so the player always sees who it is.
+# This mirrors how qing_keju.4 handles its conjured scholar (scope + event text).
+#
+# QING_roster_finalize — call INSIDE the freshly created character's scope. Sets
+#   his home country to the Qing, pins his historical name as a nickname, gives
+#   him a Manchu/Han identity band (#8), scores his affinity to the throne (the
+#   se_QING_AFFINITY model), and logs it. $nick$ = the NICKNAME_* loc key.
+#
+# CHI-only, player-only (the roll that fires these is CHI + is_ai = no gated).
+# All logged sys = QING. Stats are the Imperator four axes; trait keys verified
+# against common/traits/. Each figure guarded by a once-only ROOT flag so he
+# cannot be conjured twice.
+#
+#   ROOT = the Qing country (CHI, player); root.current_ruler = the emperor.
+#
+# Prefix = QING_roster_
+#
+# Sources: standard scholarship already cited across the suite — Spence, The
+#   Search for Modern China; Fairbank & Liu, Cambridge History of China v.10-11;
+#   Elliott, The Manchu Way; Kwang-Ching Liu on Li Hongzhang; Jonathan Spence,
+#   God's Chinese Son (Hong Xiuquan). Roster compiled in the session memory.
+########################################################################
+
+# ======================================================================
+# FINALIZE — shared tail for every spawn. Runs in the new character's scope.
+# ======================================================================
+QING_roster_finalize = {
+	set_home_country = ROOT
+	# pin the historical name as an epithet so he is identifiable in the court
+	add_nickname = "$nick$"
+	# give him the Manchu/Han identity band the office/council mechanics read (#8)
+	QING_char_init_identity = yes
+	# score how he sits with the reigning emperor (the affinity model)
+	QING_char_affinity = yes
+	LOG_line = { sys = QING  msg = "roster: [this.GetName] ($nick$) entered the [ROOT.GetTag] court (aff=[this.MakeScope.GetVariable('qing_char_affinity').GetValue|0])" }
+}
+
+# ======================================================================
+# THE ROLL — context-keyed dispatcher. Fired from QING_frontier_flavour_roll.
+# It reads the realm's present state and offers the figure the moment fits:
+#   • a corrupt court in decline           → Heshen / Lin Zexu
+#   • the Self-Strengthening stir           → Prince Gong / Li Hongzhang / Zeng /
+#                                             Zuo / Zhang / Hart / Gordon
+#   • high reform pressure                  → Kang Youwei / Liang / Sun / Yuan
+#   • high sect pressure                    → Hong Xiuquan (the Taiping)
+# Each branch is guarded so a given figure arrives at most once. All weights are
+# small; this is a rare, memorable prompt, not a constant churn.
+# ======================================================================
+QING_roster_roll = {
+	LOG_enter = { sys = QING  fn = "QING_roster_roll" }
+	random_list = {
+		# --- 和珅 Heshen: the corrupt favourite (a court running to graft) -----
+		10 = {
+			trigger = {
+				NOT = { has_variable = qing_spawned_heshen }
+				var:qing_corruption_level >= 40
+			}
+			trigger_event = { id = qing_roster.1  days = { 3 12 } }
+		}
+		# --- 林則徐 Lin Zexu: the incorruptible (corruption OR opium/Canton) -----
+		10 = {
+			trigger = {
+				NOT = { has_variable = qing_spawned_linzexu }
+				OR = { var:qing_corruption_level >= 35  var:qing_reform_pressure >= 25 }
+			}
+			trigger_event = { id = qing_roster.2  days = { 3 12 } }
+		}
+		# --- 恭親王奕訢 Prince Gong: the reform/diplomacy patron ----------------
+		# NOTE: qing_selfstr_progress is SEEDED to 0 for CHI at game start, so a
+		# has_variable test is always true; we test the numeric value (>= 10, the
+		# movement has genuinely stirred) to keep the context-keying honest.
+		10 = {
+			trigger = {
+				NOT = { has_variable = qing_spawned_prince_gong }
+				OR = { var:qing_reform_pressure >= 20  var:qing_selfstr_progress >= 10 }
+			}
+			trigger_event = { id = qing_roster.3  days = { 3 12 } }
+		}
+		# --- 李鴻章 Li Hongzhang: the Self-Strengthening hub -------------------
+		12 = {
+			trigger = {
+				NOT = { has_variable = qing_spawned_li_hongzhang }
+				OR = { var:qing_selfstr_progress >= 10  var:qing_reform_pressure >= 20 }
+			}
+			trigger_event = { id = qing_roster.4  days = { 3 12 } }
+		}
+		# --- 曾國藩 Zeng Guofan: the statesman-general (needs a rebellion/decline)
+		8 = {
+			trigger = {
+				NOT = { has_variable = qing_spawned_zeng_guofan }
+				OR = { var:qing_sect_pressure >= 30  var:qing_selfstr_progress >= 10 }
+			}
+			trigger_event = { id = qing_roster.5  days = { 3 12 } }
+		}
+		# --- 左宗棠 Zuo Zongtang: the frontier reconqueror --------------------
+		8 = {
+			trigger = {
+				NOT = { has_variable = qing_spawned_zuo_zongtang }
+				OR = { var:qing_selfstr_progress >= 10  var:qing_ethnic_tension >= 40 }
+			}
+			trigger_event = { id = qing_roster.6  days = { 3 12 } }
+		}
+		# --- 張之洞 Zhang Zhidong: the ti-yong industrialiser -----------------
+		8 = {
+			trigger = {
+				NOT = { has_variable = qing_spawned_zhang_zhidong }
+				var:qing_selfstr_progress >= 10
+			}
+			trigger_event = { id = qing_roster.7  days = { 3 12 } }
+		}
+		# --- 赫德 Robert Hart: the foreign customs inspector-general ----------
+		8 = {
+			trigger = {
+				NOT = { has_variable = qing_spawned_hart }
+				OR = { var:qing_selfstr_progress >= 10  var:qing_currency_stress >= 40 }
+			}
+			trigger_event = { id = qing_roster.8  days = { 3 12 } }
+		}
+		# --- 戈登 Charles Gordon: the Ever-Victorious Army commander ----------
+		7 = {
+			trigger = {
+				NOT = { has_variable = qing_spawned_gordon }
+				var:qing_sect_pressure >= 30
+			}
+			trigger_event = { id = qing_roster.9  days = { 3 12 } }
+		}
+		# --- 康有為 Kang Youwei: the constitutional reformer ------------------
+		8 = {
+			trigger = {
+				NOT = { has_variable = qing_spawned_kang_youwei }
+				var:qing_reform_pressure >= 45
+			}
+			trigger_event = { id = qing_roster.10  days = { 3 12 } }
+		}
+		# --- 孫中山 Sun Yat-sen: the republican revolutionary -----------------
+		7 = {
+			trigger = {
+				NOT = { has_variable = qing_spawned_sun_yatsen }
+				var:qing_reform_pressure >= 55
+			}
+			trigger_event = { id = qing_roster.11  days = { 3 12 } }
+		}
+		# --- 袁世凱 Yuan Shikai: the ambitious militarist ---------------------
+		7 = {
+			trigger = {
+				NOT = { has_variable = qing_spawned_yuan_shikai }
+				OR = { var:qing_selfstr_progress >= 10  var:qing_reform_pressure >= 45 }
+			}
+			trigger_event = { id = qing_roster.12  days = { 3 12 } }
+		}
+		# --- 洪秀全 Hong Xiuquan: the Taiping Heavenly King -------------------
+		8 = {
+			trigger = {
+				NOT = { has_variable = qing_spawned_hong_xiuquan }
+				var:qing_sect_pressure >= 45
+			}
+			trigger_event = { id = qing_roster.13  days = { 3 12 } }
+		}
+			# --- 華爾 Frederick Townsend Ward: the American mercenary who first raised
+			# the Ever-Victorious Army against the Taiping (killed at Cixi, 1862) ------
+			6 = {
+				trigger = {
+					NOT = { has_variable = qing_spawned_ward }
+					NOT = { has_variable = qing_spawned_gordon }
+					var:qing_sect_pressure >= 30
+				}
+				trigger_event = { id = qing_roster.14  days = { 3 12 } }
+			}
+			# --- 日意格 Prosper Giquel: the French engineer of the Fuzhou Navy Yard --
+			7 = {
+				trigger = {
+					NOT = { has_variable = qing_spawned_giquel }
+					var:qing_selfstr_progress >= 10
+				}
+				trigger_event = { id = qing_roster.15  days = { 3 12 } }
+			}
+			# --- 郭嵩燾 Guo Songtao: the first Chinese envoy resident in the West ----
+			7 = {
+				trigger = {
+					NOT = { has_variable = qing_spawned_guo_songtao }
+					OR = { has_variable = qing_office_zongli_holder  var:qing_reform_pressure >= 25 }
+				}
+				trigger_event = { id = qing_roster.16  days = { 3 12 } }
+			}
+			# --- 蒲安臣 Anson Burlingame: the American minister turned Qing envoy ----
+			6 = {
+				trigger = {
+					NOT = { has_variable = qing_spawned_burlingame }
+					OR = { exists = c:USA  exists = c:GBR }
+					var:qing_reform_pressure >= 20
+				}
+				trigger_event = { id = qing_roster.17  days = { 3 12 } }
+			}
+			# --- 容閎 Yung Wing (Rong Hong): the Yale man behind the Educational
+			# Mission (留學生) -------------------------------------------------------
+			6 = {
+				trigger = {
+					NOT = { has_variable = qing_spawned_yung_wing }
+					OR = { var:qing_reform_pressure >= 25  var:qing_selfstr_progress >= 10 }
+				}
+				trigger_event = { id = qing_roster.18  days = { 3 12 } }
+			}
+			# --- 盛宣懷 Sheng Xuanhuai: the guandu-shangban entrepreneur (telegraph,
+			# steamships, the merchant conglomerates) --------------------------------
+			7 = {
+				trigger = {
+					NOT = { has_variable = qing_spawned_sheng_xuanhuai }
+					var:qing_selfstr_progress >= 20
+				}
+				trigger_event = { id = qing_roster.19  days = { 3 12 } }
+			}
+			# --- 琅威理 William Lang: the Royal Navy officer who drilled the Beiyang
+			# Fleet ------------------------------------------------------------------
+			6 = {
+				trigger = {
+					NOT = { has_variable = qing_spawned_william_lang }
+					exists = c:GBR
+					var:qing_selfstr_progress >= 10
+				}
+				trigger_event = { id = qing_roster.20  days = { 3 12 } }
+			}
+			# --- 曾紀澤 Zeng Jize (Marquis Zeng): the diplomat who won back Ili at St
+			# Petersburg (1881) — the negotiator the Ili chain (New#9) invokes --------
+			6 = {
+				trigger = {
+					NOT = { has_variable = qing_spawned_zeng_jize }
+					OR = { has_variable = qing_office_zongli_holder  var:qing_ili_stage >= 2 }
+				}
+				trigger_event = { id = qing_roster.21  days = { 3 12 } }
+			}
+	}
+	LOG_exit = { sys = QING  fn = "QING_roster_roll"  result = OK }
+}

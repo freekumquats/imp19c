@@ -1,0 +1,183 @@
+﻿########################################################################
+# qing_advisor_events.txt — FOREIGN ADVISORS / TECHNICAL EXPERTS (洋員 / 顧問).
+# The proactive recruitment path for the advisor engine (se_QING_ADVISORS.txt):
+# the player opens a search for a Western expert of a chosen field, and a hired
+# foreigner arrives — accelerating the matching Self-Strengthening track and
+# drawing his home power's stake into China. CHI-only, player-driven.
+#
+# .1  the recruitment hub (choose a field; spend PI to open the search)
+# .2  the expert arrives (a generic hired foreigner; unlike the named roster he
+#     bears a random name + the advisor mark, and can later be dismissed)
+#
+# Named historical experts (Giquel, William Lang, Ward, Gordon, Hart) arrive via
+# the character roster (qing_roster_events.txt) and register through the same
+# QING_advisor_recruit interface; this file is the un-named, repeatable path.
+#
+# Sources: se_QING_ADVISORS.txt header.
+########################################################################
+
+namespace = qing_advisor
+
+# ======================================================================
+# .1  RECRUIT A FOREIGN ADVISOR — the hub. Opened from the mechanics panel verb
+# (qing_action_recruit_advisor). One option per field; each is shown only if a
+# slot is free and that field is unstaffed, and dispatches to .2 with the field
+# + a plausible home power saved as scopes.
+# ======================================================================
+qing_advisor.1 = {
+	type = country_event
+	title = "qing_advisor.1.t"
+	desc = "qing_advisor.1.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_advisor.1 (recruit advisor hub) [ROOT.GetTag] slots=[ROOT.MakeScope.GetVariable('qing_advisor_slots_used').GetValue|0]/[ROOT.MakeScope.GetVariable('qing_advisor_slot_cap').GetValue|0]" }
+		QING_advisor_init = yes
+	}
+
+	# --- A naval expert (dockyards & fleet training; the French/British tradition)
+	option = {
+		name = "qing_advisor.1.naval"
+		custom_tooltip = "qing_advisor.1.naval.tt"
+		trigger = {
+			var:qing_advisor_slots_used < var:qing_advisor_slot_cap
+			NOT = { has_variable = qing_advisor_naval }
+		}
+		set_variable = { name = qing_advisor_pending_field  value = flag:naval }
+		trigger_event = { id = qing_advisor.2  days = { 20 90 } }
+	}
+
+	# --- An army drill-master (Western drill; the British/German tradition) ------
+	option = {
+		name = "qing_advisor.1.army"
+		custom_tooltip = "qing_advisor.1.army.tt"
+		trigger = {
+			var:qing_advisor_slots_used < var:qing_advisor_slot_cap
+			NOT = { has_variable = qing_advisor_army }
+		}
+		set_variable = { name = qing_advisor_pending_field  value = flag:army }
+		trigger_event = { id = qing_advisor.2  days = { 20 90 } }
+	}
+
+	# --- A fiscal expert (accounts, customs, loans; the British tradition) -------
+	option = {
+		name = "qing_advisor.1.fiscal"
+		custom_tooltip = "qing_advisor.1.fiscal.tt"
+		trigger = {
+			var:qing_advisor_slots_used < var:qing_advisor_slot_cap
+			NOT = { has_variable = qing_advisor_fiscal }
+		}
+		set_variable = { name = qing_advisor_pending_field  value = flag:fiscal }
+		trigger_event = { id = qing_advisor.2  days = { 20 90 } }
+	}
+
+	# --- A technical expert (arsenals, mines, telegraph; the German/American line)
+	option = {
+		name = "qing_advisor.1.technical"
+		custom_tooltip = "qing_advisor.1.technical.tt"
+		trigger = {
+			var:qing_advisor_slots_used < var:qing_advisor_slot_cap
+			NOT = { has_variable = qing_advisor_technical }
+		}
+		set_variable = { name = qing_advisor_pending_field  value = flag:technical }
+		trigger_event = { id = qing_advisor.2  days = { 20 90 } }
+	}
+
+	# --- Think better of it (no slot free, or hold the funds) -------------------
+	option = {
+		name = "qing_advisor.1.decline"
+	}
+}
+
+# ======================================================================
+# .2  THE EXPERT ARRIVES — spawn a hired foreigner of the pending field, of a
+# plausible home power, and register him through QING_advisor_recruit. The home
+# power is chosen by field (the historical pattern), guarded so the recruit only
+# marks the man if a slot was actually free.
+# ======================================================================
+qing_advisor.2 = {
+	type = country_event
+	title = "qing_advisor.2.t"
+	desc = "qing_advisor.2.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:advisor
+
+	is_triggered_only = yes
+
+	immediate = {
+		# choose culture/religion + home power by the pending field.
+		if = {
+			limit = { var:qing_advisor_pending_field = flag:naval }
+			create_character = {
+				age = 38  culture = french  religion = catholic
+				add_martial = 6  add_finesse = 8  add_zeal = 4  add_charisma = 5
+				add_trait = scholar  add_trait = disciplined
+				save_scope_as = advisor
+			}
+			set_variable = { name = qing_advisor_pending_power  value = flag:france }
+		}
+		else_if = {
+			limit = { var:qing_advisor_pending_field = flag:army }
+			create_character = {
+				age = 40  culture = north_german  religion = lutheran
+				add_martial = 9  add_finesse = 5  add_zeal = 5  add_charisma = 6
+				add_trait = brave  add_trait = disciplined
+				save_scope_as = advisor
+			}
+			set_variable = { name = qing_advisor_pending_power  value = flag:germany }
+		}
+		else_if = {
+			limit = { var:qing_advisor_pending_field = flag:fiscal }
+			create_character = {
+				age = 42  culture = english  religion = anglican
+				add_martial = 2  add_finesse = 9  add_zeal = 6  add_charisma = 7
+				add_trait = honest  add_trait = scholar
+				save_scope_as = advisor
+			}
+			set_variable = { name = qing_advisor_pending_power  value = flag:britain }
+		}
+		else = {  # technical
+			create_character = {
+				age = 36  culture = yankee  religion = reformed
+				add_martial = 4  add_finesse = 8  add_zeal = 5  add_charisma = 6
+				add_trait = scholar  add_trait = energetic
+				save_scope_as = advisor
+			}
+			set_variable = { name = qing_advisor_pending_power  value = flag:america }
+		}
+		scope:advisor = { set_home_country = ROOT }
+		LOG_line = { sys = QING  msg = "EVENT qing_advisor.2 (expert arrives) [ROOT.GetTag]" }
+	}
+
+	# --- Engage the expert ------------------------------------------------------
+	# Dispatch by (field, power) pair — QING_advisor_recruit needs literal args,
+	# so branch on the two pending flags to the right literal call.
+	option = {
+		name = "qing_advisor.2.a"
+		custom_tooltip = "qing_advisor.2.a.tt"
+		trigger = { treasury >= 50 }
+		add_treasury = -50
+		scope:advisor = {
+			if = { limit = { ROOT = { var:qing_advisor_pending_field = flag:naval } }     QING_advisor_recruit = { field = naval  power = france  tag = FRA } }
+			else_if = { limit = { ROOT = { var:qing_advisor_pending_field = flag:army } }      QING_advisor_recruit = { field = army  power = germany  tag = PRU } }
+			else_if = { limit = { ROOT = { var:qing_advisor_pending_field = flag:fiscal } }    QING_advisor_recruit = { field = fiscal  power = britain  tag = GBR } }
+			else = { QING_advisor_recruit = { field = technical  power = america  tag = USA } }
+		}
+		remove_variable = qing_advisor_pending_field
+		remove_variable = qing_advisor_pending_power
+	}
+
+	# --- Send him away (a change of heart) --------------------------------------
+	option = {
+		name = "qing_advisor.2.b"
+		scope:advisor = { set_home_country = ROOT }
+		remove_variable = qing_advisor_pending_field
+		remove_variable = qing_advisor_pending_power
+	}
+}

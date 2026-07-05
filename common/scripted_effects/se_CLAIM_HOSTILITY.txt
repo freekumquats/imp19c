@@ -1,0 +1,100 @@
+########################################################################
+# se_CLAIM_HOSTILITY.txt — the GENERIC claim-hostility engine.
+#
+# "Colonial claims": a country that holds a CLAIM on a province (add_claim,
+# read back as is_core_of) but does NOT control it treats another power's
+# seizure or occupation of that land as a hostile act. This is the universal
+# equivalent of the Qing great-power tension layer (se_QING_DIPLO.txt), but
+# because the actors are DYNAMIC (any claimant vs. any taker) it cannot use the
+# Qing's per-power named counters/modifiers. Instead it uses the OPINION system
+# itself as the per-pair hostility store — an opinion is inherently keyed to a
+# (source, target) pair and carries its own yearly_decay, so the resentment
+# cools on its own exactly like the Qing tension counters do.
+#
+# Two triggers, wired to the (previously empty) province-scope on_actions in
+# common/on_action/00_specific_from_code.txt:
+#   on_ownership_change  -> CLAIM_HOSTILITY_on_transfer  (permanent seizure)
+#   on_province_occupied -> CLAIM_HOSTILITY_on_incursion (wartime occupation)
+#
+# In both, ROOT / this = the province whose owner/controller just changed.
+# All lines logged sys = CLAIM (zero-cost outside -debug_mode).
+#
+# The Qing keep their richer, bespoke reaction (QING_gp_react and the 以夷制夷
+# rival triangle) on their OWN aggressive moves; this layer is the passive,
+# universal "someone took land I claim" reaction that every country gets.
+#
+# COST: each fire runs an every_country scan (there is no engine "is this
+# province claimed by anyone" primitive to gate on cheaply). This is fine
+# because both on_actions are event-driven and infrequent (a province changes
+# owner/controller only on conquest, transfer or occupation) — NOT a per-tick
+# hot loop — and the incursion path additionally self-throttles to once/year
+# per province. A large annexation is a one-time O(provinces × countries) spike
+# at the peace, not sustained load.
+# Prefix = CLAIM_HOSTILITY_
+########################################################################
+
+# ======================================================================
+# PERMANENT SEIZURE — a province changed hands. Every OTHER country that holds
+# a claim on it resents the new owner: the land they consider rightfully theirs
+# is now flying someone else's flag. Fires on any ownership change (conquest,
+# transfer, release, colonisation), so a claim realised by anyone but its holder
+# stings the holder.
+#   this = the province, now owned by the taker.
+# ======================================================================
+CLAIM_HOSTILITY_on_transfer = {
+	if = {
+		limit = { exists = owner }
+		save_scope_as = claim_province
+		owner = { save_scope_as = claim_taker }
+		every_country = {
+			# the taker does not resent itself
+			limit = { NOT = { this = scope:claim_taker } }
+			save_scope_as = claim_holder
+			if = {
+				limit = { scope:claim_province = { is_core_of = scope:claim_holder } }
+				# claim_holder's opinion of the taker drops — the same relations
+				# value every diplomatic action reads.
+				add_opinion = { modifier = claim_violated_opinion  target = scope:claim_taker }
+				LOG_line = { sys = CLAIM  msg = "claim violated: [this.GetTag] resents [scope:claim_taker.GetTag] seizing claimed land" }
+			}
+		}
+	}
+	else = {
+		LOG_fail = { sys = CLAIM  fn = CLAIM_HOSTILITY_on_transfer  reason = "province has no owner after transfer; nothing to react to" }
+	}
+}
+
+# ======================================================================
+# WARTIME INCURSION — a province was OCCUPIED (controller changed; the owner is
+# unchanged). A milder, faster-decaying resentment than a permanent seizure,
+# and cooldowned per-province so a long war does not spam it. Anyone (other than
+# the occupier) who holds a claim on the province resents the occupier — this
+# includes the lawful owner IF it holds a core there (cores are separate from
+# ownership in this engine, so home soil only qualifies when a core was set).
+#   this = the province, now controlled by the occupier.
+# ======================================================================
+CLAIM_HOSTILITY_on_incursion = {
+	if = {
+		limit = {
+			exists = controller
+			# per-province throttle: one incursion reaction per year
+			NOT = { has_variable = claim_incursion_cd }
+		}
+		save_scope_as = claim_province
+		controller = { save_scope_as = claim_taker }
+		every_country = {
+			limit = { NOT = { this = scope:claim_taker } }
+			save_scope_as = claim_holder
+			if = {
+				limit = { scope:claim_province = { is_core_of = scope:claim_holder } }
+				add_opinion = { modifier = claim_incursion_opinion  target = scope:claim_taker }
+				LOG_line = { sys = CLAIM  msg = "claim incursion: [this.GetTag] resents [scope:claim_taker.GetTag] occupying claimed land" }
+			}
+		}
+		# throttle the every_country scan (self-clears after a year)
+		set_variable = { name = claim_incursion_cd  days = 365 }
+	}
+	else = {
+		LOG_fail = { sys = CLAIM  fn = CLAIM_HOSTILITY_on_incursion  reason = "no controller, or incursion reaction already fired for this province this year (throttled)" }
+	}
+}

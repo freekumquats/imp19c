@@ -1,0 +1,673 @@
+########################################################################
+# se_QING_DIPLO.txt — the FOREIGN-REACTION / GREAT-POWER layer for the Qing
+# expansion mechanics. Each theater of Qing expansion antagonises a SPECIFIC
+# great power, and that antagonism has diplomatic consequences that tie into the
+# rest of the suite (relations, the advisor/investment offers, the reform track).
+#
+#   Southeast Asia (incl. Vietnam)            → FRANCE   (FRA)
+#   Burma + (British) India                   → BRITAIN  (GBR)
+#   Central Asia + Siberia + Alaska           → RUSSIA   (RUS)
+#
+# The layer is a per-power TENSION counter (0..100) plus opinion swings, read the
+# same O(1) way as the decline counters. High tension with a power raises the
+# chance of that power's predatory/hostile diplomatic events and closes off its
+# advisor/investment offers; deference or a deal (accommodation) lowers it.
+#
+#   ROOT / this = the Qing (CHI, player) unless noted.
+# Prefix = QING_gp_ / counters qing_gp_tension_<power>
+#
+# Sources: see [[imp19c-grand-council-offices]] #7 diplomatic layer + the Great
+# Game research; Perdue, China Marches West; Hsü, The Ili Crisis (1965).
+########################################################################
+
+# ======================================================================
+# INIT — seed the three per-power tension counters once.
+# ======================================================================
+QING_gp_init = {
+	LOG_enter = { sys = QING  fn = "QING_gp_init" }
+	if = { limit = { NOT = { has_variable = qing_gp_tension_britain } }  set_variable = { name = qing_gp_tension_britain  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_gp_tension_france } }   set_variable = { name = qing_gp_tension_france   value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_gp_tension_russia } }   set_variable = { name = qing_gp_tension_russia   value = 0 } }
+	# The Japan sub-layer (below) is seeded here too so a single init covers all
+	# foreign-reaction state.
+	QING_japan_init = yes
+	LOG_exit = { sys = QING  fn = "QING_gp_init"  result = OK }
+}
+
+# ######################################################################
+# THE JAPAN / MEIJI SUB-LAYER  (東亞近代化, the parallel modernization)
+# ----------------------------------------------------------------------
+# Japan is NOT one of the predatory European great powers — it is the Qing's
+# PEER, an Asian state racing the same modernization the Self-Strengthening
+# Movement attempts. This layer is deliberately kept SEPARATE from the qing_gp_
+# great-power tension system: Japan gets its own two-pole relationship and its own
+# mission tree (common/missions/qing_japan_missions.txt), and does NOT participate
+# in the 以夷制夷 rival triangle.
+#
+# Two opposed 0..100 counters track the relationship the player builds:
+#   qing_japan_accord   — warmth toward the pan-Asian entente (同文同種, "same
+#                         script, same race"); high accord = the alliance path.
+#   qing_japan_rivalry  — the road to confrontation over Korea/Ryukyu/Taiwan;
+#                         high rivalry = the 1894-95 collision, pre-empted or won.
+# Plus qing_japan_meiji — how far Japan's OWN industrialization has advanced (a
+# factor in its own right): it climbs over time, faster if the two cooperate,
+# and a high value with high rivalry is the sharpest danger the Qing can face.
+#
+# "Japan" is whichever tag leads the isles: the Tokugawa Shogunate (TKG) at the
+# start, or a unified Japan (JPN) once formed. QING_japan_lead resolves it.
+#
+# Sources: Marius Jansen, The Making of Modern Japan (2000); Douglas Howland,
+#   Borders of Chinese Civilization (1996, on the Sino-Japanese cultural order &
+#   the Ryukyu/Korea disputes); Key-Hiuk Kim, The Last Phase of the East Asian
+#   World Order (1980); Benjamin Elman on the comparative self-strengthening.
+# ######################################################################
+
+QING_japan_init = {
+	if = { limit = { NOT = { has_variable = qing_japan_accord } }   set_variable = { name = qing_japan_accord   value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_japan_rivalry } }  set_variable = { name = qing_japan_rivalry  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_japan_meiji } }    set_variable = { name = qing_japan_meiji    value = 0 } }
+}
+
+# Resolve the country scope of "Japan": unified JPN if it exists, else the
+# Tokugawa Shogunate TKG. Saves the result to scope:qing_japan_lead.
+# Callers should check exists = scope:qing_japan_lead before using it.
+QING_japan_resolve_lead = {
+	if = {
+		limit = { exists = c:JPN }
+		c:JPN = { save_scope_as = qing_japan_lead }
+	}
+	else_if = {
+		limit = { exists = c:TKG }
+		c:TKG = { save_scope_as = qing_japan_lead }
+	}
+}
+
+# ----------------------------------------------------------------------
+# THE ACCORD / RIVALRY LEVERS (task #22). Two opposed poles; pushing one bleeds
+# the other, so the player commits to a road rather than banking both. Every
+# push drives the two courts' mutual OPINION so the relationship is felt in
+# ordinary diplomacy, not just a private counter. All clamp 0..100 via the nudge.
+#   $amount$ = points pushed onto the pole (positive).
+# "Japan" is resolved to the leading tag (JPN, else TKG) for the opinion swing.
+# ----------------------------------------------------------------------
+
+# Warm the entente. Accord climbs, rivalry cools a little, and Japan's court
+# thinks the better of the Qing (同文同種, "same script, same race").
+QING_japan_warm_accord = {
+	QING_japan_init = yes
+	QING_DECLINE_nudge = { var = qing_japan_accord   amount = $amount$ }
+	QING_DECLINE_nudge = { var = qing_japan_rivalry  amount = -3 }
+	QING_japan_resolve_lead = yes
+	if = {
+		limit = { exists = scope:qing_japan_lead }
+		scope:qing_japan_lead = { add_opinion = { modifier = qing_japan_accord_opinion  target = ROOT } }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_japan_warm_accord"  reason = "no Japan tag (JPN/TKG) on map - opinion swing skipped" }
+	}
+	LOG_line = { sys = QING  msg = "JAPAN accord += $amount$ -> [ROOT.MakeScope.GetVariable('qing_japan_accord').GetValue|0] for [ROOT.GetTag]" }
+}
+
+# Sharpen the rivalry. Rivalry climbs, accord cools, and Japan's court hardens
+# against the Qing — the road to the collision over Korea/Ryukyu/Taiwan.
+QING_japan_raise_rivalry = {
+	QING_japan_init = yes
+	QING_DECLINE_nudge = { var = qing_japan_rivalry  amount = $amount$ }
+	QING_DECLINE_nudge = { var = qing_japan_accord   amount = -3 }
+	QING_japan_resolve_lead = yes
+	if = {
+		limit = { exists = scope:qing_japan_lead }
+		scope:qing_japan_lead = { add_opinion = { modifier = qing_japan_rivalry_opinion  target = ROOT } }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_japan_raise_rivalry"  reason = "no Japan tag (JPN/TKG) on map - opinion swing skipped" }
+	}
+	LOG_line = { sys = QING  msg = "JAPAN rivalry += $amount$ -> [ROOT.MakeScope.GetVariable('qing_japan_rivalry').GetValue|0] for [ROOT.GetTag]" }
+}
+
+# Advance Japan's OWN Meiji industrialization meter (0..100). Climbs on its own
+# via the monthly pulse; the mission tasks nudge it when cooperation speeds it.
+QING_japan_meiji_advance = {
+	QING_japan_init = yes
+	QING_DECLINE_nudge = { var = qing_japan_meiji  amount = $amount$ }
+	LOG_line = { sys = QING  msg = "JAPAN Meiji += $amount$ -> [ROOT.MakeScope.GetVariable('qing_japan_meiji').GetValue|0] for [ROOT.GetTag]" }
+}
+
+# ----------------------------------------------------------------------
+# THE MONTHLY JAPAN PULSE — Meiji Japan modernizes whether the Qing helps or not.
+# The meter drifts UP over time (history's clock), FASTER when the two courts
+# cooperate (accord high) and slightly slower under open rivalry (resources bent
+# to arms, not works). A high Meiji meter under HIGH rivalry is the sharpest
+# danger the Qing can face — surfaced as a country modifier so it bites. Called
+# from the governance pulse (qing_mechanics_pulse_on_action) alongside the GP band.
+# ----------------------------------------------------------------------
+QING_japan_pulse = {
+	QING_japan_init = yes
+	# history's baseline drift — Japan modernizes regardless
+	QING_DECLINE_nudge = { var = qing_japan_meiji  amount = 1 }
+	# cooperation accelerates it (shared arsenals, students, the entente)
+	if = {
+		limit = { var:qing_japan_accord >= 50 }
+		QING_DECLINE_nudge = { var = qing_japan_meiji  amount = 1 }
+	}
+	# open rivalry bends Japan's effort to arms rather than broad industry
+	if = {
+		limit = { var:qing_japan_rivalry >= 60 }
+		QING_DECLINE_nudge = { var = qing_japan_meiji  amount = -1 }
+	}
+	QING_japan_apply_bands = yes
+}
+
+# One standing modifier reflecting where the relationship sits. Mutually
+# exclusive; re-applied each pulse. Rivalry+advanced-Meiji is the danger band;
+# accord is the entente dividend; otherwise nothing.
+QING_japan_apply_bands = {
+	# clear the three first so the bands never stack
+	remove_country_modifier = qing_japan_entente
+	remove_country_modifier = qing_japan_menace
+	remove_country_modifier = qing_japan_cold_peace
+	if = {
+		# THE ENTENTE — a warm, cooperative Japan is a boon (shared modernization)
+		limit = { var:qing_japan_accord >= 60  var:qing_japan_rivalry < 40 }
+		add_country_modifier = { name = qing_japan_entente  duration = -1 }
+		LOG_line = { sys = QING  msg = "band japan = entente for [ROOT.GetTag] (accord=[ROOT.MakeScope.GetVariable('qing_japan_accord').GetValue|0] rivalry=[ROOT.MakeScope.GetVariable('qing_japan_rivalry').GetValue|0])" }
+	}
+	else_if = {
+		# THE MENACE — an industrialized Japan turned hostile: the 1894 danger
+		limit = { var:qing_japan_rivalry >= 60  var:qing_japan_meiji >= 50 }
+		add_country_modifier = { name = qing_japan_menace  duration = -1 }
+		LOG_line = { sys = QING  msg = "band japan = menace for [ROOT.GetTag] (rivalry=[ROOT.MakeScope.GetVariable('qing_japan_rivalry').GetValue|0] meiji=[ROOT.MakeScope.GetVariable('qing_japan_meiji').GetValue|0])" }
+	}
+	else_if = {
+		# COLD PEACE — rivalry without (yet) the industrial teeth
+		limit = { var:qing_japan_rivalry >= 40 }
+		add_country_modifier = { name = qing_japan_cold_peace  duration = -1 }
+		LOG_line = { sys = QING  msg = "band japan = cold_peace for [ROOT.GetTag] (rivalry=[ROOT.MakeScope.GetVariable('qing_japan_rivalry').GetValue|0])" }
+	}
+}
+
+# ======================================================================
+# GENERIC REACTION — a great power reacts to a Qing move in its sphere.
+#   $power$    = britain | france | russia   (the tension-counter suffix)
+#   $tag$      = GBR | FRA | RUS              (the country tag)
+#   $severity$ = tension points added (integer)
+#
+# This does not merely bump a private counter — it drives the game's OWN
+# diplomatic mechanics so the antagonism is felt in ordinary play:
+#   • the affronted power's OPINION of the Qing drops (qing_gp_rivalry_opinion),
+#     which is the same relations value every diplomatic action reads;
+#   • the Qing accrues AGGRESSIVE EXPANSION, which chills relations with the
+#     whole neighbourhood exactly as a conquest would — the reach unsettles more
+#     than the one power;
+#   • once tension crosses the hostility threshold, an improved-relations goodwill
+#     (qing_gp_relation_opinion) with that power is stripped, so the rivalry
+#     cannot be papered over while the enterprise presses on.
+# Call from the aggressive tasks/events of the expansion trees.
+# ======================================================================
+QING_gp_react = {
+	QING_gp_init = yes
+	QING_DECLINE_nudge = { var = qing_gp_tension_$power$  amount = $severity$ }
+	# aggressive expansion — the standing relations penalty a bold move incurs
+	add_aggressive_expansion = $severity$
+	if = {
+		limit = { exists = c:$tag$ }
+		# the affronted power's opinion of the Qing — the core relations value
+		c:$tag$ = { add_opinion = { modifier = qing_gp_rivalry_opinion  target = ROOT } }
+		# past the hostility threshold, no amount of envoy-work smooths it over:
+		# strip any improved-relations goodwill the Qing had built with the power
+		if = {
+			limit = { var:qing_gp_tension_$power$ >= 50 }
+			c:$tag$ = { remove_opinion = { modifier = qing_gp_relation_opinion  target = ROOT } }
+		}
+	}
+		else = {
+			# the affronted power is not on the map (dead / never-formed tag): the
+			# tension counter still moved but no relations changed. Surface it so a
+			# provocation that only half-fired shows up in the trace.
+			LOG_fail = { sys = QING  fn = "QING_gp_react"  reason = "power tag $tag$ (sphere $power$) does not exist - opinion penalty skipped" }
+		}
+	LOG_line = { sys = QING  msg = "GP react: $tag$ tension +$severity$ (sphere $power$) for [ROOT.GetTag]" }
+}
+
+# ======================================================================
+# GRIP GRACE — control was thin in 1815 and took decades to solidify.
+# In 1815 British paramountcy in India was unfinished (the Anglo-Nepalese War was
+# still being fought) and Burma unconquered; France had NO Indochina presence at
+# all before 1858; Russia was far from the Amur and the Central Asian khanates.
+# So the SAME Qing move that would be a flat provocation in 1890 barely registers
+# in 1820 — the power is not yet there to be provoked. This refunds part of the
+# tension + aggressive expansion a provocation applied, on a graduated scale keyed
+# to how far the given power's control had consolidated by the current date.
+#   $power$ = britain | france | russia
+#   $soft$  = year before which the power's grip is merely NOMINAL (large refund)
+#   $hard$  = year after which the grip is SOLID (no refund; full hostility)
+# Call immediately after QING_gp_react (the theater wrappers do this).
+# ======================================================================
+QING_gp_grip_grace = {
+	if = {
+		# nominal control — the power is scarcely present in the region yet
+		limit = { current_date < $soft$ }
+		QING_DECLINE_nudge = { var = qing_gp_tension_$power$  amount = -6 }
+		add_aggressive_expansion = -3
+		LOG_line = { sys = QING  msg = "GP grip grace (nominal, sphere $power$) for [ROOT.GetTag]" }
+	}
+	else_if = {
+		# consolidating — present but not yet entrenched; partial refund
+		limit = { current_date < $hard$ }
+		QING_DECLINE_nudge = { var = qing_gp_tension_$power$  amount = -3 }
+		add_aggressive_expansion = -1
+		LOG_line = { sys = QING  msg = "GP grip grace (consolidating, sphere $power$) for [ROOT.GetTag]" }
+	}
+	# else: the grip is solid — the provocation stands at full weight.
+}
+
+# ======================================================================
+# BALANCE OF POWER — 以夷制夷, "using barbarians to control barbarians".
+# Britain, France and Russia are Great-Game RIVALS of one another. When the Qing
+# checks one of them, its two rivals are quietly pleased; when the Qing sides
+# with one, its rivals take it as partisanship. This is Li Hongzhang's doctrine
+# of playing the powers off each other — the high-risk/high-reward path, because
+# the goodwill/resentment it buys with the rivals is real relations movement, but
+# it deepens your entanglement in their mutual antagonism.
+#
+#   $rival_a$ / $rival_b$      = the two rival power suffixes (britain/france/russia)
+#   $rtag_a$   / $rtag_b$      = their country tags (GBR/FRA/RUS)
+#
+# DELIGHT — the target's two rivals welcome its being checked: mild goodwill AND
+# a small easing of their own tension with the Qing (a common enemy aligns us).
+QING_gp_rivals_delight = {
+	if = {
+		limit = { exists = c:$rtag_a$ }
+		c:$rtag_a$ = { add_opinion = { modifier = qing_gp_playoff_opinion  target = ROOT } }
+	}
+	if = {
+		limit = { exists = c:$rtag_b$ }
+		c:$rtag_b$ = { add_opinion = { modifier = qing_gp_playoff_opinion  target = ROOT } }
+	}
+	QING_DECLINE_nudge = { var = qing_gp_tension_$rival_a$  amount = -3 }
+	QING_DECLINE_nudge = { var = qing_gp_tension_$rival_b$  amount = -3 }
+	LOG_line = { sys = QING  msg = "GP playoff: rivals $rtag_a$/$rtag_b$ pleased for [ROOT.GetTag]" }
+}
+
+# BRISTLE — the placated power's two rivals resent the Qing taking a side: mild
+# resentment AND a small rise in their own tension (you are now the rival's friend).
+QING_gp_rivals_bristle = {
+	if = {
+		limit = { exists = c:$rtag_a$ }
+		c:$rtag_a$ = { add_opinion = { modifier = qing_gp_partisan_opinion  target = ROOT } }
+	}
+	if = {
+		limit = { exists = c:$rtag_b$ }
+		c:$rtag_b$ = { add_opinion = { modifier = qing_gp_partisan_opinion  target = ROOT } }
+	}
+	QING_DECLINE_nudge = { var = qing_gp_tension_$rival_a$  amount = 3 }
+	QING_DECLINE_nudge = { var = qing_gp_tension_$rival_b$  amount = 3 }
+	LOG_line = { sys = QING  msg = "GP partisan: rivals $rtag_a$/$rtag_b$ affronted for [ROOT.GetTag]" }
+}
+
+# Convenience wrappers so call sites read cleanly by theater. Each provocation
+# both antagonises its target AND delights the target's two rivals (以夷制夷),
+# then applies GRIP GRACE keyed to that power's historical consolidation in the
+# region — early expansion barely registers, late expansion draws full hostility.
+QING_gp_provoke_france = {   # Southeast Asia, incl. Vietnam — pleases GBR + RUS
+	QING_gp_react = { power = france  tag = FRA  severity = $severity$ }
+	QING_gp_rivals_delight = { rival_a = britain  rtag_a = GBR  rival_b = russia  rtag_b = RUS }
+	# France had NO Indochina foothold before the 1858 Cochinchina campaign, and
+	# did not entrench its protectorates until the 1880s.
+	QING_gp_grip_grace = { power = france  soft = 1858.1.1  hard = 1885.1.1 }
+}
+QING_gp_provoke_britain = {  # Burma + (British) India — pleases FRA + RUS
+	QING_gp_react = { power = britain  tag = GBR  severity = $severity$ }
+	QING_gp_rivals_delight = { rival_a = france  rtag_a = FRA  rival_b = russia  rtag_b = RUS }
+	# In 1815 British India was still consolidating (Anglo-Nepalese War ongoing;
+	# Burma unconquered until the wars of 1824-1885); paramountcy firm by ~1850s.
+	QING_gp_grip_grace = { power = britain  soft = 1826.1.1  hard = 1852.1.1 }
+}
+QING_gp_provoke_russia = {   # Central Asia, Siberia, Alaska — pleases GBR + FRA
+	QING_gp_react = { power = russia  tag = RUS  severity = $severity$ }
+	QING_gp_rivals_delight = { rival_a = britain  rtag_a = GBR  rival_b = france  rtag_b = FRA }
+	# Russia reached the Amur only in 1858-60 and conquered the Central Asian
+	# khanates 1865-85; before that its Far Eastern grip was nominal.
+	QING_gp_grip_grace = { power = russia  soft = 1858.1.1  hard = 1885.1.1 }
+}
+
+# ======================================================================
+# FRONTIER PLAY (#53) — express a colonisation aim as a first-class diplomatic
+# PLAY against the sphere power, not merely a claim + a tension counter.
+#
+# The colonisation missions already grant the frontier claim by fiat (add_claim)
+# and mount tension via QING_gp_provoke_*. This makes the SAME aim a visible
+# diplomatic CONFRONTATION with the power that holds/contests the ground:
+#   • it is the surface the #52 scan (QING_gp_scan_plays) keeps pressing each
+#     pulse while the play is live (a running crisis, not a one-off spike); and
+#   • once diplomatic-play RESOLUTION lands (task #58, DIPLOMACY_complete_play),
+#     a flag:get_territory play is the vehicle that converts the aim into the
+#     actual cession of $province$ — the very province the task already claims,
+#     so the claim and the play stay coherent.
+#
+# play_type = MANUAL, deliberately: an automatic play re-derives its target
+# country from the top-rated adversary in the target AREA (se_AI.txt ~636), which
+# would silently discard the specific sphere power we mean on a mixed-ownership
+# frontier. Manual respects the passed target. (Same idiom as the generic
+# migration breaking-point play, se_MIGRATION.txt.)
+#
+#   $tag$      = the sphere power's country tag (GBR / FRA / RUS)
+#   $province$ = a province in the contested frontier (the play_target_area) —
+#                the SAME province the calling task grants a claim on, so goal
+#                and claim describe one aim.
+#   $goal$     = flag:get_territory (a land grab) | flag:influence (a sphere contest)
+# Scope: ROOT / this = the Qing (the play instigator).
+# ======================================================================
+QING_gp_frontier_play = {
+	if = {
+		limit = {
+			# only a live, distinct sphere power over real ground can be pressed
+			exists = c:$tag$
+			NOT = { c:$tag$ = { this = ROOT } }
+			exists = p:$province$
+		}
+		LOG_line = { sys = QING  msg = "GP frontier play (#53): [ROOT.GetTag] opens a play vs $tag$ over [p:$province$.GetName] (goal $goal$)" }
+		AI_begin_diplomatic_play = {
+			play_instigator = ROOT
+			play_target_area = p:$province$
+			play_target_country = c:$tag$
+			play_goal = $goal$
+			play_type = manual
+		}
+		# the aim already carries a standing frontier claim, so the play opens with a
+		# baseline success head-start (still below the fizzle floor) rather than cold.
+		DIPLOMACY_seed_feature_play_success = yes
+	}
+	else = {
+		# the sphere power is gone / never formed, or the target province does not
+		# exist on this map: no play, but the task's claim + tension still stand.
+		LOG_fail = { sys = QING  fn = "QING_gp_frontier_play"  reason = "sphere power $tag$ absent or target province $province$ missing; frontier play not launched (claim + tension still applied)" }
+	}
+}
+
+# ======================================================================
+# SPLIT THE DIFFERENCE — an amicable PARTITION of a contested region.
+# When the Qing is strong enough to be taken seriously as a peer, it can settle a
+# contested frontier by negotiation rather than provocation: a sphere-of-influence
+# deal that hands the Qing its share WITHOUT the hostility a grab would incur — the
+# 19th-c. logic of the Anglo-Russian Convention (1907) carving up Persia, or the
+# Pamir Agreement (1895). The strength gate is the same the enterprise uses
+# elsewhere (a self-strengthened, solvent dynasty); a weak Qing has nothing to
+# bargain WITH and cannot invoke it.
+#   $power$ / $tag$ = the power the Qing settles with.
+# Effect: no tension spike — instead the deal COOLS tension and improves relations
+# with the partner, at a treasury + prestige cost; the partner's two rivals are
+# mildly reassured by an orderly settlement rather than provoked. The territorial
+# SHARE itself (claims / a buffer subject) is granted by the calling mission task,
+# which routes here instead of to the provoke path when the player chooses to deal.
+# STRENGTH GATE (check before offering): QING_gp_can_partition = yes — this is a
+# SCRIPTED TRIGGER defined in common/scripted_triggers/imp19c_diplomacy_triggers.txt,
+# measuring the Qing's GDP and military strength (not a proxy). It reads there
+# because it is used in mission allow/limit blocks (trigger context).
+# ======================================================================
+QING_gp_partition = {
+	QING_gp_init = yes
+	add_treasury = -100
+	current_ruler = { add_prestige = -10 }   # conceding a full claim is a bitter compromise at court
+	# a negotiated split cools the frontier rather than inflaming it
+	QING_DECLINE_nudge = { var = qing_gp_tension_$power$  amount = -12 }
+	if = {
+		limit = { exists = c:$tag$ }
+		c:$tag$ = {
+			add_opinion = { modifier = qing_gp_accommodation_opinion  target = ROOT }
+			add_opinion = { modifier = qing_gp_relation_opinion  target = ROOT }
+		}
+	}
+	LOG_line = { sys = QING  msg = "GP PARTITION (split the difference) with $tag$ (sphere $power$) for [ROOT.GetTag]" }
+}
+
+# Theater wrappers — settle amicably with the power whose sphere this is. The
+# rivals are reassured (a stable settlement), not affronted, so this uses a light
+# accommodation-opinion nudge on them rather than the partisan bristle.
+QING_gp_partition_with = {   # $power$/$tag$ = partner; $rtag_a$/$rtag_b$ = its rivals
+	QING_gp_partition = { power = $power$  tag = $tag$ }
+	if = { limit = { exists = c:$rtag_a$ }  c:$rtag_a$ = { add_opinion = { modifier = qing_gp_playoff_opinion  target = ROOT } } }
+	if = { limit = { exists = c:$rtag_b$ }  c:$rtag_b$ = { add_opinion = { modifier = qing_gp_playoff_opinion  target = ROOT } } }
+}
+QING_gp_partition_france = {
+	QING_gp_partition_with = { power = france  tag = FRA  rtag_a = GBR  rtag_b = RUS }
+}
+QING_gp_partition_britain = {
+	QING_gp_partition_with = { power = britain  tag = GBR  rtag_a = FRA  rtag_b = RUS }
+}
+QING_gp_partition_russia = {
+	QING_gp_partition_with = { power = russia  tag = RUS  rtag_a = GBR  rtag_b = FRA }
+}
+
+# ======================================================================
+# ACCOMMODATION — defer to a power / strike a deal; cools tension + goodwill.
+#   $power$ / $tag$ as above; $amount$ = tension points removed (positive int).
+# The player trades reach for relations — the low-risk, low-reward Great-Game
+# posture (side WITH a power) as opposed to playing both off.
+# ======================================================================
+QING_gp_accommodate = {
+	QING_gp_init = yes
+	QING_DECLINE_nudge = { var = qing_gp_tension_$power$  amount = $amount$ }   # negative $amount$ lowers it
+	# unwind some aggressive expansion — the deference reads as good conduct
+	add_aggressive_expansion = -2
+	if = {
+		limit = { exists = c:$tag$ }
+		# the power is placated, AND the two courts have genuinely improved relations
+		c:$tag$ = {
+			add_opinion = { modifier = qing_gp_accommodation_opinion  target = ROOT }
+			add_opinion = { modifier = qing_gp_relation_opinion  target = ROOT }
+		}
+	}
+	LOG_line = { sys = QING  msg = "GP accommodate: $tag$ tension $amount$ (sphere $power$) for [ROOT.GetTag]" }
+}
+
+# Theater wrappers for accommodation. Siding with one power is partisanship in the
+# eyes of its two rivals (以夷制夷 cuts both ways) — the cost side of the lever.
+QING_gp_side_with_france = {   # partner with France — offends GBR + RUS
+	QING_gp_accommodate = { power = france  tag = FRA  amount = $amount$ }
+	QING_gp_rivals_bristle = { rival_a = britain  rtag_a = GBR  rival_b = russia  rtag_b = RUS }
+}
+QING_gp_side_with_britain = {  # partner with Britain — offends FRA + RUS
+	QING_gp_accommodate = { power = britain  tag = GBR  amount = $amount$ }
+	QING_gp_rivals_bristle = { rival_a = france  rtag_a = FRA  rival_b = russia  rtag_b = RUS }
+}
+QING_gp_side_with_russia = {   # partner with Russia — offends GBR + FRA
+	QING_gp_accommodate = { power = russia  tag = RUS  amount = $amount$ }
+	QING_gp_rivals_bristle = { rival_a = britain  rtag_a = GBR  rival_b = france  rtag_b = FRA }
+}
+
+# ======================================================================
+# THE COURTING GAMBIT — 以夷制夷 as a deliberate PLAYER verb (see the scripted-GUI
+# actions in QING_mechanics_actions.txt). The Qing sends an embassy and gifts to
+# court ONE power, deepening the entente with it while its two rivals take open
+# offence. Costs treasury (the gift/legation). This is the high-risk/high-reward
+# lever in the player's own hands: strong goodwill + eased tension with the chosen
+# power, bought with resentment + rising tension from the other two.
+#   $power$ / $tag$ = the courted power; the wrapper supplies the rivals.
+# ======================================================================
+QING_gp_court = {
+	QING_gp_init = yes
+	add_treasury = -50
+	# a full accommodation with the courted power (deep tension cut + goodwill)...
+	QING_gp_accommodate = { power = $power$  tag = $tag$  amount = -20 }
+	if = {
+		limit = { exists = c:$tag$ }
+		c:$tag$ = { add_opinion = { modifier = qing_gp_accommodation_opinion  target = ROOT } }  # a second dose — this is courtship, not mere deference
+	}
+	LOG_line = { sys = QING  msg = "GP COURT gambit toward $tag$ (sphere $power$) for [ROOT.GetTag]" }
+}
+
+# Theater wrappers — court one power, offend its two rivals.
+QING_gp_court_france = {
+	QING_gp_court = { power = france  tag = FRA }
+	QING_gp_rivals_bristle = { rival_a = britain  rtag_a = GBR  rival_b = russia  rtag_b = RUS }
+}
+QING_gp_court_britain = {
+	QING_gp_court = { power = britain  tag = GBR }
+	QING_gp_rivals_bristle = { rival_a = france  rtag_a = FRA  rival_b = russia  rtag_b = RUS }
+}
+QING_gp_court_russia = {
+	QING_gp_court = { power = russia  tag = RUS }
+	QING_gp_rivals_bristle = { rival_a = britain  rtag_a = GBR  rival_b = france  rtag_b = FRA }
+}
+
+# ======================================================================
+# BAND APPLICATION — re-applied by the governance pulse. One rivalry modifier
+# per power whose tension has crossed the hostility threshold, so a provoked
+# power's enmity is felt in-game (and gates its advisor/investment offers off).
+# ======================================================================
+QING_gp_apply_bands = {
+	QING_gp_init = yes
+	# passive monthly cooling — a provoked power's enmity fades if not renewed
+	# (mirrors the opinion yearly_decay). Clamped at 0 by QING_DECLINE_nudge.
+	QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = -1 }
+	QING_DECLINE_nudge = { var = qing_gp_tension_france   amount = -1 }
+	QING_DECLINE_nudge = { var = qing_gp_tension_russia   amount = -1 }
+	# Britain
+	if = {
+		limit = { var:qing_gp_tension_britain >= 50 }
+		if = {
+			limit = { NOT = { has_country_modifier = qing_gp_rivalry_britain } }
+			add_country_modifier = { name = qing_gp_rivalry_britain  duration = -1 }
+			LOG_line = { sys = QING  msg = "band gp = rivalry_britain for [ROOT.GetTag] (tension=[ROOT.MakeScope.GetVariable('qing_gp_tension_britain').GetValue|0])" }
+		}
+	}
+	else = { remove_country_modifier = qing_gp_rivalry_britain }
+	# France
+	if = {
+		limit = { var:qing_gp_tension_france >= 50 }
+		if = {
+			limit = { NOT = { has_country_modifier = qing_gp_rivalry_france } }
+			add_country_modifier = { name = qing_gp_rivalry_france  duration = -1 }
+			LOG_line = { sys = QING  msg = "band gp = rivalry_france for [ROOT.GetTag] (tension=[ROOT.MakeScope.GetVariable('qing_gp_tension_france').GetValue|0])" }
+		}
+	}
+	else = { remove_country_modifier = qing_gp_rivalry_france }
+	# Russia
+	if = {
+		limit = { var:qing_gp_tension_russia >= 50 }
+		if = {
+			limit = { NOT = { has_country_modifier = qing_gp_rivalry_russia } }
+			add_country_modifier = { name = qing_gp_rivalry_russia  duration = -1 }
+			LOG_line = { sys = QING  msg = "band gp = rivalry_russia for [ROOT.GetTag] (tension=[ROOT.MakeScope.GetVariable('qing_gp_tension_russia').GetValue|0])" }
+		}
+	}
+	else = { remove_country_modifier = qing_gp_rivalry_russia }
+}
+
+# ######################################################################
+# DIPLOMATIC-PLAY PRESSURE  (task #52 — GP rivalry ↔ diplomatic plays)
+# ----------------------------------------------------------------------
+# The tension counters above were fed only by the SCRIPTED aggressive acts of
+# the mission trees (QING_gp_provoke_*). This layer makes the FIRST-CLASS
+# diplomatic-play system feed them too: whenever the Qing is running a play whose
+# target land sits in a great power's Great-Game sphere, that power's tension
+# mounts for as long as the play is live — and its two rivals are quietly pleased
+# (以夷制夷). The mounting pressure is what turns an ordinary colonial play in,
+# say, the Turkestan khanates into a standing quarrel with St. Petersburg.
+#
+# DESIGN — kept COUNTER-ONLY on purpose:
+#   • The scan runs on the existing 90-day Qing pulse and re-reads live plays, so
+#     it fires REPEATEDLY while a play persists. It therefore must be idempotent-
+#     safe: it only moves the tension counters (QING_DECLINE_nudge is clamped
+#     0..100), and does NOT add_opinion / add_aggressive_expansion per pulse
+#     (those would stack without bound). The opinion / rivalry-modifier / relation
+#     consequences are applied downstream by QING_gp_apply_bands the moment a
+#     counter crosses the hostility threshold — exactly as for the mission path.
+#   • No per-play "already reacted" flag is stored, so a recycled play-provobj
+#     (AI_remove_diplomatic_play does not clear custom vars) can never carry stale
+#     Qing state — the scan is a pure read of the current play set each pulse.
+#   • Sphere membership is geographic (QING_gp_sphere_is_* scripted triggers,
+#     imp19c_diplomacy_triggers.txt) so a DYNAMIC play target is classified at
+#     runtime, generalising the hand-placed theaters of the colonisation missions.
+# ######################################################################
+
+# Per-pulse pressure wrappers — raise the target power's tension a notch and ease
+# its two rivals' a notch (the balance-of-power tilt). Counter-only; see above.
+#   $severity$ = tension added to the pressed power this pulse (small: it recurs).
+QING_gp_play_pressure_france = {   # a Qing play reaches into SE Asia — France bristles
+	QING_DECLINE_nudge = { var = qing_gp_tension_france   amount = $severity$ }
+	QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = -1 }
+	QING_DECLINE_nudge = { var = qing_gp_tension_russia   amount = -1 }
+	LOG_line = { sys = QING  msg = "GP play pressure: France sphere intruded (+$severity$) for [ROOT.GetTag]" }
+}
+QING_gp_play_pressure_britain = {  # a Qing play reaches into Burma/India — Britain bristles
+	QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = $severity$ }
+	QING_DECLINE_nudge = { var = qing_gp_tension_france   amount = -1 }
+	QING_DECLINE_nudge = { var = qing_gp_tension_russia   amount = -1 }
+	LOG_line = { sys = QING  msg = "GP play pressure: Britain sphere intruded (+$severity$) for [ROOT.GetTag]" }
+}
+QING_gp_play_pressure_russia = {   # a Qing play reaches into C.Asia/Siberia/Alaska — Russia bristles
+	QING_DECLINE_nudge = { var = qing_gp_tension_russia   amount = $severity$ }
+	QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = -1 }
+	QING_DECLINE_nudge = { var = qing_gp_tension_france   amount = -1 }
+	LOG_line = { sys = QING  msg = "GP play pressure: Russia sphere intruded (+$severity$) for [ROOT.GetTag]" }
+}
+
+# The scan — run once per Qing pulse (human CHI). For each of the Qing's OWN
+# live plays, classify its target land into a sphere and press the owning power.
+# Scope: country (ROOT = CHI).
+QING_gp_scan_plays = {
+	QING_gp_init = yes
+	LOG_enter = { sys = QING  fn = "QING_gp_scan_plays" }
+	save_scope_as = qing_gp_self
+
+	# --- (A) plays the QING INSTIGATES that reach into a power's sphere ---------
+	# The Qing is the aggressor; the power whose Great-Game sphere the target land
+	# sits in bristles, its two rivals are quietly pleased.
+	every_in_global_list = {
+		variable = global_all_diplomatic_plays
+		limit = {
+			# only the Qing's OWN plays, and only those about a piece of land
+			exists = var:play_instigator
+			var:play_instigator = scope:qing_gp_self
+			exists = var:play_target_area
+		}
+		# France sphere — Southeast Asia
+		if = {
+			limit = { var:play_target_area = { QING_gp_sphere_is_france = yes } }
+			scope:qing_gp_self = { QING_gp_play_pressure_france = { severity = 3 } }
+		}
+		# Britain sphere — Burma + India
+		else_if = {
+			limit = { var:play_target_area = { QING_gp_sphere_is_britain = yes } }
+			scope:qing_gp_self = { QING_gp_play_pressure_britain = { severity = 3 } }
+		}
+		# Russia sphere — Central Asia, Siberia, Alaska
+		else_if = {
+			limit = { var:play_target_area = { QING_gp_sphere_is_russia = yes } }
+			scope:qing_gp_self = { QING_gp_play_pressure_russia = { severity = 3 } }
+		}
+		# else: the play is in no contested theater — no great power reacts.
+	}
+
+	# --- (B) plays a great power INSTIGATES AGAINST the Qing --------------------
+	# The Qing is the target of one of the three powers' aggression. The menacing
+	# power's tension mounts (the Qing resents the pressure); its two rivals ease
+	# (the Qing can appeal to them against the aggressor's gain — 以夷制夷 from the
+	# defensive side). Classified by the KNOWN instigator identity, not geography.
+	every_in_global_list = {
+		variable = global_all_diplomatic_plays
+		limit = {
+			exists = var:play_instigator
+			exists = var:play_target_country
+			var:play_target_country = scope:qing_gp_self
+			NOT = { var:play_instigator = scope:qing_gp_self }
+		}
+		if = {
+			limit = { var:play_instigator = { tag = FRA } }
+			scope:qing_gp_self = { QING_gp_play_pressure_france = { severity = 3 } }
+		}
+		else_if = {
+			limit = { var:play_instigator = { tag = GBR } }
+			scope:qing_gp_self = { QING_gp_play_pressure_britain = { severity = 3 } }
+		}
+		else_if = {
+			limit = { var:play_instigator = { tag = RUS } }
+			scope:qing_gp_self = { QING_gp_play_pressure_russia = { severity = 3 } }
+		}
+		# else: the aggressor is not one of the three Great-Game powers — no
+		# named counter to move (the generic claim-hostility layer covers it).
+	}
+	LOG_exit = { sys = QING  fn = "QING_gp_scan_plays"  result = OK }
+}

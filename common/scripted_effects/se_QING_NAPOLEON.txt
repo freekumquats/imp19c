@@ -1,0 +1,331 @@
+########################################################################
+# se_QING_NAPOLEON.txt — THE EMPEROR EMERITUS (太上皇): NAPOLEON AT THE QING
+# COURT (task #65). An alt-history reform chain: after Waterloo (1815) the Qing
+# court receives the exiled Napoleon and revives the 太上皇 office — the
+# "Retired/Grand Emperor" title Qianlong actually held 1796-99 after abdicating
+# to Jiaqing while keeping real power — conferring it on Napoleon. From that seat
+# he tutors the heir (the future Daoguang Emperor, char:227), ushers in a slate
+# of radical Enlightenment reforms, and steers Qing foreign policy toward his own
+# revenge project against Britain and Russia.
+#
+# DESIGN (locked with the user):
+#   • Emperor Emeritus is a NEW GRAND COUNCIL OFFICE, built on the existing office
+#     machinery (se_QING_COUNCIL.txt QING_office_appoint / _vacate + a country
+#     office-active modifier), NOT a bespoke system. Its key is `emeritus`.
+#   • Napoleon is DIVISIVE — a foreign usurper-emperor forcing reform enrages the
+#     conservative Manchu establishment (the qing_manchu_staunch identity band).
+#     While he holds the office the qing_emeritus_conservative_backlash modifier
+#     rides alongside the powerful reform buffs; staunch conservatives lose loyalty.
+#   • Napoleon is only CONDITIONALLY LOYAL. His true aim is building Qing strength
+#     to avenge Waterloo / 1812. His loyalty is HIGH while the court reforms AND
+#     runs an anti-GBR/anti-RUS line (his revenge is being served) and DROPS when
+#     the Qing appeases Britain/Russia or stalls the reforms. This makes the
+#     anti-GBR/RUS pro-FRA tilt the *price* of keeping him engaged — wired through
+#     the EXISTING GP-rivalry counters (se_QING_DIPLO.txt), not a parallel state.
+#   • He gets a DEDICATED, disproportionately powerful military tradition tree
+#     (00_napoleon.txt), unlocked by the country flag this chain sets.
+#
+# All CHI-only, player-only (the roll is is_ai = no gated). Every step wired to
+# se_LOG (sys = QING) with LOG_fail on guard-misses. The whole chain is once-only
+# (guarded by qing_napoleon_arrived / per-reform flags).
+#
+#   ROOT = the Qing country (CHI); ROOT.current_ruler = the emperor (Jiaqing at
+#   start); scope:napoleon = the conjured Napoleon character; char:227 = the heir
+#   Mianning (the future Daoguang Emperor).
+#
+# Prefix = QING_napoleon_
+#
+# Sources: the 太上皇 precedent (Qianlong's 1796 abdication to Jiaqing) — Cambridge
+# History of China v.9; the Napoleonic reform package (the Code, conscription /
+# levee en masse, the Banque de France, the lycee system) — standard Napoleonic
+# historiography. The scenario itself is counterfactual (the user's brief).
+########################################################################
+
+# ======================================================================
+# INIT — seed the chain's own counters for a fresh CHI game. Idempotent; called
+# from the mechanics startup hook alongside the other QING_*_init verbs.
+# ======================================================================
+QING_napoleon_init = {
+	if = { limit = { NOT = { has_variable = qing_napoleon_reforms_done } }  set_variable = { name = qing_napoleon_reforms_done  value = 0 } }
+}
+
+# ======================================================================
+# ARRIVAL — conjure Napoleon into the Qing court and confer the Emperor Emeritus
+# office on him. Called from the arrival event's immediate block (which has
+# already set the qing_napoleon_arrived guard flag and shown the sleeping-giant
+# quote). Follows the roster idiom: create_character takes no name, so we pin the
+# historical name as a nickname AND the event text names him. He is created with
+# a genius's stat line and the traits of a great captain.
+# ======================================================================
+QING_napoleon_spawn = {
+	LOG_enter = { sys = QING  fn = "QING_napoleon_spawn" }
+	create_character = {
+		age = 46                       # Napoleon was 46 in 1815
+		culture = french
+		religion = catholic
+		add_martial = 14               # the era's foremost soldier
+		add_charisma = 11
+		add_finesse = 10
+		add_zeal = 6
+		add_trait = tactician
+		add_trait = military_officer
+		add_trait = ambitious
+		add_trait = confident
+		save_scope_as = napoleon
+	}
+	scope:napoleon = {
+		# finalize via the shared roster idiom: pins home country + nickname, inits
+		# the Manchu/Han identity band the office/council mechanics read (he lands a
+		# sinicized outsider), and scores affinity with the reigning emperor.
+		QING_roster_finalize = { nick = "NICKNAME_QING_NAPOLEON" }
+		LOG_line = { sys = QING  msg = "napoleon: Napoleon Bonaparte 拿破崙 entered the [ROOT.GetTag] court as Emperor Emeritus candidate" }
+	}
+	# Record him on the country so the pulse and later events can find him.
+	set_variable = { name = qing_napoleon_char  value = scope:napoleon }
+	# Set the tradition-unlock flag: ONLY the Qing-under-Napoleon may take the
+	# Napoleonic military tradition tree (00_napoleon.txt reads this flag).
+	set_variable = qing_napoleon_present
+	LOG_exit = { sys = QING  fn = "QING_napoleon_spawn"  result = OK }
+}
+
+# ======================================================================
+# APPOINT TO THE EMPEROR EMERITUS OFFICE — reuse the parameterized office system
+# for the seat + power base, then apply the emeritus-specific country buff and the
+# conservative-backlash cost. Called inside Napoleon's character scope.
+# The office key `emeritus` plugs into QING_office_appoint's $office$ slot, so it
+# gets qing_office_emeritus_active / _holder / _vacancy handling for free.
+# ======================================================================
+QING_napoleon_take_office = {
+	# this = Napoleon.  Seat him on the Grand Council and give him the office.
+	QING_council_seat_character = yes
+	QING_office_appoint = { office = emeritus }
+	add_loyalty = loyalty_qing_elevated
+	employer = {
+		QING_council_recompute = yes
+		# the divisive foreigner: the conservative reaction begins at once.
+		QING_napoleon_apply_conservative_backlash = yes
+		LOG_line = { sys = QING  msg = "napoleon: Emperor Emeritus 太上皇 office conferred on Napoleon for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# CONSERVATIVE BACKLASH — a foreign usurper-emperor forcing Enlightenment reform
+# gores the Manchu old guard. Apply the country backlash modifier (once) and bleed
+# loyalty from every staunch-conservative councillor (the qing_manchu_staunch band).
+# Country scope. Idempotent on the modifier (add_country_modifier with a fixed
+# name refreshes rather than stacks in this engine, but we guard anyway).
+# ======================================================================
+QING_napoleon_apply_conservative_backlash = {
+	if = {
+		limit = { NOT = { has_country_modifier = qing_emeritus_conservative_backlash } }
+		add_country_modifier = { name = qing_emeritus_conservative_backlash  duration = -1 }
+	}
+	# the hardliners who loathe him lose loyalty to the throne that elevated him.
+	# Match on the identity SIGNAL, not only the qing_manchu_staunch MODIFIER: that
+	# modifier is applied by QING_char_shift_identity once var:qing_manchu_identity
+	# reaches the staunch threshold (>= 66), which may not yet have run at Napoleon's
+	# early-game arrival (< 1821.5.5). The variable itself is seeded at init (80 for
+	# Manchu-identified courtiers), so matching var:qing_manchu_identity >= 66 catches
+	# the staunch bloc at arrival; keeping the modifier as an OR covers the later case
+	# where the band has already formalised. Mirrors the shift-identity threshold.
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			OR = {
+				has_character_modifier = qing_manchu_staunch
+				AND = {
+					has_variable = qing_manchu_identity
+					var:qing_manchu_identity >= 66
+				}
+			}
+		}
+		add_loyalty = loyalty_qing_estranged
+	}
+	QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 4 }
+	LOG_line = { sys = QING  msg = "napoleon: conservative backlash applied (staunch Manchu councillors estranged) for [ROOT.GetTag]" }
+}
+
+# ======================================================================
+# THE FOREIGN-POLICY TILT — Napoleon's revenge project. Push Britain and Russia
+# tension UP and warm France, THROUGH the existing GP-rivalry engine (以夷制夷
+# wrappers in se_QING_DIPLO.txt). $severity$ scales the provocation. This is the
+# mechanism behind his loyalty (below): it is called when the player follows his
+# anti-GBR/RUS pro-FRA line, and rewards him with engagement.
+# ======================================================================
+QING_napoleon_revenge_tilt = {
+	# $severity$ = the tension push against Britain and Russia (e.g. 8).
+	LOG_enter = { sys = QING  fn = "QING_napoleon_revenge_tilt" }
+	QING_gp_provoke_britain = { severity = $severity$ }
+	QING_gp_provoke_russia  = { severity = $severity$ }
+	# warm France — his homeland and natural partner in the revenge project.
+	# QING_gp_side_with_france accommodates FRA (and, per 以夷制夷, bristles GBR+RUS
+	# too — reinforcing the anti-GBR/RUS tilt this whole verb serves).
+	QING_gp_side_with_france = { amount = 12 }
+	LOG_exit = { sys = QING  fn = "QING_napoleon_revenge_tilt"  result = OK }
+}
+
+# ======================================================================
+# CONDITIONAL-LOYALTY PULSE — re-scored each mechanics pulse while Napoleon holds
+# the office. His loyalty tracks whether his revenge project is being served:
+#   HIGH  when reforms advance AND Britain/Russia tension is high (anti-GBR/RUS)
+#   LOW   when the court appeases Britain/Russia (their tension has fallen) or
+#         the reforms have stalled.
+# Country scope; resolves Napoleon via qing_napoleon_char. No-op if he is gone.
+# ======================================================================
+QING_napoleon_loyalty_pulse = {
+	if = {
+		limit = {
+			has_variable = qing_napoleon_char
+			var:qing_napoleon_char = { is_alive = yes }
+		}
+		# his revenge is served: both rivals still resented, and reforms progressing.
+		if = {
+			limit = {
+				var:qing_gp_tension_britain >= 30
+				var:qing_gp_tension_russia >= 30
+				var:qing_napoleon_reforms_done >= 2
+			}
+			var:qing_napoleon_char = { add_loyalty = loyalty_qing_congenial }
+			LOG_line = { sys = QING  msg = "napoleon: loyalty HIGH (revenge project served) for [ROOT.GetTag]" }
+		}
+		# the court has gone soft on his enemies OR let the reforms stall: he sours.
+		else_if = {
+			limit = {
+				OR = {
+					var:qing_gp_tension_britain < 15
+					var:qing_gp_tension_russia < 15
+					var:qing_napoleon_reforms_done < 2
+				}
+			}
+			var:qing_napoleon_char = { add_loyalty = loyalty_qing_estranged }
+			LOG_line = { sys = QING  msg = "napoleon: loyalty DROPS (appeasement / reforms stalled) for [ROOT.GetTag]" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_napoleon_loyalty_pulse"  reason = "no living Emperor Emeritus; loyalty not scored for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# THE RADICAL REFORM SLATE — one verb per measure. Each grants a permanent country
+# modifier, advances the Self-Strengthening progress counter (reusing that engine,
+# per the brief), builds a real institution where one fits, counts toward
+# qing_napoleon_reforms_done (which gates the Daoguang Doctrine capstone and feeds
+# the loyalty pulse), and logs. Each guarded once-only by its own modifier.
+# ======================================================================
+
+# 拿破崙法典 Napoleonic Code — codified civil law.
+QING_napoleon_reform_code = {
+	LOG_enter = { sys = QING  fn = "QING_napoleon_reform_code" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_reform_napoleonic_code } }
+		add_country_modifier = { name = qing_reform_napoleonic_code  duration = -1 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -8 }
+		QING_selfstr_advance = { amount = 8 }
+		change_variable = { name = qing_napoleon_reforms_done  add = 1 }
+		LOG_line = { sys = QING  msg = "napoleon reform: Napoleonic Code enacted for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_napoleon_reform_code"  result = OK }
+}
+
+# 中央銀行 Central Banking — a modern fiscal-monetary institution. Ties into the
+# currency/wealth layer with a development grant.
+QING_napoleon_reform_bank = {
+	LOG_enter = { sys = QING  fn = "QING_napoleon_reform_bank" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_reform_central_bank } }
+		add_country_modifier = { name = qing_reform_central_bank  duration = -1 }
+		CURRENCY_grant_country_wealth = { thousands = 80 }
+		QING_selfstr_advance = { amount = 8 }
+		change_variable = { name = qing_napoleon_reforms_done  add = 1 }
+		LOG_line = { sys = QING  msg = "napoleon reform: Central Bank founded for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_napoleon_reform_bank"  result = OK }
+}
+
+# 國民教育 Primary Education — mass schooling. Builds a real school.
+QING_napoleon_reform_education = {
+	LOG_enter = { sys = QING  fn = "QING_napoleon_reform_education" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_reform_primary_education } }
+		add_country_modifier = { name = qing_reform_primary_education  duration = -1 }
+		QING_selfstr_build = { building = EDU_school }
+		QING_selfstr_advance = { amount = 8 }
+		change_variable = { name = qing_napoleon_reforms_done  add = 1 }
+		LOG_line = { sys = QING  msg = "napoleon reform: Primary Education established for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_napoleon_reform_education"  result = OK }
+}
+
+# 全民皆兵 Levee en masse — mass conscription + a modern drilled army. Raises a real
+# force at the capital via the verified create_unit / raise_legion idiom, and lifts
+# the banner-drill reform band (cutting decay), the military core of the package.
+QING_napoleon_reform_levee = {
+	LOG_enter = { sys = QING  fn = "QING_napoleon_reform_levee" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_reform_levee_en_masse } }
+		add_country_modifier = { name = qing_reform_levee_en_masse  duration = -1 }
+		# a drilled conscript army cuts the banner decay (reuses the reform-drill band).
+		QING_DECLINE_nudge = { var = qing_banner_decay  amount = -20 }
+		# save Napoleon to a scope so the raise_legion block can attach + command him
+		# via the proven scope: idiom (mirrors QING_selfstr_raise_evarmy_legion).
+		if = {
+			limit = { has_variable = qing_napoleon_char  var:qing_napoleon_char = { is_alive = yes } }
+			var:qing_napoleon_char = { save_scope_as = levee_commander }
+		}
+		if = {
+			limit = { exists = capital_scope }
+			capital_scope.governorship = {
+				raise_legion = {
+					create_unit = {
+						name = "La Grande Armee de Chine 中華大軍"
+						location = ROOT.capital_scope
+						sub_unit = regular_infantry
+						save_scope_as = qing_levee_legion
+						while = { count = 19  add_subunit = regular_infantry }
+					}
+					if = {
+						limit = { exists = scope:levee_commander }
+						scope:levee_commander = { add_to_legion = PREV }
+						random_legion_unit = { set_as_commander = scope:levee_commander }
+					}
+				}
+			}
+			LOG_line = { sys = QING  msg = "napoleon reform: Levee en masse — Grande Armee de Chine raised at capital for [ROOT.GetTag]" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_napoleon_reform_levee"  reason = "no capital_scope; conscript army not raised for [ROOT.GetTag]" }
+		}
+		QING_selfstr_advance = { amount = 10 }
+		change_variable = { name = qing_napoleon_reforms_done  add = 1 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_napoleon_reform_levee"  result = OK }
+}
+
+# ======================================================================
+# THE DAOGUANG DOCTRINE (道光主義) — the capstone. The heir Napoleon tutored (the
+# future Daoguang Emperor, char:227) proclaims a durable reform/foreign-policy
+# doctrine. Gated on the reform slate being substantially complete. Grants the
+# permanent apex modifier and seals the chain. Country scope.
+# ======================================================================
+QING_napoleon_proclaim_doctrine = {
+	LOG_enter = { sys = QING  fn = "QING_napoleon_proclaim_doctrine" }
+	if = {
+		limit = {
+			var:qing_napoleon_reforms_done >= 3
+			NOT = { has_country_modifier = qing_napoleon_daoguang_doctrine }
+		}
+		add_country_modifier = { name = qing_napoleon_daoguang_doctrine  duration = -1 }
+		# the reform crisis is resolved in the reform direction: relieve the pressure
+		# (reusing the reform-pressure counter, per the brief).
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -40 }
+		add_stability = 2
+		set_variable = qing_daoguang_doctrine_proclaimed
+		LOG_line = { sys = QING  msg = "napoleon: the Daoguang Doctrine 道光主義 proclaimed for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_napoleon_proclaim_doctrine"  reason = "reform slate incomplete (<3) or doctrine already proclaimed for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_napoleon_proclaim_doctrine"  result = OK }
+}

@@ -1,0 +1,90 @@
+########################################################################
+# se_DIPLO_BRIDGE.txt — wires the covert diplomatic-play chain
+# (agitator_sponsorship, se_DIPLOMACY / events) into the de jure disaffection
+# (Layer 3, se_DEJURE) and separatist-rebellion (Layer 4, se_SEPARATISM) layers.
+#
+# WHY: the agitator-sponsorship play is the mod's covert-subversion instrument —
+# a hostile power funds a disloyal notable in a rival to sow unrest. On its own it
+# is generic (loyalty / stability / state-loyalty damage). This bridge gives it
+# TEETH where it historically mattered: an alien-ruled borderland that still
+# remembers its own people (a province carrying the frozen var:dejure_culture and
+# a live dejure_disaffection modifier because its ruler never integrated that
+# culture). Fanning agitation THERE stacks extra unrest, pushing the province
+# toward the @separatism_unrest_threshold that lets it break away — and the power
+# that paid for the agitation becomes the natural backer of the secession that
+# follows.
+#
+# BACKER RULE (firm, user, see the separatism backer memory): a sponsor is only
+# pre-committed as a future backer if it is a NEIGHBOURING country in which the
+# disaffected people ACTUALLY LIVES — never a far-flung paymaster. The pre-commit
+# is a hint stored on the province; se_SEPARATISM re-validates it against the same
+# neighbour+culture gates at secession time before using it, and falls back to the
+# generic bordering-kin-state roll if it no longer holds.
+#
+# All lines logged sys = DIPLO (zero-cost outside -debug_mode).
+# Prefix = DIPLOMACY_
+########################################################################
+
+# ======================================================================
+# Called from agitator_sponsorship.4 (the recurring hidden agitation cycle, where
+# the actual damage is dealt). Scope: the sponsored agitator (a character).
+# Expects scope:agitator_sponsor (the paying power), scope:diplomatic_play, and
+# scope:diplomatic_play.var:play_target_area (the province being agitated).
+# ======================================================================
+DIPLOMACY_agitation_dejure_bridge = {
+	if = {
+		limit = {
+			exists = scope:diplomatic_play
+			scope:diplomatic_play = { exists = var:play_target_area }
+			exists = scope:agitator_sponsor
+		}
+		scope:diplomatic_play.var:play_target_area = {
+			if = {
+				limit = {
+					# an alien-ruled, already-disaffected homeland: it still carries
+					# its 1815 rightful culture and the L3 disaffection modifier.
+					has_province_modifier = dejure_disaffection
+					has_variable = dejure_culture
+					total_population > 0
+				}
+				owner = { save_scope_as = agit_target_owner }
+				var:dejure_culture = { save_scope_as = agit_dejure_culture }
+
+				# L3 AMPLIFICATION: the foreign hand fans the grievance. A shorter-
+				# lived (~5yr) modifier STACKED on top of the standing disaffection —
+				# it is the covert push, not the standing resentment, and lapses when
+				# the money stops.
+				add_province_modifier = { name = dejure_foreign_agitation  duration = 1825 }
+				LOG_line = { sys = DIPLO  msg = "agitation bridge: [scope:agitator_sponsor.GetTag] fans de jure unrest in [this.GetName] (its rightful culture is not integrated by [scope:agit_target_owner.GetTag])" }
+
+				# L4 PRE-COMMIT: the sponsor becomes the natural future backer of a
+				# secession here, but ONLY if it obeys the backer rule — a neighbour of
+				# the ruling power in which the disaffected people genuinely lives.
+				if = {
+					limit = {
+						scope:agitator_sponsor = {
+							NOT = { this = scope:agit_target_owner }
+							any_country_culture = { is_culture = scope:agit_dejure_culture }
+						}
+						scope:agit_target_owner = {
+							any_neighbour_country = { this = scope:agitator_sponsor }
+						}
+					}
+					# store on the province (survives the ownership change at secession);
+					# decays over ~a decade so a stale sponsorship does not haunt the land.
+					set_variable = { name = dejure_agitation_sponsor  value = scope:agitator_sponsor  days = 3650 }
+					LOG_line = { sys = DIPLO  msg = "agitation bridge: [scope:agitator_sponsor.GetTag] pre-committed as separatist backer for [this.GetName] (neighbouring kin-state of its rightful culture)" }
+				}
+				else = {
+					LOG_fail = { sys = DIPLO  fn = "DIPLOMACY_agitation_dejure_bridge"  reason = "sponsor is not a neighbouring kin-state of the disaffected culture; L3 amplified but no L4 backer pre-commit (backer rule)" }
+				}
+			}
+			else = {
+				LOG_fail = { sys = DIPLO  fn = "DIPLOMACY_agitation_dejure_bridge"  reason = "play target area is not an alien-ruled disaffected de jure province; no L3 amplification" }
+			}
+		}
+	}
+	else = {
+		LOG_fail = { sys = DIPLO  fn = "DIPLOMACY_agitation_dejure_bridge"  reason = "no diplomatic play, target area, or sponsor in scope" }
+	}
+}

@@ -1,0 +1,441 @@
+########################################################################
+# se_QING_SELFSTR.txt — the SELF-STRENGTHENING MOVEMENT engine (自強運動/洋務運動).
+#
+# A PREEMPTIVELY-pursuable POSITIVE track: pursue industrial + military
+# modernization early and well and the dynasty enters an alternate-history
+# GOLDEN AGE — the inverse of the decline cascade. Historically sponsored by the
+# Grand Council / governors-general (Prince Gong 恭親王 + Zongli Yamen, Li
+# Hongzhang 李鴻章, Zeng Guofan 曾國藩, Zuo Zongtang 左宗棠, Zhang Zhidong 張之洞),
+# so it CROSS-WIRES to the Grand Council hub (se_QING_COUNCIL.txt) and the great
+# offices, and to the economy/industry/currency sim.
+#
+# Design mirrors se_QING_GOVERNANCE.txt: a single 0..100 COUNTER on the Qing
+# country, advanced EVENT/MISSION-driven, read O(1) by the governance pulse which
+# swaps the progress band. Reuses QING_DECLINE_nudge for the clamped nudge.
+#   qing_selfstr_progress   0..100  momentum of the movement as a whole
+#
+# The Self-Strengthening MISSION TREE (common/missions/qing_selfstrengthening_
+# missions.txt) drives progress: each completed task calls QING_selfstr_found_*
+# below, which (a) grants the named-institution country modifier, (b) advances
+# progress, (c) builds the real institution via add_building_level, and (d) —
+# where historical — grants treasury via the CURRENCY public interface. That is
+# the "tie into existing mechanics" requirement: arsenals/yards become real
+# industry + buildings, not just abstract modifiers.
+#
+# ti-yong (中學為體，西學為用): bonuses are industrial/military/fiscal only; the
+# political end-states live in the reform track (se_QING_DECLINE / qing_reform).
+#
+#   ROOT / this = the Qing overlord (CHI, human)
+# Prefix = QING_selfstr_
+########################################################################
+
+# ======================================================================
+# INIT — seed the progress counter once for a fresh CHI game.
+# ======================================================================
+QING_selfstr_init = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_init" }
+	if = { limit = { NOT = { has_variable = qing_selfstr_progress } }  set_variable = { name = qing_selfstr_progress  value = 0 } }
+	LOG_exit = { sys = QING  fn = "QING_selfstr_init"  result = OK }
+}
+
+# ======================================================================
+# ADVANCE PROGRESS — clamped nudge, gated on the movement being viable.
+# A movement can only advance as fast as the bureaucracy + council can carry it:
+# progress gains are DAMPENED when bureau capacity or council effectiveness is
+# low (the historical failure mode — no central coordination). $amount$ = the
+# nominal progress points for this step.
+# ======================================================================
+QING_selfstr_advance = {
+	QING_selfstr_init = yes
+	# full gain when the machinery is capable; half gain when it is weak.
+	if = {
+		limit = {
+			var:qing_bureau_capacity >= 50
+			var:qing_council_effectiveness >= 50
+		}
+		QING_DECLINE_nudge = { var = qing_selfstr_progress  amount = $amount$ }
+		LOG_line = { sys = QING  msg = "selfstr +$amount$ (full) for [ROOT.GetTag]" }
+	}
+	else = {
+		set_variable = { name = qing_selfstr_gain_tmp  value = $amount$ }
+		change_variable = { name = qing_selfstr_gain_tmp  divide = 2 }
+		QING_DECLINE_nudge = { var = qing_selfstr_progress  amount = var:qing_selfstr_gain_tmp }
+		LOG_line = { sys = QING  msg = "selfstr +$amount$ HALVED (weak machinery) for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# BUILD AN INSTITUTION IN A CAPABLE PROVINCE — the economy tie-in.
+# Adds one level of $building$ to our most-populous owned province, so a founded
+# arsenal/yard/college/works is REAL industry in the region-based sim, not just a
+# country modifier. Mirrors the qing_integ.20.b precedent.
+# ======================================================================
+QING_selfstr_build = {
+	# $building$ = a building key from common/buildings (add_building_level)
+	if = {
+		limit = { any_owned_province = { count >= 1 } }
+		ordered_owned_province = {
+			order_by = total_population
+			max = 1
+			add_building_level = $building$
+		}
+		LOG_line = { sys = QING  msg = "selfstr built $building$ for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# NAMED-INSTITUTION FOUNDING EFFECTS — one per Self-Strengthening mission task.
+# Each grants the institution's lasting country modifier, advances the movement,
+# builds the real structure, and (where historical) grants development capital.
+# Called from the mission tree's on_completion blocks. All self-contained + logged.
+# ======================================================================
+
+# 江南製造總局 (Jiangnan Arsenal, 1865) — guns, shells, and the translation bureau.
+QING_selfstr_found_jiangnan = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_found_jiangnan" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_selfstr_jiangnan_arsenal } }
+		add_country_modifier = { name = qing_selfstr_jiangnan_arsenal  duration = -1 }
+		QING_selfstr_build = { building = arsenal_building }
+		QING_selfstr_advance = { amount = 12 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_found_jiangnan"  result = OK }
+}
+
+# 福州船政局 (Fuzhou Navy Yard, 1866) + naval college — the YARD is delivered as a
+# port + naval modifiers (it builds naval capacity, not hulls). The fleets it
+# enabled are the separate 北洋/南洋/福建/廣東 tasks, which raise real squadrons.
+QING_selfstr_found_fuzhou = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_found_fuzhou" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_selfstr_fuzhou_yard } }
+		add_country_modifier = { name = qing_selfstr_fuzhou_yard  duration = -1 }
+		# a naval yard is a port; build it in our most-populous COASTAL province
+		if = {
+			limit = { any_owned_province = { is_coastal = yes } }
+			ordered_owned_province = {
+				limit = { is_coastal = yes }
+				order_by = total_population
+				max = 1
+				add_building_level = port_building
+			}
+		}
+		QING_selfstr_advance = { amount = 12 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_found_fuzhou"  result = OK }
+}
+
+# ======================================================================
+# SHARED FLEET-RAISER — spawn a REAL squadron at its historical home port.
+# The four Self-Strengthening fleets (北洋/南洋/福建/廣東) are 1860s–80s creations;
+# each is raised ON MISSION COMPLETION (not seeded at game start — they did not
+# exist in 1815), following the engine idiom the user confirmed (debugevents.1):
+# create_unit = { navy = yes location=<province> add_subunit=<ship>... } run in
+# COUNTRY scope, no raise_legion wrapper. Guarded: prefer the historical home
+# port if owned + coastal; else fall back to our most-populous coastal province;
+# else LOG_fail (ability granted, no hull raised) so the miss is surfaced.
+# NOTE (scale): the squadrons are HISTORICALLY SIZED, not token forces — Beiyang was
+# the strongest fleet in Asia at its 1888–94 peak (2 ironclads + ~10 cruisers +
+# gunboats/torpedo boats), Nanyang the smaller second squadron, Fujian the Fuzhou-yard
+# force annihilated at 馬江海戰 1884 (~11 warships), Guangdong a dozen small southern
+# gunboats. screw_frigate = a major warship, medium_steamer = a smaller steam vessel.
+# These do carry naval maintenance, matching the historical fiscal burden of the fleets.
+#   $fleetname$ = display name    $homeport$ = home-port province scope
+#   $frigates$  = # of screw_frigate hulls    $steamers$ = # of medium_steamer hulls
+# ======================================================================
+QING_selfstr_raise_fleet = {
+	if = {
+		limit = { exists = $homeport$  $homeport$ = { owner = ROOT  is_coastal = yes } }
+		create_unit = {
+			navy = yes
+			name = $fleetname$
+			location = $homeport$
+			while = { count = $frigates$  add_subunit = screw_frigate }
+			while = { count = $steamers$  add_subunit = medium_steamer }
+		}
+		LOG_line = { sys = QING  msg = "$fleetname$ raised at home port for [ROOT.GetTag]" }
+	}
+	else_if = {
+		limit = { any_owned_province = { is_coastal = yes } }
+		ordered_owned_province = {
+			limit = { is_coastal = yes }
+			order_by = total_population
+			max = 1
+			save_scope_as = qing_fleet_fallback_port
+		}
+		create_unit = {
+			navy = yes
+			name = $fleetname$
+			location = scope:qing_fleet_fallback_port
+			while = { count = $frigates$  add_subunit = screw_frigate }
+			while = { count = $steamers$  add_subunit = medium_steamer }
+		}
+		LOG_line = { sys = QING  msg = "$fleetname$ raised at fallback coastal port (home port not held) for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_selfstr_raise_fleet"  reason = "no coastal province owned; $fleetname$ ability granted but no hull raised for [ROOT.GetTag]" }
+	}
+}
+
+# 北洋水師 (Beiyang Fleet) — the great northern fleet, Li Hongzhang's pride, home
+# waters the Bohai / northern approaches (here Tianjin p:3783). The strongest
+# squadron: grants the fleet-quality ability AND raises real modern hulls.
+QING_selfstr_found_beiyang = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_found_beiyang" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_selfstr_beiyang_fleet } }
+		add_country_modifier = { name = qing_selfstr_beiyang_fleet  duration = -1 }
+		QING_selfstr_advance = { amount = 15 }
+		QING_selfstr_raise_fleet = { fleetname = "Beiyang Fleet"  homeport = p:3783  frigates = 14  steamers = 10 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_found_beiyang"  result = OK }
+}
+
+# 南洋水師 (Nanyang Fleet) — the southern fleet defending the Yangzi approaches
+# and the central coast, home port Shanghai p:5429.
+QING_selfstr_found_nanyang = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_found_nanyang" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_selfstr_nanyang_fleet } }
+		add_country_modifier = { name = qing_selfstr_nanyang_fleet  duration = -1 }
+		QING_selfstr_advance = { amount = 10 }
+		QING_selfstr_raise_fleet = { fleetname = "Nanyang Fleet"  homeport = p:5429  frigates = 8  steamers = 10 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_found_nanyang"  result = OK }
+}
+
+# 福建水師 (Fujian Fleet) — the Fuzhou squadron built around the 福州船政局 yard,
+# home port Fuzhou p:3651. Historically annihilated by the French at the Battle of
+# Fuzhou (馬江海戰, 1884); here a genuine standing squadron the player can keep.
+QING_selfstr_found_fujian = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_found_fujian" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_selfstr_fujian_fleet } }
+		add_country_modifier = { name = qing_selfstr_fujian_fleet  duration = -1 }
+		QING_selfstr_advance = { amount = 8 }
+		QING_selfstr_raise_fleet = { fleetname = "Fujian Fleet"  homeport = p:3651  frigates = 6  steamers = 5 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_found_fujian"  result = OK }
+}
+
+# 廣東水師 (Guangdong Fleet) — the Canton squadron guarding the Pearl River delta
+# and the far south coast, home port Guangzhou p:9298. The smallest of the four.
+QING_selfstr_found_guangdong = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_found_guangdong" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_selfstr_guangdong_fleet } }
+		add_country_modifier = { name = qing_selfstr_guangdong_fleet  duration = -1 }
+		QING_selfstr_advance = { amount = 8 }
+		QING_selfstr_raise_fleet = { fleetname = "Guangdong Fleet"  homeport = p:9298  frigates = 3  steamers = 9 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_found_guangdong"  result = OK }
+}
+
+# 常勝軍 (Ever-Victorious Army) — Ward/Gordon's Western-drilled force, the seed of
+# the modern Huai Army 淮軍. Delivered as BOTH a lasting army ABILITY (the
+# qing_selfstr_ever_victorious modifier: cheap, disciplined modern land units) AND
+# a REAL legion raised at its historical base, Songjiang/Shanghai (p:5429) — or the
+# capital if Shanghai is not held. If the caller saved a commander as
+# scope:evarmy_commander (Ward in qing_roster.16, Gordon in qing_roster.9), he is
+# attached to the legion; otherwise the player assigns a commander. create_unit
+# follows the verified engine idiom (base sub_unit + add_subunit; commander via
+# add_to_legion=PREV + random_legion_unit set_as_commander).
+QING_selfstr_found_evarmy = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_found_evarmy" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_selfstr_ever_victorious } }
+		add_country_modifier = { name = qing_selfstr_ever_victorious  duration = -1 }
+		QING_selfstr_advance = { amount = 12 }
+		# Raise the real force. Prefer Shanghai (its historical base); fall back to
+		# the capital province if Shanghai is not owned. Guarded so a landless or
+		# Shanghai-less Qing still gets the ability without a scope error.
+		if = {
+			limit = { exists = p:5429  p:5429 = { owner = ROOT } }
+			p:5429 = { state.governorship = { QING_selfstr_raise_evarmy_legion = { loc = p:5429 } } }
+			LOG_line = { sys = QING  msg = "Ever-Victorious Army 常勝軍 raised at Shanghai (p:5429) for [ROOT.GetTag]" }
+		}
+		else_if = {
+			limit = { exists = capital_scope }
+			capital_scope = { state.governorship = { QING_selfstr_raise_evarmy_legion = { loc = ROOT.capital_scope } } }
+			LOG_line = { sys = QING  msg = "Ever-Victorious Army 常勝軍 raised at capital (Shanghai not held) for [ROOT.GetTag]" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_selfstr_found_evarmy"  reason = "no Shanghai and no capital province; ability granted but no legion raised for [ROOT.GetTag]" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_found_evarmy"  result = OK }
+}
+
+# Raise one Ever-Victorious legion at $loc$ (a province scope). Called in
+# governorship scope. Attaches scope:evarmy_commander if the caller provided one.
+QING_selfstr_raise_evarmy_legion = {
+	# $loc$ = province scope for the legion's muster point
+	raise_legion = {
+		create_unit = {
+			name = "Ever-Victorious Army"
+			location = $loc$
+			sub_unit = regular_infantry
+			save_scope_as = evarmy_legion
+			add_subunit = regular_infantry
+			add_subunit = regular_infantry
+			add_subunit = regular_infantry
+			add_subunit = regular_infantry
+			add_subunit = regular_infantry
+		}
+		if = {
+			limit = { exists = scope:evarmy_commander }
+			scope:evarmy_commander = { add_to_legion = PREV }
+			random_legion_unit = { set_as_commander = scope:evarmy_commander }
+		}
+	}
+}
+
+# 同文館 (Tongwen Guan, 1862) → colleges → 京師大學堂 — schools + a university.
+QING_selfstr_found_tongwen = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_found_tongwen" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_selfstr_tongwen_college } }
+		add_country_modifier = { name = qing_selfstr_tongwen_college  duration = -1 }
+		QING_selfstr_build = { building = EDU_university }
+		QING_selfstr_advance = { amount = 10 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_found_tongwen"  result = OK }
+}
+
+# 輪船招商局 (China Merchants SNC, 1872) — a commerce district. The telegraph is
+# now founded separately (QING_selfstr_found_telegraph), reflecting that the
+# 電報總局 was a distinct 1880s undertaking under Sheng Xuanhuai 盛宣懷.
+#
+# 官督商辦 ("official supervision, merchant management") TENSION: the model that
+# raised real merchant capital also fused bureaucratic control with private
+# profit, and that fusion bred graft, squeeze, and managerial paralysis (the
+# classic critique of Sheng Xuanhuai's conglomerates). We express it as a lasting
+# governance tension modifier and a small corruption nudge — a genuine cost that
+# rides alongside the commercial gain, exactly the ti-yong bargain the era struck.
+QING_selfstr_found_merchant = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_found_merchant" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_selfstr_merchant_steam } }
+		add_country_modifier = { name = qing_selfstr_merchant_steam  duration = -1 }
+		QING_selfstr_build = { building = URB_commerce_district }
+		# 官督商辦 raised real merchant capital — grant development funds.
+		CURRENCY_grant_country_wealth = { thousands = 60 }
+		# ...but the official-supervision graft rides along with the capital.
+		add_country_modifier = { name = qing_selfstr_guandu_tension  duration = -1 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
+		QING_selfstr_advance = { amount = 10 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_found_merchant"  result = OK }
+}
+
+# 電報總局 (Imperial Telegraph Administration, 1881, Sheng Xuanhuai 盛宣懷) — the
+# national telegraph network. Split out from the rail undertaking: a distinct
+# institution that lifts administrative reach (the wire lets the centre command
+# the provinces in hours, not weeks) — so it feeds bureau CAPACITY directly as
+# well as commerce. Also 官督商辦, so it carries the same supervision tension.
+QING_selfstr_found_telegraph = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_found_telegraph" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_selfstr_telegraph_network } }
+		add_country_modifier = { name = qing_selfstr_telegraph_network  duration = -1 }
+		QING_selfstr_build = { building = URB_commerce_district }
+		# the wire lengthens the reach of every edict — a direct capacity lift.
+		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = 6 }
+		if = {
+			limit = { NOT = { has_country_modifier = qing_selfstr_guandu_tension } }
+			add_country_modifier = { name = qing_selfstr_guandu_tension  duration = -1 }
+		}
+		QING_selfstr_advance = { amount = 8 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_found_telegraph"  result = OK }
+}
+
+# Railways + Kaiping Mines 開平礦務局 + Hanyang Ironworks 漢陽鐵廠 — rail, coal, iron.
+QING_selfstr_found_rail = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_found_rail" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_selfstr_rail_and_iron } }
+		add_country_modifier = { name = qing_selfstr_rail_and_iron  duration = -1 }
+		QING_selfstr_build = { building = INF_railway_upgrade }
+		# a resource-gathering operation for the coal + iron of Kaiping/Hanyang
+		QING_selfstr_build = { building = IND_resource_gathering_operation }
+		QING_selfstr_advance = { amount = 12 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_found_rail"  result = OK }
+}
+
+# ======================================================================
+# THE "REFRACTION" TEST — is the modernization genuine or hollow? (Elman)
+# Benjamin Elman ("Naval Warfare and the Refraction of China's Self-Strengthening
+# Reforms", 2004) argues the movement's collapse at the Yalu (1894) exposed that
+# much of its progress was HOLLOW: yards and fleets bought, but not matched by the
+# administrative coordination, honest funding, and trained cadres to wield them.
+# We model that as a validation the mission-progress counter must pass: real
+# strength is qing_selfstr_progress BACKED BY bureau capacity + council
+# effectiveness + fiscal integrity. When progress runs far ahead of the machinery
+# that must carry it, the surplus is "refracted" — it looks like strength but is
+# brittle. QING_selfstr_refraction_gap computes how hollow the movement is (0 =
+# fully backed; higher = more hollow) and stamps qing_selfstr_hollow_flag so the
+# army-performance test event (qing_reform / qing_office family) can fire.
+#   ROOT / this = the Qing overlord.
+# ======================================================================
+QING_selfstr_refraction_test = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_refraction_test" }
+	QING_selfstr_init = yes
+	# backing = average of the three machinery meters that must carry the movement.
+	set_variable = { name = qing_selfstr_backing  value = var:qing_bureau_capacity }
+	change_variable = { name = qing_selfstr_backing  add = var:qing_council_effectiveness }
+	change_variable = { name = qing_selfstr_backing  add = var:qing_bureau_integrity }
+	change_variable = { name = qing_selfstr_backing  divide = 3 }
+	# gap = how far progress outruns its backing (clamped at 0 — a well-backed
+	# movement is not "extra" strong, it is simply genuine).
+	set_variable = { name = qing_selfstr_refraction_gap  value = var:qing_selfstr_progress }
+	change_variable = { name = qing_selfstr_refraction_gap  subtract = var:qing_selfstr_backing }
+	if = { limit = { var:qing_selfstr_refraction_gap < 0 }  set_variable = { name = qing_selfstr_refraction_gap  value = 0 } }
+	# a gap of 25+ marks a hollow movement (progress far ahead of the machinery).
+	if = {
+		limit = { var:qing_selfstr_refraction_gap >= 25 }
+		set_variable = { name = qing_selfstr_hollow_flag  value = 1 }
+		LOG_line = { sys = QING  msg = "refraction: HOLLOW for [ROOT.GetTag] (progress=[ROOT.MakeScope.GetVariable('qing_selfstr_progress').GetValue|0] backing=[ROOT.MakeScope.GetVariable('qing_selfstr_backing').GetValue|0] gap=[ROOT.MakeScope.GetVariable('qing_selfstr_refraction_gap').GetValue|0])" }
+	}
+	else = {
+		set_variable = { name = qing_selfstr_hollow_flag  value = 0 }
+		LOG_line = { sys = QING  msg = "refraction: genuine for [ROOT.GetTag] (progress=[ROOT.MakeScope.GetVariable('qing_selfstr_progress').GetValue|0] backing=[ROOT.MakeScope.GetVariable('qing_selfstr_backing').GetValue|0] gap=[ROOT.MakeScope.GetVariable('qing_selfstr_refraction_gap').GetValue|0])" }
+	}
+	# re-apply the hollow-movement band (a brittle-modernization malus) each pass.
+	QING_selfstr_apply_hollow_band = yes
+	LOG_exit = { sys = QING  fn = "QING_selfstr_refraction_test"  result = OK }
+}
+
+QING_selfstr_apply_hollow_band = {
+	remove_country_modifier = qing_selfstr_hollow
+	if = {
+		limit = { var:qing_selfstr_hollow_flag = 1 }
+		add_country_modifier = { name = qing_selfstr_hollow  duration = -1 }
+	}
+}
+
+# ======================================================================
+# BAND APPLICATION — one active progress band, matching the counter.
+# Called from the governance pulse (QING_GOV_pulse) so it re-applies each quarter.
+# ======================================================================
+QING_selfstr_apply_band = {
+	remove_country_modifier = qing_selfstr_nascent
+	remove_country_modifier = qing_selfstr_advancing
+	remove_country_modifier = qing_selfstr_golden_age
+	if = {
+		limit = { var:qing_selfstr_progress >= 85 }
+		add_country_modifier = { name = qing_selfstr_golden_age  duration = -1 }
+		LOG_line = { sys = QING  msg = "band selfstr = golden_age for [ROOT.GetTag] (progress=[ROOT.MakeScope.GetVariable('qing_selfstr_progress').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_selfstr_progress >= 50 }
+		add_country_modifier = { name = qing_selfstr_advancing  duration = -1 }
+		LOG_line = { sys = QING  msg = "band selfstr = advancing for [ROOT.GetTag] (progress=[ROOT.MakeScope.GetVariable('qing_selfstr_progress').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_selfstr_progress >= 25 }
+		add_country_modifier = { name = qing_selfstr_nascent  duration = -1 }
+		LOG_line = { sys = QING  msg = "band selfstr = nascent for [ROOT.GetTag] (progress=[ROOT.MakeScope.GetVariable('qing_selfstr_progress').GetValue|0])" }
+	}
+}

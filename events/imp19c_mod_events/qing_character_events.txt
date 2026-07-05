@@ -1,0 +1,236 @@
+########################################################################
+# qing_character_events.txt — the character-level mechanics: sinicization vs
+# Manchu identity (#8) and squabbling heirs + Yongzheng's secret succession
+# (#4/#5).
+#
+#   ROOT / this  = the Qing overlord (CHI, player)
+#   scope:qing_char = the courtier/prince the event concerns
+#
+# Namespace = qing_char
+#   .10  #8 — a Manchu grandee weighs a Han marriage (identity choice)
+#   .11  #8 — the emperor orders Manchu-language exams (國語騎射)
+#   .20  #4 — princely factions form during the ruler's decline
+#   .21  #5 — adopt the secret succession system (秘密立儲)
+#   .22  #4 — a succession crisis erupts
+########################################################################
+
+namespace = qing_char
+
+########################################################################
+# .10  A HAN MARRIAGE  (#8 sinicization)
+# History: garrison bannermen intermarried with Han despite prohibitions and
+# lost Manchu fluency; individuals traded on Manchu access + Chinese cultural
+# capital (the Heshen 和珅 pattern). Source: Elliott, *The Manchu Way*.
+########################################################################
+qing_char.10 = {
+	type = country_event
+	title = "qing_char.10.t"
+	desc = "qing_char.10.desc"
+	picture = greek_court
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:qing_char
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_char.10 (Han marriage) [ROOT.GetTag] char=[scope:qing_char.GetName]" }
+	}
+
+	# --- Bless the marriage (prestige, but the family sinicizes) ----------
+	option = {
+		name = "qing_char.10.a"
+		custom_tooltip = "qing_char.10.a.tt"
+		current_ruler = { add_prestige = 10 }
+		scope:qing_char = { QING_char_shift_identity = { amount = -30 } }
+	}
+
+	# --- Forbid it; uphold banner endogamy --------------------------------
+	option = {
+		name = "qing_char.10.b"
+		custom_tooltip = "qing_char.10.b.tt"
+		scope:qing_char = { QING_char_shift_identity = { amount = 15 } }
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 3 }
+	}
+}
+
+########################################################################
+# .11  MANCHU-LANGUAGE EXAMINATIONS  (#8 — 國語騎射)
+# History: Qianlong and Jiaqing ordered banner schools to restore Manchu and
+# mounted archery, lamenting banner officers' illiteracy in Manchu; the drives
+# largely failed and irritated sinicized bannermen.
+########################################################################
+qing_char.11 = {
+	type = country_event
+	title = "qing_char.11.t"
+	desc = "qing_char.11.desc"
+	picture = great_library
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_char.11 (Manchu exams) [ROOT.GetTag]" }
+	}
+
+	# --- Impose the examinations (restore Manchu identity, cost + friction)-
+	option = {
+		name = "qing_char.11.a"
+		custom_tooltip = "qing_char.11.a.tt"
+		trigger = { treasury >= 50 }
+		add_treasury = -50
+		# Push every Manchu courtier a step back toward staunch identity.
+		every_character = {
+			limit = {
+				employer = ROOT
+				is_adult = yes
+				culture = root.primary_culture
+			}
+			QING_char_shift_identity = { amount = 12 }
+		}
+		QING_DECLINE_nudge = { var = qing_banner_decay  amount = -8 }
+	}
+
+	# --- Let the language fade -------------------------------------------
+	option = {
+		name = "qing_char.11.b"
+		custom_tooltip = "qing_char.11.b.tt"
+		QING_DECLINE_nudge = { var = qing_banner_decay  amount = 5 }
+		add_stability = 1
+	}
+}
+
+########################################################################
+# .20  PRINCELY FACTIONS  (#4 squabbling heirs)
+# History: the Nine Lords' Struggle (九子奪嫡, 1708-22) — Kangxi's deposed heir
+# Yinreng, the "eight lords' party" vs. the fourth prince's faction, the murky
+# 1722 accession and Yongzheng's purges. Source: Silas Wu, *Passage to Power*.
+# Fires when the ruler ages / sickens and no secret succession is in place.
+########################################################################
+qing_char.20 = {
+	type = country_event
+	title = "qing_char.20.t"
+	desc = "qing_char.20.desc"
+	picture = greek_court
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_char.20 (princely factions) [ROOT.GetTag]" }
+	}
+
+	# --- Adopt the secret succession system (秘密立儲) ---------------------
+	option = {
+		name = "qing_char.20.a"
+		custom_tooltip = "qing_char.20.a.tt"
+		trigger = { NOT = { has_variable = qing_secret_succession } }
+		trigger_event = { id = qing_char.21  days = 3 }
+	}
+
+	# --- Name an heir openly (invites factional struggle) -----------------
+	option = {
+		name = "qing_char.20.b"
+		custom_tooltip = "qing_char.20.b.tt"
+		add_stability = -2
+		set_variable = { name = qing_succession_contested  days = 3650  value = 1 }
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 5 }
+	}
+
+	# --- Let the princes contend (highest risk) ---------------------------
+	option = {
+		name = "qing_char.20.c"
+		custom_tooltip = "qing_char.20.c.tt"
+		add_stability = -1
+		set_variable = { name = qing_succession_contested  days = 3650  value = 1 }
+		trigger_event = { id = qing_char.22  days = { 180 720 } }
+	}
+}
+
+########################################################################
+# .21  THE SECRET SUCCESSION SYSTEM  (#5 — 秘密立儲)
+# History: Yongzheng (~1723) sealed the heir's name behind the 正大光明 plaque,
+# revealed only at death. It gave three orderly successions (Qianlong 1735,
+# Jiaqing 1796, Daoguang 1820) by denying princes a candidate to back.
+########################################################################
+qing_char.21 = {
+	type = country_event
+	title = "qing_char.21.t"
+	desc = "qing_char.21.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_char.21 (secret succession) [ROOT.GetTag]" }
+	}
+
+	# --- Seal the edict behind the 正大光明 plaque ------------------------
+	option = {
+		name = "qing_char.21.a"
+		custom_tooltip = "qing_char.21.a.tt"
+		set_variable = { name = qing_secret_succession  value = 1 }
+		# No factional struggle: a lasting stability keel.
+		add_stability = 3
+		if = { limit = { has_variable = qing_succession_contested } remove_variable = qing_succession_contested }
+		add_country_modifier = { name = qing_reform_constitutionalist  duration = 1825 }
+	}
+
+	# --- Reconsider; keep the open system ---------------------------------
+	option = {
+		name = "qing_char.21.b"
+		custom_tooltip = "qing_char.21.b.tt"
+		add_stability = -1
+	}
+}
+
+########################################################################
+# .22  SUCCESSION CRISIS
+# The open contest turns bitter — factions clash, and the loser's camp may
+# rebel or be purged (the Yongzheng aftermath).
+########################################################################
+qing_char.22 = {
+	type = country_event
+	title = "qing_char.22.t"
+	desc = "qing_char.22.desc"
+	picture = greek_court
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_char.22 (succession crisis) [ROOT.GetTag]" }
+	}
+
+	# --- Purge the rival faction (Yongzheng's answer) ---------------------
+	option = {
+		name = "qing_char.22.a"
+		custom_tooltip = "qing_char.22.a.tt"
+		add_tyranny = 8
+		add_stability = 1
+		# Purge a disloyal courtier if one exists.
+		if = {
+			limit = {
+				any_character = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  loyalty < 40 }
+			}
+			random_character = {
+				limit = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  loyalty < 40 }
+				imprison = ROOT
+			}
+		}
+	}
+
+	# --- Reconcile the factions with honours and offices ------------------
+	option = {
+		name = "qing_char.22.b"
+		custom_tooltip = "qing_char.22.b.tt"
+		add_treasury = -60
+		add_stability = 2
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 6 }
+	}
+}

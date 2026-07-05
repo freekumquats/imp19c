@@ -1,0 +1,301 @@
+########################################################################
+# qing_decline_events.txt — reaction events for the shared "dynastic decline"
+# engine (se_QING_DECLINE.txt). Fired from QING_DECLINE_roll_reaction, weighted
+# by the live decline counters, for the Qing player only.
+#
+#   ROOT / this = the Qing overlord (CHI, player)
+#
+# Namespace = qing_decline
+#   .10  D — systemic corruption scandal (distinct from the integration one)
+#   .11  G — sectarian unrest (White Lotus / Heaven-and-Earth)
+#   .12  E — Yellow River flood (severity scales with corruption)
+#   .13  C — banner-decay incident
+#   .14  #1 — ethnic tension flares
+#   .20  positive — a good year (tops up the granary)
+########################################################################
+
+namespace = qing_decline
+
+########################################################################
+# .10  SYSTEMIC CORRUPTION SCANDAL
+# History: Heshen (和珅) as the archetype of endemic Qing corruption; his
+# confiscated fortune (~1799) reputedly equalled twelve years of revenue.
+# This is the DYNASTY-WIDE meter version (the integration chain has a local one).
+########################################################################
+qing_decline.10 = {
+	type = country_event
+	title = "qing_decline.10.t"
+	desc = "qing_decline.10.desc"
+	picture = dagger_behind_back
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_decline.10 (corruption) [ROOT.GetTag] level=[ROOT.MakeScope.GetVariable('qing_corruption_level').GetValue|0]" }
+	}
+
+	# --- Launch a grand audit (yanglian yin 養廉銀) ------------------------
+	option = {
+		name = "qing_decline.10.a"
+		custom_tooltip = "qing_decline.10.a.tt"
+		trigger = { treasury >= 100 }
+		QING_anticorruption_audit = yes
+	}
+
+	# --- Make an example: impeach and confiscate --------------------------
+	option = {
+		name = "qing_decline.10.b"
+		custom_tooltip = "qing_decline.10.b.tt"
+		add_treasury = 120
+		add_stability = 2
+		add_tyranny = 5
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -10 }
+	}
+
+	# --- Turn a blind eye -------------------------------------------------
+	option = {
+		name = "qing_decline.10.c"
+		custom_tooltip = "qing_decline.10.c.tt"
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 8 }
+		add_stability = 1
+	}
+}
+
+########################################################################
+# .11  SECTARIAN UNREST
+# History: the White Lotus (白蓮教) and its 1813 Eight Trigrams (天理教) offshoot
+# that breached the Forbidden City; the Heaven-and-Earth Society (天地會).
+########################################################################
+qing_decline.11 = {
+	type = country_event
+	title = "qing_decline.11.t"
+	desc = "qing_decline.11.desc"
+	picture = revolt
+
+	left_portrait = root.current_ruler
+	goto_location = scope:sect_province
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_decline.11 (sects) [ROOT.GetTag] pressure=[ROOT.MakeScope.GetVariable('qing_sect_pressure').GetValue|0]" }
+		if = {
+			limit = { any_owned_province = { count >= 1 } }
+			ordered_owned_province = {
+				order_by = total_population
+				max = 1
+				save_scope_as = sect_province
+			}
+		}
+	}
+
+	# --- Surveillance and suppression -------------------------------------
+	option = {
+		name = "qing_decline.11.a"
+		custom_tooltip = "qing_decline.11.a.tt"
+		trigger = { treasury >= 70 }
+		QING_suppress_sects = yes
+	}
+
+	# --- Relieve grievances (remit taxes, distribute grain) ---------------
+	option = {
+		name = "qing_decline.11.b"
+		custom_tooltip = "qing_decline.11.b.tt"
+		trigger = { var:qing_granary_stock >= 20 }
+		QING_granary_release = yes
+	}
+
+	# --- Let the Green Standard crush it ----------------------------------
+	option = {
+		name = "qing_decline.11.c"
+		custom_tooltip = "qing_decline.11.c.tt"
+		add_stability = -2
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -10 }
+		if = {
+			limit = { exists = scope:sect_province }
+			scope:sect_province = {
+				add_province_modifier = { name = local_unrest_harsh  duration = 730 }
+			}
+		}
+	}
+}
+
+########################################################################
+# .12  YELLOW RIVER FLOOD (河工)
+# History: flood control was among the largest state expenditures and the
+# biggest corruption sink — Heshen's graft diverted dike funds and drowned
+# whole prefectures. Severity here scales with the corruption counter.
+########################################################################
+qing_decline.12 = {
+	type = country_event
+	title = "qing_decline.12.t"
+	desc = "qing_decline.12.desc"
+	picture = looting
+
+	left_portrait = root.current_ruler
+	goto_location = scope:flood_province
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_decline.12 (flood) [ROOT.GetTag]" }
+		if = {
+			limit = { any_owned_province = { count >= 1 } }
+			random_owned_province = {
+				save_scope_as = flood_province
+				add_province_modifier = { name = qing_flood_devastation  duration = 730 }
+			}
+		}
+	}
+
+	# --- Fund emergency dike repair and relief ----------------------------
+	option = {
+		name = "qing_decline.12.a"
+		custom_tooltip = "qing_decline.12.a.tt"
+		trigger = { treasury >= 120 }
+		add_treasury = -120
+		add_country_modifier = { name = qing_flood_hydraulic_works  duration = 1825 }
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -5 }
+	}
+
+	# --- Release the granaries to the flooded prefectures -----------------
+	option = {
+		name = "qing_decline.12.b"
+		custom_tooltip = "qing_decline.12.b.tt"
+		trigger = { var:qing_granary_stock >= 20 }
+		QING_granary_release = yes
+	}
+
+	# --- Do nothing; the corruption that caused it deepens ----------------
+	option = {
+		name = "qing_decline.12.c"
+		custom_tooltip = "qing_decline.12.c.tt"
+		add_stability = -2
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = 10 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
+	}
+}
+
+########################################################################
+# .13  BANNER-DECAY INCIDENT
+# History: by 1800 the Eight Banners had rotted from a martial caste into a
+# stipend-drawing urban dependency; the 1813 rebels breached the palace against
+# a decayed garrison. Qianlong's 國語騎射 revival drives largely failed.
+########################################################################
+qing_decline.13 = {
+	type = country_event
+	title = "qing_decline.13.t"
+	desc = "qing_decline.13.desc"
+	picture = looting
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_decline.13 (banner decay) [ROOT.GetTag] decay=[ROOT.MakeScope.GetVariable('qing_banner_decay').GetValue|0]" }
+	}
+
+	# --- Fund a banner reform drill (國語騎射) -----------------------------
+	option = {
+		name = "qing_decline.13.a"
+		custom_tooltip = "qing_decline.13.a.tt"
+		trigger = { treasury >= 60 }
+		QING_banner_drill = yes
+	}
+
+	# --- Cut the idle stipends (fiscal relief, banner resentment) ---------
+	option = {
+		name = "qing_decline.13.b"
+		custom_tooltip = "qing_decline.13.b.tt"
+		CURRENCY_grant_country_wealth = { thousands = 40 }
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 10 }
+	}
+
+	# --- Let it slide -----------------------------------------------------
+	option = {
+		name = "qing_decline.13.c"
+		custom_tooltip = "qing_decline.13.c.tt"
+		QING_DECLINE_nudge = { var = qing_banner_decay  amount = 8 }
+	}
+}
+
+########################################################################
+# .14  ETHNIC TENSION FLARES
+# History: the banner/civilian divide (旗民分治), the Manchu-Han dyarchy, and
+# the Lifan Yuan's parallel frontier administration made ethnic management a
+# permanent balancing act rather than a settled hierarchy.
+########################################################################
+qing_decline.14 = {
+	type = country_event
+	title = "qing_decline.14.t"
+	desc = "qing_decline.14.desc"
+	picture = looting
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_decline.14 (ethnic) [ROOT.GetTag] tension=[ROOT.MakeScope.GetVariable('qing_ethnic_tension').GetValue|0]" }
+	}
+
+	# --- Reaffirm the balanced dyarchy (滿漢複職) --------------------------
+	option = {
+		name = "qing_decline.14.a"
+		custom_tooltip = "qing_decline.14.a.tt"
+		QING_set_ethnic_stance = { stance = dyarchy }
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -12 }
+	}
+
+	# --- Favour the banners (martial loyalty, Han resentment) -------------
+	option = {
+		name = "qing_decline.14.b"
+		custom_tooltip = "qing_decline.14.b.tt"
+		QING_set_ethnic_stance = { stance = banner }
+	}
+
+	# --- Favour the Han literati (tax base, banner erosion) ---------------
+	option = {
+		name = "qing_decline.14.c"
+		custom_tooltip = "qing_decline.14.c.tt"
+		QING_set_ethnic_stance = { stance = han }
+	}
+}
+
+########################################################################
+# .20  A GOOD YEAR
+# Quiet prosperity: a chance to bank grain into the ever-normal granaries.
+########################################################################
+qing_decline.20 = {
+	type = country_event
+	title = "qing_decline.20.t"
+	desc = "qing_decline.20.desc"
+	picture = farming
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_decline.20 (good year) [ROOT.GetTag]" }
+	}
+
+	# --- Bank grain into the ever-normal granaries (常平倉) ----------------
+	option = {
+		name = "qing_decline.20.a"
+		custom_tooltip = "qing_decline.20.a.tt"
+		trigger = { treasury >= 80 }
+		QING_granary_invest = yes
+	}
+
+	# --- Lower taxes and let the people prosper ---------------------------
+	option = {
+		name = "qing_decline.20.b"
+		custom_tooltip = "qing_decline.20.b.tt"
+		add_stability = 2
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -8 }
+	}
+}

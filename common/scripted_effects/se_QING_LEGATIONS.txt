@@ -1,0 +1,104 @@
+########################################################################
+# se_QING_LEGATIONS.txt — DIPLOMATIC MISSIONS & PERMANENT LEGATIONS (遣使 / 駐外使館).
+#
+# The Qing entered the modern states-system late and reluctantly. The Burlingame
+# Mission (蒲安臣使團, 1868) — a Qing embassy to the treaty powers led by the
+# retiring American minister Anson Burlingame — was the first; Guo Songtao (郭嵩燾)
+# went to London in 1877 as the first permanent Chinese minister abroad, and was
+# vilified at home for it. Establishing PERMANENT LEGATIONS (駐外使館) in the
+# capitals of the powers was the institutional completion of the Zongli Yamen
+# (總理衙門): it let the dynasty conduct diplomacy as an equal, gather
+# intelligence, protect emigrant subjects, and negotiate rather than merely react.
+#
+# THE BARGAIN THIS MODELS: each legation raises DIPLOMATIC REACH (reputation +
+# relations) and eases foreign-relations tension with that power — a modern,
+# proactive foreign policy — but it costs upkeep and it AFFRONTS THE
+# CONSERVATIVES (a modest reform-pressure cost, the Guo Songtao backlash), because
+# sending envoys to "kowtow" abroad broke with the tribute-system worldview.
+#
+# Design mirrors the suite: a 0..N legation COUNT on CHI + per-power flags, all
+# O(1), all logged (sys = QING). Extends the Zongli Yamen: legations can only be
+# opened once the Yamen exists (qing_office_zongli_holder), the historical order.
+#   qing_legation_count       how many permanent legations are established
+#   qing_legation_<power>     1 while a legation stands in that power's capital
+# Powers: britain | france | russia | japan | america  (the capitals that mattered)
+#
+#   ROOT / this = the Qing overlord (CHI, human)
+# Prefix = QING_legation_
+#
+# Sources: Spence, The Search for Modern China (Burlingame, Guo Songtao); J.D.
+#   Frodsham, "The First Chinese Embassy to the West" (1974, Guo Songtao's diary);
+#   Fairbank & Liu, Cambridge History of China v.11; Immanuel Hsü, "China's Entrance
+#   into the Family of Nations" (1960).
+########################################################################
+
+# ======================================================================
+# INIT — seed the legation count once.
+# ======================================================================
+QING_legation_init = {
+	if = { limit = { NOT = { has_variable = qing_legation_count } }  set_variable = { name = qing_legation_count  value = 0 } }
+}
+
+# ======================================================================
+# OPEN A LEGATION — country scope (ROOT = CHI). $power$ = the power suffix;
+# $tag$ = its country tag. Grants the legation modifier, raises the count, eases
+# that power's tension (a resident minister smooths friction), grants a small
+# diplomatic-reach bonus, and levies the conservative backlash. Guarded once per
+# power. Reuses the se_QING_DIPLO tension counters where they exist (britain/
+# france/russia) and is a no-op-on-tension for the others.
+# ======================================================================
+QING_legation_open = {
+	LOG_enter = { sys = QING  fn = "QING_legation_open" }
+	QING_legation_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_legation_$power$ } }
+		set_variable = { name = qing_legation_$power$  value = 1 }
+		change_variable = { name = qing_legation_count  add = 1 }
+		add_country_modifier = { name = qing_legation_$power$_active  duration = -1 }
+		# a resident minister eases friction with the host power (where tracked).
+		QING_legation_ease_tension = { power = $power$ }
+		# the conservative backlash (the Guo Songtao vilification): a modest push.
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 3 }
+		# ...but a modern legation is itself an act of reform-minded statecraft that
+		# steadies the realm's diplomatic standing.
+		add_prestige = 15
+		LOG_line = { sys = QING  msg = "legation opened in $tag$ for [ROOT.GetTag] (count [ROOT.MakeScope.GetVariable('qing_legation_count').GetValue|0])" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_legation_open"  reason = "legation in $power$ already stands" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_legation_open"  result = OK }
+}
+
+# Ease the host power's great-game tension where a counter exists (britain/france/
+# russia). japan/america have no triangle counter, so this is a guarded no-op.
+QING_legation_ease_tension = {
+	if = { limit = { $power$ = britain }  QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = -5 } }
+	else_if = { limit = { $power$ = france }   QING_DECLINE_nudge = { var = qing_gp_tension_france   amount = -5 } }
+	else_if = { limit = { $power$ = russia }   QING_DECLINE_nudge = { var = qing_gp_tension_russia   amount = -5 } }
+	# japan: ease the accord/rivalry meter toward accord (se_QING_DIPLO Japan layer).
+	else_if = { limit = { $power$ = japan }    QING_japan_warm_accord = { amount = 6 } }
+	# america: no tracked counter — the prestige/reputation gain stands alone.
+}
+
+# ======================================================================
+# THE BURLINGAME MISSION (蒲安臣使團, 1868) — the one-off grand embassy that
+# preceded the permanent legations. A single act that opens several relations at
+# once and plants the institution. Guarded once. Country scope.
+# ======================================================================
+QING_legation_burlingame_mission = {
+	LOG_enter = { sys = QING  fn = "QING_legation_burlingame_mission" }
+	QING_legation_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_burlingame_mission_sent } }
+		set_variable = { name = qing_burlingame_mission_sent  value = 1 }
+		add_country_modifier = { name = qing_burlingame_mission_active  duration = 3650 }
+		# a grand embassy eases friction with the three treaty powers at once.
+		QING_legation_ease_tension = { power = britain }
+		QING_legation_ease_tension = { power = france }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -6 }
+		add_prestige = 40
+		LOG_line = { sys = QING  msg = "Burlingame mission sent for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_legation_burlingame_mission"  result = OK }
+}

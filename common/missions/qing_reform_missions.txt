@@ -1,0 +1,190 @@
+########################################################################
+# qing_reform_missions.txt — the CONSTITUTIONAL REFORM mission tree (task #14).
+# CHI-only, player-driven.
+#
+# The deliberate, goal-oriented road to the constitutional-monarchy end-state
+# (君主立憲) — the Meiji path. Where qing_reform_events.txt is the reactive crisis
+# (pressure crosses a threshold and the throne is FORCED to choose), this tree is
+# the PROACTIVE reform programme: the player who means to remake the Qing into a
+# constitutional state can walk it step by step — a translation bureau, provincial
+# assemblies, a study mission abroad (the 五大臣出洋, 1905), a draft constitution
+# (the 1908 欽定憲法大綱), and finally the summoning of a national parliament.
+#
+# The capstone calls QING_reform_endstate_constitutional (se_QING_REFORM.txt),
+# which performs the government change + golden modifier + seals the fate. So the
+# tree and the crisis events converge on the SAME end-state machinery.
+#
+# Each task also nudges qing_reform_faction_balance toward the constitutional
+# centre and eases reform pressure, so progress on the tree visibly cools the
+# crisis (the historical logic: real reform drains the revolutionaries' cause).
+#
+# Gating: CHI-only via potential = { tag = CHI }; tasks gate on political
+# influence / bureaucratic capacity / stability so the reform can only advance as
+# fast as the state can carry it.
+#
+# NOTE (cosmetic): task icons reuse stock test1/2/3 sprites and mission_image_test
+# for the header, as the self-strengthening tree does; swap for bespoke art later.
+#
+# Sources: reform historiography cited in qing_reform_events.txt — Wei Yuan 魏源
+#   Haiguo Tuzhi (1843); Kang Youwei 康有為 / Liang Qichao 梁啟超 (戊戌變法, 1898);
+#   the 1906 預備立憲 and the 1908 憲法大綱; Cambridge History of China v.11.
+########################################################################
+
+qing_constitutional_mission = {
+	icon = test1
+	header = mission_image_test
+
+	repeatable = no
+
+	chance = { }
+	ai_chance = { factor = 0 }   # player-only, like the rest of the Qing suite
+
+	potential = {
+		tag = CHI
+		is_ai = no
+	}
+
+	abort = {
+		NOT = { tag = CHI }
+	}
+
+	on_start = {
+		# The faction balance is normally seeded by the reform CRISIS (qing_reform.30).
+		# A player who walks the proactive tree may never have tripped the crisis, so
+		# guarantee the variable exists before the tasks nudge it (else the change_variable
+		# calls below and the capstone's var:qing_reform_faction_balance read are undefined).
+		if = {
+			limit = { NOT = { has_variable = qing_reform_faction_balance } }
+			set_variable = { name = qing_reform_faction_balance  value = 0 }
+		}
+		LOG_line = { sys = QING  msg = "MISSION constitutional reform started for [ROOT.GetTag]" }
+	}
+
+	on_completion = {
+		LOG_line = { sys = QING  msg = "MISSION constitutional reform COMPLETED for [ROOT.GetTag]" }
+	}
+
+	# ==================================================================
+	# ROOT TASK — a translation bureau for foreign law & institutions.
+	# The intellectual groundwork: Wei Yuan's injunction to "learn the superior
+	# techniques of the barbarians" (師夷長技) applied to statecraft, not just guns.
+	# ==================================================================
+	qing_con_bureau = {
+		icon = test1
+		allow = {
+			political_influence >= 15
+		}
+		on_start = {
+			add_political_influence = -15
+		}
+		on_completion = {
+			custom_tooltip = qing_con_bureau_tt
+			QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -6 }
+			change_variable = { name = qing_reform_faction_balance  add = 5 }
+			LOG_line = { sys = QING  msg = "MISSION task con_bureau done for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# PROVINCIAL ASSEMBLIES — 諮議局: consultative bodies in the provinces, the
+	# first taste of representation (historically convened 1909).
+	# ==================================================================
+	qing_con_assemblies = {
+		icon = test2
+		requires = { qing_con_bureau }
+		allow = {
+			political_influence >= 20
+			custom_tooltip = {
+				text = qing_con_needs_capacity_tt
+				var:qing_bureau_capacity >= 40
+			}
+		}
+		on_start = {
+			add_political_influence = -20
+		}
+		on_completion = {
+			custom_tooltip = qing_con_assemblies_tt
+			add_country_modifier = { name = qing_reform_constitutionalist  duration = -1 }
+			QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -8 }
+			change_variable = { name = qing_reform_faction_balance  add = 8 }
+			add_stability = 1
+			LOG_line = { sys = QING  msg = "MISSION task con_assemblies done for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# THE CONSTITUTIONAL MISSION ABROAD — 五大臣出洋 (1905): send grandees to study
+	# the constitutions of Japan, Britain, Germany and the United States.
+	# ==================================================================
+	qing_con_mission_abroad = {
+		icon = test3
+		requires = { qing_con_bureau }
+		allow = {
+			treasury >= 80
+		}
+		on_start = {
+			add_treasury = -80
+		}
+		on_completion = {
+			custom_tooltip = qing_con_mission_abroad_tt
+			QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -6 }
+			change_variable = { name = qing_reform_faction_balance  add = 6 }
+			# a study mission also feeds the modernising temper
+			QING_selfstr_advance = { amount = 5 }
+			LOG_line = { sys = QING  msg = "MISSION task con_mission_abroad done for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# THE DRAFT CONSTITUTION — 欽定憲法大綱 (1908): promulgate the principles of a
+	# constitution and a timetable for the parliament to come (預備立憲).
+	# ==================================================================
+	qing_con_draft = {
+		icon = test3
+		requires = { qing_con_assemblies  qing_con_mission_abroad }
+		allow = {
+			political_influence >= 30
+			stability >= 30
+			custom_tooltip = {
+				text = qing_con_needs_capacity_tt
+				var:qing_bureau_capacity >= 55
+			}
+		}
+		on_start = {
+			add_political_influence = -30
+		}
+		on_completion = {
+			custom_tooltip = qing_con_draft_tt
+			QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -12 }
+			change_variable = { name = qing_reform_faction_balance  add = 10 }
+			add_stability = 1
+			add_legitimacy = 10
+			LOG_line = { sys = QING  msg = "MISSION task con_draft done for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# CAPSTONE — SUMMON THE NATIONAL PARLIAMENT (君主立憲) → END-STATE (2).
+	# Emperor preserved as sovereign, the autocracy ended. Converges on the same
+	# end-state effect the crisis path uses.
+	# ==================================================================
+	qing_con_parliament = {
+		icon = test1
+		requires = { qing_con_draft }
+		allow = {
+			custom_tooltip = {
+				text = qing_con_needs_ready_tt
+				var:qing_reform_faction_balance >= 20
+			}
+			custom_tooltip = {
+				text = qing_con_needs_not_sealed_tt
+				NOT = { has_variable = qing_reform_endstate_reached }
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_con_parliament_tt
+			QING_reform_endstate_constitutional = yes
+			LOG_line = { sys = QING  msg = "MISSION constitutional CAPSTONE (parliament summoned) for [ROOT.GetTag]" }
+		}
+	}
+}

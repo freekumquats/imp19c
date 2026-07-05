@@ -1,10 +1,139 @@
+########################################################################
+# MIGRATION_svalues.txt — push / pull scoring for bottom-up migration.
+#
+# DESIGN (firm): migration is BOTTOM-UP. Pops leave a province because life
+# there is bad for them (push) and arrive somewhere because life there is
+# better (pull). The government / player is only ONE factor — it nudges the
+# scores with modifiers, it never orders a move. se_MIGRATION.txt reads these
+# two province scores each decade pulse, moves a grievance-weighted pop from a
+# high-push province to the best-pull neighbour, and (if the settlers flip the
+# destination's plurality) seeds a claim — the organic route to the settler
+# colonialism the Qing missions do by fiat.
+#
+# REUSE (firm): these scores RECOMPUTE NOTHING. Every term is an already-cached
+# economy field read straight from its scope:
+#   JOBS_unemployed_pops_province / JOBS_available_slots  (JOBS_svalues.txt)
+#   province_unrest, civilization_value, total_population  (engine, per-tick)
+#   governorship.ECON_governorship_food_shortage           (ECON_svalues.txt,
+#       itself a sum of the cached var:shortage_<food> the consume step writes)
+# So a pulse is O(provinces) cheap reads, not a resimulation.
+#
+# Prefix = MIGRATION_
+########################################################################
+
+# ======================================================================
+# PUSH — how strongly a province makes its pops want to LEAVE. Sum of the
+# hardships a pop can flee: joblessness/overpopulation, unrest, hunger, and
+# the disruption of war/occupation. Per-pop grievances that vary WITHIN a
+# province (being a cultural/religious minority, being poor) are NOT here —
+# they belong in se_MIGRATION's per-pop weight, so only the *who leaves*
+# depends on them, not *whether this province sheds anyone*.
+#   Scope: province
+# ======================================================================
 MIGRATION_push_province = {
-	# Scope: Province
-	# The migration push in the province, i.e. the sum of factors making pops want to leave this province
-	value = total_population
-	add = num_of_proletariat
+	value = 0
+
+	# Overpopulation / joblessness: pops with no slot to work are the readiest
+	# to leave. Already cached (total_population*0.5 - used slots).
+	add = {
+		value = JOBS_unemployed_pops_province
+		min = 0
+	}
+
+	# Unrest — a restless province bleeds people. province_unrest is ~0..10.
 	add = {
 		value = province_unrest
-		multiply = 10
+		multiply = 2
+	}
+
+	# Hunger — the governorship's average food shortage (sum over food goods,
+	# each ~0..1). A famine is one of history's great migration engines.
+	add = {
+		value = governorship.ECON_governorship_food_shortage
+		multiply = 8
+	}
+
+	# War & occupation — people flee the front. Both read off the province's
+	# own owner / controller, no recompute.
+	if = {
+		limit = { owner = { war = yes } }
+		add = 4
+	}
+	if = {
+		limit = {
+			exists = controller
+			NOT = { controller = owner }
+		}
+		add = 10
+	}
+
+	# GOVERNMENT LEVER (the "one factor among many"): a government may tag a
+	# province with migr_gov_push to encourage people to leave (e.g. clearing a
+	# crowded heartland). Optional — read behind a has_variable guard so it costs
+	# nothing when unset. This is how the state INCENTIVISES, never orders.
+	if = {
+		limit = { has_variable = migr_gov_push }
+		add = var:migr_gov_push
+	}
+
+	min = 0
+}
+
+# ======================================================================
+# PULL — how strongly a province ATTRACTS incomers. The mirror of push:
+# spare jobs, calm, food, and development draw people in; a province that is
+# full, restless, hungry or fought-over repels them (the score can go
+# negative, which se_MIGRATION treats as "do not settle here").
+#   Scope: province
+# ======================================================================
+MIGRATION_pull_province = {
+	value = 0
+
+	# Opportunity — unfilled job slots are the classic magnet. Cached, and
+	# already negative when a province is overfull (so it self-repels).
+	add = {
+		value = JOBS_available_slots
+	}
+
+	# Development / prosperity — civilised, built-up land draws settlers.
+	add = {
+		value = civilization_value
+		divide = 20
+	}
+
+	# Calm attracts; unrest deters.
+	subtract = {
+		value = province_unrest
+		multiply = 2
+	}
+
+	# A hungry destination is no refuge.
+	subtract = {
+		value = governorship.ECON_governorship_food_shortage
+		multiply = 8
+	}
+
+	# No one migrates toward a war zone.
+	if = {
+		limit = { owner = { war = yes } }
+		subtract = 6
+	}
+	if = {
+		limit = {
+			exists = controller
+			NOT = { controller = owner }
+		}
+		subtract = 20
+	}
+
+	# GOVERNMENT LEVER (the "one factor among many"): a government may tag a
+	# province with migr_gov_pull to make it more attractive to settlers (e.g.
+	# a frontier the state wants peopled — 屯田 / 闖關東). Optional, guarded, and
+	# it only tilts the odds: the pop still moves of its own accord, and only if
+	# the destination still out-scores where it lives. The state incentivises,
+	# it does not order.
+	if = {
+		limit = { has_variable = migr_gov_pull }
+		add = var:migr_gov_pull
 	}
 }

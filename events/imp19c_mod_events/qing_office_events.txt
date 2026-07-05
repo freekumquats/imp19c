@@ -1,0 +1,698 @@
+########################################################################
+# qing_office_events.txt — the Grand Council (軍機處) + great-office event
+# roster (task #9). These are the living drama on top of the structural
+# mechanic in se_QING_COUNCIL.txt: the meters that mechanic maintains
+# (qing_council_effectiveness, qing_council_overmighty_flag, the office-holder
+# variables) surface here as choices with teeth.
+#
+# CHI-only, player-only. Fired from QING_frontier_flavour_roll
+# (se_QING_DECLINE.txt), each gated on the council/office state it dramatizes.
+# All logged to sys = QING. Options lean on VERIFIED effects only:
+#   QING_office_vacate / QING_council_unseat_character / QING_DECLINE_nudge /
+#   add_country_modifier (qing_governance_modifiers.txt) / stock country effects.
+#
+#   ROOT / this = the Qing overlord (CHI, player)
+#
+# History woven through:
+#   • Heshen 和珅 (1750–99), Qianlong's favourite — the archetypal "overmighty
+#     grandee": a fortune reckoned at years of state revenue, purged by the
+#     Jiaqing Emperor in 1799 ("和珅跌倒，嘉慶吃飽").
+#   • the Censorate 都察院 and its remonstrance censors 御史 / 言官, whose duty
+#     was to impeach the corrupt however highly placed.
+#   • the Grand Council 軍機處 itself (est. Yongzheng, 1729) and the Manchu–Han
+#     dyarchy of paired board presidents 尚書.
+#   • the sale of offices 捐納 as a fiscal expedient that rotted bureaucratic
+#     quality (Kaske; Zelin, The Magistrate's Tael).
+#   • the Zongli Yamen 總理衙門 (1861), Prince Gong 恭親王奕訢's foreign-affairs
+#     office born of the Self-Strengthening turn.
+#
+# Namespace = qing_office
+#   .1  the overmighty grandee (a Heshen-style chief councillor)
+#   .2  a censor's impeachment memorial (都察院)
+#   .3  a council paralysed by vacancy / dysfunction
+#   .4  a capable statesman comes forward (seat him?)
+#   .5  factional strife on the council (Manchu vs Han / literati blocs)
+#   .6  found the Zongli Yamen (總理衙門) — a modern foreign office
+#   .7  the sale of offices tempts the treasury (捐納)
+#   .8  a grand councillor's clear-eyed memorial (an effective council's reward)
+#
+# Sources: Fairbank & Teng, "On the Ch'ing Tributary System" & Ch'ing
+#   Administration (1960); Beatrice Bartlett, Monarchs and Ministers: The Grand
+#   Council 1723–1820 (1991); Wang Yeh-chien / Madeleine Zelin, The Magistrate's
+#   Tael (1984); Elisabeth Kaske, "The Price of an Office" (2011); Wook Yoon,
+#   "Prosperity with the Help of 'Villains'" (on Heshen, 2009).
+########################################################################
+
+namespace = qing_office
+
+########################################################################
+# .1  THE OVERMIGHTY GRANDEE  (the Heshen pattern)
+# Fires when QING_council_recompute has raised qing_council_overmighty_flag: a
+# corrupt court plus a chief councillor of dangerous prominence. The emperor
+# must choose the Jiaqing path (purge, confiscate) or Qianlong's (indulge him).
+########################################################################
+qing_office.1 = {
+	type = country_event
+	title = "qing_office.1.t"
+	desc = "qing_office.1.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:grandee
+
+	is_triggered_only = yes
+
+	trigger = {
+		var:qing_council_overmighty_flag = 1
+		has_variable = qing_council_chief
+	}
+
+	immediate = {
+		var:qing_council_chief = {
+			save_scope_as = grandee
+			# score the grandee against the throne — a congenial kinsman is a
+			# manageable overmighty subject; an estranged, wealthy, thickly-retained
+			# one is the true Heshen danger (his power base already docks his loyalty).
+			QING_char_affinity = yes
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_office.1 (overmighty grandee [ROOT.MakeScope.GetVariable('qing_council_chief').GetName]) [ROOT.GetTag]" }
+	}
+
+	# --- Purge him and confiscate the fortune (the Jiaqing solution, 1799) -
+	option = {
+		name = "qing_office.1.a"
+		custom_tooltip = "qing_office.1.a.tt"
+		# "Heshen fell, and Jiaqing ate his fill" — the confiscated hoard.
+		add_treasury = 150
+		scope:grandee = {
+			QING_council_unseat_character = yes
+			add_loyalty = loyalty_qing_disgraced
+			add_popularity = -40
+			# the confiscation shatters his personal power base directly — his
+			# loyal veterans (the engine's power-base backbone) are stripped, and
+			# his standing at court collapses with his fall.
+			add_loyal_veterans = -10
+			add_prominence = -30
+			# seize the private fortune too (Heshen's hoard) and brand him for the
+			# venality that made him — the wealth/venality factors made concrete.
+			QING_char_endow = { amount = -400 }
+			QING_char_taint = yes
+			# the disgraced grandee's house falls with him
+			QING_char_honour_family = { amount = -100 }
+		}
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -12 }
+		add_tyranny = 4
+		add_stability = -1
+	}
+
+	# --- Clip his wings: strip the chiefship, leave him seated ------------
+	option = {
+		name = "qing_office.1.b"
+		custom_tooltip = "qing_office.1.b.tt"
+		# demote from chief but keep on the council (a measured rebuke)
+		if = {
+			limit = { var:qing_council_chief = scope:grandee }
+			remove_variable = qing_council_chief
+		}
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -5 }
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -4 }
+	}
+
+	# --- Indulge him as Qianlong did (the rot deepens) -------------------
+	option = {
+		name = "qing_office.1.c"
+		custom_tooltip = "qing_office.1.c.tt"
+		add_treasury = 40
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 10 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 6 }
+		scope:grandee = { add_loyalty = loyalty_qing_indulged  add_popularity = 20 }
+	}
+}
+
+########################################################################
+# .2  A CENSOR'S IMPEACHMENT MEMORIAL  (都察院)
+# A remonstrance censor lays an impeachment before the throne. Backing the
+# censor cleans house but makes enemies; shielding the accused breeds tyranny.
+# Weighted toward firing when corruption is high; a censor in office sharpens it.
+########################################################################
+qing_office.2 = {
+	type = country_event
+	title = "qing_office.2.t"
+	desc = "qing_office.2.desc"
+	picture = senate_debate
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_office.2 (censor impeachment) [ROOT.GetTag]" }
+	}
+
+	# --- Uphold the impeachment (the censor's duty vindicated) -----------
+	option = {
+		name = "qing_office.2.a"
+		custom_tooltip = "qing_office.2.a.tt"
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -8 }
+		add_stability = 1
+		# the censorate emboldened: a temporary integrity dividend
+		add_country_modifier = { name = qing_censorate_vigilant  duration = 1825 }
+	}
+
+	# --- A show trial: punish a scapegoat, spare the network -------------
+	option = {
+		name = "qing_office.2.b"
+		custom_tooltip = "qing_office.2.b.tt"
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -3 }
+		add_tyranny = 2
+	}
+
+	# --- Suppress the memorial; punish the censor for insolence ----------
+	option = {
+		name = "qing_office.2.c"
+		custom_tooltip = "qing_office.2.c.tt"
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 6 }
+		add_tyranny = 4
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 5 }
+	}
+}
+
+########################################################################
+# .3  A COUNCIL PARALYSED  (vacancy / dysfunction)
+# Fires when the council is weak (low effectiveness or empty seats): business
+# stalls, memorials pile up. Offers a quick autofill or a slower, cleaner path.
+########################################################################
+qing_office.3 = {
+	type = country_event
+	title = "qing_office.3.t"
+	desc = "qing_office.3.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_office.3 (council paralysed, eff=[ROOT.MakeScope.GetVariable('qing_council_effectiveness').GetValue|0]) [ROOT.GetTag]" }
+	}
+
+	# --- Convene the council in haste: fill the seats now ----------------
+	option = {
+		name = "qing_office.3.a"
+		custom_tooltip = "qing_office.3.a.tt"
+		QING_council_autofill = yes
+		QING_council_recompute = yes
+		add_political_influence = -20
+	}
+
+	# --- Rule by the inner court a while longer (autocratic stopgap) -----
+	option = {
+		name = "qing_office.3.b"
+		custom_tooltip = "qing_office.3.b.tt"
+		add_tyranny = 2
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -2 }
+	}
+}
+
+########################################################################
+# .4  A STATESMAN COMES FORWARD
+# A capable courtier distinguishes himself. Seat him on the council, or send
+# him to the provinces (a governorship the mechanic doesn't model, so a bonus).
+########################################################################
+qing_office.4 = {
+	type = country_event
+	title = "qing_office.4.t"
+	desc = "qing_office.4.desc"
+	picture = greek_court
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:statesman
+
+	is_triggered_only = yes
+
+	trigger = {
+		any_character = {
+			employer = ROOT
+			is_ruler = no
+			is_adult = yes
+			is_alive = yes
+			NOT = { is_target_in_variable_list = { name = qing_council_members  target = this } }
+			# never surface a rebel foil (e.g. Hong Xiuquan) as a "rising statesman"
+			NOT = { has_variable = qing_rebel_foil }
+		}
+	}
+
+	immediate = {
+		random_character = {
+			limit = {
+				employer = ROOT
+				is_ruler = no
+				is_adult = yes
+				is_alive = yes
+				NOT = { is_target_in_variable_list = { name = qing_council_members  target = this } }
+				NOT = { has_variable = qing_rebel_foil }
+			}
+			order_by = combined_stats_council_svalue
+			save_scope_as = statesman
+			# gauge how this rising man sits with the throne (culture, faith, zeal,
+			# kinship, standing) — it colours whether elevating him binds a friend
+			# or empowers a future rival.
+			QING_char_affinity = yes
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_office.4 (statesman [ROOT.MakeScope.GetVariable('qing_council_seat_count').GetValue|0] seats) [ROOT.GetTag]" }
+	}
+
+	# --- Seat him on the Grand Council -----------------------------------
+	option = {
+		name = "qing_office.4.a"
+		custom_tooltip = "qing_office.4.a.tt"
+		trigger = { var:qing_council_seat_count < var:qing_council_seat_cap }
+		scope:statesman = {
+			QING_council_seat_character = yes
+			# elevation lands differently by compatibility: a congenial man is
+			# bound to the throne (befriended); an alien one is merely empowered.
+			QING_char_bind = yes
+		}
+		QING_council_recompute = yes
+		add_political_influence = -10
+	}
+
+	# --- Send him to steady a troubled province --------------------------
+	option = {
+		name = "qing_office.4.b"
+		custom_tooltip = "qing_office.4.b.tt"
+		add_stability = 1
+		# a provincial posting lets him build a following of his own (a loyal
+		# power base while his gratitude holds).
+		scope:statesman = {
+			add_loyalty = loyalty_qing_elevated
+			add_popularity = 15
+			add_loyal_veterans = 4
+			QING_char_bind = yes
+		}
+	}
+
+	# --- Take him into the emperor's own household & tutelage ------------
+	# The mentorship path: cultivate his gifts, draw him into the imperial culture
+	# and faith, and honour his house — reshaping the very factors that make a man
+	# congenial. The lever that turns an able outsider into a bound insider.
+	option = {
+		name = "qing_office.4.c"
+		custom_tooltip = "qing_office.4.c.tt"
+		add_political_influence = -15
+		scope:statesman = {
+			# season his statecraft and his courtly charm
+			QING_char_cultivate = { stat = finesse  amount = 1 }
+			QING_char_cultivate = { stat = charisma  amount = 1 }
+			# bring him into the throne's culture & faith, and raise his house
+			QING_char_assimilate = yes
+			QING_char_convert = yes
+			QING_char_honour_family = { amount = 50 }
+			# with the factors realigned, bind him
+			QING_char_bind = yes
+		}
+	}
+}
+
+########################################################################
+# .5  FACTIONAL STRIFE ON THE COUNCIL
+# The Manchu grandees and the Han literati pull against one another (or, in the
+# late court, the reform and conservative blocs). The dyarchy is the strength
+# and the strain of the Qing state. Fires when the council is manned.
+########################################################################
+qing_office.5 = {
+	type = country_event
+	title = "qing_office.5.t"
+	desc = "qing_office.5.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		var:qing_council_seat_count >= 2
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_office.5 (factional strife, manchu=[ROOT.MakeScope.GetVariable('qing_council_manchu_count').GetValue|0] han=[ROOT.MakeScope.GetVariable('qing_council_han_count').GetValue|0]) [ROOT.GetTag]" }
+	}
+
+	# --- Hold the balance (滿漢一體) — reward the dyarchy ----------------
+	option = {
+		name = "qing_office.5.a"
+		custom_tooltip = "qing_office.5.a.tt"
+		add_political_influence = -15
+		add_stability = 1
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -6 }
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 4 }
+	}
+
+	# --- Favour the Manchu bloc (the banner interest) --------------------
+	option = {
+		name = "qing_office.5.b"
+		custom_tooltip = "qing_office.5.b.tt"
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 5 }
+		add_country_modifier = { name = qing_council_effective  duration = 1095 }
+	}
+
+	# --- Favour the Han literati (the examination elite) -----------------
+	option = {
+		name = "qing_office.5.c"
+		custom_tooltip = "qing_office.5.c.tt"
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -3 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -3 }
+		QING_DECLINE_nudge = { var = qing_banner_decay  amount = 4 }
+	}
+}
+
+########################################################################
+# .6  FOUND THE ZONGLI YAMEN  (總理衙門, 1861)
+# The turn to a modern foreign office — Prince Gong's institution for dealing
+# with the Western powers on their own terms. Gated on the office being vacant;
+# weighted to appear once the empire is actually dealing with the powers.
+########################################################################
+qing_office.6 = {
+	type = country_event
+	title = "qing_office.6.t"
+	desc = "qing_office.6.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		NOT = { has_variable = qing_office_zongli_holder }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_office.6 (Zongli Yamen offered) [ROOT.GetTag]" }
+	}
+
+	# --- Establish it, and appoint the ablest man to head it -------------
+	option = {
+		name = "qing_office.6.a"
+		custom_tooltip = "qing_office.6.a.tt"
+		trigger = {
+			political_influence >= 25
+			any_character = { employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes }
+		}
+		add_political_influence = -25
+		random_character = {
+			limit = { employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes }
+			order_by = combined_stats_council_svalue
+			QING_office_appoint = { office = zongli }
+		}
+		add_country_modifier = { name = qing_zongli_yamen_founded  duration = -1 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -5 }
+		add_stability = 1
+	}
+
+	# --- Not yet — the Middle Kingdom treats with no equals --------------
+	option = {
+		name = "qing_office.6.b"
+		custom_tooltip = "qing_office.6.b.tt"
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
+	}
+}
+
+########################################################################
+# .7  THE SALE OF OFFICES TEMPTS THE TREASURY  (捐納)
+# A fiscal shortfall invites the old expedient: sell degrees and posts for
+# ready silver. It fills the coffers and rots the bureaucracy at once — the
+# structural driver behind so much of the corruption meter.
+########################################################################
+qing_office.7 = {
+	type = country_event
+	title = "qing_office.7.t"
+	desc = "qing_office.7.desc"
+	picture = senate_debate
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_office.7 (sale of offices) [ROOT.GetTag]" }
+	}
+
+	# --- Open the sales wide (silver now, rot later) ---------------------
+	option = {
+		name = "qing_office.7.a"
+		custom_tooltip = "qing_office.7.a.tt"
+		QING_sell_offices = yes
+	}
+
+	# --- A limited, controlled sale (a measured compromise) --------------
+	option = {
+		name = "qing_office.7.b"
+		custom_tooltip = "qing_office.7.b.tt"
+		add_treasury = 60
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 4 }
+	}
+
+	# --- Refuse; keep the examination path pure (儒 integrity) -----------
+	option = {
+		name = "qing_office.7.c"
+		custom_tooltip = "qing_office.7.c.tt"
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -3 }
+		add_political_influence = 10
+	}
+}
+
+########################################################################
+# .8  A GRAND COUNCILLOR'S MEMORIAL  (an effective council's reward)
+# Fires when the council is functioning well (high effectiveness): a councillor
+# submits a clear, well-argued memorial the throne can act on cheaply.
+########################################################################
+qing_office.8 = {
+	type = country_event
+	title = "qing_office.8.t"
+	desc = "qing_office.8.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:councillor
+
+	is_triggered_only = yes
+
+	trigger = {
+		var:qing_council_effectiveness >= 60
+		has_variable_list = qing_council_members
+	}
+
+	immediate = {
+		ordered_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT }
+			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
+			save_scope_as = councillor
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_office.8 (councillor memorial) [ROOT.GetTag]" }
+	}
+
+	# --- Act on the fiscal memorial (streamline the revenue) -------------
+	option = {
+		name = "qing_office.8.a"
+		custom_tooltip = "qing_office.8.a.tt"
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -4 }
+		add_treasury = 40
+	}
+
+	# --- Act on the military memorial (drill the banners) ----------------
+	option = {
+		name = "qing_office.8.b"
+		custom_tooltip = "qing_office.8.b.tt"
+		QING_DECLINE_nudge = { var = qing_banner_decay  amount = -6 }
+		add_manpower = 2
+	}
+
+	# --- Commend him and file it (a modest morale gain) ------------------
+	option = {
+		name = "qing_office.8.c"
+		custom_tooltip = "qing_office.8.c.tt"
+		add_stability = 1
+		scope:councillor = { add_loyalty = loyalty_qing_commended  add_popularity = 15 }
+	}
+}
+
+########################################################################
+# .9  BICKERING AT THE COUNCIL TABLE  (兩虎相爭)
+# Two seated councillors are at each other's throats. The event picks two distinct
+# members and scores their MUTUAL friction ON THE FLY (QING_pair_friction — a
+# transient country-scratch value, nothing stored per pair), so a Manchu grandee
+# and a Han literatus, or two proud eminences, or a zealot and a worldling, clash
+# hardest. The throne mediates, takes a side, or lets them fight it out.
+# Fires only on a manned council (>=2 seated).
+########################################################################
+qing_office.9 = {
+	type = country_event
+	title = "qing_office.9.t"
+	desc = "qing_office.9.desc"
+	picture = council_country
+
+	left_portrait = scope:feud_a
+	right_portrait = scope:feud_b
+
+	is_triggered_only = yes
+
+	trigger = {
+		var:qing_council_seat_count >= 2
+	}
+
+	immediate = {
+		# first disputant: a prominent sitting member
+		ordered_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT }
+			order_by = prominence
+			check_range_bounds = no
+			max = 1
+			save_scope_as = feud_a
+		}
+		# second disputant: any OTHER sitting member
+		random_in_list = {
+			variable = qing_council_members
+			limit = {
+				is_alive = yes
+				employer = ROOT
+				NOT = { this = scope:feud_a }
+			}
+			save_scope_as = feud_b
+		}
+		# score their clash transiently (stores one scratch var, not a per-pair map)
+		QING_pair_friction = { a = scope:feud_a  b = scope:feud_b }
+		LOG_line = { sys = QING  msg = "EVENT qing_office.9 (council feud [scope:feud_a.GetName] vs [scope:feud_b.GetName], friction=[ROOT.MakeScope.GetVariable('qing_pair_friction').GetValue|0]) [ROOT.GetTag]" }
+	}
+
+	# --- Mediate between them (hold the council together) ----------------
+	option = {
+		name = "qing_office.9.a"
+		custom_tooltip = "qing_office.9.a.tt"
+		add_political_influence = -10
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 3 }
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -3 }
+		# both men, reconciled by the throne's grace, warm to it a little
+		scope:feud_a = { add_loyalty = loyalty_qing_commended }
+		scope:feud_b = { add_loyalty = loyalty_qing_commended }
+	}
+
+	# --- Back the abler of the two, dismiss the other --------------------
+	option = {
+		name = "qing_office.9.b"
+		custom_tooltip = "qing_office.9.b.tt"
+		# the less capable disputant is unseated; the winner is affirmed
+		if = {
+			limit = { scope:feud_a.combined_stats_council_svalue >= scope:feud_b.combined_stats_council_svalue }
+			scope:feud_b = {
+				QING_council_unseat_character = yes
+				add_loyalty = loyalty_qing_estranged
+			}
+			scope:feud_a = { add_loyalty = loyalty_qing_elevated }
+		}
+		else = {
+			scope:feud_a = {
+				QING_council_unseat_character = yes
+				add_loyalty = loyalty_qing_estranged
+			}
+			scope:feud_b = { add_loyalty = loyalty_qing_elevated }
+		}
+		QING_council_recompute = yes
+		add_tyranny = 1
+	}
+
+	# --- Let them fight it out (the council tears at itself) -------------
+	option = {
+		name = "qing_office.9.c"
+		custom_tooltip = "qing_office.9.c.tt"
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -6 }
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 4 }
+		# the feud hardens into a personal rivalry between the two men
+		scope:feud_a = { add_rival = scope:feud_b }
+	}
+}
+
+########################################################################
+# .10  A CLIQUE FORMS AGAINST THE CHIEF  (朋黨)
+# The old Chinese dread of "factions" (朋黨): councillors band into a clique
+# against the chief grand councillor. Fires when there IS a chief and a manned
+# council. The throne breaks the clique, bends to it, or purges the ringleader —
+# picked transiently as the chief's sharpest antagonist.
+########################################################################
+qing_office.10 = {
+	type = country_event
+	title = "qing_office.10.t"
+	desc = "qing_office.10.desc"
+	picture = chinese_throne_room
+
+	left_portrait = scope:clique_chief
+	right_portrait = scope:clique_head
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_variable = qing_council_chief
+		var:qing_council_seat_count >= 3
+	}
+
+	immediate = {
+		var:qing_council_chief = { save_scope_as = clique_chief }
+		# the clique's ringleader: the member who clashes worst with the chief
+		random_in_list = {
+			variable = qing_council_members
+			limit = {
+				is_alive = yes
+				employer = ROOT
+				NOT = { this = scope:clique_chief }
+			}
+			order_by = prominence
+			check_range_bounds = no
+			max = 1
+			save_scope_as = clique_head
+		}
+		QING_pair_friction = { a = scope:clique_chief  b = scope:clique_head }
+		LOG_line = { sys = QING  msg = "EVENT qing_office.10 (clique vs chief [scope:clique_chief.GetName], head [scope:clique_head.GetName], friction=[ROOT.MakeScope.GetVariable('qing_pair_friction').GetValue|0]) [ROOT.GetTag]" }
+	}
+
+	# --- Break the clique; uphold the chief's authority ------------------
+	option = {
+		name = "qing_office.10.a"
+		custom_tooltip = "qing_office.10.a.tt"
+		add_political_influence = -15
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 4 }
+		scope:clique_head = {
+			QING_council_unseat_character = yes
+			add_loyalty = loyalty_qing_estranged
+		}
+		QING_council_recompute = yes
+		add_tyranny = 2
+	}
+
+	# --- Sacrifice the chief to appease the clique ----------------------
+	option = {
+		name = "qing_office.10.b"
+		custom_tooltip = "qing_office.10.b.tt"
+		# strip the chiefship (the clique gets its way); the fallen chief embittered
+		if = {
+			limit = { var:qing_council_chief = scope:clique_chief }
+			remove_variable = qing_council_chief
+		}
+		scope:clique_chief = { add_loyalty = loyalty_qing_estranged  add_prominence = -15 }
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -4 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
+	}
+
+	# --- Let the clique and chief check one another (divide and rule) ----
+	option = {
+		name = "qing_office.10.c"
+		custom_tooltip = "qing_office.10.c.tt"
+		# the emperor plays them off — a Kangxi/Yongzheng tactic. The two become
+		# rivals, and the throne's freedom of action grows even as the council frays.
+		scope:clique_head = { add_rival = scope:clique_chief }
+		add_political_influence = 10
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -2 }
+	}
+}

@@ -1,351 +1,485 @@
-﻿SE_qing_armies = {
-	#char:358 = { remove_all_positions = yes } # Nayancheng, viceroy of Zhili
-	c:CHI = {
-		capital_scope.governorship = {
+########################################################################
+# imp19c_effects_legion_setup.txt — historical starting-army setup
+#
+# create_unit / raise_legion follow the engine idiom verified against the
+# feasibility oracles (Invictus, Terra-Indomita): every create_unit declares a
+# base `sub_unit = <type>`, adds strength with `add_subunit = <type>`, and the
+# commander is attached INSIDE the raise_legion block via
+#   char:X = { add_to_legion = PREV } + random_legion_unit = { set_as_commander = char:X }
+# (An earlier version used add_loyal_subunit / set_personal_loyalty / a pre-add
+#  every_sub_unit loop / an external add_commander on a saved scope — none of
+#  those are valid here; that is why these effects were disabled "due to errors".)
+#
+# Prefix = SE
+########################################################################
+
+########################################################################
+# QING DUAL STANDING ARMY (#66) — the two permanent, separately-administered,
+# ethnically-defined institutions of the 1815 Qing military, meeting only at the
+# throne (see memory imp19c-qing-army-1815-research):
+#
+#   八旗 Eight Banners — the hereditary conquest-elite caste + strategic reserve.
+#     ~half its soldiers (禁旅八旗) garrison BEIJING; the rest hold ~20 walled
+#     "Manchu cities" 滿城 (mancheng) — Xi'an (largest interior), the Manchuria
+#     homeland, the Xinjiang/NW frontier (Ili = seat of the 伊犁將軍), and interior
+#     choke-points. Prestigious, but by 1815 militarily soft (banner-poverty
+#     crisis 旗人生計, lost 國語騎射). We express that softness through the existing
+#     qing_banner_decay bands (qing_banner_decay_mild / _severe country modifiers),
+#     NOT by shrinking the paper rolls — hence garrisons are raised at full paper
+#     size and the decay modifier carries the combat penalty ("big on paper,
+#     brittle in field").
+#
+#   綠營 Green Standard — the Han professional TERRITORIAL/CONSTABULARY army,
+#     deliberately fragmented (anti-warlordism) and dispersed across every
+#     province for policing, escort, coast/canal patrol and first-line
+#     suppression. Modelled as several mediocre provincial stacks under the great
+#     regional commands (Zhili, Liangjiang, Huguang, Sichuan, Liangguang,
+#     Shaan-Gan, Fujian incl. Taiwan, Yunnan-Guizhou).
+#
+# IMPLEMENTATION NOTE: every legion is raised from c:CHI.capital_scope.governorship
+# (proven to exist) but LOCATED at its garrison province — exactly the pattern
+# SE_occupation_of_france uses (all raised from the GBR capital governorship,
+# located across France). This sidesteps any per-province state.governorship
+# existence risk. Each raise is individually guarded on province existence +
+# Qing ownership via the SE_qing_raise_garrison[_cmd] helpers, so a partitioned
+# or shrunken Qing simply gets fewer garrisons (each miss logs LOG_fail) instead
+# of a scope error. count = $size$ in the while-loop is the number of ADDITIONAL
+# regular_infantry companies on top of the 1 base sub_unit (so total = size + 1).
+########################################################################
+
+# ----------------------------------------------------------------------
+# Helper: raise a garrison legion of ($size$ + 1) regular_infantry companies at
+# province $prov$, named $name$, with NO scripted commander (the player assigns
+# one). Guards province existence + Qing ownership; raises from the Qing capital
+# governorship and locates the unit at $prov$. Silent LOG_fail if $prov$ is not
+# held. Assumes c:CHI exists (the caller SE_qing_armies guards that once).
+# ----------------------------------------------------------------------
+SE_qing_raise_garrison = {
+	if = {
+		limit = { exists = $prov$  $prov$ = { owner = c:CHI } }
+		c:CHI.capital_scope.governorship = {
 			raise_legion = {
-				save_scope_as = green_standard_army
 				create_unit = {
-					name="Jingshi Green Standard Army"
-					location = p:8363 #Beijing
-					save_scope_as = green_standard_army_1
-					every_sub_unit = { set_personal_loyalty = char:224 } #emperor
-					add_loyal_subunit = regular_infantry #should be up to 600k around the country, this is a test
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
+					name = $name$
+					location = $prov$
+					sub_unit = regular_infantry
+					save_scope_as = qing_garrison_legion
+					while = { count = $size$  add_subunit = regular_infantry }
 				}
 			}
 		}
-		scope:green_standard_army = {
-			add_commander = char:358 
+		LOG_line = { sys = QING  msg = "Qing garrison raised: $name$ at $prov$ (+$size$ coy)" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "SE_qing_raise_garrison"  reason = "$prov$ not held by Qing; $name$ not raised" }
+	}
+}
+
+# ----------------------------------------------------------------------
+# Helper: as above, but attaches historical commander $cmd$ (a char scope) to the
+# legion. Guards that $cmd$ exists too (a dead/absent character just falls through
+# to LOG_fail rather than erroring). Commander attach follows the verified idiom:
+# $cmd$ = { add_to_legion = PREV } then random_legion_unit = { set_as_commander }.
+# ----------------------------------------------------------------------
+SE_qing_raise_garrison_cmd = {
+	if = {
+		limit = { exists = $prov$  $prov$ = { owner = c:CHI }  exists = $cmd$ }
+		c:CHI.capital_scope.governorship = {
+			raise_legion = {
+				create_unit = {
+					name = $name$
+					location = $prov$
+					sub_unit = regular_infantry
+					save_scope_as = qing_garrison_legion
+					while = { count = $size$  add_subunit = regular_infantry }
+				}
+				$cmd$ = { add_to_legion = PREV }
+				random_legion_unit = { set_as_commander = $cmd$ }
+			}
 		}
-		scope:green_standard_army_1 = {
-			set_as_commander = char:358
+		LOG_line = { sys = QING  msg = "Qing garrison raised: $name$ at $prov$ (+$size$ coy) under commander $cmd$" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "SE_qing_raise_garrison_cmd"  reason = "$prov$ unheld or $cmd$ absent; $name$ not raised" }
+	}
+}
+
+SE_qing_armies = {
+	LOG_enter = { sys = QING  fn = "SE_qing_armies" }
+	if = {
+		limit = {
+			exists = c:CHI
+			c:CHI = { exists = capital_scope }
 		}
+
+		# ==============================================================
+		# 八旗 EIGHT BANNERS
+		# ==============================================================
+		# 禁旅八旗 jinlü baqi — the metropolitan/capital banners: roughly half of all
+		# banner soldiers concentrated at Beijing, by far the largest single force.
+		# Commanded by Yinghe (char:340), general of the Manchu Plain Blue Banner
+		# since 1814.
+		SE_qing_raise_garrison_cmd = { prov = p:8363  name = "Metropolitan Eight Banners 禁旅八旗"  size = 23  cmd = char:340 }
+
+		# 駐防八旗 zhufang baqi — provincial garrison banners in the walled Manchu
+		# cities 滿城. Xi'an is the largest interior garrison; Ili (Huiyuan, seat of
+		# the 伊犁將軍) is the largest western one, under Changling (char:244, who held
+		# the NW command). The rest are the mid-Yangzi / coastal / frontier mancheng.
+		SE_qing_raise_garrison     = { prov = p:7129  name = "Xi'an Banner Garrison 西安駐防"      size = 7 }   # largest interior mancheng
+		SE_qing_raise_garrison_cmd = { prov = p:3534  name = "Ili Banner Garrison 伊犁駐防"        size = 5  cmd = char:244 } # Huiyuan, seat of the Ili General
+		SE_qing_raise_garrison     = { prov = p:1087  name = "Shengjing Banner Garrison 盛京駐防"  size = 4 }   # Mukden, Manchuria homeland seat
+		SE_qing_raise_garrison     = { prov = p:5005  name = "Jingzhou Banner Garrison 荊州駐防"   size = 3 }   # mid-Yangzi choke
+		SE_qing_raise_garrison     = { prov = p:8120  name = "Hangzhou Banner Garrison 杭州駐防"   size = 3 }
+		SE_qing_raise_garrison     = { prov = p:6659  name = "Jiangning Banner Garrison 江寧駐防"  size = 3 }   # Nanjing
+		SE_qing_raise_garrison     = { prov = p:3537  name = "Chengdu Banner Garrison 成都駐防"    size = 3 }
+		SE_qing_raise_garrison     = { prov = p:9298  name = "Canton Banner Garrison 廣州駐防"     size = 3 }   # Guangzhou, coastal
+		SE_qing_raise_garrison     = { prov = p:3651  name = "Fuzhou Banner Garrison 福州駐防"     size = 3 }
+		SE_qing_raise_garrison     = { prov = p:209   name = "Ningxia Banner Garrison 寧夏駐防"    size = 3 }
+		SE_qing_raise_garrison     = { prov = p:5616  name = "Liangzhou Banner Garrison 涼州駐防"  size = 2 }   # Wuwei
+		SE_qing_raise_garrison     = { prov = p:4931  name = "Kaifeng Banner Garrison 開封駐防"    size = 2 }
+		SE_qing_raise_garrison     = { prov = p:8501  name = "Taiyuan Banner Garrison 太原駐防"    size = 2 }
+		SE_qing_raise_garrison     = { prov = p:3322  name = "Suiyuan Banner Garrison 綏遠駐防"    size = 2 }   # Guihua/Hohhot, Inner Mongolia
+		SE_qing_raise_garrison     = { prov = p:43    name = "Heilongjiang Banner Garrison 黑龍江駐防"  size = 2 } # Qiqihar, thin frontier force facing Russia
+		SE_qing_raise_garrison     = { prov = p:2930  name = "Ürümqi Banner Garrison 烏魯木齊駐防"  size = 3 }
+		SE_qing_raise_garrison     = { prov = p:2700  name = "Kashgar Banner Garrison 喀什噶爾駐防"  size = 2 } # westernmost outpost
+
+		# ==============================================================
+		# 綠營 GREEN STANDARD — dispersed Han constabulary under the great regional
+		# commands. Numerous but individually mediocre; the real fighting edge of
+		# the late Qing lay in locally-raised militia 鄉勇, not this standing force.
+		# ==============================================================
+		# Zhili 直隸 — the metropolitan Green Standard guarding the Beijing approaches,
+		# under Nayancheng (char:358), Viceroy of Zhili (the historical 1815 command,
+		# preserved from the original single-army setup).
+		SE_qing_raise_garrison_cmd = { prov = p:8363  name = "Jingshi Green Standard Army 京師綠營"  size = 11  cmd = char:358 }
+		SE_qing_raise_garrison     = { prov = p:6659  name = "Liangjiang Green Standard 兩江綠營"    size = 7 }   # rich lower-Yangzi (Nanjing)
+		SE_qing_raise_garrison     = { prov = p:4991  name = "Huguang Green Standard 湖廣綠營"       size = 7 }   # Wuchang
+		SE_qing_raise_garrison_cmd = { prov = p:3537  name = "Sichuan Green Standard 四川綠營"       size = 7  cmd = char:339 } # logistical spine of the frontier; Wu Xiongguang
+		SE_qing_raise_garrison     = { prov = p:9298  name = "Liangguang Green Standard 兩廣綠營"    size = 7 }   # Guangzhou, coast/anti-piracy + marine squadrons
+		SE_qing_raise_garrison     = { prov = p:1303  name = "Shaan-Gan Green Standard 陝甘綠營"     size = 5 }   # Lanzhou, Muslim frontier
+		SE_qing_raise_garrison     = { prov = p:3651  name = "Fujian Green Standard 福建綠營"        size = 5 }   # Fuzhou + Straits marine
+		SE_qing_raise_garrison     = { prov = p:6781  name = "Taiwan Green Standard 臺灣綠營"        size = 4 }   # Tainan garrison
+		SE_qing_raise_garrison_cmd = { prov = p:5786  name = "Yunnan-Guizhou Green Standard 雲貴綠營"  size = 5  cmd = char:241 } # SW tribal frontier; Yang Fang, White Lotus veteran
+
+		LOG_line = { sys = QING  msg = "Qing dual standing army raised: Eight Banners (metropolitan + provincial mancheng) + dispersed Green Standard" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "SE_qing_armies"  reason = "c:CHI absent or has no capital_scope; no Qing army raised" }
 	}
 }
 
 SE_occupation_of_france = {
-	c:GBR = {
-		add_military_access = c:FRA
-		add_truce = {
-			target = c:FRA
-			duration = 3650 #10 years
-		}
-		capital_scope.governorship = {
-			raise_legion = {
-				save_scope_as = british_occupation_force
-				create_unit = {
-					name="Div. I, British Occupation Force"
-					location = p:3768 #Cambrai
-					save_scope_as = british_occupation_div_1
-					every_sub_unit = { set_personal_loyalty = char:88 } #Wellington
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-				} #for accuracy should be 150k men from coalition states. Look into composition. Wellington was overall commander.
-				create_unit = {
-					name="Div. II, British Occupation Force"
-					location = p:8782 #Calais
-					save_scope_as = british_occupation_div_2
-					every_sub_unit = { set_personal_loyalty = char:88 } #Wellington
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
+	LOG_enter = { sys = DIPLO  fn = "SE_occupation_of_france" }
+	if = {
+		limit = { exists = c:FRA }
+		if = {
+			limit = { exists = c:GBR }
+			c:GBR = {
+				add_military_access = c:FRA
+				add_truce = {
+					target = c:FRA
+					duration = 3650 #10 years
 				}
-				create_unit = {
-					name="Div. III, British Occupation Force"
-					location = p:3451 #Valenciennes
-					save_scope_as = british_occupation_div_3
-					every_sub_unit = { set_personal_loyalty = char:88 } #Wellington
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
+				capital_scope.governorship = {
+					raise_legion = {
+						create_unit = {
+							name = "Div. I, British Occupation Force"
+							location = p:3768 #Cambrai
+							sub_unit = regular_infantry
+							save_scope_as = legion_scope
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+						}
+						char:88 = { add_to_legion = PREV } #Wellington
+						random_legion_unit = { set_as_commander = char:88 }
+					}
 				}
-			}
-		}
-		scope:british_occupation_force = {
-			add_commander = char:88 #Wellington
-			add_commander = char:494 #Henry Clinton
-			add_commander = char:496 #Charles Colville
-		}
-		scope:british_occupation_div_1 = { #technically Sir Lowry Cole, should Wellington get his own token "High Command" force of 1500ish?
-			set_as_commander = char:88
-		}
-		scope:british_occupation_div_2 = {
-			set_as_commander = char:494
-		}
-		scope:british_occupation_div_3 = {
-			set_as_commander = char:496
-		}
-	}
-	c:AUS = {
-		add_military_access = c:FRA
-		add_truce = {
-			target = c:FRA
-			duration = 3650 #10 years
-		}
-		capital_scope.governorship = {
-			raise_legion = {
-				save_scope_as = austrian_occupation_force
-				create_unit = {
-					name="Austrian Occupation Force"
-					location = p:3887 #Colmar
-					save_scope_as = austrian_occupation_force_1
-					every_sub_unit = { set_personal_loyalty = char:88 } #Wellington as overall commander
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-				} #10k, make up to 30k
-			}
-		}
-		scope:austrian_occupation_force = {
-			add_commander = char:493
-		}
-		scope:austrian_occupation_force_1 = {
-			set_as_commander = char:493 #Johann Frimont
-		}
-	}
-	c:PRU = {
-		add_military_access = c:FRA
-		add_truce = {
-			target = c:FRA
-			duration = 3650 #10 years
-		}
-		capital_scope.governorship = {
-			raise_legion = {
-				save_scope_as = prussian_occupation_force
-				create_unit = {
-					name="Prussian Occupation Force"
-					location = p:5025 #Sedan
-					save_scope_as = prussian_occupation_force_1
-					every_sub_unit = { set_personal_loyalty = char:88 } #Wellington
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-				} #10k, make up to 30k
-			}
-		}
-		scope:prussian_occupation_force = {
-			add_commander = char:293
-		}
-		scope:prussian_occupation_force_1 = {
-			set_as_commander = char:293 #Hans von Zieten
-		}
-	}
-	c:RUS = {
-		add_military_access = c:FRA
-		add_truce = {
-			target = c:FRA
-			duration = 3650 #10 years
-		}
-		capital_scope.governorship = {
-			raise_legion = {
-				save_scope_as = russian_occupation_force
-				create_unit = {
-					name="Russian Occupation Force"
-					location = p:1714 #Vervins - they were at Maubeuge
-					save_scope_as = russian_occupation_force_1
-					every_sub_unit = { set_personal_loyalty = char:88 } #Wellington
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-				} #10k, make up to 30k
-			}
-		}
-		scope:russian_occupation_force = {
-			add_commander = char:289
-		}
-		scope:russian_occupation_force_1 = {
-			set_as_commander = char:289 #Mikhail Vorontsov
-		}
-	}
-	c:BAV = {
-		add_military_access = c:FRA
-		add_truce = {
-			target = c:FRA
-			duration = 3650 #10 years
-		}
-		capital_scope.governorship = {
-			raise_legion = {
-				save_scope_as = bavarian_occupation_force
-				create_unit = {
-					name="Bavarian Occupation Force"
-					location = p:8839 #Nogent - can't find where they really were, a map put them significantly further west
-					save_scope_as = bavarian_occupation_force_1
-					every_sub_unit = { set_personal_loyalty = char:118 } #Gourlez de Lamotte
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-				} #10k
-			}
-		}
-    }
-	scope:bavarian_occupation_force = {
-		add_commander = char:118
-	}
-	scope:bavarian_occupation_force_1 = {
-		set_as_commander = char:118
-	}
-	c:SWI = {
-		add_military_access = c:FRA
-		add_truce = {
-			target = c:FRA
-			duration = 3650 #10 years
-		}
-		capital_scope.governorship = {
-			raise_legion = {
-				save_scope_as = swiss_occupation_force
-				create_unit = {
-					name="Swiss Occupation Force"
-					location = p:3495 #Lons-le-Saunier
-					save_scope_as = swiss_occupation_force_1
-					every_sub_unit = { set_personal_loyalty = char:119 } #Bachmann
-					add_loyal_subunit = regular_infantry #5k
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
-					add_loyal_subunit = regular_infantry
+				capital_scope.governorship = {
+					raise_legion = {
+						create_unit = {
+							name = "Div. II, British Occupation Force"
+							location = p:8782 #Calais
+							sub_unit = regular_infantry
+							save_scope_as = legion_scope
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+						}
+						char:494 = { add_to_legion = PREV } #Henry Clinton
+						random_legion_unit = { set_as_commander = char:494 }
+					}
+				}
+				capital_scope.governorship = {
+					raise_legion = {
+						create_unit = {
+							name = "Div. III, British Occupation Force"
+							location = p:3451 #Valenciennes
+							sub_unit = regular_infantry
+							save_scope_as = legion_scope
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+						}
+						char:496 = { add_to_legion = PREV } #Charles Colville
+						random_legion_unit = { set_as_commander = char:496 }
+					}
 				}
 			}
+			LOG_line = { sys = DIPLO  msg = "GBR army of occupation deployed in France" }
 		}
-    }
-	scope:swiss_occupation_force = {
-		add_commander = char:119
+		if = {
+			limit = { exists = c:AUS }
+			c:AUS = {
+				add_military_access = c:FRA
+				add_truce = {
+					target = c:FRA
+					duration = 3650 #10 years
+				}
+				capital_scope.governorship = {
+					raise_legion = {
+						create_unit = {
+							name = "Austrian Occupation Force"
+							location = p:3887 #Colmar
+							sub_unit = regular_infantry
+							save_scope_as = legion_scope
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+						}
+						char:493 = { add_to_legion = PREV } #Johann Frimont
+						random_legion_unit = { set_as_commander = char:493 }
+					}
+				}
+			}
+			LOG_line = { sys = DIPLO  msg = "AUS army of occupation deployed in France" }
+		}
+		if = {
+			limit = { exists = c:PRU }
+			c:PRU = {
+				add_military_access = c:FRA
+				add_truce = {
+					target = c:FRA
+					duration = 3650 #10 years
+				}
+				capital_scope.governorship = {
+					raise_legion = {
+						create_unit = {
+							name = "Prussian Occupation Force"
+							location = p:5025 #Sedan
+							sub_unit = regular_infantry
+							save_scope_as = legion_scope
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+						}
+						char:293 = { add_to_legion = PREV } #Hans von Zieten
+						random_legion_unit = { set_as_commander = char:293 }
+					}
+				}
+			}
+			LOG_line = { sys = DIPLO  msg = "PRU army of occupation deployed in France" }
+		}
+		if = {
+			limit = { exists = c:RUS }
+			c:RUS = {
+				add_military_access = c:FRA
+				add_truce = {
+					target = c:FRA
+					duration = 3650 #10 years
+				}
+				capital_scope.governorship = {
+					raise_legion = {
+						create_unit = {
+							name = "Russian Occupation Force"
+							location = p:1714 #Vervins
+							sub_unit = regular_infantry
+							save_scope_as = legion_scope
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+						}
+						char:289 = { add_to_legion = PREV } #Mikhail Vorontsov
+						random_legion_unit = { set_as_commander = char:289 }
+					}
+				}
+			}
+			LOG_line = { sys = DIPLO  msg = "RUS army of occupation deployed in France" }
+		}
+		if = {
+			limit = { exists = c:BAV }
+			c:BAV = {
+				add_military_access = c:FRA
+				add_truce = {
+					target = c:FRA
+					duration = 3650 #10 years
+				}
+				capital_scope.governorship = {
+					raise_legion = {
+						create_unit = {
+							name = "Bavarian Occupation Force"
+							location = p:8839 #Nogent
+							sub_unit = regular_infantry
+							save_scope_as = legion_scope
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+						}
+						char:118 = { add_to_legion = PREV } #Gourlez de Lamotte
+						random_legion_unit = { set_as_commander = char:118 }
+					}
+				}
+			}
+			LOG_line = { sys = DIPLO  msg = "BAV army of occupation deployed in France" }
+		}
+		if = {
+			limit = { exists = c:SWI }
+			c:SWI = {
+				add_military_access = c:FRA
+				add_truce = {
+					target = c:FRA
+					duration = 3650 #10 years
+				}
+				capital_scope.governorship = {
+					raise_legion = {
+						create_unit = {
+							name = "Swiss Occupation Force"
+							location = p:3495 #Lons-le-Saunier
+							sub_unit = regular_infantry
+							save_scope_as = legion_scope
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+						}
+						char:119 = { add_to_legion = PREV } #Niklaus von Bachmann
+						random_legion_unit = { set_as_commander = char:119 }
+					}
+				}
+			}
+			LOG_line = { sys = DIPLO  msg = "SWI army of occupation deployed in France" }
+		}
 	}
-	scope:swiss_occupation_force_1 = {
-		set_as_commander = char:119 #Niklaus von Bachmann
+	else = {
+		LOG_fail = { sys = DIPLO  fn = "SE_occupation_of_france"  reason = "c:FRA absent; no army of occupation deployed" }
 	}
 }

@@ -1,0 +1,1173 @@
+########################################################################
+# se_QING_DECLINE.txt — the shared "dynastic decline" state engine for the
+# Qing player-experience mechanics suite.
+#
+# Design: the mechanics A (silver stress), C (banner decay), D (corruption),
+# G (sects), #1 (ethnic tension) and the reform pressure that unlocks #9b all
+# share a small set of COUNTER variables on the Qing country. Each counter is
+# nudged EVENT-DRIVEN (never recomputed by sweeping pops/provinces), and a
+# single throttled pulse (QING_DECLINE_apply_bands) reads the counters and
+# swaps the country modifier that matches each counter's current band.
+#
+# This is why the whole suite stays cheap: the counters are plain numbers,
+# reads are O(1), and the only per-tick work is a handful of threshold checks
+# gated to the single human Qing player (see 00_monthly_country.txt).
+#
+#   ROOT / this = the Qing overlord (CHI, human)
+#
+# State variables (all on CHI):
+#   qing_corruption_level     0..100   (D)   raised by war/office-sales, cut by audits/reform
+#   qing_sect_pressure        0..100   (G)   raised by famine/unrest/tax, cut by suppression
+#   qing_banner_decay         0..100   (C)   climbs slowly with time, cut by reform drills
+#   qing_ethnic_tension       0..100   (#1)  raised by integration/strife, cut by dyarchy
+#   qing_currency_stress      0..100   (A)   tracks reserve-ratio stress + opium drain
+#   qing_reform_pressure      0..100   (#9)  fed by ALL the above; unlocks the reform track
+#   qing_granary_stock        0..100   (F)   built in good years, spent in famine
+#
+# Prefix = QING_DECLINE
+########################################################################
+
+# ---- Generic clamped-counter helpers ---------------------------------
+# Nudge one 0..100 counter by $amount$ (may be negative) and clamp.
+# Scope: country (CHI).  $var$ = counter name, $amount$ = signed integer.
+QING_DECLINE_nudge = {
+	if = {
+		limit = { NOT = { has_variable = $var$ } }
+		set_variable = { name = $var$  value = 0 }
+	}
+	change_variable = { name = $var$  add = $amount$ }
+	if = { limit = { var:$var$ > 100 }  set_variable = { name = $var$  value = 100 } }
+	if = { limit = { var:$var$ < 0 }    set_variable = { name = $var$  value = 0 } }
+	LOG_line = { sys = QING  msg = "counter $var$ += $amount$ -> [ROOT.MakeScope.GetVariable('$var$').GetValue|0]" }
+}
+
+# Initialise every counter to 0 if unset. Called once on game start for CHI.
+QING_DECLINE_init = {
+	LOG_enter = { sys = QING  fn = "QING_DECLINE_init" }
+	if = { limit = { NOT = { has_variable = qing_corruption_level } }  set_variable = { name = qing_corruption_level  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_sect_pressure } }     set_variable = { name = qing_sect_pressure  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_banner_decay } }      set_variable = { name = qing_banner_decay  value = 10 } }
+	if = { limit = { NOT = { has_variable = qing_ethnic_tension } }    set_variable = { name = qing_ethnic_tension  value = 20 } }
+	if = { limit = { NOT = { has_variable = qing_currency_stress } }   set_variable = { name = qing_currency_stress  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_reform_pressure } }   set_variable = { name = qing_reform_pressure  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_granary_stock } }     set_variable = { name = qing_granary_stock  value = 30 } }
+	# Civic (national) identity — the POSITIVE nation-building meter (§11 L4 ext).
+	# A shared "Chinese"/中華 civic identity that can transcend the empire's ethnic
+	# fault lines. Starts at 0: in 1815 the realm is a dynastic-ethnic order, not a
+	# nation. Rises only as the Self-Strengthening movement forges the connective
+	# institutions of a nation (schools, telegraph, press) — see the drift below.
+	if = { limit = { NOT = { has_variable = qing_civic_identity } }    set_variable = { name = qing_civic_identity  value = 0 } }
+	LOG_exit = { sys = QING  fn = "QING_DECLINE_init"  result = OK }
+}
+
+# ======================================================================
+# BAND APPLICATION
+# Read each counter and (re)apply the matching modifier band. Called from the
+# throttled monthly pulse. Each block removes the other bands for its family
+# first so exactly one is active, then adds the correct one. This is the only
+# recurring work in the suite and it is all O(1) counter reads.
+# ======================================================================
+
+# --- A: currency stress feeds off the live reserve ratio, then bands --------
+# The reserve-ratio -> stress transfer function now lives in the GENERIC engine
+# se_CURRENCY_STRESS.txt (CURR_STRESS_update): the Qing meter EXTENDS it rather
+# than owning a private copy. We pass our own counter var (qing_currency_stress)
+# so the qing decline suite keeps its own meter and its feed into reform pressure
+# and the opium/treaty events — only the underlying transfer function is shared.
+# (Historically the "silver drain": a low reserve ratio = silver drained away.)
+QING_DECLINE_update_currency_stress = {
+	CURR_STRESS_update = { counter = qing_currency_stress }
+}
+
+# Band application maps the SHARED band level (CURR_STRESS_classify: 0 calm /
+# 1 strain / 2 crisis, thresholds 30/60) onto the Qing-flavoured modifiers. The
+# modifier names are the consumer's own — the generic classifier deliberately
+# names no modifiers (see se_CURRENCY_STRESS.txt design seam).
+QING_DECLINE_apply_currency_band = {
+	CURR_STRESS_classify = { counter = qing_currency_stress  out = qing_curr_band_tmp }
+	remove_country_modifier = qing_curr_silver_drain
+	remove_country_modifier = qing_curr_monetary_crisis
+	if = {
+		limit = { var:qing_curr_band_tmp = 2 }
+		add_country_modifier = { name = qing_curr_monetary_crisis  duration = -1 }
+		LOG_line = { sys = QING  msg = "band currency = monetary_crisis for [ROOT.GetTag] (stress=[ROOT.MakeScope.GetVariable('qing_currency_stress').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_curr_band_tmp = 1 }
+		add_country_modifier = { name = qing_curr_silver_drain  duration = -1 }
+		LOG_line = { sys = QING  msg = "band currency = silver_drain for [ROOT.GetTag] (stress=[ROOT.MakeScope.GetVariable('qing_currency_stress').GetValue|0])" }
+	}
+	remove_variable = qing_curr_band_tmp
+}
+
+QING_DECLINE_apply_corruption_band = {
+	remove_country_modifier = qing_corrupt_endemic
+	remove_country_modifier = qing_corrupt_rampant
+	remove_country_modifier = qing_corrupt_clean_government
+	if = {
+		limit = { var:qing_corruption_level >= 60 }
+		add_country_modifier = { name = qing_corrupt_rampant  duration = -1 }
+		LOG_line = { sys = QING  msg = "band corruption = rampant for [ROOT.GetTag] (level=[ROOT.MakeScope.GetVariable('qing_corruption_level').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_corruption_level >= 30 }
+		add_country_modifier = { name = qing_corrupt_endemic  duration = -1 }
+		LOG_line = { sys = QING  msg = "band corruption = endemic for [ROOT.GetTag] (level=[ROOT.MakeScope.GetVariable('qing_corruption_level').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_corruption_level <= 10 }
+		add_country_modifier = { name = qing_corrupt_clean_government  duration = -1 }
+		LOG_line = { sys = QING  msg = "band corruption = clean_government for [ROOT.GetTag] (level=[ROOT.MakeScope.GetVariable('qing_corruption_level').GetValue|0])" }
+	}
+}
+
+QING_DECLINE_apply_sect_band = {
+	remove_country_modifier = qing_sect_infiltration
+	if = {
+		limit = { var:qing_sect_pressure >= 50 }
+		add_country_modifier = { name = qing_sect_infiltration  duration = -1 }
+		LOG_line = { sys = QING  msg = "band sect = infiltration for [ROOT.GetTag] (pressure=[ROOT.MakeScope.GetVariable('qing_sect_pressure').GetValue|0])" }
+	}
+}
+
+QING_DECLINE_apply_banner_band = {
+	remove_country_modifier = qing_banner_decay_mild
+	remove_country_modifier = qing_banner_decay_severe
+	if = {
+		limit = { var:qing_banner_decay >= 60 }
+		add_country_modifier = { name = qing_banner_decay_severe  duration = -1 }
+		LOG_line = { sys = QING  msg = "band banner = severe for [ROOT.GetTag] (decay=[ROOT.MakeScope.GetVariable('qing_banner_decay').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_banner_decay >= 30 }
+		add_country_modifier = { name = qing_banner_decay_mild  duration = -1 }
+		LOG_line = { sys = QING  msg = "band banner = mild for [ROOT.GetTag] (decay=[ROOT.MakeScope.GetVariable('qing_banner_decay').GetValue|0])" }
+	}
+}
+
+QING_DECLINE_apply_ethnic_band = {
+	remove_country_modifier = qing_ethnic_high_tension
+	if = {
+		limit = { var:qing_ethnic_tension >= 60 }
+		add_country_modifier = { name = qing_ethnic_high_tension  duration = -1 }
+		LOG_line = { sys = QING  msg = "band ethnic = high_tension for [ROOT.GetTag] (tension=[ROOT.MakeScope.GetVariable('qing_ethnic_tension').GetValue|0])" }
+	}
+}
+
+# --- Civic (national) identity band (§11 L4 ext) ---------------------------
+# One active band matching the meter, re-applied each pulse (mirrors the
+# self-strengthening band). The bands reward a coalescing nation with falling
+# unrest, rising loyalty and — at the top — faster assimilation of the realm's
+# peoples into a shared civic order.
+QING_DECLINE_apply_civic_band = {
+	if = { limit = { NOT = { has_variable = qing_civic_identity } }  set_variable = { name = qing_civic_identity  value = 0 } }
+	remove_country_modifier = qing_civic_nascent
+	remove_country_modifier = qing_civic_emerging
+	remove_country_modifier = qing_civic_national
+	if = {
+		limit = { var:qing_civic_identity >= 85 }
+		add_country_modifier = { name = qing_civic_national  duration = -1 }
+		LOG_line = { sys = QING  msg = "band civic = national for [ROOT.GetTag] (civic=[ROOT.MakeScope.GetVariable('qing_civic_identity').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_civic_identity >= 50 }
+		add_country_modifier = { name = qing_civic_emerging  duration = -1 }
+		LOG_line = { sys = QING  msg = "band civic = emerging for [ROOT.GetTag] (civic=[ROOT.MakeScope.GetVariable('qing_civic_identity').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_civic_identity >= 25 }
+		add_country_modifier = { name = qing_civic_nascent  duration = -1 }
+		LOG_line = { sys = QING  msg = "band civic = nascent for [ROOT.GetTag] (civic=[ROOT.MakeScope.GetVariable('qing_civic_identity').GetValue|0])" }
+	}
+}
+
+# --- Reform pressure is DERIVED from the other counters (event-driven read) -
+# It is the connective tissue to #9b: when enough decline accumulates, the
+# reform track unlocks. Computed as a gentle blend so it can cross the unlock
+# threshold BEFORE 1840 if the player's realm is genuinely in crisis (per the
+# loosened-gate decision), but is not date-locked.
+QING_DECLINE_update_reform_pressure = {
+	set_variable = {
+		name = qing_reform_pressure_target
+		value = 0
+	}
+	change_variable = { name = qing_reform_pressure_target  add = var:qing_corruption_level  }
+	change_variable = { name = qing_reform_pressure_target  add = var:qing_currency_stress  }
+	change_variable = { name = qing_reform_pressure_target  add = var:qing_ethnic_tension  }
+	change_variable = { name = qing_reform_pressure_target  add = var:qing_banner_decay  }
+	# average of the four decline counters
+	change_variable = { name = qing_reform_pressure_target  divide = 4 }
+	# drift the live counter toward the target by +/-2
+	if = {
+		limit = { var:qing_reform_pressure < var:qing_reform_pressure_target }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 2 }
+	}
+	else_if = {
+		limit = { var:qing_reform_pressure > var:qing_reform_pressure_target }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -1 }
+	}
+}
+
+# ======================================================================
+# ETHNIC TENSION — DEEP RE-DERIVATION FROM PROVINCE DEMOGRAPHICS (§11 L3, Qing).
+#
+# The abstract ethnic-tension counter is now largely COMPUTED from the real
+# ethnic geography of the realm rather than hand-tuned nudges. It reads the
+# GENERIC de jure baseline (se_DEJURE.txt froze each province's rightful 1815
+# culture into var:dejure_culture at game start) and measures how much of the
+# realm is "restive": land whose rightful people the Qing has NOT integrated.
+#
+# The manchu-primary / Han-realm subtlety is handled for free: a country's OWN
+# primary culture is always integrated, so manchu de jure land is never restive;
+# and because we CALIBRATE against the 1815 baseline (the huge static mass of
+# un-integrated Han de jure land is the baseline and nets to zero deviation), a
+# stable historical Qing sits at the ~20 start value. The counter then MOVES as
+# the realm changes: conquering more un-integrated foreign de jure land raises
+# it, integrating cultures or losing that land lowers it, and Han settlers
+# demographically displacing a frontier people (live plurality != frozen de
+# jure) adds a displacement premium — the historical driver of frontier strife.
+#
+# PERFORMANCE (firm, user): the heavy every_owned_province scan runs ANNUALLY
+# (yearly_country_pulse, CHI + human only) and writes a cached target; the
+# cheap O(1) quarterly pulse just drifts the live counter toward that target.
+# Ethnic tension only moves through slow processes (conquest, integration,
+# migration) that do not shift within a year, so annual granularity loses almost
+# nothing while cutting the scan cost ~4x versus running it every pulse.
+# ======================================================================
+QING_DECLINE_scan_ethnic_target = {
+	LOG_enter = { sys = QING  fn = "QING_DECLINE_scan_ethnic_target" }
+
+	# Weighted tally of restive land. base 1 per restive province, +1 if actively
+	# unhappy (unrest high), +1 if its rightful people have been demographically
+	# displaced (live plurality no longer the frozen de jure culture).
+	set_variable = { name = qing_ethnic_restive_weighted  value = 0 }
+	every_owned_province = {
+		limit = {
+			is_sea = no
+			total_population > 0
+			has_variable = dejure_culture
+		}
+		# Pull the frozen rightful culture into a named scope so it can be tested
+		# unambiguously across scope changes (a saved scope is globally visible
+		# within the effect; a prev-chain into any_country_culture would resolve
+		# to the country, where the variable does not live).
+		var:dejure_culture = { save_scope_as = dj_rightful_c }
+		# restive = the Qing has NOT integrated this land's rightful culture.
+		# (manchu, the primary culture, is always integrated -> never restive.)
+		if = {
+			limit = {
+				NOT = {
+					ROOT = {
+						any_country_culture = {
+							is_integrated = yes
+							is_culture = scope:dj_rightful_c
+						}
+					}
+				}
+			}
+			ROOT = { change_variable = { name = qing_ethnic_restive_weighted  add = 1 } }
+			# actively restless land weighs more
+			if = {
+				limit = { province_unrest >= 4 }
+				ROOT = { change_variable = { name = qing_ethnic_restive_weighted  add = 1 } }
+			}
+			# displacement premium: the rightful people are no longer the plurality
+			# (e.g. Han settlers swamped a frontier province) — a strife driver.
+			if = {
+				limit = { NOT = { dominant_province_culture = scope:dj_rightful_c } }
+				ROOT = { change_variable = { name = qing_ethnic_restive_weighted  add = 1 } }
+			}
+		}
+	}
+
+	# On the FIRST scan, freeze the 1815 weighted tally as the baseline so the
+	# historical realm sits at the ~20 start value and only DEVIATIONS move it.
+	if = {
+		limit = { NOT = { has_variable = qing_ethnic_restive_base } }
+		set_variable = { name = qing_ethnic_restive_base  value = var:qing_ethnic_restive_weighted }
+		LOG_line = { sys = QING  msg = "ethnic baseline frozen: restive_base=[ROOT.MakeScope.GetVariable('qing_ethnic_restive_base').GetValue|0]" }
+	}
+
+	# target = 20 + (current restive - baseline restive) / 2, clamped 0..100.
+	# Each net-new restive province adds ~0.5 to the tension target.
+	set_variable = { name = qing_ethnic_tension_target  value = var:qing_ethnic_restive_weighted }
+	change_variable = { name = qing_ethnic_tension_target  subtract = var:qing_ethnic_restive_base }
+	change_variable = { name = qing_ethnic_tension_target  divide = 2 }
+	change_variable = { name = qing_ethnic_tension_target  add = 20 }
+	if = { limit = { var:qing_ethnic_tension_target > 100 }  set_variable = { name = qing_ethnic_tension_target  value = 100 } }
+	if = { limit = { var:qing_ethnic_tension_target < 0 }    set_variable = { name = qing_ethnic_tension_target  value = 0 } }
+
+	LOG_exit = { sys = QING  fn = "QING_DECLINE_scan_ethnic_target"  result = OK }
+}
+
+# ======================================================================
+# CIVIC ASSIMILATION — the annual nation-building pass (§11 L4 ext).
+# Runs once a year, right after the demographic scan (CHI + human), so it reuses
+# the same annual cadence and adds NO new polling hook. What a coalescing civic
+# nation actually DOES to its ethnic map, in two complementary registers:
+#
+#   (A) INTEGRATION BRIDGE (civic citizenship — inclusive). Once civic identity is
+#       genuinely established (>= 50), the realm extends citizenship to its
+#       peoples: it integrates ONE not-yet-integrated country-culture per year
+#       (integrate_country_culture, proven engine effect). Because ethnic tension
+#       is DERIVED from un-integrated restive land, this directly lowers next
+#       year's scanned target. No culture is erased — minorities become citizens.
+#       One per year keeps it gradual and legible.
+#
+#   (B) SINICIZATION TRICKLE (assimilative). A DISTINCT, popular-level process from
+#       the elite Manchu-identity meter (qing_manchu_identity, se_QING_MECHANICS)
+#       and the customs-service sinicization (QING_customs_sinicize): here a small,
+#       slow fraction of pops in provinces WHERE HAN ARE ALREADY THE PLURALITY but
+#       the frozen rightful culture is non-Han (i.e. displacement has already
+#       happened, L2) drift to the province's dominant Sinitic culture. Gated to
+#       follow demographic reality, never force it — so it complements the bottom-
+#       up migration philosophy rather than fighting it. Only fires at high civic
+#       identity (>= 70), and touches at most a couple of provinces a year.
+#   ROOT / this = the Qing overlord (CHI, human).
+# ======================================================================
+QING_DECLINE_civic_assimilation = {
+	LOG_enter = { sys = QING  fn = "QING_DECLINE_civic_assimilation" }
+	if = { limit = { NOT = { has_variable = qing_civic_identity } }  set_variable = { name = qing_civic_identity  value = 0 } }
+
+	# (A) INTEGRATION BRIDGE — one culture per year, once civic identity is established.
+	# SCOPE DIRECTION (see the warning at QING_DECLINE_scan_ethnic_target): the frozen
+	# rightful culture lives as a variable on the PROVINCE, so we must iterate provinces
+	# and pull it into a named scope — a culture scope has no owned-province list, and a
+	# prev-chain the other way would resolve to the country. We therefore walk our own
+	# restive de jure provinces, and integrate the first un-integrated rightful culture
+	# we find. A body-side "done" guard caps it at ONE per year (an every_ limit cannot
+	# cap mid-iteration — the candidate list is built once, up front).
+	if = {
+		limit = { var:qing_civic_identity >= 50 }
+		set_variable = { name = qing_civic_bridge_done  value = 0 }
+		every_owned_province = {
+			limit = {
+				has_variable = dejure_culture
+				total_population > 0
+			}
+			if = {
+				limit = { ROOT.var:qing_civic_bridge_done = 0 }
+				var:dejure_culture = { save_scope_as = civic_candidate_culture }
+				# integrate only if this rightful culture is ACTUALLY PRESENT among our
+				# pops AND not yet a citizen culture. The positive any_country_culture
+				# test does both at once: it only enumerates cultures that exist in the
+				# realm, so a fully-displaced rightful people (no pops left — e.g. a
+				# frontier swamped by Han settlers) is correctly skipped rather than
+				# wasting the year's single integration on an absent culture.
+				# (is_integrated = no auto-excludes our own always-integrated primary.)
+				if = {
+					limit = {
+						ROOT = {
+							any_country_culture = {
+								is_integrated = no
+								is_culture = scope:civic_candidate_culture
+							}
+						}
+					}
+					ROOT = {
+						integrate_country_culture = scope:civic_candidate_culture
+						set_variable = { name = qing_civic_bridge_done  value = 1 }
+					}
+					LOG_line = { sys = QING  msg = "civic: extended citizenship (integrated a restive culture) for [ROOT.GetTag] (civic=[ROOT.MakeScope.GetVariable('qing_civic_identity').GetValue|0])" }
+				}
+			}
+		}
+		if = {
+			limit = { var:qing_civic_bridge_done = 0 }
+			LOG_fail = { sys = QING  fn = "QING_DECLINE_civic_assimilation"  reason = "integration bridge: no un-integrated culture anchors restive de jure land (all such peoples already citizens)" }
+		}
+		remove_variable = qing_civic_bridge_done
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_DECLINE_civic_assimilation"  reason = "integration bridge: civic identity below 50, citizenship not yet extended" }
+	}
+
+	# (B) SINICIZATION — a demographic MELTING POT driven by MAJORITY WEIGHT, not by
+	# strife (user, firm): even a HAPPILY-INTEGRATED minority pop assimilates under
+	# enough surrounding majority pressure — the more dominant the local Sinitic
+	# plurality, the faster minorities merge into it. This is the popular, bottom-up
+	# counterpart to the elite Manchu-identity meter (qing_manchu_identity) and the
+	# customs-service sinicization; it deliberately does NOT filter on unrest or pop
+	# happiness. The national project (high civic identity) is what mobilises common
+	# schooling/print/administration into assimilation pressure, so it is gated on
+	# civic identity >= 70; WITHIN that, INTENSITY scales with the majority's weight.
+	if = {
+		limit = { var:qing_civic_identity >= 70 }
+		# sentinel so we can LOG_fail the "gate passed but no province matched" no-op
+		# path (standing rule), mirroring part (A)'s qing_civic_bridge_done.
+		set_variable = { name = qing_civic_sinic_done  value = 0 }
+		# Touch the several most-populous provinces where a Sinitic culture already
+		# holds a majority. Assimilation follows demography — it never manufactures a
+		# majority that isn't there (so it complements L2 bottom-up migration).
+		ordered_owned_province = {
+			order_by = total_population
+			max = 4
+			limit = {
+				is_sea = no
+				total_population > 0
+				dominant_province_culture.culture_group = chinese_group
+				# a genuine majority of the province is already Sinitic (>= 50%).
+				# (any_pops_in_province takes its match conditions FLAT beside
+				# percent/count — NO limit = {} wrapper; proven decentralize_realm_button.)
+				any_pops_in_province = {
+					percent >= 0.5
+					pop_culture.culture_group = chinese_group
+				}
+				# and at least one ELIGIBLE non-Sinitic pop remains to assimilate. This
+				# must match QING_civic_assimilate_one_pop's own eligibility (non-slave,
+				# non-noble) so the outer gate never admits a province the helper will
+				# no-op on (which would fire a misleading success LOG_line).
+				any_pops_in_province = {
+					count >= 1
+					NOT = { pop_type = slaves }
+					NOT = { pop_type = nobles }
+					NOT = { pop_culture.culture_group = chinese_group }
+				}
+			}
+			save_scope_as = civic_sinic_province
+			# set the sentinel on ROOT (country) — the loop body scope is the PROVINCE.
+			ROOT = { set_variable = { name = qing_civic_sinic_done  value = 1 } }
+			# Base assimilation: one non-Sinitic pop merges into the local Sinitic
+			# plurality culture. set_pop_culture is the proven engine effect. Happy or
+			# not — majority weight, not grievance, drives this.
+			QING_civic_assimilate_one_pop = yes
+			# Majority-weight INTENSITY: an OVERWHELMING Sinitic majority (>= 75%)
+			# exerts stronger pull — a second pop assimilates the same year.
+			if = {
+				limit = {
+					scope:civic_sinic_province = {
+						any_pops_in_province = {
+							percent >= 0.75
+							pop_culture.culture_group = chinese_group
+						}
+					}
+				}
+				QING_civic_assimilate_one_pop = yes
+			}
+			LOG_line = { sys = QING  msg = "civic: sinicization melting-pot in [scope:civic_sinic_province.GetName] for [ROOT.GetTag]" }
+		}
+		if = {
+			limit = { var:qing_civic_sinic_done = 0 }
+			LOG_fail = { sys = QING  fn = "QING_DECLINE_civic_assimilation"  reason = "sinicization: no majority-Sinitic province with an assimilable (non-slave/non-noble) minority left" }
+		}
+		remove_variable = qing_civic_sinic_done
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_DECLINE_civic_assimilation"  reason = "sinicization: civic identity below 70, no assimilation pressure mobilised" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_DECLINE_civic_assimilation"  result = OK }
+}
+
+# Assimilate ONE non-Sinitic, non-slave pop in scope:civic_sinic_province into the
+# province's dominant (Sinitic) culture. Split out so the majority-weight intensity
+# logic can call it once or twice. Guarded: no-op + LOG_fail if no eligible pop.
+QING_civic_assimilate_one_pop = {
+	if = {
+		limit = {
+			scope:civic_sinic_province = {
+				any_pops_in_province = {
+					count >= 1
+					NOT = { pop_type = slaves }
+					NOT = { pop_type = nobles }
+					NOT = { pop_culture = scope:civic_sinic_province.dominant_province_culture }
+				}
+			}
+		}
+		scope:civic_sinic_province = {
+			random_pops_in_province = {
+				limit = {
+					NOT = { pop_type = slaves }
+					NOT = { pop_type = nobles }
+					NOT = { pop_culture = scope:civic_sinic_province.dominant_province_culture }
+				}
+				set_pop_culture = scope:civic_sinic_province.dominant_province_culture
+			}
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_civic_assimilate_one_pop"  reason = "no eligible non-Sinitic freemen/townsfolk pop left to assimilate in the province" }
+	}
+}
+
+# Drift the live ethnic-tension counter toward the annually-scanned demographic
+# target, by +/-3 per quarterly pulse. Cheap O(1). The stance drift
+# (QING_ethnic_stance_drift) still nudges on top as a player lever, so good
+# governance (dyarchy) can hold tension below the raw demographic baseline.
+#
+# CIVIC RELIEF (§11 L4 ext, "strong relief" per design): a shared civic national
+# identity lets the SAME ethnic geography produce LESS separatist strife — Bretons
+# became Frenchmen. We subtract a civic-relief term from the EFFECTIVE tension
+# target the counter drifts toward, so a high-civic realm can be pulled well below
+# the raw demographic baseline and largely escape L4 separatism (SEPARATISM_qing_
+# pulse gates on tension >= 45). Relief = civic_identity / 2, so a maxed civic
+# identity (100) can shave up to 50 points off the demographic target. Nation-
+# building is thus a real, powerful answer to the separatist threat the L1-4
+# program creates. The relief is computed into a scratch var each pulse (never
+# mutating the scanned target itself, which the annual scan owns).
+QING_DECLINE_drift_ethnic_tension = {
+	if = {
+		limit = { NOT = { has_variable = qing_ethnic_tension_target } }
+		# scan has not run yet (start of game) — nothing to drift toward.
+		LOG_fail = { sys = QING  fn = "QING_DECLINE_drift_ethnic_tension"  reason = "no demographic target yet; annual scan not run" }
+	}
+	else = {
+		# effective target = scanned demographic target - civic relief, clamped 0..100.
+		set_variable = { name = qing_ethnic_eff_target  value = var:qing_ethnic_tension_target }
+		if = { limit = { NOT = { has_variable = qing_civic_identity } }  set_variable = { name = qing_civic_identity  value = 0 } }
+		set_variable = { name = qing_civic_relief_tmp  value = var:qing_civic_identity }
+		change_variable = { name = qing_civic_relief_tmp  divide = 2 }
+		change_variable = { name = qing_ethnic_eff_target  subtract = var:qing_civic_relief_tmp }
+		if = { limit = { var:qing_ethnic_eff_target < 0 }    set_variable = { name = qing_ethnic_eff_target  value = 0 } }
+		if = { limit = { var:qing_ethnic_eff_target > 100 }  set_variable = { name = qing_ethnic_eff_target  value = 100 } }
+		if = {
+			limit = { var:qing_ethnic_tension < var:qing_ethnic_eff_target }
+			QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 3 }
+		}
+		else_if = {
+			limit = { var:qing_ethnic_tension > var:qing_ethnic_eff_target }
+			QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -3 }
+		}
+	}
+}
+
+# ======================================================================
+# CIVIC (NATIONAL) IDENTITY — the positive nation-building meter (§11 L4 ext).
+#
+# Drifts toward a target derived from Self-Strengthening progress: the modern
+# schools, telegraph and national press that the movement builds ARE the
+# connective tissue that forges a civic nation out of a multiethnic empire, so
+# civic identity CANNOT outrun self-strengthening. The inclusive dyarchy stance
+# accelerates it (shared citizenship); ethnic favouritism (banner/han) caps it
+# low. Hollow modernization (refraction flag) dampens the target — a nation built
+# on brittle for-show institutions does not cohere.
+#   target = selfstr_progress, then:
+#     - if the movement is hollow, halve it (brittle institutions bind no nation);
+#     - +15 ceiling lift while the dyarchy stance is held;
+#     - -20 cap while a favouritist stance (banner/han) is held.
+#   clamped 0..100. Drifts +/-2 per quarterly pulse (slower than tension: a
+#   national identity is built over generations).
+# ======================================================================
+QING_DECLINE_drift_civic_identity = {
+	if = { limit = { NOT = { has_variable = qing_civic_identity } }  set_variable = { name = qing_civic_identity  value = 0 } }
+	QING_selfstr_init = yes
+	# base ceiling = self-strengthening progress.
+	set_variable = { name = qing_civic_target_tmp  value = var:qing_selfstr_progress }
+	# hollow modernization forges no nation — halve the ceiling.
+	if = {
+		limit = { has_variable = qing_selfstr_hollow_flag  var:qing_selfstr_hollow_flag = 1 }
+		change_variable = { name = qing_civic_target_tmp  divide = 2 }
+	}
+	# inclusive rule teaches shared citizenship; favouritism forecloses it.
+	if = {
+		limit = { var:qing_ethnic_stance_active = flag:dyarchy }
+		change_variable = { name = qing_civic_target_tmp  add = 15 }
+	}
+	else_if = {
+		limit = {
+			OR = {
+				var:qing_ethnic_stance_active = flag:banner
+				var:qing_ethnic_stance_active = flag:han
+			}
+		}
+		change_variable = { name = qing_civic_target_tmp  subtract = 20 }
+	}
+	if = { limit = { var:qing_civic_target_tmp < 0 }    set_variable = { name = qing_civic_target_tmp  value = 0 } }
+	if = { limit = { var:qing_civic_target_tmp > 100 }  set_variable = { name = qing_civic_target_tmp  value = 100 } }
+	# drift toward it, slowly.
+	if = {
+		limit = { var:qing_civic_identity < var:qing_civic_target_tmp }
+		QING_DECLINE_nudge = { var = qing_civic_identity  amount = 2 }
+	}
+	else_if = {
+		limit = { var:qing_civic_identity > var:qing_civic_target_tmp }
+		QING_DECLINE_nudge = { var = qing_civic_identity  amount = -2 }
+	}
+}
+
+# ======================================================================
+# THE PULSE ENTRY POINT
+# One call, gated CHI/human/throttled by 00_monthly_country.txt. Refreshes the
+# derived counters and re-applies every band. All O(1).
+# ======================================================================
+QING_DECLINE_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_DECLINE_pulse" }
+
+	QING_DECLINE_init = yes
+
+	# Banner decay creeps up with time (the martial caste rots); reform drills
+	# and events push back. Small monthly creep.
+	QING_DECLINE_nudge = { var = qing_banner_decay  amount = 1 }
+
+	QING_DECLINE_update_currency_stress = yes
+	# Civic identity drifts toward its self-strengthening-gated target FIRST, so
+	# the ethnic-tension drift that follows reads a fresh civic-relief value (§11
+	# L4 ext — a strong civic nation defuses the same ethnic geography).
+	QING_DECLINE_drift_civic_identity = yes
+	# Ethnic tension drifts toward its annually-scanned demographic target (§11
+	# L3), MINUS civic relief. Runs BEFORE reform pressure so the latter reads a
+	# fresh value.
+	QING_DECLINE_drift_ethnic_tension = yes
+	QING_DECLINE_update_reform_pressure = yes
+
+	QING_DECLINE_apply_currency_band = yes
+	QING_DECLINE_apply_corruption_band = yes
+	QING_DECLINE_apply_sect_band = yes
+	QING_DECLINE_apply_banner_band = yes
+	QING_DECLINE_apply_ethnic_band = yes
+	QING_DECLINE_apply_civic_band = yes
+
+	# Unlock the reform track once pressure is high enough (and not already on).
+	if = {
+		limit = {
+			var:qing_reform_pressure >= 50
+			NOT = { has_variable = qing_reform_track_unlocked }
+		}
+		set_variable = { name = qing_reform_track_unlocked  value = 1 }
+		LOG_line = { sys = QING  msg = "REFORM TRACK UNLOCKED for [ROOT.GetTag] at pressure=[ROOT.MakeScope.GetVariable('qing_reform_pressure').GetValue|0]" }
+		trigger_event = { id = qing_reform.30  days = { 5 15 } }
+	}
+
+	# Fire a decline reaction event on a modest chance (kept rare; the pulse is
+	# already throttled to ~quarterly by the on_action cooldown).
+	random = {
+		chance = 35
+		QING_DECLINE_roll_reaction = yes
+	}
+
+	LOG_exit = { sys = QING  fn = "QING_DECLINE_pulse"  result = OK }
+}
+
+# Flavour / opportunity roll: the non-decline side of the suite — statecraft
+# memorials (#9a), Canton & tribute (H), distance/memorial (#2/#3, I), treasure
+# fleets (#6), the Golden Urn (#7), and character-level identity/succession
+# prompts (#8, #4/#5). Kept at a low chance so the player isn't spammed; the
+# pulse itself is already throttled to ~quarterly.
+QING_frontier_flavour_roll = {
+	random = {
+		chance = 30
+		random_list = {
+			# --- #65 THE EMPEROR EMERITUS: NAPOLEON AT THE QING COURT --------
+			# The exiled Napoleon offers his sword and his statecraft to Beijing.
+			# Offered once, only in the early window (his historical post-Waterloo
+			# lifespan, 1815-1821) and only to a still-intact Qing court. The arrival
+			# event re-checks these in its own trigger, so this is a no-op otherwise.
+			# A rare, singular prompt — the counterfactual pivot.
+			6 = {
+				trigger = {
+					NOT = { has_variable = qing_napoleon_arrived }
+					current_date < 1821.5.5
+				}
+				trigger_event = { id = qing_napoleon.1  days = { 3 12 } }
+			}
+			# --- #9a statecraft memorial ---
+			15 = { trigger_event = { id = qing_reform.10  days = { 3 12 } } }
+			10 = { trigger_event = { id = qing_reform.11  days = { 3 12 } } }
+			# --- §4 the refraction reckoning: fires only when self-strengthening
+			# progress has been judged hollow (backing far behind progress). The
+			# event's own trigger re-checks the flag, so this is a no-op otherwise.
+			10 = {
+				trigger = { var:qing_selfstr_hollow_flag = 1 }
+				trigger_event = { id = qing_reform.35  days = { 3 12 } }
+			}
+			# --- New#3 the Burlingame grand embassy: offered once the Zongli Yamen
+			# exists but the mission has not yet been sent. The event re-checks both
+			# in its own trigger, so this is a no-op otherwise.
+			8 = {
+				trigger = {
+					has_variable = qing_office_zongli_holder
+					NOT = { has_variable = qing_burlingame_mission_sent }
+				}
+				trigger_event = { id = qing_legation.2  days = { 3 12 } }
+			}
+			# --- New#5 the unequal-treaty system imposed: fires when the realm is in
+			# deep fiscal/opium crisis (currency stress high) and the treaty order has
+			# not yet been forced upon it — the Nanjing moment. The event re-checks
+			# state in its own trigger.
+			10 = {
+				trigger = {
+					var:qing_currency_stress >= 40
+					NOT = { has_variable = qing_treaty_system_imposed }
+				}
+				trigger_event = { id = qing_treaty.1  days = { 3 12 } }
+			}
+			# --- New#5 a demand to open a further treaty port: fires once the system
+			# is in force. The event re-checks state in its own trigger.
+			8 = {
+				trigger = { has_variable = qing_treaty_system_imposed }
+				trigger_event = { id = qing_treaty.2  days = { 3 12 } }
+			}
+			# --- New#7 Protect the Vassal (保藩): the tributary crises. Each fires only
+			# while that vassal is not yet lost AND the encroaching power is on the map;
+			# the events re-check their own triggers.
+			6 = {
+				trigger = {
+					NOT = { has_variable = qing_vassal_lost_korea }
+					OR = { exists = c:JPN  exists = c:TKG }
+				}
+				trigger_event = { id = qing_vassal.1  days = { 3 12 } }
+			}
+			6 = {
+				trigger = {
+					NOT = { has_variable = qing_vassal_lost_vietnam }
+					exists = c:FRA
+				}
+				trigger_event = { id = qing_vassal.2  days = { 3 12 } }
+			}
+			5 = {
+				trigger = {
+					NOT = { has_variable = qing_vassal_lost_ryukyu }
+					OR = { exists = c:JPN  exists = c:TKG }
+				}
+				trigger_event = { id = qing_vassal.3  days = { 3 12 } }
+			}
+			5 = {
+				trigger = {
+					NOT = { has_variable = qing_vassal_lost_burma }
+					exists = c:GBR
+				}
+				trigger_event = { id = qing_vassal.4  days = { 3 12 } }
+			}
+			# --- New#8 a missionary incident (教案): fires once anti-Christian
+			# sentiment is simmering and a treaty power is on the map. The event
+			# re-checks its own trigger.
+			7 = {
+				trigger = {
+					var:qing_antichristian_sentiment >= 40
+					OR = { exists = c:FRA  exists = c:GBR  exists = c:RUS }
+				}
+				trigger_event = { id = qing_missionary.1  days = { 3 12 } }
+			}
+			# --- #60 WESTERN EMBASSIES (西使覲見; qing_embassy_events.txt). A Western
+			# power arrives seeking audience + trade; the court chooses the tribute
+			# ceremony (rebuff) or a modern reception (receive). Each re-checks its
+			# own trigger (power on the map + not yet resolved), so a stale pick is a
+			# no-op. Weighted early-heavy for Britain (Macartney/Amherst, 1793/1816).
+			10 = {
+				trigger = { exists = c:GBR  NOT = { has_variable = qing_embassy_britain } }
+				random_list = {
+					1 = { trigger_event = { id = qing_embassy.1  days = { 3 12 } } }
+					1 = { trigger_event = { id = qing_embassy.2  days = { 3 12 } } }
+				}
+			}
+			6 = {
+				trigger = { exists = c:NED  NOT = { has_variable = qing_embassy_netherlands } }
+				trigger_event = { id = qing_embassy.3  days = { 3 12 } }
+			}
+			6 = {
+				trigger = { exists = c:RUS  NOT = { has_variable = qing_embassy_russia } }
+				trigger_event = { id = qing_embassy.4  days = { 3 12 } }
+			}
+			6 = {
+				trigger = { exists = c:FRA  NOT = { has_variable = qing_embassy_france } }
+				trigger_event = { id = qing_embassy.5  days = { 3 12 } }
+			}
+			6 = {
+				trigger = { exists = c:USA  NOT = { has_variable = qing_embassy_america } }
+				trigger_event = { id = qing_embassy.6  days = { 3 12 } }
+			}
+				# --- #73 THE AMERICAN CIVIL WAR (南北戰爭; qing_uscw_events.txt). Fires only
+				# in the 1861-65 war window, once, while the Union is still on the map. The
+				# event re-checks its own trigger (window + USA + not-yet-decided), so a
+				# stale pick is a no-op. The three-way choice (back the Union if the Daoguang
+				# entente holds / recognise the Confederacy / stay neutral and profit).
+				8 = {
+					trigger = {
+						exists = c:USA
+						current_date >= 1861.1.1
+						current_date < 1866.1.1
+						NOT = { has_variable = qing_uscw_decided }
+					}
+					trigger_event = { id = qing_uscw.1  days = { 3 12 } }
+				}
+				# --- #74 THE SACK OF THE SUMMER PALACE (火燒圓明園; qing_summer_palace_events.txt).
+				# Fires only if the Yuanmingyuan stands (var qing_sp_built) and the Qing is at
+				# war with Britain or France after 1856 — the 1860 Anglo-French burning. The
+				# event re-checks its own trigger, so a stale pick is a no-op.
+				6 = {
+					trigger = {
+						has_variable = qing_sp_built
+						current_date >= 1856.1.1
+						OR = {
+							war_with = c:GBR
+							war_with = c:FRA
+						}
+					}
+					trigger_event = { id = qing_summer_palace.1  days = { 3 12 } }
+				}
+				# --- #74 THE MARBLE BOAT BLAME (石舫之非; qing_summer_palace_events.txt .3).
+				# Post-1894, if the Qing diverted navy funds and then lost a war, critics
+				# RETROACTIVELY pin the defeat on the palace splendour. One-time reactive.
+				4 = {
+					trigger = {
+						has_variable = qing_sp_diverted_navy
+						current_date >= 1894.1.1
+						is_at_war = no
+						has_country_modifier = qing_sp_starved_fleet
+						NOT = { has_variable = qing_sp_marble_boat_blame_done }
+					}
+					trigger_event = { id = qing_summer_palace.3  days = { 3 12 } }
+				}
+			# --- H Canton / tribute ---
+			12 = { trigger_event = { id = qing_frontier.20  days = { 3 12 } } }
+			12 = { trigger_event = { id = qing_frontier.21  days = { 3 12 } } }
+			# --- I palace-memorial investment ---
+			10 = { trigger_event = { id = qing_frontier.11  days = { 3 12 } } }
+			# --- #2/#3 distance friction (needs a far/alien subject) ---
+			12 = {
+				trigger = {
+					any_subject = { NOT = { primary_culture = ROOT.primary_culture } }
+				}
+				random_subject = {
+					limit = { NOT = { primary_culture = ROOT.primary_culture } }
+					save_scope_as = target
+				}
+				trigger_event = { id = qing_frontier.10  days = { 3 12 } }
+			}
+			# --- #7 Golden Urn (needs a Tibetan-Buddhist subject) ---
+			10 = {
+				trigger = {
+					any_subject = { OR = { religion = vajrayana  culture_group = bodish } }
+				}
+				random_subject = {
+					limit = { OR = { religion = vajrayana  culture_group = bodish } }
+					save_scope_as = target
+				}
+				trigger_event = { id = qing_urn.1  days = { 3 12 } }
+			}
+			# --- #6 treasure fleets (rare; not yet revived) ---
+			5 = {
+				trigger = { NOT = { has_variable = qing_treasure_fleet_revived } }
+				trigger_event = { id = qing_frontier.30  days = { 3 12 } }
+			}
+			# --- #8 sinicization: a Han-marriage prompt for a Manchu grandee ---
+			10 = {
+				trigger = {
+					any_character = { employer = ROOT  is_ruler = no  is_adult = yes  culture = ROOT.primary_culture }
+				}
+				random_character = {
+					limit = { employer = ROOT  is_ruler = no  is_adult = yes  culture = ROOT.primary_culture }
+					save_scope_as = qing_char
+				}
+				trigger_event = { id = qing_char.10  days = { 3 12 } }
+			}
+			8 = { trigger_event = { id = qing_char.11  days = { 3 12 } } }
+			# --- demographic & frontier flavour (qing_migration) ---
+			# nomad in-migration echoing the Torghut return
+			8 = { trigger_event = { id = qing_migration.11  days = { 3 12 } } }
+			# the rarer, greater Torghut homecoming
+			4 = {
+				trigger = { NOT = { has_country_modifier = qing_migr_torghut_return } }
+				trigger_event = { id = qing_migration.10  days = { 3 12 } }
+			}
+			# the New World crop revolution (fires once; plants the boom)
+			8 = {
+				trigger = { NOT = { has_variable = qing_newworld_crops } }
+				trigger_event = { id = qing_migration.20  days = { 3 12 } }
+			}
+			# Hong Kong as a Chinese entrepot (needs the island)
+			6 = {
+				trigger = { owns = 8245  NOT = { has_variable = qing_hongkong_developed } }
+				trigger_event = { id = qing_migration.30  days = { 3 12 } }
+			}
+			# the naming of Vietnam (needs VIE; fires once)
+			6 = {
+				trigger = { exists = c:VIE  NOT = { has_variable = qing_named_vietnam } }
+				trigger_event = { id = qing_migration.40  days = { 3 12 } }
+			}
+			# --- #4/#5 succession: only while the ruler is in decline ---
+			8 = {
+				trigger = {
+					current_ruler = { OR = { age >= 60  health < 0.4 } }
+					NOT = { has_variable = qing_secret_succession }
+				}
+				trigger_event = { id = qing_char.20  days = { 3 12 } }
+			}
+			# --- #9 GRAND COUNCIL & GREAT OFFICES (qing_office_events.txt) ---
+			# the overmighty grandee (Heshen pattern) — only when flagged
+			8 = {
+				trigger = {
+					var:qing_council_overmighty_flag = 1
+					has_variable = qing_council_chief
+				}
+				trigger_event = { id = qing_office.1  days = { 3 12 } }
+			}
+			# a censor's impeachment (weighted by corruption; see event)
+			10 = { trigger_event = { id = qing_office.2  days = { 3 12 } } }
+			# a council paralysed by vacancy / low effectiveness
+			8 = {
+				trigger = { var:qing_council_effectiveness <= 40 }
+				trigger_event = { id = qing_office.3  days = { 3 12 } }
+			}
+			# a capable statesman comes forward (needs an unseated able courtier)
+			8 = {
+				trigger = {
+					any_character = {
+						employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes
+						NOT = { is_target_in_variable_list = { name = qing_council_members  target = this } }
+					}
+				}
+				trigger_event = { id = qing_office.4  days = { 3 12 } }
+			}
+			# factional strife on a manned council
+			8 = {
+				trigger = { var:qing_council_seat_count >= 2 }
+				trigger_event = { id = qing_office.5  days = { 3 12 } }
+			}
+			# found the Zongli Yamen (once; while the office is vacant)
+			6 = {
+				trigger = { NOT = { has_variable = qing_office_zongli_holder } }
+				trigger_event = { id = qing_office.6  days = { 3 12 } }
+			}
+			# the sale of offices tempts a strained treasury
+			8 = {
+				trigger = { treasury < 100 }
+				trigger_event = { id = qing_office.7  days = { 3 12 } }
+			}
+			# a fine memorial from an effective council
+			8 = {
+				trigger = {
+					var:qing_council_effectiveness >= 60
+					has_variable_list = qing_council_members
+				}
+				trigger_event = { id = qing_office.8  days = { 3 12 } }
+			}
+			# councillors bicker at the table (needs two seated members)
+			8 = {
+				trigger = { var:qing_council_seat_count >= 2 }
+				trigger_event = { id = qing_office.9  days = { 3 12 } }
+			}
+			# a clique forms against the chief (needs a chief + a manned council)
+			6 = {
+				trigger = {
+					has_variable = qing_council_chief
+					var:qing_council_seat_count >= 3
+				}
+				trigger_event = { id = qing_office.10  days = { 3 12 } }
+			}
+			# --- #9 THE IMPERIAL EXAMINATION (qing_keju_events.txt) ---
+			# the triennial examination convenes (the keju's spine; fires readily)
+			14 = { trigger_event = { id = qing_keju.1  days = { 3 12 } } }
+			# an examination scandal — only in a corrupt court
+			8 = {
+				trigger = { var:qing_corruption_level >= 45 }
+				trigger_event = { id = qing_keju.3  days = { 3 12 } }
+			}
+			# a brilliant scholar passed over (weightier when the ladder is clogged)
+			8 = {
+				modifier = { factor = 2  has_country_modifier = qing_exam_ladder_clogged }
+				trigger_event = { id = qing_keju.4  days = { 3 12 } }
+			}
+			# a grace examination at a jubilee (a rarer act of largesse)
+			5 = { trigger_event = { id = qing_keju.5  days = { 3 12 } } }
+			# --- #13 ANACHRONISTIC HISTORICAL-CHARACTER ROSTER ----------
+			# a famous figure of the age steps onto the stage, keyed to the
+			# realm's present state (the roll self-guards each figure once).
+			10 = { QING_roster_roll = yes }
+			# --- #14 THE GREAT REBELLIONS (qing_rebellion_events.txt) --------
+			# a rising flares, its flavour keyed to what ails the realm (the roll
+			# self-guards each rebellion once). Rarer than the character roster.
+			8 = { QING_rebellion_roll = yes }
+			# --- #15 CULTURAL HAPPENINGS (qing_culture_events.txt) ----------
+			# a monument of letters or a masterwork of craft is offered to the
+			# throne (the roll self-guards each monument once). The bright
+			# counterweight to the decline and rebellion families.
+			12 = { QING_culture_roll = yes }
+		}
+	}
+}
+
+# ======================================================================
+# THE REBELLION ROLL — context-keyed dispatcher (#14). Reads the realm's ills
+# and offers the rising that fits: a corrupt, sect-ridden court faces the
+# sectarian and secret-society risings; a realm straining its minorities faces
+# the ethnic revolts; a realm in deep reform crisis faces the Taiping, Boxers,
+# and finally Xinhai. Each guarded so a given rising comes at most once, and the
+# whole roll is skipped while another great rebellion is already live.
+# ======================================================================
+QING_rebellion_roll = {
+	LOG_enter = { sys = QING  fn = "QING_rebellion_roll" }
+	# do not stack great risings: only roll when none is currently active
+	if = {
+		limit = { NOT = { has_variable = qing_active_rebellion } }
+		random_list = {
+			# --- 白蓮教 White Lotus: a corrupt court and a stirring sect ------
+			10 = {
+				trigger = {
+					NOT = { has_variable = qing_rebel_white_lotus }
+					var:qing_corruption_level >= 35
+					var:qing_sect_pressure >= 25
+				}
+				trigger_event = { id = qing_rebellion.1  days = { 3 12 } }
+			}
+			# --- 天理教 Eight Trigrams: sect pressure with palace rot ---------
+			8 = {
+				trigger = {
+					NOT = { has_variable = qing_rebel_eight_trigrams }
+					var:qing_sect_pressure >= 30
+					var:qing_corruption_level >= 25
+				}
+				trigger_event = { id = qing_rebellion.2  days = { 3 12 } }
+			}
+			# --- 太平天國 Taiping: high sect pressure (the great heterodox war)
+			10 = {
+				trigger = {
+					NOT = { has_variable = qing_rebel_taiping_risen }
+					var:qing_sect_pressure >= 45
+				}
+				trigger_event = { id = qing_rebellion.3  days = { 3 12 } }
+			}
+			# --- 捻軍 Nian: banditry from decay + flood country ---------------
+			8 = {
+				trigger = {
+					NOT = { has_variable = qing_rebel_nian }
+					var:qing_sect_pressure >= 30
+					var:qing_banner_decay >= 30
+				}
+				trigger_event = { id = qing_rebellion.4  days = { 3 12 } }
+			}
+			# --- 回變 Panthay: Yunnan Hui, ethnic tension --------------------
+			8 = {
+				trigger = {
+					NOT = { has_variable = qing_rebel_panthay }
+					var:qing_ethnic_tension >= 40
+				}
+				trigger_event = { id = qing_rebellion.5  days = { 3 12 } }
+			}
+			# --- 陝甘回變 Dungan + Yaqub Beg: high ethnic tension ------------
+			8 = {
+				trigger = {
+					NOT = { has_variable = qing_rebel_dungan }
+					var:qing_ethnic_tension >= 50
+				}
+				trigger_event = { id = qing_rebellion.6  days = { 3 12 } }
+			}
+			# --- 紅巾 Red Turban: secret-society, corruption + sect ----------
+			8 = {
+				trigger = {
+					NOT = { has_variable = qing_rebel_red_turban }
+					var:qing_corruption_level >= 30
+					var:qing_sect_pressure >= 30
+				}
+				trigger_event = { id = qing_rebellion.7  days = { 3 12 } }
+			}
+			# --- 苗變 Miao: Guizhou, ethnic tension --------------------------
+			7 = {
+				trigger = {
+					NOT = { has_variable = qing_rebel_miao }
+					var:qing_ethnic_tension >= 40
+				}
+				trigger_event = { id = qing_rebellion.8  days = { 3 12 } }
+			}
+			# --- 義和團 Boxers: currency/foreign stress + reform pressure ----
+			7 = {
+				trigger = {
+					NOT = { has_variable = qing_rebel_boxer_rose }
+					var:qing_currency_stress >= 40
+					var:qing_reform_pressure >= 35
+				}
+				trigger_event = { id = qing_rebellion.9  days = { 3 12 } }
+			}
+			# --- 辛亥 Xinhai / Wuchang: the dynasty's terminal crisis --------
+			8 = {
+				trigger = {
+					NOT = { has_variable = qing_rebel_xinhai }
+					var:qing_reform_pressure >= 70
+				}
+				trigger_event = { id = qing_rebellion.10  days = { 3 12 } }
+			}
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_rebellion_roll"  result = OK }
+}
+
+# ======================================================================
+# THE CULTURAL ROLL — the bright counterweight (#15, qing_culture_events.txt).
+# Offers the monuments of letters and masterworks of craft of the High Qing.
+# The great compilations (dictionary, poems, encyclopaedia, novel, Siku) are
+# each guarded to a single founding via their once-variables; the luxury crafts
+# (jade, porcelain, silk, painting) and the jubilee recur as flavour. Monuments
+# are weighted toward a treasury that can actually afford them, so the offer is
+# rarely a dead letter.
+# ======================================================================
+QING_culture_roll = {
+	LOG_enter = { sys = QING  fn = "QING_culture_roll" }
+	random_list = {
+		# --- 康熙字典 Kangxi Dictionary (once) --------------------------
+		10 = {
+			trigger = { NOT = { has_variable = qing_culture_kangxi_done } }
+			modifier = { factor = 2  treasury >= 60 }
+			trigger_event = { id = qing_culture.1  days = { 3 12 } }
+		}
+		# --- 全唐詩 Complete Tang Poems (once) --------------------------
+		10 = {
+			trigger = { NOT = { has_variable = qing_culture_tang_poems_done } }
+			modifier = { factor = 2  treasury >= 40 }
+			trigger_event = { id = qing_culture.2  days = { 3 12 } }
+		}
+		# --- 古今圖書集成 Gujin Tushu Jicheng (once) --------------------
+		9 = {
+			trigger = { NOT = { has_variable = qing_culture_encyclopaedia_done } }
+			modifier = { factor = 2  treasury >= 80 }
+			trigger_event = { id = qing_culture.3  days = { 3 12 } }
+		}
+		# --- 紅樓夢 Dream of the Red Chamber (once) ---------------------
+		9 = {
+			trigger = { NOT = { has_variable = qing_culture_red_chamber_done } }
+			trigger_event = { id = qing_culture.4  days = { 3 12 } }
+		}
+		# --- 四庫全書 Siku Quanshu + literary inquisition (once) --------
+		8 = {
+			trigger = { NOT = { has_variable = qing_culture_siku_done } }
+			modifier = { factor = 2  treasury >= 100 }
+			trigger_event = { id = qing_culture.5  days = { 3 12 } }
+		}
+		# --- 玉器 imperial jade (recurring) -----------------------------
+		12 = { trigger_event = { id = qing_culture.6  days = { 3 12 } } }
+		# --- 瓷器 Jingdezhen porcelain (recurring) ----------------------
+		12 = { trigger_event = { id = qing_culture.7  days = { 3 12 } } }
+		# --- 絲綢 Jiangnan silk (recurring) -----------------------------
+		12 = { trigger_event = { id = qing_culture.8  days = { 3 12 } } }
+		# --- 宮廷繪畫 court painting (recurring) ------------------------
+		10 = { trigger_event = { id = qing_culture.9  days = { 3 12 } } }
+		# --- 萬壽盛典 grand jubilee (recurring) -------------------------
+		10 = { trigger_event = { id = qing_culture.10  days = { 3 12 } } }
+	}
+	LOG_exit = { sys = QING  fn = "QING_culture_roll"  result = OK }
+}
+
+# Weighted pick of one decline/flavour reaction event, tilted by the counters.
+QING_DECLINE_roll_reaction = {
+	LOG_line = { sys = QING  msg = "QING_DECLINE_roll_reaction for [ROOT.GetTag]" }
+	random_list = {
+		# corruption scandal (systemic, distinct from the integration one)
+		20 = {
+			modifier = { factor = 3  var:qing_corruption_level >= 40 }
+			trigger_event = { id = qing_decline.10  days = { 3 12 } }
+		}
+		# sectarian unrest
+		20 = {
+			modifier = { factor = 3  var:qing_sect_pressure >= 40 }
+			trigger_event = { id = qing_decline.11  days = { 3 12 } }
+		}
+		# Yellow River flood (severity scales with corruption; see event)
+		18 = {
+			modifier = { factor = 2  var:qing_corruption_level >= 30 }
+			trigger_event = { id = qing_decline.12  days = { 3 12 } }
+		}
+		# banner-decay incident
+		15 = {
+			modifier = { factor = 2  var:qing_banner_decay >= 40 }
+			trigger_event = { id = qing_decline.13  days = { 3 12 } }
+		}
+		# ethnic tension flares
+		15 = {
+			modifier = { factor = 2  var:qing_ethnic_tension >= 40 }
+			trigger_event = { id = qing_decline.14  days = { 3 12 } }
+		}
+		# quiet / good year (may top up granary)
+		25 = {
+			trigger_event = { id = qing_decline.20  days = { 3 12 } }
+		}
+	}
+}
+

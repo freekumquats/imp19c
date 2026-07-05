@@ -1,0 +1,496 @@
+########################################################################
+# se_SEPARATISM.txt — the GENERIC separatist-rebellion engine (Layer 4).
+#
+# The pay-off of Layers 1-3. Where alien rule has festered — a province still
+# carries its 1815 de jure culture (var:dejure_culture, frozen by se_DEJURE) and
+# a live dejure_disaffection modifier because its ruler never integrated that
+# people — the population can rise, tear the land away as a NEW breakaway
+# country, and be dragged back by the old master in a war of reconquest. A
+# foreign kin-state of that culture (the same actor Layers 1-3 hand irredentist
+# claims to) may seize the moment and join the rebels, turning a local revolt
+# into an international question — which, won, leaves the seceded land in hands
+# friendlier to its people than the parent's.
+#
+# WHY A REAL COUNTRY, NOT ENGINE REBELS: the vanilla state-secession /
+# civil-war path (on_state_secession) cannot make the seceding land JOIN or be
+# annexed by a third power — it only flips loyalty. Spawning an actual country
+# (LAND_release_from_list, the proven release primitive) lets the kin-state be
+# invited into the war (add_to_war) and press the outcome, which is the whole
+# point of the feature.
+#
+# PERFORMANCE (firm, user): the generic layer is deliberately CRUDE and rare.
+#   - piggybacks the EXISTING decade_country_pulse (see 00_decade_country.txt) —
+#     NO new polling hook;
+#   - self-throttled by a per-country decade cooldown (separatism_cd) AND a low
+#     chance roll, so at most one secession attempt per country per ~decade, and
+#     usually none;
+#   - the heavy every_owned_province scan runs ONLY after a cheap guard (the
+#     country must own at least one high-unrest disaffected province) and the
+#     chance roll have both passed — i.e. almost never.
+# The richer, tension-driven Qing version (SEPARATISM_qing_*) layers on top and
+# is allowed to be heavier because it is throttled to the single human player.
+#
+# All lines logged sys = SEPAR (zero-cost outside -debug_mode).
+# Prefix = SEPARATISM_
+########################################################################
+
+# A province only counts as a secession seed once its unrest is genuinely high;
+# below this, disaffection is a grumble, not a revolt.
+@separatism_unrest_threshold = 6
+# Chance (%) that a qualifying country actually spawns a rebellion this pulse.
+# Kept low so secession is a rare, memorable event, not decade churn.
+@separatism_chance = 20
+# Chance (%) that an existing foreign kin-state throws in behind the rebels.
+@separatism_backer_chance = 50
+# Cooldown after any attempt (~a decade) so a country cannot haemorrhage
+# breakaway states every pulse.
+@separatism_cooldown_days = 3650
+
+# ======================================================================
+# ENTRY — run once per country per decade pulse. ROOT / this = the country.
+# Cheap guards first; the expensive work is gated behind them AND the roll.
+# ======================================================================
+SEPARATISM_country_pulse = {
+	if = {
+		limit = {
+			# not still cooling down from a recent secession attempt
+			NOT = { has_variable = separatism_cd }
+			# and there is genuinely a restive, alien-ruled province to rally
+			# around (the L3 disaffection modifier + a frozen rightful culture +
+			# real unrest). This any_owned_province test is the cheap gate.
+			any_owned_province = {
+				has_province_modifier = dejure_disaffection
+				has_variable = dejure_culture
+				province_unrest >= @separatism_unrest_threshold
+			}
+		}
+		LOG_enter = { sys = SEPAR  fn = SEPARATISM_country_pulse }
+		# stamp the cooldown whether or not the roll fires, so a perpetually
+		# restive empire still only rolls once per decade.
+		set_variable = { name = separatism_cd  days = @separatism_cooldown_days }
+		random = {
+			chance = @separatism_chance
+			SEPARATISM_try_secession = yes
+		}
+		LOG_exit = { sys = SEPAR  fn = SEPARATISM_country_pulse  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = SEPAR  fn = SEPARATISM_country_pulse  reason = "no secession seed: on cooldown, or no high-unrest disaffected de jure province" }
+	}
+}
+
+# ======================================================================
+# The roll passed: pick the angriest disaffected province, take its FROZEN
+# rightful culture as the rebellion's banner, gather every disaffected province
+# that shares that rightful culture, and break them away together.
+#   ROOT / this = the parent country.
+# ======================================================================
+SEPARATISM_try_secession = {
+	save_scope_as = sep_parent
+	# The single most restive alien-ruled province becomes the heart of the
+	# revolt; its rightful (de jure) culture is the cause everyone rallies to.
+	ordered_owned_province = {
+		order_by = province_unrest
+		max = 1
+		limit = {
+			has_province_modifier = dejure_disaffection
+			has_variable = dejure_culture
+			province_unrest >= @separatism_unrest_threshold
+		}
+		save_scope_as = sep_focus
+		var:dejure_culture = { save_scope_as = sep_culture }
+	}
+
+	# Guard: if somehow no focus qualified (shouldn't happen — the entry guard
+	# already proved one exists — but ordered_ can be empty under odd state).
+	if = {
+		limit = { exists = scope:sep_culture }
+		# Gather the whole disaffected homeland of this culture into the
+		# breakaway. Only provinces we still OWN, carrying the disaffection
+		# modifier, whose FROZEN rightful culture matches the rallying cause.
+		every_owned_province = {
+			limit = {
+				has_province_modifier = dejure_disaffection
+				has_variable = dejure_culture
+				var:dejure_culture = scope:sep_culture
+			}
+			add_to_list = sep_secession_provinces
+		}
+		LOG_line = { sys = SEPAR  msg = "secession forming in [scope:sep_parent.GetTag] around [scope:sep_focus.GetName]; rallying culture frozen from de jure baseline" }
+		SEPARATISM_spawn_breakaway = yes
+	}
+	else = {
+		LOG_fail = { sys = SEPAR  fn = SEPARATISM_try_secession  reason = "roll passed but no qualifying focus province resolved" }
+	}
+}
+
+# ======================================================================
+# Spawn the breakaway as an independent country holding its disaffected
+# homeland, grant the parent an explicit claim on that land (so reconquest_wargoal
+# — which keys on the attacker holding a claim/core — can be justified), then
+# have the parent declare a war of reconquest to drag it back. If the rebel's
+# people are split across MORE than
+# one empire (Poles, Kurds, Balkan cultures under several crowns), the new
+# national state also wages liberation wars on its OTHER parents to reunite its
+# whole homeland (cross-border rebellion, Option A). Finally, offer a
+# neighbouring kin-state the chance to back the rebels.
+#   ROOT / this = the parent (scope:sep_parent); scope:sep_culture set;
+#   list sep_secession_provinces populated.
+# ======================================================================
+SEPARATISM_spawn_breakaway = {
+	# Create the rebel state from the gathered provinces. LAND_release_from_list
+	# transfers the land, wires the new country into the imp19c economy (via
+	# ECON_events.7 one day later) and saves it as scope:new_country_scope.
+	LAND_release_from_list = {
+		releaser = scope:sep_parent
+		list = sep_secession_provinces
+		capital_location = flag:by_population
+		# the rebellion is fought in the NAME of the rightful culture.
+		primary_culture = scope:sep_culture
+		country_religion = flag:as_capital
+		as_subject_type = flag:independent
+		# a sovereign national-liberation state, NOT a viceroyalty: passing a
+		# concrete government skips LAND_release_from_list's flag:dynamic ->
+		# change_government = viceroyalty branch (which is subject-flavoured and
+		# wrong for an independent breakaway), leaving a real republic. Proven:
+		# send_settlers passes flag:revolutionary_republic the same way.
+		government_type = flag:revolutionary_republic
+		give_overlord_hos = no
+		country_name = flag:dynamic
+		country_adj = flag:dynamic
+		country_flag = flag:dynamic
+		country_color = flag:dynamic
+	}
+
+	# The parent must actually hold a CLAIM on the land it means to reclaim, or
+	# reconquest_wargoal's allow (is_core_of = root, root = attacker) cannot pass
+	# for AI selection — and the land it just lost was alien-conquered, so it may
+	# hold no auto-core there. Grant it an explicit claim on every seceded
+	# province before the war: it just governed this land, reclaiming it is
+	# legitimate. Done while the list is still populated, before the clear.
+	scope:sep_parent = { save_scope_as = sep_reclaimer }
+	every_in_list = {
+		list = sep_secession_provinces
+		add_claim = scope:sep_reclaimer
+	}
+
+	# Clear the working list immediately after the release consumes it, per the
+	# codebase convention (see se_SUBJECT_QING), so no stale province leaks into
+	# a later country's secession on the same or a subsequent pulse.
+	every_in_list = {
+		list = sep_secession_provinces
+		remove_from_list = sep_secession_provinces
+	}
+
+	if = {
+		limit = { exists = scope:new_country_scope }
+		scope:new_country_scope = { save_scope_as = sep_rebel_state }
+		scope:new_country_scope.capital_scope = { save_scope_as = sep_rebel_capital }
+		LOG_line = { sys = SEPAR  msg = "breakaway [scope:sep_rebel_state.GetTag] seceded from [scope:sep_parent.GetTag], holding its de jure homeland" }
+
+		# The empire strikes back: parent wages a war of reconquest for the land
+		# it now (re)claims. FUNC handles subject-release edge cases and saves the
+		# resulting war as scope:current_war_scope.
+		scope:sep_parent = {
+			FUNC_declare_war_with_wargoal_province = {
+				war_goal = reconquest_wargoal
+				target = scope:sep_rebel_state
+				province = scope:sep_rebel_capital
+			}
+		}
+
+		# Pin the PRIMARY reconquest war under its own scope IMMEDIATELY. FUNC_
+		# declare_war_with_wargoal_province overwrites scope:current_war_scope on
+		# every call, and SEPARATISM_liberate_across_borders below fires it again
+		# per liberation front — so without this capture the backer step would
+		# read the LAST liberation war (rebel-as-attacker) and, with attacker=no,
+		# invite the kin-state in AGAINST the rebels. Bind it now, before the loop.
+		if = {
+			limit = { exists = scope:current_war_scope }
+			scope:current_war_scope = { save_scope_as = sep_primary_war }
+		}
+		else = {
+			LOG_fail = { sys = SEPAR  fn = SEPARATISM_spawn_breakaway  reason = "parent reconquest war did not resolve to a war scope; cross-border liberation may still fire but no backer can be invited" }
+		}
+
+		# CROSS-BORDER LIBERATION (Option A): if the rebel's people are split
+		# across several empires, the new national state fights to reunite its
+		# whole homeland. For each NEIGHBOURING other empire holding frozen
+		# de jure land of the rebel culture, grant the rebel a claim on that land
+		# and have it declare a reconquest (liberation) war there too. Capped so a
+		# single secession cannot open a dozen fronts at once; the cap is logged
+		# (no silent truncation). Only the angriest such province per neighbour is
+		# used as the war's target province.
+		SEPARATISM_liberate_across_borders = yes
+
+		# Covert / opportunist backing: a NEIGHBOURING country in which the rebel
+		# culture ACTUALLY LIVES may join the rebels' side — the "our X brothers
+		# next door need help" motive (firm rule, user). Two gates, both required:
+		#   (1) it must BORDER the rebel state (random_neighbour_country of the
+		#       rebel) — a power on the far side of the world can neither reach nor
+		#       has reason to intervene;
+		#   (2) the rebel culture must be one of ITS country-cultures — that people
+		#       genuinely lives there (broader than the titular kin-state: a
+		#       multiethnic neighbour holding X pops also qualifies).
+		# It is still NOT the parent, NOT the rebel. The pre-war covert phase is
+		# modelled by the diplomatic-play event chain (agitator_sponsorship-style)
+		# in se_DIPLOMACY.
+		# NOTE the backer joins the PRIMARY reconquest war (scope:sep_primary_war,
+		# pinned above), NOT scope:current_war_scope — which the liberation loop has
+		# by now overwritten with the last cross-border war (rebel = attacker).
+		# Joining the primary war with attacker=no puts the kin-state on the rebels'
+		# side against the original parent, as intended.
+		if = {
+			limit = { exists = scope:sep_primary_war }
+			# PRE-COMMITTED BACKER (diplomatic-play bridge, se_DIPLO_BRIDGE.txt):
+			# if a hostile power funded agitation in a province of this homeland and
+			# was pre-committed there as a sponsor, it steps in FIRST, but only if it
+			# still obeys the backer rule at secession time (a bordering non-subject
+			# at-peace state that hosts the rebel culture, not parent/rebel). The
+			# province var may name a power that has since moved / allied / been
+			# conquered, so every gate is re-checked; failing any, we fall through
+			# to the generic neighbour roll below.
+			# The pre-commit is stored on the specific province that was agitated,
+			# which is not always the highest-unrest focus. Scan every province the
+			# rebel now holds for a stored sponsor and pin the first one found
+			# (sep_secession_provinces has already been cleared, so iterate the rebel's
+			# owned provinces instead).
+			scope:sep_rebel_state = {
+				ordered_owned_province = {
+					limit = { has_variable = dejure_agitation_sponsor }
+					max = 1
+					var:dejure_agitation_sponsor = { save_scope_as = sep_sponsor_hint }
+				}
+			}
+			if = {
+				limit = { exists = scope:sep_sponsor_hint }
+				if = {
+					limit = {
+						scope:sep_sponsor_hint = {
+							NOT = { this = scope:sep_parent }
+							NOT = { this = scope:sep_rebel_state }
+							is_subject = no
+							war = no
+							any_country_culture = { is_culture = scope:sep_culture }
+						}
+						scope:sep_rebel_state = {
+							any_neighbour_country = { this = scope:sep_sponsor_hint }
+						}
+					}
+					# add_to_war adds `this` to the war, so it MUST run in the JOINING
+					# country's scope (scope:sep_sponsor_hint) -- nested here, not as a
+					# sibling, or it would try to add the ambient parent instead and the
+					# backer would never actually join.
+					scope:sep_sponsor_hint = {
+						save_scope_as = sep_backer
+						add_to_war = {
+							target = scope:sep_primary_war
+							attacker = no
+							leader = no
+						}
+					}
+					LOG_line = { sys = SEPAR  msg = "pre-committed sponsor [scope:sep_backer.GetTag] (funded agitation in the seceding homeland) backs the [scope:sep_rebel_state.GetTag] rebellion against [scope:sep_parent.GetTag]" }
+				}
+				else = {
+					LOG_fail = { sys = SEPAR  fn = SEPARATISM_spawn_breakaway  reason = "pre-committed agitation sponsor no longer satisfies the backer rule (moved, allied, subjugated, or culture absent); falling back to generic roll" }
+				}
+			}
+			# GENERIC ROLL: only if no valid pre-committed sponsor took the slot.
+			if = {
+				limit = { NOT = { exists = scope:sep_backer } }
+				random = {
+					chance = @separatism_backer_chance
+					scope:sep_rebel_state = {
+						random_neighbour_country = {
+							limit = {
+								# the rebel culture is one of this neighbour's cultures —
+								# i.e. that people genuinely lives here (proven
+								# any_country_culture / is_culture = scope: idiom, se_DEJURE).
+								any_country_culture = {
+									is_culture = scope:sep_culture
+								}
+								NOT = { this = scope:sep_parent }
+								NOT = { this = scope:sep_rebel_state }
+								is_subject = no
+								war = no
+							}
+							save_scope_as = sep_backer
+							add_to_war = {
+								target = scope:sep_primary_war
+								attacker = no
+								leader = no
+							}
+							LOG_line = { sys = SEPAR  msg = "neighbouring kin-state [scope:sep_backer.GetTag] (home to the rebel culture) backs the [scope:sep_rebel_state.GetTag] rebellion against [scope:sep_parent.GetTag]" }
+						}
+					}
+				}
+			}
+			# Surface the "no backer" outcome so a rebellion left to fight alone is
+			# distinguishable in the log from one that never reached this step. Fires
+			# whether the chance roll failed or no bordering kin-state qualified
+			# (sep_backer is set only on the successful add_to_war path above).
+			if = {
+				limit = { NOT = { exists = scope:sep_backer } }
+				LOG_fail = { sys = SEPAR  fn = SEPARATISM_spawn_breakaway  reason = "no backer joined: chance roll failed, or no bordering non-subject at-peace country hosts the rebel culture" }
+			}
+		}
+		else = {
+			LOG_fail = { sys = SEPAR  fn = SEPARATISM_spawn_breakaway  reason = "reconquest war did not resolve to a war scope; no backer invited" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = SEPAR  fn = SEPARATISM_spawn_breakaway  reason = "LAND_release_from_list produced no new country scope" }
+	}
+}
+
+# How many OTHER empires (beyond the parent) a single secession will open a
+# liberation front against. Capped so one revolt cannot plunge the whole map into
+# war; the cap being hit is logged, never silent.
+@separatism_max_extra_fronts = 3
+
+# ======================================================================
+# CROSS-BORDER LIBERATION (Option A) — a culture split across several empires
+# rises as ONE national state and fights to reunite its whole homeland. For each
+# NEIGHBOURING other empire that still holds frozen de jure land of the rebel
+# culture, grant the rebel a claim on that land and declare a reconquest
+# (liberation) war on it. Capped at @separatism_max_extra_fronts fronts.
+#   this = scope:sep_rebel_state is used as the iteration root; scope:sep_culture,
+#   scope:sep_parent, scope:sep_rebel_state, scope:sep_rebel_capital all set.
+#
+# NOTE the war is declared BY the rebel (it holds the fresh claims), targeting
+# each other parent. The front cap MUST be enforced with an `if` INSIDE the loop
+# body, NOT in the every_ limit: Clausewitz builds the every_neighbour_country
+# candidate list ONCE (evaluating limit up front, when the counter is still 0),
+# then iterates — so a counter test in the limit would never bite. The in-body
+# `if` re-reads the live counter each iteration, so only the first N neighbours
+# actually open a front; the rest fall through and are logged as skipped.
+# ======================================================================
+SEPARATISM_liberate_across_borders = {
+	scope:sep_rebel_state = {
+		set_variable = { name = sep_fronts_opened  value = 0 }
+		set_variable = { name = sep_fronts_skipped  value = 0 }
+		every_neighbour_country = {
+			limit = {
+				# a DIFFERENT empire than the one we just seceded from ...
+				NOT = { this = scope:sep_parent }
+				NOT = { this = scope:sep_rebel_state }
+				is_subject = no
+				# ... which still holds frozen de jure land of our culture.
+				any_owned_province = {
+					has_variable = dejure_culture
+					var:dejure_culture = scope:sep_culture
+				}
+			}
+			save_scope_as = sep_other_parent
+			if = {
+				# under the front cap: open a liberation front against this neighbour.
+				limit = { scope:sep_rebel_state.var:sep_fronts_opened < @separatism_max_extra_fronts }
+				# Grant the rebel a claim on ALL this empire's de jure-X land ...
+				every_owned_province = {
+					limit = {
+						has_variable = dejure_culture
+						var:dejure_culture = scope:sep_culture
+					}
+					add_claim = scope:sep_rebel_state
+				}
+				# ... and pick the angriest such province as the war's target.
+				ordered_owned_province = {
+					order_by = province_unrest
+					max = 1
+					limit = {
+						has_variable = dejure_culture
+						var:dejure_culture = scope:sep_culture
+					}
+					save_scope_as = sep_liberation_province
+				}
+				if = {
+					limit = { exists = scope:sep_liberation_province }
+					scope:sep_rebel_state = {
+						change_variable = { name = sep_fronts_opened  add = 1 }
+						FUNC_declare_war_with_wargoal_province = {
+							war_goal = reconquest_wargoal
+							target = scope:sep_other_parent
+							province = scope:sep_liberation_province
+						}
+					}
+					LOG_line = { sys = SEPAR  msg = "cross-border liberation: [scope:sep_rebel_state.GetTag] wars [scope:sep_other_parent.GetTag] to free its de jure kin in [scope:sep_liberation_province.GetName]" }
+				}
+				else = {
+					LOG_fail = { sys = SEPAR  fn = SEPARATISM_liberate_across_borders  reason = "neighbour passed the de jure-land guard but no target province resolved" }
+				}
+			}
+			else = {
+				# cap reached: this neighbour holds de jure kin land but we are already
+				# at the front limit — count it so the truncation is logged, not silent.
+				scope:sep_rebel_state = { change_variable = { name = sep_fronts_skipped  add = 1 } }
+			}
+		}
+		# Surface whether the cap bit (so a truncated pan-ethnic revolt is never
+		# mistaken for the full picture in the logs).
+		if = {
+			limit = { var:sep_fronts_skipped > 0 }
+			# NB literal "3" here, not @separatism_max_extra_fronts: @-constants are
+			# only substituted in value positions, never inside quoted log strings.
+			LOG_line = { sys = SEPAR  msg = "cross-border liberation for [scope:sep_rebel_state.GetTag] hit the front cap (3): [scope:sep_rebel_state.MakeScope.GetVariable('sep_fronts_skipped').GetValue|0] further de jure parent(s) left unchallenged this secession" }
+		}
+		remove_variable = sep_fronts_opened
+		remove_variable = sep_fronts_skipped
+	}
+}
+
+# ======================================================================
+# QING EXTENSION — tension-driven separatism (§11 L4, Qing).
+#
+# The generic engine gives the Qing the same rare decade-cadence secession risk
+# as everyone else. This extension layers an EXTRA, more frequent risk scaled to
+# the Qing's own crisis meter: qing_ethnic_tension (deeply re-derived in L3 from
+# the realm's real ethnic geography). A calm dynasty (tension <= band floor)
+# never triggers it; a realm whose tension has boiled over the high-tension band
+# faces breakaways on the quarterly Qing pulse, not once a decade — the White
+# Lotus / Taiping-scale unravelling the decline suite is built to dramatise.
+#
+# It reuses the generic SEPARATISM_try_secession core verbatim (same de jure
+# focus, same reconquest war, same kin-backer path) — only the CADENCE and
+# TRIGGER are Qing-specific. Throttled to the single human CHI player, so the
+# heavier quarterly cadence is affordable (perf philosophy: rich Qing layer OK).
+#   ROOT / this = c:CHI (human).
+# ======================================================================
+@separatism_qing_tension_floor = 45
+# Own cooldown (~3 years) so even a boiling realm secedes in waves, not monthly.
+@separatism_qing_cooldown_days = 1095
+
+SEPARATISM_qing_pulse = {
+	if = {
+		limit = {
+			has_variable = qing_ethnic_tension
+			var:qing_ethnic_tension >= @separatism_qing_tension_floor
+			NOT = { has_variable = separatism_qing_cd }
+			# same cheap structural gate as the generic engine: a real seed exists
+			any_owned_province = {
+				has_province_modifier = dejure_disaffection
+				has_variable = dejure_culture
+				province_unrest >= @separatism_unrest_threshold
+			}
+		}
+		LOG_enter = { sys = SEPAR  fn = SEPARATISM_qing_pulse }
+		set_variable = { name = separatism_qing_cd  days = @separatism_qing_cooldown_days }
+		# Chance scales with how far tension has run past the floor: at the floor
+		# it is a modest roll, near boiling point it is nearly certain. Bands
+		# rather than a raw formula, to stay within proven random{chance=} syntax.
+		if = {
+			limit = { var:qing_ethnic_tension >= 80 }
+			random = { chance = 75  SEPARATISM_try_secession = yes }
+		}
+		else_if = {
+			limit = { var:qing_ethnic_tension >= 60 }
+			random = { chance = 50  SEPARATISM_try_secession = yes }
+		}
+		else = {
+			random = { chance = 30  SEPARATISM_try_secession = yes }
+		}
+		LOG_exit = { sys = SEPAR  fn = SEPARATISM_qing_pulse  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = SEPAR  fn = SEPARATISM_qing_pulse  reason = "Qing separatism gate not met: tension below floor, on cooldown, or no disaffected high-unrest province" }
+	}
+}

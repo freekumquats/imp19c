@@ -1,0 +1,460 @@
+########################################################################
+# qing_reform_events.txt — the reform track, mechanics #9a (statecraft) and
+# #9b (constitutional / republican).
+#
+# #9a  @1815: indigenous Confucian "statecraft" reform (經世致用, jingshi zhiyong)
+#      — Hong Liangji (洪亮吉), Bao Shichen (包世臣) — pushing administrative and
+#      anti-corruption reform WITHIN the monarchy. No Western political models.
+#      These fire from the flavour pulse regardless of the reform-track unlock.
+#
+# #9b  The constitutional/republican track. Per the loosened-gate decision this
+#      is NOT hard-locked to ~1840: it unlocks when qing_reform_pressure crosses
+#      its threshold (se_QING_DECLINE.txt), which CAN happen earlier if the realm
+#      is in genuine crisis. Once unlocked, a three-way tension runs between:
+#        - traditionalists  (Confucian-monarchist; keep the autocracy)
+#        - constitutionalists (君主立憲; keep the emperor, add a parliament)
+#        - republicans      (abolish the monarchy — ends the dynasty)
+#      Modelled via qing_reform_faction_balance (-100 reactionary .. +100
+#      republican) and government transitions through change_government.
+#      History: Wei Yuan 魏源 *Haiguo Tuzhi* (1843); Kang Youwei 康有為 / Liang
+#      Qichao 梁啟超 (戊戌變法, 1898); the 1906 預備立憲; Sun Yat-sen 孫中山 (1911).
+#
+#   ROOT / this = the Qing overlord (CHI, player)
+#
+# Namespace = qing_reform
+#   .10  #9a — a statecraft memorial (administrative reform)
+#   .11  #9a — an anti-corruption reform drive
+#   .30  #9b — the reform track opens (fired on unlock; the four-way crossroads)
+#   .31  #9b — constitutionalist pressure → constitutional monarchy end-state
+#   .32  #9b — republican ferment → republic end-state
+#   .33  #14 — the Heavenly-Kingdom path (Christian theocracy end-state; HARD)
+#   .34  #14 — the Restoration path (revitalised absolute monarchy end-state)
+#
+# #14 REWORK: the track no longer resolves into a bare constitutional/republican
+# binary. Each branch culminates in ONE of FOUR durable alternate-history
+# END-STATES, applied by the QING_reform_endstate_* effects (se_QING_REFORM.txt):
+#   (1) 同治中興 revitalised absolute monarchy   (.34; keep imperial_monarchy)
+#   (2) 君主立憲 constitutional monarchy         (.31; constitutional_parliament)
+#   (3) 中華共和 the republic                    (.32; constitutional_republic)
+#   (4) 天國     Christian theocracy             (.33; militant_theocracy + faith)
+# The theocracy is gated behind the Taiping overture + the Christian-path meter
+# (qing_taiping_progress), so it is the hardest and rarest fate to reach.
+########################################################################
+
+namespace = qing_reform
+
+########################################################################
+# .10  A STATECRAFT MEMORIAL  (#9a)
+# A jingshi reformer submits a memorial urging practical administrative reform.
+########################################################################
+qing_reform.10 = {
+	type = country_event
+	title = "qing_reform.10.t"
+	desc = "qing_reform.10.desc"
+	picture = senate_debate
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_reform.10 (statecraft) [ROOT.GetTag]" }
+	}
+
+	# --- Adopt the reforms ------------------------------------------------
+	option = {
+		name = "qing_reform.10.a"
+		custom_tooltip = "qing_reform.10.a.tt"
+		trigger = { treasury >= 80 }
+		add_treasury = -80
+		add_country_modifier = { name = qing_reform_statecraft  duration = 3650 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -8 }
+	}
+
+	# --- Take the anti-corruption thrust only -----------------------------
+	option = {
+		name = "qing_reform.10.b"
+		custom_tooltip = "qing_reform.10.b.tt"
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -5 }
+		add_stability = 1
+	}
+
+	# --- Reject it as impractical meddling --------------------------------
+	option = {
+		name = "qing_reform.10.c"
+		custom_tooltip = "qing_reform.10.c.tt"
+		add_stability = 1
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
+	}
+}
+
+########################################################################
+# .11  ANTI-CORRUPTION REFORM DRIVE  (#9a)
+########################################################################
+qing_reform.11 = {
+	type = country_event
+	title = "qing_reform.11.t"
+	desc = "qing_reform.11.desc"
+	picture = senate_debate
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_reform.11 (anticorruption) [ROOT.GetTag]" }
+	}
+
+	option = {
+		name = "qing_reform.11.a"
+		custom_tooltip = "qing_reform.11.a.tt"
+		trigger = { treasury >= 100 }
+		QING_anticorruption_audit = yes
+	}
+
+	option = {
+		name = "qing_reform.11.b"
+		custom_tooltip = "qing_reform.11.b.tt"
+		add_stability = 1
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 4 }
+	}
+}
+
+########################################################################
+# .30  THE REFORM TRACK OPENS  (#9b unlock)
+# Fired once from QING_DECLINE_pulse when qing_reform_pressure >= 50. Sets up
+# the three-way faction balance and hands the player the framing choice.
+########################################################################
+qing_reform.30 = {
+	type = country_event
+	title = "qing_reform.30.t"
+	desc = "qing_reform.30.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_reform.30 (REFORM TRACK OPENS) [ROOT.GetTag]" }
+		# Faction balance: -100 = hard reactionary .. 0 = constitutional-curious
+		# .. +100 = republican. Start slightly reformist given the crisis.
+		if = {
+			limit = { NOT = { has_variable = qing_reform_faction_balance } }
+			set_variable = { name = qing_reform_faction_balance  value = 0 }
+		}
+		QING_taiping_init = yes
+	}
+
+	# --- Renew the autocracy itself; a Confucian restoration (同治中興) ----
+	# The fourth road: not reaction-as-paralysis but reaction-as-renewal — make
+	# the ancestral system work again rather than replace it.
+	option = {
+		name = "qing_reform.30.a"
+		custom_tooltip = "qing_reform.30.a.tt"
+		change_variable = { name = qing_reform_faction_balance  subtract = 15 }
+		add_stability = 1
+		# a genuine restoration is earned, not declared: gate the end-state on
+		# a realm that is actually being governed well (see qing_reform.34).
+		trigger_event = { id = qing_reform.34  days = { 180 540 } }
+	}
+
+	# --- Embrace cautious constitutional reform (君主立憲) -----------------
+	option = {
+		name = "qing_reform.30.b"
+		custom_tooltip = "qing_reform.30.b.tt"
+		change_variable = { name = qing_reform_faction_balance  add = 20 }
+		add_country_modifier = { name = qing_reform_constitutionalist  duration = 1825 }
+		trigger_event = { id = qing_reform.31  days = { 180 540 } }
+	}
+
+	# --- Reaffirm the Mandate of Heaven; clamp down (toward republican crisis)
+	option = {
+		name = "qing_reform.30.c"
+		custom_tooltip = "qing_reform.30.c.tt"
+		change_variable = { name = qing_reform_faction_balance  add = 10 }
+		add_country_modifier = { name = qing_reform_reactionary_clampdown  duration = 1825 }
+		add_tyranny = 5
+		# Suppression buys time but pressure keeps building underneath.
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 10 }
+		trigger_event = { id = qing_reform.32  days = { 360 900 } }
+	}
+
+	# --- Come to terms with the Heavenly Kingdom (the Christian road) ------
+	# Only if the Taiping overture was made (qing_roster.13 option b). The hardest,
+	# most heterodox path — it leads to the theocracy end-state via qing_reform.33.
+	option = {
+		name = "qing_reform.30.d"
+		custom_tooltip = "qing_reform.30.d.tt"
+		trigger = { has_variable = qing_taiping_overture }
+		QING_taiping_advance = { amount = 20 }
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -6 }
+		trigger_event = { id = qing_reform.33  days = { 360 720 } }
+	}
+}
+
+########################################################################
+# .31  CONSTITUTIONALIST PRESSURE
+# The constitutionalists press for a real parliament (君主立憲). Choosing it
+# moves the government toward constitutional_parliament and cools unrest, at the
+# cost of imperial autocracy.
+########################################################################
+qing_reform.31 = {
+	type = country_event
+	title = "qing_reform.31.t"
+	desc = "qing_reform.31.desc"
+	picture = senate_debate
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_reform.31 (constitutional) [ROOT.GetTag] balance=[ROOT.MakeScope.GetVariable('qing_reform_faction_balance').GetValue|0]" }
+	}
+
+	# --- Grant a constitution and a parliament (君主立憲) — END-STATE (2) ---
+	option = {
+		name = "qing_reform.31.a"
+		custom_tooltip = "qing_reform.31.a.tt"
+		QING_reform_endstate_constitutional = yes
+	}
+
+	# --- Refuse; the pressure builds toward republicanism -----------------
+	option = {
+		name = "qing_reform.31.b"
+		custom_tooltip = "qing_reform.31.b.tt"
+		change_variable = { name = qing_reform_faction_balance  add = 25 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 12 }
+		add_country_modifier = { name = qing_reform_republican_ferment  duration = 1095 }
+		trigger_event = { id = qing_reform.32  days = { 360 720 } }
+	}
+}
+
+########################################################################
+# .32  REPUBLICAN FERMENT — THE DYNASTY IN THE BALANCE
+# History: Sun Yat-sen's 三民主義 and the 1911 Xinhai Revolution. If the balance
+# has tipped fully republican, the monarchy can fall.
+########################################################################
+qing_reform.32 = {
+	type = country_event
+	title = "qing_reform.32.t"
+	desc = "qing_reform.32.desc"
+	picture = revolt
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_reform.32 (republican) [ROOT.GetTag] balance=[ROOT.MakeScope.GetVariable('qing_reform_faction_balance').GetValue|0]" }
+	}
+
+	# --- Yield to a republic (ends the Qing as a monarchy) — END-STATE (3) -
+	option = {
+		name = "qing_reform.32.a"
+		custom_tooltip = "qing_reform.32.a.tt"
+		QING_reform_endstate_republic = yes
+	}
+
+	# --- Concede a constitutional monarchy instead — END-STATE (2) --------
+	option = {
+		name = "qing_reform.32.b"
+		custom_tooltip = "qing_reform.32.b.tt"
+		trigger = { NOT = { has_variable = qing_reform_endstate_reached } }
+		QING_reform_endstate_constitutional = yes
+	}
+
+	# --- Crush the revolutionaries by force (a last reactionary stand) ----
+	# Not itself an end-state: buys time, and if the throne truly restores order
+	# it can still earn the Restoration (a later qing_reform.34 may follow).
+	option = {
+		name = "qing_reform.32.c"
+		custom_tooltip = "qing_reform.32.c.tt"
+		add_stability = -3
+		add_war_exhaustion = 3
+		add_tyranny = 8
+		change_variable = { name = qing_reform_faction_balance  subtract = 15 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 5 }
+	}
+}
+
+########################################################################
+# .33  THE HEAVENLY-KINGDOM PATH — Christian theocracy (END-STATE 4)
+# The hardest, most heterodox fate. Reached only through the Taiping overture
+# (qing_roster.13 option b) and a Christian-path meter pushed high by the Taiping
+# mission tree and Western backing. History inverted: instead of the Xiang Army
+# breaking the God Worshippers, the throne — or a throne remade — takes up their
+# faith, and a Heavenly Kingdom of Great Peace (太平天國) is founded in earnest.
+########################################################################
+qing_reform.33 = {
+	type = country_event
+	title = "qing_reform.33.t"
+	desc = "qing_reform.33.desc"
+	picture = revolt
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_reform.33 (Heavenly Kingdom path) [ROOT.GetTag] taiping=[ROOT.MakeScope.GetVariable('qing_taiping_progress').GetValue|0]" }
+		QING_taiping_init = yes
+	}
+
+	# --- Proclaim the Heavenly Kingdom — END-STATE (4) --------------------
+	# Gated hard: needs the Christian-path meter genuinely high (the overture, the
+	# mission tree, Western backing all had to come together).
+	option = {
+		name = "qing_reform.33.a"
+		custom_tooltip = "qing_reform.33.a.tt"
+		trigger = {
+			var:qing_taiping_progress >= 70
+			NOT = { has_variable = qing_reform_endstate_reached }
+		}
+		QING_reform_endstate_heavenly_kingdom = yes
+	}
+
+	# --- Keep walking the road; deepen the accommodation ------------------
+	option = {
+		name = "qing_reform.33.b"
+		custom_tooltip = "qing_reform.33.b.tt"
+		QING_taiping_advance = { amount = 10 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 5 }
+		add_stability = -1
+	}
+
+	# --- Recoil from heresy; abandon the Christian road -------------------
+	option = {
+		name = "qing_reform.33.c"
+		custom_tooltip = "qing_reform.33.c.tt"
+		remove_variable = qing_taiping_overture
+		set_variable = { name = qing_taiping_progress  value = 0 }
+		add_tyranny = 3
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = 8 }
+	}
+}
+
+########################################################################
+# .34  THE RESTORATION PATH — revitalised absolute monarchy (END-STATE 1)
+# The 同治中興 (Tongzhi Restoration) made permanent: the Confucian autocracy is
+# not replaced but genuinely renewed. Earned, not proclaimed — the throne must
+# actually be governing a stable, orderly realm to claim it; otherwise the
+# "restoration" is hollow and the crisis grinds on.
+########################################################################
+qing_reform.34 = {
+	type = country_event
+	title = "qing_reform.34.t"
+	desc = "qing_reform.34.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_reform.34 (Restoration path) [ROOT.GetTag] corruption=[ROOT.MakeScope.GetVariable('qing_corruption_level').GetValue|0]" }
+	}
+
+	# --- Seal the restoration — END-STATE (1) -----------------------------
+	# Gated on a realm actually in order: real stability, corruption tamed, and
+	# the reactionary faction ascendant enough to carry the ancestral settlement.
+	option = {
+		name = "qing_reform.34.a"
+		custom_tooltip = "qing_reform.34.a.tt"
+		trigger = {
+			stability >= 50
+			var:qing_corruption_level <= 35
+			NOT = { has_variable = qing_reform_endstate_reached }
+		}
+		QING_reform_endstate_restoration = yes
+	}
+
+	# --- Redouble the effort to set the house in order --------------------
+	# The restoration is not yet earned: cut corruption, steady the realm, try again.
+	option = {
+		name = "qing_reform.34.b"
+		custom_tooltip = "qing_reform.34.b.tt"
+		add_stability = 1
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -6 }
+		trigger_event = { id = qing_reform.34  days = { 720 1440 } }
+	}
+
+	# --- Let the moment pass; drift back toward the wider crisis ----------
+	option = {
+		name = "qing_reform.34.c"
+		custom_tooltip = "qing_reform.34.c.tt"
+		change_variable = { name = qing_reform_faction_balance  add = 10 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 6 }
+	}
+}
+
+########################################################################
+# .35  THE ARMY-PERFORMANCE TEST — the "refraction" reckoning (Elman).
+# Fires only when the Self-Strengthening movement has been judged HOLLOW
+# (qing_selfstr_hollow_flag = 1 by QING_selfstr_refraction_test): progress on
+# paper has outrun the bureau/council/integrity machinery that must carry it.
+# A frontier clash, a fleet review, or a mobilization drill exposes whether the
+# arsenals and fleets are real strength or a brittle façade — and offers the
+# player the choice to CLOSE THE GAP (invest in the machinery) or paper it over.
+# Historically the reckoning came at the Yalu (1894); here the player is warned
+# in time. Cross-wires: reads qing_selfstr_* + governance meters, writes them back.
+########################################################################
+qing_reform.35 = {
+	type = country_event
+	title = "qing_reform.35.t"
+	desc = "qing_reform.35.desc"
+	picture = senate_debate
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		var:qing_selfstr_hollow_flag = 1
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_reform.35 (refraction/army-performance test) [ROOT.GetTag] gap=[ROOT.MakeScope.GetVariable('qing_selfstr_refraction_gap').GetValue|0]" }
+	}
+
+	# --- Close the gap: pour effort into the coordinating machinery --------
+	# The genuine remedy — fund the staff work, the honest accounts, the trained
+	# cadres. Costly, but it converts hollow progress into real strength: lift the
+	# bureau capacity + council effectiveness that back the movement.
+	option = {
+		name = "qing_reform.35.a"
+		custom_tooltip = "qing_reform.35.a.tt"
+		trigger = { treasury >= 80 }
+		add_treasury = -80
+		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = 8 }
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 6 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -4 }
+		# recompute immediately so the player sees the hollow band lift if earned.
+		QING_selfstr_refraction_test = yes
+	}
+
+	# --- Drill and review, but do not spend: a partial, temporary steadying -
+	# A little coordination without the money — enough to narrow the gap a touch.
+	# We recompute the refraction test so the hollow band lifts if this alone
+	# happens to close it; otherwise it persists (the pulse owns the modifier).
+	option = {
+		name = "qing_reform.35.b"
+		custom_tooltip = "qing_reform.35.b.tt"
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 3 }
+		QING_selfstr_refraction_test = yes
+	}
+
+	# --- Trust the paper strength: gamble that the façade will hold ---------
+	# Cheap now, dangerous later — the brittle modernization persists, and if the
+	# realm is ever tested in war the cost comes due. A prestige show masks it.
+	option = {
+		name = "qing_reform.35.c"
+		custom_tooltip = "qing_reform.35.c.tt"
+		add_prestige = 25
+		QING_DECLINE_nudge = { var = qing_selfstr_progress  amount = 4 }
+		# the gap widens: hollow progress with no new backing.
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
+	}
+}

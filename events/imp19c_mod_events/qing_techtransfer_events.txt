@@ -1,0 +1,165 @@
+########################################################################
+# qing_techtransfer_events.txt — TECHNOLOGY-TRANSFER BARGAINS (洋務交易 / 借才借法).
+# The player-facing surface of the tech-transfer engine (se_QING_TECHTRANSFER.txt):
+# strike a help-for-favors bargain with a foreign power to accelerate a Self-
+# Strengthening track, and weather the day the power calls the favor in. CHI-only.
+#
+# .1   the bargain hub (choose a partner power + a track to accelerate)
+# .2   the track picker (having chosen a power, choose which track to buy)
+# .10  the call-the-favor crisis (the power cashes in its accumulated stake)
+#
+# Sources: se_QING_TECHTRANSFER.txt header (Pong 1994; Kennedy 1978; van de Ven 2014).
+########################################################################
+
+namespace = qing_techtransfer
+
+# ======================================================================
+# .1  THE BARGAIN HUB — choose which power to deal with. Opened from the mechanics-
+# panel verb (qing_action_techtransfer). Each option is shown only if that power
+# exists; it saves the chosen power to a variable and opens the track picker (.2).
+# ======================================================================
+qing_techtransfer.1 = {
+	type = country_event
+	title = "qing_techtransfer.1.t"
+	desc = "qing_techtransfer.1.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_techtransfer.1 (bargain hub) [ROOT.GetTag]" }
+		QING_techtransfer_init = yes
+	}
+
+	option = {
+		name = "qing_techtransfer.1.britain"
+		trigger = { exists = c:GBR }
+		set_variable = { name = qing_ttx_partner  value = flag:britain }
+		trigger_event = { id = qing_techtransfer.2 }
+	}
+	option = {
+		name = "qing_techtransfer.1.france"
+		trigger = { exists = c:FRA }
+		set_variable = { name = qing_ttx_partner  value = flag:france }
+		trigger_event = { id = qing_techtransfer.2 }
+	}
+	option = {
+		name = "qing_techtransfer.1.russia"
+		trigger = { exists = c:RUS }
+		set_variable = { name = qing_ttx_partner  value = flag:russia }
+		trigger_event = { id = qing_techtransfer.2 }
+	}
+	option = {
+		name = "qing_techtransfer.1.america"
+		trigger = { exists = c:USA }
+		set_variable = { name = qing_ttx_partner  value = flag:america }
+		trigger_event = { id = qing_techtransfer.2 }
+	}
+	option = {
+		name = "qing_techtransfer.1.decline"
+	}
+}
+
+# ======================================================================
+# .2  THE TRACK PICKER — the partner is chosen (qing_ttx_partner); now choose which
+# Self-Strengthening track to accelerate. Each option branches on the saved partner
+# flag to call QING_techtransfer_bargain with the right power/tag + track. Costs
+# treasury (the machinery/loan). The favor-debt is what the power will call in later.
+# ======================================================================
+qing_techtransfer.2 = {
+	type = country_event
+	title = "qing_techtransfer.2.t"
+	desc = "qing_techtransfer.2.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_techtransfer.2 (track picker) [ROOT.GetTag]" }
+	}
+
+	# --- Arsenal (機器局 — guns, shells; the Jiangnan hook) ---
+	option = {
+		name = "qing_techtransfer.2.arsenal"
+		custom_tooltip = "qing_techtransfer.2.arsenal.tt"
+		trigger = { treasury >= 40 }
+		add_treasury = -40
+		QING_techtransfer_dispatch = { track = arsenal }
+	}
+	# --- Naval (船政 — dockyard & fleet; the Fuzhou hook) ---
+	option = {
+		name = "qing_techtransfer.2.naval"
+		custom_tooltip = "qing_techtransfer.2.naval.tt"
+		trigger = { treasury >= 40 }
+		add_treasury = -40
+		QING_techtransfer_dispatch = { track = naval }
+	}
+	# --- Rail & iron (鐵路 — railways & mines; the rail hook) ---
+	option = {
+		name = "qing_techtransfer.2.rail"
+		custom_tooltip = "qing_techtransfer.2.rail.tt"
+		trigger = { treasury >= 40 }
+		add_treasury = -40
+		QING_techtransfer_dispatch = { track = rail }
+	}
+	# --- Telegraph (電報 — the wire network; the telegraph hook) ---
+	option = {
+		name = "qing_techtransfer.2.telegraph"
+		custom_tooltip = "qing_techtransfer.2.telegraph.tt"
+		trigger = { treasury >= 40 }
+		add_treasury = -40
+		QING_techtransfer_dispatch = { track = telegraph }
+	}
+	option = {
+		name = "qing_techtransfer.2.back"
+	}
+}
+
+# ======================================================================
+# .10  THE CALL-THE-FAVOR CRISIS — the power (qing_ttx_caller_power) cashes in its
+# accumulated stake with a concession demand. Pay it (clear the debt, deepen the
+# treaty burden) or refuse (keep the gains, spike that power's tension). Branches on
+# the saved caller flag to pass the right power/tag to the pay/refuse effects.
+# ======================================================================
+qing_techtransfer.10 = {
+	type = country_event
+	title = "qing_techtransfer.10.t"
+	desc = "qing_techtransfer.10.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = { tag = CHI }
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_techtransfer.10 (call the favor) [ROOT.GetTag]" }
+	}
+
+	# --- Pay the concession ---
+	option = {
+		name = "qing_techtransfer.10.pay"
+		custom_tooltip = "qing_techtransfer.10.pay.tt"
+		if = { limit = { var:qing_ttx_caller_power = flag:britain }  QING_techtransfer_pay_concession = { power = britain  tag = GBR } }
+		else_if = { limit = { var:qing_ttx_caller_power = flag:france }  QING_techtransfer_pay_concession = { power = france  tag = FRA } }
+		else_if = { limit = { var:qing_ttx_caller_power = flag:russia }  QING_techtransfer_pay_concession = { power = russia  tag = RUS } }
+		else_if = { limit = { var:qing_ttx_caller_power = flag:america } QING_techtransfer_pay_concession = { power = america  tag = USA } }
+		remove_variable = qing_ttx_call_pending
+	}
+
+	# --- Refuse — repudiate the debt, take the affront ---
+	option = {
+		name = "qing_techtransfer.10.refuse"
+		custom_tooltip = "qing_techtransfer.10.refuse.tt"
+		if = { limit = { var:qing_ttx_caller_power = flag:britain }  QING_techtransfer_refuse_concession = { power = britain  tag = GBR } }
+		else_if = { limit = { var:qing_ttx_caller_power = flag:france }  QING_techtransfer_refuse_concession = { power = france  tag = FRA } }
+		else_if = { limit = { var:qing_ttx_caller_power = flag:russia }  QING_techtransfer_refuse_concession = { power = russia  tag = RUS } }
+		else_if = { limit = { var:qing_ttx_caller_power = flag:america } QING_techtransfer_refuse_concession = { power = america  tag = USA } }
+		remove_variable = qing_ttx_call_pending
+	}
+}

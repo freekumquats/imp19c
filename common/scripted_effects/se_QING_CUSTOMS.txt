@@ -1,0 +1,193 @@
+########################################################################
+# se_QING_CUSTOMS.txt — the IMPERIAL MARITIME CUSTOMS SERVICE (海關 / 中國海關總稅務司署).
+#
+# The great institutional novelty of the late Qing fiscal state: a revenue
+# service RUN BY FOREIGNERS in the dynasty's name. Founded 1854 at Shanghai and
+# built into a national apparatus by Robert Hart (赫德), Inspector-General from
+# 1863 to 1911, the Maritime Customs became the most honest, efficient, and
+# reliable source of revenue the dynasty possessed — funding the Self-Strengthening
+# arsenals, servicing the foreign loans, and staffing a modern statistical,
+# postal, and lighthouse administration. Its price was sovereignty: the tariff was
+# fixed by treaty, the Inspector-General was a foreigner, and the service answered
+# in practice to a foreign staff — a standing reproach to Qing autonomy that the
+# reform and revolutionary factions never forgot.
+#
+# THE BARGAIN THIS MODELS: foreign control buys HONEST, HIGH REVENUE and a check
+# on graft, at the cost of SOVEREIGNTY (reform pressure + a foreign-influence
+# hook). The player can push toward SINICIZATION — replace the foreign staff with
+# Chinese officials — trading revenue and honesty for autonomy. This is the first
+# FOREIGN-HELD OFFICE in the suite: the Inspector-General is a foreign character,
+# not a Qing courtier, so the office model is extended, not merely reused.
+#
+# Design mirrors the rest of the suite: 0..100 COUNTER variables on CHI, advanced
+# EVENT-driven, read O(1) by the governance pulse (QING_customs_pulse) which grants
+# quarterly revenue via the CURRENCY interface and swaps the efficiency band.
+#   qing_customs_efficiency      0..100  how well-run the service is
+#   qing_customs_foreign_control 0..100  degree of foreign management (Hart-style)
+# Marks:
+#   qing_customs_established      flag var: the service exists
+#   qing_customs_ig_holder        the Inspector-General character (foreign)
+#
+#   ROOT / this = the Qing overlord (CHI, human)
+# Prefix = QING_customs_
+#
+# Sources: Hans van de Ven, "Breaking with the Past: The Maritime Customs Service
+#   and the Global Origins of Modernity in China" (2014); Robert Bickers, "The
+#   Scramble for China" (2011); Spence, The Search for Modern China (Hart, the
+#   Customs, and the loan-service). Fairbank & Liu, Cambridge History v.11.
+########################################################################
+
+# ======================================================================
+# INIT — seed the customs counters once. Called by QING_customs_pulse.
+# ======================================================================
+QING_customs_init = {
+	if = { limit = { NOT = { has_variable = qing_customs_efficiency } }      set_variable = { name = qing_customs_efficiency  value = 40 } }
+	if = { limit = { NOT = { has_variable = qing_customs_foreign_control } } set_variable = { name = qing_customs_foreign_control  value = 0 } }
+}
+
+# ======================================================================
+# ESTABLISH THE SERVICE — the foundational act (Shanghai 1854 → national).
+# Grants the lasting institution modifier + a first push of foreign control.
+# Guarded once. Call in country scope (ROOT = CHI).
+# ======================================================================
+QING_customs_establish = {
+	LOG_enter = { sys = QING  fn = "QING_customs_establish" }
+	QING_customs_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_customs_established } }
+		set_variable = { name = qing_customs_established  value = 1 }
+		add_country_modifier = { name = qing_customs_service_active  duration = -1 }
+		# a foreign-run service starts under heavy foreign management.
+		QING_DECLINE_nudge = { var = qing_customs_foreign_control  amount = 60 }
+		QING_DECLINE_nudge = { var = qing_customs_efficiency  amount = 25 }
+		LOG_line = { sys = QING  msg = "customs: Maritime Customs Service established for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_customs_establish"  result = OK }
+}
+
+# ======================================================================
+# APPOINT THE INSPECTOR-GENERAL (總稅務司) — call INSIDE the foreign character's
+# scope (this = the IG, e.g. Hart). The country is reached via ROOT here because
+# a foreign expert is NOT employed by CHI in the courtier sense — he has no
+# `employer` tie — so unlike the great-office verbs this resolves via ROOT, which
+# is CHI when dispatched from the roster/advisor events. A capable IG lifts both
+# efficiency and (because he embodies foreign management) foreign control.
+# ======================================================================
+QING_customs_appoint_ig = {
+	# this = the foreign Inspector-General.  ROOT = CHI.
+	ROOT = {
+		QING_customs_establish = yes
+		# vacate the previous IG if any (strip his mark).
+		if = {
+			limit = { has_variable = qing_customs_ig_holder }
+			var:qing_customs_ig_holder = { remove_character_modifier = qing_customs_inspector_general }
+		}
+		set_variable = { name = qing_customs_ig_holder  value = prev }
+		add_country_modifier = { name = qing_customs_strong_ig  duration = -1 }
+		QING_DECLINE_nudge = { var = qing_customs_efficiency  amount = 20 }
+		QING_DECLINE_nudge = { var = qing_customs_foreign_control  amount = 15 }
+	}
+	add_character_modifier = { name = qing_customs_inspector_general  duration = -1 }
+	LOG_line = { sys = QING  msg = "customs: Inspector-General = [this.GetName] for [ROOT.GetTag]" }
+}
+
+# ======================================================================
+# SINICIZE — replace foreign staff with Chinese officials. Trades revenue and
+# honesty (foreign control down → efficiency drifts down) for SOVEREIGNTY (a
+# reform-pressure relief + prestige). $amount$ = how hard the push (foreign
+# control points removed). Country scope. Clears the strong-IG bonus once control
+# falls low (the service is no longer foreign-led).
+# ======================================================================
+QING_customs_sinicize = {
+	LOG_enter = { sys = QING  fn = "QING_customs_sinicize" }
+	QING_customs_init = yes
+	QING_DECLINE_nudge = { var = qing_customs_foreign_control  amount = $amount$ }
+	# reclaiming the service is a sovereign act — it relieves reform pressure.
+	QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -4 }
+	# once foreign management is largely gone, the foreign IG bonus + his office
+	# lapse (a Chinese Inspector-General now runs it).
+	if = {
+		limit = { var:qing_customs_foreign_control <= 20 }
+		remove_country_modifier = qing_customs_strong_ig
+		if = {
+			limit = { has_variable = qing_customs_ig_holder }
+			var:qing_customs_ig_holder = { remove_character_modifier = qing_customs_inspector_general }
+			remove_variable = qing_customs_ig_holder
+		}
+		LOG_line = { sys = QING  msg = "customs: fully sinicized (foreign IG relinquished) for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_customs_sinicize"  result = OK }
+}
+
+# ======================================================================
+# THE PULSE — recompute efficiency, grant quarterly revenue, apply bands.
+# Called from QING_GOV_pulse (only when the service exists). All O(1).
+# ======================================================================
+QING_customs_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_customs_pulse" }
+	QING_customs_init = yes
+
+	# --- efficiency drifts toward a blend of foreign control (professional,
+	# honest management) and the realm's own bureau integrity (a competent host
+	# administration collects better). Foreign control weighted x2 historically.
+	set_variable = { name = qing_customs_eff_target  value = var:qing_customs_foreign_control }
+	change_variable = { name = qing_customs_eff_target  multiply = 2 }
+	change_variable = { name = qing_customs_eff_target  add = var:qing_bureau_integrity }
+	change_variable = { name = qing_customs_eff_target  divide = 3 }
+	if = { limit = { var:qing_customs_eff_target < 0 }   set_variable = { name = qing_customs_eff_target  value = 0 } }
+	if = { limit = { var:qing_customs_eff_target > 100 } set_variable = { name = qing_customs_eff_target  value = 100 } }
+	if = {
+		limit = { var:qing_customs_efficiency < var:qing_customs_eff_target }
+		QING_DECLINE_nudge = { var = qing_customs_efficiency  amount = 3 }
+	}
+	else_if = {
+		limit = { var:qing_customs_efficiency > var:qing_customs_eff_target }
+		QING_DECLINE_nudge = { var = qing_customs_efficiency  amount = -3 }
+	}
+
+	# --- quarterly revenue: scaled by efficiency (thousands = efficiency / 5, so
+	# up to ~20k at full efficiency), routed through the reserve-scaled CURRENCY
+	# interface so it respects the economy layer.
+	set_variable = { name = qing_customs_revenue_tmp  value = var:qing_customs_efficiency }
+	change_variable = { name = qing_customs_revenue_tmp  divide = 5 }
+	if = {
+		limit = { var:qing_customs_revenue_tmp >= 1 }
+		CURRENCY_grant_country_wealth = { thousands = var:qing_customs_revenue_tmp }
+		LOG_line = { sys = QING  msg = "customs revenue grant (eff=[ROOT.MakeScope.GetVariable('qing_customs_efficiency').GetValue|0]) for [ROOT.GetTag]" }
+	}
+
+	# --- honest customs is a small standing check on graft while foreign-led.
+	if = {
+		limit = { var:qing_customs_foreign_control >= 50 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -1 }
+		# ...but the sovereignty cost: heavy foreign control feeds reform pressure.
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 1 }
+	}
+
+	QING_customs_apply_band = yes
+	LOG_exit = { sys = QING  fn = "QING_customs_pulse"  result = OK }
+}
+
+# ======================================================================
+# BAND APPLICATION — one active efficiency band + a foreign-control overlay.
+# ======================================================================
+QING_customs_apply_band = {
+	remove_country_modifier = qing_customs_efficient
+	remove_country_modifier = qing_customs_leaky
+	remove_country_modifier = qing_customs_foreign_dominated
+	if = {
+		limit = { var:qing_customs_efficiency >= 66 }
+		add_country_modifier = { name = qing_customs_efficient  duration = -1 }
+		LOG_line = { sys = QING  msg = "band customs = efficient for [ROOT.GetTag] (efficiency=[ROOT.MakeScope.GetVariable('qing_customs_efficiency').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_customs_efficiency <= 33 }
+		add_country_modifier = { name = qing_customs_leaky  duration = -1 }
+		LOG_line = { sys = QING  msg = "band customs = leaky for [ROOT.GetTag] (efficiency=[ROOT.MakeScope.GetVariable('qing_customs_efficiency').GetValue|0])" }
+	}
+	# a foreign-dominated service (control >= 66) — the sovereignty reproach.
+	if = {
+		limit = { var:qing_customs_foreign_control >= 66 }
+		add_country_modifier = { name = qing_customs_foreign_dominated  duration = -1 }
+	}
+}

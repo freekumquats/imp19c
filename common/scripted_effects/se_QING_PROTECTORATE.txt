@@ -1,0 +1,103 @@
+########################################################################
+# se_QING_PROTECTORATE.txt — re-establish the frontier PROTECTORATES-GENERAL
+# (都護府) as tributary subjects of the Son of Heaven.
+#
+# The Tang dynasty governed its conquered marches not as provinces but through
+# the Protectorates-General (都護府, dūhùfǔ) — a layer of indirect ("loose-rein",
+# 羈縻 jīmí) rule under a Protector-General who left local society intact while
+# holding the frontier for the throne. This Qing mission branch revives that
+# institution anachronistically: where the dynasty holds enough territory in a
+# frontier region, it may erect a Protectorate there — spinning that territory
+# off as a NEW COUNTRY and immediately binding it as a sinosphere_tributary, an
+# autonomous march that pays tribute and shelters under Qing protection rather
+# than being ruled directly from Beijing.
+#
+# The historical Tang protectorates modelled here:
+#   安北 Ānběi  (Pacified North)  — the Mongol steppe (seat nr. Hohhot / Ordu-Baliq)
+#   安東 Āndōng (Pacified East)   — Manchuria & Korea (seat Pyongyang, later Liaodong)
+#   安西 Ānxī   (Pacified West)   — the Tarim oases / Turkestan (seat Kucha)
+#   安南 Ānnán  (Pacified South)  — northern Vietnam (seat Hanoi)
+# Two invented protectorates extend the scheme to the oceans and the New World:
+#   安海 Ānhǎi  (Pacified Seas)      — the island territories of the Pacific
+#   安新 Ānxīn  (Pacified New World) — the North-American Pacific coast
+# And the historical overseas Chinese republic:
+#   蘭芳 Lánfāng — the Lanfang kongsi (公司) of western Borneo (Luo Fangbo, 1777),
+#     whose tributary overtures the historical Qing rejected; here accepted.
+#
+# Sources: Beckwith, Empires of the Silk Road (2009); Skaff, Sui-Tang China and
+#   its Turko-Mongol Neighbors (2012); Twitchett (ed.), Cambridge History of China
+#   Vol. 3; on Lanfang, Mary Somers Heidhues, Golddiggers, Farmers, and Traders
+#   (2003), Yuan Bingling 袁冰凌 (2000), Wang Tai Peng (1994).
+#
+# Mechanism: LAND_release_from_list (se_LAND.txt) spins a new country off a list
+# of the overlord's own provinces (splitting governorship wealth/stockpiles and
+# recalculating foreign influence), then FUNC_make_subject (se_FUNC.txt) binds it
+# as a sinosphere_tributary. The releasing task builds the province list (so the
+# region logic can span several map regions), and this effect consumes it.
+#
+# All effects are instrumented with the LOG_* module (se_LOG.txt); the trace lands
+# in game.log under [IMP19C][QING]. Prefix = QING_ (protectorate helpers).
+########################################################################
+
+# Establish one protectorate from a pre-built list of the overlord's provinces.
+# Scope: country (ROOT = the Qing overlord).
+# Args:
+#   list        : province list (built by the caller via add_to_list; NOT a var list)
+#   name_key    : loc key for the new country's name
+#   adj_key     : loc key for the new country's adjective
+#   government  : government script name for the new country (viceroyalty for the
+#                 protectorates-general; oligarchic_republic for the Lanfang kongsi)
+#   log_tag     : short identifier for the log line (e.g. ANBEI)
+QING_establish_protectorate = {
+	LOG_enter = { sys = QING  fn = "QING_establish_protectorate ($log_tag$)" }
+
+	if = {
+		limit = { any_in_list = { list = $list$  count >= 1 } }
+
+		LOG_line = { sys = QING  msg = "PROTECTORATE $log_tag$ releasing territory from [ROOT.GetTag]" }
+
+		# Spin the frontier territory off as a new country. capital = its most
+		# populous province; culture/religion inherited from that seat; a viceregal
+		# (or, for Lanfang, republican) government. Subject status is set below so we
+		# can bind the exact sinosphere_tributary type rather than a client colony.
+		LAND_release_from_list = {
+			releaser = ROOT
+			list = $list$
+			capital_location = flag:by_population
+			primary_culture = flag:as_capital
+			country_religion = flag:as_capital
+			as_subject_type = flag:independent
+			government_type = flag:dynamic
+			give_overlord_hos = no
+			country_flag = flag:dynamic
+			country_name = $name_key$
+			country_adj = $adj_key$
+			country_color = flag:dynamic
+		}
+
+		# Bind the freshly released march as a tributary of the Son of Heaven and
+		# give it the intended government. LAND_release fires ECON_events.7 to set
+		# up the new country's economy, so we do not re-init it here.
+		if = {
+			limit = { exists = scope:new_country_scope }
+			scope:new_country_scope = { change_government = $government$ }
+			FUNC_make_subject = {
+				overlord = ROOT
+				target = scope:new_country_scope
+				type = sinosphere_tributary
+			}
+			LOG_line = { sys = QING  msg = "PROTECTORATE $log_tag$ established [scope:new_country_scope.GetTag] ($name_key$) as tributary of [ROOT.GetTag]" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_establish_protectorate"  reason = "$log_tag$ release produced no new_country_scope" }
+		}
+
+		LOG_exit = { sys = QING  fn = "QING_establish_protectorate"  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_establish_protectorate"  reason = "$log_tag$ has no owned provinces in region to release" }
+	}
+
+	# Clean the working list so a later protectorate task starts from empty.
+	every_in_list = { list = $list$  remove_from_list = $list$ }
+}

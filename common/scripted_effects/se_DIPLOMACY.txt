@@ -154,9 +154,89 @@ DIPLOMACY_finalise_cached_subject_power_tradezone = {
 	remove_variable = DIPLOMACY_power_from_subjects_$tradezone$
 }
 
+DIPLOMACY_seed_feature_play_success = {
+	# Scope: the INSTIGATOR country, called IMMEDIATELY after AI_begin_diplomatic_play
+	# (which saves the freshly-created provobj as scope:diplomatic_play). Function:
+	# give a MOD-FEATURE play a baseline success head-start so an aim that is already
+	# justified at launch (a standing frontier claim #53, or years of demographic
+	# pressure #57) is not near-certain to fizzle below the floor before its
+	# success-moving events (agitator/settlers/...) have had a chance to fire.
+	#
+	# The seed is BELOW the fizzle floor, so the play must still develop to win — this
+	# only removes the cold-start penalty an AI interest-play deservedly carries.
+	# Guarded on the provobj existing (a launcher that aborted set no play), so a
+	# no-op launch stays a no-op.
+	if = {
+		limit = { exists = scope:diplomatic_play  scope:diplomatic_play = { has_variable = is_diplomatic_play } }
+		scope:diplomatic_play = {
+			set_variable = {
+				name = diplomatic_play_success
+				value = DIPLOMACY_play_success_seed_feature
+			}
+		}
+		# THIS (not ROOT) is the instigator: this helper always runs in the instigator's
+		# country scope, whereas at the migration call sites ROOT is still the pulsing
+		# sender country. Log the actual instigator so the trace reads correctly.
+		LOG_line = { sys = DIPLO  msg = "feature play seeded with baseline success for [This.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = DIPLO  fn = "DIPLOMACY_seed_feature_play_success"  reason = "no play provobj in scope (launch aborted); no baseline success seeded" }
+	}
+}
+
 DIPLOMACY_complete_play = {
+	# Scope: called with $diplomatic_play$ = the play provobj (a province tagged
+	# is_diplomatic_play). Function: RESOLVE a play that has reached max progression
+	# into a real gameplay outcome, then TEAR THE PLAY DOWN.
+	#
+	# CRITICAL: DIPLOMACY_diplomatic_play_update_status re-calls this EVERY monthly
+	# tick while diplomatic_play_progression stays above the max (nothing lowers it),
+	# so if we did not remove the play here the outcome would re-fire (re-transfer
+	# territory) every month. The final AI_remove_diplomatic_play strips
+	# is_diplomatic_play + all play_* vars, so the next update pass finds nothing.
+	#
+	# The outcome is scored on the play's accumulated diplomatic_play_success (0..100,
+	# moved by the play events). Below the floor the play FIZZLES; at/above the
+	# decisive line the goal is achieved in FULL; between, a PARTIAL outcome. This
+	# means an AI interest-play that never developed through events (success stays
+	# near 0) simply lapses — no territory changes hands on a play that went nowhere.
 	$diplomatic_play$ = {
 		save_scope_as = diplomatic_play
+
+		# Guard: a well-formed play carries an instigator, a target area, a target
+		# country and a goal. A malformed/partly-torn-down provobj is just removed.
+		if = {
+			limit = {
+				has_variable = play_instigator
+				has_variable = play_target_area
+				has_variable = play_target_country
+				has_variable = play_goal
+			}
+			var:play_instigator = { save_scope_as = play_instigator }
+			var:play_target_country = { save_scope_as = play_target_country }
+			var:play_target_area = { save_scope_as = play_target_area }
+
+			LOG_line = { sys = DIPLO  msg = "play resolving: instigator [scope:play_instigator.GetTag] goal [scope:diplomatic_play.MakeScope.GetVariable('play_goal').GetValueAsFlagName] vs [scope:play_target_country.GetTag] over [scope:play_target_area.GetName], success [scope:diplomatic_play.MakeScope.GetVariable('diplomatic_play_success').GetValue|0]" }
+
+			if = {
+				# FIZZLE — the confrontation ran out of steam short of any result.
+				# A play that went nowhere produces no popup (this is the common fate of
+				# an AI interest-play that never developed through events); the trace line
+				# records it. No state changes.
+				limit = { var:diplomatic_play_success < DIPLOMACY_play_success_floor }
+				LOG_line = { sys = DIPLO  msg = "play fizzled (success below floor): no outcome for [scope:play_instigator.GetTag]" }
+			}
+			else = {
+				# a real outcome: branch on the goal.
+				DIPLOMACY_trigger_diplomatic_play_finale_event = yes
+			}
+		}
+		else = {
+			LOG_fail = { sys = DIPLO  fn = "DIPLOMACY_complete_play"  reason = "play provobj missing one of instigator/target_area/target_country/goal at resolution; removed without an outcome" }
+		}
+
+		# TEAR DOWN — always, so the resolved play cannot re-fire next tick.
+		AI_remove_diplomatic_play = yes
 	}
 }
 
@@ -654,16 +734,231 @@ DIPLOMACY_trigger_diplomatic_play_event = {
 }
 
 DIPLOMACY_trigger_diplomatic_play_finale_event = {
-	# Scope: Province (diplomatic play)
-	# Function: Trigger the final event for a diplomatic play, based on the conditions of the play
+	# Scope: Province (diplomatic play provobj). Expects the caller
+	# (DIPLOMACY_complete_play) to have set scope:diplomatic_play, scope:play_instigator,
+	# scope:play_target_country and scope:play_target_area, and to have already gated on
+	# success >= floor. Function: deliver the play's GOAL as a real outcome, scaled by
+	# whether success cleared the DECISIVE line (full) or only the floor (partial).
+	#
+	# Only two goals are ever passed by live callers today (flag:get_territory ×3 paths,
+	# flag:influence ×1 — the migration nativist play); flag:subjugate_nation is handled
+	# for completeness; anything else falls through to a territorial reading with a note.
 
-	# Target country turned into protectorate (major power imbalance, colonial type play)
-	# Target area ceded to instigator (moderate power imbalance, colonial type play)
-	# Instigator creates a rebellion in the target area, as protectorate of itself (major power imbalance, poor relations, low stability in the target country)
-	# Instigator creates an independent rebellion in the target area (moderate power imbalanace, poor relations, low stability in the target country)
-	# Instigator declares war on the target country (high likelihood of war, low infamy cost and stability cost to instigator)
-	# Royal marriage between the two countries (Friendly, both monarchies)
-	# Trade agreement between the two countries (Friendly, both AI)
+	set_local_variable = {
+		name = play_decisive
+		value = 0
+	}
+	if = {
+		limit = { var:diplomatic_play_success >= DIPLOMACY_play_success_decisive }
+		set_local_variable = { name = play_decisive  value = 1 }
+	}
+
+	# --- GET TERRITORY: cede provinces of the target area to the instigator. ----
+	# Uses LAND_transfer_province (grantee = instigator) — the SAME proven annexation
+	# idiom diplomatic_play.2 uses. A DECISIVE win takes the whole target area; a
+	# partial win takes only the single most valuable eligible province.
+	if = {
+		limit = { var:play_goal = flag:get_territory }
+		DIPLOMACY_resolve_get_territory = yes
+	}
+	# --- INFLUENCE: plant foreign influence in the target area's state. ---------
+	else_if = {
+		limit = { var:play_goal = flag:influence }
+		DIPLOMACY_resolve_influence = yes
+	}
+	# --- SUBJUGATE NATION: bind the target country as a subject of the instigator.
+	else_if = {
+		limit = { var:play_goal = flag:subjugate_nation }
+		DIPLOMACY_resolve_subjugate = yes
+	}
+	# --- FALLBACK: an unhandled goal — treat as a territorial claim so the win is
+	# not silently dropped, and surface it so the gap is visible in the trace.
+	else = {
+		LOG_fail = { sys = DIPLO  fn = "DIPLOMACY_trigger_diplomatic_play_finale_event"  reason = "unhandled play_goal for [scope:play_instigator.GetTag]; defaulting to a territorial claim on the target area" }
+		scope:play_target_area = {
+			if = {
+				limit = {
+					exists = owner
+					NOT = { owner = scope:play_instigator }
+				}
+				add_claim = scope:play_instigator
+			}
+		}
+	}
+}
+
+# ======================================================================
+# RESOLVE GET_TERRITORY — cede target-area land to the instigator.
+# Scope: the play provobj; expects scope:play_instigator / scope:play_target_area
+# and local_var:play_decisive (1 = full, 0 = partial). Skips provinces the
+# instigator already owns; only fires the annexation notice if land actually moved.
+# ======================================================================
+DIPLOMACY_resolve_get_territory = {
+	# collect the eligible (foreign-owned, not-already-ours) provinces of the area
+	scope:play_target_area.area = {
+		every_area_province = {
+			limit = {
+				is_uninhabitable = no
+				exists = owner
+				NOT = { owner = scope:play_instigator }
+			}
+			add_to_list = play_cede_candidates
+		}
+	}
+
+	if = {
+		limit = { any_in_list = { list = play_cede_candidates  count >= 1 } }
+		if = {
+			# DECISIVE — the whole contested area changes hands. LAND_transfer_provinces
+			# takes the entire list at once (it handles multiple source owners and the
+			# governorship-wealth split internally), so it is called ONCE, not per-province.
+			limit = { local_var:play_decisive = 1 }
+			LAND_transfer_provinces = {
+				target_provinces = play_cede_candidates
+				grantee = scope:play_instigator
+			}
+			LOG_line = { sys = DIPLO  msg = "play get_territory DECISIVE: [scope:play_instigator.GetTag] annexes the [scope:play_target_area.GetName] area" }
+		}
+		else = {
+			# PARTIAL — a single province is ceded. It must be the CONTESTED province
+			# itself (the play_target_area — the very province the feature seeded a
+			# claim on, #53/#57), so the award matches the claim rather than drifting
+			# to some other, richer province that merely shares the area. Only if the
+			# contested province is not itself cedable (already ours / uninhabitable)
+			# do we fall back to the most valuable eligible province in the area.
+			if = {
+				limit = {
+					scope:play_target_area = {
+						is_uninhabitable = no
+						exists = owner
+						NOT = { owner = scope:play_instigator }
+					}
+				}
+				scope:play_target_area = {
+					save_scope_as = play_cede_prov
+					LAND_transfer_province = {
+						grantee = scope:play_instigator
+					}
+				}
+				LOG_line = { sys = DIPLO  msg = "play get_territory PARTIAL: [scope:play_instigator.GetTag] takes the contested province [scope:play_cede_prov.GetName]" }
+			}
+			else = {
+				ordered_in_list = {
+					list = play_cede_candidates
+					order_by = DIPLOMACY_province_wealth_value
+					max = 1
+					save_scope_as = play_cede_prov
+					LAND_transfer_province = {
+						grantee = scope:play_instigator
+					}
+				}
+				LOG_line = { sys = DIPLO  msg = "play get_territory PARTIAL (contested province not cedable; most-valuable fallback): [scope:play_instigator.GetTag] takes [scope:play_cede_prov.GetName]" }
+			}
+		}
+		# relations fallout (the loser resents the cession). Excludes the instigator
+		# itself and the c:BAR placeholder that AI interest-plays normalise to.
+		if = {
+			limit = {
+				exists = scope:play_target_country
+				NOT = { scope:play_target_country = { this = scope:play_instigator } }
+				NOT = { scope:play_target_country = { tag = BAR } }
+			}
+			scope:play_target_country = {
+				add_opinion = { modifier = bitter_over_occupation  target = scope:play_instigator }
+			}
+		}
+		# NOTE: the cession itself is surfaced to the player by the engine's own
+		# land-transfer notification; we deliberately do NOT fire the .5/.6 EXPEDITION
+		# events here — they require scopes (foreign_minister, play_target_area) the
+		# resolution path does not set and that teardown strips, and their flavour
+		# ("establishes an outpost"/"annexes a territory") is shaped for the naval
+		# expedition flow, not a diplomatic-play cession.
+	}
+	else = {
+		# the area held no foreign land to take (already ours / uninhabitable): the
+		# win banks a claim instead so the aim is not wholly lost.
+		LOG_line = { sys = DIPLO  msg = "play get_territory: no cedable province in [scope:play_target_area.GetName] for [scope:play_instigator.GetTag]; banking a claim" }
+		scope:play_target_area = {
+			if = {
+				limit = { exists = owner  NOT = { owner = scope:play_instigator } }
+				add_claim = scope:play_instigator
+			}
+		}
+	}
+	every_in_list = { list = play_cede_candidates  remove_from_list = play_cede_candidates }
+}
+
+# ======================================================================
+# RESOLVE INFLUENCE — the instigator plants foreign influence in the target
+# area's state (the mod's DIPLOMACY_add_state_foreign_influence layer). No land
+# changes hands. Scope: the play provobj.
+# ======================================================================
+DIPLOMACY_resolve_influence = {
+	# The instigator projects influence onto the TARGET COUNTRY's home ground —
+	# NOT the target area. The only live influence caller is the nativist migration
+	# breaking-point play (se_MIGRATION.txt): there the instigator is the receiving
+	# HOST state and play_target_country is the SENDER of the influx, while
+	# play_target_area is a province the host ALREADY OWNS. The coherent win is the
+	# host gaining sway over the sender (to stem the flow at its source), so we plant
+	# influence in the target country's capital state, guarded so we never try to
+	# influence ourselves or the c:BAR placeholder.
+	if = {
+		limit = {
+			exists = scope:play_target_country
+			NOT = { scope:play_target_country = { this = scope:play_instigator } }
+			NOT = { scope:play_target_country = { tag = BAR } }
+			scope:play_target_country = { exists = capital_scope.state }
+		}
+		scope:play_target_country.capital_scope.state = {
+			# refresh any prior influence on the state, then add the instigator's
+			DIPLOMACY_remove_state_foreign_influence = yes
+			DIPLOMACY_add_state_foreign_influence = {
+				influencer = scope:play_instigator
+			}
+		}
+		LOG_line = { sys = DIPLO  msg = "play influence: [scope:play_instigator.GetTag] gains sway over [scope:play_target_country.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = DIPLO  fn = "DIPLOMACY_resolve_influence"  reason = "target country absent, is the instigator, or is c:BAR; no influence planted for [scope:play_instigator.GetTag]" }
+	}
+}
+
+# ======================================================================
+# RESOLVE SUBJUGATE — bind the whole target country to the instigator as a
+# subject. DECISIVE = a client_state; partial = a lighter tributary. Uses
+# FUNC_make_subject (the mod's make_subject wrapper). Scope: the play provobj.
+# ======================================================================
+DIPLOMACY_resolve_subjugate = {
+	if = {
+		limit = {
+			exists = scope:play_target_country
+			NOT = { scope:play_target_country = { this = scope:play_instigator } }
+			NOT = { scope:play_target_country = { is_subject_of = scope:play_instigator } }
+		}
+		if = {
+			limit = { local_var:play_decisive = 1 }
+			FUNC_make_subject = {
+				overlord = scope:play_instigator
+				target = scope:play_target_country
+				type = client_state
+			}
+			LOG_line = { sys = DIPLO  msg = "play subjugate DECISIVE: [scope:play_target_country.GetTag] becomes a client state of [scope:play_instigator.GetTag]" }
+		}
+		else = {
+			FUNC_make_subject = {
+				overlord = scope:play_instigator
+				target = scope:play_target_country
+				type = tributary
+			}
+			LOG_line = { sys = DIPLO  msg = "play subjugate PARTIAL: [scope:play_target_country.GetTag] becomes a tributary of [scope:play_instigator.GetTag]" }
+		}
+		# the new subject relationship is itself visible to the player; no .5/.6
+		# expedition popup (wrong flavour + unset scopes — see the note in
+		# DIPLOMACY_resolve_get_territory).
+	}
+	else = {
+		LOG_fail = { sys = DIPLO  fn = "DIPLOMACY_resolve_subjugate"  reason = "target country absent, is the instigator, or already a subject; no subjugation for [scope:play_instigator.GetTag]" }
+	}
 }
 
 DIPLOMACY_add_state_foreign_influence = {

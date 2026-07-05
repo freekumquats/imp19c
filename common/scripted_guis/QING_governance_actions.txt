@@ -1,0 +1,365 @@
+########################################################################
+# QING_governance_actions.txt — player-facing scripted GUIs for the Qing
+# GOVERNANCE suite: the Grand Council (軍機處) hub and the character-held great
+# offices. Companion to QING_mechanics_actions.txt.
+#
+# Two shapes:
+#   * COUNTRY-scope verbs (convene / dissolve the council) — same pattern as
+#     QING_mechanics_actions.txt: scope = country, gated CHI + ai_is_valid no.
+#   * CHARACTER-scope verbs (seat / unseat a councillor, appoint / vacate an
+#     office) — invoked on a courtier from the character view; scope = character,
+#     with saved_scopes = { player } so is_shown/is_valid can gate on the country.
+#     The underlying effects in se_QING_COUNCIL.txt self-scope to the country via
+#     `employer`, so these GUIs call them directly in the character scope (this =
+#     the courtier) — no re-scoping needed.
+#
+# All gated CHI-only + ai_is_valid = { always = no }.
+# Prefix = qing_gov_
+########################################################################
+
+# ======================================================================
+# COUNTRY-SCOPE: convene / refresh the Grand Council (autofill best courtiers)
+# ======================================================================
+qing_gov_council_convene = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_gov_council_needs_pi_tt
+			political_influence >= 20
+		}
+	}
+	effect = {
+		add_political_influence = -20
+		QING_council_autofill = yes
+	}
+}
+
+# ======================================================================
+# CHARACTER-SCOPE: seat a courtier as a grand councillor (軍機大臣)
+# this = the courtier; the effect reaches CHI via `employer`.
+# ======================================================================
+qing_gov_council_seat = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		employer = scope:player
+	}
+	is_valid = {
+		# an adult, living courtier not already seated, and a free seat exists
+		custom_tooltip = {
+			text = qing_gov_council_seat_valid_tt
+			is_adult = yes
+			is_alive = yes
+			NOT = { has_variable = qing_is_councillor }
+			scope:player = { var:qing_council_seat_count < var:qing_council_seat_cap }
+		}
+		custom_tooltip = {
+			text = qing_gov_council_needs_pi_tt
+			scope:player = { political_influence >= 10 }
+		}
+	}
+	effect = {
+		scope:player = { add_political_influence = -10 }
+		# effect self-scopes to the country via `employer`; this = the courtier
+		QING_council_seat_character = yes
+	}
+}
+
+# ======================================================================
+# CHARACTER-SCOPE: make this councillor the chief (領班軍機大臣)
+# ======================================================================
+qing_gov_council_make_chief = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		employer = scope:player
+	}
+	is_valid = {
+		custom_tooltip = {
+			text = qing_gov_council_chief_valid_tt
+			is_adult = yes
+			is_alive = yes
+			NOT = { scope:player = { var:qing_council_chief = prev } }
+		}
+		custom_tooltip = {
+			text = qing_gov_council_needs_pi_tt
+			scope:player = { political_influence >= 15 }
+		}
+	}
+	effect = {
+		scope:player = { add_political_influence = -15 }
+		# effect self-scopes to the country via `employer`; this = the courtier
+		QING_council_make_chief = yes
+	}
+}
+
+# ======================================================================
+# CHARACTER-SCOPE: unseat a councillor
+# ======================================================================
+qing_gov_council_unseat = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		has_variable = qing_is_councillor
+	}
+	is_valid = { always = yes }
+	effect = {
+		# effect self-scopes to the country via `employer`; this = the courtier
+		QING_council_unseat_character = yes
+	}
+}
+
+# ======================================================================
+# CHARACTER-SCOPE: appoint this courtier to a great office.
+# The engine has no runtime GUI parameters, so there is one appoint verb per
+# office; each calls the shared QING_office_appoint with its office literal.
+# this = the appointee; the effect reaches CHI via `employer`. Appointing over a
+# sitting holder auto-vacates them (handled inside QING_office_appoint).
+# Offices: personnel 吏部 / revenue 戶部 / rites 禮部 / war 兵部 / justice 刑部
+#          works 工部 / censor 都察院 / lifanyuan 理藩院 / amban 駐藏大臣 / zongli 總理衙門
+# ======================================================================
+qing_gov_office_appoint_personnel = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = { scope:player = { tag = CHI }  employer = scope:player }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_gov_office_valid_tt
+			is_adult = yes
+			is_alive = yes
+			NOT = { var:qing_office_held = flag:personnel }
+		}
+		custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 15 } }
+	}
+	effect = {
+		scope:player = { add_political_influence = -15 }
+		QING_office_appoint = { office = personnel }
+	}
+}
+
+qing_gov_office_appoint_revenue = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = { scope:player = { tag = CHI }  employer = scope:player }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_gov_office_valid_tt
+			is_adult = yes
+			is_alive = yes
+			NOT = { var:qing_office_held = flag:revenue }
+		}
+		custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 15 } }
+	}
+	effect = {
+		scope:player = { add_political_influence = -15 }
+		QING_office_appoint = { office = revenue }
+	}
+}
+
+qing_gov_office_appoint_rites = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = { scope:player = { tag = CHI }  employer = scope:player }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_gov_office_valid_tt
+			is_adult = yes
+			is_alive = yes
+			NOT = { var:qing_office_held = flag:rites }
+		}
+		custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 15 } }
+	}
+	effect = {
+		scope:player = { add_political_influence = -15 }
+		QING_office_appoint = { office = rites }
+	}
+}
+
+qing_gov_office_appoint_war = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = { scope:player = { tag = CHI }  employer = scope:player }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_gov_office_valid_tt
+			is_adult = yes
+			is_alive = yes
+			NOT = { var:qing_office_held = flag:war }
+		}
+		custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 15 } }
+	}
+	effect = {
+		scope:player = { add_political_influence = -15 }
+		QING_office_appoint = { office = war }
+	}
+}
+
+qing_gov_office_appoint_justice = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = { scope:player = { tag = CHI }  employer = scope:player }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_gov_office_valid_tt
+			is_adult = yes
+			is_alive = yes
+			NOT = { var:qing_office_held = flag:justice }
+		}
+		custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 15 } }
+	}
+	effect = {
+		scope:player = { add_political_influence = -15 }
+		QING_office_appoint = { office = justice }
+	}
+}
+
+qing_gov_office_appoint_works = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = { scope:player = { tag = CHI }  employer = scope:player }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_gov_office_valid_tt
+			is_adult = yes
+			is_alive = yes
+			NOT = { var:qing_office_held = flag:works }
+		}
+		custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 15 } }
+	}
+	effect = {
+		scope:player = { add_political_influence = -15 }
+		QING_office_appoint = { office = works }
+	}
+}
+
+qing_gov_office_appoint_censor = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = { scope:player = { tag = CHI }  employer = scope:player }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_gov_office_valid_tt
+			is_adult = yes
+			is_alive = yes
+			NOT = { var:qing_office_held = flag:censor }
+		}
+		custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 15 } }
+	}
+	effect = {
+		scope:player = { add_political_influence = -15 }
+		QING_office_appoint = { office = censor }
+	}
+}
+
+qing_gov_office_appoint_lifanyuan = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = { scope:player = { tag = CHI }  employer = scope:player }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_gov_office_valid_tt
+			is_adult = yes
+			is_alive = yes
+			NOT = { var:qing_office_held = flag:lifanyuan }
+		}
+		custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 15 } }
+	}
+	effect = {
+		scope:player = { add_political_influence = -15 }
+		QING_office_appoint = { office = lifanyuan }
+	}
+}
+
+qing_gov_office_appoint_amban = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = { scope:player = { tag = CHI }  employer = scope:player }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_gov_office_valid_tt
+			is_adult = yes
+			is_alive = yes
+			NOT = { var:qing_office_held = flag:amban }
+		}
+		custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 15 } }
+	}
+	effect = {
+		scope:player = { add_political_influence = -15 }
+		QING_office_appoint = { office = amban }
+	}
+}
+
+qing_gov_office_appoint_zongli = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = { scope:player = { tag = CHI }  employer = scope:player }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_gov_office_valid_tt
+			is_adult = yes
+			is_alive = yes
+			NOT = { var:qing_office_held = flag:zongli }
+		}
+		custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 15 } }
+	}
+	effect = {
+		scope:player = { add_political_influence = -15 }
+		QING_office_appoint = { office = zongli }
+	}
+}
+
+# ======================================================================
+# CHARACTER-SCOPE: relieve this courtier of whatever great office they hold.
+# One verb for all ten offices via the QING_office_vacate_dispatch effect.
+# ======================================================================
+qing_gov_office_vacate = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		has_variable = qing_office_held
+	}
+	is_valid = { always = yes }
+	effect = {
+		# dispatcher self-scopes to the country via `employer`; this = the holder
+		QING_office_vacate_dispatch = yes
+	}
+}
+
+# ======================================================================
+# CHARACTER-SCOPE: dismiss a serving foreign advisor (洋員). Frees the post and
+# cools the home power's stake. One verb for all fields via the dispatcher.
+# this = the advisor; the effect self-scopes to CHI via ROOT.
+# ======================================================================
+qing_gov_advisor_dismiss = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		has_variable = qing_is_foreign_advisor
+	}
+	is_valid = { always = yes }
+	effect = {
+		QING_advisor_dismiss = yes
+	}
+}

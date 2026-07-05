@@ -1,0 +1,387 @@
+########################################################################
+# qing_selfstrengthening_missions.txt — the Self-Strengthening Movement
+# (自強運動 / 洋務運動) mission tree. CHI-only, player-driven.
+#
+# This is the deliberate, goal-oriented player path the user asked to be
+# organized as a MISSION TREE (not loose events): each task founds a real
+# historical institution, calling the QING_selfstr_found_* effects in
+# se_QING_SELFSTR.txt, which grant the named-institution modifier, advance the
+# 0..100 qing_selfstr_progress meter (→ the golden-age bands), and build REAL
+# structures (add_building_level) so the movement ties into the industry /
+# economy / currency sim. ti-yong framing (中學為體，西學為用).
+#
+# The tree fans out from the Zongli Yamen (總理衙門) — the movement's
+# institutional head — through arsenals, yards, schools/universities, the four
+# modern fleets and the Ever-Victorious Army, to a capstone that seals the
+# alternate-history golden age.
+#
+# NOTE (real units): the four fleet tasks (北洋/南洋/福建/廣東) and the Ever-Victorious
+# Army now RAISE REAL on-map forces on completion — QING_selfstr_found_beiyang/
+# _nanyang/_fujian/_guangdong spawn a squadron via create_unit at each fleet's
+# historical home port (Tianjin / Shanghai / Fuzhou / Guangzhou), falling back to
+# the most-populous owned coastal province if the home port is not held. Because
+# a spawned fleet is created BY the task (not seeded at game start), no pre-existing
+# navy is required; but the raised hulls DO carry naval maintenance, so the
+# squadrons are deliberately modest. Each fleet also grants a lasting "build ships
+# cheaply / fleet quality" country modifier, so navy strength comes from BOTH the
+# spawned core and cheaper construction thereafter.
+#
+# Gating: CHI-only via potential = { tag = CHI }; individual tasks gate on
+# treasury / bureaucracy capacity / relevant inventions so the movement can only
+# advance as fast as the state can carry it (the historical coordination problem).
+#
+# NOTE (cosmetic): task icons reuse the stock test1/2/3 sprites and the header
+# reuses mission_image_test, since bespoke mission art is not yet in gfx/. Swap
+# for dedicated sprites later; this does not affect function.
+#
+# Sources: see se_QING_SELFSTR.txt / qing_selfstrengthening_modifiers.txt headers.
+########################################################################
+
+qing_selfstrengthening_mission = {
+	icon = test1
+	header = mission_image_test
+
+	repeatable = no
+
+	chance = { }
+	ai_chance = { factor = 0 }   # player-only, like the rest of the Qing suite
+
+	potential = {
+		tag = CHI
+		is_ai = no
+	}
+
+	abort = {
+		NOT = { tag = CHI }
+	}
+
+	on_start = {
+		LOG_line = { sys = QING  msg = "MISSION self-strengthening started for [ROOT.GetTag]" }
+		QING_selfstr_init = yes
+	}
+
+	on_completion = {
+		LOG_line = { sys = QING  msg = "MISSION self-strengthening COMPLETED for [ROOT.GetTag]" }
+	}
+
+	# ==================================================================
+	# ROOT TASK — establish the Zongli Yamen (總理衙門), the movement's head.
+	# ==================================================================
+	qing_ss_zongli = {
+		icon = test1
+		allow = {
+			political_influence >= 20
+		}
+		on_start = {
+			add_political_influence = -20
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_zongli_tt
+			# the Zongli Yamen office bonus (from the governance suite) + a first
+			# push of momentum.
+			add_country_modifier = { name = qing_office_zongli_active  duration = -1 }
+			QING_selfstr_advance = { amount = 8 }
+			LOG_line = { sys = QING  msg = "MISSION task zongli done for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# ARSENAL — 江南製造總局 (Jiangnan Arsenal, 1865).
+	# ==================================================================
+	qing_ss_jiangnan = {
+		icon = test2
+		requires = { qing_ss_zongli }
+		allow = {
+			treasury >= 100
+			custom_tooltip = {
+				text = qing_ss_needs_capacity_tt
+				var:qing_bureau_capacity >= 40
+			}
+		}
+		on_start = {
+			add_treasury = -100
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_jiangnan_tt
+			QING_selfstr_found_jiangnan = yes
+		}
+	}
+
+	# ==================================================================
+	# NAVY YARD — 福州船政局 (Fuzhou Navy Yard + 船政學堂, 1866).
+	# ==================================================================
+	qing_ss_fuzhou = {
+		icon = test2
+		requires = { qing_ss_zongli }
+		allow = {
+			treasury >= 100
+			custom_tooltip = {
+				text = qing_ss_needs_coast_tt
+				any_owned_province = { is_coastal = yes }
+			}
+		}
+		on_start = {
+			add_treasury = -100
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_fuzhou_tt
+			QING_selfstr_found_fuzhou = yes
+		}
+	}
+
+	# ==================================================================
+	# SCHOOLS — 同文館 / colleges → the modern universities.
+	# ==================================================================
+	qing_ss_tongwen = {
+		icon = test3
+		requires = { qing_ss_zongli }
+		allow = {
+			treasury >= 60
+		}
+		on_start = {
+			add_treasury = -60
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_tongwen_tt
+			QING_selfstr_found_tongwen = yes
+		}
+	}
+
+	# --- 北洋大學堂 → 天津大學 (Peiyang / Tianjin University, 1895) ---
+	qing_ss_peiyang_university = {
+		icon = test3
+		requires = { qing_ss_tongwen }
+		allow = {
+			treasury >= 80
+			custom_tooltip = {
+				text = qing_ss_needs_capacity_tt
+				var:qing_bureau_capacity >= 50
+			}
+		}
+		on_start = {
+			add_treasury = -80
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_peiyang_university_tt
+			QING_selfstr_build = { building = EDU_university }
+			add_country_modifier = { name = qing_selfstr_tongwen_college  duration = -1 }
+			QING_selfstr_advance = { amount = 8 }
+			LOG_line = { sys = QING  msg = "MISSION task Peiyang University for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 京師大學堂 → 北京大學 (Imperial University of Peking, 1898) ---
+	qing_ss_peking_university = {
+		icon = test3
+		requires = { qing_ss_peiyang_university }
+		allow = {
+			treasury >= 100
+			custom_tooltip = {
+				text = qing_ss_needs_capacity_tt
+				var:qing_bureau_capacity >= 60
+			}
+		}
+		on_start = {
+			add_treasury = -100
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_peking_university_tt
+			QING_selfstr_build = { building = EDU_university }
+			# the capital's new university: prestige + a research/reform edge.
+			add_country_modifier = { name = qing_selfstr_advancing  duration = 3650 }
+			QING_selfstr_advance = { amount = 10 }
+			LOG_line = { sys = QING  msg = "MISSION task Peking University for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# COMMERCE — 輪船招商局 + 電報總局 (steam navigation + telegraph, 官督商辦).
+	# ==================================================================
+	qing_ss_merchant = {
+		icon = test1
+		requires = { qing_ss_jiangnan }
+		allow = {
+			treasury >= 80
+		}
+		on_start = {
+			add_treasury = -80
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_merchant_tt
+			QING_selfstr_found_merchant = yes
+		}
+	}
+
+	# ==================================================================
+	# RAIL + IRON + COAL — 唐胥/京張鐵路, 開平礦務局, 漢陽鐵廠.
+	# ==================================================================
+	qing_ss_rail = {
+		icon = test1
+		requires = { qing_ss_merchant }
+		allow = {
+			treasury >= 120
+			custom_tooltip = {
+				text = qing_ss_needs_capacity_tt
+				var:qing_bureau_capacity >= 55
+			}
+		}
+		on_start = {
+			add_treasury = -120
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_rail_tt
+			QING_selfstr_found_rail = yes
+		}
+	}
+
+	# ==================================================================
+	# TELEGRAPH — 電報總局 (Imperial Telegraph Administration, 1881). Split from
+	# the rail undertaking: the national wire that lengthens the reach of every
+	# edict. Requires the merchant arm (the 官督商辦 apparatus that ran it).
+	# ==================================================================
+	qing_ss_telegraph = {
+		icon = test1
+		requires = { qing_ss_merchant }
+		allow = {
+			treasury >= 70
+			custom_tooltip = {
+				text = qing_ss_needs_capacity_tt
+				var:qing_bureau_capacity >= 45
+			}
+		}
+		on_start = {
+			add_treasury = -70
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_telegraph_tt
+			QING_selfstr_found_telegraph = yes
+		}
+	}
+
+	# ==================================================================
+	# EVER-VICTORIOUS ARMY — 常勝軍: build modern land units cheaply.
+	# ==================================================================
+	qing_ss_ever_victorious = {
+		icon = test2
+		requires = { qing_ss_jiangnan }
+		allow = {
+			treasury >= 90
+		}
+		on_start = {
+			add_treasury = -90
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_ever_victorious_tt
+			QING_selfstr_found_evarmy = yes
+		}
+	}
+
+	# ==================================================================
+	# BEIYANG FLEET — 北洋水師: build modern ships cheaply (needs arsenal + yard).
+	# ==================================================================
+	qing_ss_beiyang = {
+		icon = test2
+		requires = { qing_ss_fuzhou  qing_ss_jiangnan }
+		allow = {
+			treasury >= 150
+			custom_tooltip = {
+				text = qing_ss_needs_capacity_tt
+				var:qing_bureau_capacity >= 60
+			}
+		}
+		on_start = {
+			add_treasury = -150
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_beiyang_tt
+			QING_selfstr_found_beiyang = yes
+		}
+	}
+
+	# ==================================================================
+	# NANYANG FLEET — 南洋水師: the southern squadron.
+	# ==================================================================
+	qing_ss_nanyang = {
+		icon = test2
+		requires = { qing_ss_fuzhou }
+		allow = {
+			treasury >= 110
+		}
+		on_start = {
+			add_treasury = -110
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_nanyang_tt
+			QING_selfstr_found_nanyang = yes
+		}
+	}
+
+	# ==================================================================
+	# FUJIAN FLEET — 福建水師: the Fuzhou-yard squadron. Cheaper (built at the yard
+	# it was born from) and available straight off the Fuzhou navy yard.
+	# ==================================================================
+	qing_ss_fujian = {
+		icon = test2
+		requires = { qing_ss_fuzhou }
+		allow = {
+			treasury >= 90
+		}
+		on_start = {
+			add_treasury = -90
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_fujian_tt
+			QING_selfstr_found_fujian = yes
+		}
+	}
+
+	# ==================================================================
+	# GUANGDONG FLEET — 廣東水師: the Canton squadron guarding the far south.
+	# ==================================================================
+	qing_ss_guangdong = {
+		icon = test2
+		requires = { qing_ss_fuzhou }
+		allow = {
+			treasury >= 90
+		}
+		on_start = {
+			add_treasury = -90
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_guangdong_tt
+			QING_selfstr_found_guangdong = yes
+		}
+	}
+
+	# ==================================================================
+	# CAPSTONE — 自強大成: seal the alternate-history industrial golden age.
+	# Requires the fleets, the army, the universities and the rail/iron base, and
+	# a movement that has genuinely reached its apex (progress >= 85).
+	# ==================================================================
+	qing_ss_capstone = {
+		icon = test1
+		requires = {
+			qing_ss_beiyang
+			qing_ss_nanyang
+			qing_ss_fujian
+			qing_ss_guangdong
+			qing_ss_ever_victorious
+			qing_ss_rail
+			qing_ss_peking_university
+		}
+		allow = {
+			custom_tooltip = {
+				text = qing_ss_needs_golden_age_tt
+				var:qing_selfstr_progress >= 85
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_ss_capstone_tt
+			# lock in the golden age + a lasting prestige of the restored dynasty.
+			QING_selfstr_advance = { amount = 15 }
+			add_country_modifier = { name = qing_selfstr_golden_age  duration = -1 }
+			add_stability = 2
+			LOG_line = { sys = QING  msg = "MISSION self-strengthening CAPSTONE (golden age) for [ROOT.GetTag]" }
+		}
+	}
+}

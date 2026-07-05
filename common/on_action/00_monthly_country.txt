@@ -6,19 +6,85 @@ monthly_country_pulse = {
 		update_government_modifier_on_action
 
 		monthly_reparation_payments_on_action
-		
+
 		diplomatic_plays_on_action
+
+		# Qing subject-integration ambient reaction pulse (player CHI only).
+		qing_integration_pulse_on_action
+
+		# Qing "dynastic decline" + mechanics-suite pulse (player CHI only).
+		qing_mechanics_pulse_on_action
 
 		# TODO: Microflavour events
 		# delay = { days = { 1 28 } }
 		# random_microflavour_event_on_action
 	}
-	
+
+}
+
+# Fires reaction events (unrest / scandal / riot / harvest / festival) for any
+# subject the Qing player is actively integrating. Gated to CHI and throttled to
+# roughly twice a year via a cooldown variable so pushes stay eventful, not spammy.
+qing_integration_pulse_on_action = {
+	trigger = {
+		tag = CHI
+		is_ai = no
+		NOT = { has_variable = qing_integration_pulse_cooldown }
+		any_subject = {
+			has_variable = SUBJ_integration_active
+			NOT = { has_variable = SUBJ_integration_suspended }
+			is_subject_type = autonomous_governorship
+		}
+	}
+	effect = {
+		LOG_line = { sys = SUBJ  msg = "monthly integration pulse firing for overlord=[ROOT.GetTag]" }
+		set_variable = { name = qing_integration_pulse_cooldown  days = 180 }
+		SUBJ_QING_integration_pulse = yes
+	}
 }
 
 update_government_modifier_on_action = {
 	effect = {
 		POLITICS_update_government_type_modifier = yes
+	}
+}
+
+# Qing player-experience mechanics suite: the shared decline-engine pulse.
+# Reads O(1) counters and re-applies modifier bands; fires weighted reaction
+# events. Gated to the single human Qing player and throttled to ~quarterly via
+# a cooldown variable, so it is negligible for the AI (rejected on tag = CHI).
+qing_mechanics_pulse_on_action = {
+	trigger = {
+		tag = CHI
+		is_ai = no
+		NOT = { has_variable = qing_mechanics_pulse_cooldown }
+	}
+	effect = {
+		set_variable = { name = qing_mechanics_pulse_cooldown  days = 90 }
+		QING_DECLINE_pulse = yes
+		QING_ethnic_stance_drift = yes
+		# Great-Game diplomatic-play pressure (#52): scan the Qing's live plays and
+		# mount tension on any great power whose sphere a play reaches into (以夷制夷
+		# rivals eased in turn). Runs BEFORE the governance pulse so the fresh
+		# tension is converted to rivalry bands by QING_gp_apply_bands this pulse.
+		QING_gp_scan_plays = yes
+		# Governance layer: recompute council effectiveness + the abstracted
+		# bureaucracy meters and re-apply their bands. Runs AFTER the decline
+		# pulse so it reads fresh corruption/currency counters.
+		QING_GOV_pulse = yes
+		QING_frontier_flavour_roll = yes
+		# #65 Emperor Emeritus: re-score Napoleon's conditional loyalty (HIGH while
+		# his revenge project is served — reforms advancing AND GBR/RUS tension held
+		# high; DROPS on appeasement / stalled reform). Self-guards if he is absent.
+		QING_napoleon_loyalty_pulse = yes
+		# Japan/Meiji sub-layer (#22): Japan modernizes on its own clock and
+		# the accord/rivalry bands are re-applied. Runs after the flavour roll.
+		QING_japan_pulse = yes
+		# §11 L4 separatism (Qing): tension-scaled breakaway risk, layered ON TOP
+		# of the generic decade-cadence engine. Only bites once ethnic tension has
+		# boiled past its floor; self-throttled by its own ~3yr cooldown. Runs
+		# after the decline pulse so it reads a fresh qing_ethnic_tension.
+		SEPARATISM_qing_pulse = yes
 	}
 }
 

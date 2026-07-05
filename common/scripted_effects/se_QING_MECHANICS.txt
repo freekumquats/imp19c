@@ -1,0 +1,297 @@
+########################################################################
+# se_QING_MECHANICS.txt — player-facing effects for the Qing mechanics suite.
+#
+# These are the verbs the player triggers through scripted GUIs and event
+# options: set an ethnic stance (#1), sell offices (B), fund/deplete the
+# granary (F), run a banner drill (C), manage the Canton trade (H), and the
+# character-level sinicization verbs (#8). Each nudges the shared decline
+# counters in se_QING_DECLINE.txt and/or applies a modifier from
+# qing_mechanics_modifiers.txt.
+#
+#   ROOT / this = the Qing overlord (CHI, human)
+#
+# Prefix = QING
+########################################################################
+
+# ======================================================================
+# #1  INTER-ETHNIC TENSION STANCE
+# Mutually-exclusive country stance. Setting one removes the others and marks
+# the choice with a variable the GUI reads to show which is active.
+# ======================================================================
+QING_set_ethnic_stance = {
+	# $stance$ = banner | han | dyarchy
+	LOG_line = { sys = QING  msg = "set ethnic stance = $stance$ for [ROOT.GetTag]" }
+	remove_country_modifier = qing_ethnic_stance_banner
+	remove_country_modifier = qing_ethnic_stance_han
+	remove_country_modifier = qing_ethnic_stance_dyarchy
+	add_country_modifier = { name = qing_ethnic_stance_$stance$  duration = -1 }
+	set_variable = { name = qing_ethnic_stance_active  value = flag:$stance$ }
+}
+
+# Stance effect on the tension counter: the balanced dyarchy cools tension,
+# the two favouritist stances heat it. Called on the pulse-adjacent nudge.
+QING_ethnic_stance_drift = {
+	if = {
+		limit = { var:qing_ethnic_stance_active = flag:dyarchy }
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -2 }
+	}
+	else_if = {
+		limit = {
+			OR = {
+				var:qing_ethnic_stance_active = flag:banner
+				var:qing_ethnic_stance_active = flag:han
+			}
+		}
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 1 }
+	}
+}
+
+# ======================================================================
+# #1b  PROMOTE CIVIC (NATIONAL) IDENTITY  (§11 L4 ext)
+# Fund the connective institutions of a nation — common schools, a national
+# press, shared civil administration — to build a civic "Chinese" identity that
+# can transcend the empire's ethnic fault lines. Directly nudges the civic meter
+# (drifts up over time toward the self-strengthening-gated ceiling anyway; this
+# is the player's accelerant). Gated on the Self-Strengthening movement being
+# underway — you cannot forge a modern nation without the modern institutions.
+# ======================================================================
+QING_promote_civic_identity = {
+	LOG_enter = { sys = QING  fn = "QING_promote_civic_identity" }
+	if = {
+		limit = { treasury >= 90 }
+		add_treasury = -90
+		QING_DECLINE_nudge = { var = qing_civic_identity  amount = 8 }
+		# a burst of common schooling/print also lifts self-strengthening a touch,
+		# since the two share institutions (Tongwen colleges, the telegraph press).
+		QING_selfstr_advance = { amount = 3 }
+		LOG_line = { sys = QING  msg = "promoted civic identity (national schools/press) for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_promote_civic_identity"  reason = "insufficient treasury (<90) to fund the civic-institution drive" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_promote_civic_identity"  result = OK }
+}
+
+# ======================================================================
+# B  SALE OF OFFICES 捐納
+# Immediate treasury from selling ranks, at the cost of corruption + a
+# purchased-ranks modifier that decays admin quality.
+# ======================================================================
+QING_sell_offices = {
+	LOG_line = { sys = QING  msg = "sold offices (juanna) for [ROOT.GetTag]" }
+	CURRENCY_grant_country_wealth = { thousands = 80 }
+	QING_DECLINE_nudge = { var = qing_corruption_level  amount = 12 }
+	add_country_modifier = { name = qing_office_purchased_ranks  duration = 3650 }
+}
+
+# ======================================================================
+# F  EVER-NORMAL GRANARIES 常平倉
+# Build stock (costs treasury), and release it during famine (consumes stock).
+# ======================================================================
+QING_granary_invest = {
+	LOG_line = { sys = QING  msg = "invested in granaries for [ROOT.GetTag]" }
+	add_treasury = -80
+	QING_DECLINE_nudge = { var = qing_granary_stock  amount = 25 }
+	# Refresh the stocked bonus while reserves are healthy.
+	if = {
+		limit = { var:qing_granary_stock >= 40 }
+		add_country_modifier = { name = qing_granary_stocked  duration = 3650 }
+	}
+}
+
+QING_granary_release = {
+	# Spend granary stock for famine relief. Only meaningful if stock exists.
+	LOG_line = { sys = QING  msg = "released granary stores for [ROOT.GetTag]" }
+	QING_DECLINE_nudge = { var = qing_granary_stock  amount = -20 }
+	QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -10 }
+	add_country_modifier = { name = qing_granary_famine_relief  duration = 730 }
+	if = {
+		limit = { var:qing_granary_stock < 40 }
+		remove_country_modifier = qing_granary_stocked
+	}
+}
+
+# ======================================================================
+# C  BANNER REFORM DRILL
+# Buy back some martial vigour; costs treasury and a temporary upkeep bump.
+# ======================================================================
+QING_banner_drill = {
+	LOG_line = { sys = QING  msg = "ran banner reform drill for [ROOT.GetTag]" }
+	add_treasury = -60
+	QING_DECLINE_nudge = { var = qing_banner_decay  amount = -20 }
+	add_country_modifier = { name = qing_banner_reform_drill  duration = 1825 }
+}
+
+# ======================================================================
+# D  ANTI-CORRUPTION AUDIT / yanglian yin 養廉銀
+# Cut the corruption counter at a treasury cost.
+# ======================================================================
+QING_anticorruption_audit = {
+	LOG_line = { sys = QING  msg = "anti-corruption audit for [ROOT.GetTag]" }
+	add_treasury = -100
+	QING_DECLINE_nudge = { var = qing_corruption_level  amount = -25 }
+	add_tyranny = 3
+}
+
+# ======================================================================
+# G  SECT SUPPRESSION
+# Surveillance / crackdown on secret societies; cuts sect pressure but stirs
+# some short-term resentment.
+# ======================================================================
+QING_suppress_sects = {
+	LOG_line = { sys = QING  msg = "suppressed sects for [ROOT.GetTag]" }
+	add_treasury = -70
+	QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -25 }
+	add_country_modifier = { name = qing_sect_suppressed  duration = 1095 }
+}
+
+# ======================================================================
+# A  CURRENCY: SILVER REPATRIATION / OPIUM SUPPRESSION
+# Ease reserve stress at a diplomatic/stability cost (the Lin Zexu path).
+# ======================================================================
+QING_suppress_opium = {
+	LOG_line = { sys = QING  msg = "suppressed opium trade for [ROOT.GetTag]" }
+	QING_DECLINE_nudge = { var = qing_currency_stress  amount = -25 }
+	add_country_modifier = { name = qing_curr_reserve_restored  duration = 1095 }
+	# Antagonises the maritime powers: this is the road to the war that feeds 9b.
+	add_aggressive_expansion = 5
+	set_variable = { name = qing_opium_suppressed  days = 3650  value = 1 }
+}
+
+# ======================================================================
+# H  TRIBUTARY / CANTON SYSTEM
+# Toggle the Canton trade regime: open (commerce up) vs. closed (control up).
+# ======================================================================
+QING_canton_open_trade = {
+	LOG_line = { sys = QING  msg = "opened Canton trade for [ROOT.GetTag]" }
+	remove_country_modifier = qing_canton_closed
+	add_country_modifier = { name = qing_canton_trade_boom  duration = 3650 }
+	set_variable = { name = qing_canton_regime  value = flag:open }
+}
+
+QING_canton_close_trade = {
+	LOG_line = { sys = QING  msg = "closed Canton trade for [ROOT.GetTag]" }
+	remove_country_modifier = qing_canton_trade_boom
+	add_country_modifier = { name = qing_canton_closed  duration = 3650 }
+	set_variable = { name = qing_canton_regime  value = flag:closed }
+	# A closure raises silver-stress relief slightly (less outflow) but hurts trade.
+	QING_DECLINE_nudge = { var = qing_currency_stress  amount = -5 }
+}
+
+# ======================================================================
+# #8  SINICIZATION vs MANCHU IDENTITY  (character scope)
+# Per-character identity variable 0..100 (100 = staunch Manchu, 0 = fully
+# sinicized). Nudged event-driven; the modifier is refreshed on change.
+# Call inside a character scope.
+# ======================================================================
+QING_char_init_identity = {
+	# Manchu characters start staunch; Han-cultured courtiers start sinicized.
+	if = {
+		limit = { NOT = { has_variable = qing_manchu_identity } }
+		if = {
+			limit = { culture = root.primary_culture }
+			set_variable = { name = qing_manchu_identity  value = 80 }
+		}
+		else = {
+			set_variable = { name = qing_manchu_identity  value = 20 }
+		}
+	}
+}
+
+QING_char_shift_identity = {
+	# $amount$ signed. Positive = more staunchly Manchu, negative = sinicize.
+	QING_char_init_identity = yes
+	change_variable = { name = qing_manchu_identity  add = $amount$ }
+	if = { limit = { var:qing_manchu_identity > 100 } set_variable = { name = qing_manchu_identity  value = 100 } }
+	if = { limit = { var:qing_manchu_identity < 0 }   set_variable = { name = qing_manchu_identity  value = 0 } }
+	# Refresh the identity modifier to match the current band.
+	remove_character_modifier = qing_manchu_staunch
+	remove_character_modifier = qing_manchu_sinicized
+	if = {
+		limit = { var:qing_manchu_identity >= 66 }
+		add_character_modifier = { name = qing_manchu_staunch  duration = -1 }
+	}
+	else_if = {
+		limit = { var:qing_manchu_identity <= 33 }
+		add_character_modifier = { name = qing_manchu_sinicized  duration = -1 }
+	}
+	LOG_line = { sys = QING  msg = "char [this.GetName] manchu_identity=[this.MakeScope.GetVariable('qing_manchu_identity').GetValue|0]" }
+}
+
+
+# ======================================================================
+# STATECRAFT INVESTMENT (振興庶政) — the early build-out lever.
+# The Qing sits on the world's largest economy but a fiscally shallow, thinly-
+# administered state (Kangxi's frozen tax quota, ~20k officials for 350M+). This
+# action lets the player spend the treasury to thicken state capacity FAST and
+# from the 1815 start: it raises schools (the connective tissue of an educated
+# officialdom) and administration districts (civil-service throughput) across the
+# most populous city provinces at once. Distinct from Self-Strengthening, which
+# founds ONE named institution per mission task; this is a broad, repeatable sweep.
+#
+# add_building_level does not itself enforce a building's `allow`, so each target
+# is guarded here: the country must hold the enabling invention and the province
+# must be a city. Skipped provinces (no invention / no city) are surfaced via
+# LOG_fail so a no-op is never silent. Scope: country / ROOT = CHI.
+# ======================================================================
+QING_statecraft_invest = {
+	LOG_enter = { sys = QING  fn = "QING_statecraft_invest" }
+	set_variable = { name = qing_statecraft_built  value = 0 }
+
+	# SCHOOLS — the top populous city provinces gain a school, if education is known.
+	if = {
+		limit = { invention = tech_education }
+		ordered_owned_province = {
+			order_by = total_population
+			max = 3
+			limit = {
+				has_city_status = yes
+				total_population > 0
+			}
+			add_building_level = EDU_school
+			ROOT = { change_variable = { name = qing_statecraft_built  add = 1 } }
+			LOG_line = { sys = QING  msg = "statecraft: raised a school in [this.GetName] for [ROOT.GetTag]" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_statecraft_invest"  reason = "no schools built: tech_education not yet known" }
+	}
+
+	# ADMINISTRATION DISTRICTS — civil-service capacity in the top city provinces.
+	if = {
+		limit = { invention = tech_central_administration }
+		ordered_owned_province = {
+			order_by = total_population
+			max = 2
+			limit = {
+				has_city_status = yes
+				total_population > 0
+			}
+			add_building_level = URB_administration_district
+			ROOT = { change_variable = { name = qing_statecraft_built  add = 1 } }
+			LOG_line = { sys = QING  msg = "statecraft: raised an administration district in [this.GetName] for [ROOT.GetTag]" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_statecraft_invest"  reason = "no administration districts built: tech_central_administration not yet known" }
+	}
+
+	# A modest bureaucratic-capacity nudge for the effort itself (the generic clamped
+	# nudge; qing_bureau_capacity is the administrative-throughput meter), and surface
+	# a total no-op.
+	# Charge for delivery, not for the attempt: the treasury + influence are only
+	# spent if at least one building actually went up. This closes the residual
+	# no-op-but-charged edge (holding an enabling invention but no qualifying city
+	# province, or holding neither invention). A total no-op is surfaced.
+	if = {
+		limit = { var:qing_statecraft_built > 0 }
+		add_treasury = -120
+		add_political_influence = -10
+		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = 2 }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_statecraft_invest"  reason = "no buildings raised (no qualifying city province held either enabling invention); nothing charged" }
+	}
+	remove_variable = qing_statecraft_built
+	LOG_exit = { sys = QING  fn = "QING_statecraft_invest"  result = OK }
+}

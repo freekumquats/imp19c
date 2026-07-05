@@ -1,0 +1,361 @@
+########################################################################
+# se_QING_AFFINITY.txt — CHARACTER COMPATIBILITY with the throne.
+#
+# The Grand Council / great-office / examination events don't treat courtiers as
+# interchangeable counters: how a man gets on with the reigning emperor is scored
+# from the WHOLE Imperator character model, exactly as the engine itself weighs
+# characters (see the Characters wiki page):
+#
+#   • CHARISMA  — "the ability to charm and persuade others." A charismatic
+#     official is easier to deal with and rises smoothly; a graceless one grates.
+#   • ZEAL GAP  — zeal is the gift of inspiring faith. A wide gap in fervour
+#     between sovereign and servant (a zealot under a worldly throne, or a
+#     sceptic under a devout one) breeds friction; matched zeal binds.
+#   • CULTURE   — a Manchu-culture courtier shares the conquest elite's world with
+#     a Manchu throne; a Han official (or an alien one) stands at a remove. Match
+#     draws them together, mismatch apart (the 滿漢 fault line, given teeth).
+#   • RELIGION  — likewise a shared faith binds and a divergent one distances.
+#   • FRIEND / RIVAL — the engine's own secondary relations: a friend of the
+#     emperor is bound to him (+Loyalty in the base game), a rival set against him.
+#   • KINSHIP   — a close relative of the imperial house is bound by blood (and is
+#     the very stuff of the overmighty-kinsman danger).
+#   • AGE & HEALTH — an aged or ailing official is a fading asset; the old grow
+#     "increasingly susceptible to terminal illnesses," so their troubles — and
+#     their threat — may resolve themselves.
+#
+# QING_char_affinity  — call inside a courtier's character scope (this = courtier).
+#   Scores compatibility with root.current_ruler into qing_char_affinity (0..100,
+#   50 = neutral) and logs it. A pure read — no side effects on the character.
+# QING_char_bind      — call inside a courtier's scope AFTER QING_char_affinity.
+#   Turns the score into consequences: a highly compatible man is bound to the
+#   throne (loyalty + a friendship of the sovereign), an incompatible one is
+#   alienated (loyalty loss + a rivalry). This is what "makes characters more or
+#   less friendly" per the factors above.
+#
+# CHI-only, player-only suite. All logged to sys = QING.
+#   ROOT = the Qing country (CHI, player); root.current_ruler = the emperor.
+#
+# Prefix = QING_char_
+########################################################################
+
+# ======================================================================
+# SCORE — read every factor, store 0..100 in qing_char_affinity, log it.
+# ======================================================================
+QING_char_affinity = {
+	set_variable = { name = qing_char_affinity  value = 50 }
+
+	# --- CHARISMA: +1 per point of the courtier's charm above the average of 5.
+	change_variable = { name = qing_char_affinity  add = charisma }
+	change_variable = { name = qing_char_affinity  subtract = 5 }
+
+	# --- ZEAL MISMATCH: subtract the ABSOLUTE gap in zeal from throne to servant.
+	set_variable = { name = qing_aff_zeal_gap  value = zeal }
+	change_variable = { name = qing_aff_zeal_gap  subtract = root.current_ruler.zeal }
+	if = {
+		limit = { var:qing_aff_zeal_gap < 0 }
+		change_variable = { name = qing_aff_zeal_gap  multiply = -1 }
+	}
+	change_variable = { name = qing_char_affinity  subtract = var:qing_aff_zeal_gap }
+
+	# --- CULTURE match / mismatch (the 滿漢 dyarchy at the personal level)
+	if = {
+		limit = { culture = root.current_ruler.culture }
+		change_variable = { name = qing_char_affinity  add = 10 }
+	}
+	else = {
+		change_variable = { name = qing_char_affinity  subtract = 8 }
+	}
+
+	# --- RELIGION match / mismatch
+	if = {
+		limit = { religion = root.current_ruler.religion }
+		change_variable = { name = qing_char_affinity  add = 8 }
+	}
+	else = {
+		change_variable = { name = qing_char_affinity  subtract = 8 }
+	}
+
+	# --- FRIENDSHIP / RIVALRY with the sovereign (engine secondary relations)
+	if = {
+		limit = { is_friend = root.current_ruler }
+		change_variable = { name = qing_char_affinity  add = 15 }
+	}
+	if = {
+		limit = { is_rival = root.current_ruler }
+		change_variable = { name = qing_char_affinity  subtract = 20 }
+	}
+
+	# --- KINSHIP & FAMILY PRESTIGE: a close relative of the imperial house is
+	# bound by blood, and a member of the reigning family more so — the great
+	# families' standing (family prestige) is itself a courtier's stake in the
+	# dynasty. A scion of a prestigious house is invested in the throne.
+	if = {
+		limit = { is_close_relative = root.current_ruler }
+		change_variable = { name = qing_char_affinity  add = 8 }
+	}
+	if = {
+		limit = { from_ruler_family = yes }
+		change_variable = { name = qing_char_affinity  add = 8 }
+	}
+	# family prestige, banded (family.prestige is unbounded, so we don't add it raw)
+	if = {
+		limit = { family = { prestige >= 500 } }
+		change_variable = { name = qing_char_affinity  add = 6 }
+	}
+	else_if = {
+		limit = { family = { prestige >= 100 } }
+		change_variable = { name = qing_char_affinity  add = 3 }
+	}
+
+	# --- STATESMANSHIP: the governing skills (finesse the administrator's gift,
+	# martial the general's). A capable man serves the throne well and knows it —
+	# a modest confidence bonus above the average pair (10 = 5+5).
+	set_variable = { name = qing_aff_statecraft  value = finesse }
+	change_variable = { name = qing_aff_statecraft  add = martial }
+	change_variable = { name = qing_aff_statecraft  subtract = 10 }
+	change_variable = { name = qing_aff_statecraft  divide = 2 }
+	change_variable = { name = qing_char_affinity  add = var:qing_aff_statecraft }
+
+	# --- STANDING: popularity (how the people see him) and prominence (his fame)
+	# both raise a man's sense of his own worth to the state. Banded, not raw.
+	if = { limit = { popularity >= 40 }   change_variable = { name = qing_char_affinity  add = 5 } }
+	else_if = { limit = { popularity <= -20 } change_variable = { name = qing_char_affinity  subtract = 5 } }
+	if = { limit = { prominence >= 60 }   change_variable = { name = qing_char_affinity  add = 4 } }
+
+	# --- EXISTING LOYALTY feeds back: a man already loyal is congenial, a
+	# disloyal one estranged (loyalty is a 0..100 state-loyalty read).
+	if = { limit = { loyalty >= 65 }  change_variable = { name = qing_char_affinity  add = 6 } }
+	else_if = { limit = { loyalty < 40 }  change_variable = { name = qing_char_affinity  subtract = 8 } }
+
+	# --- VENALITY: a corrupt official is a self-server; an honest / just one a
+	# pillar. Corruption also drags in step with the realm's corruption level.
+	if = { limit = { has_trait = corrupt } change_variable = { name = qing_char_affinity  subtract = 8 } }
+	if = { limit = { OR = { has_trait = honest  has_trait = just } } change_variable = { name = qing_char_affinity  add = 5 } }
+	# corruption is ALSO a numeric character stat (0..100), distinct from the
+	# corrupt trait: the higher a man's own venality, the more he serves himself.
+	if = { limit = { corruption >= 40 } change_variable = { name = qing_char_affinity  subtract = 8 } }
+	else_if = { limit = { corruption >= 15 } change_variable = { name = qing_char_affinity  subtract = 4 } }
+	# a corrupt court makes even honest men warier of the throne — the realm's
+	# corruption level (the decline counter) drags every courtier's affinity.
+	if = {
+		limit = { ROOT = { has_variable = qing_corruption_level  var:qing_corruption_level >= 60 } }
+		change_variable = { name = qing_char_affinity  subtract = 5 }
+	}
+
+	# --- PERSONAL WEALTH & POWER BASE: the Heshen danger. A courtier rich in his
+	# own right and thick with loyal retainers (power_base — holdings + veterans,
+	# which the engine already docks 0.55 loyalty per unit) is powerful but LESS
+	# dependent on the throne's favour, and so a warier, more dangerous servant.
+	if = { limit = { wealth >= 300 }   change_variable = { name = qing_char_affinity  subtract = 5 } }
+	if = { limit = { power_base >= 15 } change_variable = { name = qing_char_affinity  subtract = 6 } }
+	else_if = { limit = { power_base >= 8 } change_variable = { name = qing_char_affinity  subtract = 3 } }
+
+	# --- AGE & HEALTH: an ailing or aged official is a fading (less reliable) asset
+	if = {
+		limit = { health < 0.35 }
+		change_variable = { name = qing_char_affinity  subtract = 10 }
+	}
+	if = {
+		limit = { age >= 70 }
+		change_variable = { name = qing_char_affinity  subtract = 6 }
+	}
+
+	# --- clamp 0..100
+	if = { limit = { var:qing_char_affinity > 100 } set_variable = { name = qing_char_affinity  value = 100 } }
+	if = { limit = { var:qing_char_affinity < 0 }   set_variable = { name = qing_char_affinity  value = 0 } }
+
+	LOG_line = { sys = QING  msg = "char affinity: [this.GetName] w/ throne = [this.MakeScope.GetVariable('qing_char_affinity').GetValue|0] (zeal gap [this.MakeScope.GetVariable('qing_aff_zeal_gap').GetValue|0]) for [ROOT.GetTag]" }
+}
+
+# ======================================================================
+# APPLY — turn the score into loyalty + a friendship or rivalry.
+# High affinity (>=70): the man is bound to the throne — loyalty and, at the top,
+# a personal friendship of the sovereign. Low affinity (<=30): he is alienated —
+# loyalty falls and, at the bottom, he becomes the emperor's rival. The mid band
+# leaves the relations untouched. Auto-scores first if not yet scored.
+# ======================================================================
+QING_char_bind = {
+	if = {
+		limit = { NOT = { has_variable = qing_char_affinity } }
+		QING_char_affinity = yes
+	}
+	if = {
+		limit = { var:qing_char_affinity >= 70 }
+		add_loyalty = loyalty_qing_congenial
+		# a genuinely congenial servant becomes a friend of the throne
+		if = {
+			limit = {
+				var:qing_char_affinity >= 85
+				NOT = { is_friend = root.current_ruler }
+				NOT = { is_rival = root.current_ruler }
+			}
+			add_friend = root.current_ruler
+			LOG_line = { sys = QING  msg = "char bind: [this.GetName] befriended the throne (affinity high) for [ROOT.GetTag]" }
+		}
+	}
+	else_if = {
+		limit = { var:qing_char_affinity <= 30 }
+		add_loyalty = loyalty_qing_estranged
+		# a deeply incompatible servant turns rival
+		if = {
+			limit = {
+				var:qing_char_affinity <= 15
+				NOT = { is_rival = root.current_ruler }
+				NOT = { is_friend = root.current_ruler }
+			}
+			add_rival = root.current_ruler
+			LOG_line = { sys = QING  msg = "char bind: [this.GetName] set against the throne (affinity low) for [ROOT.GetTag]" }
+		}
+	}
+	LOG_line = { sys = QING  msg = "char bind applied: [this.GetName] affinity=[this.MakeScope.GetVariable('qing_char_affinity').GetValue|0] for [ROOT.GetTag]" }
+}
+
+# ======================================================================
+# MUTATORS — events don't only READ these factors, they can CHANGE them. A man
+# can be sinicized, converted, cultivated into a more charismatic statesman, or
+# have his fervour kindled or cooled. Each is call-site-agnostic (this = the
+# character), logs the change, and re-scores affinity so the new state takes
+# effect immediately. This is the loop the user asked for: the events are shaped
+# by these factors AND reshape them.
+# ======================================================================
+
+# --- Assimilate a courtier to the imperial culture (漢化 / 滿化, per the throne's
+# own culture): the sinicization of a Manchu, or a Han official taken into the
+# banner establishment. Binds him closer to the conquest elite.
+QING_char_assimilate = {
+	set_culture = root.current_ruler.culture
+	LOG_line = { sys = QING  msg = "char mutate: [this.GetName] assimilated to [root.current_ruler.GetCulture.GetName] culture for [ROOT.GetTag]" }
+	QING_char_affinity = yes
+}
+
+# --- Convert a courtier to the imperial faith.
+QING_char_convert = {
+	set_character_religion = root.current_ruler.religion
+	LOG_line = { sys = QING  msg = "char mutate: [this.GetName] converted to [root.current_ruler.GetReligion.GetName] for [ROOT.GetTag]" }
+	QING_char_affinity = yes
+}
+
+# --- Cultivate a courtier's ability. $stat$ = charisma|zeal|martial|finesse,
+# $amount$ = signed points (accepts negatives — a disgrace or a wasting illness
+# can DIMINISH a man). Used by the mentorship / office-seasoning / scandal events.
+QING_char_cultivate = {
+	add_$stat$ = $amount$
+	LOG_line = { sys = QING  msg = "char mutate: [this.GetName] $stat$ += $amount$ for [ROOT.GetTag]" }
+	QING_char_affinity = yes
+}
+
+# --- Enrich or fine a courtier (personal wealth). $amount$ signed. A grant of
+# silver buys goodwill; a confiscation (negative) strips his private fortune —
+# the fiscal lever on the power-base danger.
+QING_char_endow = {
+	add_gold = $amount$
+	LOG_line = { sys = QING  msg = "char mutate: [this.GetName] wealth += $amount$ for [ROOT.GetTag]" }
+	QING_char_affinity = yes
+}
+
+# --- Advance or diminish a courtier's public standing. $pop$ / $prom$ signed
+# (popularity / prominence). Raising a man to the public eye or casting him down.
+QING_char_promote_standing = {
+	add_popularity = $pop$
+	add_prominence = $prom$
+	LOG_line = { sys = QING  msg = "char mutate: [this.GetName] popularity += $pop$, prominence += $prom$ for [ROOT.GetTag]" }
+	QING_char_affinity = yes
+}
+
+# --- Elevate the whole house — a grant of family prestige (爵位/世職 honours).
+# $amount$ signed; applied to the character's family scope.
+QING_char_honour_family = {
+	if = {
+		limit = { is_minor_character = no }
+		family = { add_prestige = $amount$ }
+		LOG_line = { sys = QING  msg = "char mutate: [this.GetName] family prestige += $amount$ for [ROOT.GetTag]" }
+	}
+	QING_char_affinity = yes
+}
+
+# --- Brand a courtier corrupt: adds the corrupt TRAIT (guarded) and drives up
+# the numeric corruption STAT — the sale-of-offices rot at the personal level.
+QING_char_taint = {
+	if = {
+		limit = { NOT = { has_trait = corrupt } }
+		add_trait = corrupt
+	}
+	add_corruption = 20
+	LOG_line = { sys = QING  msg = "char mutate: [this.GetName] tainted (corrupt +trait, corruption +20) for [ROOT.GetTag]" }
+	QING_char_affinity = yes
+}
+
+# --- Rehabilitate a reformed official: clears the corrupt trait (guarded) and
+# cuts the numeric corruption stat back.
+QING_char_cleanse = {
+	if = {
+		limit = { has_trait = corrupt }
+		remove_trait = corrupt
+	}
+	add_corruption = -20
+	LOG_line = { sys = QING  msg = "char mutate: [this.GetName] cleansed (corrupt -trait, corruption -20) for [ROOT.GetTag]" }
+	QING_char_affinity = yes
+}
+
+# --- Move the numeric corruption stat alone (no trait change). $amount$ signed.
+# For gradual venality creep or an audit's partial clean-up.
+QING_char_corruption = {
+	add_corruption = $amount$
+	LOG_line = { sys = QING  msg = "char mutate: [this.GetName] corruption += $amount$ for [ROOT.GetTag]" }
+	QING_char_affinity = yes
+}
+
+# ======================================================================
+# PAIRWISE FRICTION — TRANSIENT, never stored per-pair.
+# Two councillors' compatibility with EACH OTHER, computed on the fly at event
+# time from the same character factors and written to ONE country-scope scratch
+# variable (qing_pair_friction) that the calling event reads immediately and lets
+# fall out of use. We deliberately do NOT persist an affinity between every pair
+# of characters (that would be O(n^2) saved variables — the memory blow-up the
+# user warned against); the council-infighting events resolve the clash in the
+# moment and store nothing.
+#
+# Call at COUNTRY scope with two saved character scopes:
+#   QING_pair_friction = { a = scope:feud_a  b = scope:feud_b }
+# Result: var:qing_pair_friction (0..100; HIGH = they clash badly).
+# ======================================================================
+QING_pair_friction = {
+	set_variable = { name = qing_pair_friction  value = 20 }
+
+	# culture divide (the 滿漢 fault line between two ministers)
+	if = {
+		limit = { NOT = { $a$ = { culture = $b$.culture } } }
+		change_variable = { name = qing_pair_friction  add = 25 }
+	}
+	# faith divide
+	if = {
+		limit = { NOT = { $a$ = { religion = $b$.religion } } }
+		change_variable = { name = qing_pair_friction  add = 15 }
+	}
+	# a zeal gulf between them (fervent vs worldly)
+	set_variable = { name = qing_pair_zeal_gap  value = $a$.zeal }
+	change_variable = { name = qing_pair_zeal_gap  subtract = $b$.zeal }
+	if = { limit = { var:qing_pair_zeal_gap < 0 }  change_variable = { name = qing_pair_zeal_gap  multiply = -1 } }
+	change_variable = { name = qing_pair_friction  add = var:qing_pair_zeal_gap }
+	# two proud, prominent men rub worse (rivalry of the eminent)
+	if = {
+		limit = { $a$ = { prominence >= 50 }  $b$ = { prominence >= 50 } }
+		change_variable = { name = qing_pair_friction  add = 10 }
+	}
+	# venality breeds mutual distrust
+	if = {
+		limit = { OR = { $a$ = { has_trait = corrupt }  $b$ = { has_trait = corrupt } } }
+		change_variable = { name = qing_pair_friction  add = 8 }
+	}
+	# but kinship softens it
+	if = {
+		limit = { $a$ = { is_close_relative = $b$ } }
+		change_variable = { name = qing_pair_friction  subtract = 15 }
+	}
+
+	if = { limit = { var:qing_pair_friction > 100 } set_variable = { name = qing_pair_friction  value = 100 } }
+	if = { limit = { var:qing_pair_friction < 0 }   set_variable = { name = qing_pair_friction  value = 0 } }
+
+	LOG_line = { sys = QING  msg = "pair friction: [$a$.GetName] vs [$b$.GetName] = [ROOT.MakeScope.GetVariable('qing_pair_friction').GetValue|0] for [ROOT.GetTag]" }
+}
+

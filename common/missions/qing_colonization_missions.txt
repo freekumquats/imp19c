@@ -1,0 +1,1229 @@
+########################################################################
+# qing_colonization_missions.txt — the GREAT PACIFIC ENTERPRISE (大洋洲事業):
+# an anachronistic Qing overseas-colonization mission tree. CHI-only, player-only,
+# and gated so it opens ONLY to a genuinely powerful, self-strengthened dynasty —
+# a naval, industrial Qing that reaches north into Siberia, across to Russian
+# America (Alaska), and on to the Pacific coast of the New World, disrupting and
+# potentially supplanting Russia's own thin colonial effort.
+#
+# History that grounds the fantasy: the Qing and Romanov empires met on the Amur
+# in the 17th c. (Treaties of Nerchinsk 尼布楚條約 1689, Kyakhta 恰克圖條約 1727,
+# later Aigun 璦琿條約 1858). Russian America was governed by the tiny, chronically
+# under-supplied Russian-American Company from Novoarkhangelsk (Sitka); its
+# Pacific posts leaned on the Canton tea trade and on Californian grain (Fort
+# Ross, 1812-41) to survive. A Qing that had mastered steam and finance could, in
+# an alternate history, have contested all of it. That is the premise.
+#
+# The tree fans out: secure the Amur (the northern frontier) → project across the
+# Pacific to Alaska → contest the fur coast of Canada → plant a colony in
+# California → the capstone, a Qing dominion spanning the Pacific.
+#
+# Gating: potential requires tag CHI + is_ai=no + a strong base (self-strengthening
+# under way + a real treasury/fleet). Individual tasks gate on the fleet ability,
+# treasury, and ownership/claims. Rewards call add_building_level, add_claim,
+# FUNC_make_subject (sinosphere_tributary), CURRENCY_grant_country_wealth, and the
+# QING_* effects, all logged to sys = QING.
+#
+# NOTE (cosmetic): task icons reuse test1/2/3, header mission_image_test — see the
+# note in qing_selfstrengthening_missions.txt.
+########################################################################
+
+qing_colonization_mission = {
+	icon = test2
+	header = mission_image_test
+
+	repeatable = no
+
+	chance = { }
+	ai_chance = { factor = 0 }
+
+	potential = {
+		tag = CHI
+		is_ai = no
+		# opens only to a self-strengthening, capable Qing — not a struggling one
+		has_variable = qing_selfstr_progress
+		var:qing_selfstr_progress >= 40
+	}
+
+	abort = {
+		NOT = { tag = CHI }
+	}
+
+	on_start = {
+		LOG_line = { sys = QING  msg = "MISSION colonization (Pacific enterprise) started for [ROOT.GetTag]" }
+	}
+
+	on_completion = {
+		LOG_line = { sys = QING  msg = "MISSION colonization COMPLETED for [ROOT.GetTag]" }
+	}
+
+	# ==================================================================
+	# ROOT — the Maritime Bureau: resolve to look outward across the ocean.
+	# ==================================================================
+	qing_col_bureau = {
+		icon = test1
+		allow = {
+			treasury >= 100
+			custom_tooltip = {
+				text = qing_col_needs_fleet_tt
+				OR = {
+					has_country_modifier = qing_selfstr_beiyang_fleet
+					has_country_modifier = qing_selfstr_nanyang_fleet
+					has_country_modifier = qing_selfstr_fuzhou_yard
+				}
+			}
+		}
+		on_start = {
+			add_treasury = -100
+			LOG_line = { sys = QING  msg = "MISSION task START maritime bureau (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_bureau_tt
+			add_country_modifier = { name = qing_col_maritime_bureau  duration = -1 }
+			LOG_line = { sys = QING  msg = "MISSION task maritime bureau for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# TAIWAN — make the island prefecture a true maritime province (臺灣).
+	# History: Taiwan was a prefecture of Fujian from 1684 and became its own
+	# province only in 1885 under Liu Mingchuan (劉銘傳), who built its first
+	# railway and telegraph. Here the Qing develops it early as the springboard
+	# of the whole Pacific enterprise.
+	# ==================================================================
+	qing_col_taiwan = {
+		icon = test3
+		requires = { qing_col_bureau }
+		allow = {
+			treasury >= 90
+			custom_tooltip = {
+				text = qing_col_needs_taiwan_tt
+				OR = { owns = 6799  owns = 6781 }
+			}
+		}
+		on_start = {
+			add_treasury = -90
+			LOG_line = { sys = QING  msg = "MISSION task START Taiwan (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_taiwan_tt
+			# Liu Mingchuan's modernisation: a port, commerce, and rail on Taibei
+			if = {
+				limit = { owns = 6799 }
+				p:6799 = {
+					set_city_status = city
+					add_building_level = port_building
+					add_building_level = URB_commerce_district
+				}
+			}
+			else_if = {
+				limit = { owns = 6781 }
+				p:6781 = {
+					set_city_status = city
+					add_building_level = port_building
+				}
+			}
+			# claim the Pescadores (Penghu) if not held — the strait's key
+			if = { limit = { exists = p:10423  NOT = { owns = 10423 } }  add_claim = p:10423 }
+			# make the developed ports a settlement magnet: mainland surplus crosses the
+			# strait of its own accord via the migration pulse. See se_QING_COLON.txt.
+			QING_COLON_frontier_pull = { province = 6799 }
+			QING_COLON_frontier_pull = { province = 6781 }
+			add_country_modifier = { name = qing_col_taiwan_province  duration = -1 }
+			LOG_line = { sys = QING  msg = "MISSION task Taiwan for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# THE AMUR — secure the northern frontier the Romanovs contest (黑龍江).
+	# ==================================================================
+	qing_col_amur = {
+		icon = test2
+		requires = { qing_col_bureau }
+		allow = {
+			treasury >= 120
+		}
+		on_start = {
+			add_treasury = -120
+			LOG_line = { sys = QING  msg = "MISSION task START Amur (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_amur_tt
+			# fortify the Amur — a claim on the disputed Okhotsk coast
+			if = { limit = { owns = 6170 }  p:6170 = { add_building_level = fortress_building } }
+			if = {
+				limit = { exists = p:11553  NOT = { owns = 11553 } }
+				add_claim = p:11553
+				# and press the claim as a first-class diplomatic play vs the Tsar (#53):
+				# the contested Okhotsk coast becomes a live Great-Game crisis, not just
+				# a claim. Same province the claim covers, so goal + claim are one aim.
+				QING_gp_frontier_play = { tag = RUS  province = 11553  goal = flag:get_territory }
+			}
+			# and draw settlers to the garrison (闖關東): the frontier peoples itself
+			# via the migration pulse. See se_QING_COLON.txt.
+			QING_COLON_frontier_pull = { province = 6170 }
+			add_country_modifier = { name = qing_col_amur_frontier  duration = -1 }
+			QING_DECLINE_nudge = { var = qing_banner_decay  amount = -5 }
+			# fortifying the contested river alarms the Tsar (Nerchinsk/Aigun frontier)
+			QING_gp_provoke_russia = { severity = 8 }
+			LOG_line = { sys = QING  msg = "MISSION task Amur for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# CENTRAL ASIA — the New Dominion and the road west (新疆 → 中亞).
+	# History: the Qing conquered the Zunghar basin in the 1750s and named it
+	# Xinjiang ("New Dominion"). Through the 19th c. Russia pushed into the Kazakh
+	# steppe and the Khanates (Kokand 浩罕, Bukhara, Khiva); the Ili Crisis
+	# (伊犁危機) and Yaqub Beg's revolt nearly cost the Qing the whole region,
+	# recovered by Zuo Zongtang (左宗棠) in 1877 and made a province in 1884. Here
+	# the Qing pushes the OTHER way — consolidating Xinjiang and contesting the
+	# steppe and the oasis khanates against the advancing Tsar (the true Great
+	# Game). This branch runs off the Amur/northern frontier resolve.
+	# ==================================================================
+	qing_col_xinjiang = {
+		icon = test3
+		requires = { qing_col_bureau }
+		allow = {
+			treasury >= 110
+			custom_tooltip = {
+				text = qing_col_needs_xinjiang_tt
+				OR = { owns = 2930  owns = 2977  owns = 9597 }
+			}
+		}
+		on_start = {
+			add_treasury = -110
+			LOG_line = { sys = QING  msg = "MISSION task START Xinjiang (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_xinjiang_tt
+			# Zuo Zongtang's consolidation: fortify and settle the New Dominion
+			if = {
+				limit = { owns = 2930 }
+				p:2930 = {
+					set_city_status = city
+					add_building_level = fortress_building
+				}
+			}
+			# military-agricultural colonies (屯田): the state makes the oases
+			# attractive; the empire's surplus migrates there of its own accord via
+			# the migration pulse, and a Han plurality then seeds a claim organically.
+			# Replaces the old create_state_pop fiat. See se_QING_COLON.txt.
+			QING_COLON_frontier_pull = { province = 2930 }
+			QING_COLON_frontier_pull = { province = 2977 }
+			add_country_modifier = { name = qing_col_xinjiang_province  duration = -1 }
+			QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 4 }
+			# a firmer grip on the New Dominion presses on Russia's Ili sphere
+			QING_gp_provoke_russia = { severity = 6 }
+			LOG_line = { sys = QING  msg = "MISSION task Xinjiang for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- the Kazakh steppe + the oasis khanates (contest Russia's advance) ---
+	qing_col_central_asia = {
+		icon = test3
+		requires = { qing_col_xinjiang }
+		allow = {
+			treasury >= 170
+			custom_tooltip = {
+				text = qing_col_needs_strong_army_tt
+				OR = {
+					has_country_modifier = qing_selfstr_ever_victorious
+					has_country_modifier = qing_col_xinjiang_province
+				}
+			}
+		}
+		on_start = {
+			add_treasury = -170
+			LOG_line = { sys = QING  msg = "MISSION task START Central Asia (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_central_asia_tt
+			# claim the great Silk Road cities and the steppe before the Tsar takes them
+			if = { limit = { exists = p:8238  NOT = { owns = 8238 } }  add_claim = p:8238 }  # Alma-Ata
+			if = { limit = { exists = p:7038  NOT = { owns = 7038 } }  add_claim = p:7038 }  # Bishkek
+			if = {
+				limit = { exists = p:9370  NOT = { owns = 9370 } }
+				add_claim = p:9370  # Tashkent
+				# racing the Tsar to the great Silk Road city, pressed as a diplomatic play (#53)
+				QING_gp_frontier_play = { tag = RUS  province = 9370  goal = flag:get_territory }
+			}
+			if = { limit = { exists = p:110   NOT = { owns = 110 } }   add_claim = p:110 }   # Kokand
+			# offer the oasis khanates tributary status under the Son of Heaven
+			if = {
+				limit = { exists = c:BUK  NOT = { c:BUK = { is_subject_of = ROOT } } }
+				FUNC_make_subject = { overlord = ROOT  target = c:BUK  type = sinosphere_tributary }
+			}
+			add_country_modifier = { name = qing_col_silk_road  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 70 }
+			# racing Russia to the khanates is the sharpest provocation of the Great Game
+			QING_gp_provoke_russia = { severity = 14 }
+			LOG_line = { sys = QING  msg = "MISSION task Central Asia for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# ALASKA — cross the ocean to Russian America (Novoarkhangelsk/Sitka).
+	# The Russian-American Company is weak and half-starved; contest it.
+	# ==================================================================
+	qing_col_alaska = {
+		icon = test2
+		requires = { qing_col_amur }
+		allow = {
+			treasury >= 200
+			custom_tooltip = {
+				text = qing_col_needs_strong_fleet_tt
+				has_country_modifier = qing_selfstr_beiyang_fleet
+			}
+		}
+		on_start = {
+			add_treasury = -200
+			LOG_line = { sys = QING  msg = "MISSION task START Alaska (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_alaska_tt
+			# lay claim to the great fur coast; if Russian America exists, press it
+			if = {
+				limit = { exists = p:9429  NOT = { owns = 9429 } }
+				add_claim = p:9429
+				# seizing Novoarkhangelsk (Sitka) itself, pressed as a diplomatic play (#53):
+				# the direct contest for Russian America becomes a formal Great-Game crisis
+				QING_gp_frontier_play = { tag = RUS  province = 9429  goal = flag:get_territory }
+			}
+			if = { limit = { exists = p:12498  NOT = { owns = 12498 } }  add_claim = p:12498 }
+			if = { limit = { exists = p:2477  NOT = { owns = 2477 } }  add_claim = p:2477 }
+			add_country_modifier = { name = qing_col_fur_coast  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 80 }
+			# seizing Russian America directly supplants the Tsar's colonial effort
+			QING_gp_provoke_russia = { severity = 16 }
+			LOG_line = { sys = QING  msg = "MISSION task Alaska for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# CANADA — the Pacific-Northwest fur coast (the Columbia / Nootka trade).
+	# ==================================================================
+	qing_col_canada = {
+		icon = test2
+		requires = { qing_col_alaska }
+		allow = {
+			treasury >= 160
+		}
+		on_start = {
+			add_treasury = -160
+			LOG_line = { sys = QING  msg = "MISSION task START Canada coast (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_canada_tt
+			add_country_modifier = { name = qing_col_pacific_trade  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 60 }
+			# the Northwest coast is contested by BOTH the Hudson's Bay Company (Britain,
+			# the Oregon dispute) AND the Russian-American Company — friction with each,
+			# UNLESS the Daoguang Doctrine has aligned the Qing with the American republic.
+			if = {
+				limit = { NOT = { has_country_modifier = qing_daoguang_doctrine } }
+				QING_gp_provoke_britain = { severity = 10 }
+			}
+			QING_gp_provoke_russia = { severity = 6 }
+			LOG_line = { sys = QING  msg = "MISSION task Canada coast for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# CALIFORNIA — plant a Chinese colony on the golden shore (金山).
+	# History: Fort Ross fed Russian Alaska; Chinese labour later built the
+	# American West. Here the Qing settles San Francisco Bay itself.
+	# ==================================================================
+	qing_col_california = {
+		icon = test3
+		requires = { qing_col_alaska }
+		allow = {
+			treasury >= 180
+		}
+		on_start = {
+			add_treasury = -180
+			LOG_line = { sys = QING  msg = "MISSION task START California (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_california_tt
+			if = { limit = { exists = p:1493  NOT = { owns = 1493 } }  add_claim = p:1493 }
+			add_country_modifier = { name = qing_col_golden_shore  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 100 }
+			# a colony on the Pacific coast of the New World crosses the young American
+			# republic's own westward path — friction with the United States, UNLESS the
+			# Daoguang Doctrine has made the two expanding powers partners rather than rivals.
+			if = {
+				limit = {
+					exists = c:USA
+					NOT = { has_country_modifier = qing_daoguang_doctrine }
+				}
+				c:USA = { add_opinion = { modifier = qing_gp_rivalry_opinion  target = ROOT } }
+				LOG_line = { sys = QING  msg = "MISSION task California antagonised USA for [ROOT.GetTag]" }
+			}
+			LOG_line = { sys = QING  msg = "MISSION task California for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# THE PACIFIC ISLANDS — the sea road between the two shores (太平洋群島).
+	# Ryukyu (琉球, a Qing tributary until Japan annexed it in 1879), the
+	# Marianas/Guam, the Philippines (呂宋), and on to Hawaii (檀香山, "Sandalwood
+	# Mountains" to the Chinese who traded there) — the island chain that links
+	# the China coast to the New World.
+	# ==================================================================
+	qing_col_pacific_isles = {
+		icon = test2
+		requires = { qing_col_taiwan }
+		allow = {
+			treasury >= 140
+			custom_tooltip = {
+				text = qing_col_needs_strong_fleet_tt
+				OR = {
+					has_country_modifier = qing_selfstr_beiyang_fleet
+					has_country_modifier = qing_selfstr_nanyang_fleet
+				}
+			}
+		}
+		on_start = {
+			add_treasury = -140
+			LOG_line = { sys = QING  msg = "MISSION task START Pacific isles (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_pacific_isles_tt
+			# reassert suzerainty over Ryukyu; claim the island stepping-stones
+			if = { limit = { exists = p:524   NOT = { owns = 524 } }  add_claim = p:524 }
+			if = { limit = { exists = p:2901  NOT = { owns = 2901 } }  add_claim = p:2901 }
+			if = { limit = { exists = p:7994  NOT = { owns = 7994 } }  add_claim = p:7994 }
+			if = { limit = { exists = p:6151  NOT = { owns = 6151 } }  add_claim = p:6151 }
+			add_country_modifier = { name = qing_col_island_road  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 50 }
+			LOG_line = { sys = QING  msg = "MISSION task Pacific isles for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# THE DAOGUANG DOCTRINE — align with the rising American republic (道光主義).
+	# A Pacific-basin answer to the Monroe Doctrine (1823): the two rising
+	# non-European powers — the Great Qing and the young United States — declare
+	# the Pacific and the Americas closed to further European aggrandisement, and
+	# stand together against Britain, France and Russia. History that grounds it:
+	# the Treaty of Wanghia (望廈條約, 1844) gave the US most-favoured-nation terms
+	# and was negotiated more amicably than the British treaties; American traders
+	# at Canton (the "Old China Trade") and the sandalwood/fur men of the Pacific
+	# had long been rivals of, not partners with, the British. Here the player can
+	# make that rivalry a formal entente. Taking the Doctrine turns the American
+	# republic from a rival on the Pacific coast into a partner, and cools the
+	# European friction the enterprise stirs up — the diplomatic alternative to
+	# playing every power at once.
+	# ==================================================================
+	qing_col_daoguang_doctrine = {
+		icon = test1
+		requires = { qing_col_bureau }
+		allow = {
+			custom_tooltip = {
+				text = qing_col_needs_usa_tt
+				exists = c:USA
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_col_daoguang_doctrine_tt
+			add_country_modifier = { name = qing_daoguang_doctrine  duration = -1 }
+			# the entente with the American republic — goodwill, and a shared front
+			if = {
+				limit = { exists = c:USA }
+				c:USA = { add_opinion = { modifier = qing_gp_accommodation_opinion  target = ROOT } }
+				ROOT = { add_opinion = { modifier = qing_gp_accommodation_opinion  target = c:USA } }
+			}
+			# standing with a fellow rising power steadies the reform cause at home
+			add_stability = 1
+			if = {
+				limit = { has_variable = qing_selfstr_progress }
+				QING_selfstr_advance = { amount = 5 }
+			}
+			LOG_line = { sys = QING  msg = "MISSION task Daoguang Doctrine (US entente) for [ROOT.GetTag]" }
+		}
+	}
+
+	# ##################################################################
+	# THE PROTECTORATES-GENERAL (都護府) — revive the Tang institution of
+	# indirect frontier rule (羈縻, "loose rein"). Where the dynasty holds enough
+	# territory in a frontier region, it may erect a Protectorate there: that
+	# territory is spun off as a NEW COUNTRY and bound at once as a
+	# sinosphere_tributary — an autonomous march that pays tribute and shelters
+	# under Qing protection rather than being ruled directly from Beijing. Each
+	# task builds the province list for its region and calls
+	# QING_establish_protectorate (se_QING_PROTECTORATE.txt).
+	#
+	# History: the Tang governed its marches through Protectors-General (都護)
+	# over 安北/安東/安西/安南 — the Pacified North, East, West and South. Two
+	# invented marches, 安海 (Pacified Seas) and 安新 (Pacified New World), extend
+	# the scheme to the oceans and the Americas; and the Lanfang kongsi (蘭芳公司)
+	# of western Borneo — whose tributary overtures the historical Qing rejected —
+	# is here taken under protection. Sources: Beckwith, Empires of the Silk Road
+	# (2009); Skaff, Sui-Tang China and its Turko-Mongol Neighbors (2012); on
+	# Lanfang, Heidhues, Golddiggers, Farmers, and Traders (2003).
+	# ##################################################################
+
+	# --- 安北 ĀNBĚI, Pacified North — the Mongol steppe (都護府) ---------
+	qing_col_anbei = {
+		icon = test2
+		requires = { qing_col_amur }
+		allow = {
+			political_influence >= 30
+			custom_tooltip = {
+				text = qing_col_needs_north_land_tt
+				any_owned_province = { count >= 3  is_in_region = Mongolia }
+			}
+		}
+		on_start = {
+			add_political_influence = -30
+			LOG_line = { sys = QING  msg = "MISSION task START Anbei protectorate for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_anbei_tt
+			every_owned_province = {
+				limit = { is_in_region = Mongolia  is_capital = no }
+				add_to_list = qing_protectorate_list
+			}
+			QING_establish_protectorate = {
+				list = qing_protectorate_list
+				name_key = qing_protectorate_anbei_name
+				adj_key = qing_protectorate_anbei_adj
+				government = viceroyalty
+				log_tag = ANBEI
+			}
+			add_country_modifier = { name = qing_col_protectorate_north  duration = -1 }
+			current_ruler = { add_prestige = 20 }
+			LOG_line = { sys = QING  msg = "MISSION task Anbei protectorate for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 安東 ĀNDŌNG, Pacified East — Manchuria & Korea (都護府) ---------
+	qing_col_andong = {
+		icon = test2
+		requires = { qing_col_amur }
+		allow = {
+			political_influence >= 30
+			custom_tooltip = {
+				text = qing_col_needs_east_land_tt
+				any_owned_province = {
+					count >= 3
+					OR = { is_in_region = Liaoning  is_in_region = Korea }
+				}
+			}
+		}
+		on_start = {
+			add_political_influence = -30
+			LOG_line = { sys = QING  msg = "MISSION task START Andong protectorate for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_andong_tt
+			every_owned_province = {
+				limit = {
+					is_capital = no
+					OR = { is_in_region = Liaoning  is_in_region = Korea }
+				}
+				add_to_list = qing_protectorate_list
+			}
+			QING_establish_protectorate = {
+				list = qing_protectorate_list
+				name_key = qing_protectorate_andong_name
+				adj_key = qing_protectorate_andong_adj
+				government = viceroyalty
+				log_tag = ANDONG
+			}
+			add_country_modifier = { name = qing_col_protectorate_east  duration = -1 }
+			current_ruler = { add_prestige = 20 }
+			LOG_line = { sys = QING  msg = "MISSION task Andong protectorate for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 安西 ĀNXĪ, Pacified West — the Tarim oases / Turkestan (都護府) --
+	qing_col_anxi = {
+		icon = test3
+		requires = { qing_col_xinjiang }
+		allow = {
+			political_influence >= 30
+			custom_tooltip = {
+				text = qing_col_needs_west_land_tt
+				any_owned_province = { count >= 3  is_in_region = Turkestan }
+			}
+		}
+		on_start = {
+			add_political_influence = -30
+			LOG_line = { sys = QING  msg = "MISSION task START Anxi protectorate for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_anxi_tt
+			every_owned_province = {
+				limit = { is_in_region = Turkestan  is_capital = no }
+				add_to_list = qing_protectorate_list
+			}
+			QING_establish_protectorate = {
+				list = qing_protectorate_list
+				name_key = qing_protectorate_anxi_name
+				adj_key = qing_protectorate_anxi_adj
+				government = viceroyalty
+				log_tag = ANXI
+			}
+			add_country_modifier = { name = qing_col_protectorate_west  duration = -1 }
+			# an autonomous oasis march eases the strain of direct alien rule
+			QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -5 }
+			current_ruler = { add_prestige = 20 }
+			LOG_line = { sys = QING  msg = "MISSION task Anxi protectorate for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 安南 ĀNNÁN, Pacified South — northern Vietnam (都護府) ----------
+	qing_col_annan = {
+		icon = test3
+		requires = { qing_col_bureau }
+		allow = {
+			political_influence >= 30
+			custom_tooltip = {
+				text = qing_col_needs_south_land_tt
+				any_owned_province = { count >= 3  is_in_region = Vietnam }
+			}
+		}
+		on_start = {
+			add_political_influence = -30
+			LOG_line = { sys = QING  msg = "MISSION task START Annan protectorate for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_annan_tt
+			every_owned_province = {
+				limit = { is_in_region = Vietnam  is_capital = no }
+				add_to_list = qing_protectorate_list
+			}
+			QING_establish_protectorate = {
+				list = qing_protectorate_list
+				name_key = qing_protectorate_annan_name
+				adj_key = qing_protectorate_annan_adj
+				government = viceroyalty
+				log_tag = ANNAN
+			}
+			add_country_modifier = { name = qing_col_protectorate_south  duration = -1 }
+			QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -4 }
+			current_ruler = { add_prestige = 20 }
+			LOG_line = { sys = QING  msg = "MISSION task Annan protectorate for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 安海 ĀNHǍI, Pacified Seas — the invented Pacific-island march ---
+	# The oceanic protectorate: the scattered island holdings of the enterprise
+	# (the Ryukyus, Marianas, Philippines, Hawaii and the microstates between)
+	# gathered under a single maritime march.
+	qing_col_anhai = {
+		icon = test2
+		requires = { qing_col_pacific_isles }
+		allow = {
+			political_influence >= 30
+			custom_tooltip = {
+				text = qing_col_needs_isles_land_tt
+				any_owned_province = {
+					count >= 3
+					OR = {
+						is_in_region = Okinawa
+						is_in_region = Luzon
+						is_in_region = Visayas
+						is_in_region = Mindanao
+						is_in_region = Mariana_Islands
+						is_in_region = Guam
+						is_in_region = Hawaii
+						is_in_region = Palau
+						is_in_region = Caroline_Islands
+					}
+				}
+			}
+		}
+		on_start = {
+			add_political_influence = -30
+			LOG_line = { sys = QING  msg = "MISSION task START Anhai protectorate for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_anhai_tt
+			every_owned_province = {
+				limit = {
+					is_capital = no
+					OR = {
+						is_in_region = Okinawa
+						is_in_region = Luzon
+						is_in_region = Visayas
+						is_in_region = Mindanao
+						is_in_region = Mariana_Islands
+						is_in_region = Guam
+						is_in_region = Hawaii
+						is_in_region = Palau
+						is_in_region = Caroline_Islands
+					}
+				}
+				add_to_list = qing_protectorate_list
+			}
+			QING_establish_protectorate = {
+				list = qing_protectorate_list
+				name_key = qing_protectorate_anhai_name
+				adj_key = qing_protectorate_anhai_adj
+				government = viceroyalty
+				log_tag = ANHAI
+			}
+			add_country_modifier = { name = qing_col_protectorate_seas  duration = -1 }
+			current_ruler = { add_prestige = 25 }
+			LOG_line = { sys = QING  msg = "MISSION task Anhai protectorate for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 安新 ĀNXĪN, Pacified New World — the invented N.-American march -
+	# The New-World protectorate: the Qing's Pacific-coast conquests in the
+	# Americas — the fur coast, the golden shore — erected into a single
+	# transpacific march.
+	qing_col_anxin = {
+		icon = test2
+		requires = { qing_col_california }
+		allow = {
+			political_influence >= 30
+			custom_tooltip = {
+				text = qing_col_needs_newworld_land_tt
+				any_owned_province = {
+					count >= 3
+					OR = {
+						is_in_region = Alaska
+						is_in_region = British_Columbia
+						is_in_region = Vancouver_Island
+						is_in_region = Cascadia
+						is_in_region = California
+					}
+				}
+			}
+		}
+		on_start = {
+			add_political_influence = -30
+			LOG_line = { sys = QING  msg = "MISSION task START Anxin protectorate for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_anxin_tt
+			every_owned_province = {
+				limit = {
+					is_capital = no
+					OR = {
+						is_in_region = Alaska
+						is_in_region = British_Columbia
+						is_in_region = Vancouver_Island
+						is_in_region = Cascadia
+						is_in_region = California
+					}
+				}
+				add_to_list = qing_protectorate_list
+			}
+			QING_establish_protectorate = {
+				list = qing_protectorate_list
+				name_key = qing_protectorate_anxin_name
+				adj_key = qing_protectorate_anxin_adj
+				government = viceroyalty
+				log_tag = ANXIN
+			}
+			add_country_modifier = { name = qing_col_protectorate_newworld  duration = -1 }
+			current_ruler = { add_prestige = 25 }
+			LOG_line = { sys = QING  msg = "MISSION task Anxin protectorate for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 蘭芳 LÁNFĀNG — recognise the Borneo kongsi republic (蘭芳公司) ---
+	# Not a march of conquest: the Lanfang kongsi of western Borneo (founded 1777
+	# by Luo Fangbo 羅芳伯) was a self-governing overseas-Chinese mining federation
+	# whose tributary overtures the historical Qing court spurned. Here the dynasty
+	# accepts them — extending its protection over the Nanyang Chinese. The task
+	# releases the Borneo holdings as the kongsi and binds it as a tributary.
+	qing_col_lanfang = {
+		icon = test3
+		requires = { qing_col_pacific_isles }
+		allow = {
+			political_influence >= 25
+			custom_tooltip = {
+				text = qing_col_needs_borneo_tt
+				any_owned_province = { count >= 2  is_in_region = Borneo }
+			}
+		}
+		on_start = {
+			add_political_influence = -25
+			LOG_line = { sys = QING  msg = "MISSION task START Lanfang republic for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_lanfang_tt
+			every_owned_province = {
+				limit = { is_in_region = Borneo  is_capital = no }
+				add_to_list = qing_protectorate_list
+			}
+			# the kongsi was a republic, not a viceroyalty — an oligarchy of miners
+			QING_establish_protectorate = {
+				list = qing_protectorate_list
+				name_key = qing_protectorate_lanfang_name
+				adj_key = qing_protectorate_lanfang_adj
+				government = oligarchic_republic
+				log_tag = LANFANG
+			}
+			add_country_modifier = { name = qing_col_protectorate_lanfang  duration = -1 }
+			current_ruler = { add_prestige = 20 }
+			LOG_line = { sys = QING  msg = "MISSION task Lanfang republic for [ROOT.GetTag]" }
+		}
+	}
+
+	# ##################################################################
+	# THE TREASURE VOYAGES REBORN (鄭和下西洋復興) — the SCRAMBLE FOR AFRICA.
+	# A second, southern enterprise to mirror the Pacific one. Where the Pacific
+	# arc looks east across the ocean the Ming treasure fleets never crossed, this
+	# arc looks WEST across the ocean they DID — reviving the seven voyages of the
+	# eunuch-admiral Zheng He (鄭和, 1371-1433), whose great fleets under the Yongle
+	# and Xuande emperors reached the Swahili coast of East Africa (Malindi, Mombasa,
+	# Kilwa) between 1405 and 1433, and bore a live giraffe back to the Ming court as
+	# a tribute-qilin. The historical dynasty then burned the shipyards and turned
+	# inward; here a self-strengthened Qing does the opposite — it sails again, and
+	# arrives in Africa in the very decades the European powers are carving it up.
+	#
+	# The arc is deliberately a contest with BRITAIN and FRANCE (the paramount
+	# powers of the 19th-c. Scramble), not Russia — so each task routes through
+	# QING_gp_provoke_britain / _france, which by the 以夷制夷 logic DELIGHTS Russia
+	# (Britain's and France's rival) rather than provoking her. NOTE (deliberate): the
+	# Daoguang Doctrine (qing_daoguang_doctrine) is a PACIFIC-BASIN entente closing
+	# the Americas and the Pacific — it does NOT extend to Africa or the Indian Ocean,
+	# so unlike the Canada/California tasks these do NOT check for it: the European
+	# friction of the Scramble stands regardless of the American entente.
+	#
+	# Sources: Dreyer, Zheng He: China and the Oceans in the Early Ming (2007);
+	# Wade, "The Zheng He Voyages: A Reassessment" (2005); Pakenham, The Scramble for
+	# Africa (1991).
+	# ##################################################################
+
+	# --- 鄭和下西洋 — revive the treasure voyages, land on the Swahili coast ---
+	qing_col_zheng_he = {
+		icon = test2
+		requires = { qing_col_bureau }
+		allow = {
+			treasury >= 150
+			custom_tooltip = {
+				text = qing_col_needs_strong_fleet_tt
+				OR = {
+					has_country_modifier = qing_selfstr_beiyang_fleet
+					has_country_modifier = qing_selfstr_nanyang_fleet
+				}
+			}
+		}
+		on_start = {
+			add_treasury = -150
+			LOG_line = { sys = QING  msg = "MISSION task START Zheng He treasure voyages (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_zheng_he_tt
+			# the Swahili coast the Ming fleets actually reached — Zanzibar and Kilwa
+			if = { limit = { exists = p:1489  NOT = { owns = 1489 } }  add_claim = p:1489 }  # Zanzibar (Kiunguja)
+			if = { limit = { exists = p:1715  NOT = { owns = 1715 } }  add_claim = p:1715 }  # Kilwa (Mohoro)
+			# a treaty-port foothold draws the overseas Chinese of the Nanyang onward down
+			# the monsoon route, of their own accord, via the migration pulse.
+			if = { limit = { owns = 1489 }  QING_COLON_frontier_pull = { province = 1489 } }
+			add_country_modifier = { name = qing_col_treasure_fleet  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 70 }
+			current_ruler = { add_prestige = 25 }
+			# a Chinese squadron in the western Indian Ocean crosses the Royal Navy's lake
+			QING_gp_provoke_britain = { severity = 8 }
+			LOG_line = { sys = QING  msg = "MISSION task Zheng He treasure voyages for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 好望角 — the Cape of Good Hope, the sea-lane's southern hinge ---------
+	# History: the Cape was Dutch (VOC, 1652), then British from 1806 — the pivot of
+	# every route between the Atlantic and the Indian Ocean. A Qing that would hold
+	# the southern sea must contest it with the Royal Navy that took it from the Dutch.
+	qing_col_cape = {
+		icon = test2
+		requires = { qing_col_zheng_he }
+		allow = {
+			treasury >= 170
+		}
+		on_start = {
+			add_treasury = -170
+			LOG_line = { sys = QING  msg = "MISSION task START Cape of Good Hope (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_cape_tt
+			if = {
+				limit = { exists = p:132  NOT = { owns = 132 } }
+				add_claim = p:132  # Clanwilliam, the Western Cape
+				# wresting the Cape from the Royal Navy is pressed as a diplomatic play (#53)
+				QING_gp_frontier_play = { tag = GBR  province = 132  goal = flag:get_territory }
+			}
+			add_country_modifier = { name = qing_col_cape_route  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 80 }
+			# seizing the hinge of the southern sea-lanes is a sharp affront to Britain
+			QING_gp_provoke_britain = { severity = 12 }
+			LOG_line = { sys = QING  msg = "MISSION task Cape of Good Hope for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 蘇伊士 — the Suez passage / Red Sea gate, the short road home ---------
+	# History: the Suez Canal opened in 1869; Egypt's finances fell under an
+	# Anglo-French condominium, and Britain occupied Egypt outright in 1882. The
+	# short route between the oceans is contested by BOTH powers at once.
+	qing_col_suez = {
+		icon = test3
+		requires = { qing_col_zheng_he }
+		allow = {
+			treasury >= 160
+		}
+		on_start = {
+			add_treasury = -160
+			LOG_line = { sys = QING  msg = "MISSION task START Suez passage (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_suez_tt
+			if = {
+				limit = { exists = p:413  NOT = { owns = 413 } }
+				add_claim = p:413  # Suez
+				QING_gp_frontier_play = { tag = GBR  province = 413  goal = flag:get_territory }
+			}
+			if = { limit = { exists = p:429  NOT = { owns = 429 } }  add_claim = p:429 }  # Bani Suwayf, Cairo
+			add_country_modifier = { name = qing_col_suez_passage  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 70 }
+			# the short road home offends the two powers who condominated Egypt
+			QING_gp_provoke_britain = { severity = 10 }
+			QING_gp_provoke_france = { severity = 8 }
+			LOG_line = { sys = QING  msg = "MISSION task Suez passage for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 剛果 — the Congo basin, the heart of the interior scramble -----------
+	# History: the Congo was the very crucible of the Scramble — Leopold's Congo
+	# Free State and the Berlin Conference (1884-85) that partitioned the continent.
+	# France held the north bank (Brazzaville). Here the Qing thrusts into the interior.
+	qing_col_congo = {
+		icon = test3
+		requires = { qing_col_cape }
+		allow = {
+			treasury >= 180
+		}
+		on_start = {
+			add_treasury = -180
+			LOG_line = { sys = QING  msg = "MISSION task START Congo interior (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_congo_tt
+			if = { limit = { exists = p:2652  NOT = { owns = 2652 } }  add_claim = p:2652 }  # the Congo (Kongo, Equatorial Africa — in the Congo_Basin region)
+			if = { limit = { exists = p:3526  NOT = { owns = 3526 } }  add_claim = p:3526 }  # Libreville, the Gulf-of-Guinea coast (Gabon)
+			add_country_modifier = { name = qing_col_congo_interior  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 90 }
+			# carving the interior sets the Qing directly against Britain and France, the
+			# paramount partitioners of the Berlin Conference
+			QING_gp_provoke_britain = { severity = 8 }
+			QING_gp_provoke_france = { severity = 10 }
+			LOG_line = { sys = QING  msg = "MISSION task Congo interior for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 安非 ĀNFĒI, Pacified Africa — the invented African march (都護府) ------
+	# The African protectorate: the dynasty's holdings across the continent —
+	# the Swahili coast, the Cape, the Red Sea gate, the Congo — gathered into a
+	# single march under a Protector-General, extending the Tang institution to the
+	# ocean Zheng He last crossed. Wholly an invention of this Qing.
+	qing_col_anfei = {
+		icon = test2
+		requires = { qing_col_cape }
+		allow = {
+			political_influence >= 30
+			custom_tooltip = {
+				text = qing_col_needs_africa_land_tt
+				any_owned_province = {
+					count >= 3
+					OR = {
+						is_in_region = Lake_Victoria
+						is_in_region = South_Africa
+						is_in_region = Egypt
+						is_in_region = Congo_Basin
+						is_in_region = Mozambique
+						is_in_region = Madagascar
+						is_in_region = Horn_of_Africa
+						is_in_region = Gulf_of_Guinea
+						is_in_region = Coastal_West_Africa
+						is_in_region = Angola
+					}
+				}
+			}
+		}
+		on_start = {
+			add_political_influence = -30
+			LOG_line = { sys = QING  msg = "MISSION task START Anfei protectorate for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_anfei_tt
+			every_owned_province = {
+				limit = {
+					is_capital = no
+					OR = {
+						is_in_region = Lake_Victoria
+						is_in_region = South_Africa
+						is_in_region = Egypt
+						is_in_region = Congo_Basin
+						is_in_region = Mozambique
+						is_in_region = Madagascar
+						is_in_region = Horn_of_Africa
+						is_in_region = Gulf_of_Guinea
+						is_in_region = Coastal_West_Africa
+						is_in_region = Angola
+					}
+				}
+				add_to_list = qing_protectorate_list
+			}
+			QING_establish_protectorate = {
+				list = qing_protectorate_list
+				name_key = qing_protectorate_anfei_name
+				adj_key = qing_protectorate_anfei_adj
+				government = viceroyalty
+				log_tag = ANFEI
+			}
+			add_country_modifier = { name = qing_col_protectorate_africa  duration = -1 }
+			current_ruler = { add_prestige = 30 }
+			LOG_line = { sys = QING  msg = "MISSION task Anfei protectorate for [ROOT.GetTag]" }
+		}
+	}
+
+	# ##################################################################
+	# THE MANILA GALLEON REBORN & THE MEXICAN ADVENTURE (馬尼拉大帆船 / 墨西哥)
+	# For two and a half centuries (1565-1815) the Manila galleon carried Mexican
+	# silver west to Canton and Chinese silk east to Acapulco — the one sustained
+	# artery between the Middle Kingdom and the New World, and the pump that drew
+	# the world's silver into China. The line closed in 1815, the very year this
+	# game opens; here the dynasty may re-open it, and follow the silver road to
+	# its far terminus. History that grounds the arc: France's Second Empire, in
+	# the American Civil War's shadow, landed at Veracruz (1862) and installed the
+	# Habsburg archduke Maximilian as Emperor of Mexico (1864-67) — a European
+	# throne planted in the Americas over the objection of the United States. A
+	# Qing that has learned the sea can insert itself into that same contest.
+	# ##################################################################
+
+	# --- 馬尼拉大帆船 THE GALLEON REBORN — re-open the Acapulco silver road ---
+	qing_col_galleon = {
+		icon = test2
+		requires = { qing_col_bureau }
+		allow = {
+			treasury >= 150
+			custom_tooltip = {
+				text = qing_col_needs_pacific_reach_tt
+				OR = {
+					has_country_modifier = qing_selfstr_beiyang_fleet
+					has_country_modifier = qing_selfstr_nanyang_fleet
+					owns = 1493
+				}
+			}
+		}
+		on_start = {
+			add_treasury = -150
+			LOG_line = { sys = QING  msg = "MISSION task START Manila galleon reborn (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_galleon_tt
+			# Acapulco (p:1800) — the galleon's American terminus, the far anchor of the silver road
+			if = { limit = { exists = p:1800  NOT = { owns = 1800 } }  add_claim = p:1800 }
+			QING_COLON_frontier_pull = { province = 1800 }
+			add_country_modifier = { name = qing_col_silver_road  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 80 }
+			current_ruler = { add_prestige = 20 }
+			# reviving the Pacific bullion trade nettles Britain, the reigning master
+			# of world commerce — UNLESS the Daoguang entente has made the Pacific a
+			# shared American-Qing lake rather than a contested one.
+			if = {
+				limit = { NOT = { has_country_modifier = qing_daoguang_doctrine } }
+				QING_gp_provoke_britain = { severity = 6 }
+			}
+			LOG_line = { sys = QING  msg = "MISSION task Manila galleon reborn for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 韋拉克魯斯 VERACRUZ — a foothold on the Gulf, the door to Mexico ---
+	qing_col_veracruz = {
+		icon = test3
+		requires = { qing_col_galleon }
+		allow = {
+			treasury >= 170
+			custom_tooltip = {
+				text = qing_col_needs_acapulco_tt
+				OR = {
+					owns = 1800
+					has_country_modifier = qing_col_silver_road
+				}
+			}
+		}
+		on_start = {
+			add_treasury = -170
+			LOG_line = { sys = QING  msg = "MISSION task START Veracruz foothold (spending treasury) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_veracruz_tt
+			# Veracruz (p:2069) — the real 1862 French landing point, the Gulf gate to
+			# the Mexican interior. Press it as a play against France, whose own
+			# Mexican adventure contests the same ground.
+			if = {
+				limit = { exists = p:2069  NOT = { owns = 2069 } }
+				add_claim = p:2069
+				QING_gp_frontier_play = { tag = FRA  province = 2069  goal = flag:get_territory }
+			}
+			add_country_modifier = { name = qing_col_gulf_gate  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 70 }
+			QING_gp_provoke_france = { severity = 8 }
+			LOG_line = { sys = QING  msg = "MISSION task Veracruz foothold for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 墨西哥帝業 THE MEXICAN ADVENTURE — the fork over the throne of Mexico ---
+	# Two roads to a crown in the Americas. If the Emperor Emeritus (Napoleon)
+	# sits at the Qing court, the dynasty makes common cause with his nephew's
+	# Second Empire: a Franco-Qing condominium props up the Habsburg Maximilian,
+	# and the enterprise DELIGHTS Napoleon (his family's imperial project served,
+	# Britain affronted, his revenge advanced). If he is absent, the Qing plays
+	# the adventure for itself — muscling into the New World over the head of the
+	# very France that would otherwise own it.
+	qing_col_maximilian = {
+		icon = test1
+		requires = { qing_col_veracruz }
+		allow = {
+			treasury >= 200
+			political_influence >= 20
+		}
+		on_start = {
+			add_treasury = -200
+			add_political_influence = -20
+			LOG_line = { sys = QING  msg = "MISSION task START Mexican adventure (spending treasury+influence) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_maximilian_tt
+			# Mexico City (p:8516) — the seat of the throne being contested
+			if = { limit = { exists = p:8516  NOT = { owns = 8516 } }  add_claim = p:8516 }
+			add_country_modifier = { name = qing_col_mexican_crown  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 90 }
+			current_ruler = { add_prestige = 30 }
+			# FORK on Napoleon's presence at court.
+			if = {
+				limit = { has_variable = qing_napoleon_present }
+				# The condominium with the Second Empire. Provoke Britain (the Monroe
+				# Doctrine's tacit backer resents a European throne in the Americas),
+				# and warm relations with France, whose adventure this now shares.
+				QING_gp_provoke_britain = { severity = 10 }
+				if = {
+					limit = { exists = c:FRA }
+					c:FRA = { add_opinion = { modifier = qing_gp_accommodation_opinion  target = ROOT } }
+					ROOT = { add_opinion = { modifier = qing_gp_accommodation_opinion  target = c:FRA } }
+				}
+				# the enterprise serves the Emperor Emeritus's own imperial house: he is gratified
+				if = {
+					limit = { has_variable = qing_napoleon_char  var:qing_napoleon_char = { is_alive = yes } }
+					var:qing_napoleon_char = { add_loyalty = loyalty_qing_congenial }
+				}
+				LOG_line = { sys = QING  msg = "MISSION task Mexican adventure: FRANCO-QING condominium (Napoleon present) for [ROOT.GetTag]" }
+			}
+			else = {
+				# no French partner — the Qing grabs the adventure alone, and France,
+				# whose New-World project this pre-empts, is affronted.
+				QING_gp_provoke_france = { severity = 12 }
+				LOG_line = { sys = QING  msg = "MISSION task Mexican adventure: SOLO Qing intervention (no Napoleon) for [ROOT.GetTag]" }
+			}
+			# Either way, planting a monarchy in the Americas violates the Pacific
+			# entente: the American republic feels betrayed by its erstwhile partner.
+			if = {
+				limit = { exists = c:USA  has_country_modifier = qing_daoguang_doctrine }
+				c:USA = { add_opinion = { modifier = qing_gp_rivalry_opinion  target = ROOT } }
+				LOG_line = { sys = QING  msg = "MISSION task Mexican adventure BETRAYED the Daoguang entente; USA affronted for [ROOT.GetTag]" }
+			}
+			LOG_line = { sys = QING  msg = "MISSION task Mexican adventure for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 墨西哥帝國 THE EMPIRE OF MEXICO — enthrone a client emperor ---
+	# Release the Mexican interior as a client Empire — an imperial_monarchy bound
+	# as a sinosphere tributary, the Son of Heaven's most distant vassal-throne.
+	# Pacific_Mexico (which contains Mexico City, p:8516, the throne's seat) belongs
+	# HERE, with the Empire of Mexico — not with Anxin, which is the Pacific-Northwest
+	# and California coast. The two releases stay disjoint (Anxin = Alaska/BC/Cascadia/
+	# California; the Empire = all four Mexican regions), so they never contest ground.
+	qing_col_mexican_empire = {
+		icon = test1
+		requires = { qing_col_maximilian }
+		allow = {
+			political_influence >= 30
+			custom_tooltip = {
+				text = qing_col_needs_mexico_land_tt
+				any_owned_province = {
+					count >= 3
+					OR = {
+						is_in_region = Pacific_Mexico
+						is_in_region = Eastern_Mexico
+						is_in_region = Northern_Mexico
+						is_in_region = Central_America
+					}
+				}
+			}
+		}
+		on_start = {
+			add_political_influence = -30
+			LOG_line = { sys = QING  msg = "MISSION task START Empire of Mexico (spending influence) for [ROOT.GetTag]" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_mexican_empire_tt
+			every_owned_province = {
+				limit = {
+					is_capital = no
+					OR = {
+						is_in_region = Pacific_Mexico
+						is_in_region = Eastern_Mexico
+						is_in_region = Northern_Mexico
+						is_in_region = Central_America
+					}
+				}
+				add_to_list = qing_protectorate_list
+			}
+			QING_establish_protectorate = {
+				list = qing_protectorate_list
+				name_key = qing_protectorate_mexico_name
+				adj_key = qing_protectorate_mexico_adj
+				government = imperial_monarchy
+				log_tag = MEXICO
+			}
+			add_country_modifier = { name = qing_col_mexican_empire_mod  duration = -1 }
+			current_ruler = { add_prestige = 30 }
+			LOG_line = { sys = QING  msg = "MISSION task Empire of Mexico established for [ROOT.GetTag]" }
+		}
+	}
+
+
+	# ==================================================================
+	# CAPSTONE — a Qing dominion spanning the Pacific (環太平洋大清).
+	# ==================================================================
+	qing_col_capstone = {
+		icon = test1
+		requires = {
+			qing_col_canada
+			qing_col_california
+			qing_col_pacific_isles
+		}
+		allow = {
+			custom_tooltip = {
+				text = qing_col_needs_holdings_tt
+				OR = {
+					owns = 9429
+					owns = 12498
+					owns = 1493
+					owns = 524
+					has_country_modifier = qing_col_golden_shore
+					has_country_modifier = qing_col_island_road
+				}
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_col_capstone_tt
+			add_country_modifier = { name = qing_col_pacific_dominion  duration = -1 }
+			current_ruler = { add_prestige = 50 }
+			add_stability = 2
+			# a globe-spanning empire vindicates the whole self-strengthening cause
+			if = {
+				limit = { has_variable = qing_selfstr_progress }
+				QING_selfstr_advance = { amount = 15 }
+			}
+			LOG_line = { sys = QING  msg = "MISSION colonization CAPSTONE (Pacific dominion) for [ROOT.GetTag]" }
+		}
+	}
+}

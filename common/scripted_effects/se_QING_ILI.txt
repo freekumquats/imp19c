@@ -1,0 +1,278 @@
+########################################################################
+# se_QING_ILI.txt — THE ILI CRISIS & THE RECONQUEST OF XINJIANG (新疆 / 伊犁).
+#
+# The gravest strategic argument of the self-strengthening decades was fought not on a
+# battlefield but in the memorials: the 海防塞防之爭 (hǎifáng-sàifáng zhī zhēng), the
+# COASTAL-DEFENCE vs FRONTIER-DEFENCE debate of 1874-75. With the treasury able to fund
+# only one great effort, LI HONGZHANG 李鴻章 argued the maritime threat (Japan, fresh from
+# the Taiwan expedition; the treaty-port powers) was mortal and the far west a barren
+# drain — abandon Xinjiang, buy modern ships. ZUO ZONGTANG 左宗棠 answered that to lose
+# the New Dominion was to lose Mongolia's shield and then the capital itself — the frontier
+# must be held. The throne backed Zuo.
+#
+# The stake was real: since the 1860s the whole of Xinjiang had fallen away — the Dungan
+# revolt (陝甘回變) and then YAQUB BEG 阿古柏, an adventurer out of Kokand who carved out
+# the emirate of Kashgaria (喀什噶爾) and won recognition from Britain and the Ottomans —
+# while RUSSIA, on the pretext of protecting trade, OCCUPIED THE ILI VALLEY (伊犁) in 1871.
+# Zuo's campaign of 1876-77 (緩進急戰 "advance slowly, strike swiftly", supplied on foreign
+# loans brokered by Hu Xueyan 胡雪巖) destroyed Yaqub Beg's state within eighteen months.
+# Xinjiang was made a province in 1884.
+#
+# There remained ILI. Russia would not simply hand it back. The first envoy, CHONGHOU 崇厚,
+# signed the humiliating Treaty of Livadia (1879) giving away most of the valley and its
+# passes; the outrage at court was such that he was condemned to death and the treaty
+# repudiated — the empire stood on the brink of war with Russia. ZENG JIZE 曾紀澤 (Marquis
+# Zeng, Zeng Guofan's son), minister in London and St Petersburg, reopened talks under the
+# guns of a mobilised Qing army and Russia's own reluctance, and won the far better TREATY
+# OF ST PETERSBURG (1881): most of Ili recovered for a 9-million-rouble indemnity. It was
+# the one clear diplomatic VICTORY of the late Qing — the frontier held, a treaty revised
+# upward by Chinese negotiation rather than dictated.
+#
+# THE CHAIN THIS MODELS — a self-contained set-piece, gated on the far-western rebellion
+# having flared (qing_rebel_dungan, set by the existing qing_rebellion.6):
+#   .1  THE DEBATE (海防塞防之爭)     — commit to the frontier (Zuo) or the coast (Li)
+#   .2  THE RECONQUEST (克復新疆)     — resolve Zuo's campaign against Yaqub Beg
+#   .3  CHONGHOU'S BLUNDER (崇厚誤國) — the Livadia disaster: repudiate (→ war footing) or ratify
+#   .4  ZENG JIZE'S TREATY (改訂條約)  — the St Petersburg settlement; the frontier recovered
+#
+# Design mirrors the suite: a chain-stage variable + a control meter on CHI, event-driven,
+# read O(1) — but this is a discrete SET-PIECE, so its pulse only guards the entry offer;
+# the stages advance by player choice. All logged. Connects to the existing far-western
+# rebellion (qing_rebel_dungan) and the Russia great-power tension counter
+# (qing_gp_tension_russia, se_QING_DIPLO.txt); on victory it can restore the 安西 Pacified-
+# West protectorate via the existing qing_frontier protectorate offer.
+#
+#   qing_xinjiang_control  0..100  控馭新疆 — the grip on the New Dominion (starts mid, low
+#                                  while Yaqub Beg stands, high once reconquered)
+#   qing_ili_stage         0..4    which stage of the crisis chain has been reached
+#
+#   ROOT / this = the Qing (CHI, human)
+# Prefix = QING_ili_
+#
+# Sources: Immanuel C. Y. Hsü, "The Ili Crisis: A Study of Sino-Russian Diplomacy,
+#   1871-1881" (1965); Kim Hodong, "Holy War in China: The Muslim Rebellion and State in
+#   Chinese Central Asia, 1864-1877" (2004); W. L. Bales, "Tso Tsung-t'ang" (1937);
+#   Spence, The Search for Modern China.
+########################################################################
+
+# ======================================================================
+# INIT — seed the control meter and the stage marker once. Called by the pulse and by
+# the entry event's immediate block.
+# ======================================================================
+QING_ili_init = {
+	if = { limit = { NOT = { has_variable = qing_xinjiang_control } } set_variable = { name = qing_xinjiang_control  value = 40 } }
+	if = { limit = { NOT = { has_variable = qing_ili_stage } }        set_variable = { name = qing_ili_stage  value = 0 } }
+}
+
+# ======================================================================
+# .1 → COMMIT TO THE FRONTIER (塞防) — the throne backs Zuo Zongtang. The campaign is
+# launched (a costly mobilisation, part-funded on foreign loans), the stage advances, and
+# the reconquest event is queued. Country scope.
+# ======================================================================
+QING_ili_commit_frontier = {
+	LOG_enter = { sys = QING  fn = "QING_ili_commit_frontier" }
+	QING_ili_init = yes
+	set_variable = { name = qing_ili_stage  value = 1 }
+	# the mobilisation of Zuo's army and the Hu Xueyan loans — a real fiscal strain now,
+	# and a spur to the reformers who want the arsenals that armed it.
+	QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
+	add_country_modifier = { name = qing_ili_campaign_mobilised  duration = 3650 }
+	LOG_line = { sys = QING  msg = "ili: throne backs the FRONTIER (Zuo Zongtang) for [ROOT.GetTag]" }
+	# queue the reconquest reckoning.
+	trigger_event = { id = qing_ili.2  days = { 120 300 } }
+	LOG_exit = { sys = QING  fn = "QING_ili_commit_frontier"  result = OK }
+}
+
+# ======================================================================
+# .1 → CHOOSE THE COAST (海防) — Li Hongzhang's argument prevails; Xinjiang is written off.
+# The grip on the New Dominion collapses, the western tributaries are abandoned, but the
+# treasury is spared for the fleet (a lasting naval edge). Country scope.
+# ======================================================================
+QING_ili_choose_coast = {
+	LOG_enter = { sys = QING  fn = "QING_ili_choose_coast" }
+	QING_ili_init = yes
+	set_variable = { name = qing_ili_stage  value = 4 }   # the chain ends here — no reconquest, no Ili showdown
+	set_variable = { name = qing_xinjiang_control  value = 0 }
+	# the far west is gone; the collapsed grip (control=0) is the durable marker — no later
+	# stage can be reached, the chain closes here at stage 4.
+	QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 12 }
+	QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 6 }
+	# the coastal-defence dividend: the funds Zuo would have burned go to the Beiyang fleet.
+	add_country_modifier = { name = qing_ili_coastal_priority  duration = -1 }
+	QING_ili_apply_control_band = yes
+	LOG_line = { sys = QING  msg = "ili: throne chooses the COAST (Li Hongzhang) — Xinjiang abandoned for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_ili_choose_coast"  result = OK }
+}
+
+# ======================================================================
+# .2 → THE RECONQUEST SUCCEEDS (克復新疆) — Zuo's slow-advance-swift-strike campaign
+# destroys Yaqub Beg's emirate. The grip is restored; the far-western rebellion (if still
+# marked active from qing_rebellion.6) is closed out; Russia's occupation of Ili now becomes
+# the diplomatic question. Country scope.
+# ======================================================================
+QING_ili_reconquest_win = {
+	LOG_enter = { sys = QING  fn = "QING_ili_reconquest_win" }
+	QING_ili_init = yes
+	set_variable = { name = qing_ili_stage  value = 2 }
+	set_variable = { name = qing_xinjiang_control  value = 80 }
+	QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -12 }
+	add_legitimacy = 10
+	add_stability = 2
+	add_manpower = 2
+	# close out the far-western rising the reconquest answered (qing_rebellion.6 set this).
+	if = {
+		limit = { has_variable = qing_rebel_dungan }
+		QING_ili_close_dungan = yes
+	}
+	QING_ili_apply_control_band = yes
+	LOG_line = { sys = QING  msg = "ili: RECONQUEST succeeds (Yaqub Beg destroyed) for [ROOT.GetTag]" }
+	# the campaign modifier lifts; the Ili valley remains under Russian occupation → the showdown.
+	remove_country_modifier = qing_ili_campaign_mobilised
+	trigger_event = { id = qing_ili.3  days = { 90 200 } }
+	LOG_exit = { sys = QING  fn = "QING_ili_reconquest_win"  result = OK }
+}
+
+# ======================================================================
+# .2 → THE RECONQUEST FALTERS (師老無功) — the campaign bogs down: the far west is not
+# recovered, the treasury is drained for nothing, the frontier stays lost. A darker branch.
+# Country scope.
+# ======================================================================
+QING_ili_reconquest_fail = {
+	LOG_enter = { sys = QING  fn = "QING_ili_reconquest_fail" }
+	QING_ili_init = yes
+	set_variable = { name = qing_ili_stage  value = 4 }   # chain ends — no Ili showdown to be had
+	set_variable = { name = qing_xinjiang_control  value = 10 }
+	QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 10 }
+	QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 10 }
+	add_stability = -2
+	add_legitimacy = -5
+	remove_country_modifier = qing_ili_campaign_mobilised
+	QING_ili_apply_control_band = yes
+	LOG_line = { sys = QING  msg = "ili: reconquest FALTERS (frontier lost, treasury spent) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_ili_reconquest_fail"  result = OK }
+}
+
+# Close out the far-western rebellion the reconquest answered. Mirrors qing_rebellion.6
+# option a (QING_rebellion_end) but guarded so it is a safe no-op if the rebellion machinery
+# is not active. QING_rebellion_end clears the active-rebellion bookkeeping.
+QING_ili_close_dungan = {
+	if = {
+		limit = { has_variable = qing_active_rebellion }
+		QING_rebellion_end = { flavour = ethnic }
+	}
+	remove_variable = qing_rebel_dungan
+	LOG_line = { sys = QING  msg = "ili: far-western rising (Dungan/Yaqub Beg) closed by reconquest for [ROOT.GetTag]" }
+}
+
+# ======================================================================
+# .3 → REPUDIATE CHONGHOU'S TREATY (拒約) — the Livadia treaty is torn up, Chonghou
+# condemned, and the empire goes to a WAR FOOTING with Russia. Tension spikes hard; the
+# army mobilises again; but the firm stance sets up Zeng Jize's far better bargain. This is
+# the historical, and better, path. Country scope.
+# ======================================================================
+QING_ili_repudiate_livadia = {
+	LOG_enter = { sys = QING  fn = "QING_ili_repudiate_livadia" }
+	QING_ili_init = yes
+	set_variable = { name = qing_ili_stage  value = 3 }
+	# the brink of war with Russia.
+	QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = 25 }
+	add_country_modifier = { name = qing_ili_war_footing  duration = 1825 }
+	add_legitimacy = 3   # the court's fury vindicated; the throne looks resolute
+	LOG_line = { sys = QING  msg = "ili: Livadia REPUDIATED (Chonghou condemned, war footing vs Russia) for [ROOT.GetTag]" }
+	# the renegotiation under Zeng Jize.
+	trigger_event = { id = qing_ili.4  days = { 120 300 } }
+	LOG_exit = { sys = QING  fn = "QING_ili_repudiate_livadia"  result = OK }
+}
+
+# ======================================================================
+# .3 → RATIFY CHONGHOU'S TREATY (批准崇約) — swallow the Livadia terms: peace with Russia
+# now, but most of the Ili valley and its passes are signed away, and the humiliation
+# feeds the reformers. The grip on the west is dented; the chain ends without the St
+# Petersburg triumph. Country scope.
+# ======================================================================
+QING_ili_ratify_livadia = {
+	LOG_enter = { sys = QING  fn = "QING_ili_ratify_livadia" }
+	QING_ili_init = yes
+	set_variable = { name = qing_ili_stage  value = 4 }
+	# peace bought — Russia is placated.
+	QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = -10 }
+	# ...but the valley and passes are lost, and the shame bites.
+	QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = -25 }
+	QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 8 }
+	add_legitimacy = -5
+	QING_ili_apply_control_band = yes
+	LOG_line = { sys = QING  msg = "ili: Livadia RATIFIED (Ili passes ceded, humiliation) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_ili_ratify_livadia"  result = OK }
+}
+
+# ======================================================================
+# .4 → ZENG JIZE'S SETTLEMENT (改訂條約) — the Treaty of St Petersburg (1881): most of Ili
+# recovered by negotiation for an indemnity. The one clean diplomatic victory of the late
+# Qing. The stage closes, the war footing lifts, tension with Russia falls back, the grip
+# on the west is made whole, and the throne wins real prestige. Country scope.
+# ======================================================================
+QING_ili_zeng_triumph = {
+	LOG_enter = { sys = QING  fn = "QING_ili_zeng_triumph" }
+	QING_ili_init = yes
+	set_variable = { name = qing_ili_stage  value = 4 }   # chain complete
+	# the 9-million-rouble indemnity.
+	if = { limit = { treasury >= 40 } add_treasury = -40 }
+	# Ili recovered — the grip on the New Dominion is made whole.
+	set_variable = { name = qing_xinjiang_control  value = 90 }
+	# the war footing stands down; Russia tension falls back below the war line.
+	remove_country_modifier = qing_ili_war_footing
+	QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = -30 }
+	# the diplomatic triumph — prestige, legitimacy, a boost to the reform party who staffed
+	# the legations that won it.
+	add_legitimacy = 10
+	add_stability = 1
+	add_country_modifier = { name = qing_ili_frontier_secured  duration = -1 }
+	QING_ili_apply_control_band = yes
+	LOG_line = { sys = QING  msg = "ili: ZENG JIZE wins St Petersburg (Ili recovered) — diplomatic victory for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_ili_zeng_triumph"  result = OK }
+}
+
+# ======================================================================
+# THE PULSE — this is a discrete SET-PIECE, not a running meter, so the pulse does only two
+# cheap things: keep the control band in step with the meter, and — when the far-western
+# rebellion has flared but the crisis has not yet been offered — queue the opening debate.
+# Called from QING_GOV_pulse. All O(1).
+# ======================================================================
+QING_ili_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_ili_pulse" }
+	QING_ili_init = yes
+	QING_ili_apply_control_band = yes
+	# offer the debate once: the Dungan/Yaqub Beg rising is what forces the strategic choice,
+	# so we gate on its flag (set by qing_rebellion.6). Guarded so it fires a single time.
+	if = {
+		limit = {
+			var:qing_ili_stage = 0
+			has_variable = qing_rebel_dungan
+			NOT = { has_variable = qing_ili_debate_offered }
+		}
+		set_variable = qing_ili_debate_offered
+		LOG_line = { sys = QING  msg = "ili: far-western rising active -> queue the 海防塞防 debate for [ROOT.GetTag]" }
+		trigger_event = { id = qing_ili.1  days = { 10 40 } }
+	}
+	LOG_exit = { sys = QING  fn = "QING_ili_pulse"  result = OK }
+}
+
+# ======================================================================
+# BAND APPLICATION — one active modifier matching the grip on the New Dominion. A firm grip
+# is a frontier secured (manpower, prestige); a collapsed grip is a bleeding march (unrest,
+# a standing drain). Distinct from the one-shot outcome modifiers above.
+# ======================================================================
+QING_ili_apply_control_band = {
+	remove_country_modifier = qing_xinjiang_grip_firm
+	remove_country_modifier = qing_xinjiang_grip_lost
+	if = {
+		limit = { var:qing_xinjiang_control >= 70 }
+		add_country_modifier = { name = qing_xinjiang_grip_firm  duration = -1 }
+		LOG_line = { sys = QING  msg = "band xinjiang = grip_firm for [ROOT.GetTag] (control=[ROOT.MakeScope.GetVariable('qing_xinjiang_control').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_xinjiang_control <= 20 }
+		add_country_modifier = { name = qing_xinjiang_grip_lost  duration = -1 }
+		LOG_line = { sys = QING  msg = "band xinjiang = grip_lost for [ROOT.GetTag] (control=[ROOT.MakeScope.GetVariable('qing_xinjiang_control').GetValue|0])" }
+	}
+}

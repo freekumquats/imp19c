@@ -1,0 +1,227 @@
+########################################################################
+# se_QING_EMBASSY.txt — WESTERN EMBASSIES TO THE COURT (西使覲見 / 貢使問題).
+#
+# The INBOUND mirror of the permanent-legation engine (se_QING_LEGATIONS.txt):
+# where that models Qing envoys going ABROAD, this models the Western powers
+# coming to the Qing court to seek audience and trade — and the kowtow crisis
+# (叩頭之爭) that attended every one of them before the treaty era.
+#
+#   Macartney (馬戛爾尼, 1793) — Britain's great embassy under Lord Macartney,
+#     which Qianlong received with the famous edict that "the Celestial Empire
+#     possesses all things in prolific abundance and lacks no product within its
+#     borders" (天朝物產豐盈，無所不有), refusing the trade demands. The kowtow was
+#     fudged (Macartney bent one knee).
+#   Amherst (阿美士德, 1816) — Britain's second embassy under Lord Amherst, sent
+#     the year AFTER this mod's 1815 start, refused an audience outright over the
+#     kowtow and expelled from Peking without ever seeing the Jiaqing Emperor.
+#   Titsingh (德勝, 1795) — the Dutch VOC embassy under Isaac Titsingh, the LAST
+#     mission to perform the full kowtow as a tribute embassy — and to get nothing
+#     for it.
+#   Golovkin (戈洛夫金, 1805) — Russia's embassy, turned back at the Mongolian
+#     frontier (Urga/Kyakhta) when it refused to rehearse the kowtow.
+#   Cushing / Wanghia (顧盛 / 望廈條約, 1844) — the American mission that, after
+#     the first Opium War, won the United States most-favoured-nation trade by
+#     treaty rather than by tribute ceremony.
+#
+# THE BARGAIN THIS MODELS. Each embassy forces one choice on the court:
+#   • REBUFF (stand on the tribute ceremony / demand the kowtow / expel) — the
+#     Qianlong-Jiaqing posture. Affronts the requesting power (its Great-Game
+#     tension rises) but DELIGHTS that power's two rivals (以夷制夷 — a common
+#     stiff-necked China aligns them) and VINDICATES THE CONSERVATIVES at court
+#     (reform pressure eases, prestige rises on the Mandate's dignity).
+#   • RECEIVE (grant audience as near-equals, open limited trade) — the opening
+#     the reformers wanted. Cools tension with the power and builds real goodwill,
+#     draws trade revenue, and — if the unequal-treaty order is already in force —
+#     deepens it by a further treaty port. But it BREAKS THE TRIBUTE WORLDVIEW
+#     (reform pressure rises, the conservative backlash) and its two rivals
+#     BRISTLE at the Qing taking a side.
+#
+# INTEGRATION (task #60): this layer OWNS NO NEW GREAT-POWER STATE. It drives the
+# existing GP-rivalry engine (se_QING_DIPLO.txt) — the qing_gp_tension_<power>
+# counters via QING_gp_react / QING_gp_accommodate, the 以夷制夷 rival logic via
+# QING_gp_rivals_delight / QING_gp_rivals_bristle, and the reform-pressure counter
+# via QING_DECLINE_nudge — exactly the same API the legation and expansion layers
+# use, and reuses the treaty-port opener (QING_treaty_open_port) and the shared
+# relation opinion. Powers follow the established suffix pattern:
+#   TRIANGLE (have a GP-tension counter): britain | france | russia
+#   MINOR    (no GP counter, like america in the legation layer): america | netherlands
+#
+#   qing_embassy_count            how many embassies have been resolved
+#   qing_embassy_<power>          0 unset · 1 rebuffed · 2 received  (once per power)
+#
+#   ROOT / this = the Qing court (CHI, human)
+# Prefix = QING_embassy_
+#
+# Sources: Alain Peyrefitte, "The Immobile Empire" (Macartney/Amherst); James
+#   Hevia, "Cherishing Men from Afar" (1995, the kowtow and Qing guest ritual);
+#   J.L. Cranmer-Byng, "An Embassy to China" (Macartney's journal); Immanuel Hsü,
+#   "The Rise of Modern China"; Spence, "The Search for Modern China".
+########################################################################
+
+# ======================================================================
+# INIT — seed the embassy count once.
+# ======================================================================
+QING_embassy_init = {
+	if = { limit = { NOT = { has_variable = qing_embassy_count } }  set_variable = { name = qing_embassy_count  value = 0 } }
+}
+
+# ======================================================================
+# SHARED TRADE GRANT — what a RECEIVED embassy wins for the realm: trade revenue
+# and a lasting commerce lift, and — if the unequal-treaty order is already in
+# force — a further treaty port opened on the back of the concession. Country
+# scope. Called by both the triangle and minor receive verbs.
+# ======================================================================
+QING_embassy_grant_trade = {
+	add_treasury = 40
+	if = {
+		limit = { NOT = { has_country_modifier = qing_embassy_trade } }
+		add_country_modifier = { name = qing_embassy_trade  duration = 3650 }
+	}
+	# a received embassy, once the treaty order already stands, is the occasion for
+	# one more concession port (reuses the treaty-port engine; the effect is a
+	# guarded no-op if the system is not yet in force).
+	if = {
+		limit = { has_variable = qing_treaty_system_imposed }
+		QING_treaty_open_port = yes
+	}
+}
+
+# ======================================================================
+# TRIANGLE RESPONSES (britain | france | russia) — the powers that carry a
+# qing_gp_tension_<power> counter. Rivals supplied by the per-power wrappers.
+#   $power$ / $tag$          = the requesting power + its tag
+#   $rival_a$ / $rtag_a$     = its first Great-Game rival (suffix + tag)
+#   $rival_b$ / $rtag_b$     = its second Great-Game rival (suffix + tag)
+#   $severity$               = the affront a rebuff deals its tension
+# ======================================================================
+
+# REBUFF — stand on the tribute ceremony / demand the kowtow / expel the envoy.
+# Affronts the power (GP react: tension + resentment + a little aggressive
+# expansion, the road-to-war signal), delights its two rivals (以夷制夷), and
+# vindicates the conservatives (reform pressure eases; the Mandate's dignity
+# lifts prestige). Guarded once per power.
+QING_embassy_triangle_rebuff = {
+	LOG_enter = { sys = QING  fn = "QING_embassy_triangle_rebuff" }
+	QING_embassy_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_embassy_$power$ } }
+		set_variable = { name = qing_embassy_$power$  value = 1 }
+		change_variable = { name = qing_embassy_count  add = 1 }
+		QING_gp_react = { power = $power$  tag = $tag$  severity = $severity$ }
+		QING_gp_rivals_delight = { rival_a = $rival_a$  rtag_a = $rtag_a$  rival_b = $rival_b$  rtag_b = $rtag_b$ }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -4 }
+		add_prestige = 12
+		LOG_line = { sys = QING  msg = "embassy from $tag$ (sphere $power$) REBUFFED for [ROOT.GetTag] (count [ROOT.MakeScope.GetVariable('qing_embassy_count').GetValue|0])" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_embassy_triangle_rebuff"  reason = "embassy from $power$ already resolved" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_embassy_triangle_rebuff"  result = OK }
+}
+
+# RECEIVE — grant audience as near-equals and open limited trade. Cools tension
+# and builds goodwill (GP accommodate), draws trade + a further port where the
+# treaty order stands, but its two rivals bristle and the conservatives recoil
+# (reform pressure rises). Guarded once per power.
+QING_embassy_triangle_receive = {
+	LOG_enter = { sys = QING  fn = "QING_embassy_triangle_receive" }
+	QING_embassy_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_embassy_$power$ } }
+		set_variable = { name = qing_embassy_$power$  value = 2 }
+		change_variable = { name = qing_embassy_count  add = 1 }
+		QING_gp_accommodate = { power = $power$  tag = $tag$  amount = -8 }
+		QING_gp_rivals_bristle = { rival_a = $rival_a$  rtag_a = $rtag_a$  rival_b = $rival_b$  rtag_b = $rtag_b$ }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 3 }
+		QING_embassy_grant_trade = yes
+		LOG_line = { sys = QING  msg = "embassy from $tag$ (sphere $power$) RECEIVED for [ROOT.GetTag] (count [ROOT.MakeScope.GetVariable('qing_embassy_count').GetValue|0])" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_embassy_triangle_receive"  reason = "embassy from $power$ already resolved" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_embassy_triangle_receive"  result = OK }
+}
+
+# ======================================================================
+# MINOR RESPONSES (america | netherlands) — powers OUTSIDE the Great-Game
+# triangle, with no qing_gp_tension_<power> counter (exactly as the legation
+# layer treats america as a no-op on tension). No GP react/accommodate, no
+# rival logic; the affront/goodwill is carried by prestige, reform pressure,
+# trade, and the shared relation opinion directly with the power.
+#   $power$ / $tag$ = the requesting power + its tag
+# ======================================================================
+QING_embassy_minor_rebuff = {
+	LOG_enter = { sys = QING  fn = "QING_embassy_minor_rebuff" }
+	QING_embassy_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_embassy_$power$ } }
+		set_variable = { name = qing_embassy_$power$  value = 1 }
+		change_variable = { name = qing_embassy_count  add = 1 }
+		# no GP counter for this power — the rebuff is felt only as ceremony upheld
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -3 }
+		add_prestige = 8
+		LOG_line = { sys = QING  msg = "embassy from $tag$ (minor, no GP counter) REBUFFED for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_embassy_minor_rebuff"  reason = "embassy from $power$ already resolved" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_embassy_minor_rebuff"  result = OK }
+}
+
+QING_embassy_minor_receive = {
+	LOG_enter = { sys = QING  fn = "QING_embassy_minor_receive" }
+	QING_embassy_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_embassy_$power$ } }
+		set_variable = { name = qing_embassy_$power$  value = 2 }
+		change_variable = { name = qing_embassy_count  add = 1 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 3 }
+		QING_embassy_grant_trade = yes
+		# a direct improvement of relations with the power (reuses the shared
+		# relation opinion the accommodate verb grants the triangle powers).
+		if = {
+			limit = { exists = c:$tag$ }
+			c:$tag$ = { add_opinion = { modifier = qing_gp_relation_opinion  target = ROOT } }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_embassy_minor_receive"  reason = "power tag $tag$ does not exist - relation opinion skipped" }
+		}
+		LOG_line = { sys = QING  msg = "embassy from $tag$ (minor) RECEIVED for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_embassy_minor_receive"  reason = "embassy from $power$ already resolved" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_embassy_minor_receive"  result = OK }
+}
+
+# ======================================================================
+# PER-POWER WRAPPERS — read cleanly at the event call sites. Each triangle
+# wrapper hardcodes the requesting power's two Great-Game rivals (as the
+# se_QING_DIPLO theater wrappers do). Rebuff severity varies with how grave the
+# historical snub was (Amherst's expulsion the sharpest).
+# ======================================================================
+
+# --- Britain (Macartney 1793 / Amherst 1816): rivals France + Russia ---------
+# Two rebuff wrappers share the one qing_embassy_britain flag (whichever embassy
+# the flavour roll surfaces first resolves Britain). Amherst's outright expulsion
+# from Peking (severity 9) was the graver snub than Qianlong's polite refusal of
+# Macartney (severity 7) — hence the sharper tooltip on qing_embassy.2.
+QING_embassy_britain_rebuff       = { QING_embassy_triangle_rebuff  = { power = britain  tag = GBR  rival_a = france  rtag_a = FRA  rival_b = russia  rtag_b = RUS  severity = 7 } }
+QING_embassy_britain_rebuff_sharp = { QING_embassy_triangle_rebuff  = { power = britain  tag = GBR  rival_a = france  rtag_a = FRA  rival_b = russia  rtag_b = RUS  severity = 9 } }
+QING_embassy_britain_receive      = { QING_embassy_triangle_receive = { power = britain  tag = GBR  rival_a = france  rtag_a = FRA  rival_b = russia  rtag_b = RUS } }
+
+# --- France: rivals Britain + Russia -----------------------------------------
+QING_embassy_france_rebuff   = { QING_embassy_triangle_rebuff  = { power = france  tag = FRA  rival_a = britain  rtag_a = GBR  rival_b = russia  rtag_b = RUS  severity = 5 } }
+QING_embassy_france_receive  = { QING_embassy_triangle_receive = { power = france  tag = FRA  rival_a = britain  rtag_a = GBR  rival_b = russia  rtag_b = RUS } }
+
+# --- Russia (Golovkin 1805, Kyakhta): rivals Britain + France ----------------
+QING_embassy_russia_rebuff   = { QING_embassy_triangle_rebuff  = { power = russia  tag = RUS  rival_a = britain  rtag_a = GBR  rival_b = france  rtag_b = FRA  severity = 5 } }
+QING_embassy_russia_receive  = { QING_embassy_triangle_receive = { power = russia  tag = RUS  rival_a = britain  rtag_a = GBR  rival_b = france  rtag_b = FRA } }
+
+# --- America (Cushing / Wanghia 1844): no GP counter -------------------------
+QING_embassy_america_rebuff  = { QING_embassy_minor_rebuff  = { power = america  tag = USA } }
+QING_embassy_america_receive = { QING_embassy_minor_receive = { power = america  tag = USA } }
+
+# --- Netherlands (Titsingh 1795): no GP counter ------------------------------
+QING_embassy_netherlands_rebuff  = { QING_embassy_minor_rebuff  = { power = netherlands  tag = NED } }
+QING_embassy_netherlands_receive = { QING_embassy_minor_receive = { power = netherlands  tag = NED } }

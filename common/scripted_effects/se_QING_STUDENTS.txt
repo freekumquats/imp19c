@@ -1,0 +1,229 @@
+########################################################################
+# se_QING_STUDENTS.txt — THE EDUCATIONAL MISSION & STUDENTS ABROAD (留學生 / 留美幼童).
+#
+# In 1872, at Yung Wing's (容閎) urging and under Zeng Guofan's and Li Hongzhang's
+# patronage, the Qing sent 120 boys to New England to be schooled in Western
+# science and engineering — the Chinese Educational Mission (幼童出洋肄業局). It was
+# the boldest human-capital bet of the Self-Strengthening age: a generation trained
+# abroad to man the arsenals, telegraphs, railways, and navy at home. But the
+# conservatives distrusted it from the start — the boys wore Western clothes, played
+# baseball, some cut their queues and took to Christianity — and in 1881 the mission
+# was RECALLED in disgrace, the students hauled home before their degrees. The few
+# who finished later became China's first railway engineers, admirals, and premiers
+# (Zhan Tianyou 詹天佑; Tang Shaoyi 唐紹儀), but the recall squandered the promise.
+#
+# THE BARGAIN THIS MODELS: dispatching cohorts abroad builds a STUDENTS-ABROAD
+# meter (a pipeline of Western-trained talent) that, when the cohorts RETURN,
+# advances Self-Strengthening and lifts bureau capacity — a lasting human-capital
+# dividend. But every cohort abroad RAISES CONSERVATIVE ALARM (reform pressure +
+# a recall-risk meter): the longer and larger the mission, the greater the danger
+# the court recalls it early, forfeiting the return dividend and dealing a
+# prestige/pressure blow (the 1881 recall). The player weighs a bold, sustained
+# mission against the backlash it feeds.
+#
+# Design mirrors the suite: 0..100 COUNTERS on CHI, event-driven, read O(1) by the
+# governance pulse (QING_students_pulse), all logged (sys = QING).
+#   qing_students_abroad     0..100  size of the cohort currently studying overseas
+#   qing_students_returned   0..100  cumulative pool of Western-trained returnees
+#   qing_students_alarm      0..100  conservative alarm at the mission (recall risk)
+# Marks:
+#   qing_students_mission_active  flag var: the Educational Mission is running
+#   qing_students_recalled        flag var: the mission was recalled (the 1881 blow)
+#
+#   ROOT / this = the Qing overlord (CHI, human)
+# Prefix = QING_students_
+#
+# Sources: Edward J.M. Rhoads, "Stepping Forth into the World: The Chinese
+#   Educational Mission to the United States, 1872-81" (2011); Thomas LaFargue,
+#   "China's First Hundred" (1942); Spence, The Search for Modern China (Yung Wing);
+#   Benjamin Elman, "A Cultural History of Modern Science in China" (2006).
+########################################################################
+
+# ======================================================================
+# INIT — seed the mission counters once. Called by QING_students_pulse.
+# ======================================================================
+QING_students_init = {
+	if = { limit = { NOT = { has_variable = qing_students_abroad } }   set_variable = { name = qing_students_abroad  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_students_returned } } set_variable = { name = qing_students_returned  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_students_alarm } }    set_variable = { name = qing_students_alarm  value = 0 } }
+}
+
+# ======================================================================
+# LAUNCH THE MISSION — the foundational act (幼童出洋肄業局, 1872). Grants the
+# lasting institution modifier + a first cohort abroad. Guarded once. Country
+# scope (ROOT = CHI).
+# ======================================================================
+QING_students_launch = {
+	LOG_enter = { sys = QING  fn = "QING_students_launch" }
+	QING_students_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_students_mission_active } }
+		set_variable = { name = qing_students_mission_active  value = 1 }
+		# a fresh mission starts with a clean recall-crisis slate (re-founding after
+		# a recall must be able to raise a new crisis later).
+		remove_variable = qing_students_recall_pending
+		add_country_modifier = { name = qing_students_mission_running  duration = -1 }
+		# the first cohort sails.
+		QING_DECLINE_nudge = { var = qing_students_abroad  amount = 25 }
+		# ...and the conservatives take note at once.
+		QING_DECLINE_nudge = { var = qing_students_alarm  amount = 15 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 3 }
+		LOG_line = { sys = QING  msg = "students: Educational Mission launched for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_students_launch"  reason = "mission already running" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_students_launch"  result = OK }
+}
+
+# ======================================================================
+# SEND ANOTHER COHORT — enlarge the mission while it runs. Adds students abroad
+# and feeds the alarm meter (a larger foreign-trained cohort alarms the court
+# more). Country scope. Guarded on the mission running and not recalled.
+# ======================================================================
+QING_students_send_cohort = {
+	LOG_enter = { sys = QING  fn = "QING_students_send_cohort" }
+	QING_students_init = yes
+	if = {
+		limit = {
+			has_variable = qing_students_mission_active
+			NOT = { has_variable = qing_students_recalled }
+		}
+		QING_DECLINE_nudge = { var = qing_students_abroad  amount = 20 }
+		QING_DECLINE_nudge = { var = qing_students_alarm  amount = 12 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 2 }
+		LOG_line = { sys = QING  msg = "students: cohort dispatched (abroad=[ROOT.MakeScope.GetVariable('qing_students_abroad').GetValue|0]) for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_students_send_cohort"  reason = "mission not running or already recalled" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_students_send_cohort"  result = OK }
+}
+
+# ======================================================================
+# GRADUATION — a cohort abroad completes its studies and RETURNS as trained
+# talent. Moves students from the abroad meter into the returned pool, advances
+# Self-Strengthening, and lifts bureau capacity (modern-trained men in office).
+# The returnees also cool the alarm a touch — a visible dividend quiets some
+# critics. $amount$ = how many (abroad points converted). Country scope.
+# ======================================================================
+QING_students_graduate = {
+	LOG_enter = { sys = QING  fn = "QING_students_graduate" }
+	QING_students_init = yes
+	# convert up to $amount$ of the abroad meter into the returned pool.
+	if = {
+		limit = { var:qing_students_abroad >= 1 }
+		QING_DECLINE_nudge = { var = qing_students_abroad  amount = $amount$ }
+		# the negative-of-$amount$ flows into returned. $amount$ is passed negative
+		# by the caller (it drains abroad), so add its magnitude to returned here.
+		change_variable = { name = qing_students_returned  add = var:qing_students_graduate_mag }
+		if = { limit = { var:qing_students_returned > 100 } set_variable = { name = qing_students_returned  value = 100 } }
+		# the human-capital dividend: trained men advance the reform tracks.
+		QING_selfstr_advance = { amount = 6 }
+		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = 4 }
+		QING_DECLINE_nudge = { var = qing_students_alarm  amount = -8 }
+		add_prestige = 20
+		LOG_line = { sys = QING  msg = "students: a cohort graduated & returned (returned=[ROOT.MakeScope.GetVariable('qing_students_returned').GetValue|0]) for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_students_graduate"  result = OK }
+}
+
+# ======================================================================
+# RECALL — the 1881 blow. The conservatives win: the mission is dissolved, the
+# students hauled home before their degrees. Forfeits the abroad cohort (no
+# graduation dividend for them), deals a prestige + reform-pressure blow, and
+# ends the mission. A partial returned pool is salvaged (the few who had nearly
+# finished). Country scope. Guarded once.
+# ======================================================================
+QING_students_recall = {
+	LOG_enter = { sys = QING  fn = "QING_students_recall" }
+	QING_students_init = yes
+	if = {
+		limit = {
+			has_variable = qing_students_mission_active
+			NOT = { has_variable = qing_students_recalled }
+		}
+		set_variable = { name = qing_students_recalled  value = 1 }
+		remove_variable = qing_students_mission_active
+		remove_country_modifier = qing_students_mission_running
+		# salvage a fraction of the abroad cohort as returnees (the near-finished).
+		set_variable = { name = qing_students_salvage_tmp  value = var:qing_students_abroad }
+		change_variable = { name = qing_students_salvage_tmp  divide = 4 }
+		change_variable = { name = qing_students_returned  add = var:qing_students_salvage_tmp }
+		if = { limit = { var:qing_students_returned > 100 } set_variable = { name = qing_students_returned  value = 100 } }
+		# the rest are forfeit — the cohort abroad is dissolved.
+		set_variable = { name = qing_students_abroad  value = 0 }
+		# the blow: prestige loss + a jolt of reform pressure, and the alarm subsides
+		# now that the affront has been removed.
+		add_prestige = -30
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 8 }
+		QING_DECLINE_nudge = { var = qing_students_alarm  amount = -40 }
+		LOG_line = { sys = QING  msg = "students: MISSION RECALLED (the 1881 blow) for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_students_recall"  result = OK }
+}
+
+# ======================================================================
+# THE PULSE — advance graduations, drift alarm, test the recall risk. Called from
+# QING_GOV_pulse only while the mission is active. All O(1).
+# ======================================================================
+QING_students_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_students_pulse" }
+	QING_students_init = yes
+
+	# --- steady graduation: a slice of the abroad cohort completes each pulse once
+	# there is a meaningful cohort in place (studies take years — modelled as a slow
+	# drip). We pass a magnitude of 4 (abroad -4 → returned +4).
+	if = {
+		limit = { var:qing_students_abroad >= 10 }
+		set_variable = { name = qing_students_graduate_mag  value = 4 }
+		QING_students_graduate = { amount = -4 }
+	}
+
+	# --- alarm drifts down slowly on its own (memories fade) but is held up while a
+	# large cohort is abroad (a standing affront to the literati).
+	if = {
+		limit = { var:qing_students_abroad >= 40 }
+		QING_DECLINE_nudge = { var = qing_students_alarm  amount = 2 }
+	}
+	else = {
+		QING_DECLINE_nudge = { var = qing_students_alarm  amount = -2 }
+	}
+
+	# --- the recall risk: once alarm is high AND reform pressure is high, the court
+	# may move to dissolve the mission (the 1881 dynamic). Fire the recall-crisis
+	# event; its own trigger re-checks state, and the player chooses whether to
+	# defend the mission or yield. Guarded so it fires at most once per window via a
+	# cooldown flag.
+	if = {
+		limit = {
+			var:qing_students_alarm >= 70
+			var:qing_reform_pressure >= 60
+			NOT = { has_variable = qing_students_recall_pending }
+		}
+		set_variable = { name = qing_students_recall_pending  value = 1 }
+		trigger_event = { id = qing_students.10  days = { 5 20 } }
+		LOG_line = { sys = QING  msg = "students: recall crisis triggered (alarm high) for [ROOT.GetTag]" }
+	}
+
+	QING_students_apply_band = yes
+	LOG_exit = { sys = QING  fn = "QING_students_pulse"  result = OK }
+}
+
+# ======================================================================
+# BAND APPLICATION — a returnee-dividend band (the trained pool as a standing
+# lift) + an alarm overlay. One active per family.
+# ======================================================================
+QING_students_apply_band = {
+	remove_country_modifier = qing_students_returnee_corps
+	remove_country_modifier = qing_students_alarm_high
+	if = {
+		limit = { var:qing_students_returned >= 50 }
+		add_country_modifier = { name = qing_students_returnee_corps  duration = -1 }
+		LOG_line = { sys = QING  msg = "band students = returnee corps for [ROOT.GetTag] (returned=[ROOT.MakeScope.GetVariable('qing_students_returned').GetValue|0])" }
+	}
+	if = {
+		limit = { var:qing_students_alarm >= 66 }
+		add_country_modifier = { name = qing_students_alarm_high  duration = -1 }
+	}
+}

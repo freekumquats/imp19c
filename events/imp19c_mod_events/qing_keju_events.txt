@@ -1,0 +1,388 @@
+########################################################################
+# qing_keju_events.txt — THE IMPERIAL EXAMINATION (科舉), task #9.
+#
+# The keju is the beating heart of the Qing civil order: the ladder by which
+# the empire recruited its officials, conferred its degrees, and bound the
+# gentry to the throne. This roster makes the examination a living cycle the
+# player HOSTS — the triennial provincial (鄉試) and metropolitan (會試)
+# examinations culminating in the palace examination (殿試) under the emperor's
+# own eye — and ties its outcomes to the men who sit on the Grand Council and
+# hold the great offices (se_QING_COUNCIL.txt).
+#
+# WHAT THE PLAYER FEELS:
+#   • HOSTING: a triennial exam prompt. Fund it well and it renews the
+#     bureaucracy with merit (qing_keju_fresh_intake) and confers real degrees
+#     — the shengyuan / juren / gongshi / jinshi status traits (00_imp19c.txt) —
+#     on his courtiers, raising their office eligibility (office_eligibility.*).
+#   • RANK: the top graduate is the 狀元 (zhuangyuan, optimus); the event names
+#     a laureate, awards the jinshi degree, and binds him to the throne
+#     (loyalty_qing_exam_laureate — the 天子門生, "the Son of Heaven's disciple").
+#   • CORRUPTION AFFECTING SCORES: a high qing_corruption_level makes bought
+#     degrees (捐納) and rigged rankings likely — the examiner-bribery scandals
+#     that periodically rocked the Qing. The player chooses whether to prosecute.
+#   • OLD RIVALRIES: examination cohorts (同年) and the examiner–examinee bond
+#     (座師/門生) were the sinews of Qing factionalism; a passed-over scholar can
+#     become a rival, or worse — the archetype being Hong Xiuquan (洪秀全), who
+#     failed the Canton exams four times and raised the Taiping heaven.
+#
+# CHI-only, player-only. Fired from QING_frontier_flavour_roll. All logged
+# sys = QING. Effects verified: add_trait (status degrees), add_loyalty (named
+# objects in 00_imp19c_loyalty.txt), add_rival, add_country_modifier, the
+# QING_DECLINE_nudge counters, and stock country/character effects.
+#
+#   ROOT / this = the Qing overlord (CHI, player)
+#
+# Namespace = qing_keju
+#   .1  the triennial examination convenes (the host prompt)
+#   .2  the palace examination & the naming of the 狀元 (award the laureate)
+#   .3  an examination scandal — corruption has reached the graders (bought ranks)
+#   .4  a brilliant scholar passed over — old rivalry, or the road to rebellion
+#   .5  a grace examination (恩科) proclaimed at a jubilee (optional largesse)
+#
+# Sources: Benjamin Elman, A Cultural History of Civil Examinations in Late
+#   Imperial China (2000) & Civil Examinations and Meritocracy (2013); Ichisada
+#   Miyazaki, China's Examination Hell (tr. 1976); Chung-li Chang, The Chinese
+#   Gentry (1955); Jonathan Spence, God's Chinese Son (1996, on Hong Xiuquan);
+#   Elisabeth Kaske, "The Price of an Office" (2011, on 捐納).
+########################################################################
+
+namespace = qing_keju
+
+########################################################################
+# .1  THE TRIENNIAL EXAMINATION CONVENES  (鄉試 / 會試)
+# The examination cycle comes round. The throne decides how it will be run:
+# funded richly and by the book, run on a shoestring, or — the fiscal
+# temptation — thrown open to purchased degrees for ready silver.
+########################################################################
+qing_keju.1 = {
+	type = country_event
+	title = "qing_keju.1.t"
+	desc = "qing_keju.1.desc"
+	picture = great_library
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_keju.1 (triennial exam convenes, corruption=[ROOT.MakeScope.GetVariable('qing_corruption_level').GetValue|0]) [ROOT.GetTag]" }
+	}
+
+	# --- Host it in full state, by the book (the meritocratic ideal) -----
+	option = {
+		name = "qing_keju.1.a"
+		custom_tooltip = "qing_keju.1.a.tt"
+		trigger = { treasury >= 90 }
+		add_treasury = -90
+		add_country_modifier = { name = qing_keju_fresh_intake  duration = 3650 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -4 }
+		# funding the prefectural & provincial halls (院試/鄉試) properly clears
+		# the lower ladder so able men rise — the abstracted 生員/舉人 tiers.
+		QING_DECLINE_nudge = { var = qing_exam_ladder  amount = 8 }
+		add_stability = 1
+		# the cycle culminates in the palace examination — name the laureate.
+		trigger_event = { id = qing_keju.2  days = { 60 150 } }
+	}
+
+	# --- Hold a modest examination (adequate, unglamorous) ---------------
+	option = {
+		name = "qing_keju.1.b"
+		custom_tooltip = "qing_keju.1.b.tt"
+		trigger = { treasury >= 30 }
+		add_treasury = -30
+		add_political_influence = 10
+		trigger_event = { id = qing_keju.2  days = { 60 150 } }
+	}
+
+	# --- Sell degrees to fill the war chest (捐納) — the rot sets in ------
+	option = {
+		name = "qing_keju.1.c"
+		custom_tooltip = "qing_keju.1.c.tt"
+		QING_sell_offices = yes
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 6 }
+		# bought shengyuan/juren places clog the lower ladder from the base up
+		QING_DECLINE_nudge = { var = qing_exam_ladder  amount = -10 }
+		# a purchased cohort still yields a nominal laureate cycle
+		trigger_event = { id = qing_keju.2  days = { 60 150 } }
+	}
+}
+
+########################################################################
+# .2  THE PALACE EXAMINATION & THE 狀元  (殿試)
+# The metropolitan graduates are ranked before the throne. The first-place
+# graduate is the zhuangyuan (狀元). The event picks the ablest eligible
+# courtier, confers the jinshi degree, and binds him to the emperor as his
+# examiner-sovereign (天子門生). If corruption is high, the ranking may be
+# suspect — a hook into .3.
+########################################################################
+qing_keju.2 = {
+	type = country_event
+	title = "qing_keju.2.t"
+	desc = "qing_keju.2.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:laureate
+
+	is_triggered_only = yes
+
+	immediate = {
+		# the laureate: the ablest courtier not already a jinshi (the new degree
+		# is his making). Fall back to any able adult courtier.
+		if = {
+			limit = {
+				any_character = {
+					employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes
+					NOT = { has_trait = jinshi }
+				}
+			}
+			random_character = {
+				limit = {
+					employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes
+					NOT = { has_trait = jinshi }
+				}
+				order_by = combined_stats_council_svalue
+				save_scope_as = laureate
+			}
+		}
+		else = {
+			random_character = {
+				limit = { employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes }
+				order_by = combined_stats_council_svalue
+				save_scope_as = laureate
+			}
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_keju.2 (palace exam, laureate=[ROOT.MakeScope.GetVariable('qing_corruption_level').GetValue|0] corruption) [ROOT.GetTag]" }
+	}
+
+	# --- Confer the jinshi degree on the 狀元 (bind him to the throne) ----
+	option = {
+		name = "qing_keju.2.a"
+		custom_tooltip = "qing_keju.2.a.tt"
+		scope:laureate = {
+			add_trait = jinshi
+			add_loyalty = loyalty_qing_exam_laureate
+			add_popularity = 15
+			add_character_experience = 10
+			# passing under the emperor's own eye seasons a man's charm and learning
+			# (the 天子門生 bond) — cultivate the factors, then bind him to the throne.
+			QING_char_cultivate = { stat = charisma  amount = 1 }
+			QING_char_cultivate = { stat = finesse  amount = 1 }
+			# the degree confers a clientele of students & protégés (門生故吏) — a
+			# real power base, but one bound to the throne that examined him.
+			add_loyal_veterans = 6
+			QING_char_bind = yes
+		}
+		add_stability = 1
+		# a suspect ranking in a corrupt court may spark a scandal
+		if = {
+			limit = { var:qing_corruption_level >= 45 }
+			trigger_event = { id = qing_keju.3  days = { 30 120 } }
+		}
+	}
+
+	# --- Confer it, and seat the new laureate on the Grand Council -------
+	option = {
+		name = "qing_keju.2.b"
+		custom_tooltip = "qing_keju.2.b.tt"
+		trigger = {
+			var:qing_council_seat_count < var:qing_council_seat_cap
+			political_influence >= 15
+		}
+		add_political_influence = -15
+		scope:laureate = {
+			add_trait = jinshi
+			add_loyalty = loyalty_qing_exam_laureate
+			add_popularity = 15
+			QING_council_seat_character = yes
+		}
+		QING_council_recompute = yes
+		add_stability = 1
+	}
+}
+
+########################################################################
+# .3  AN EXAMINATION SCANDAL  (bought ranks / leaked papers)
+# Fires when corruption has reached the examination halls — the graders have
+# sold rankings or leaked the questions. The great scandals (e.g. the 1858
+# Shuntian fraud, for which a Grand Secretary was executed) were prosecuted
+# ferociously. The throne must choose severity against fiscal/factional cost.
+########################################################################
+qing_keju.3 = {
+	type = country_event
+	title = "qing_keju.3.t"
+	desc = "qing_keju.3.desc"
+	picture = senate_debate
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_keju.3 (exam scandal) [ROOT.GetTag]" }
+	}
+
+	# --- Prosecute to the utmost (execute the graders — the 1858 precedent) -
+	option = {
+		name = "qing_keju.3.a"
+		custom_tooltip = "qing_keju.3.a.tt"
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -10 }
+		add_tyranny = 3
+		add_stability = 1
+		add_country_modifier = { name = qing_censorate_vigilant  duration = 1825 }
+		# a purged examiner among the courtiers, disgraced
+		if = {
+			limit = {
+				any_character = { employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes  has_trait = corrupt }
+			}
+			random_character = {
+				limit = { employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes  has_trait = corrupt }
+				add_loyalty = loyalty_qing_disgraced
+				add_popularity = -30
+			}
+		}
+	}
+
+	# --- Quietly annul the tainted results and re-sit the exam -----------
+	option = {
+		name = "qing_keju.3.b"
+		custom_tooltip = "qing_keju.3.b.tt"
+		trigger = { treasury >= 40 }
+		add_treasury = -40
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -4 }
+	}
+
+	# --- Hush it up (the degrees stand; the rot compounds) ---------------
+	option = {
+		name = "qing_keju.3.c"
+		custom_tooltip = "qing_keju.3.c.tt"
+		add_country_modifier = { name = qing_keju_scandal  duration = 3650 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 5 }
+	}
+}
+
+########################################################################
+# .4  A BRILLIANT SCHOLAR PASSED OVER  (old rivalries / the road to rebellion)
+# A gifted candidate has failed the examinations — whether by ill luck, by a
+# rigged grade, or by the sheer brutal odds (the metropolitan pass rate was ~1%).
+# History's warning is Hong Xiuquan, four times failed at Canton, who read a
+# Christian tract in his despair and raised the Taiping Heavenly Kingdom.
+########################################################################
+qing_keju.4 = {
+	type = country_event
+	title = "qing_keju.4.t"
+	desc = "qing_keju.4.desc"
+	picture = great_library
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:failed_scholar
+
+	is_triggered_only = yes
+
+	immediate = {
+		# conjure the disappointed scholar (a Han commoner of real ability)
+		create_character = {
+			age = 26
+			culture = han
+			religion = root.religion
+			add_martial = 6
+			add_finesse = 9
+			add_charisma = 8
+			add_zeal = 7
+			save_scope_as = failed_scholar
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_keju.4 (scholar passed over) [ROOT.GetTag]" }
+	}
+
+	# --- A special appointment — recognise the talent outside the ladder --
+	option = {
+		name = "qing_keju.4.a"
+		custom_tooltip = "qing_keju.4.a.tt"
+		trigger = { political_influence >= 15 }
+		add_political_influence = -15
+		scope:failed_scholar = {
+			add_trait = juren
+			add_loyalty = loyalty_qing_elevated
+			add_popularity = 10
+			set_home_country = ROOT
+			# recognised and taken into service against the odds — a debt of
+			# gratitude. Score him fresh in his new station and bind him.
+			QING_char_bind = yes
+		}
+		add_stability = 1
+	}
+
+	# --- Grant a re-examination (a fair second chance) -------------------
+	option = {
+		name = "qing_keju.4.b"
+		custom_tooltip = "qing_keju.4.b.tt"
+		trigger = { treasury >= 30 }
+		add_treasury = -30
+		scope:failed_scholar = {
+			add_trait = shengyuan
+			set_home_country = ROOT
+		}
+		# a fair re-sit signals the lower ladder still works — the gentry notice.
+		QING_DECLINE_nudge = { var = qing_exam_ladder  amount = 4 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -2 }
+	}
+
+	# --- Turn him away — and reap the bitterness (the Hong Xiuquan road) --
+	option = {
+		name = "qing_keju.4.c"
+		custom_tooltip = "qing_keju.4.c.tt"
+		scope:failed_scholar = {
+			add_loyalty = loyalty_qing_exam_embittered
+			add_rival = root.current_ruler
+			add_popularity = -10
+			# shut out of imperial office, he raises a power base of his OWN — the
+			# disaffected-gentry militia that grew into the Taiping (a hostile,
+			# independent power base, the mirror of the loyal laureate's).
+			add_loyal_veterans = 8
+		}
+		# a passed-over scholar-class swells the ranks of the disaffected
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = 6 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
+	}
+}
+
+########################################################################
+# .5  A GRACE EXAMINATION PROCLAIMED  (恩科)
+# Beyond the regular triennial cycle, the throne could proclaim an extra
+# "grace examination" to mark a jubilee, an accession, or an imperial
+# birthday — an act of largesse that won the gentry's gratitude.
+########################################################################
+qing_keju.5 = {
+	type = country_event
+	title = "qing_keju.5.t"
+	desc = "qing_keju.5.desc"
+	picture = great_library
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_keju.5 (grace exam) [ROOT.GetTag]" }
+	}
+
+	# --- Proclaim the grace examination (largesse, gentry goodwill) ------
+	option = {
+		name = "qing_keju.5.a"
+		custom_tooltip = "qing_keju.5.a.tt"
+		trigger = { treasury >= 60 }
+		add_treasury = -60
+		add_country_modifier = { name = qing_keju_grace_exam  duration = 3650 }
+		current_ruler = { add_prestige = 15 }
+		add_stability = 1
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -3 }
+	}
+
+	# --- Keep to the regular cycle (thrift over spectacle) ---------------
+	option = {
+		name = "qing_keju.5.b"
+		custom_tooltip = "qing_keju.5.b.tt"
+		add_political_influence = 5
+	}
+}

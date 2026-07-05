@@ -1,0 +1,317 @@
+########################################################################
+# qing_japan_missions.txt — the JAPAN / MEIJI mission tree (東亞近代化).
+# CHI-only, player-driven. The parallel-modernization relationship with the
+# one Asian PEER: not a predatory Western great power but the Qing's mirror,
+# racing the same self-strengthening.
+#
+# The tree opens with a shared diplomatic overture (the closed courts open to
+# one another) and then FORKS into two roads the player commits to:
+#
+#   ARC A — 同文同種 THE ACCORD (the pan-Asian entente): treaty of amity,
+#     shared students and arsenals, the Ryukyu question settled by negotiation,
+#     rising to the East Asian Alliance capstone (qing_japan_alliance).
+#
+#   ARC B — 海防 THE RIVALRY (the collision pre-empted or won): read the danger,
+#     ready the coast and fleets, and forestall/win the 1894–95 war, rising to
+#     the Collision-Won capstone (qing_japan_triumph).
+#
+# The tasks drive the accord/rivalry poles and Japan's Meiji meter through the
+# QING_japan_* effects (se_QING_DIPLO.txt) and grant the named reward modifiers
+# (qing_japan_modifiers.txt). "Japan" is whichever tag leads the isles — the
+# Tokugawa Shogunate (TKG) at the 1815 start, or a unified Japan (JPN) if formed;
+# QING_japan_resolve_lead resolves it and the tasks guard on its existence.
+#
+# Gating: CHI-only via potential = { tag = CHI  is_ai = no }; tasks gate on
+# treasury / political influence and (for the diplomatic beats) on Japan being
+# on the map, so the tree cannot run in its absence.
+#
+# NOTE (cosmetic): task icons reuse the stock test1/2/3 sprites and the header
+# reuses mission_image_test, matching the rest of the Qing suite; swap for
+# bespoke art later. This does not affect function.
+#
+# Sources: Marius Jansen, The Making of Modern Japan (2000); Key-Hiuk Kim, The
+#   Last Phase of the East Asian World Order (1980); Douglas Howland, Borders of
+#   Chinese Civilization (1996, on the Ryukyu/Korea disputes and the 1871 treaty);
+#   Benjamin Elman on the comparative self-strengthening; S.C.M. Paine, The
+#   Sino-Japanese War of 1894–1895 (2003).
+########################################################################
+
+qing_japan_mission = {
+	icon = test1
+	header = mission_image_test
+
+	repeatable = no
+
+	chance = { }
+	ai_chance = { factor = 0 }   # player-only, like the rest of the Qing suite
+
+	potential = {
+		tag = CHI
+		is_ai = no
+	}
+
+	abort = {
+		NOT = { tag = CHI }
+	}
+
+	on_start = {
+		LOG_line = { sys = QING  msg = "MISSION japan/meiji started for [ROOT.GetTag]" }
+		QING_japan_init = yes
+	}
+
+	on_completion = {
+		LOG_line = { sys = QING  msg = "MISSION japan/meiji COMPLETED for [ROOT.GetTag]" }
+	}
+
+	# ==================================================================
+	# ROOT TASK — 遣使日本 open the closed courts (the first legation).
+	# For two centuries Beijing and Edo held no formal relations; the sea
+	# between them was a silence. Send an embassy and open the channel.
+	# ==================================================================
+	qing_jp_open_relations = {
+		icon = test1
+		allow = {
+			political_influence >= 15
+			custom_tooltip = {
+				text = qing_jp_needs_japan_tt
+				OR = { exists = c:JPN  exists = c:TKG }
+			}
+		}
+		on_start = {
+			add_political_influence = -15
+		}
+		on_completion = {
+			custom_tooltip = qing_jp_open_relations_tt
+			add_country_modifier = { name = qing_japan_legation  duration = -1 }
+			# an overture warms the relationship a touch, without committing a road
+			QING_japan_warm_accord = { amount = 8 }
+			LOG_line = { sys = QING  msg = "MISSION task open-relations (legation) for [ROOT.GetTag]" }
+		}
+	}
+
+	# ##################################################################
+	# ARC A — 同文同種 THE ACCORD (the pan-Asian entente)
+	# ##################################################################
+
+	# --- 修好條規 the Treaty of Amity (1871), signed as equals ----------
+	# ENTRY of the ACCORD arc. Completing it commits the dynasty to the warm road
+	# (qing_japan_road = flag:accord), which locks the rivalry arc's entry — the
+	# player commits to ONE road rather than banking both capstones.
+	qing_jp_treaty_amity = {
+		icon = test2
+		requires = { qing_jp_open_relations }
+		allow = {
+			treasury >= 50
+			custom_tooltip = {
+				text = qing_jp_needs_japan_tt
+				OR = { exists = c:JPN  exists = c:TKG }
+			}
+			custom_tooltip = {
+				text = qing_jp_road_uncommitted_tt
+				NOT = { var:qing_japan_road = flag:rivalry }
+			}
+		}
+		on_start = {
+			add_treasury = -50
+		}
+		on_completion = {
+			custom_tooltip = qing_jp_treaty_amity_tt
+			# commit to the accord road (guarded so it is set once)
+			if = {
+				limit = { NOT = { has_variable = qing_japan_road } }
+				set_variable = { name = qing_japan_road  value = flag:accord }
+			}
+			add_country_modifier = { name = qing_japan_treaty_amity  duration = -1 }
+			QING_japan_warm_accord = { amount = 15 }
+			LOG_line = { sys = QING  msg = "MISSION task treaty-of-amity (road=accord) for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 留學生 shared students and arsenals ----------------------------
+	qing_jp_shared_learning = {
+		icon = test3
+		requires = { qing_jp_treaty_amity }
+		allow = {
+			treasury >= 70
+			custom_tooltip = {
+				text = qing_jp_needs_accord_tt
+				var:qing_japan_accord >= 30
+			}
+		}
+		on_start = {
+			add_treasury = -70
+		}
+		on_completion = {
+			custom_tooltip = qing_jp_shared_learning_tt
+			add_country_modifier = { name = qing_japan_shared_learning  duration = -1 }
+			QING_japan_warm_accord = { amount = 15 }
+			# cooperation speeds BOTH programmes — Japan's Meiji clock and the Qing's
+			QING_japan_meiji_advance = { amount = 5 }
+			if = {
+				limit = { has_variable = qing_selfstr_progress }
+				QING_selfstr_advance = { amount = 8 }
+			}
+			LOG_line = { sys = QING  msg = "MISSION task shared-learning for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 琉球分島 the Ryukyu question settled by negotiation ------------
+	qing_jp_ryukyu_accord = {
+		icon = test2
+		requires = { qing_jp_shared_learning }
+		allow = {
+			treasury >= 80
+			custom_tooltip = {
+				text = qing_jp_needs_accord_tt
+				var:qing_japan_accord >= 50
+			}
+		}
+		on_start = {
+			add_treasury = -80
+		}
+		on_completion = {
+			custom_tooltip = qing_jp_ryukyu_accord_tt
+			# the historical 1880 partition proposal, here carried through in peace
+			if = { limit = { exists = p:524   NOT = { owns = 524 } }  add_claim = p:524 }
+			add_country_modifier = { name = qing_japan_ryukyu_accord  duration = -1 }
+			QING_japan_warm_accord = { amount = 10 }
+			LOG_line = { sys = QING  msg = "MISSION task ryukyu-accord for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 東亞同盟 CAPSTONE A — the East Asian Alliance ------------------
+	qing_jp_alliance = {
+		icon = test1
+		requires = { qing_jp_ryukyu_accord }
+		allow = {
+			custom_tooltip = {
+				text = qing_jp_needs_deep_accord_tt
+				var:qing_japan_accord >= 70
+				var:qing_japan_rivalry < 30
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_jp_alliance_tt
+			add_country_modifier = { name = qing_japan_alliance  duration = -1 }
+			QING_japan_warm_accord = { amount = 20 }
+			current_ruler = { add_prestige = 40 }
+			add_stability = 1
+			# two industrial monarchies pulling together speeds both clocks
+			QING_japan_meiji_advance = { amount = 10 }
+			if = {
+				limit = { has_variable = qing_selfstr_progress }
+				QING_selfstr_advance = { amount = 12 }
+			}
+			LOG_line = { sys = QING  msg = "MISSION japan CAPSTONE A (east asian alliance) for [ROOT.GetTag]" }
+		}
+	}
+
+	# ##################################################################
+	# ARC B — 海防 THE RIVALRY (the collision pre-empted or won)
+	# ##################################################################
+
+	# --- 東洋之患 read the danger (the coastal-defence debate, 塞防海防) -
+	# ENTRY of the RIVALRY arc. Completing it commits the dynasty to the hard road
+	# (qing_japan_road = flag:rivalry), which locks the accord arc's entry.
+	qing_jp_read_danger = {
+		icon = test2
+		requires = { qing_jp_open_relations }
+		allow = {
+			political_influence >= 20
+			custom_tooltip = {
+				text = qing_jp_road_uncommitted_tt
+				NOT = { var:qing_japan_road = flag:accord }
+			}
+		}
+		on_start = {
+			add_political_influence = -20
+		}
+		on_completion = {
+			custom_tooltip = qing_jp_read_danger_tt
+			# commit to the rivalry road (guarded so it is set once)
+			if = {
+				limit = { NOT = { has_variable = qing_japan_road } }
+				set_variable = { name = qing_japan_road  value = flag:rivalry }
+			}
+			# name Japan the coming rival — the relationship hardens
+			QING_japan_raise_rivalry = { amount = 15 }
+			LOG_line = { sys = QING  msg = "MISSION task read-danger (road=rivalry) for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 海防 ready the coast and concentrate the fleets ----------------
+	qing_jp_ready_coast = {
+		icon = test3
+		requires = { qing_jp_read_danger }
+		allow = {
+			treasury >= 90
+			custom_tooltip = {
+				text = qing_jp_needs_rivalry_tt
+				var:qing_japan_rivalry >= 30
+			}
+		}
+		on_start = {
+			add_treasury = -90
+		}
+		on_completion = {
+			custom_tooltip = qing_jp_ready_coast_tt
+			# fortify Weihaiwei (the historical Beiyang base) if held
+			if = { limit = { owns = 3033 }  p:3033 = { add_building_level = fortress_building } }
+			add_country_modifier = { name = qing_japan_coastal_defence  duration = -1 }
+			QING_japan_raise_rivalry = { amount = 10 }
+			LOG_line = { sys = QING  msg = "MISSION task ready-coast for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 朝鮮 hold the Korean shield (the flashpoint of 1894) -----------
+	qing_jp_korea_shield = {
+		icon = test2
+		requires = { qing_jp_ready_coast }
+		allow = {
+			treasury >= 100
+			custom_tooltip = {
+				text = qing_jp_needs_rivalry_tt
+				var:qing_japan_rivalry >= 50
+			}
+		}
+		on_start = {
+			add_treasury = -100
+		}
+		on_completion = {
+			custom_tooltip = qing_jp_korea_shield_tt
+			# reaffirm suzerainty over Joseon — the buffer Japan means to prise loose
+			if = {
+				limit = { exists = c:KOR  NOT = { c:KOR = { is_subject_of = ROOT } } }
+				FUNC_make_subject = { overlord = ROOT  target = c:KOR  type = sinosphere_tributary }
+			}
+			QING_japan_raise_rivalry = { amount = 12 }
+			LOG_line = { sys = QING  msg = "MISSION task korea-shield for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 甲午雪恥 CAPSTONE B — the collision forestalled or won ---------
+	qing_jp_triumph = {
+		icon = test1
+		requires = { qing_jp_korea_shield }
+		allow = {
+			custom_tooltip = {
+				text = qing_jp_needs_deep_rivalry_tt
+				var:qing_japan_rivalry >= 70
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_jp_triumph_tt
+			add_country_modifier = { name = qing_japan_triumph  duration = -1 }
+			current_ruler = { add_prestige = 50 }
+			add_stability = 1
+			# the danger is broken: the menace band can no longer form while this holds
+			QING_DECLINE_nudge = { var = qing_japan_rivalry  amount = -30 }
+			# vindication of the whole self-strengthening cause
+			if = {
+				limit = { has_variable = qing_selfstr_progress }
+				QING_selfstr_advance = { amount = 15 }
+			}
+			LOG_line = { sys = QING  msg = "MISSION japan CAPSTONE B (collision won) for [ROOT.GetTag]" }
+		}
+	}
+}

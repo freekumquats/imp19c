@@ -1,0 +1,276 @@
+﻿########################################################################
+# se_QING_GOVERNANCE.txt — the GOVERNANCE engine for the Qing suite: the
+# abstracted bureaucratic hierarchy that the Grand Council (軍機處) sits atop,
+# plus the Grand Council hub and the character-held great offices.
+#
+# Design mirrors se_QING_DECLINE.txt exactly: a small set of 0..100 COUNTER
+# variables on the Qing country, nudged EVENT-DRIVEN, read O(1) by a throttled
+# pulse (QING_GOV_pulse) that swaps the modifier band matching each counter.
+# It reuses QING_DECLINE_nudge (generic over var name) for all clamped nudges.
+#
+# The hierarchy itself (tens of thousands of clerks) is NOT modelled per-clerk;
+# it is compressed into two meters:
+#   qing_bureau_capacity   0..100  administrative throughput / reach of edicts
+#   qing_bureau_integrity  0..100  merit (科舉) vs patronage (捐納) staffing
+# and the Grand Council's own quality:
+#   qing_council_effectiveness  0..100  derived from seated councillors
+#
+# Capacity is FED BY the Grand Council (a responsive council drives the whole
+# machine) and DRAINED BY corruption and purchased ranks; integrity tracks the
+# balance of exam-selected vs bought office. This is the connective tissue the
+# user asked for: the Council sits atop the hierarchy, and both feed and are fed
+# by the existing decline/reform meters in se_QING_DECLINE.txt.
+#
+#   ROOT / this = the Qing overlord (CHI, human)
+#
+# Prefix = QING_GOV  (council seat/office helpers: QING_council_ / QING_office_)
+########################################################################
+
+# ======================================================================
+# INIT — seed the governance counters once for a fresh CHI game.
+# ======================================================================
+QING_GOV_init = {
+	LOG_enter = { sys = QING  fn = "QING_GOV_init" }
+	if = { limit = { NOT = { has_variable = qing_bureau_capacity } }       set_variable = { name = qing_bureau_capacity  value = 60 } }
+	if = { limit = { NOT = { has_variable = qing_bureau_integrity } }      set_variable = { name = qing_bureau_integrity  value = 60 } }
+	if = { limit = { NOT = { has_variable = qing_council_effectiveness } } set_variable = { name = qing_council_effectiveness  value = 50 } }
+	# the lower examination ladder (prefectural 生員 + provincial 舉人 tiers),
+	# abstracted like the sub-bureaucracy — a single meter for the health of the
+	# merit-selection apparatus that feeds candidates up to the metropolitan exam.
+	if = { limit = { NOT = { has_variable = qing_exam_ladder } }           set_variable = { name = qing_exam_ladder  value = 60 } }
+	LOG_exit = { sys = QING  fn = "QING_GOV_init"  result = OK }
+}
+
+# ======================================================================
+# DERIVED UPDATES — recompute the two abstracted meters from live state.
+# All reads are O(1) counter/variable reads; no pop or province sweeps.
+# ======================================================================
+
+# Integrity drifts toward (100 - corruption), penalised while purchased ranks
+# are stuffing the bureaucracy (the 捐納 modifier from se_QING_MECHANICS.txt).
+QING_GOV_update_integrity = {
+	set_variable = { name = qing_bureau_integrity_target  value = 100 }
+	change_variable = { name = qing_bureau_integrity_target  subtract = var:qing_corruption_level }
+	if = {
+		limit = { has_country_modifier = qing_office_purchased_ranks }
+		change_variable = { name = qing_bureau_integrity_target  subtract = 20 }
+	}
+	if = { limit = { var:qing_bureau_integrity_target < 0 }   set_variable = { name = qing_bureau_integrity_target  value = 0 } }
+	if = { limit = { var:qing_bureau_integrity_target > 100 } set_variable = { name = qing_bureau_integrity_target  value = 100 } }
+	# smooth drift toward the target (+/-2 per pulse)
+	if = {
+		limit = { var:qing_bureau_integrity < var:qing_bureau_integrity_target }
+		QING_DECLINE_nudge = { var = qing_bureau_integrity  amount = 2 }
+	}
+	else_if = {
+		limit = { var:qing_bureau_integrity > var:qing_bureau_integrity_target }
+		QING_DECLINE_nudge = { var = qing_bureau_integrity  amount = -2 }
+	}
+}
+
+# Capacity drifts toward a blend of council effectiveness + integrity, minus a
+# corruption drag. This is where the Grand Council "drives the machine": a
+# capable council raises the ceiling of the whole abstracted hierarchy.
+QING_GOV_update_capacity = {
+	set_variable = { name = qing_bureau_capacity_target  value = 0 }
+	change_variable = { name = qing_bureau_capacity_target  add = var:qing_council_effectiveness }
+	change_variable = { name = qing_bureau_capacity_target  add = var:qing_bureau_integrity }
+	# average the two positive drivers
+	change_variable = { name = qing_bureau_capacity_target  divide = 2 }
+	# corruption drags the achievable capacity down (half its value)
+	set_variable = { name = qing_gov_corruption_drag  value = var:qing_corruption_level }
+	change_variable = { name = qing_gov_corruption_drag  divide = 2 }
+	change_variable = { name = qing_bureau_capacity_target  subtract = var:qing_gov_corruption_drag }
+	if = { limit = { var:qing_bureau_capacity_target < 0 }   set_variable = { name = qing_bureau_capacity_target  value = 0 } }
+	if = { limit = { var:qing_bureau_capacity_target > 100 } set_variable = { name = qing_bureau_capacity_target  value = 100 } }
+	# smooth drift toward the target (+/-2 per pulse)
+	if = {
+		limit = { var:qing_bureau_capacity < var:qing_bureau_capacity_target }
+		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = 2 }
+	}
+	else_if = {
+		limit = { var:qing_bureau_capacity > var:qing_bureau_capacity_target }
+		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = -2 }
+	}
+}
+
+# ======================================================================
+# BAND APPLICATION — one active modifier per family, matching the counter.
+# ======================================================================
+QING_GOV_apply_capacity_band = {
+	remove_country_modifier = qing_bureau_capable
+	remove_country_modifier = qing_bureau_strained
+	remove_country_modifier = qing_bureau_paralysed
+	if = {
+		limit = { var:qing_bureau_capacity >= 70 }
+		add_country_modifier = { name = qing_bureau_capable  duration = -1 }
+		LOG_line = { sys = QING  msg = "band capacity = capable for [ROOT.GetTag] (capacity=[ROOT.MakeScope.GetVariable('qing_bureau_capacity').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_bureau_capacity < 30 }
+		add_country_modifier = { name = qing_bureau_paralysed  duration = -1 }
+		LOG_line = { sys = QING  msg = "band capacity = paralysed for [ROOT.GetTag] (capacity=[ROOT.MakeScope.GetVariable('qing_bureau_capacity').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_bureau_capacity < 50 }
+		add_country_modifier = { name = qing_bureau_strained  duration = -1 }
+		LOG_line = { sys = QING  msg = "band capacity = strained for [ROOT.GetTag] (capacity=[ROOT.MakeScope.GetVariable('qing_bureau_capacity').GetValue|0])" }
+	}
+}
+
+QING_GOV_apply_integrity_band = {
+	remove_country_modifier = qing_bureau_meritocratic
+	remove_country_modifier = qing_bureau_venal
+	if = {
+		limit = { var:qing_bureau_integrity >= 70 }
+		add_country_modifier = { name = qing_bureau_meritocratic  duration = -1 }
+		LOG_line = { sys = QING  msg = "band integrity = meritocratic for [ROOT.GetTag] (integrity=[ROOT.MakeScope.GetVariable('qing_bureau_integrity').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_bureau_integrity <= 30 }
+		add_country_modifier = { name = qing_bureau_venal  duration = -1 }
+		LOG_line = { sys = QING  msg = "band integrity = venal for [ROOT.GetTag] (integrity=[ROOT.MakeScope.GetVariable('qing_bureau_integrity').GetValue|0])" }
+	}
+}
+
+# ======================================================================
+# THE LOWER EXAMINATION LADDER (生員 / 舉人) — abstracted, like the sub-
+# bureaucracy. NOT modelled per-candidate: one 0..100 meter for the health of
+# the prefectural (院試/府試 → 生員/秀才) and provincial (鄉試 → 舉人) tiers that
+# feed talent up to the metropolitan/palace examination dramatized in
+# qing_keju_events.txt. It drifts toward a blend of bureau integrity (an honest
+# apparatus grades fairly) and council effectiveness (a capable court funds and
+# oversees the halls), dragged down by corruption (bought degrees at the base).
+# ======================================================================
+QING_GOV_update_exam_ladder = {
+	set_variable = { name = qing_exam_ladder_target  value = 0 }
+	change_variable = { name = qing_exam_ladder_target  add = var:qing_bureau_integrity }
+	change_variable = { name = qing_exam_ladder_target  add = var:qing_council_effectiveness }
+	change_variable = { name = qing_exam_ladder_target  divide = 2 }
+	# corruption at the base (examiner bribery, bought shengyuan places) drags it
+	set_variable = { name = qing_exam_corruption_drag  value = var:qing_corruption_level }
+	change_variable = { name = qing_exam_corruption_drag  divide = 2 }
+	change_variable = { name = qing_exam_ladder_target  subtract = var:qing_exam_corruption_drag }
+	# a fresh, well-run metropolitan cycle lifts the whole ladder for its duration
+	if = {
+		limit = { has_country_modifier = qing_keju_fresh_intake }
+		change_variable = { name = qing_exam_ladder_target  add = 10 }
+	}
+	if = {
+		limit = { has_country_modifier = qing_keju_scandal }
+		change_variable = { name = qing_exam_ladder_target  subtract = 15 }
+	}
+	if = { limit = { var:qing_exam_ladder_target < 0 }   set_variable = { name = qing_exam_ladder_target  value = 0 } }
+	if = { limit = { var:qing_exam_ladder_target > 100 } set_variable = { name = qing_exam_ladder_target  value = 100 } }
+	# smooth drift toward the target (+/-2 per pulse)
+	if = {
+		limit = { var:qing_exam_ladder < var:qing_exam_ladder_target }
+		QING_DECLINE_nudge = { var = qing_exam_ladder  amount = 2 }
+	}
+	else_if = {
+		limit = { var:qing_exam_ladder > var:qing_exam_ladder_target }
+		QING_DECLINE_nudge = { var = qing_exam_ladder  amount = -2 }
+	}
+}
+
+QING_GOV_apply_exam_ladder_band = {
+	remove_country_modifier = qing_exam_ladder_vigorous
+	remove_country_modifier = qing_exam_ladder_clogged
+	if = {
+		limit = { var:qing_exam_ladder >= 70 }
+		add_country_modifier = { name = qing_exam_ladder_vigorous  duration = -1 }
+		LOG_line = { sys = QING  msg = "band exam_ladder = vigorous for [ROOT.GetTag] (ladder=[ROOT.MakeScope.GetVariable('qing_exam_ladder').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_exam_ladder <= 30 }
+		add_country_modifier = { name = qing_exam_ladder_clogged  duration = -1 }
+		LOG_line = { sys = QING  msg = "band exam_ladder = clogged for [ROOT.GetTag] (ladder=[ROOT.MakeScope.GetVariable('qing_exam_ladder').GetValue|0])" }
+	}
+}
+
+# ======================================================================
+# THE GOVERNANCE PULSE ENTRY POINT
+# Called from the throttled monthly pulse (00_monthly_country.txt) right after
+# the decline pulse, so the council recompute below sees fresh decline counters.
+# All O(1).
+# ======================================================================
+QING_GOV_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_GOV_pulse" }
+	QING_GOV_init = yes
+
+	# 1. recompute the Grand Council's effectiveness from its seated members
+	QING_council_recompute = yes
+
+	# 2. recompute the abstracted hierarchy meters (integrity & capacity first, as
+	#    the exam-ladder meter is derived from them)
+	QING_GOV_update_integrity = yes
+	QING_GOV_update_capacity = yes
+	QING_GOV_update_exam_ladder = yes
+
+	# 3. re-apply every band
+	QING_council_apply_band = yes
+	QING_GOV_apply_capacity_band = yes
+	QING_GOV_apply_integrity_band = yes
+	QING_GOV_apply_exam_ladder_band = yes
+
+	# 4. Self-Strengthening progress band (reads qing_selfstr_progress, advanced
+	#    by the Self-Strengthening mission tree). Cheap O(1) band swap.
+	QING_selfstr_apply_band = yes
+
+	# 4b. Elman "refraction" test: is that progress genuine (backed by the bureau
+	#     capacity / council / integrity machinery) or hollow? Stamps
+	#     qing_selfstr_hollow_flag and swaps the brittle-modernization band. O(1).
+	QING_selfstr_refraction_test = yes
+
+	# 5. Great-power rivalry bands (reads qing_gp_tension_*, raised by the
+	#    expansion mission trees; se_QING_DIPLO.txt). Cheap O(1) band swap —
+	#    a provoked power's enmity persists until its tension counter cools.
+	QING_gp_apply_bands = yes
+
+	# 6. Imperial Maritime Customs Service (海關) — only once established. Recompute
+	#    efficiency, grant the quarterly (reserve-scaled) customs revenue, and swap
+	#    the efficiency + foreign-control bands. O(1). (se_QING_CUSTOMS.txt)
+	if = {
+		limit = { has_variable = qing_customs_established }
+		QING_customs_pulse = yes
+	}
+
+	# 7. Educational Mission (留學生) — only while the mission runs. Advances
+	#    graduations, drifts conservative alarm, and tests the recall risk
+	#    (the 1881 dynamic). O(1). (se_QING_STUDENTS.txt)
+	if = {
+		limit = { has_variable = qing_students_mission_active }
+		QING_students_pulse = yes
+	}
+
+	# 8. Unequal-treaty & treaty-port system (條約口岸) — only once imposed. Feeds
+	#    reform pressure from the humiliation burden, drifts the burden as revision
+	#    proceeds, and swaps the ports/burden bands. O(1). (se_QING_TREATIES.txt)
+	if = {
+		limit = { has_variable = qing_treaty_system_imposed }
+		QING_treaty_pulse = yes
+	}
+
+	# 9. Technology-transfer bargains (洋務交易) — test each power's favor-debt against
+	#    the call threshold. Always runs (the debts persist); at most one call
+	#    pending at a time. O(1). (se_QING_TECHTRANSFER.txt)
+	QING_techtransfer_pulse = yes
+
+	# 10. Protect the Vassal (保藩) — apply the suzerain-prestige band. The tributary
+	#     crises fire from the flavour roll; the meter is stable between shocks. O(1).
+	#     (se_QING_VASSAL.txt)
+	QING_vassal_pulse = yes
+
+	# 11. Missionary incidents (教案) — drift the anti-Christian sentiment toward the
+	#     treaty-burden/sect-pressure grievance, apply its band, and escalate to the
+	#     Boxer moment when it boils over. O(1). (se_QING_MISSIONARY.txt)
+	QING_missionary_pulse = yes
+
+	# 12. The Ili Crisis (新疆/伊犁) — a discrete set-piece: keep the New-Dominion grip
+	#     band in step, and once the far-western rising has flared, queue the 海防塞防
+	#     debate a single time. The stages then advance by player choice. O(1).
+	#     (se_QING_ILI.txt)
+	QING_ili_pulse = yes
+
+	LOG_exit = { sys = QING  fn = "QING_GOV_pulse"  result = OK }
+}

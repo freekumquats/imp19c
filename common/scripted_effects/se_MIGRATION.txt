@@ -1,0 +1,402 @@
+########################################################################
+# se_MIGRATION.txt — the GENERIC bottom-up migration engine.
+#
+# Pops move because life is bad where they are and better somewhere else.
+# Each decade pulse (00_decade_country.txt -> MIGRATION_decade_pulse) every
+# country runs this once: it finds its most miserable provinces, and from each
+# lets ONE grievance-weighted pop trickle to the most attractive adjacent
+# province — which may belong to a NEIGHBOUR, i.e. cross-border migration.
+#
+# BOTTOM-UP (firm design): the government / player never orders a move. They
+# only tilt the odds through modifiers folded into the push/pull scores
+# (MIGRATION_svalues.txt). The scores are built ENTIRELY from already-cached
+# economy fields (jobs, unrest, food shortage, war/occupation) — the pulse
+# recomputes nothing, it reads.
+#
+# SETTLER COLONIALISM (organic): if the incomers make their own culture the
+# new plurality of a foreign province, the kin-state of that culture gains a
+# CLAIM on it (add_claim, the same primitive the Qing colonisation missions and
+# send_settlers use by fiat) — feeding the Layer 1 claim-hostility engine
+# (se_CLAIM_HOSTILITY.txt) and the Layer 3 de jure / irredentism layer. Internal
+# migration flipping one's OWN province seeds nothing (the kin-state is the
+# owner, and a country cannot claim what it already holds).
+#
+# THROTTLE: the decade pulse IS the throttle — one trickle per top-push
+# province per country per ~decade. No per-pair state, no hot loop. The heavy
+# calls (the every/ordered scans, the random_country kin lookup) only run for
+# the few worst provinces, and the kin lookup only when a flip actually happens.
+#
+# All lines logged sys = MIGR (zero-cost outside -debug_mode).
+# Prefix = MIGRATION_
+########################################################################
+
+# How many of a country's worst provinces shed a pop each pulse. Kept small so
+# migration is a steady trickle, not a churn.
+@migration_source_provinces = 3
+
+# ======================================================================
+# ENTRY — run once per country per decade pulse. ROOT / this = the country.
+# ======================================================================
+MIGRATION_country_pulse = {
+	# Skip countries too small or empty to have meaningful internal movement.
+	if = {
+		limit = {
+			exists = capital_scope
+			num_of_provinces >= 2
+		}
+		LOG_enter = { sys = MIGR  fn = MIGRATION_country_pulse }
+
+		# FRICTION DECAY (light): our own provinces cool one notch of accumulated
+		# migrant-influx strain each decade. A province still receiving newcomers
+		# gains faster than this bleeds (arrival = +2, decay = -1), so sustained
+		# migration escalates while a burst that stops fades and its strain
+		# modifiers lapse. Guarded on has_variable so it costs nothing on the
+		# overwhelming majority of provinces that never received a foreign influx.
+		every_owned_province = {
+			limit = { has_variable = migr_influx }
+			MIGRATION_decay_border_friction = yes
+		}
+
+		# The worst-off provinces we own are where people start leaving from.
+		ordered_owned_province = {
+			order_by = MIGRATION_push_province
+			max = @migration_source_provinces
+			# Only bother if there is real pressure here and someone who could go.
+			limit = {
+				MIGRATION_push_province > 5
+				any_pops_in_province = {
+					NOT = { pop_type = slaves }
+					NOT = { pop_type = nobles }
+				}
+			}
+			MIGRATION_try_emigrate_from_province = yes
+		}
+
+		LOG_exit = { sys = MIGR  fn = MIGRATION_country_pulse  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = MIGR  fn = MIGRATION_country_pulse  reason = "country too small/empty for internal migration (no capital or <2 provinces)" }
+	}
+}
+
+# ======================================================================
+# From ONE high-push province, pick the best adjacent destination and let a
+# single grievance-weighted pop leave for it.
+#   this = the source province (owned by the pulsing country).
+# ======================================================================
+MIGRATION_try_emigrate_from_province = {
+	save_scope_as = migr_source
+	LOG_line = { sys = MIGR  msg = "migration: evaluating emigration from [this.GetName] ([ROOT.GetTag]); no subsequent move line means no viable destination qualified" }
+
+	# The most attractive neighbour that is genuinely worth moving to: it must
+	# be owned land with a POSITIVE pull (a net-better place than a war zone /
+	# overfull slum). ordered_ picks the single highest-pull neighbour.
+	ordered_neighbor_province = {
+		order_by = MIGRATION_pull_province
+		max = 1
+		limit = {
+			exists = owner
+			NOT = { this = scope:migr_source }
+			MIGRATION_pull_province > 0
+			# don't shuffle pops between two equally-bad provinces: the
+			# destination must beat where they are now.
+			MIGRATION_pull_province > scope:migr_source.MIGRATION_pull_province
+		}
+		save_scope_as = migr_dest
+
+		# WHO leaves: the readiest emigrant, chosen by grievance weight. Slaves
+		# (no free choice) and nobles (rooted elite) do not voluntarily migrate.
+		scope:migr_source = {
+			random_pops_in_province = {
+				limit = {
+					NOT = { pop_type = slaves }
+					NOT = { pop_type = nobles }
+				}
+				weight = {
+					base = 1
+					# a cultural minority at home is likelier to leave it
+					modifier = {
+						factor = 3
+						NOT = { pop_culture = scope:migr_source.dominant_province_culture }
+					}
+					# so is a religious minority
+					modifier = {
+						factor = 2
+						NOT = { pop_religion = scope:migr_source.dominant_province_religion }
+					}
+					# the poor move for opportunity more than the comfortable
+					modifier = {
+						factor = 2
+						OR = {
+							pop_type = proletariat
+							pop_type = lower_strata
+						}
+					}
+					# the unhappy are the readiest of all (pop_hapiness is 0..1)
+					modifier = {
+						factor = 2
+						pop_hapiness < 0.4
+					}
+					# NOMADIC MOBILITY (generic): tribesmen are pastoralists, not
+					# rooted farmers - the readiest of all to move over distance
+					# (steppe drift, nomad in-migrations, transhumance). A strong
+					# factor so a mixed province sheds its herders first.
+					modifier = {
+						factor = 4
+						pop_type = tribesmen
+					}
+				}
+				LOG_line = { sys = MIGR  msg = "migration: a pop leaves [scope:migr_source.GetName] for [scope:migr_dest.GetName] ([ROOT.GetTag])" }
+				move_pop = scope:migr_dest
+			}
+		}
+
+		# CROSS-BORDER FRICTION: if the newcomers crossed into a NEIGHBOUR (the
+		# destination is not ours), the arrival strains relations between the two
+		# peoples and their governments — even though neither state ordered it.
+		# Scaled by the province's running influx tally: modest at first, worsening
+		# as the flow persists, and at the breaking point a diplomatic play.
+		if = {
+			limit = {
+				exists = owner
+				NOT = { owner = ROOT }
+			}
+			MIGRATION_border_friction_on_arrival = yes
+		}
+
+		# Did the newcomers reshape the destination? If so, settler colonialism.
+		MIGRATION_seed_claim_if_flipped = yes
+	}
+}
+
+# ======================================================================
+# CROSS-BORDER FRICTION — a foreign pop just arrived here from ROOT (the source
+# country). Bump the province's running influx tally and let the strain escalate
+# with it. This is the GENERIC, deliberately-light tension layer: cheap variable
+# writes + a province modifier, with the one expensive step (launching a play)
+# gated behind the rare breaking point and a cooldown. ROOT = the SENDING
+# country; this / scope:migr_dest = the destination province (foreign soil).
+#   TIER 1 (influx 1-2)  modest strain modifier + a mild two-way opinion knock
+#   TIER 2 (influx 3-4)  heavier strain modifier + a larger opinion knock
+#   TIER 3 (influx >=5)  BREAKING POINT — a diplomatic play, then bleed back down
+# ======================================================================
+MIGRATION_border_friction_on_arrival = {
+	save_scope_as = migr_friction_prov
+	owner = { save_scope_as = migr_receiver }        # the state receiving the influx
+	ROOT = { save_scope_as = migr_sender }           # the state the pop left (pulsing country)
+
+	# Running tally of foreign arrivals on this soil. Decays a notch each decade
+	# pulse (MIGRATION_decay_border_friction), so only a sustained flow climbs.
+	if = {
+		limit = { NOT = { has_variable = migr_influx } }
+		set_variable = { name = migr_influx  value = 0 }
+	}
+	change_variable = { name = migr_influx  add = 2 }
+
+	# The sender/receiver of THIS arrival are carried in saved scopes (migr_sender /
+	# migr_receiver) straight through to the tier + breaking-point sub-effects, so
+	# no per-province "who sent them" variable needs storing between pulses.
+	LOG_line = { sys = MIGR  msg = "border friction: influx into [this.GetName] from [scope:migr_sender.GetTag] now [this.MakeScope.GetVariable('migr_influx').GetValue|0] (owner [scope:migr_receiver.GetTag])" }
+
+	# --- BREAKING POINT: the friction boils over into a diplomatic play. --------
+	if = {
+		limit = {
+			var:migr_influx >= 5
+			# once-per-decade-ish guard so a flood does not launch a play every pulse
+			NOT = { has_variable = migr_friction_play_cd }
+		}
+		MIGRATION_border_friction_breaking_point = yes
+		# spend most of the tally so tension resets after the confrontation, and
+		# throttle the (expensive) play launch for ~a decade.
+		set_variable = { name = migr_influx  value = 1 }
+		set_variable = { name = migr_friction_play_cd  days = 3650 }
+	}
+	# --- TIER 2: worsening — sustained influx, real friction. -------------------
+	# (Re-)add the high-strain modifier every arrival so a continuing flow keeps
+	# it fresh; drop the modest one it supersedes. add_province_modifier of an
+	# existing modifier resets its duration, so it only lapses once influx stops.
+	else_if = {
+		limit = { var:migr_influx >= 3 }
+		if = {
+			limit = { has_province_modifier = migration_strain }
+			remove_province_modifier = migration_strain
+		}
+		add_province_modifier = { name = migration_strain_high  duration = 3650 }
+		MIGRATION_border_friction_opinions = yes
+		LOG_line = { sys = MIGR  msg = "border friction: WORSENING strain in [this.GetName] (influx from [scope:migr_sender.GetTag])" }
+	}
+	# --- TIER 1: modest — a first wave. -----------------------------------------
+	else = {
+		if = {
+			limit = { has_province_modifier = migration_strain_high }
+			remove_province_modifier = migration_strain_high
+		}
+		add_province_modifier = { name = migration_strain  duration = 3650 }
+		MIGRATION_border_friction_opinions = yes
+		LOG_line = { sys = MIGR  msg = "border friction: modest strain in [this.GetName] (influx from [scope:migr_sender.GetTag])" }
+	}
+}
+
+# Two-way relations knock between the receiving and sending governments. Mild and
+# fast-decaying (see the opinion defs) so a trickle barely registers but a flood
+# restacks faster than it fades. Scope: destination province; expects
+# scope:migr_receiver and scope:migr_sender set by the caller.
+MIGRATION_border_friction_opinions = {
+	if = {
+		limit = { NOT = { scope:migr_receiver = { this = scope:migr_sender } } }
+		scope:migr_receiver = {
+			add_opinion = { modifier = migrant_influx_opinion  target = scope:migr_sender }
+		}
+		scope:migr_sender = {
+			add_opinion = { modifier = migrant_emigration_opinion  target = scope:migr_receiver }
+		}
+	}
+}
+
+# ======================================================================
+# BREAKING POINT — the friction has boiled over into a diplomatic play. The
+# instigator depends on the SHAPE of the friction (situational, either side):
+#   • FLIPPED (settler colonialism): the newcomers have made their own culture
+#     the province's plurality. The SENDING/kin-state presses an irredentist
+#     play to gather in the land its people now fill — the historical settler-
+#     annexation dynamic (the same soil the claim track already flagged).
+#   • NOT FLIPPED (resented minority): the incomers are a disliked foreign
+#     minority who have NOT taken over. The RECEIVING state presses a nativist
+#     play against the source — asserting control of its contested borderland
+#     and pushing back on the foreign influx.
+# Either way the play arises from POPULAR pressure, not a cabinet decision — it
+# can embarrass a government that never wanted the confrontation. Scope: the
+# destination province; expects scope:migr_receiver / scope:migr_sender.
+# ======================================================================
+MIGRATION_border_friction_breaking_point = {
+	# A play needs two distinct countries; a stateless/self-owned edge case aborts.
+	if = {
+		limit = { NOT = { scope:migr_receiver = { this = scope:migr_sender } } }
+
+		# still bank the two-way relations damage the confrontation causes
+		MIGRATION_border_friction_opinions = yes
+
+		# play_type = MANUAL, not automatic: an automatic play re-derives its
+		# target country from the top-rated adversary in the target AREA (se_AI.txt
+		# ~636), which would silently discard the specific sender/receiver we mean
+		# when the area is mixed-ownership. Manual respects the passed target.
+		if = {
+			# FLIPPED — a foreign culture now dominates this soil (settler
+			# colonialism). The IRREDENTIST claimant is the KIN-STATE of that
+			# now-dominant culture, NOT necessarily the sender (the readiest
+			# emigrants are cultural minorities of the source, so the culture that
+			# flipped the land may speak for a third state). This mirrors the claim
+			# track (MIGRATION_seed_claim_if_flipped), keeping the two coherent.
+			limit = { NOT = { dominant_province_culture = owner.culture } }
+			random_country = {
+				limit = {
+					primary_culture = scope:migr_friction_prov.dominant_province_culture
+					NOT = { this = scope:migr_receiver }
+				}
+				save_scope_as = migr_irredentist
+			}
+			if = {
+				limit = { exists = scope:migr_irredentist }
+				LOG_line = { sys = MIGR  msg = "BREAKING POINT (irredentist): settlers of [scope:migr_irredentist.GetTag]'s culture now dominate [this.GetName]; [scope:migr_irredentist.GetTag] presses a play vs [scope:migr_receiver.GetTag]" }
+				scope:migr_irredentist = {
+					AI_begin_diplomatic_play = {
+						play_instigator = scope:migr_irredentist
+						play_target_area = scope:migr_friction_prov
+						play_target_country = scope:migr_receiver
+						play_goal = flag:get_territory
+						play_type = manual
+					}
+					# years of settler pressure already back this aim: open with a baseline
+					# success head-start (still below the fizzle floor) rather than cold.
+					DIPLOMACY_seed_feature_play_success = yes
+				}
+			}
+			else = {
+				# the flipped culture speaks for no state (or only for the owner):
+				# no coherent irredentist claimant — the strain + opinion hit stand,
+				# but no play fires.
+				LOG_fail = { sys = MIGR  fn = "MIGRATION_border_friction_breaking_point"  reason = "province flipped to a culture with no kin-state to press an irredentist play; opinions banked, no play" }
+			}
+		}
+		else = {
+			# NOT FLIPPED — a resented foreign minority who have NOT taken over; the
+			# host state pushes back to assert control of its contested borderland.
+			LOG_line = { sys = MIGR  msg = "BREAKING POINT (nativist): [scope:migr_receiver.GetTag] confronts [scope:migr_sender.GetTag] over the foreign influx into [this.GetName]" }
+			scope:migr_receiver = {
+				AI_begin_diplomatic_play = {
+					play_instigator = scope:migr_receiver
+					play_target_area = scope:migr_friction_prov
+					play_target_country = scope:migr_sender
+					play_goal = flag:influence
+					play_type = manual
+				}
+				# the influx pressure already backs this aim: open with a baseline success
+				# head-start (still below the fizzle floor) rather than cold.
+				DIPLOMACY_seed_feature_play_success = yes
+			}
+		}
+	}
+	else = {
+		LOG_fail = { sys = MIGR  fn = "MIGRATION_border_friction_breaking_point"  reason = "receiver and sender are the same country; no play launched" }
+	}
+}
+
+# Bleed one notch of accumulated influx off an owned province each decade pulse.
+# When the tally empties, drop the strain modifiers so a province whose influx has
+# stopped returns to calm. Scope: the owned province (has_variable = migr_influx).
+MIGRATION_decay_border_friction = {
+	change_variable = { name = migr_influx  subtract = 1 }
+	if = {
+		limit = { var:migr_influx <= 0 }
+		remove_variable = migr_influx
+		if = { limit = { has_province_modifier = migration_strain }       remove_province_modifier = migration_strain }
+		if = { limit = { has_province_modifier = migration_strain_high }  remove_province_modifier = migration_strain_high }
+		LOG_line = { sys = MIGR  msg = "border friction: influx into [this.GetName] has ceased; strain lifted" }
+	}
+	else_if = {
+		# eased below the worsening threshold: step the high strain back down to modest
+		limit = {
+			var:migr_influx < 3
+			has_province_modifier = migration_strain_high
+		}
+		remove_province_modifier = migration_strain_high
+		add_province_modifier = { name = migration_strain  duration = 3650 }
+	}
+}
+
+# ======================================================================
+# SETTLER COLONIALISM — after a move, if the destination's plurality culture is
+# no longer its owner's culture, the kin-state of the new plurality culture
+# gains a claim on the province. Only fires on a genuine foreign flip:
+#   - if the owner's own culture still dominates, nothing changed -> skip;
+#   - the kin-state is the country whose primary_culture is that plurality
+#     culture (the proven send_settlers / release idiom); if it is the owner,
+#     or already holds a core here, no claim is added.
+#   this = the destination province (scope:migr_dest).
+# ======================================================================
+MIGRATION_seed_claim_if_flipped = {
+	if = {
+		limit = {
+			exists = owner
+			# a culture other than the owner's now dominates this soil
+			NOT = { dominant_province_culture = owner.culture }
+		}
+		save_scope_as = migr_flip_prov
+		LOG_line = { sys = MIGR  msg = "migration: [this.GetName] flipped plurality to a non-owner culture; seeking a kin-state (no subsequent settler-claim line means no kin-state exists)" }
+		random_country = {
+			limit = {
+				# the state that speaks for the now-dominant culture ...
+				primary_culture = scope:migr_flip_prov.dominant_province_culture
+				# ... but not the province's own owner ...
+				NOT = { this = scope:migr_flip_prov.owner }
+				# ... and only if it does not already claim/hold it.
+				NOT = { scope:migr_flip_prov = { is_core_of = this } }
+			}
+			save_scope_as = migr_kin
+			scope:migr_flip_prov = {
+				add_claim = scope:migr_kin
+			}
+			LOG_line = { sys = MIGR  msg = "settler claim: [scope:migr_kin.GetTag] now claims [scope:migr_flip_prov.GetName] after its people became the plurality" }
+		}
+	}
+}

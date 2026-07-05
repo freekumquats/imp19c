@@ -6,6 +6,8 @@ SETUP_CSV = "province_setup.csv"
 # Output file
 f_area = open("areas_output.txt", "w")
 f_region = open("regions_output.txt", "w")
+# Culture-plurality de jure output (see generate_de_jure below)
+f_de_jure = open("de_jure_output.txt", "w")
 
 # Turn the province_setup CSV into a dataframe
 df = pd.read_csv(
@@ -48,5 +50,35 @@ for area in areas:
                    "        " + str(area) + "\n    }\n}\n"
                    )
 
+# Culture-plurality de jure: for each area, work out which culture holds the
+# most provinces and emit a de_jure_culture -> areas lookup. This is the
+# generated "which culture this land rightfully belongs to" table; consumers
+# (irredentism, etc.) read it. Provinces without a listed culture are ignored
+# when tallying, and an area with no cultured province at all is skipped.
+# Ties are broken by lowest-sorted culture name so the output is deterministic
+# across regenerations.
+def generate_de_jure(df):
+    de_jure = {}  # culture -> list of areas
+    for area in areas:
+        provinces = df.loc[df['AREA'] == area]
+        counts = provinces['CULTURE'].dropna().value_counts()
+        if counts.empty:
+            continue
+        top = counts.max()
+        # Deterministic tiebreak: among cultures sharing the top count, take the
+        # first alphabetically.
+        winner = sorted(c for c in counts.index if counts[c] == top)[0]
+        de_jure.setdefault(winner, []).append(sanitise_string(area))
+    # Emit one block per culture, cultures and areas in sorted order.
+    for culture in sorted(de_jure):
+        f_de_jure.write(str(culture) + " = {\n" +
+                        "    areas = {\n")
+        for area in sorted(de_jure[culture]):
+            f_de_jure.write("        " + str(area) + "\n")
+        f_de_jure.write("    }\n}\n\n")
+
+generate_de_jure(df)
+
 f_area.close()
 f_region.close()
+f_de_jure.close()

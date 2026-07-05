@@ -1,0 +1,128 @@
+########################################################################
+# se_QING_VASSAL.txt — PROTECT THE VASSAL (保藩): the tributary crises.
+#
+# The Qing world-order was a hierarchy of TRIBUTARY STATES (藩屬 / 朝貢國) — Korea
+# (朝鮮), Vietnam (越南/安南), the Ryukyus (琉球), Burma (緬甸), Siam, and the Central-
+# Asian khanates — that acknowledged the Son of Heaven as suzerain and traded under
+# his protection. The tragedy of the 19th century was the DISMEMBERMENT of that order
+# by the imperial powers: France took Vietnam (Sino-French War, 1884-85); Japan
+# annexed the Ryukyus (1879) and then Korea (after the 1894-95 war); Britain took
+# Burma (1886). Each was a test the Qing largely FAILED — the choice, again and again,
+# between fighting for a vassal it could not defend and abandoning the tributary bond
+# that legitimized the whole imperial idea.
+#
+# THE BARGAIN THIS MODELS: a SUZERAIN-PRESTIGE meter (保藩威望) tracks the standing of
+# the tributary order. Crises arrive keyed to the historical vassals; at each the
+# player DEFENDS the vassal (spend treasury/manpower, raise suzerain prestige, but
+# spike tension with the encroaching power — risking the war the historical Qing
+# often lost) or YIELDS (avoid the war, but the tributary order visibly crumbles:
+# suzerain prestige and legitimacy fall, reform pressure rises). Defending Korea or
+# the Ryukyus drives the Japan rivalry; Vietnam drives France; Burma drives Britain.
+#
+# Design mirrors the suite: a 0..100 COUNTER on CHI, event-driven, read O(1) by the
+# governance pulse (QING_vassal_pulse) which applies the prestige band, all logged.
+#   qing_suzerain_prestige   0..100  standing of the tributary order (保藩威望)
+# Per-vassal loss marks (set when a vassal is abandoned):
+#   qing_vassal_lost_<vassal>   1 once that vassal is lost
+# Vassals: korea | vietnam | ryukyu | burma
+#
+#   ROOT / this = the Qing overlord (CHI, human)
+# Prefix = QING_vassal_
+#
+# Sources: Kirk Larsen, "Tradition, Treaties, and Trade: Qing Imperialism and Chosön
+#   Korea" (2008); Lloyd Eastman, "Throne and Mandarins" (1967, the Sino-French War);
+#   Key-Hiuk Kim, "The Last Phase of the East Asian World Order" (1980); Immanuel Hsü,
+#   The Rise of Modern China; Spence, The Search for Modern China.
+########################################################################
+
+# ======================================================================
+# INIT — seed the suzerain-prestige meter once. Called by QING_vassal_pulse.
+# The tributary order starts strong (the historical 1815 order was intact).
+# ======================================================================
+QING_vassal_init = {
+	if = { limit = { NOT = { has_variable = qing_suzerain_prestige } } set_variable = { name = qing_suzerain_prestige  value = 70 } }
+}
+
+# ======================================================================
+# DEFEND THE VASSAL — stand by the tributary against the encroaching power. Raises
+# suzerain prestige and national prestige, but spikes tension with the encroacher
+# (the risk of the war the historical Qing often lost). $vassal$ = korea|vietnam|
+# ryukyu|burma; $encroacher$ = the power pressing the vassal (japan|france|britain).
+# Country scope (ROOT = CHI).
+# ======================================================================
+QING_vassal_defend = {
+	LOG_enter = { sys = QING  fn = "QING_vassal_defend ($vassal$)" }
+	QING_vassal_init = yes
+	# standing by a vassal affirms the whole tributary order.
+	QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = 12 }
+	add_prestige = 20
+	# ...but it affronts the power pressing the vassal.
+	QING_vassal_pressure_encroacher = { encroacher = $encroacher$ }
+	LOG_line = { sys = QING  msg = "vassal: DEFENDED $vassal$ vs $encroacher$ for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_vassal_defend"  result = OK }
+}
+
+# ======================================================================
+# ABANDON THE VASSAL — yield to the encroacher, avoid the war. The tributary order
+# visibly crumbles: suzerain prestige and national prestige fall, reform pressure
+# rises (the humiliation), and the vassal is marked lost. $vassal$ = the vassal key.
+# Country scope.
+# ======================================================================
+QING_vassal_abandon = {
+	LOG_enter = { sys = QING  fn = "QING_vassal_abandon ($vassal$)" }
+	QING_vassal_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_vassal_lost_$vassal$ } }
+		set_variable = { name = qing_vassal_lost_$vassal$  value = 1 }
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = -25 }
+		add_prestige = -25
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 6 }
+		LOG_line = { sys = QING  msg = "vassal: ABANDONED $vassal$ (tributary order crumbles) for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_vassal_abandon"  reason = "$vassal$ already lost" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_vassal_abandon"  result = OK }
+}
+
+# Pressure the encroaching power (defence spikes tension). Japan uses the rivalry
+# meter (se_QING_DIPLO Japan layer); Britain/France use the great-power tension
+# counters. A logged no-op for any unmapped encroacher.
+QING_vassal_pressure_encroacher = {
+	if = { limit = { $encroacher$ = japan }  QING_japan_raise_rivalry = { amount = 12 } }
+	else_if = { limit = { $encroacher$ = france }  QING_DECLINE_nudge = { var = qing_gp_tension_france  amount = 15 } }
+	else_if = { limit = { $encroacher$ = britain } QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = 15 } }
+	else = { LOG_fail = { sys = QING  fn = "QING_vassal_pressure_encroacher"  reason = "unmapped encroacher $encroacher$" } }
+}
+
+# ======================================================================
+# THE PULSE — apply the suzerain-prestige band. Called from QING_GOV_pulse. O(1).
+# (The crises themselves fire from the flavour roll, gated on the vassal not yet
+# lost; there is no per-pulse meter drift — the order is stable between shocks.)
+# ======================================================================
+QING_vassal_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_vassal_pulse" }
+	QING_vassal_init = yes
+	QING_vassal_apply_band = yes
+	LOG_exit = { sys = QING  fn = "QING_vassal_pulse"  result = OK }
+}
+
+# ======================================================================
+# BAND APPLICATION — one active modifier matching the suzerain-prestige meter.
+# A strong tributary order lends legitimacy + diplomatic weight; a collapsed one
+# is a standing humiliation.
+# ======================================================================
+QING_vassal_apply_band = {
+	remove_country_modifier = qing_suzerain_ascendant
+	remove_country_modifier = qing_suzerain_crumbling
+	if = {
+		limit = { var:qing_suzerain_prestige >= 70 }
+		add_country_modifier = { name = qing_suzerain_ascendant  duration = -1 }
+		LOG_line = { sys = QING  msg = "band suzerain = ascendant for [ROOT.GetTag] (prestige=[ROOT.MakeScope.GetVariable('qing_suzerain_prestige').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_suzerain_prestige <= 30 }
+		add_country_modifier = { name = qing_suzerain_crumbling  duration = -1 }
+		LOG_line = { sys = QING  msg = "band suzerain = crumbling for [ROOT.GetTag] (prestige=[ROOT.MakeScope.GetVariable('qing_suzerain_prestige').GetValue|0])" }
+	}
+}

@@ -1,0 +1,241 @@
+########################################################################
+# se_QING_COLON.txt — the Qing colonisation layer, reworked to drive the
+# GENERIC bottom-up migration engine (se_MIGRATION.txt) instead of conjuring
+# settlers by fiat.
+#
+# The old colonisation missions settled the frontier with create_state_pop and
+# stamped down claims by decree. That violated the firm design philosophy that
+# migration is BOTTOM-UP — the state should INCENTIVISE people to move, not
+# teleport them. This module gives the Qing the historically-correct verbs:
+#   - 屯田 / 闖關東 : the state makes a frontier attractive (a durable migr_gov_pull
+#     on owned frontier provinces) so the empire's surplus population flows there
+#     of its own accord via the decade migration pulse, and — when Han settlers
+#     become a province's plurality — seeds a claim ORGANICALLY (the generic
+#     MIGRATION_seed_claim_if_flipped path), feeding the Layer 1 claim-hostility
+#     engine exactly as any settler colonialism would.
+#   - the New World crop boom / overpopulation events set a migr_gov_push on the
+#     crowded heartland, turning the demographic bulge into actual out-migrants —
+#     the ENGINE of the frontier settlement, closing the loop between the two
+#     previously-disconnected Qing systems.
+#
+# The formal add_claim calls in the missions REMAIN (a state formally claiming
+# the Amur or Alaska is a real diplomatic act, not migration) — they now also
+# feed Layer 1. What changes is that the PEOPLING of that land is organic.
+#
+# All paths log sys = QING (LOG_enter / LOG_exit / LOG_line, and LOG_fail on the
+# guard misses so a no-op is diagnosable, not silent).
+# Prefix = QING_COLON_
+########################################################################
+
+# The strength of the incentives (inline literals — this mod does not use @
+# script-constants in scripted_effects). Frontier pull is strong: 12, on the
+# same scale as the natural pull terms (job slots, civ/20), so a state-backed
+# frontier competes with a genuinely prosperous province without swamping the
+# organic signal. Heartland push is milder: 6, a nudge on an already-crowded
+# core province, not a purge.
+# ======================================================================
+# FRONTIER PULL — mark the Qing's owned frontier provinces as settlement
+# targets. Called from a colonisation task's on_completion with the task's
+# key provinces. ROOT = CHI. Sets a durable migr_gov_pull the generic pull
+# score reads; only on land actually OWNED (you cannot recruit settlers to a
+# province you do not hold — that is what the mission's add_claim is for).
+#   $province$ = the province id to make attractive (e.g. 2930).
+# ======================================================================
+QING_COLON_frontier_pull = {
+	if = {
+		limit = { owns = $province$ }
+		p:$province$ = {
+			set_variable = { name = migr_gov_pull  value = 12 }
+			LOG_line = { sys = QING  msg = "COLON frontier pull set on [this.GetName] (province $province$) for [ROOT.GetTag]" }
+		}
+	}
+	else = {
+		# not held yet — the mission's add_claim covers the aspiration; settlers
+		# will only be recruited once it is actually taken.
+		LOG_fail = { sys = QING  fn = QING_COLON_frontier_pull  reason = "province $province$ not owned; pull deferred until conquered" }
+	}
+}
+
+# ======================================================================
+# HEARTLAND PUSH — turn a demographic bulge into migrants. Called from the New
+# World crop-boom / overpopulation events. Tags the most crowded core provinces
+# with a migr_gov_push so their surplus actually leaves for the frontier,
+# instead of the boom being a static modifier. ROOT = CHI.
+#   $count$ = how many top-population owned provinces to mark.
+# ======================================================================
+QING_COLON_heartland_push = {
+	LOG_enter = { sys = QING  fn = QING_COLON_heartland_push }
+	if = {
+		limit = { any_owned_province = { count >= 1 } }
+		ordered_owned_province = {
+			order_by = total_population
+			max = $count$
+			set_variable = { name = migr_gov_push  value = 6 }
+			LOG_line = { sys = QING  msg = "COLON heartland push set on [this.GetName] for [ROOT.GetTag]" }
+		}
+		LOG_exit = { sys = QING  fn = QING_COLON_heartland_push  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = QING_COLON_heartland_push  reason = "no owned provinces to push from" }
+	}
+}
+
+# ======================================================================
+# CLEAR HEARTLAND PUSH — when the crowding is relieved (relief works, the boom
+# resolving as a blessing), lift the push so migration settles back to its
+# organic baseline. ROOT = CHI.
+# ======================================================================
+QING_COLON_clear_heartland_push = {
+	every_owned_province = {
+		limit = { has_variable = migr_gov_push }
+		remove_variable = migr_gov_push
+	}
+	LOG_line = { sys = QING  msg = "COLON heartland push cleared for [ROOT.GetTag]" }
+}
+
+# ======================================================================
+# FRONTIER PULL (scope form) — as QING_COLON_frontier_pull, but takes the
+# already-scoped destination province instead of a literal id. Call inside a
+# province scope. Used by the nomad-ingathering path, where the settling ground
+# is chosen at runtime (not a fixed mission province). ROOT = CHI.
+# ======================================================================
+QING_COLON_frontier_pull_here = {
+	set_variable = { name = migr_gov_pull  value = 12 }
+	LOG_line = { sys = QING  msg = "COLON frontier pull set on [this.GetName] (nomad settling ground) for [ROOT.GetTag]" }
+}
+
+# ======================================================================
+# NOMAD IN-GATHERING — the Torghut-return demographic beat (qing_migration.10/.11),
+# reworked to MOVE REAL PEOPLE rather than conjure them.
+#
+# Design philosophy (see the header): migration is a movement of actual pops, not
+# a spawn. So the ingathering first tries to relocate genuine Mongol-steppe
+# tribesmen (kalmyks / oirat / mongolian / buryat — the Oirat-Kalmyk homecoming)
+# OUT of whatever country holds the lower-Volga / Kazakh steppe today (Russia, by
+# and large) INTO a Qing frontier settling ground. Only if the historical source
+# has run dry (no such pop left to move) does it FALL BACK to create_state_pop, so
+# the event still delivers its promised host even on an atypical map.
+#
+# The settling ground is ROOT's most populous inland steppe-adjacent province
+# (semi_arid / desert / plains terrain), which then gets a durable frontier pull
+# so the newcomers — and the empire's own surplus — keep flowing there via the
+# generic decade migration pulse. Closes the loop into se_MIGRATION.txt.
+#
+# Scope: country (ROOT = CHI). Args:
+#   count : how many nomad pops to gather (moved-or-spawned).
+# ======================================================================
+QING_MIGR_nomad_ingather = {
+	LOG_enter = { sys = QING  fn = "QING_MIGR_nomad_ingather x$count$" }
+
+	# --- pick the settling ground: our most populous steppe-adjacent province ---
+	ordered_owned_province = {
+		order_by = total_population
+		max = 1
+		limit = {
+			OR = {
+				terrain = semi_arid
+				terrain = desert
+				terrain = plains
+			}
+		}
+		save_scope_as = qing_nomad_dest
+	}
+	# Fallback: if we hold no steppe/desert/plains province at all, just take the
+	# single most populous province so the host still has somewhere to land.
+	if = {
+		limit = { NOT = { exists = scope:qing_nomad_dest } }
+		ordered_owned_province = {
+			order_by = total_population
+			max = 1
+			save_scope_as = qing_nomad_dest
+		}
+	}
+
+	if = {
+		limit = { exists = scope:qing_nomad_dest }
+		# Move (or, on shortfall, spawn) the host one pop at a time.
+		while = {
+			count = $count$
+			QING_MIGR_move_one_nomad = yes
+		}
+		# Make the settling ground a durable draw for further migration.
+		scope:qing_nomad_dest = { QING_COLON_frontier_pull_here = yes }
+		LOG_line = { sys = QING  msg = "nomad in-gathering: $count$ pops settled at [scope:qing_nomad_dest.GetName] for [ROOT.GetTag]" }
+		LOG_exit = { sys = QING  fn = "QING_MIGR_nomad_ingather"  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_MIGR_nomad_ingather"  reason = "ROOT holds no province to settle the nomads on" }
+	}
+}
+
+# Move ONE Mongol-steppe tribesman pop from its current (foreign) home to the
+# ingathering destination; if none remains anywhere on the map, spawn one instead
+# so the promised host is still delivered. Scope: country (ROOT = CHI);
+# scope:qing_nomad_dest = the settling province.
+QING_MIGR_move_one_nomad = {
+	if = {
+		# A genuine Oirat-Kalmyk-Mongol tribesman pop exists somewhere we do NOT
+		# already own it (a real out-migration, not shuffling our own pops), and it
+		# is a free mover (not slave/noble).
+		limit = {
+			any_province = {
+				NOT = { this = scope:qing_nomad_dest }
+				owner = { NOT = { this = ROOT } }
+				any_pops_in_province = {
+					NOT = { pop_type = slaves }
+					NOT = { pop_type = nobles }
+					OR = {
+						pop_culture = culture:kalmyks
+						pop_culture = culture:oirat
+						pop_culture = culture:mongolian
+						pop_culture = culture:buryat
+					}
+				}
+			}
+		}
+		# Draw from the most populous qualifying source province (the populous Volga /
+		# Kazakh steppe reads as the Kalmyk heartland). order_by ranks by the province's
+		# total population, not by its count of matching pops — a close-enough proxy,
+		# and it always picks a province that holds at least one eligible mover.
+		ordered_province = {
+			limit = {
+				NOT = { this = scope:qing_nomad_dest }
+				owner = { NOT = { this = ROOT } }
+				any_pops_in_province = {
+					NOT = { pop_type = slaves }
+					NOT = { pop_type = nobles }
+					OR = {
+						pop_culture = culture:kalmyks
+						pop_culture = culture:oirat
+						pop_culture = culture:mongolian
+						pop_culture = culture:buryat
+					}
+				}
+			}
+			order_by = total_population
+			max = 1
+			save_scope_as = qing_nomad_source
+			random_pops_in_province = {
+				limit = {
+					NOT = { pop_type = slaves }
+					NOT = { pop_type = nobles }
+					OR = {
+						pop_culture = culture:kalmyks
+						pop_culture = culture:oirat
+						pop_culture = culture:mongolian
+						pop_culture = culture:buryat
+					}
+				}
+				move_pop = scope:qing_nomad_dest
+			}
+			LOG_line = { sys = QING  msg = "nomad in-gathering: a steppe pop leaves [scope:qing_nomad_source.GetName] for [scope:qing_nomad_dest.GetName]" }
+		}
+	}
+	else = {
+		# The historical source is dry — deliver the host anyway (fallback spawn).
+		scope:qing_nomad_dest = {
+			create_state_pop = tribesmen
+		}
+		LOG_line = { sys = QING  msg = "nomad in-gathering: no steppe source pop left to move; spawned a tribesmen pop at [scope:qing_nomad_dest.GetName] (fallback)" }
+	}
+}

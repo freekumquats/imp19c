@@ -1,0 +1,136 @@
+########################################################################
+# se_QING_ADVISORS.txt — FOREIGN ADVISORS & TECHNICAL EXPERTS (洋員 / 顧問).
+#
+# The Self-Strengthening movement ran on hired Western talent: Prosper Giquel
+# (日意格) built and ran the Fuzhou Navy Yard; Frederick Townsend Ward (華爾) and
+# Charles Gordon (戈登) drilled the Ever-Victorious Army; William Lang (琅威理)
+# trained the Beiyang Fleet; Robert Hart (赫德) ran the Customs. Each was a
+# transfer of expertise the dynasty could not yet supply itself — and each was a
+# STRAND OF FOREIGN INFLUENCE, because a hired national of a Great Power both
+# accelerated one modernization track AND deepened that power's stake in China.
+#
+# THE BARGAIN THIS MODELS: hiring an expert of a given field ACCELERATES the
+# matching Self-Strengthening track (a direct QING_selfstr_advance + a lasting
+# expertise modifier), while his HOME POWER's involvement grows — modelled as a
+# warming of relations with that power (以夷制夷: it also nudges the rivals).
+# Advisors are a limited resource: a slot count caps how many may serve at once,
+# so the player chooses whom to court. Dismissing an advisor frees a slot and
+# cools the home power's stake.
+#
+# Fields (each maps to a Self-Strengthening founding track + a modifier):
+#   naval    — dockyards & fleet training (Giquel, Lang)     → Fuzhou/Beiyang
+#   army     — modern land drill (Ward, Gordon)              → Ever-Victorious
+#   fiscal   — customs, accounts, loans (Hart)               → Customs/revenue
+#   technical— arsenals, mines, telegraph, engineering       → Jiangnan/rail
+#
+# Powers: britain | france | germany | america  (home nation of the advisor; the
+# diplomatic hook warms that power via the existing se_QING_DIPLO relation layer).
+#
+# Design mirrors the suite: counters on CHI, O(1), all logged (sys = QING).
+#   qing_advisor_slots_used   how many advisor posts are filled
+#   qing_advisor_slot_cap     max concurrent advisors (default 3)
+#   qing_advisor_<field>      1 while an advisor of that field serves
+# Character mark: qing_is_foreign_advisor (on the serving expert).
+#
+#   ROOT / this = the Qing overlord (CHI, human)
+# Prefix = QING_advisor_
+#
+# Sources: David Pong, "Modernization and Politics in China: Shen Pao-chen and
+#   the Self-Strengthening Movement" (1994, Giquel & the Fuzhou yard); Richard
+#   Smith, "Mercenaries and Mandarins" (1978, Ward/Gordon); Benjamin Elman (2004);
+#   Spence, The Search for Modern China; van de Ven, Breaking with the Past (2014).
+########################################################################
+
+# ======================================================================
+# INIT — seed the advisor slot counters once.
+# ======================================================================
+QING_advisor_init = {
+	if = { limit = { NOT = { has_variable = qing_advisor_slot_cap } }  set_variable = { name = qing_advisor_slot_cap  value = 3 } }
+	if = { limit = { NOT = { has_variable = qing_advisor_slots_used } } set_variable = { name = qing_advisor_slots_used  value = 0 } }
+}
+
+# ======================================================================
+# THE DIPLOMATIC HOOK — hiring a national of a power warms that power (a stake in
+# China), and by 以夷制夷 mildly unsettles its rivals. Reuses the se_QING_DIPLO
+# relation layer. Call INSIDE the country scope (the employer). $power$ =
+# britain|france|germany|america; $tag$ = the home power's country tag. Guarded:
+# a tag that does not exist (e.g. a not-yet-unified Germany) only skips the hook.
+# ======================================================================
+QING_advisor_apply_home_hook = {
+	# $tag$ = the home power's country tag.  this = the Qing country (employer).
+	save_scope_as = qing_advisor_country
+	if = {
+		limit = { exists = c:$tag$ }
+		c:$tag$ = { add_opinion = { modifier = qing_advisor_home_opinion  target = scope:qing_advisor_country } }
+		LOG_line = { sys = QING  msg = "advisor home hook: $tag$ stake in China grows for [this.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_advisor_apply_home_hook"  reason = "home power $tag$ does not exist - opinion skipped" }
+	}
+}
+
+# ======================================================================
+# RECRUIT — call INSIDE the advisor character's scope (this = the expert). The
+# country is reached via `employer` (the proven council-model idiom), so this is
+# correct whether invoked from a country event or a character-scope GUI.
+# $field$ = naval|army|fiscal|technical.  $power$/$tag$ = home power.
+# Grants the field-expertise modifier, advances the matching Self-Strengthening
+# track, applies the diplomatic hook, marks the character, and consumes a slot.
+# Guarded on a free slot AND on the field not already being staffed.
+# ======================================================================
+QING_advisor_recruit = {
+	save_scope_as = qing_advisor_char
+	employer = {
+		QING_advisor_init = yes
+		if = {
+			limit = {
+				var:qing_advisor_slots_used < var:qing_advisor_slot_cap
+				NOT = { has_variable = qing_advisor_$field$ }
+			}
+			set_variable = { name = qing_advisor_$field$  value = 1 }
+			change_variable = { name = qing_advisor_slots_used  add = 1 }
+			add_country_modifier = { name = qing_advisor_$field$_active  duration = -1 }
+			# the matching Self-Strengthening track leaps forward.
+			QING_selfstr_advance = { amount = 8 }
+			QING_advisor_apply_home_hook = { power = $power$  tag = $tag$ }
+			LOG_line = { sys = QING  msg = "advisor recruited: field=$field$ home=$tag$ ([scope:qing_advisor_char.GetName]) for [this.GetTag] (slots [this.MakeScope.GetVariable('qing_advisor_slots_used').GetValue|0]/[this.MakeScope.GetVariable('qing_advisor_slot_cap').GetValue|0])" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_advisor_recruit"  reason = "no free slot or field $field$ already staffed" }
+		}
+	}
+	# mark the expert (guarded so a rejected recruit is not falsely marked).
+	if = {
+		limit = { employer = { var:qing_advisor_$field$ = 1 } }
+		set_variable = { name = qing_is_foreign_advisor  value = flag:$field$ }
+		add_character_modifier = { name = qing_foreign_advisor  duration = -1 }
+	}
+}
+
+# ======================================================================
+# DISMISS — call INSIDE the advisor's scope (this = the expert). Frees the slot,
+# removes the field modifier, cools the home power's stake a touch. Branches on
+# the character's qing_is_foreign_advisor field mark so one verb serves all
+# fields; the country is reached via `employer`.
+# ======================================================================
+QING_advisor_dismiss = {
+	if = { limit = { var:qing_is_foreign_advisor = flag:naval }     employer = { QING_advisor_dismiss_field = { field = naval } } }
+	else_if = { limit = { var:qing_is_foreign_advisor = flag:army } employer = { QING_advisor_dismiss_field = { field = army } } }
+	else_if = { limit = { var:qing_is_foreign_advisor = flag:fiscal }    employer = { QING_advisor_dismiss_field = { field = fiscal } } }
+	else_if = { limit = { var:qing_is_foreign_advisor = flag:technical } employer = { QING_advisor_dismiss_field = { field = technical } } }
+	remove_character_modifier = qing_foreign_advisor
+	remove_variable = qing_is_foreign_advisor
+	LOG_line = { sys = QING  msg = "advisor dismissed: [this.GetName] for [this.GetEmployer.GetTag]" }
+}
+
+# Country-scope field release (call in ROOT). $field$ = the field key.
+QING_advisor_dismiss_field = {
+	QING_advisor_init = yes
+	if = {
+		limit = { has_variable = qing_advisor_$field$ }
+		remove_variable = qing_advisor_$field$
+		remove_country_modifier = qing_advisor_$field$_active
+		change_variable = { name = qing_advisor_slots_used  subtract = 1 }
+		if = { limit = { var:qing_advisor_slots_used < 0 }  set_variable = { name = qing_advisor_slots_used  value = 0 } }
+	}
+}

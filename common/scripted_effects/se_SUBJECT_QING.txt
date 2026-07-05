@@ -1,0 +1,445 @@
+########################################################################
+# se_SUBJECT_QING.txt — Player-facing per-subject interactions
+#
+# Scope of this work: interactions the PLAYER can perform on a single named
+# subject. Built and tuned for a Qing (CHI) playthrough, whose starting
+# subjects span exactly four types. AI usage is intentionally NOT handled.
+#
+# Two systems live here:
+#   1. Change subject type (promotion = tighter control, demotion = looser),
+#      stepping one rung along the Qing control ladder.
+#   2. Gradual integration: spend influence to accrue integration progress on
+#      one subject; at the threshold, absorb its provinces into the overlord.
+#
+# The change-type primitive is vanilla make_subject { target type }, wrapped
+# by FUNC_make_subject (se_FUNC.txt). Province absorption uses
+# LAND_transfer_provinces (se_LAND.txt), which correctly handles governorship
+# wealth/stockpile splitting and foreign-influence recalculation.
+#
+# All effects are instrumented with the LOG_* module (se_LOG.txt). Launch the
+# game with -debug_mode and the trace lands in game.log under [IMP19C][SUBJ].
+#
+# Convention for these effects:
+#   ROOT / this  = the overlord (player, Qing)
+#   scope:target = the single subject being acted upon
+#
+# Prefix = SUBJ_QING
+########################################################################
+
+########################################################################
+# CONTROL LADDER
+# Ordered loosest -> tightest for the four types a Qing player holds:
+#   tributary < nominal_vassal < feudatory < autonomous_governorship
+# "Promote" = move one rung tighter, "Demote" = one rung looser.
+# Rungs are encoded as an integer on the subject (SUBJ_ladder_rung) so the
+# UI and triggers can reason about position without a chain of is_subject_type
+# checks. The rung is (re)derived from the live subject type on every use, so
+# it stays correct even if the type is changed by other code or at game start.
+########################################################################
+
+# Derive the ladder rung integer from the subject's current type.
+# Scope: the subject (call inside scope:target = { ... })
+# Sets SUBJ_ladder_rung: 1..4, or 0 if the type is off-ladder (unsupported).
+SUBJ_QING_derive_rung = {
+	if = {
+		limit = { is_subject_type = tributary }
+		set_variable = { name = SUBJ_ladder_rung  value = 1 }
+	}
+	else_if = {
+		limit = { is_subject_type = nominal_vassal }
+		set_variable = { name = SUBJ_ladder_rung  value = 2 }
+	}
+	else_if = {
+		limit = { is_subject_type = feudatory }
+		set_variable = { name = SUBJ_ladder_rung  value = 3 }
+	}
+	else_if = {
+		limit = { is_subject_type = autonomous_governorship }
+		set_variable = { name = SUBJ_ladder_rung  value = 4 }
+	}
+	else = {
+		set_variable = { name = SUBJ_ladder_rung  value = 0 }
+	}
+}
+
+########################################################################
+# CHANGE SUBJECT TYPE
+# Called from the scripted GUIs. Expects ROOT = overlord, scope:target = subject.
+# $direction$ = promote | demote  (text, used only for logging clarity)
+# $new_type$  = the subject_type to switch the subject to.
+# The GUI is responsible for gating (influence cost, valid rung, cooldown);
+# these effects assume validity but still log loudly and guard the transition.
+########################################################################
+
+SUBJ_QING_change_type = {
+	# Scope: country (overlord / ROOT)
+	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_change_type -> $new_type$ ($direction$)" }
+
+	if = {
+		limit = { exists = scope:target }
+
+		scope:target = { SUBJ_QING_derive_rung = yes }
+
+		LOG_line = {
+			sys = SUBJ
+			msg = "overlord=[ROOT.GetTag] subject=[scope:target.GetTag] from_rung=[scope:target.MakeScope.GetVariable('SUBJ_ladder_rung').GetValue|0] action=$direction$ new_type=$new_type$"
+		}
+
+		# Perform the type change via the mod's make_subject wrapper.
+		FUNC_make_subject = {
+			overlord = ROOT
+			target = scope:target
+			type = $new_type$
+		}
+
+		# Re-derive the rung from the now-current type so state stays truthful.
+		scope:target = { SUBJ_QING_derive_rung = yes }
+
+		# Integration only runs on autonomous_governorship. If a demotion (or any
+		# type change) drops the subject off that rung, wipe stale integration
+		# state so the GUI bar and the pulse don't act on a frozen half-progress.
+		if = {
+			limit = {
+				scope:target = {
+					NOT = { is_subject_type = autonomous_governorship }
+					OR = {
+						has_variable = SUBJ_integration_progress
+						has_variable = SUBJ_integration_active
+						has_variable = SUBJ_integration_suspended
+					}
+				}
+			}
+			scope:target = { SUBJ_QING_clear_integration_state = yes }
+		}
+
+		LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_change_type"  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_change_type"  reason = "scope:target does not exist" }
+	}
+}
+
+########################################################################
+# INCORPORATE A PROTECTORATE ONTO THE LADDER
+# A protectorate (e.g. Tibet under the 1815 amban arrangement) sits OFF the
+# Qing control ladder — can_be_integrated = no, so the promote/integrate verbs
+# never apply to it. This is the historical loose-rein (羈縻) settlement.
+#
+# This effect is the one-way "formally incorporate" act modelled on Zhao Erfeng's
+# (趙爾豐) forced incorporation of Kham (川邊改土歸流, 1904-1911): it converts a
+# protectorate straight to an autonomous_governorship, dropping it onto rung 4 so
+# the ordinary integration process can then absorb it. It is expensive and
+# coercive by design (the prestige + influence price is deducted in the calling
+# GUI's effect block; its is_valid only checks affordability), and it is
+# NOT date-restricted — the player may attempt it from the 1815 start, at the
+# same price the late historical attempt would have cost the court.
+#
+# One-way: the demote ladder runs autonomous_governorship -> feudatory -> ... ->
+# tributary and never returns to protectorate, so there is no reverse path.
+#
+# Called from qing_subject_incorporate_button. ROOT = overlord, scope:target =
+# the protectorate subject.
+########################################################################
+SUBJ_QING_incorporate_protectorate = {
+	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_incorporate_protectorate" }
+
+	if = {
+		limit = {
+			exists = scope:target
+			scope:target = { is_subject_of = ROOT }
+			scope:target = { is_subject_type = protectorate }
+		}
+
+		LOG_line = {
+			sys = SUBJ
+			msg = "incorporate overlord=[ROOT.GetTag] protectorate=[scope:target.GetTag] -> autonomous_governorship"
+		}
+
+		# The coercion abrogates a standing autonomy compact: a tyranny + AE bite,
+		# mirroring the other coercive Qing verbs (audit/opium). The prestige and
+		# influence price is deducted in the calling GUI's effect block, not here.
+		add_tyranny = 3
+		add_aggressive_expansion = 5
+
+		FUNC_make_subject = {
+			overlord = ROOT
+			target = scope:target
+			type = autonomous_governorship
+		}
+
+		# Land it truthfully on rung 4 so the UI and integrate verb pick it up.
+		scope:target = { SUBJ_QING_derive_rung = yes }
+
+		LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_incorporate_protectorate"  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_incorporate_protectorate"  reason = "scope:target missing, not a subject of ROOT, or not a protectorate" }
+	}
+}
+
+########################################################################
+# INTEGRATION
+# Integration is a STATEFUL PROCESS, not a silent counter. Progress is stored
+# on the SUBJECT as SUBJ_integration_progress (0..threshold). The player drives
+# it through the qing_integ.* event chain (events/imp19c_mod_events/
+# qing_subject_integration.txt), which can be helped or hindered by positive
+# and negative "reaction" events grounded in real Qing frontier history
+# (the Revolt of the Three Feudatories, gaitu guiliu, the Heshen scandal,
+# the White Lotus / Miao / Panthay / Dungan risings, tuntian harvests, and
+# imperial investiture festivals). At the threshold the subject is absorbed:
+# all its provinces transfer to the overlord and the subject relationship ends.
+#
+# State variables on the SUBJECT:
+#   SUBJ_integration_progress   0..SUBJ_integration_threshold
+#   SUBJ_integration_active     set once the process is under way (drives the
+#                               ambient reaction pulse)
+#   SUBJ_integration_suspended  set when the player suspends; the pulse skips it
+########################################################################
+
+# Tunables (kept inline; promote to script_values later if balancing needs it).
+# threshold = 5 progress to absorb. Keep in sync with:
+#   - the "N / 5" progress text and the 0.2 progressbar scale in diplomatic_view.gui
+#   - the 5-step wording in the QING_SUBJECT_INTEGRATE_TT localisation
+
+# Advance integration progress by $steps$ (scope: country / ROOT = overlord,
+# scope:target = subject). Marks the process active, clears any suspension,
+# and absorbs the subject once progress reaches the threshold.
+SUBJ_QING_advance_integration = {
+	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_advance_integration +$steps$" }
+
+	if = {
+		limit = { exists = scope:target }
+
+		scope:target = {
+			if = {
+				limit = { NOT = { has_variable = SUBJ_integration_progress } }
+				set_variable = { name = SUBJ_integration_progress  value = 0 }
+			}
+			set_variable = { name = SUBJ_integration_active  value = 1 }
+			if = {
+				limit = { has_variable = SUBJ_integration_suspended }
+				remove_variable = SUBJ_integration_suspended
+			}
+			change_variable = { name = SUBJ_integration_progress  add = $steps$ }
+			# Clamp to the threshold so display and absorption stay consistent.
+			if = {
+				limit = { var:SUBJ_integration_progress > 5 }
+				set_variable = { name = SUBJ_integration_progress  value = 5 }
+			}
+
+			LOG_line = {
+				sys = SUBJ
+				msg = "integration overlord=[ROOT.GetTag] subject=[this.GetTag] +$steps$ progress=[this.MakeScope.GetVariable('SUBJ_integration_progress').GetValue|0]/5"
+			}
+
+			if = {
+				limit = { var:SUBJ_integration_progress >= 5 }
+				root = { SUBJ_QING_absorb_subject = yes }
+			}
+		}
+
+		LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_advance_integration"  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_advance_integration"  reason = "scope:target does not exist" }
+	}
+}
+
+# Set back integration progress by $steps$ (scope: country / ROOT), clamped at 0.
+# Used by negative reaction events (unrest, scandal, riot) to punish a botched push.
+SUBJ_QING_reduce_integration = {
+	if = {
+		limit = { exists = scope:target }
+		scope:target = {
+			if = {
+				limit = { NOT = { has_variable = SUBJ_integration_progress } }
+				set_variable = { name = SUBJ_integration_progress  value = 0 }
+			}
+			change_variable = { name = SUBJ_integration_progress  subtract = $steps$ }
+			if = {
+				limit = { var:SUBJ_integration_progress < 0 }
+				set_variable = { name = SUBJ_integration_progress  value = 0 }
+			}
+			LOG_line = {
+				sys = SUBJ
+				msg = "integration SETBACK subject=[this.GetTag] -$steps$ progress=[this.MakeScope.GetVariable('SUBJ_integration_progress').GetValue|0]/5"
+			}
+		}
+	}
+}
+
+# Suspend the process (scope: country, scope:target = subject).
+SUBJ_QING_suspend_integration = {
+	if = {
+		limit = { exists = scope:target }
+		scope:target = {
+			set_variable = { name = SUBJ_integration_suspended  value = 1 }
+			LOG_line = { sys = SUBJ  msg = "integration SUSPENDED subject=[this.GetTag]" }
+		}
+	}
+}
+
+# Resume a suspended process (scope: country, scope:target = subject).
+# Progress is preserved; only the suspension flag is lifted. Called from the
+# resume button so the player can restart without paying the push cost again.
+SUBJ_QING_resume_integration = {
+	if = {
+		limit = { exists = scope:target }
+		scope:target = {
+			if = {
+				limit = { has_variable = SUBJ_integration_suspended }
+				remove_variable = SUBJ_integration_suspended
+			}
+			set_variable = { name = SUBJ_integration_active  value = 1 }
+			LOG_line = { sys = SUBJ  msg = "integration RESUMED subject=[this.GetTag]" }
+		}
+	}
+}
+
+# Clear all integration state from a subject. Scope: the subject
+# (call inside scope:target = { ... }). Used when the subject is absorbed
+# (no longer exists as a relationship) or drops off the integration-eligible
+# rung via a demotion, so no stale progress/active/suspended flags linger to
+# confuse the GUI progress bar or the ambient pulse.
+SUBJ_QING_clear_integration_state = {
+	if = { limit = { has_variable = SUBJ_integration_progress }   remove_variable = SUBJ_integration_progress }
+	if = { limit = { has_variable = SUBJ_integration_active }     remove_variable = SUBJ_integration_active }
+	if = { limit = { has_variable = SUBJ_integration_suspended }  remove_variable = SUBJ_integration_suspended }
+	LOG_line = { sys = SUBJ  msg = "integration STATE CLEARED subject=[this.GetTag]" }
+}
+
+# Kept for backward compatibility: a single steady push (+1).
+SUBJ_QING_add_integration = {
+	SUBJ_QING_advance_integration = { steps = 1 }
+}
+
+########################################################################
+# REACTION EVENTS
+# After a push (and, at lower odds, on the ambient pulse) a positive or
+# negative reaction event may fire on the overlord about this subject. The
+# weighting reads live game state so a corrupt court, a rebellious populace,
+# or a prosperous frontier each tilt the odds toward the matching history.
+########################################################################
+
+# Roll one reaction event for scope:target. Scope: country (ROOT = overlord).
+# $ambient$ = yes on the pulse (adds a "nothing happens" weight so quiet years
+# are common); omit / no when called right after a deliberate push.
+SUBJ_QING_roll_reaction = {
+	LOG_line = {
+		sys = SUBJ
+		msg = "roll_reaction overlord=[ROOT.GetTag] subject=[scope:target.GetTag] ambient=$ambient$"
+	}
+	random_list = {
+		# --- Quiet: only meaningful on the ambient pulse ---
+		30 = {
+			trigger = { always = $ambient$ }
+			LOG_line = { sys = SUBJ  msg = "reaction=QUIET subject=[scope:target.GetTag]" }
+		}
+		# --- NEGATIVE: popular unrest (Three Feudatories / Taiping echo) ---
+		20 = {
+			modifier = {
+				# A restive frontier is likelier to rise.
+				factor = 2
+				scope:target = { any_owned_province = { total_population >= 20 } }
+			}
+			LOG_line = { sys = SUBJ  msg = "reaction=UNREST(qing_integ.10) subject=[scope:target.GetTag]" }
+			trigger_event = { id = qing_integ.10  days = { 3 10 } }
+		}
+		# --- NEGATIVE: corruption scandal (Heshen archetype) ---
+		15 = {
+			modifier = {
+				# A corrupt court breeds scandal.
+				factor = 3
+				current_ruler = { corruption >= 5 }
+			}
+			LOG_line = { sys = SUBJ  msg = "reaction=SCANDAL(qing_integ.11) subject=[scope:target.GetTag]" }
+			trigger_event = { id = qing_integ.11  days = { 3 10 } }
+		}
+		# --- NEGATIVE: ethnic / "race" riot (Miao, Panthay, Dungan) ---
+		15 = {
+			modifier = {
+				# Culturally alien subjects are likelier to riot against Han settlers.
+				factor = 2
+				scope:target = { NOT = { primary_culture = ROOT.primary_culture } }
+			}
+			LOG_line = { sys = SUBJ  msg = "reaction=STRIFE(qing_integ.12) subject=[scope:target.GetTag]" }
+			trigger_event = { id = qing_integ.12  days = { 3 10 } }
+		}
+		# --- POSITIVE: bountiful harvest on the frontier colonies (tuntian) ---
+		12 = {
+			LOG_line = { sys = SUBJ  msg = "reaction=HARVEST(qing_integ.20) subject=[scope:target.GetTag]" }
+			trigger_event = { id = qing_integ.20  days = { 3 10 } }
+		}
+		# --- POSITIVE: joyous festival / imperial investiture ---
+		12 = {
+			LOG_line = { sys = SUBJ  msg = "reaction=FESTIVAL(qing_integ.21) subject=[scope:target.GetTag]" }
+			trigger_event = { id = qing_integ.21  days = { 3 10 } }
+		}
+	}
+}
+
+# Ambient pulse: for the Qing player, every subject with an active, unsuspended
+# integration has a chance of a reaction event. Scope: country (CHI, human).
+SUBJ_QING_integration_pulse = {
+	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_integration_pulse" }
+	every_subject = {
+		limit = {
+			has_variable = SUBJ_integration_active
+			NOT = { has_variable = SUBJ_integration_suspended }
+			is_subject_type = autonomous_governorship
+		}
+		save_scope_as = target
+		root = {
+			random = {
+				chance = 40
+				SUBJ_QING_roll_reaction = { ambient = yes }
+			}
+		}
+	}
+	LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_integration_pulse"  result = OK }
+}
+
+SUBJ_QING_absorb_subject = {
+	# Scope: country (overlord / ROOT). scope:target = subject to be absorbed.
+	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_absorb_subject" }
+
+	if = {
+		limit = {
+			exists = scope:target
+			scope:target = { any_owned_province = { count >= 1 } }
+		}
+
+		LOG_state = { sys = SUBJ  note = "before absorbing [scope:target.GetTag]" }
+
+		# Build the list of the subject's provinces, then transfer them to us.
+		scope:target = {
+			every_owned_province = {
+				add_to_list = SUBJ_provinces_to_absorb
+			}
+		}
+
+		LAND_transfer_provinces = {
+			target_provinces = SUBJ_provinces_to_absorb
+			grantee = ROOT
+		}
+
+		# Clean up the working list and integration state.
+		every_in_list = {
+			list = SUBJ_provinces_to_absorb
+			remove_from_list = SUBJ_provinces_to_absorb
+		}
+
+		# Wipe the integration flags off the (now landless) subject so nothing
+		# stale drives the pulse or the GUI progress bar if the tag persists.
+		if = {
+			limit = { exists = scope:target }
+			scope:target = { SUBJ_QING_clear_integration_state = yes }
+		}
+
+		LOG_line = { sys = SUBJ  msg = "ABSORBED subject=[scope:target.GetTag] into overlord=[ROOT.GetTag]" }
+		LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_absorb_subject"  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_absorb_subject"  reason = "target missing or has no provinces to absorb" }
+	}
+}

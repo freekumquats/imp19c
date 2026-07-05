@@ -1,0 +1,173 @@
+########################################################################
+# se_QING_REFORM.txt — the reform-track END-STATES and the anachronistic
+# REBELLION helpers (task #14).
+#
+# The reform crisis (#9b, se_QING_DECLINE.txt → qing_reform_events.txt) no longer
+# resolves into a bare constitutional/republican binary. It now settles into ONE
+# of FOUR durable alternate-history end-states, each a government form + (for the
+# heterodox path) a religion change + a permanent golden modifier:
+#
+#   (1) 同治中興  revitalised absolute monarchy   keep imperial_monarchy  + qing_endstate_restoration
+#   (2) 君主立憲  constitutional monarchy         constitutional_parliament + qing_endstate_constitutional
+#   (3) 中華共和  the republic                    constitutional_republic + qing_endstate_republic
+#   (4) 天國      Christian theocracy (Taiping)   militant_theocracy + set_country_religion + qing_endstate_heavenly_kingdom
+#
+# The theocracy is deliberately the HARDEST to reach: it needs the Taiping
+# overture (qing_taiping_overture, seeded by qing_roster.13) AND a Christian-path
+# advance meter (qing_taiping_progress) pushed up by the Taiping mission tree and
+# Western backing. The others gate on the reform-faction balance.
+#
+# All end-states are once-only (guarded by qing_reform_endstate_reached) so the
+# dynasty settles its fate a single time.
+#
+# The REBELLION helpers (QING_rebellion_begin / _end) apply and clear the four
+# thematic rebellion modifiers and log the rising. They are called from
+# qing_rebellion_events.txt.
+#
+#   ROOT / this = the Qing overlord (CHI, player)
+#
+# Prefix = QING_reform_ / QING_rebellion_
+#
+# Sources: reform historiography as cited in qing_reform_events.txt; rebellion
+#   scholarship (Kuhn, Naquin, Spence, Atwill, Hodong Kim, Perry, Esherick) cited
+#   per-event in qing_rebellion_events.txt.
+########################################################################
+
+# ======================================================================
+# SHARED TAIL — mark the fate sealed, log it, and cool the reform crisis for
+# good. Called by every end-state finalizer.  $state$ = a short label string.
+# ======================================================================
+QING_reform_endstate_seal = {
+	set_variable = { name = qing_reform_endstate_reached  value = 1 }
+	# the great question is answered: the pressure that drove it collapses.
+	QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -60 }
+	LOG_line = { sys = QING  msg = "END-STATE sealed for [ROOT.GetTag]: $state$ (balance=[ROOT.MakeScope.GetVariable('qing_reform_faction_balance').GetValue|0])" }
+}
+
+# ---- (1) 同治中興 revitalised absolute monarchy ----------------------
+# The Confucian autocracy renewed rather than replaced. Government unchanged
+# (imperial_monarchy); a lasting restoration modifier + a jolt of legitimacy.
+QING_reform_endstate_restoration = {
+	LOG_enter = { sys = QING  fn = "QING_reform_endstate_restoration" }
+	if = {
+		limit = { NOT = { has_variable = qing_reform_endstate_reached } }
+		remove_country_modifier = qing_reform_constitutionalist
+		remove_country_modifier = qing_reform_republican_ferment
+		remove_country_modifier = qing_reform_reactionary_clampdown
+		add_country_modifier = { name = qing_endstate_restoration  duration = -1 }
+		set_variable = { name = qing_became_restoration  value = 1 }
+		add_stability = 3
+		add_legitimacy = 20
+		QING_reform_endstate_seal = { state = "revitalised absolute monarchy 同治中興" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_reform_endstate_restoration"  result = OK }
+}
+
+# ---- (2) 君主立憲 constitutional monarchy ----------------------------
+QING_reform_endstate_constitutional = {
+	LOG_enter = { sys = QING  fn = "QING_reform_endstate_constitutional" }
+	if = {
+		limit = { NOT = { has_variable = qing_reform_endstate_reached } }
+		remove_country_modifier = qing_reform_constitutionalist
+		remove_country_modifier = qing_reform_republican_ferment
+		remove_country_modifier = qing_reform_reactionary_clampdown
+		change_government = constitutional_parliament
+		add_country_modifier = { name = qing_endstate_constitutional  duration = -1 }
+		set_variable = { name = qing_became_constitutional  value = 1 }
+		add_stability = 2
+		QING_reform_endstate_seal = { state = "constitutional monarchy 君主立憲" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_reform_endstate_constitutional"  result = OK }
+}
+
+# ---- (3) 中華共和 the republic ---------------------------------------
+QING_reform_endstate_republic = {
+	LOG_enter = { sys = QING  fn = "QING_reform_endstate_republic" }
+	if = {
+		limit = { NOT = { has_variable = qing_reform_endstate_reached } }
+		remove_country_modifier = qing_reform_constitutionalist
+		remove_country_modifier = qing_reform_republican_ferment
+		remove_country_modifier = qing_reform_reactionary_clampdown
+		change_government = constitutional_republic
+		add_country_modifier = { name = qing_endstate_republic  duration = -1 }
+		set_variable = { name = qing_became_republic  value = 1 }
+		add_stability = 1
+		QING_reform_endstate_seal = { state = "republic 中華共和" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_reform_endstate_republic"  result = OK }
+}
+
+# ---- (4) 天國 Christian theocracy (the Taiping apex) -----------------
+# The hardest end: a Heavenly Kingdom. Government becomes a militant theocracy and
+# the state religion turns to the syncretic Chinese Christianity of the God
+# Worshippers. Reserved behind the Taiping path (checked by the caller).
+QING_reform_endstate_heavenly_kingdom = {
+	LOG_enter = { sys = QING  fn = "QING_reform_endstate_heavenly_kingdom" }
+	if = {
+		limit = { NOT = { has_variable = qing_reform_endstate_reached } }
+		remove_country_modifier = qing_reform_constitutionalist
+		remove_country_modifier = qing_reform_republican_ferment
+		remove_country_modifier = qing_reform_reactionary_clampdown
+		# the Taiping rising itself is subsumed into the new order
+		QING_rebellion_end = { flavour = taiping }
+		change_government = militant_theocracy
+		set_country_religion = syncretic_christian
+		add_country_modifier = { name = qing_endstate_heavenly_kingdom  duration = -1 }
+		set_variable = { name = qing_became_heavenly_kingdom  value = 1 }
+		add_stability = 2
+		QING_reform_endstate_seal = { state = "Heavenly Kingdom 天國 (Christian theocracy)" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_reform_endstate_heavenly_kingdom"  result = OK }
+}
+
+# ======================================================================
+# THE TAIPING / CHRISTIAN-PATH METER
+# qing_taiping_progress 0..100 — how far the throne has walked the heterodox
+# road. Advanced by the Taiping mission tree and Western-backing events; the
+# Heavenly-Kingdom end-state needs it high (see qing_reform.33 gate).
+# ======================================================================
+QING_taiping_init = {
+	LOG_enter = { sys = QING  fn = "QING_taiping_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_taiping_progress } }
+		set_variable = { name = qing_taiping_progress  value = 0 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_taiping_init"  result = OK }
+}
+
+QING_taiping_advance = {
+	QING_taiping_init = yes
+	QING_DECLINE_nudge = { var = qing_taiping_progress  amount = $amount$ }
+	LOG_line = { sys = QING  msg = "Taiping/Christian path advance +$amount$ -> [ROOT.MakeScope.GetVariable('qing_taiping_progress').GetValue|0] for [ROOT.GetTag]" }
+}
+
+# ======================================================================
+# REBELLION HELPERS
+# A great rising flares. $flavour$ selects the thematic modifier; $sect$ is the
+# sect-pressure jolt. Kept O(1): a country modifier + a counter nudge + a flag so
+# the same rising is not double-started.
+# ======================================================================
+QING_rebellion_begin = {
+	LOG_enter = { sys = QING  fn = "QING_rebellion_begin" }
+	if = {
+		limit = { NOT = { has_variable = qing_active_rebellion } }
+		set_variable = { name = qing_active_rebellion  value = 1 }
+	}
+	add_country_modifier = { name = qing_rebel_$flavour$  duration = -1 }
+	QING_DECLINE_nudge = { var = qing_sect_pressure  amount = $sect$ }
+	LOG_line = { sys = QING  msg = "REBELLION begins ($flavour$) for [ROOT.GetTag], sect += $sect$" }
+	LOG_exit = { sys = QING  fn = "QING_rebellion_begin"  result = OK }
+}
+
+# The rising is suppressed or comes to terms. Clears its flavour modifier and
+# lifts the active-rebellion state. The suite enforces one rising at a time (see
+# QING_rebellion_begin's guard + the roll dispatcher), so there is never a second
+# flavour to keep the state alive.
+QING_rebellion_end = {
+	remove_country_modifier = qing_rebel_$flavour$
+	if = {
+		limit = { has_variable = qing_active_rebellion }
+		remove_variable = qing_active_rebellion
+	}
+	LOG_line = { sys = QING  msg = "REBELLION ends ($flavour$) for [ROOT.GetTag]" }
+}

@@ -1,0 +1,195 @@
+########################################################################
+# se_QING_TECHTRANSFER.txt — TECHNOLOGY-TRANSFER BARGAINS (借才與借法 / 洋務交易).
+#
+# The Self-Strengthening yards, arsenals, and railways were not built in isolation:
+# they ran on foreign machinery, foreign engineers, foreign patterns, and foreign
+# loans. Krupp armed the Beiyang forts; Armstrong and Vulcan built its ironclads;
+# the Fuzhou yard was a French turnkey project under Giquel; the first railways
+# were British- and later German-financed. Each transfer of technology came WITH A
+# PRICE that was rarely written on the invoice: a mining concession, a railway
+# right, a loan on hard terms, a most-favoured claim — the "help-for-favors"
+# bargain that let a Great Power convert its expertise into a standing stake in China.
+#
+# THE BARGAIN THIS MODELS: strike a bargain with a power and it ACCELERATES a chosen
+# Self-Strengthening track at once (a burst of progress + a track hook), for a small
+# treasury cost — a genuine shortcut past the slow indigenous path. But every bargain
+# adds to that power's FAVOR-DEBT (a per-power meter): the stake it has built up and
+# will eventually call in. When the debt crosses a threshold the power CALLS THE
+# FAVOR (a concession-demand crisis, qing_techtransfer.10) — pay the concession
+# (treaty burden / gp goodwill) or refuse and spike that power's tension. It also
+# warms the partner power (the advisor home-hook) and, by 以夷制夷, its rivals bristle.
+#
+# This is the ACCELERANT that ties the reform suite to the foreign-relations suite:
+# faster modernization, bought with deepening foreign leverage.
+#
+# Design mirrors the suite: per-power 0..100 debt COUNTERS on CHI, event-driven,
+# read O(1) by the governance pulse (QING_techtransfer_pulse), all logged.
+#   qing_ttx_debt_<power>   0..100  favor-debt owed to that power
+# Powers: britain | france | russia | america  (the diplo-layer powers)
+# Tracks (each maps to a Self-Strengthening founding hook):
+#   arsenal | naval | rail | telegraph
+#
+#   ROOT / this = the Qing overlord (CHI, human)
+# Prefix = QING_techtransfer_ / QING_ttx_
+#
+# Sources: David Pong, Shen Pao-chen and the Self-Strengthening Movement (1994);
+#   Thomas Kennedy, "The Arms of Kiangnan" (1978); Hans van de Ven, Breaking with
+#   the Past (2014); Spence, The Search for Modern China; Benjamin Elman (2004).
+########################################################################
+
+# ======================================================================
+# INIT — seed the per-power favor-debt counters once.
+# ======================================================================
+QING_techtransfer_init = {
+	if = { limit = { NOT = { has_variable = qing_ttx_debt_britain } } set_variable = { name = qing_ttx_debt_britain  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_ttx_debt_france } }  set_variable = { name = qing_ttx_debt_france  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_ttx_debt_russia } }  set_variable = { name = qing_ttx_debt_russia  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_ttx_debt_america } } set_variable = { name = qing_ttx_debt_america  value = 0 } }
+}
+
+# ======================================================================
+# STRIKE A BARGAIN — the core verb. $power$/$tag$ = the partner power; $track$ =
+# arsenal|naval|rail|telegraph (the Self-Strengthening founding hook to fire).
+# Fires the track hook (real progress + institution), adds to that power's favor-
+# debt, warms the partner (the advisor home-hook idiom), and — via 以夷制夷 —
+# bristles its rivals through the diplo layer. Country scope (ROOT = CHI).
+# ======================================================================
+QING_techtransfer_bargain = {
+	LOG_enter = { sys = QING  fn = "QING_techtransfer_bargain" }
+	QING_techtransfer_init = yes
+	# --- fire the chosen Self-Strengthening founding hook (the transfer itself).
+	QING_techtransfer_fire_track = { track = $track$ }
+	# --- the favor-debt to the partner grows (the stake it is building).
+	QING_DECLINE_nudge = { var = qing_ttx_debt_$power$  amount = 20 }
+	# --- warm the partner power: it has deepened its stake in China (reuses the
+	# advisor home-hook opinion; a tag that does not exist is a guarded no-op).
+	QING_techtransfer_warm_partner = { power = $power$  tag = $tag$ }
+	LOG_line = { sys = QING  msg = "techtransfer: bargain with $tag$ on $track$ (debt=[ROOT.MakeScope.GetVariable('qing_ttx_debt_$power$').GetValue|0]) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_techtransfer_bargain"  result = OK }
+}
+
+# Map a track key to its Self-Strengthening founding hook. The hooks are themselves
+# guarded (they no-op if the institution already stands), so a repeat bargain on a
+# built track still adds favor-debt and warms the partner — the diplomatic cost is
+# paid even when the industrial gain is capped, which is the intended lesson.
+QING_techtransfer_fire_track = {
+	if = { limit = { $track$ = arsenal }   QING_selfstr_found_jiangnan = yes }
+	else_if = { limit = { $track$ = naval }     QING_selfstr_found_fuzhou = yes }
+	else_if = { limit = { $track$ = rail }      QING_selfstr_found_rail = yes }
+	else_if = { limit = { $track$ = telegraph } QING_selfstr_found_telegraph = yes }
+	else = { LOG_fail = { sys = QING  fn = "QING_techtransfer_fire_track"  reason = "unknown track $track$" } }
+}
+
+# Warm the partner power (its stake in China grows) and bristle its rivals (以夷制夷).
+# Reuses the great-power tension layer (se_QING_DIPLO.txt) where the power is in the
+# triangle; america is outside the triangle, so only its goodwill applies.
+QING_techtransfer_warm_partner = {
+	if = { limit = { $power$ = britain }  QING_gp_accommodate = { power = britain  tag = GBR  amount = -6 }  QING_gp_rivals_bristle = { rival_a = france  rtag_a = FRA  rival_b = russia  rtag_b = RUS } }
+	else_if = { limit = { $power$ = france }  QING_gp_accommodate = { power = france  tag = FRA  amount = -6 }  QING_gp_rivals_bristle = { rival_a = britain  rtag_a = GBR  rival_b = russia  rtag_b = RUS } }
+	else_if = { limit = { $power$ = russia }  QING_gp_accommodate = { power = russia  tag = RUS  amount = -6 }  QING_gp_rivals_bristle = { rival_a = britain  rtag_a = GBR  rival_b = france  rtag_b = FRA } }
+	else_if = {
+		limit = { $power$ = america }
+		# america is outside the 以夷制夷 triangle — only its goodwill grows.
+		if = {
+			limit = { exists = c:USA }
+			c:USA = { add_opinion = { modifier = qing_advisor_home_opinion  target = ROOT } }
+		}
+	}
+}
+
+# ======================================================================
+# DISPATCH — called from the track-picker event (.2). Reads the saved partner flag
+# (qing_ttx_partner) and calls QING_techtransfer_bargain with the matching power/
+# tag + the chosen $track$. Keeps the event options terse. Country scope.
+# ======================================================================
+QING_techtransfer_dispatch = {
+	if = { limit = { var:qing_ttx_partner = flag:britain }  QING_techtransfer_bargain = { power = britain  tag = GBR  track = $track$ } }
+	else_if = { limit = { var:qing_ttx_partner = flag:france }  QING_techtransfer_bargain = { power = france  tag = FRA  track = $track$ } }
+	else_if = { limit = { var:qing_ttx_partner = flag:russia }  QING_techtransfer_bargain = { power = russia  tag = RUS  track = $track$ } }
+	else_if = { limit = { var:qing_ttx_partner = flag:america } QING_techtransfer_bargain = { power = america  tag = USA  track = $track$ } }
+	else = { LOG_fail = { sys = QING  fn = "QING_techtransfer_dispatch"  reason = "no partner selected" } }
+}
+
+# ======================================================================
+# CALL THE FAVOR — the power cashes in its accumulated stake (a concession demand).
+# Called by the pulse when a power's favor-debt crosses the threshold. Dispatches
+# the concession-demand crisis event, keyed to the owing power. Country scope.
+# ======================================================================
+QING_techtransfer_call_favor = {
+	# $power$/$tag$ = the calling power.
+	LOG_line = { sys = QING  msg = "techtransfer: $tag$ CALLS THE FAVOR for [ROOT.GetTag]" }
+	set_variable = { name = qing_ttx_caller_power  value = flag:$power$ }
+	trigger_event = { id = qing_techtransfer.10  days = { 5 20 } }
+}
+
+# ======================================================================
+# PAY / REFUSE the concession (called from the crisis event). $power$/$tag$ = the
+# caller. Paying: clears most of that power's debt, deepens the treaty burden (a new
+# concession), keeps goodwill. Refusing: keeps the industrial gains but spikes that
+# power's tension and forfeits goodwill. Country scope.
+# ======================================================================
+QING_techtransfer_pay_concession = {
+	QING_techtransfer_init = yes
+	QING_DECLINE_nudge = { var = qing_ttx_debt_$power$  amount = -60 }
+	# a granted concession deepens the treaty order (guarded: only if imposed; else
+	# it seeds a modest burden as a fresh concession).
+	if = {
+		limit = { has_variable = qing_treaty_system_imposed }
+		QING_DECLINE_nudge = { var = qing_treaty_burden  amount = 10 }
+	}
+	else = {
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
+	}
+	LOG_line = { sys = QING  msg = "techtransfer: concession PAID to $tag$ for [ROOT.GetTag]" }
+}
+
+QING_techtransfer_refuse_concession = {
+	QING_techtransfer_init = yes
+	# the debt is repudiated but the affront spikes that power's tension.
+	QING_DECLINE_nudge = { var = qing_ttx_debt_$power$  amount = -40 }
+	QING_techtransfer_spike_tension = { power = $power$ }
+	add_prestige = 10
+	LOG_line = { sys = QING  msg = "techtransfer: concession REFUSED to $tag$ (tension spiked) for [ROOT.GetTag]" }
+}
+
+# Spike the caller's tension (refusal). Triangle powers use the gp tension counter;
+# america has no counter, so it is a logged no-op there.
+QING_techtransfer_spike_tension = {
+	if = { limit = { $power$ = britain }  QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = 20 } }
+	else_if = { limit = { $power$ = france }  QING_DECLINE_nudge = { var = qing_gp_tension_france  amount = 20 } }
+	else_if = { limit = { $power$ = russia }  QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = 20 } }
+	else = { LOG_line = { sys = QING  msg = "techtransfer: no tension counter for $power$ (refusal noted)" } }
+}
+
+# ======================================================================
+# THE PULSE — test each power's favor-debt against the call threshold, at most one
+# call pending at a time. Called from QING_GOV_pulse. All O(1).
+# ======================================================================
+QING_techtransfer_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_techtransfer_pulse" }
+	QING_techtransfer_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_ttx_call_pending } }
+		if = {
+			limit = { var:qing_ttx_debt_britain >= 70 }
+			set_variable = { name = qing_ttx_call_pending  value = 1 }
+			QING_techtransfer_call_favor = { power = britain  tag = GBR }
+		}
+		else_if = {
+			limit = { var:qing_ttx_debt_france >= 70 }
+			set_variable = { name = qing_ttx_call_pending  value = 1 }
+			QING_techtransfer_call_favor = { power = france  tag = FRA }
+		}
+		else_if = {
+			limit = { var:qing_ttx_debt_russia >= 70 }
+			set_variable = { name = qing_ttx_call_pending  value = 1 }
+			QING_techtransfer_call_favor = { power = russia  tag = RUS }
+		}
+		else_if = {
+			limit = { var:qing_ttx_debt_america >= 70 }
+			set_variable = { name = qing_ttx_call_pending  value = 1 }
+			QING_techtransfer_call_favor = { power = america  tag = USA }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_techtransfer_pulse"  result = OK }
+}

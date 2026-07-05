@@ -1,0 +1,213 @@
+########################################################################
+# se_QING_TREATIES.txt — UNEQUAL TREATIES & THE TREATY-PORT SYSTEM (條約口岸 / 租界).
+#
+# The "unequal treaty" order (不平等條約) was the frame within which the late Qing
+# lived: beginning with Nanjing (南京條約, 1842) and multiplying through Tianjin
+# (1858), Beijing (1860), and Shimonoseki (1895), the treaties forced open TREATY
+# PORTS (條約口岸) where foreigners traded and resided; granted EXTRATERRITORIALITY
+# (領事裁判權 — foreigners tried under their own consuls, not Qing law); fixed the
+# tariff by treaty (the 5% ceiling the Maritime Customs then collected); carved out
+# foreign-run CONCESSIONS (租界, above all the Shanghai International Settlement);
+# and bound in the most-favoured-nation clause that spread every concession to all.
+#
+# THE BARGAIN THIS MODELS — a two-sided ledger:
+#  (+) the treaty ports are ENGINES OF COMMERCE: Shanghai, Tianjin, Hankou became
+#      the entrepôts through which China's modern trade, banking, and industry grew
+#      (a standing commerce/tax lift that scales with the number of ports).
+#  (-) the treaty SYSTEM is a STANDING HUMILIATION: extraterritoriality and the
+#      concessions are a running affront to sovereignty (a burden meter that feeds
+#      reform pressure and drags legitimacy) — the grievance that fed reform,
+#      revolution, and eventually the drive for treaty revision (修約).
+#
+# The player can pursue TREATY REVISION — claw back extraterritoriality and tariff
+# autonomy — but only as the dynasty's DIPLOMATIC REACH grows: revision is gated on
+# the permanent legations (駐外使館, se_QING_LEGATIONS.txt) and eased by a sinicized,
+# efficient Maritime Customs (海關, se_QING_CUSTOMS.txt). This is the payoff arc that
+# ties the whole foreign-relations suite together.
+#
+# Design mirrors the suite: 0..100 COUNTERS + a small port count on CHI, event-
+# driven, read O(1) by the governance pulse (QING_treaty_pulse), all logged.
+#   qing_treaty_burden     0..100  weight of the unequal-treaty order (humiliation)
+#   qing_treaty_ports      0..N     number of opened treaty ports (commerce engines)
+#   qing_tariff_autonomy   0..100  how far tariff-setting has been reclaimed (0 = the
+#                                   treaty-fixed 5% ceiling; 100 = full autonomy)
+# Marks:
+#   qing_treaty_system_imposed  flag var: the unequal-treaty order is in force
+#   qing_extrality_abolished    flag var: extraterritoriality has been revised away
+#
+#   ROOT / this = the Qing overlord (CHI, human)
+# Prefix = QING_treaty_
+#
+# Sources: Dong Wang, "China's Unequal Treaties: Narrating National History" (2005);
+#   Robert Bickers, "The Scramble for China" (2011); Immanuel Hsü, The Rise of Modern
+#   China; Pär Cassel, "Grounds of Judgment" (2012, extraterritoriality); Spence, The
+#   Search for Modern China; Fairbank & Liu, Cambridge History of China v.11.
+########################################################################
+
+# ======================================================================
+# INIT — seed the treaty counters once. Called by QING_treaty_pulse.
+# ======================================================================
+QING_treaty_init = {
+	if = { limit = { NOT = { has_variable = qing_treaty_burden } }   set_variable = { name = qing_treaty_burden  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_treaty_ports } }    set_variable = { name = qing_treaty_ports  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_tariff_autonomy } } set_variable = { name = qing_tariff_autonomy  value = 0 } }
+}
+
+# ======================================================================
+# IMPOSE THE TREATY SYSTEM — the foundational act (南京條約, 1842 and after). Called
+# when the dynasty is forced open (a lost war, the Canton crisis, or the flavour
+# event). Grants the lasting humiliation modifier, opens the first tranche of
+# treaty ports, and sets the burden high. Guarded once. Country scope (ROOT = CHI).
+# ======================================================================
+QING_treaty_impose = {
+	LOG_enter = { sys = QING  fn = "QING_treaty_impose" }
+	QING_treaty_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_treaty_system_imposed } }
+		set_variable = { name = qing_treaty_system_imposed  value = 1 }
+		add_country_modifier = { name = qing_treaty_system_active  duration = -1 }
+		# the first treaty ports open (Nanjing's five: Canton, Xiamen, Fuzhou,
+		# Ningbo, Shanghai).
+		change_variable = { name = qing_treaty_ports  add = 5 }
+		# the order lands as a heavy humiliation.
+		QING_DECLINE_nudge = { var = qing_treaty_burden  amount = 60 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 10 }
+		# tariff autonomy is lost to the treaty-fixed ceiling.
+		set_variable = { name = qing_tariff_autonomy  value = 0 }
+		QING_treaty_apply_ports_modifier = yes
+		LOG_line = { sys = QING  msg = "treaty: unequal-treaty system imposed for [ROOT.GetTag] (ports=[ROOT.MakeScope.GetVariable('qing_treaty_ports').GetValue|0])" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_treaty_impose"  reason = "treaty system already imposed" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_treaty_impose"  result = OK }
+}
+
+# ======================================================================
+# OPEN A FURTHER TREATY PORT — each new port (Tianjin, Hankou, ...) deepens the
+# commerce engine but adds a little to the burden (more foreign presence, more
+# concessions). Country scope. Guarded on the system being in force.
+# ======================================================================
+QING_treaty_open_port = {
+	LOG_enter = { sys = QING  fn = "QING_treaty_open_port" }
+	QING_treaty_init = yes
+	if = {
+		limit = { has_variable = qing_treaty_system_imposed }
+		change_variable = { name = qing_treaty_ports  add = 1 }
+		QING_DECLINE_nudge = { var = qing_treaty_burden  amount = 5 }
+		QING_treaty_apply_ports_modifier = yes
+		LOG_line = { sys = QING  msg = "treaty: further port opened for [ROOT.GetTag] (ports=[ROOT.MakeScope.GetVariable('qing_treaty_ports').GetValue|0])" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_treaty_open_port"  reason = "treaty system not in force" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_treaty_open_port"  result = OK }
+}
+
+# ======================================================================
+# TREATY REVISION (修約) — claw back sovereignty. $track$ = tariff|extrality.
+#   tariff:   raise tariff autonomy (reclaim the treaty-fixed rate). Repeatable.
+#   extrality: abolish extraterritoriality (the great prize). One-off; requires
+#             tariff autonomy already well advanced (the historical order).
+# Both relieve the burden and prestige; gated (in the GUI/event) on diplomatic
+# reach (permanent legations). Country scope.
+# ======================================================================
+QING_treaty_revise = {
+	LOG_enter = { sys = QING  fn = "QING_treaty_revise" }
+	QING_treaty_init = yes
+	if = {
+		limit = { $track$ = tariff }
+		QING_DECLINE_nudge = { var = qing_tariff_autonomy  amount = 25 }
+		QING_DECLINE_nudge = { var = qing_treaty_burden  amount = -12 }
+		add_prestige = 30
+		LOG_line = { sys = QING  msg = "treaty revision: tariff autonomy advanced for [ROOT.GetTag] (autonomy=[ROOT.MakeScope.GetVariable('qing_tariff_autonomy').GetValue|0])" }
+	}
+	else_if = {
+		limit = {
+			$track$ = extrality
+			NOT = { has_variable = qing_extrality_abolished }
+		}
+		set_variable = { name = qing_extrality_abolished  value = 1 }
+		QING_DECLINE_nudge = { var = qing_treaty_burden  amount = -30 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -8 }
+		add_prestige = 60
+		LOG_line = { sys = QING  msg = "treaty revision: EXTRATERRITORIALITY ABOLISHED for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_treaty_revise"  reason = "extrality already abolished or bad track $track$" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_treaty_revise"  result = OK }
+}
+
+# ======================================================================
+# THE COMMERCE ENGINE — swap the treaty-ports modifier to the tier matching the
+# number of open ports. More ports = a greater entrepôt commerce/tax lift. O(1).
+# ======================================================================
+QING_treaty_apply_ports_modifier = {
+	remove_country_modifier = qing_treaty_ports_minor
+	remove_country_modifier = qing_treaty_ports_major
+	remove_country_modifier = qing_treaty_ports_dominant
+	if = {
+		limit = { var:qing_treaty_ports >= 12 }
+		add_country_modifier = { name = qing_treaty_ports_dominant  duration = -1 }
+	}
+	else_if = {
+		limit = { var:qing_treaty_ports >= 7 }
+		add_country_modifier = { name = qing_treaty_ports_major  duration = -1 }
+	}
+	else_if = {
+		limit = { var:qing_treaty_ports >= 1 }
+		add_country_modifier = { name = qing_treaty_ports_minor  duration = -1 }
+	}
+}
+
+# ======================================================================
+# THE PULSE — feed reform pressure from the burden, drift the burden, apply the
+# burden band. Called from QING_GOV_pulse only while the system is imposed. O(1).
+# ======================================================================
+QING_treaty_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_treaty_pulse" }
+	QING_treaty_init = yes
+
+	# --- the standing humiliation feeds reform pressure while the burden is heavy.
+	if = {
+		limit = { var:qing_treaty_burden >= 50 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 1 }
+	}
+
+	# --- the burden eases slowly as tariff autonomy is reclaimed (revision chips
+	# away at the grievance), and is fully lifted only once extrality is abolished.
+	if = {
+		limit = { has_variable = qing_extrality_abolished }
+		QING_DECLINE_nudge = { var = qing_treaty_burden  amount = -3 }
+	}
+	else_if = {
+		limit = { var:qing_tariff_autonomy >= 50 }
+		QING_DECLINE_nudge = { var = qing_treaty_burden  amount = -1 }
+	}
+
+	QING_treaty_apply_ports_modifier = yes
+	QING_treaty_apply_burden_band = yes
+	LOG_exit = { sys = QING  fn = "QING_treaty_pulse"  result = OK }
+}
+
+# ======================================================================
+# BURDEN BAND — one active modifier matching the humiliation weight.
+# ======================================================================
+QING_treaty_apply_burden_band = {
+	remove_country_modifier = qing_treaty_burden_heavy
+	remove_country_modifier = qing_treaty_burden_eased
+	if = {
+		limit = { var:qing_treaty_burden >= 60 }
+		add_country_modifier = { name = qing_treaty_burden_heavy  duration = -1 }
+		LOG_line = { sys = QING  msg = "band treaty burden = heavy for [ROOT.GetTag] (burden=[ROOT.MakeScope.GetVariable('qing_treaty_burden').GetValue|0])" }
+	}
+	else_if = {
+		limit = {
+			var:qing_treaty_burden <= 25
+			has_variable = qing_treaty_system_imposed
+		}
+		add_country_modifier = { name = qing_treaty_burden_eased  duration = -1 }
+		LOG_line = { sys = QING  msg = "band treaty burden = eased for [ROOT.GetTag] (burden=[ROOT.MakeScope.GetVariable('qing_treaty_burden').GetValue|0])" }
+	}
+}

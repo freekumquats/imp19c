@@ -1,0 +1,363 @@
+########################################################################
+# qing_himalaya_seasia_missions.txt — the SOUTHERN & MARITIME FRONTIER
+# (南疆與海疆): an anachronistic Qing expansion tree across the Himalaya and the
+# whole of Southeast Asia. CHI-only, player-only, and — like the rest of the
+# suite — able to fire on an anachronistic timeline.
+#
+# TWO great arcs fan out from a shared root (the Court of Colonial Affairs /
+# expanded 理藩院):
+#
+#   • THE HIMALAYA (the Tibetan glacis): Nepal (Gurkha), Sikkim, Bhutan, Ladakh.
+#     History: the Qing fought the Gurkhas in 1788-92 (the Sino-Nepalese War,
+#     ending with a Gurkha tribute mission to Beijing), and Tibet was a Qing
+#     protectorate under the ambans (駐藏大臣). Pushing the ring of Himalayan
+#     states into the tributary order brings the Qing up against the EXPANDING
+#     British Raj climbing the other side of the range.
+#
+#   • SOUTHEAST ASIA (the southern tributaries, 南洋): Burma, Siam, Vietnam,
+#     Cambodia, Laos, the Shan states — the historical 朝貢 tributaries of the
+#     Qing. History: the Qianlong court fought the Konbaung Burmese (1765-69) and
+#     invaded Vietnam (1788-89); Siam, Vietnam, Laos, Cambodia and the Shan chiefs
+#     all sent tribute at various points. Reasserting and deepening that order
+#     collides with the two European empires closing in: BRITAIN from India into
+#     Burma, and FRANCE into Vietnam/Cambodia/Laos (Indochina).
+#
+# GREAT-POWER RULE (ties into se_QING_DIPLO.txt, the foreign-reaction layer):
+#     Burma + (British) India ....... provokes BRITAIN (GBR / the EIC)
+#     Vietnam / Cambodia / Laos ...... provokes FRANCE (FRA)
+#     the Himalaya (vs the Raj) ...... provokes BRITAIN
+# Each aggressive task calls QING_gp_provoke_britain / _provoke_france, which run
+# the tension counter, opinion, aggressive expansion, the 以夷制夷 rival-delight,
+# AND the date-keyed GRIP GRACE (early moves barely register — control was thin in
+# 1815 and took decades to solidify). Where the Qing is strong enough, the same
+# tasks offer a "SPLIT THE DIFFERENCE" partition alternative (QING_gp_partition_*)
+# that takes a share by negotiation instead of provocation.
+#
+# Rewards: add_claim, FUNC_make_subject (sinosphere_tributary — the tributary
+# system), set_city_status, add_building_level, CURRENCY_grant_country_wealth, and
+# the QING_* effects; all logged to sys = QING.
+#
+# NOTE (cosmetic): task icons reuse test1/2/3, header mission_image_test — see the
+# note in qing_selfstrengthening_missions.txt.
+#
+# Sources: Perdue, China Marches West (2005); Dai Yingcong, "A Disguised Defeat:
+#   The Myanmar Campaign of the Qing Dynasty" (2004); Woodside, Vietnam and the
+#   Chinese Model (1988); Kirkpatrick / Rose, Nepal and the Sino-Nepalese War;
+#   John K. Fairbank (ed.), The Chinese World Order (1968, the tributary system).
+########################################################################
+
+qing_himalaya_seasia_mission = {
+	icon = test3
+	header = mission_image_test
+
+	repeatable = no
+
+	chance = { }
+	ai_chance = { factor = 0 }   # player-only
+
+	potential = {
+		tag = CHI
+		is_ai = no
+	}
+
+	abort = {
+		NOT = { tag = CHI }
+	}
+
+	on_start = {
+		LOG_line = { sys = QING  msg = "MISSION himalaya/SE-Asia (southern frontier) started for [ROOT.GetTag]" }
+		QING_gp_init = yes
+	}
+
+	on_completion = {
+		LOG_line = { sys = QING  msg = "MISSION himalaya/SE-Asia COMPLETED for [ROOT.GetTag]" }
+	}
+
+	# ==================================================================
+	# ROOT — the Court of Colonial Affairs (理藩院 expanded to the south).
+	# The institutional resolve to order the southern and Himalayan marches.
+	# ==================================================================
+	qing_hs_lifanyuan = {
+		icon = test1
+		allow = {
+			treasury >= 80
+		}
+		on_start = {
+			add_treasury = -80
+		}
+		on_completion = {
+			custom_tooltip = qing_hs_lifanyuan_tt
+			add_country_modifier = { name = qing_hs_southern_court  duration = -1 }
+			LOG_line = { sys = QING  msg = "MISSION task Lifanyuan (southern court) for [ROOT.GetTag]" }
+		}
+	}
+
+	# ##################################################################
+	# ARC I — THE HIMALAYA (the Tibetan glacis, vs the climbing Raj)
+	# ##################################################################
+
+	# --- Tibet: confirm the amban protectorate (駐藏大臣) --------------
+	qing_hs_tibet = {
+		icon = test2
+		requires = { qing_hs_lifanyuan }
+		allow = {
+			treasury >= 70
+			custom_tooltip = {
+				text = qing_hs_needs_tibet_tt
+				OR = { owns = 3819  any_subject = { owns = 3819 } }
+			}
+		}
+		on_start = {
+			add_treasury = -70
+		}
+		on_completion = {
+			custom_tooltip = qing_hs_tibet_tt
+			if = { limit = { owns = 3819 }  p:3819 = { add_building_level = fortress_building } }
+			add_country_modifier = { name = qing_hs_amban  duration = -1 }
+			QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 2 }
+			LOG_line = { sys = QING  msg = "MISSION task Tibet amban for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- Nepal (Gurkha): the 1792 settlement made permanent --------------
+	qing_hs_nepal = {
+		icon = test3
+		requires = { qing_hs_tibet }
+		allow = {
+			treasury >= 90
+		}
+		on_start = {
+			add_treasury = -90
+		}
+		on_completion = {
+			custom_tooltip = qing_hs_nepal_tt
+			# the Gurkha kingdom returns to the tributary fold under the Son of Heaven
+			if = {
+				limit = { exists = c:NEP  NOT = { c:NEP = { is_subject_of = ROOT } } }
+				FUNC_make_subject = { overlord = ROOT  target = c:NEP  type = sinosphere_tributary }
+			}
+			if = { limit = { exists = p:7739  NOT = { owns = 7739 } }  add_claim = p:7739 }
+			# climbing into the Himalaya brings the Qing against the British Raj
+			QING_gp_provoke_britain = { severity = 8 }
+			LOG_line = { sys = QING  msg = "MISSION task Nepal tributary for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- Sikkim, Bhutan, Ladakh: the rest of the Himalayan ring ----------
+	qing_hs_himalaya_ring = {
+		icon = test2
+		requires = { qing_hs_nepal }
+		allow = {
+			treasury >= 110
+		}
+		on_start = {
+			add_treasury = -110
+		}
+		on_completion = {
+			custom_tooltip = qing_hs_himalaya_ring_tt
+			if = { limit = { exists = p:7347  NOT = { owns = 7347 } }  add_claim = p:7347 }  # Sikkim (Gangtok)
+			if = { limit = { exists = p:7040  NOT = { owns = 7040 } }  add_claim = p:7040 }  # Bhutan (Punakha)
+			if = { limit = { exists = p:2164  NOT = { owns = 2164 } }  add_claim = p:2164 }  # Ladakh (Leh)
+			if = {
+				limit = { exists = c:SKK  NOT = { c:SKK = { is_subject_of = ROOT } } }
+				FUNC_make_subject = { overlord = ROOT  target = c:SKK  type = sinosphere_tributary }
+			}
+			if = {
+				limit = { exists = c:BHU  NOT = { c:BHU = { is_subject_of = ROOT } } }
+				FUNC_make_subject = { overlord = ROOT  target = c:BHU  type = sinosphere_tributary }
+			}
+			add_country_modifier = { name = qing_hs_himalayan_wall  duration = -1 }
+			# the whole southern face of the range now abuts British India — either a
+			# sharp provocation, OR, for a strong Qing, a negotiated demarcation of
+			# spheres along the watershed (the historical logic of the boundary
+			# conventions). The mission task offers the deal; here we take the push.
+			if = {
+				limit = { QING_gp_can_partition = yes }
+				custom_tooltip = qing_hs_partition_britain_tt
+				QING_gp_partition_britain = yes
+			}
+			else = {
+				QING_gp_provoke_britain = { severity = 10 }
+			}
+			LOG_line = { sys = QING  msg = "MISSION task Himalayan ring for [ROOT.GetTag]" }
+		}
+	}
+
+	# ##################################################################
+	# ARC II — SOUTHEAST ASIA (the southern tributaries, 南洋)
+	# ##################################################################
+
+	# --- Vietnam: the tributary bond deepened (越南) --------------------
+	# Runs off the naming-of-Vietnam flavour beat; France is the rival here.
+	qing_hs_vietnam = {
+		icon = test3
+		requires = { qing_hs_lifanyuan }
+		allow = {
+			treasury >= 90
+			custom_tooltip = {
+				text = qing_hs_needs_vietnam_tt
+				exists = c:VIE
+			}
+		}
+		on_start = {
+			add_treasury = -90
+		}
+		on_completion = {
+			custom_tooltip = qing_hs_vietnam_tt
+			if = {
+				limit = { exists = c:VIE  NOT = { c:VIE = { is_subject_of = ROOT } } }
+				FUNC_make_subject = { overlord = ROOT  target = c:VIE  type = sinosphere_tributary }
+			}
+			if = { limit = { exists = p:3418  NOT = { owns = 3418 } }  add_claim = p:3418 }  # Hanoi
+			# Vietnam is the heart of the French sphere-to-be
+			if = {
+				limit = { QING_gp_can_partition = yes }
+				custom_tooltip = qing_hs_partition_france_tt
+				QING_gp_partition_france = yes
+			}
+			else = {
+				QING_gp_provoke_france = { severity = 10 }
+			}
+			LOG_line = { sys = QING  msg = "MISSION task Vietnam tributary for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- Cambodia + Laos: the rest of French Indochina-to-be -------------
+	qing_hs_indochina = {
+		icon = test2
+		requires = { qing_hs_vietnam }
+		allow = {
+			treasury >= 120
+		}
+		on_start = {
+			add_treasury = -120
+		}
+		on_completion = {
+			custom_tooltip = qing_hs_indochina_tt
+			if = {
+				limit = { exists = p:2637  NOT = { owns = 2637 } }
+				add_claim = p:2637  # Phnom Penh
+				# contesting the heart of French Indochina-to-be as a diplomatic play (#53)
+				QING_gp_frontier_play = { tag = FRA  province = 2637  goal = flag:get_territory }
+			}
+			if = { limit = { exists = p:6614  NOT = { owns = 6614 } }  add_claim = p:6614 }  # Vientiane
+			if = {
+				limit = { exists = c:CBI  NOT = { c:CBI = { is_subject_of = ROOT } } }
+				FUNC_make_subject = { overlord = ROOT  target = c:CBI  type = sinosphere_tributary }
+			}
+			if = {
+				limit = { exists = c:VIN  NOT = { c:VIN = { is_subject_of = ROOT } } }
+				FUNC_make_subject = { overlord = ROOT  target = c:VIN  type = sinosphere_tributary }
+			}
+			add_country_modifier = { name = qing_hs_indochina_sphere  duration = -1 }
+			QING_gp_provoke_france = { severity = 12 }
+			CURRENCY_grant_country_wealth = { thousands = 50 }
+			LOG_line = { sys = QING  msg = "MISSION task Indochina for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- Burma: the Konbaung reckoning (緬甸) — vs Britain --------------
+	qing_hs_burma = {
+		icon = test3
+		requires = { qing_hs_lifanyuan }
+		allow = {
+			treasury >= 110
+			custom_tooltip = {
+				text = qing_hs_needs_burma_tt
+				exists = c:BUR
+			}
+		}
+		on_start = {
+			add_treasury = -110
+		}
+		on_completion = {
+			custom_tooltip = qing_hs_burma_tt
+			if = {
+				limit = { exists = c:BUR  NOT = { c:BUR = { is_subject_of = ROOT } } }
+				FUNC_make_subject = { overlord = ROOT  target = c:BUR  type = sinosphere_tributary }
+			}
+			if = { limit = { exists = p:6562  NOT = { owns = 6562 } }  add_claim = p:6562 }  # Mandalay
+			# Burma is where the Qing frontier meets the expanding Raj most directly
+			if = {
+				limit = { QING_gp_can_partition = yes }
+				custom_tooltip = qing_hs_partition_britain_tt
+				QING_gp_partition_britain = yes
+			}
+			else = {
+				QING_gp_provoke_britain = { severity = 12 }
+				# taking the push (not the deal): press the frontier as a diplomatic
+				# play vs the Raj over Mandalay (#53) — the same soil the claim covers.
+				if = {
+					limit = { exists = p:6562  NOT = { owns = 6562 } }
+					QING_gp_frontier_play = { tag = GBR  province = 6562  goal = flag:get_territory }
+				}
+			}
+			LOG_line = { sys = QING  msg = "MISSION task Burma for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- Siam: the neutral pivot brought into the fold (暹羅) -------------
+	qing_hs_siam = {
+		icon = test2
+		requires = { qing_hs_burma  qing_hs_vietnam }
+		allow = {
+			treasury >= 100
+			custom_tooltip = {
+				text = qing_hs_needs_siam_tt
+				exists = c:SIA
+			}
+		}
+		on_start = {
+			add_treasury = -100
+		}
+		on_completion = {
+			custom_tooltip = qing_hs_siam_tt
+			# Siam sat between the British (Burma) and French (Indochina) spheres —
+			# winning it is the pivot, and it needles BOTH powers at once.
+			if = {
+				limit = { exists = c:SIA  NOT = { c:SIA = { is_subject_of = ROOT } } }
+				FUNC_make_subject = { overlord = ROOT  target = c:SIA  type = sinosphere_tributary }
+			}
+			if = { limit = { exists = p:8873  NOT = { owns = 8873 } }  add_claim = p:8873 }  # Bangkok
+			QING_gp_provoke_britain = { severity = 6 }
+			QING_gp_provoke_france = { severity = 6 }
+			add_country_modifier = { name = qing_hs_nanyang_suzerain  duration = -1 }
+			LOG_line = { sys = QING  msg = "MISSION task Siam for [ROOT.GetTag]" }
+		}
+	}
+
+	# ==================================================================
+	# CAPSTONE — the Southern Tributary Order restored and modernised.
+	# ==================================================================
+	qing_hs_capstone = {
+		icon = test1
+		requires = {
+			qing_hs_himalaya_ring
+			qing_hs_indochina
+			qing_hs_siam
+		}
+		allow = {
+			custom_tooltip = {
+				text = qing_hs_needs_south_tt
+				OR = {
+					has_country_modifier = qing_hs_himalayan_wall
+					has_country_modifier = qing_hs_indochina_sphere
+					has_country_modifier = qing_hs_nanyang_suzerain
+					any_subject = { is_subject_type = sinosphere_tributary }
+				}
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_hs_capstone_tt
+			add_country_modifier = { name = qing_hs_southern_dominion  duration = -1 }
+			current_ruler = { add_prestige = 40 }
+			add_stability = 1
+			# a restored, modernised tributary order vindicates the reform cause
+			if = {
+				limit = { has_variable = qing_selfstr_progress }
+				QING_selfstr_advance = { amount = 10 }
+			}
+			LOG_line = { sys = QING  msg = "MISSION himalaya/SE-Asia CAPSTONE (southern dominion) for [ROOT.GetTag]" }
+		}
+	}
+}

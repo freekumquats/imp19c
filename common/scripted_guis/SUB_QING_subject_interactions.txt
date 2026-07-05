@@ -1,0 +1,287 @@
+########################################################################
+# SUB_QING_subject_interactions.txt — scripted GUIs for per-subject actions
+#
+# These are the gated entry points the diplomatic-view buttons call. Each is
+# scoped to the player (ROOT = overlord) and reads scope:target as the subject
+# currently shown in the diplomacy view, passed from the GUI via:
+#     .AddScope('target', DiplomaticView.GetTargetCountry.MakeScope )
+#
+# Gating lives in is_valid (influence cost + valid ladder position + cooldown),
+# surfaced to the player with custom_tooltip red-reason lines. The actual work
+# is done by the SUBJ_QING_* effects in se_SUBJECT_QING.txt.
+#
+# AI is disabled on every interaction (ai_is_valid = { always = no }) — this is
+# a deliberately player-only feature set.
+#
+# Prefix = qing_subject_
+########################################################################
+
+# ---- TYPE INDICATORS (read-only, for the diplomatic-view "Type:" label) ---
+# There is no engine datafunction that returns a subject's type name, so the
+# UI reads the type off these boolean scripted GUIs via ScriptedGui.IsShown
+# nested in SelectLocalization. Each is true iff scope:target is that type.
+# autonomous_governorship needs no indicator: it is the final SelectLocalization
+# fallback once the other three are false. AI never evaluates these.
+qing_subject_type_is_tributary = {
+	scope = country
+	saved_scopes = { target }
+	ai_is_valid = { always = no }
+	is_shown = {
+		exists = scope:target
+		scope:target = { is_subject_type = tributary }
+	}
+}
+
+qing_subject_type_is_nominal_vassal = {
+	scope = country
+	saved_scopes = { target }
+	ai_is_valid = { always = no }
+	is_shown = {
+		exists = scope:target
+		scope:target = { is_subject_type = nominal_vassal }
+	}
+}
+
+qing_subject_type_is_feudatory = {
+	scope = country
+	saved_scopes = { target }
+	ai_is_valid = { always = no }
+	is_shown = {
+		exists = scope:target
+		scope:target = { is_subject_type = feudatory }
+	}
+}
+
+# An off-ladder protectorate (Tibet under the amban settlement). Needs its own
+# indicator so the "Type:" label does not fall through to the autonomous-
+# governorship default and mislabel it.
+qing_subject_type_is_protectorate = {
+	scope = country
+	saved_scopes = { target }
+	ai_is_valid = { always = no }
+	is_shown = {
+		exists = scope:target
+		scope:target = { is_subject_type = protectorate }
+	}
+}
+
+# ---- PROMOTE: move the subject one rung tighter -----------------------
+# tributary -> nominal_vassal -> feudatory -> autonomous_governorship
+qing_subject_promote_button = {
+	scope = country
+	saved_scopes = { target }
+
+	is_shown = {
+		exists = scope:target
+		scope:target = { is_subject_of = ROOT }
+		# Only meaningful for the four Qing ladder types, and not at the top rung.
+		scope:target = {
+			OR = {
+				is_subject_type = tributary
+				is_subject_type = nominal_vassal
+				is_subject_type = feudatory
+			}
+		}
+	}
+
+	ai_is_valid = { always = no }
+
+	is_valid = {
+		custom_tooltip = {
+			text = qing_subject_needs_influence_75_tt
+			political_influence >= 75
+		}
+		# Cooldown is tracked per-subject, so acting on one subject does not
+		# lock out interactions with the others.
+		custom_tooltip = {
+			text = qing_subject_promote_cooldown_tt
+			scope:target = { NOT = { has_variable = qing_recently_changed_type } }
+		}
+	}
+
+	effect = {
+		add_political_influence = -75
+		scope:target = { set_variable = { name = qing_recently_changed_type  days = 730  value = 1 } }
+
+		# Step one rung tighter based on the subject's current type.
+		scope:target = { SUBJ_QING_derive_rung = yes }
+		if = {
+			limit = { scope:target = { is_subject_type = tributary } }
+			SUBJ_QING_change_type = { direction = promote  new_type = nominal_vassal }
+		}
+		else_if = {
+			limit = { scope:target = { is_subject_type = nominal_vassal } }
+			SUBJ_QING_change_type = { direction = promote  new_type = feudatory }
+		}
+		else_if = {
+			limit = { scope:target = { is_subject_type = feudatory } }
+			SUBJ_QING_change_type = { direction = promote  new_type = autonomous_governorship }
+		}
+		else = {
+			LOG_fail = { sys = SUBJ  fn = "qing_subject_promote_button"  reason = "target not on a promotable rung" }
+		}
+	}
+}
+
+# ---- DEMOTE: move the subject one rung looser -------------------------
+# autonomous_governorship -> feudatory -> nominal_vassal -> tributary
+qing_subject_demote_button = {
+	scope = country
+	saved_scopes = { target }
+
+	is_shown = {
+		exists = scope:target
+		scope:target = { is_subject_of = ROOT }
+		scope:target = {
+			OR = {
+				is_subject_type = nominal_vassal
+				is_subject_type = feudatory
+				is_subject_type = autonomous_governorship
+			}
+		}
+	}
+
+	ai_is_valid = { always = no }
+
+	is_valid = {
+		custom_tooltip = {
+			text = qing_subject_needs_influence_50_tt
+			political_influence >= 50
+		}
+		custom_tooltip = {
+			text = qing_subject_demote_cooldown_tt
+			scope:target = { NOT = { has_variable = qing_recently_changed_type } }
+		}
+	}
+
+	effect = {
+		add_political_influence = -50
+		scope:target = { set_variable = { name = qing_recently_changed_type  days = 730  value = 1 } }
+
+		scope:target = { SUBJ_QING_derive_rung = yes }
+		if = {
+			limit = { scope:target = { is_subject_type = autonomous_governorship } }
+			SUBJ_QING_change_type = { direction = demote  new_type = feudatory }
+		}
+		else_if = {
+			limit = { scope:target = { is_subject_type = feudatory } }
+			SUBJ_QING_change_type = { direction = demote  new_type = nominal_vassal }
+		}
+		else_if = {
+			limit = { scope:target = { is_subject_type = nominal_vassal } }
+			SUBJ_QING_change_type = { direction = demote  new_type = tributary }
+		}
+		else = {
+			LOG_fail = { sys = SUBJ  fn = "qing_subject_demote_button"  reason = "target not on a demotable rung" }
+		}
+	}
+}
+
+# ---- INTEGRATE: push integration progress, absorb at threshold --------
+qing_subject_integrate_button = {
+	scope = country
+	saved_scopes = { target }
+
+	is_shown = {
+		exists = scope:target
+		scope:target = { is_subject_of = ROOT }
+		# Only the tightest rung can be integrated toward full absorption.
+		scope:target = { is_subject_type = autonomous_governorship }
+		# While suspended the player must RESUME first (the resume button shows
+		# instead); pushing integration would otherwise bypass the suspension.
+		scope:target = { NOT = { has_variable = SUBJ_integration_suspended } }
+	}
+
+	ai_is_valid = { always = no }
+
+	is_valid = {
+		custom_tooltip = {
+			text = qing_subject_needs_influence_50_tt
+			political_influence >= 50
+		}
+		custom_tooltip = {
+			text = qing_subject_integrate_cooldown_tt
+			scope:target = { NOT = { has_variable = qing_recently_integrated } }
+		}
+	}
+
+	effect = {
+		add_political_influence = -50
+		scope:target = { set_variable = { name = qing_recently_integrated  days = 365  value = 1 } }
+		# A deliberate push advances the process and then rolls for a reaction
+		# (the deliberate roll has no "quiet" weight, so a push is always eventful).
+		SUBJ_QING_advance_integration = { steps = 1 }
+		if = {
+			limit = { scope:target = { is_subject_of = ROOT } }
+			SUBJ_QING_roll_reaction = { ambient = no }
+		}
+	}
+}
+
+# ---- RESUME: lift a suspension so the process (and pulse) run again ----
+# Only appears when the current subject's integration is suspended (a reaction
+# event's "suspend" option set the flag). Free and un-cooldowned: the player
+# already paid to reach this progress, so restarting should not be punished.
+qing_subject_resume_integration_button = {
+	scope = country
+	saved_scopes = { target }
+
+	is_shown = {
+		exists = scope:target
+		scope:target = { is_subject_of = ROOT }
+		scope:target = { is_subject_type = autonomous_governorship }
+		scope:target = { has_variable = SUBJ_integration_suspended }
+	}
+
+	ai_is_valid = { always = no }
+
+	is_valid = {
+		always = yes
+	}
+
+	effect = {
+		SUBJ_QING_resume_integration = yes
+	}
+}
+
+# ---- INCORPORATE: convert an off-ladder protectorate onto the ladder ---
+# A protectorate (Tibet under the amban settlement) sits off the control ladder
+# and cannot be promoted or integrated. This one-way, expensive act — modelled on
+# Zhao Erfeng's forced incorporation of Kham (改土歸流) — converts it straight to
+# an autonomous_governorship (rung 4), after which the ordinary integrate verb
+# applies. Priced in prestige + influence, NOT date-restricted: available from
+# the 1815 start at the cost the historical court would have borne.
+qing_subject_incorporate_button = {
+	scope = country
+	saved_scopes = { target }
+
+	is_shown = {
+		exists = scope:target
+		scope:target = { is_subject_of = ROOT }
+		scope:target = { is_subject_type = protectorate }
+	}
+
+	ai_is_valid = { always = no }
+
+	is_valid = {
+		custom_tooltip = {
+			text = qing_subject_needs_influence_100_tt
+			political_influence >= 100
+		}
+		custom_tooltip = {
+			text = qing_subject_needs_prestige_50_tt
+			prestige >= 50
+		}
+		custom_tooltip = {
+			text = qing_subject_incorporate_cooldown_tt
+			scope:target = { NOT = { has_variable = qing_recently_changed_type } }
+		}
+	}
+
+	effect = {
+		add_political_influence = -100
+		add_prestige = -50
+		scope:target = { set_variable = { name = qing_recently_changed_type  days = 730  value = 1 } }
+		SUBJ_QING_incorporate_protectorate = yes
+	}
+}

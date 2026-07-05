@@ -1,0 +1,265 @@
+﻿########################################################################
+# qing_napoleon_events.txt — THE EMPEROR EMERITUS (太上皇): NAPOLEON AT THE QING
+# COURT (task #65). The counterfactual reform chain — after Waterloo the exiled
+# Napoleon is received in Beijing, given the revived 太上皇 (Retired/Grand Emperor)
+# office Qianlong once held, and from that seat drives a slate of radical
+# Enlightenment reforms while steering Qing foreign policy toward his own revenge
+# on Britain and Russia. Machinery: se_QING_NAPOLEON.txt (all QING_napoleon_*
+# verbs) + qing_mechanics_modifiers.txt (the reform/office/backlash modifiers) +
+# 00_napoleon.txt (the Grande Armée military tradition, gated on the flag the
+# arrival sets). Design + scope: memory imp19c-napoleon-in-china.
+#
+# CHI-only, player-only. All logged sys = QING. Offered once via the frontier
+# flavour roll (se_QING_DECLINE.txt QING_frontier_flavour_roll), in the early
+# window only; every event re-checks its own guards.
+#
+#   ROOT / this = the Qing overlord (CHI, player); root.current_ruler = the emperor
+#   (the Jiaqing Emperor at the 1815 start); scope:napoleon = the conjured Napoleon;
+#   char:227 = the heir Mianning (the future Daoguang Emperor).
+#
+# Namespace = qing_napoleon
+#   .1  L'arrivée      — Napoleon offered the throne; the sleeping-giant quote
+#   .2  Le grand œuvre — the reform hub: enact the Napoleonic reform slate + tilt
+#   .3  La réaction    — the conservative Manchu backlash against the foreigner
+#   .4  道光主義        — the Daoguang Doctrine capstone, proclaimed by the heir
+########################################################################
+
+namespace = qing_napoleon
+
+########################################################################
+# .1  L'ARRIVÉE — THE EXILE OFFERED THE THRONE'S RIGHT HAND
+# Waterloo is lost; rather than St Helena, a secret embassy brings Napoleon east.
+# The court may receive him and revive the 太上皇 office for him — or turn him away.
+# The opening text carries the sleeping-giant apocryphon (attributed to Napoleon).
+########################################################################
+qing_napoleon.1 = {
+	type = country_event
+	title = "qing_napoleon.1.t"
+	desc = "qing_napoleon.1.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	# Re-check the roll's guards (the roll self-throttles, but be defensive).
+	trigger = {
+		tag = CHI
+		NOT = { has_variable = qing_napoleon_arrived }
+		current_date < 1821.5.5
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_napoleon.1 (Napoleon offered the Qing court) [ROOT.GetTag]" }
+	}
+
+	# --- Receive him, and revive the 太上皇 office for him ------------------
+	option = {
+		name = "qing_napoleon.1.a"
+		custom_tooltip = "qing_napoleon.1.a.tt"
+		set_variable = qing_napoleon_arrived
+		QING_napoleon_spawn = yes
+		scope:napoleon = { QING_napoleon_take_office = yes }
+		# he begins to work at once — the reform council convenes within the year.
+		trigger_event = { id = qing_napoleon.2  days = { 120 300 } }
+		# and the conservative reaction gathers.
+		trigger_event = { id = qing_napoleon.3  days = { 200 500 } }
+	}
+
+	# --- Turn him away — the Middle Kingdom needs no barbarian's sword ------
+	option = {
+		name = "qing_napoleon.1.b"
+		custom_tooltip = "qing_napoleon.1.b.tt"
+		# the chance passes for good.
+		set_variable = qing_napoleon_arrived
+		add_stability = 1
+		LOG_line = { sys = QING  msg = "napoleon: the court turned Napoleon away for [ROOT.GetTag]" }
+	}
+}
+
+########################################################################
+# .2  LE GRAND ŒUVRE — THE REFORM COUNCIL
+# The recurring hub. From the Emperor Emeritus's seat the Napoleonic programme is
+# laid before the throne: the Code, central banking, mass schooling, the levée —
+# and the foreign-policy tilt that keeps the old soldier engaged. Each reform verb
+# self-guards once-only; the event re-offers itself until the slate is complete,
+# then hands off to the capstone. Requires Napoleon alive and in office.
+########################################################################
+qing_napoleon.2 = {
+	type = country_event
+	title = "qing_napoleon.2.t"
+	desc = "qing_napoleon.2.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:napoleon
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_napoleon_char
+		var:qing_napoleon_char = { is_alive = yes }
+	}
+
+	immediate = {
+		# re-establish the right-portrait scope for a re-fired instance.
+		var:qing_napoleon_char = { save_scope_as = napoleon }
+		LOG_line = { sys = QING  msg = "EVENT qing_napoleon.2 (reform council; reforms=[ROOT.MakeScope.GetVariable('qing_napoleon_reforms_done').GetValue|0]) [ROOT.GetTag]" }
+	}
+
+	# --- 拿破崙法典 The Napoleonic Code ------------------------------------
+	option = {
+		name = "qing_napoleon.2.a"
+		custom_tooltip = "qing_napoleon.2.a.tt"
+		trigger = { NOT = { has_country_modifier = qing_reform_napoleonic_code } }
+		QING_napoleon_reform_code = yes
+		trigger_event = { id = qing_napoleon.2  days = { 180 480 } }
+	}
+
+	# --- 中央銀行 Central Banking ------------------------------------------
+	option = {
+		name = "qing_napoleon.2.b"
+		custom_tooltip = "qing_napoleon.2.b.tt"
+		trigger = { NOT = { has_country_modifier = qing_reform_central_bank } }
+		QING_napoleon_reform_bank = yes
+		trigger_event = { id = qing_napoleon.2  days = { 180 480 } }
+	}
+
+	# --- 國民教育 Primary Education ----------------------------------------
+	option = {
+		name = "qing_napoleon.2.c"
+		custom_tooltip = "qing_napoleon.2.c.tt"
+		trigger = { NOT = { has_country_modifier = qing_reform_primary_education } }
+		QING_napoleon_reform_education = yes
+		trigger_event = { id = qing_napoleon.2  days = { 180 480 } }
+	}
+
+	# --- 全民皆兵 Levée en masse -------------------------------------------
+	option = {
+		name = "qing_napoleon.2.d"
+		custom_tooltip = "qing_napoleon.2.d.tt"
+		trigger = { NOT = { has_country_modifier = qing_reform_levee_en_masse } }
+		QING_napoleon_reform_levee = yes
+		trigger_event = { id = qing_napoleon.2  days = { 180 480 } }
+	}
+
+	# --- 以夷制夷 Follow his line against Britain and Russia ----------------
+	# The price of his engagement: the anti-GBR/RUS pro-FRA tilt. Keeps his loyalty
+	# high (scored by QING_napoleon_loyalty_pulse). Always available while he lives.
+	option = {
+		name = "qing_napoleon.2.e"
+		custom_tooltip = "qing_napoleon.2.e.tt"
+		QING_napoleon_revenge_tilt = { severity = 8 }
+		trigger_event = { id = qing_napoleon.2  days = { 180 480 } }
+	}
+
+	# --- 道光主義 Consolidate the reforms into a lasting doctrine -----------
+	# The capstone hand-off, unlocked once the slate is substantially complete.
+	option = {
+		name = "qing_napoleon.2.f"
+		custom_tooltip = "qing_napoleon.2.f.tt"
+		trigger = {
+			var:qing_napoleon_reforms_done >= 3
+			NOT = { has_country_modifier = qing_napoleon_daoguang_doctrine }
+		}
+		trigger_event = { id = qing_napoleon.4  days = { 30 90 } }
+	}
+
+	# --- Let the council rest for now --------------------------------------
+	option = {
+		name = "qing_napoleon.2.g"
+		# no re-trigger — the player reconvenes it from the next council prompt.
+	}
+}
+
+########################################################################
+# .3  LA RÉACTION — THE CONSERVATIVE MANCHU BACKLASH
+# A foreign usurper-emperor forcing Enlightenment reform enrages the Manchu old
+# guard (the qing_manchu_staunch band the backlash already bled at take-office).
+# The throne must choose how to face them. Fires once, a while after the arrival.
+########################################################################
+qing_napoleon.3 = {
+	type = country_event
+	title = "qing_napoleon.3.t"
+	desc = "qing_napoleon.3.desc"
+	picture = dagger_behind_back
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:napoleon
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_napoleon_char
+		var:qing_napoleon_char = { is_alive = yes }
+		NOT = { has_variable = qing_napoleon_reaction_faced }
+	}
+
+	immediate = {
+		set_variable = qing_napoleon_reaction_faced
+		var:qing_napoleon_char = { save_scope_as = napoleon }
+		LOG_line = { sys = QING  msg = "EVENT qing_napoleon.3 (conservative backlash) [ROOT.GetTag]" }
+	}
+
+	# --- Stand with the Emperor Emeritus; face down the reaction -----------
+	# Back reform: relieve reform pressure and steady him, at a stability cost.
+	option = {
+		name = "qing_napoleon.3.a"
+		custom_tooltip = "qing_napoleon.3.a.tt"
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -10 }
+		var:qing_napoleon_char = { add_loyalty = loyalty_qing_congenial }
+		add_stability = -1
+	}
+
+	# --- Rein him in to placate the old guard ------------------------------
+	# Soothe the conservatives (ease ethnic tension, gain stability) — but he sours
+	# at being checked (loyalty falls; the loyalty pulse will compound it).
+	option = {
+		name = "qing_napoleon.3.b"
+		custom_tooltip = "qing_napoleon.3.b.tt"
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -6 }
+		var:qing_napoleon_char = { add_loyalty = loyalty_qing_estranged }
+		add_stability = 1
+	}
+}
+
+########################################################################
+# .4  道光主義 — THE DAOGUANG DOCTRINE (THE CAPSTONE)
+# The heir Napoleon tutored — Mianning, the future Daoguang Emperor (char:227) —
+# proclaims the reforms and the anti-GBR/RUS pro-FRA line a lasting doctrine of
+# state. Grants the permanent apex modifier and seals the chain.
+########################################################################
+qing_napoleon.4 = {
+	type = country_event
+	title = "qing_napoleon.4.t"
+	desc = "qing_napoleon.4.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		var:qing_napoleon_reforms_done >= 3
+		NOT = { has_country_modifier = qing_napoleon_daoguang_doctrine }
+	}
+
+	immediate = {
+		# put the heir on the stage if he is still alive to be shown.
+		if = {
+			limit = { exists = char:227  char:227 = { is_alive = yes } }
+			char:227 = { save_scope_as = daoguang_heir }
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_napoleon.4 (Daoguang Doctrine) [ROOT.GetTag]" }
+	}
+
+	# --- Proclaim the Daoguang Doctrine ------------------------------------
+	option = {
+		name = "qing_napoleon.4.a"
+		custom_tooltip = "qing_napoleon.4.a.tt"
+		QING_napoleon_proclaim_doctrine = yes
+	}
+}

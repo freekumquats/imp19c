@@ -1,0 +1,426 @@
+########################################################################
+# qing_subject_integration.txt — reaction events for the Qing subject
+# integration process (the promote/demote/integrate/absorb feature).
+#
+# Fired from se_SUBJECT_QING.txt (SUBJ_QING_roll_reaction) either right after
+# a deliberate integration push, or on the ambient pulse for any subject with
+# an active, unsuspended integration. In every event:
+#     ROOT / this  = the overlord (player, Qing / CHI)
+#     scope:target = the subject governorship being integrated
+#
+# The chain is deliberately Qing-only and player-only; AI never sees it.
+# Each event is anchored to real Qing frontier history and cites it in the
+# localisation. Options let the player push through, delay, suspend, or
+# accelerate the process, and are wired into existing mechanics: treasury /
+# currency, industrialisation, trade, pop happiness/unrest, stability,
+# character loyalty, and the subject-relationship modifiers.
+#
+# Namespace = qing_integ
+#   .10  NEGATIVE — popular unrest (Three Feudatories / White Lotus echo)
+#   .11  NEGATIVE — corruption scandal (Heshen archetype)
+#   .12  NEGATIVE — ethnic strife (Miao / Panthay / Dungan risings)
+#   .20  POSITIVE — bountiful frontier harvest (tuntian colonies)
+#   .21  POSITIVE — investiture festival / imperial favour
+########################################################################
+
+namespace = qing_integ
+
+########################################################################
+# .10  POPULAR UNREST
+# Anchor: Revolt of the Three Feudatories (三藩之亂, 1673-81) — Kangxi's move
+# to revoke the autonomous southern fiefs triggered an eight-year revolt; and
+# the White Lotus Rebellion (白蓮教起義, 1794-1804), where a Daoguang decree
+# admitted "it was extortion by local officials that goaded the people into
+# rebellion" (官吏苛索逼民為亂). Tightening the screws provokes a rising.
+########################################################################
+qing_integ.10 = {
+	type = country_event
+	title = "qing_integ.10.t"
+	desc = "qing_integ.10.desc"
+	picture = revolt
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:target.current_ruler
+
+	goto_location = scope:unrest_province
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.10 (unrest) overlord=[ROOT.GetTag] subject=[scope:target.GetTag]" }
+		# Anchor the event on the subject's most populous province, if any.
+		if = {
+			limit = { scope:target = { any_owned_province = { count >= 1 } } }
+			scope:target = {
+				ordered_owned_province = {
+					order_by = total_population
+					max = 1
+					save_scope_as = unrest_province
+				}
+			}
+		}
+	}
+
+	# --- Push through with a show of force: crush it, but at a cost -------
+	option = {
+		name = "qing_integ.10.a"
+		custom_tooltip = "qing_integ.10.a.tt"
+		add_stability = -5
+		add_war_exhaustion = 2
+		# The subject network resents the heavy hand (Three Feudatories echo).
+		add_country_modifier = {
+			name = qing_integ_frontier_resentment
+			duration = 1825
+		}
+		if = {
+			limit = { exists = scope:unrest_province }
+			scope:unrest_province = {
+				add_province_modifier = {
+					name = local_unrest_harsh
+					duration = 730
+				}
+			}
+		}
+		# But a crushed revolt does not stop the process.
+	}
+
+	# --- Suspend the integration and let tempers cool --------------------
+	option = {
+		name = "qing_integ.10.b"
+		custom_tooltip = "qing_integ.10.b.tt"
+		SUBJ_QING_suspend_integration = yes
+		SUBJ_QING_reduce_integration = { steps = 1 }
+		add_stability = 2
+	}
+
+	# --- Give alms and remit taxes to pacify the frontier (rou yuan 柔遠) -
+	option = {
+		name = "qing_integ.10.c"
+		custom_tooltip = "qing_integ.10.c.tt"
+		trigger = { treasury >= 100 }
+		add_treasury = -100
+		if = {
+			limit = { exists = scope:unrest_province }
+			scope:unrest_province = {
+				add_province_modifier = {
+					name = positive_food_modifier
+					duration = 730
+				}
+			}
+		}
+		# Applied to the overlord: subject_loyalty / integrate_speed act
+		# on our relationship with this subject.
+		add_country_modifier = {
+			name = qing_integ_imperial_favor
+			duration = 1095
+		}
+	}
+}
+
+########################################################################
+# .11  CORRUPTION SCANDAL
+# Anchor: Heshen (和珅, d. 1799), "the most corrupt official in Chinese
+# history" — his confiscated estate (~1.1bn taels) reputedly equalled twelve
+# years of imperial revenue. His graft diverted funds meant for canals and
+# dams, worsening floods and famine (Hummel 1943). A grandee has been skimming
+# the integration funds.
+########################################################################
+qing_integ.11 = {
+	type = country_event
+	title = "qing_integ.11.t"
+	desc = "qing_integ.11.desc"
+	picture = dagger_behind_back
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:corrupt_official
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.11 (scandal) overlord=[ROOT.GetTag] subject=[scope:target.GetTag]" }
+		# Find a disloyal official at court to pin the scandal on; fall back
+		# to any adult courtier if none are outright disloyal.
+		if = {
+			limit = {
+				any_character = {
+					employer = ROOT
+					is_ruler = no
+					is_adult = yes
+					prisoner = no
+					loyalty < 50
+				}
+			}
+			random_character = {
+				limit = {
+					employer = ROOT
+					is_ruler = no
+					is_adult = yes
+					prisoner = no
+					loyalty < 50
+				}
+				weight = {
+					modifier = { factor = 2  prominence >= 50 }
+					modifier = { factor = 2  has_any_office = yes }
+				}
+				save_scope_as = corrupt_official
+			}
+		}
+		else_if = {
+			limit = {
+				any_character = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no }
+			}
+			random_character = {
+				limit = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no }
+				save_scope_as = corrupt_official
+			}
+		}
+		else = {
+			# Last-resort fallback so scope:corrupt_official is ALWAYS set — the
+			# desc text and right_portrait reference it, and an unset scope would
+			# render a broken portrait and an unresolved name. The ruler stands in.
+			current_ruler = { save_scope_as = corrupt_official }
+			LOG_line = { sys = SUBJ  msg = "qing_integ.11 no courtier available; ruler stands in as corrupt_official" }
+		}
+	}
+
+	# --- Impeach and confiscate (the Jiaqing solution) -------------------
+	option = {
+		name = "qing_integ.11.a"
+		custom_tooltip = "qing_integ.11.a.tt"
+		trigger = { exists = scope:corrupt_official }
+		# Seize the grandee's fortune — a Heshen-scale windfall to the treasury.
+		add_treasury = 150
+		add_stability = 3
+		add_tyranny = 5
+		scope:corrupt_official = {
+			add_corruption = 20
+			add_loyalty = inspired_disloyalty_other_l
+		}
+	}
+
+	# --- Quietly settle it, losing money and momentum --------------------
+	option = {
+		name = "qing_integ.11.b"
+		custom_tooltip = "qing_integ.11.b.tt"
+		add_treasury = -80
+		SUBJ_QING_reduce_integration = { steps = 1 }
+		add_country_modifier = {
+			name = qing_integ_corruption_scandal
+			duration = 1095
+		}
+	}
+
+	# --- Institute yanglian yin (養廉銀), "nourish honesty" stipends ------
+	option = {
+		name = "qing_integ.11.c"
+		custom_tooltip = "qing_integ.11.c.tt"
+		trigger = { treasury >= 120 }
+		add_treasury = -120
+		current_ruler = { add_popularity = 5 }
+		if = {
+			limit = { exists = scope:corrupt_official }
+			scope:corrupt_official = {
+				add_character_modifier = {
+					name = qing_integ_bribed_official
+					duration = 1825
+				}
+			}
+		}
+	}
+}
+
+########################################################################
+# .12  ETHNIC STRIFE
+# Anchor: the risings that gaitu guiliu (改土归流) and Han in-migration set off —
+# the Miao Rebellion (苗民起義, 1795-1806, Han settlers displacing natives),
+# the Panthay Rebellion (雲南回變, 1856-73, Du Wenxiu's 杜文秀 Pingnan Guo), and
+# the Dungan Revolt (陝甘回變, 1862-77, ~21 million dead). Settlers and natives
+# come to blows as direct rule replaces the old chieftaincies.
+########################################################################
+qing_integ.12 = {
+	type = country_event
+	title = "qing_integ.12.t"
+	desc = "qing_integ.12.desc"
+	picture = looting
+
+	left_portrait = root.current_ruler
+
+	goto_location = scope:riot_province
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.12 (ethnic strife) overlord=[ROOT.GetTag] subject=[scope:target.GetTag]" }
+		if = {
+			limit = { scope:target = { any_owned_province = { count >= 1 } } }
+			scope:target = {
+				ordered_owned_province = {
+					order_by = total_population
+					max = 1
+					save_scope_as = riot_province
+				}
+			}
+		}
+	}
+
+	# --- Send in the Green Standard Army to restore order ----------------
+	option = {
+		name = "qing_integ.12.a"
+		custom_tooltip = "qing_integ.12.a.tt"
+		add_stability = -3
+		add_aggressive_expansion = 5
+		# Applied to the overlord: subject_loyalty / integrate_speed act
+		# on our relationship with this subject.
+		add_country_modifier = {
+			name = qing_integ_ethnic_strife
+			duration = 1095
+		}
+		if = {
+			limit = { exists = scope:riot_province }
+			scope:riot_province = {
+				add_province_modifier = {
+					name = local_unrest_harsh
+					duration = 730
+				}
+			}
+		}
+	}
+
+	# --- Segregate settlers and natives; slow the process to keep peace --
+	# (After the Miao rising the Qing built a segregating wall and forts.)
+	option = {
+		name = "qing_integ.12.b"
+		custom_tooltip = "qing_integ.12.b.tt"
+		SUBJ_QING_reduce_integration = { steps = 1 }
+		add_stability = 2
+		# Applied to the overlord: subject_loyalty / integrate_speed act
+		# on our relationship with this subject.
+		add_country_modifier = {
+			name = qing_integ_imperial_favor
+			duration = 730
+		}
+	}
+
+	# --- Fund resettlement and irrigation to defuse the land dispute -----
+	option = {
+		name = "qing_integ.12.c"
+		custom_tooltip = "qing_integ.12.c.tt"
+		trigger = { treasury >= 100 }
+		add_treasury = -100
+		if = {
+			limit = { exists = scope:riot_province }
+			scope:riot_province = {
+				add_province_modifier = {
+					name = positive_food_modifier
+					duration = 1095
+				}
+			}
+		}
+	}
+}
+
+########################################################################
+# .20  BOUNTIFUL FRONTIER HARVEST
+# Anchor: the tuntian (屯田) military-agricultural colonies that anchored Qing
+# control in Xinjiang, Inner Mongolia and Heilongjiang (Kim, Borderland
+# Capitalism, 2016). A bumper harvest feeds the garrisons and settlers who hold
+# the frontier — and warms the subject to absorption.
+########################################################################
+qing_integ.20 = {
+	type = country_event
+	title = "qing_integ.20.t"
+	desc = "qing_integ.20.desc"
+	picture = farming
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.20 (harvest) overlord=[ROOT.GetTag] subject=[scope:target.GetTag]" }
+	}
+
+	# --- Bank the surplus and press the advantage ------------------------
+	option = {
+		name = "qing_integ.20.a"
+		custom_tooltip = "qing_integ.20.a.tt"
+		CURRENCY_grant_country_wealth = { thousands = 50 }
+		add_country_modifier = {
+			name = qing_integ_bountiful_frontier
+			duration = 730
+		}
+		# A prosperous year advances the process a further step for free.
+		SUBJ_QING_advance_integration = { steps = 1 }
+	}
+
+	# --- Invest the surplus in a state farm / industrial estate ----------
+	option = {
+		name = "qing_integ.20.b"
+		custom_tooltip = "qing_integ.20.b.tt"
+		trigger = { scope:target = { any_owned_province = { count >= 1 } } }
+		scope:target = {
+			ordered_owned_province = {
+				order_by = total_population
+				max = 1
+				add_building_level = IND_industrial_estate
+			}
+		}
+		# Applied to the overlord: subject_loyalty / integrate_speed act
+		# on our relationship with this subject.
+		add_country_modifier = {
+			name = qing_integ_imperial_favor
+			duration = 730
+		}
+	}
+}
+
+########################################################################
+# .21  INVESTITURE FESTIVAL / IMPERIAL FAVOUR
+# Anchor: the investiture of tributaries (冊封 — crown, seal, and robes),
+# Qianlong's six Southern Tours (南巡, 1751-84), and the Qing self-portrayal as
+# Buddhist "wheel-turning king" (轉輪聖王) to win over frontier nobles. A well-run
+# ceremony binds the subject's elite to the throne (rou yuan 柔遠).
+########################################################################
+qing_integ.21 = {
+	type = country_event
+	title = "qing_integ.21.t"
+	desc = "qing_integ.21.desc"
+	picture = religious_rite
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:target.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.21 (festival) overlord=[ROOT.GetTag] subject=[scope:target.GetTag]" }
+	}
+
+	# --- Hold the ceremony in grand style --------------------------------
+	option = {
+		name = "qing_integ.21.a"
+		custom_tooltip = "qing_integ.21.a.tt"
+		trigger = { treasury >= 60 }
+		add_treasury = -60
+		current_ruler = { add_prestige = 25 }
+		# Applied to the overlord: subject_loyalty / integrate_speed act
+		# on our relationship with this subject.
+		add_country_modifier = {
+			name = qing_integ_imperial_favor
+			duration = 1460
+		}
+	}
+
+	# --- A modest rite: keep the goodwill, spend nothing -----------------
+	option = {
+		name = "qing_integ.21.b"
+		custom_tooltip = "qing_integ.21.b.tt"
+		add_stability = 2
+		# Applied to the overlord: subject_loyalty / integrate_speed act
+		# on our relationship with this subject.
+		add_country_modifier = {
+			name = qing_integ_imperial_favor
+			duration = 730
+		}
+	}
+}

@@ -1,0 +1,134 @@
+########################################################################
+# se_DEJURE.txt — the GENERIC de jure / irredentism engine (Layer 3).
+#
+# "De jure culture" = the culture that rightfully owns a piece of land. The
+# culture-plurality de jure table (map_data/de_jure_output.txt) is GENERATED
+# reference data the engine never loads at runtime, so this module builds the
+# runtime equivalent: at game start it FREEZES each settled province's 1815
+# plurality culture into a province variable (dejure_culture). That frozen value
+# is the province's rightful culture — deliberately immutable, so that later
+# conquest (Layer 1) or settler migration flipping the live plurality (Layer 2)
+# creates a lasting MISMATCH between who rules the land and whose land it is,
+# rather than silently rewriting history.
+#
+# PERFORMANCE (firm, user): the generic layer is deliberately CRUDE and cheap.
+#   - the freeze is a ONE-TIME startup pass, run exactly once via a global-var
+#     guard no matter how on_game_initialized fires;
+#   - the consumer is EVENT-DRIVEN off the existing on_ownership_change hook
+#     (which already runs CLAIM_HOSTILITY_on_transfer) — O(1)+O(countries) per
+#     conquest, NO per-tick or per-province polling. Conquest is infrequent.
+# The richer, per-pulse demographic re-derivation is the QING extension
+# (QING_DECLINE_update_ethnic_tension in se_QING_DECLINE.txt), which is allowed
+# to be heavier because it is throttled to the single human Qing player.
+#
+# All lines logged sys = DEJURE (zero-cost outside -debug_mode).
+# Prefix = DEJURE_
+########################################################################
+
+# ======================================================================
+# GAME-START FREEZE — stamp every settled province with its rightful culture.
+# Guarded by a global variable so it runs exactly ONCE even if the engine fires
+# on_game_initialized per-country. every_province is a global iterator, valid
+# from any root scope. Sea tiles and empty provinces are skipped (no plurality
+# to freeze); provinces settled only later simply never join the de jure system,
+# which is fine — there is no 1815 rightful culture to defend there.
+# ======================================================================
+DEJURE_freeze_setup = {
+	if = {
+		limit = { NOT = { has_global_variable = dejure_baseline_frozen } }
+		set_global_variable = dejure_baseline_frozen
+		LOG_enter = { sys = DEJURE  fn = DEJURE_freeze_setup }
+		every_province = {
+			limit = {
+				is_sea = no
+				total_population > 0
+			}
+			# store the culture SCOPE itself (proven: value = <scope link>), so
+			# it can later be entered and compared as a culture.
+			set_variable = { name = dejure_culture  value = dominant_province_culture }
+		}
+		LOG_exit = { sys = DEJURE  fn = DEJURE_freeze_setup  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = DEJURE  fn = DEJURE_freeze_setup  reason = "de jure baseline already frozen; skipping re-freeze" }
+	}
+}
+
+# ======================================================================
+# ON CONQUEST — a province changed owner. If the new owner has NOT integrated
+# the land's rightful culture, the conquered people resent alien rule
+# (a decaying disaffection unrest modifier) and their kin-state abroad gains a
+# de jure claim (irredentism). Called from on_ownership_change alongside the
+# Layer 1 claim-hostility reaction.
+#   this = the province, now owned by the taker.
+#
+# The is_integrated test does the work elegantly: a country's OWN primary
+# culture is always integrated, so retaking your own de jure land (or ruling a
+# people you have absorbed) triggers nothing; only ruling an un-absorbed foreign
+# people does. No separate "is it my culture" check needed.
+# ======================================================================
+DEJURE_on_ownership_change = {
+	if = {
+		limit = {
+			exists = owner
+			has_variable = dejure_culture
+			total_population > 0
+		}
+		# clear any stale disaffection from a previous conquest first
+		remove_province_modifier = dejure_disaffection
+		var:dejure_culture = { save_scope_as = dj_rightful }
+		if = {
+			limit = {
+				# the new owner has NOT integrated this land's rightful culture
+				NOT = {
+					owner = {
+						any_country_culture = {
+							is_integrated = yes
+							is_culture = scope:dj_rightful
+						}
+					}
+				}
+			}
+			# generational resentment of alien rule — decays over ~20 years,
+			# re-applied on each fresh conquest.
+			add_province_modifier = { name = dejure_disaffection  duration = 7300 }
+			LOG_line = { sys = DEJURE  msg = "de jure disaffection on [this.GetName]: [this.owner.GetTag] rules land not of its integrated cultures" }
+			# irredentism: the rightful culture's kin-state now claims this soil.
+			DEJURE_seed_dejure_claim = yes
+		}
+		else = {
+			LOG_line = { sys = DEJURE  msg = "no de jure disaffection on [this.GetName]: [this.owner.GetTag] has integrated its rightful culture" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = DEJURE  fn = DEJURE_on_ownership_change  reason = "province has no owner, no frozen de jure culture, or is empty" }
+	}
+}
+
+# ======================================================================
+# IRREDENTIST CLAIM — the state that speaks for a province's rightful (frozen
+# de jure) culture gains a claim on it, unless it is the owner or already holds
+# a core there. Mirror of the Layer 2 settler-claim path, but keyed to the
+# FROZEN de jure culture rather than the live plurality — so a people conquered
+# or demographically swamped still has its homeland claimed on its behalf.
+#   this = the province (scope:dj_rightful already holds its rightful culture).
+# ======================================================================
+DEJURE_seed_dejure_claim = {
+	save_scope_as = dj_prov
+	# diagnostic: if no line follows below, no living kin-state speaks for this
+	# culture (a stateless people, e.g. a frontier culture with no country), so
+	# the land is disaffected but has no irredentist claimant. Not an error.
+	LOG_line = { sys = DEJURE  msg = "seeking kin-state for de jure culture of [scope:dj_prov.GetName]; no claim line below = stateless rightful culture" }
+	random_country = {
+		limit = {
+			primary_culture = scope:dj_rightful
+			NOT = { this = scope:dj_prov.owner }
+			NOT = { scope:dj_prov = { is_core_of = this } }
+		}
+		save_scope_as = dj_kin
+		scope:dj_prov = {
+			add_claim = scope:dj_kin
+		}
+		LOG_line = { sys = DEJURE  msg = "irredentist claim: [scope:dj_kin.GetTag] claims its de jure land [scope:dj_prov.GetName]" }
+	}
+}
