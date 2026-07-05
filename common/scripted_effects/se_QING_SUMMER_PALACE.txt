@@ -39,9 +39,6 @@ QING_sp_sack_of_1860 = {
 		set_variable = qing_sp_burnt
 		LOG_line = { sys = QING  msg = "SUMMER PALACE: the Yuanmingyuan is SACKED (1860) for [ROOT.GetTag]" }
 	}
-	else = {
-		LOG_fail = { sys = QING  fn = QING_sp_sack_of_1860  reason = "no standing Yuanmingyuan to sack (flag qing_sp_built unset) for [ROOT.GetTag]" }
-	}
 	# ALSO burn the Qingyi Yuan if it exists (it was burned in the SAME 1860 expedition)
 	if = {
 		limit = { has_variable = qing_sp_qingyi_built }
@@ -49,6 +46,17 @@ QING_sp_sack_of_1860 = {
 		remove_variable = qing_sp_qingyi_built
 		set_variable = qing_sp_qingyi_burnt
 		LOG_line = { sys = QING  msg = "SUMMER PALACE: the Qingyi Yuan is ALSO burned (1860) for [ROOT.GetTag]" }
+	}
+	# #74-fix (2026-07-05): only a TRUE no-op (NEITHER garden stood) is a guard-miss.
+	# Previously the Yuanmingyuan else-branch fired LOG_fail whenever qing_sp_built was
+	# unset, which — now that a Branch-B player reaches this verb (see event .1 fix) —
+	# would spuriously log a failure even when the Qingyi was successfully burned.
+	if = {
+		limit = {
+			NOT = { has_variable = qing_sp_built }
+			NOT = { has_variable = qing_sp_qingyi_burnt }
+		}
+		LOG_fail = { sys = QING  fn = QING_sp_sack_of_1860  reason = "no standing garden to sack (neither qing_sp_built nor qing_sp_qingyi_built) for [ROOT.GetTag]" }
 	}
 	# a shock to the throne's standing
 	current_ruler = { add_prestige = -20 }
@@ -79,6 +87,17 @@ QING_sp_yiheyuan_divert_navy = {
 		limit = { has_variable = qing_sp_qingyi_burnt }
 		# the Qingyi was burned in 1860; clear that scar
 		remove_variable = qing_sp_qingyi_burnt
+	}
+	# #74-fix (2026-07-05): the Yiheyuan rises ON the Qingyi Yuan grounds, so a Qingyi
+	# that still STANDS (its 1860 burning never fired — Qing stayed at peace with GBR/FRA)
+	# is subsumed, not left beside it. Remove its modifier + var so its bonuses do not
+	# permanently double-stack with the Yiheyuan's splendour. Bug: both verbs previously
+	# only cleared the *burnt* scar and never the standing garden.
+	if = {
+		limit = { has_variable = qing_sp_qingyi_built }
+		remove_country_modifier = qing_sp_qingyi_garden
+		remove_variable = qing_sp_qingyi_built
+		LOG_line = { sys = QING  msg = "SUMMER PALACE: standing Qingyi Yuan subsumed into the Yiheyuan (no double-splendour) for [ROOT.GetTag]" }
 	}
 	# The Yuanmingyuan burnt-ruins scar is PERMANENT (Branch A never rebuilds) — leave it.
 	set_variable = qing_sp_yiheyuan_built
@@ -113,6 +132,14 @@ QING_sp_yiheyuan_from_treasury = {
 		limit = { has_variable = qing_sp_qingyi_burnt }
 		remove_variable = qing_sp_qingyi_burnt
 	}
+	# #74-fix (2026-07-05): subsume a STILL-STANDING Qingyi Yuan (see the divert-navy verb) —
+	# remove its modifier + var so the Yiheyuan does not double-stack its splendour.
+	if = {
+		limit = { has_variable = qing_sp_qingyi_built }
+		remove_country_modifier = qing_sp_qingyi_garden
+		remove_variable = qing_sp_qingyi_built
+		LOG_line = { sys = QING  msg = "SUMMER PALACE: standing Qingyi Yuan subsumed into the Yiheyuan (no double-splendour) for [ROOT.GetTag]" }
+	}
 	# The Yuanmingyuan burnt-ruins scar is PERMANENT (Branch A never rebuilds).
 	set_variable = qing_sp_yiheyuan_built
 	add_country_modifier = { name = qing_sp_yiheyuan_splendour  duration = -1 }
@@ -139,6 +166,10 @@ QING_sp_tongzhi_attempt = {
 			remove_country_modifier = qing_sp_burnt_ruins
 			remove_variable = qing_sp_burnt
 			set_variable = qing_sp_built
+			# #74 note: only the garden shell (garden_of_brightness) returns — NOT the looted
+			# european_marvels nor the burned imperial_library. This asymmetry is INTENTIONAL:
+			# the plundered European treasures and the destroyed Siku library copy are gone for
+			# good even in the counterfactual rebuild. Do not "restore" them here.
 			add_country_modifier = { name = qing_sp_garden_of_brightness  duration = -1 }
 			current_ruler = { add_prestige = 40 }
 			add_stability = 2
