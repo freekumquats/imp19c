@@ -150,8 +150,92 @@ QING_sanction_regional_army = {
 	# ...but a personal army answerable to its founder, not the throne, is the seed
 	# of devolution: push Han provincial power up hard.
 	QING_DECLINE_nudge = { var = qing_han_provincial_power  amount = 15 }
+	# task #90 (concrete-over-abstract): the abstract counter above is not the whole
+	# story — a sanctioned 勇營 is a REAL personal army under a REAL Han magnate. Bind
+	# that concrete power base to an actual character, so the devolution the counter
+	# tracks is embodied by a man at court whose loyal cohorts answer to him, not the
+	# throne (the engine's overmighty-subject / civil-war seed). See [[loyal-cohorts]].
+	QING_regional_army_bind_commander = yes
 	LOG_line = { sys = QING  msg = "sanctioned a Han regional army (勇營): central strain eased, provincial power +15 for [ROOT.GetTag]" }
 	LOG_exit = { sys = QING  fn = "QING_sanction_regional_army"  result = OK }
+}
+
+# task #90 — CONCRETE LINK for the regional-army lever. Find a real Han governor-
+# general at court and grant him a personal power base (add_loyal_veterans — the
+# engine's loyal-cohort / power_base mechanic, proven in se_QING_COUNCIL.txt:69 and
+# the roster events); if no Han governor is on hand, conjure one via the roster
+# create_character idiom so the 勇營 always has a named founder (the Zeng Guofan /
+# Li Hongzhang pattern). This is the concrete embodiment of qing_han_provincial_power:
+# the counter is the summary/AI layer, this is the man the player can see, promote,
+# fear, or one day have to break. Marks him with qing_regional_magnate so the
+# reassert lever knows whom to strip. Call from QING_sanction_regional_army only.
+QING_regional_army_bind_commander = {
+	if = {
+		# --- a real Han governor-general already stands: empower HIM ---
+		# task #90 (review CRITICAL): the magnate is HAN (勇營/湘軍/淮軍), so filter on the
+		# Han culture — NOT ROOT.primary_culture, which for CHI is MANCHU (the banner
+		# caste). Using primary_culture would have empowered a Manchu bannerman, the
+		# exact inverse of a Han provincial warlord.
+		limit = {
+			any_character = {
+				employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes
+				is_governor = yes  culture = han
+			}
+		}
+		# prefer the weightiest such governor (the man best placed to build a base).
+		ordered_character = {
+			limit = {
+				employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes
+				is_governor = yes  culture = han
+			}
+			order_by = power_base
+			check_range_bounds = no
+			max = 1
+			add_loyal_veterans = 8
+			QING_magnate_track_grant = yes
+			LOG_line = { sys = QING  msg = "regional army (勇營) raised under sitting Han governor [this.GetName] (+8 loyal veterans) for [ROOT.GetTag]" }
+		}
+	}
+	else = {
+		# --- none on hand: conjure the founding magnate (roster idiom, Han) ---
+		create_character = {
+			age = 44
+			culture = han
+			religion = ROOT.religion
+			add_martial = 7
+			add_finesse = 6
+			add_zeal = 5
+			add_charisma = 6
+			add_trait = disciplined
+			add_trait = brave
+			save_scope_as = qing_regional_founder
+		}
+		scope:qing_regional_founder = {
+			QING_roster_finalize = { nick = "NICKNAME_QING_REGIONAL_MAGNATE" }
+			add_loyal_veterans = 8
+			QING_magnate_track_grant = yes
+			LOG_line = { sys = QING  msg = "regional army (勇營): no Han governor on hand — conjured founder [this.GetName] (+8 loyal veterans) for [ROOT.GetTag]" }
+		}
+	}
+}
+
+# task #90 (review) — grant/refresh the magnate marker in a way that does NOT re-stack
+# on repeated sanction. Track the granted loyal-veteran pool in a per-character variable
+# so the strip path (below) can retire the marker precisely when the private army the
+# THRONE granted is spent — independent of the man's baseline holdings power_base (a real
+# governor's holdings would otherwise keep power_base above any fixed floor forever).
+# Call inside the magnate's character scope.
+QING_magnate_track_grant = {
+	if = {
+		# first sanction of this man: mark him and open his granted-veteran tally.
+		limit = { NOT = { has_character_modifier = qing_regional_magnate } }
+		add_character_modifier = { name = qing_regional_magnate  duration = -1 }
+		set_variable = { name = qing_magnate_granted_veterans  value = 8 }
+	}
+	else = {
+		# already a magnate: his private army simply grows (no modifier re-stack).
+		change_variable = { name = qing_magnate_granted_veterans  add = 8 }
+	}
 }
 
 # task #88 — REASSERT CENTRAL COMMAND over the regional armies (兵權收歸中央). The
@@ -172,12 +256,54 @@ QING_reassert_central_command = {
 		# central discipline — modelled by re-granting the Green Standard drill buff
 		# (the reclaimed men re-enter the regular line), on a shorter 2-year duration.
 		add_country_modifier = { name = qing_greenstandard_reform_drill  duration = 730 }
+		# task #90 (concrete-over-abstract): the counter cut above has a concrete
+		# mirror — physically break the personal power base of the greatest regional
+		# magnate. Strip his loyal veterans (the mirror of the +8 on sanctioning) and,
+		# once his base is spent, clear the magnate marker. This is the seat/unseat
+		# symmetry the council mechanic uses (se_QING_COUNCIL.txt:69/98).
+		QING_reassert_strip_magnate = yes
 		LOG_line = { sys = QING  msg = "reasserted central command: provincial power -20 for [ROOT.GetTag]" }
 	}
 	else = {
 		LOG_fail = { sys = QING  fn = "QING_reassert_central_command"  reason = "insufficient provincial power to reclaim (<20) or treasury too low (<90)" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_reassert_central_command"  result = OK }
+}
+
+# task #90 — CONCRETE LINK for the reassert lever. Break the personal power base of
+# the greatest sitting regional magnate (marked qing_regional_magnate): strip loyal
+# veterans (mirror of the +8 on sanctioning). If that spends his base down, retire
+# the magnate marker — his private army is gone, he is a governor again, not a
+# warlord-in-waiting. No-op (logged) if no magnate stands, so the treasury/counter
+# effect still lands. Call from QING_reassert_central_command only.
+QING_reassert_strip_magnate = {
+	if = {
+		limit = { any_character = { employer = ROOT  has_character_modifier = qing_regional_magnate } }
+		# hit the strongest base first (the most dangerous man).
+		ordered_character = {
+			limit = { employer = ROOT  has_character_modifier = qing_regional_magnate }
+			order_by = power_base
+			check_range_bounds = no
+			max = 1
+			add_loyal_veterans = -8
+			# draw down the THRONE-granted tally, not the man's total power_base (a real
+			# governor keeps holdings-based power_base forever). When the private army the
+			# throne authorised is spent, he is a governor again — retire the marker.
+			change_variable = { name = qing_magnate_granted_veterans  subtract = 8 }
+			if = {
+				limit = { var:qing_magnate_granted_veterans <= 0 }
+				remove_character_modifier = qing_regional_magnate
+				remove_variable = qing_magnate_granted_veterans
+				LOG_line = { sys = QING  msg = "reassert: broke the power base of regional magnate [this.GetName] — marker cleared for [ROOT.GetTag]" }
+			}
+			else = {
+				LOG_line = { sys = QING  msg = "reassert: cut regional magnate [this.GetName]'s loyal veterans (-8) for [ROOT.GetTag]" }
+			}
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_reassert_strip_magnate"  reason = "no sitting regional magnate to break; counter/treasury effect still applied" }
+	}
 }
 
 # task #88 — COMMIT TO A MODERN NATIONAL ARMY (新軍). Fund a modern, centrally-
