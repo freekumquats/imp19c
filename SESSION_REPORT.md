@@ -426,3 +426,334 @@ The #91 concrete-conversions workflow (runId wf_cbbf71fb-94a) landed all its edi
 **Behavioural-equivalence proof (heightened scrutiny per directive "lots of scrutiny on performance changes"):** each play still performs exactly its one A- or B-action (mutual exclusion preserved → same SET of pressure calls). The only change is the ORDER of the per-play `QING_DECLINE_nudge` calls; those clamp 0..100, so order can perturb a raw counter value ONLY at the 0/100 rails. Every consumer reads these counters through THRESHOLD bands (≥50 rivalry modifier, ≥75 predatory `QING_gp_rival_launch_play`), and a rail discrepancy (99 vs 100, 0 vs 1) sits on the same side of every threshold — unobservable downstream. Away from rails addition is commutative → bit-identical. `AND`-in-limit idiom verified proven (se_AI.txt, se_DEMAND.txt). This is the lower-risk equivalent of the task's "cache Qing-involved plays" intent — it removes the redundant second full scan without hooking the play create/teardown lifecycle in se_AI.txt (which the directive's caution argues against).
 
 **Perf cluster #83-#87 now COMPLETE** (#83/#84/#85 prior; #86 this pass; #87 currency-name bug prior). All autonomous perf + #91-quality work done; commit pending user request.
+
+---
+
+## [#92] Qing global diplomatic reach — enable Qing↔USA (and distant-power) diplomacy
+
+**Problem (user):** At game start the Qing cannot conduct diplomatic relations with the United States.
+
+**Root cause:** Not a mod bug — an engine gate. All real diplomatic actions (alliances, guarantees, trade agreements, diplomatic plays, war declarations) require `in_diplomatic_range`. The base `DIPLOMATIC_RANGE = 800` (common/defines/00_defines.txt:458), scaled only by the global `diplomatic_range_modifier` country modifier (nation ranks grant 0.10–2.25; great works 0.1–0.5), is far short of the trans-Pacific Qing↔USA distance. (The existing GP-rivalry/embassy layer sidesteps range by using `add_opinion`, which is why opinions work but real US relations never appear.)
+
+**Decision (user):** Global reach for the Qing — `diplomatic_range_modifier` is the engine's only lever and cannot be pointed at one target, so grant CHI a blanket global reach. The USA and every other distant power become reachable. Thematically fits a Victorian world-power Qing.
+
+**Change (3 files, additive, se_LOG-wired per standing rule):**
+- `common/modifiers/qing_mechanics_modifiers.txt` — NEW country modifier `qing_global_diplomatic_reach { diplomatic_range_modifier = 9.0 }` (stacks additively on nation-rank bonus → effective range well over any inter-continental distance). Key verified engine-valid (used by 00_hardcoded.txt nation ranks).
+- `common/scripted_effects/se_QING_MECHANICS.txt` — NEW effect `QING_open_global_diplomacy` (LOG_enter/exit/line/fail; idempotent guard on `has_country_modifier`, applies `duration = -1`).
+- `common/on_action/qing_mechanics_on_actions.txt` — call `QING_open_global_diplomacy = yes` in the CHI `on_game_initialized` block.
+
+All three files brace-balanced after edit. Fires for both human and AI CHI at game start.
+
+---
+
+## [#93 / #94 / #95 / #96] AI-autonomous US, Japan, and Mexico arcs + coupling inversion (2026-07-05)
+
+**User directive:** implement DESIGN_USA_CIVIL_WAR.md (#93) and DESIGN_JAPAN_BOSHIN.md (#94) with a **coupling
+inversion** — the NEW US and Japan subsystems OWN their arcs and climaxes; the EXISTING Qing content (#73 USCW,
+#81 pre-Perry Japan) is refactored to HOOK INTO the new content, not the reverse (#95). Then a NEW Mexico
+subsystem (#96) coupling to the US arc, with the existing Qing #69 Mexico colonization arc hooking INTO it.
+**Hard requirement:** all three arcs must advance and resolve AUTONOMOUSLY under AI control (the player is
+almost always the Qing) — ai_chance-weighted options + immediate/pulse-driven decisive effects, never
+player-gated outcomes.
+
+**The shared AI-autonomy pattern** (mirrored across all three, oracle-checked in Phase 0 / #92):
+- `on_game_initialized` seeds the state init + the dated historical beats for the tag with **NO is_ai guard**,
+  so the arc unfolds for an AI-controlled country exactly as for a human one. Each beat re-checks its own
+  not-done variable at trigger time, so wide `days = { A B }` windows (offsets from the 1815.7.1 START_DATE at
+  365.25 d/yr) are safe.
+- The monthly pulse (`*_pulse_on_action`, registered in `00_monthly_country.txt`) **self-gates on `tag`, NEVER
+  on `is_ai`**, and throttles to ~quarterly via a cooldown variable so the per-tick cost is negligible for every
+  other country (rejected on the tag test).
+- Every event's `immediate` block holds the decisive state change; player `option` blocks only *modulate* and
+  are `ai_chance`-weighted. The climax is reached via meter-driven pulse checks with a hard-date fallback, so no
+  beat depends on a human choosing.
+- Counters are the AI/summary layer (0..100, clamped via a `*_nudge` helper); every threshold hangs a **concrete
+  on-map object** (a real named character, a released country, a province modifier) per the concrete-over-abstract
+  standing rule.
+
+### #93 — the American road to the Civil War ("The House Divided")
+
+- **Files:** `se_USA_SECTION.txt` (counters + verbs), `se_USA_ROSTER.txt` (named figures), `usa_section_events.txt`
+  (beats .1–.12), `usa_section_modifiers.txt` (band modifiers), `usa_section_on_actions.txt` (seed + pulse),
+  `usa_section_l_english.yml` (loc). Pulse registered in `00_monthly_country.txt`.
+- The arc runs Missouri Compromise → sectional crises → secession → the war, tag = USA, AI-autonomous. The
+  Confederacy is released **dynamically off the USA's own land** (`LAND_release_from_list`) because CSA is a
+  PHANTOM tag (custom-name only, `c:CSA` unsafe) — the handle is published via `set_global_variable = usa_csa_country`.
+
+### #94 — the Japanese Bakumatsu → Boshin arc
+
+- **Files:** `se_JAPAN_BAKUMATSU.txt`, `se_JAPAN_BOSHIN.txt`, `japan_bakumatsu_events.txt`,
+  `japan_bakumatsu_modifiers.txt`, `japan_bakumatsu_on_actions.txt`, `setup/countries/japan/japan.txt`,
+  `japan_bakumatsu_l_english.yml`. Self-gates on the Japan tag (TKG is Japan at 1815; JPN never formed).
+- The Restoration payoff is made CONCRETE via the real daimyo tags (`release_subject` of CSU/SHZ from TKG +
+  `start_civil_war` behind a spawned loyalist leader), not a tag formation — same concrete idiom as #81.
+
+### #95 — coupling inversion (CHANGE to shipped #73 + #81, behavioural-equivalence-scrutinized)
+
+- The Qing #73 `qing_uscw.1` now fires **from `usa_section.12`** (the new arc's secession climax) for a human
+  Qing only, and its Confederate-recognition path consumes `global_var:usa_csa_country` (the concrete released
+  country the US arc put on the map) rather than the phantom `c:CSA`. Dead `QING_uscw_release_confederacy` removed;
+  verified no dangling refs. The Qing #81 pre-Perry Japan schedule left as an idempotent, human-gated backstop
+  (the dead `NOT = { exists = c:TKG }` game-start guard removed).
+
+### #96 — the Mexican political-instability arc + the Qing #69 hook
+
+- **New Mexico subsystem (source of truth), files:** `se_MEXICO.txt` (7 counters — instability/conservative/
+  liberal/church-privilege/foreign-debt/territory-lost/pronunciado-count; band + milestone + climax verbs),
+  `se_MEXICO_ROSTER.txt` (10 named figures: Iturbide, Alamán, Santa Anna, Álvarez, Juárez, Ocampo, Miramón,
+  Zaragoza, Díaz, Maximilian — carried by `add_nickname`), `mex_instability_events.txt` (beats .1–.13),
+  `mex_instability_modifiers.txt` (instability + church bands, debt-suspension, Second-Empire, the Caste-War
+  province modifier), `mex_instability_on_actions.txt` (seed .1–.10 + pulse), `mex_instability_l_english.yml`.
+  Pulse registered in `00_monthly_country.txt`.
+- **Arc:** independence → the Santa Anna praetorian cycle → the 1848 Cession (concrete province transfer to
+  c:USA, feeding the US arc's `usa_section.4`) → La Reforma → the War of the Reform → the 1861 default →
+  European intervention → the **Second Mexican Empire** under Maximilian (`MEX_install_empire`: spawns Maximilian,
+  `set_as_ruler`, `change_government = imperial_monarchy`, renames to the Second Empire, publishes
+  `set_global_variable = mex_empire_country`) → the 1867 fall — **UNLESS a foreign patron props it up**
+  (`mex_foreign_patron`, read by `MEX_empire_fall_check`), the alt-history divergence the Qing #69 arc is *for*.
+- **US↔Mexico coupling:** the French Intervention is gated on the US Civil War state (`usa_seceded` /
+  `usa_csa_country`) — the Monroe Doctrine cannot be enforced against France until the Union wins, so an early
+  Union collapse *helps* Maximilian and a Union victory dooms him. The concrete US↔Mexico linkage the user asked for.
+- **Qing #69 refactor (CHANGE to shipped code, heightened scrutiny), files:** `se_QING_MEXICO.txt` (new consumer
+  verbs `QING_mexico_prop_empire` / `QING_mexico_back_juarez`), `qing_mexico_adventure_events.txt` (new consumer
+  event `qing_mexico_adventure.1`, the `usa_section.12 → qing_uscw.1` inversion pattern — a human Qing court reacts
+  to a Maximilian the Mexico arc set in motion), and the two refactored tasks in `qing_colonization_missions.txt`
+  (search `[#96 REFACTOR]`):
+  - `qing_col_maximilian` now READS the Mexico arc: if the Second Empire already stands
+    (`global_var:mex_empire_country`), the Qing PROPS it (sets `mex_foreign_patron`); if not yet, it ACCELERATES
+    the arc (`MEX_nudge mex_foreign_debt +20` + pokes `mex_instability.12`); the original Napoleon-fork /
+    Daoguang-betrayal flavour preserved verbatim.
+  - `qing_col_mexican_empire` now guards against **double-release**: if the arc's Empire already exists, the Qing
+    becomes its patron instead of standing up a duplicate client Empire; otherwise the original
+    `QING_establish_protectorate` release runs verbatim. Behaviour when the Mexico arc is absent (`c:MEX` unset)
+    is unchanged — a `LOG_fail` notes the no-hook case and the task proceeds on its own flavour.
+  - **No new Qing state invented**; the #69 tasks only READ the Mexico arc and set at most the one
+    `mex_foreign_patron` flag on it.
+
+**se_LOG + traceability:** every new verb wired LOG_enter/LOG_exit/LOG_line + LOG_fail on guard-fail
+(sys = USA / JAPAN / MEX / QING); every refactored #69 branch carries a `[#96 REFACTOR]` in-code comment + a
+sys = QING LOG_line, per the fix-traceability rule.
+
+**Validation:** all new/edited Mexico files brace-balanced (se_MEXICO 206/206, roster 82/82, se_QING_MEXICO 42/42,
+events 181/181 + 7/7, modifiers 8/8, on_action 30/30, missions 515/515). Byte conventions correct per file class
+(se_*/modifiers = no-BOM/LF; events/on_action/loc = BOM/LF). Every cross-reference resolves: `qing_mexico_adventure.1`
+defined, `QING_mexico_prop_empire`/`_back_juarez` defined and called, `MEX_nudge`/`mex_instability.12`/
+`mex_empire_country`/`mex_foreign_patron`/`mex_empire_installed` all resolve, and the reused opinion/loyalty modifiers
+(`qing_gp_accommodation_opinion`, `qing_gp_rivalry_opinion`, `loyalty_qing_congenial`, `qing_col_mexican_crown`) all
+exist. Mandatory post-implementation code review of the #93–#96 changeset dispatched (findings to be addressed on return).
+
+**Deep-changeset audit (separate, larger scope):** the full-authorship deep audit (commits 0990fe6a..HEAD, 201
+files, 211 agents) completed and returned **38 confirmed findings (9 major, 29 minor)** — all in the *earlier* Qing
+subsystems (keju/council/office/ili/pre-Perry-Japan/advisors/migration/diplomacy), NOT the new #93–#96 arcs. Saved to
+`DEEP_AUDIT_FINDINGS.json`; to be triaged and fixed as the next work item per user instruction.
+
+### #93–#96 mandatory code review — findings + fixes (2026-07-05)
+
+The dedicated post-implementation review of the new arcs verified all cross-references resolve, all arcs are
+AI-autonomous (decisive state in `immediate`, options `ai_chance`-weighted, pulse-driven climaxes with hard-date
+fallbacks, once-guards intact, no double-install/double-release), and the #96 Qing refactor is
+behaviourally equivalent when the Mexico arc is absent. Findings actioned:
+
+- **FIXED (correctness, MEDIUM) — `se_USA_SECTION.txt:245`:** the secession gate's structural clause
+  `var:usa_free_states > usa_slave_states` had a **bare-token RHS**, which the engine resolves as a (nonexistent)
+  script value → 0, making the free>slave condition always-true. Corrected to `var:usa_free_states >
+  var:usa_slave_states` (variable-to-variable idiom, `var:` on both sides). Tagged `[#97-fix task #97]`. The
+  1861.4.1 date fallback meant this never stalled the arc — it was a design-intent correctness bug, now honest.
+- **FIXED (dead code) — `usa_king_cotton` / `usa_free_labor`:** both modifiers were defined + loc'd but never
+  applied. They model the sectional economies present from the start, so both are now stamped once, idempotently,
+  in `USA_section_init`. Tagged `[#97-fix task #97]`.
+- **FIXED (log accuracy) — `se_MEXICO.txt:76` `MEX_nudge`:** the LOG_line read `[ROOT...]`, which misreported CHI's
+  scope when the #96 Qing hook calls `c:MEX = { MEX_nudge ... }` (ROOT = CHI). Changed to `[This...]` so the log
+  names the actually-nudged country in both the in-MEX and cross-scope cases. Tagged `[#97-fix task #97]`.
+- **REVIEWED, no change — Boshin civil war raised inside the released tozama** (`se_JAPAN_BOSHIN.txt:137`): the
+  reviewer flagged that `start_civil_war` runs inside the just-released Satsuma. This is the **exact shipped,
+  oracle-verified #81 idiom** (`QING_jppre_restoration_break`, se_QING_JAPAN_PREPERRY.txt:199-215:
+  `release_subject` then `start_civil_war` inside the freed daimyo). #94 was speced to mirror #81; kept for
+  behavioural consistency with the established pattern (the arc still completes correctly).
+- **REVIEWED, no change — `japan_bakumatsu.7 → qing_japan_preperry.10` re-fire** (event:425): harmless — `.10`'s
+  own trigger re-guards on `NOT = { has_variable = qing_jppre_perry_done }`, so it cannot double-fire.
+- **NOTED (low, un-actioned) — `usa_csa_country` never `remove_global_variable`'d:** the Mexico Empire-fall check
+  reads `NOT = { exists = global_var:usa_csa_country }`; relies on engine scope-invalidation once the released CSA
+  is destroyed, covered by the 1867.6.1 date fallback regardless. Left as-is pending playtest confirmation.
+- **NOTED (low, un-actioned) — twin-throne edge:** a human Qing releasing a client Empire of Mexico *before* an AI
+  MEX reaches its own climax can, in principle, coexist with a later arc Empire (requires holding ≥3 Mexican-region
+  provinces first — geographically unlikely). Point-in-time guard; no later reconciliation. Flagged for playtest.
+
+All fixed files re-verified brace-balanced (se_USA_SECTION 158/158, se_MEXICO 207/207); a scan confirmed no other
+bare-token variable comparisons exist in the four new `se_` files. Phase 5 complete.
+
+## Deep-audit findings — MAJOR logic bugs (task #98)
+
+The 211-agent deep adversarial audit (wf_e2d51f54) returned 38 confirmed findings across the shipped
+codebase. The 9 MAJOR (real logic bugs) are addressed below; all carry `[#98-fix task #98]` in-code tags.
+Findings [4] and [5] land in `qing_japan_preperry_missions.txt`, which the #93-96 review (w7iipeldq) is
+concurrently rewriting — DEFERRED to reconcile against that review's output rather than clobber it.
+
+- **[0] FIXED — `qing_keju_events.txt:139/149` (`qing_keju.2`):** the palace-exam laureate was chosen with
+  `order_by` inside `random_character`, where `order_by` is IGNORED — so the 狀元 was picked uniformly at
+  random, not by ability. Both the primary and fallback picks changed to `ordered_character` + `max = 1`
+  (+ `check_range_bounds = no`), the proven ablest-picker idiom (se_QING_COUNCIL.txt:128). Now the ablest
+  non-jinshi courtier is conferred the degree.
+- **[1] FIXED — `se_QING_COUNCIL.txt:120/133` (`QING_council_autofill`):** the while-limit and the
+  `ordered_character` limit tested `is_target_in_variable_list = { ... target = this }` in CHARACTER scope
+  against the COUNTRY-held `qing_council_members` list, which always missed — so autofill seated one member
+  and stalled. Both now read the list via `employer = { ... target = prev }` (the proven form at line 58).
+- **[2] FIXED — `qing_office_events.txt:356` (`qing_office.5.b`):** granted the `qing_council_effective`
+  BAND modifier with `duration = 1095`, but `QING_council_apply_band` strips + re-derives that band from the
+  effectiveness counter every pulse — so the buff vanished on the next tick. Replaced with a durable
+  `+8` nudge to the underlying `qing_council_effectiveness` counter (the concrete driver the band reflects).
+- **[3] FIXED — `qing_ili_events.txt:193` (`qing_ili.4` compromise):** called only
+  `QING_ili_apply_control_band`, never `QING_ili_apply_prov_band` — so the province modifiers stayed frozen
+  at the pre-settlement band forever. Added the province sweep, matching the #91 de-pulsed convention where
+  every discrete stage stamps both the control band and the map.
+- **[6] FIXED — `se_QING_ADVISORS.txt:104` (`QING_advisor_recruit`):** the post-block mark-the-expert guard
+  tested `var:qing_advisor_$field$ = 1` — the FIELD being staffed by anyone — so a same-field recruit that
+  was REJECTED for a full slot was still falsely marked a foreign advisor (and given the character modifier).
+  Moved the mark INSIDE the success branch (on `scope:qing_advisor_char`), tying it to this recruit actually
+  taking the seat.
+- **[7] FIXED — `se_MIGRATION.txt:318` (`MIGRATION_border_friction_breaking_point`):** the
+  `migr_found_irredentist_kin` flag was set on `root` (the on_action's country) but the sibling reads that
+  gate the clean-fail log run in the effect's this-scope (the friction province) — so the flag was never
+  seen and the "no kin-state" failure log fired even on a successful irredentist play launch. Set + read +
+  clear the flag all on `scope:migr_friction_prov`.
+- **[8] FIXED — `send_settlers.txt:328`:** `DIPLOMACY_trigger_diplomatic_play_war` now tears the play down
+  (se_DIPLOMACY.txt:716, the #79 fix), stripping `play_target_area`; but this caller read that var AFTER the
+  war trigger to run its post-war claim sweep, hitting a wiped var. Capture the target area into
+  `scope:settlers_target_area` BEFORE the trigger and read the saved scope afterward. Audited all five
+  war-trigger callers; this was the only genuine post-teardown play_* read (the double-teardown at
+  diplomatic_play_events.txt:639 is a harmless no-op; agadir + the other sites read nothing after the trigger).
+- **[4]/[5] DEFERRED — `qing_japan_preperry_missions.txt:189/218`:** the loyalist gate needs
+  `reform_faction >= 40` (max reachable ≈31) and the restoration capstone needs `reform_faction >= 70`
+  (max ≈43) AND `shogun_grip < 40` (min ≈64) — both roads unreachable. File under concurrent #93-96 review;
+  reconcile the rebalance against that review's changes.
+
+All edited files re-verified brace-balanced.
+
+## Deep-audit findings — MINOR logic bugs (task #98)
+
+Three of the 29 "minor" findings are genuine logic/scope bugs (not just missing LOG markers); fixed here.
+The remaining ~26 are mechanical se_LOG LOG_enter/LOG_exit wiring gaps on new scripted_effects — batched
+separately (see below), with the Japan pre-Perry files EXCLUDED pending the #93-96 review.
+
+- **[18] FIXED — `qing_office_events.txt:239` + `:252` (`qing_office.4`):** same country-held-list scope bug
+  as [1] — the `qing_council_members` membership test ran in character scope (`target = this`) in both the
+  event trigger and the immediate's picker, so a sitting councillor could resurface as a "rising statesman".
+  Both now read via `employer = { ... target = prev }`.
+- **[19] FIXED — `qing_office_events.txt:255` (`qing_office.4`) + `:419` (`qing_office.6.a`):** same
+  order_by-in-`random_character` bug as [0] — the "rising statesman" and the Zongli Yamen head were picked
+  at random despite the tooltips promising the ablest man. Both changed to `ordered_character` + `max = 1`.
+- **[16] FIXED — `se_ECON_LOG.txt:54/78/109` (country/jobs/currency snapshots):** `ECON_LOG_quarter` runs
+  inside `every_country` (oa_wealth_changes.txt:185), so `this` = the iterated country but the LOG_lines read
+  temps via `[ROOT.MakeScope...]` and tagged `[ROOT.GetTag]` — ROOT being the on_action root, NOT the iterated
+  country. The temps were staged on bare `this` yet read off ROOT, so every quarterly snapshot logged the
+  wrong tag and a stale/zero value. All three snapshots now stage the temps on ROOT (matching the read form,
+  as the already-correct production snapshot does) and label the line with `[scope:econ_log_country.GetTag]`.
+
+All edited files re-verified brace-balanced (qing_office_events 158/158, se_ECON_LOG 55/55).
+
+## Deep-audit findings — se_LOG enter/exit wiring batch (task #98)
+
+The remaining ~26 minor findings ([9]-[15], [17], [20]-[24], [26]-[34], [36], [37]) are all the same class:
+NEW scripted_effects that carry only LOG_line (or nothing) and are missing the standing-rule LOG_enter/LOG_exit
+pair. This is a purely mechanical, additive pass, so it was delegated to a subagent with strict guardrails
+(additive-only, preserve byte convention + tabs, brace-check each file, tag each with `[#98-fix task #98]`,
+and EXCLUDE se_QING_JAPAN_PREPERRY.txt — finding [25] — which is under the concurrent #93-96 review).
+
+Result: **71 effects wired across 18 files**, all brace-balanced. Files: se_QING_CUSTOMS, se_QING_GOVERNANCE,
+se_QING_TECHTRANSFER, se_QING_REFORM, se_QING_SELFSTR, se_GOODS, se_QING_COUNCIL, se_QING_NAPOLEON,
+se_QING_COLON, se_QING_DECLINE, se_CURRENCY_STRESS, se_SUBJECT_QING, se_MIGRATION, se_DEJURE,
+se_CLAIM_HOSTILITY, se_SEPARATISM, imp19c_effects_legion_setup (EXIT-only, both already had ENTER),
+se_QING_AFFINITY, se_DIPLOMACY. The parent verified the batch coexists cleanly with the [7]/[1] logic fixes
+already made in se_MIGRATION.txt and se_QING_COUNCIL.txt, and that se_QING_JAPAN_PREPERRY.txt was left untouched.
+
+## Deferred (task #98)
+
+- **[4]/[5] and [25]** all live in `qing_japan_preperry_missions.txt` / `se_QING_JAPAN_PREPERRY.txt`, which the
+  #93-96 adversarial review (workflow w7iipeldq) is concurrently rewriting. Deferred to reconcile against that
+  review's output. [4]/[5] = unreachable loyalist/restoration thresholds (rebalance the gates or add
+  reform_faction/shogun_grip sources); [25] = LOG_enter/exit wiring on QING_jppre_deepen_intel.
+
+Deep-audit outcome: 8 of 9 majors fixed (2 deferred as [4]/[5] are both in the under-review Japan file — one
+major, [4]/[5], counted as two findings), 3 minor logic bugs fixed, 71-effect LOG-wiring batch done, 3 items
+deferred pending the concurrent review. All non-deferred findings actioned.
+
+---
+
+## Military-logistics expansion — 4 proposals drafted [logistics P1–P4]
+
+Implements RESEARCH_MILITARY_LOGISTICS.md, closing the §B gap: the quarterly trade sim already
+PRODUCED/DEMANDED/computed SHORTAGES for the military goods but nothing read those shortages to
+affect forces. New suite tag: `sys = LOGISTICS`.
+
+**P1 — munitions/artillery shortage → attrition & morale (LIVE).**
+- NEW `common/scripted_effects/se_LOGISTICS.txt` (no-BOM/LF): `LOGISTICS_scan_worst_land_shortage`
+  aggregates the worst governorship-scope `shortage_{early,late}_{munitions,artillery}` (0..1);
+  `LOGISTICS_apply_munitions_shortage_penalty` stamps ONE tiered self-refreshing country modifier
+  (severe ≥0.50, minor ≥0.15, else clears). Full LOG_enter/exit/line.
+- NEW `common/modifiers/logistics_modifiers.txt`: `country_munitions_shortage_minor`
+  (land_unit_attrition +0.10, land_morale_recovery −0.10), `_severe` (+0.30 / −0.25 / army_movement_speed −0.15).
+- Wired at oa_wealth_changes.txt (quarterly_apply_trade_changes_and_consume), country scope,
+  AFTER the every_governorships CONSUME loop refreshes shortages. `LOGISTICS_quarter = yes`.
+
+**P2 — arsenal/depot buildings → local munitions production (LIVE).**
+- 00_military_buildings.txt: `arsenal_building` given real `local_defensive` output (was empty
+  modification_display); NEW `military_depot_building` (granary-schema clone, city-gated, event-spawnable).
+- GOODS_svalues.txt: `GOODS_governorship_early_munitions_produced` now adds a per-province
+  `num_of_arsenal_building × GOODS_arsenal_munitions_output(2)` + `num_of_military_depot_building × GOODS_depot_munitions_output(1)`
+  term, gated on tech_firearms — symmetric with the demand side that already counts these buildings.
+- Loc: modifiers_l_english.yml (3 modifiers), text_l_english.yml (military_depot_building + _desc).
+
+**P3 — coal/naval-supplies shortage → steam-fleet attrition (LIVE).**
+- se_LOGISTICS.txt: `LOGISTICS_scan_worst_naval_shortage` (worst of shortage_coal / shortage_naval_supplies);
+  `LOGISTICS_apply_coal_shortage_penalty` gated on owning steam hulls via PROVEN
+  `num_of_unit_type = { type = medium_steamer/screw_frigate value >= 1 }`, stamps `country_coal_shortage`
+  (naval_unit_attrition +0.20). Sailing navies unaffected; self-clears if fleet scrapped.
+
+**P4 — rifles trade good + infantry gating (DRAFT ONLY, deliberately not wired).**
+- NEW `DESIGN_LOGISTICS_RIFLES.md`: complete 6-edit spec. Held out of live files because (a) it is the
+  HIGH-risk 6-file member and (b) `trade_good_surplus` inside a UNIT `allow` is the one primitive the oracle
+  pass could NOT prove. A half-registered good would inject a permanent phantom `shortage_rifles` that P1 would
+  then punish, so it ships as a ready-to-apply spec (with a soft-penalty fallback) pending P1–P2 stability + a
+  live `trade_good_surplus`-in-unit-allow test.
+
+Byte conventions preserved per file (se_LOGISTICS/logistics_modifiers = no-BOM/LF; the 3 edited common files =
+BOM/CRLF as their siblings). All edited/created files brace-balanced. se_LOG on every new effect.
+
+
+## #93-96 deep-review fixes (M1-M4, m5; m6 resolved as side-effect)
+
+Source: REVIEW_9396_FINDINGS.md (workflow w7iipeldq synthesis). All six survivors addressed.
+
+- **[#94-fix M1 / M1 v2]** `se_JAPAN_BAKUMATSU.txt` pulse drift — Tosa (YCH) & Saga (SGA)
+  `domain_sonno` were seeded 15/12 and nudged by NO path, so the Boshin release gate (`>= 45`,
+  se_JAPAN_BOSHIN.txt:103) was permanently false and both tozama could never be released.
+  FIRST attempt added them to the leaders' drift block — but the post-implementation review
+  caught that that block is gated on `baku_legitimacy > 25`, which the dated beats drive below
+  25 by ~1861, freezing YCH/SGA at ~31 (still short of 45). v2 gives YCH/SGA their OWN drift
+  block gated on `baku_perry_done` ONLY (decoupled from legitimacy) at +3/yr, so from Perry
+  (~1854) to the 1868 climax they reach YCH ~57 / SGA ~54 — clear of 45 with margin, YCH also
+  clears the `>= 55` Tosa milestone (resolves m6), both still behind the beat-driven leaders
+  (CSU/SHZ ~85), ordering YCH > SGA preserved by seed.
+- **[#94-fix m6]** side-effect of M1: YCH now drifts past the previously-dead `>= 55` milestone
+  gate at se_JAPAN_BAKUMATSU.txt:187 (Ryoma spawn). No separate edit.
+- **[#93-fix M2]** `usa_section_events.txt` .11 (Election 1860) — added `usa_free_states +2`
+  (Minnesota 1858 / Oregon 1859 / Kansas Jan 1861 free admissions) so free (15) can exceed slave
+  (13) and USA_secession_check's structural `free > slave` gate can actually trip the climax
+  ahead of the 1861.4 date fallback (kept as a true backstop).
+- **[#94-fix M3]** `se_JAPAN_BOSHIN.txt` JPN_boshin_execute — added `remove_country_modifier` for
+  all three `baku_grip_*` bands BEFORE the TKG->JPN retag. The TKG pulse gates on `tag = TKG`, so
+  after the retag it can never reconcile; the last band was otherwise stranded on Meiji Japan
+  forever.
+- **[#93-fix M4]** `se_USA_SECTION.txt` USA_section_pulse — added a guarded
+  `remove_global_variable = usa_csa_country` teardown (fires when the Union no longer wars with
+  the CSA and the CSA holds no provinces). Unblocks MEX_empire_fall_check's reunification branch
+  (se_MEXICO.txt:457) and stops se_QING_USCW:91 acting on a dead handle.
+- **[#96-fix m5]** three uncoordinated "prop the Second Empire" payouts (se_QING_MEXICO.txt
+  QING_mexico_prop_empire; qing_col_maximilian & qing_col_mexican_empire on_completions) now share
+  a first-wins `qing_mexico_propped` flag (ROOT = CHI in all three): the additive wealth/prestige/
+  GP-provoke package pays out exactly once. Name-unique crown modifiers (non-stacking) left
+  outside the guard. Mission site uses a per-run `qing_mexico_pkg_this` decision var (an always-run
+  arc hook sits between its grants) and cleans it up at on_completion end.
+
+All six files brace-balanced; byte conventions preserved (se_* / missions no-BOM/LF, usa events
+BOM/LF). se_LOG markers added where new (M4 teardown LOG_line).

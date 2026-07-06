@@ -1,0 +1,435 @@
+﻿########################################################################
+# japan_bakumatsu_events.txt — "THE COLLAPSE OF THE TOKUGAWA": the dated beats
+# of Japan's road from Perry to the Meiji Restoration (1815-1868), task #94.
+#
+# AI-AUTONOMOUS (the player is the Qing): every beat's DECISIVE state change lives
+# in its immediate block (fires regardless of which option is taken), and every
+# option carries an explicit ai_chance weighted to the historical default, so an
+# AI Japan walks the historical road on its own. The pulse (se_JAPAN_BAKUMATSU)
+# converts the meters these beats move into concrete objects (domain firebrands,
+# the Satcho bond) and fires the climax (se_JAPAN_BOSHIN). Machinery lives in the
+# two se_JAPAN_* files.
+#
+#   ROOT / this = c:TKG (the beats are seeded for TKG; see the on_action file).
+#
+# Namespace = japan_bakumatsu
+#   .0  Perry at Uraga (1853-54)            .4  Shimonoseki / Choshu expeditions (1863-66)
+#   .1  Harris Treaty + Komei refusal (1858) .5  Satcho Alliance (1866)
+#   .2  Ansei Purge -> Sakuradamon (1858-60) .6  Taisei hokan (Nov 1867)
+#   .3  Namamugi -> Kagoshima (1862-63)      (.7 Boshin is fired by the pulse climax)
+#
+# Sources: Jansen, The Making of Modern Japan (2000); Totman, The Collapse of the
+#   Tokugawa Bakufu (1980); Beasley, The Meiji Restoration (1972).
+########################################################################
+
+namespace = japan_bakumatsu
+
+########################################################################
+# .0  PERRY AT URAGA (1853-54) — the shock that begins the end. The black ships
+# force the Convention of Kanagawa; the bakufu's foreign-relations monopoly, the
+# root of its legitimacy, is broken open. This beat also runs the ONE-TIME overlay
+# ingest of a human Qing's #81 pre-Perry meddling (JPN_baku_ingest_preperry), the
+# only channel by which the Qing arc now biases Japan (design §6).
+########################################################################
+japan_bakumatsu.0 = {
+	type = country_event
+	title = "japan_bakumatsu.0.t"
+	desc = "japan_bakumatsu.0.desc"
+	picture = trade_port
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = TKG
+		NOT = { has_variable = baku_perry_done }
+	}
+
+	immediate = {
+		JPN_baku_init = yes
+		JPN_baku_seed_domains = yes
+		set_variable = baku_perry_done
+		# the foreign-relations monopoly cracks: authority bleeds to Kyoto.
+		JPN_baku_nudge = { var = baku_legitimacy    amount = -8 }
+		JPN_baku_nudge = { var = imperial_prestige  amount = 6 }
+		# OVERLAY: read a human Qing's #81 meddling once, now, to bias the seed.
+		JPN_baku_ingest_preperry = yes
+		# #81 INVERSION: tell a human Qing that Perry has come, so its pre-Perry
+		# hand-off narrative (qing_japan_preperry.10) fires as a CONSUMER of Japan's
+		# event rather than the driver of Japan's fate. Gated to a human CHI that has
+		# not already closed its pre-Perry arc.
+		if = {
+			limit = {
+				exists = c:CHI
+				c:CHI = {
+					is_ai = no
+					NOT = { has_variable = qing_jppre_perry_done }
+				}
+			}
+			c:CHI = { trigger_event = { id = qing_japan_preperry.10  days = { 5 20 } } }
+			LOG_line = { sys = BAKU  msg = "notified human Qing that Perry has come (qing_japan_preperry.10) for [ROOT.GetTag]" }
+		}
+		LOG_line = { sys = BAKU  msg = "EVENT japan_bakumatsu.0 (Perry at Uraga) for [ROOT.GetTag]" }
+	}
+
+	# --- Sign the Convention of Kanagawa (Abe Masahiro's realism) — historical -
+	option = {
+		name = "japan_bakumatsu.0.a"
+		JPN_baku_nudge = { var = imperial_prestige  amount = 4 }
+		ai_chance = { factor = 10 }
+	}
+	# --- Resist and cling to seclusion (the joi hardliners) -------------------
+	option = {
+		name = "japan_bakumatsu.0.b"
+		# defiance costs more authority when the guns are in the bay.
+		JPN_baku_nudge = { var = baku_legitimacy  amount = -6 }
+		if = { limit = { exists = c:CSU }  c:CSU = { JPN_baku_nudge = { var = domain_sonno  amount = 6 } } }
+		ai_chance = { factor = 2 }
+	}
+}
+
+########################################################################
+# .1  THE HARRIS TREATY & KOMEI'S REFUSAL (1858) — tairo Ii Naosuke signs the
+# commercial treaty WITHOUT imperial sanction, and Emperor Komei refuses to grant
+# it. At a stroke Kyoto becomes a rival pole of authority: to obey the bakufu is
+# now to defy the throne. Spawns Ii Naosuke (TKG), the strong-man of the response.
+########################################################################
+japan_bakumatsu.1 = {
+	type = country_event
+	title = "japan_bakumatsu.1.t"
+	desc = "japan_bakumatsu.1.desc"
+	picture = senate
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:jpn_ii
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = TKG
+		has_variable = baku_perry_done
+		NOT = { has_variable = baku_beat_harris }
+	}
+
+	immediate = {
+		set_variable = baku_beat_harris
+		JPN_baku_nudge = { var = baku_legitimacy    amount = -12 }
+		JPN_baku_nudge = { var = imperial_prestige  amount = 10 }
+		# Ii Naosuke, the iron tairo who will sign and purge.
+		create_character = {
+			age = 43  culture = japanese  religion = shinto
+			add_martial = 5  add_charisma = 5  add_finesse = 8  add_zeal = 6
+			add_trait = stubborn  add_trait = cruel  add_trait = disciplined
+			save_scope_as = jpn_ii
+		}
+		scope:jpn_ii = { set_home_country = ROOT  add_nickname = "NICKNAME_JPN_II" }
+		set_variable = { name = baku_ii_char  value = scope:jpn_ii }
+		LOG_line = { sys = BAKU  msg = "EVENT japan_bakumatsu.1 (Harris Treaty + Komei refusal; Ii Naosuke rises) for [ROOT.GetTag]" }
+	}
+
+	# --- Sign unilaterally, bakufu authority over imperial sanction — historical
+	option = {
+		name = "japan_bakumatsu.1.a"
+		if = { limit = { exists = c:CSU }  c:CSU = { JPN_baku_nudge = { var = domain_sonno  amount = 8 } } }
+		if = { limit = { exists = c:SHZ }  c:SHZ = { JPN_baku_nudge = { var = domain_sonno  amount = 6 } } }
+		ai_chance = { factor = 10 }
+	}
+	# --- Seek the sanction and defer (the kobu-gattai instinct) ---------------
+	option = {
+		name = "japan_bakumatsu.1.b"
+		JPN_baku_nudge = { var = baku_legitimacy    amount = 4 }
+		JPN_baku_nudge = { var = imperial_prestige  amount = -3 }
+		ai_chance = { factor = 3 }
+	}
+}
+
+########################################################################
+# .2  THE ANSEI PURGE -> SAKURADAMON (1858-60) — Ii Naosuke purges the sonno-joi
+# activists (executing Yoshida Shoin among them), and is cut down in reprisal at
+# the Sakurada Gate. The bakufu's strong-man is dead and its authority with him;
+# the great tozama turn decisively toward the throne. Kills Ii (the immediate
+# handles it regardless of option).
+########################################################################
+japan_bakumatsu.2 = {
+	type = country_event
+	title = "japan_bakumatsu.2.t"
+	desc = "japan_bakumatsu.2.desc"
+	picture = war_council
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = TKG
+		has_variable = baku_beat_harris
+		NOT = { has_variable = baku_beat_sakuradamon }
+	}
+
+	immediate = {
+		set_variable = baku_beat_sakuradamon
+		# Sakuradamon: the tairo is assassinated. Remove Ii if he still lives.
+		if = {
+			limit = { has_variable = baku_ii_char  var:baku_ii_char = { is_alive = yes } }
+			var:baku_ii_char = { death = { death_reason = death_murder } }
+		}
+		JPN_baku_nudge = { var = baku_legitimacy  amount = -10 }
+		# the purge's martyrs inflame the tozama.
+		if = { limit = { exists = c:CSU }  c:CSU = { JPN_baku_nudge = { var = domain_sonno  amount = 12 } } }
+		if = { limit = { exists = c:SHZ }  c:SHZ = { JPN_baku_nudge = { var = domain_sonno  amount = 12 } } }
+		LOG_line = { sys = BAKU  msg = "EVENT japan_bakumatsu.2 (Ansei Purge -> Sakuradamon; Ii cut down) for [ROOT.GetTag]" }
+	}
+
+	# --- Seek reconciliation with Kyoto (kobu-gattai) — the historical retreat --
+	option = {
+		name = "japan_bakumatsu.2.a"
+		JPN_baku_nudge = { var = imperial_prestige  amount = 6 }
+		ai_chance = { factor = 8 }
+	}
+	# --- Answer terror with a harder hand -------------------------------------
+	option = {
+		name = "japan_bakumatsu.2.b"
+		JPN_baku_nudge = { var = baku_legitimacy  amount = -4 }
+		if = { limit = { exists = c:CSU }  c:CSU = { JPN_baku_nudge = { var = domain_sonno  amount = 6 } } }
+		ai_chance = { factor = 3 }
+	}
+}
+
+########################################################################
+# .3  NAMAMUGI -> KAGOSHIMA (1862-63) — a Satsuma retainer cuts down an Englishman
+# on the Tokaido; the Royal Navy bombards Kagoshima in reprisal. The lesson lands:
+# Satsuma abandons joi bravado and turns to Western arms, becoming the modern
+# military spine of the imperial cause. The one permitted external nudge (GBR).
+########################################################################
+japan_bakumatsu.3 = {
+	type = country_event
+	title = "japan_bakumatsu.3.t"
+	desc = "japan_bakumatsu.3.desc"
+	picture = navy
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = TKG
+		has_variable = baku_perry_done
+		exists = c:SHZ
+		NOT = { has_variable = baku_beat_kagoshima }
+	}
+
+	immediate = {
+		set_variable = baku_beat_kagoshima
+		# Satsuma converts to Western arms and commits to the imperial cause.
+		c:SHZ = {
+			JPN_baku_nudge = { var = domain_sonno  amount = 15 }
+			add_country_modifier = { name = baku_western_arms  duration = -1 }
+		}
+		LOG_line = { sys = BAKU  msg = "EVENT japan_bakumatsu.3 (Namamugi -> Kagoshima; Satsuma turns to Western arms) for [ROOT.GetTag]" }
+	}
+
+	option = {
+		name = "japan_bakumatsu.3.a"
+		ai_chance = { factor = 10 }
+	}
+}
+
+########################################################################
+# .4  SHIMONOSEKI & THE CHOSHU EXPEDITIONS (1863-66) — Choshu shells foreign
+# shipping and is answered by a four-nation fleet; then the bakufu's SECOND
+# punitive expedition against Choshu collapses in humiliating failure. That the
+# shogunate cannot subdue a single domain is the death knell of its authority.
+########################################################################
+japan_bakumatsu.4 = {
+	type = country_event
+	title = "japan_bakumatsu.4.t"
+	desc = "japan_bakumatsu.4.desc"
+	picture = war_council
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = TKG
+		has_variable = baku_perry_done
+		exists = c:CSU
+		NOT = { has_variable = baku_beat_choshu_expedition }
+	}
+
+	immediate = {
+		set_variable = baku_beat_choshu_expedition
+		c:CSU = {
+			JPN_baku_nudge = { var = domain_sonno  amount = 15 }
+			add_country_modifier = { name = baku_western_arms  duration = -1 }
+		}
+		LOG_line = { sys = BAKU  msg = "EVENT japan_bakumatsu.4 (Shimonoseki + Choshu expeditions) for [ROOT.GetTag]" }
+	}
+
+	# --- Press the expedition and fail (the historical humiliation) -----------
+	option = {
+		name = "japan_bakumatsu.4.a"
+		JPN_baku_nudge = { var = baku_legitimacy  amount = -15 }
+		ai_chance = { factor = 9 }
+	}
+	# --- Cut losses and negotiate (a lesser, but still costly, retreat) -------
+	option = {
+		name = "japan_bakumatsu.4.b"
+		JPN_baku_nudge = { var = baku_legitimacy  amount = -6 }
+		ai_chance = { factor = 3 }
+	}
+}
+
+########################################################################
+# .5  THE SATCHO ALLIANCE (1866) — Sakamoto Ryoma brokers the secret pact between
+# Satsuma and Choshu, the two great military domains, against the bakufu. This is
+# the beat's flavour + a guarantee: it directly arms the concrete Satcho bond via
+# the pulse's check (the meters may already have; this forces the commitment).
+########################################################################
+japan_bakumatsu.5 = {
+	type = country_event
+	title = "japan_bakumatsu.5.t"
+	desc = "japan_bakumatsu.5.desc"
+	picture = senate
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:jpn_ryoma
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = TKG
+		has_variable = baku_perry_done
+		exists = c:CSU
+		exists = c:SHZ
+		NOT = { has_variable = baku_beat_satcho }
+	}
+
+	immediate = {
+		set_variable = baku_beat_satcho
+		# Sakamoto Ryoma, the broker (Tosa); spawned into Tosa if it exists, else TKG.
+		create_character = {
+			age = 30  culture = japanese  religion = shinto
+			add_martial = 5  add_charisma = 9  add_finesse = 7  add_zeal = 7
+			add_trait = orator  add_trait = brave  add_trait = ambitious
+			save_scope_as = jpn_ryoma
+		}
+		scope:jpn_ryoma = {
+			add_nickname = "NICKNAME_JPN_RYOMA"
+			if = { limit = { exists = c:YCH }  set_home_country = c:YCH }
+			else = { set_home_country = ROOT }
+		}
+		# force both domains over the commitment line so the pulse's Satcho check
+		# (JPN_boshin_check_satcho) binds the concrete alliance this cycle.
+		c:CSU = { JPN_baku_nudge = { var = domain_sonno  amount = 20 }  set_variable = sonno_committed }
+		c:SHZ = { JPN_baku_nudge = { var = domain_sonno  amount = 20 }  set_variable = sonno_committed }
+		JPN_boshin_check_satcho = yes
+		LOG_line = { sys = BAKU  msg = "EVENT japan_bakumatsu.5 (Satcho Alliance brokered by Ryoma) for [ROOT.GetTag]" }
+	}
+
+	option = {
+		name = "japan_bakumatsu.5.a"
+		ai_chance = { factor = 10 }
+	}
+}
+
+########################################################################
+# .6  TAISEI HOKAN (Nov 1867) — the last shogun, Tokugawa Yoshinobu, returns
+# governing authority to the throne, hoping to keep the Tokugawa first among a
+# council of lords. Spawns the young Emperor Meiji (a character inside TKG, per
+# the design's court model) and sets jpn_taisei_hokan_done, arming the Boshin
+# climax. The flag is set regardless of option; the option only colours the exit.
+########################################################################
+japan_bakumatsu.6 = {
+	type = country_event
+	title = "japan_bakumatsu.6.t"
+	desc = "japan_bakumatsu.6.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:jpn_meiji_emperor
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = TKG
+		has_variable = baku_perry_done
+		NOT = { has_variable = jpn_taisei_hokan_done }
+		OR = {
+			AND = { var:imperial_prestige >= 55  var:baku_legitimacy < 40 }
+			current_date >= 1867.11.1
+		}
+	}
+
+	immediate = {
+		set_variable = jpn_taisei_hokan_done
+		JPN_baku_nudge = { var = imperial_prestige  amount = 15 }
+		JPN_baku_nudge = { var = baku_legitimacy    amount = -8 }
+		# the young Emperor Meiji, in whose name the Restoration is made.
+		create_character = {
+			age = 15  culture = japanese  religion = shinto
+			add_charisma = 7  add_finesse = 6  add_martial = 4  add_zeal = 6
+			add_trait = ambitious
+			save_scope_as = jpn_meiji_emperor
+		}
+		scope:jpn_meiji_emperor = { set_home_country = ROOT  add_nickname = "NICKNAME_JPN_MEIJI" }
+		LOG_line = { sys = BAKU  msg = "EVENT japan_bakumatsu.6 (Taisei hokan; Emperor Meiji rises; Boshin armed) for [ROOT.GetTag]" }
+	}
+
+	# --- Return rule gracefully, keep the Tokugawa first (Yoshinobu's gamble) --
+	option = {
+		name = "japan_bakumatsu.6.a"
+		ai_chance = { factor = 8 }
+	}
+	# --- Cling to power and provoke the reckoning -----------------------------
+	option = {
+		name = "japan_bakumatsu.6.b"
+		JPN_baku_nudge = { var = baku_legitimacy  amount = -6 }
+		ai_chance = { factor = 3 }
+	}
+}
+
+########################################################################
+# .7  THE MEIJI RESTORATION PROCLAIMED — flavour coda fired by JPN_boshin_execute
+# once the realm has been reformed into the Empire of Japan (see se_JAPAN_BOSHIN).
+# By the time this runs the tag is already JPN, the tozama are released, and the
+# Boshin War is on the map; this beat announces it and (the #81 bridge) notifies a
+# human Qing that the Restoration has happened, so its post-Perry tree activates.
+########################################################################
+japan_bakumatsu.7 = {
+	type = country_event
+	title = "japan_bakumatsu.7.t"
+	desc = "japan_bakumatsu.7.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = JPN
+		NOT = { has_variable = baku_beat_restoration_declared }
+	}
+
+	immediate = {
+		set_variable = baku_beat_restoration_declared
+		LOG_line = { sys = BOSHIN  msg = "EVENT japan_bakumatsu.7 (Meiji Restoration proclaimed) for [ROOT.GetTag]" }
+		# #81 BRIDGE: tell a human Qing the Restoration has come so its post-Perry
+		# Japan tree keys off the real event (the tree's exists = c:JPN fallbacks are
+		# now live). Sets a CHI-side flag the tree reads.
+		if = {
+			limit = { exists = c:CHI  c:CHI = { is_ai = no } }
+			c:CHI = {
+				set_variable = qing_japan_meiji_seen
+				trigger_event = { id = qing_japan_preperry.10  days = { 5 20 } }
+			}
+			LOG_line = { sys = BOSHIN  msg = "notified human Qing of the Meiji Restoration for [ROOT.GetTag]" }
+		}
+	}
+
+	option = {
+		name = "japan_bakumatsu.7.a"
+		ai_chance = { factor = 10 }
+	}
+}

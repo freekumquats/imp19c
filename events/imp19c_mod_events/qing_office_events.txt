@@ -236,23 +236,33 @@ qing_office.4 = {
 			is_ruler = no
 			is_adult = yes
 			is_alive = yes
-			NOT = { is_target_in_variable_list = { name = qing_council_members  target = this } }
+			# [#98-fix task #98] qing_council_members is COUNTRY-held; testing it in this
+			# character scope (target = this) always missed, so the "already seated"
+			# exclusion never applied and a sitting councillor could resurface as a
+			# "rising statesman". Read the list via employer (proven form).
+			NOT = { employer = { is_target_in_variable_list = { name = qing_council_members  target = prev } } }
 			# never surface a rebel foil (e.g. Hong Xiuquan) as a "rising statesman"
 			NOT = { has_variable = qing_rebel_foil }
 		}
 	}
 
 	immediate = {
-		random_character = {
+		# [#98-fix task #98] two bugs: (1) order_by is IGNORED inside random_character,
+		# so the "rising statesman" was picked at random rather than by ability; (2) the
+		# country-held qing_council_members list was tested in character scope. Use
+		# ordered_character + max = 1 (honours order_by) and read the list via employer.
+		ordered_character = {
 			limit = {
 				employer = ROOT
 				is_ruler = no
 				is_adult = yes
 				is_alive = yes
-				NOT = { is_target_in_variable_list = { name = qing_council_members  target = this } }
+				NOT = { employer = { is_target_in_variable_list = { name = qing_council_members  target = prev } } }
 				NOT = { has_variable = qing_rebel_foil }
 			}
 			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
 			save_scope_as = statesman
 			# gauge how this rising man sits with the throne (culture, faith, zeal,
 			# kinship, standing) — it colours whether elevating him binds a friend
@@ -353,7 +363,12 @@ qing_office.5 = {
 		name = "qing_office.5.b"
 		custom_tooltip = "qing_office.5.b.tt"
 		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 5 }
-		add_country_modifier = { name = qing_council_effective  duration = 1095 }
+		# [#98-fix task #98] qing_council_effective is a BAND modifier owned by
+		# QING_council_apply_band (stripped + re-derived every pulse from the
+		# effectiveness counter), so granting it here was wiped on the next pulse.
+		# Nudge the underlying effectiveness counter instead — a durable buff that
+		# the band naturally reflects, keeping the concrete driver authoritative.
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 8 }
 	}
 
 	# --- Favour the Han literati (the examination elite) -----------------
@@ -399,9 +414,14 @@ qing_office.6 = {
 			any_character = { employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes }
 		}
 		add_political_influence = -25
-		random_character = {
+		# [#98-fix task #98] order_by is IGNORED inside random_character, so the Zongli
+		# Yamen head was appointed at random despite the tooltip promising "the ablest
+		# man". ordered_character + max = 1 honours order_by and picks the ablest.
+		ordered_character = {
 			limit = { employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes }
 			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
 			QING_office_appoint = { office = zongli }
 		}
 		add_country_modifier = { name = qing_zongli_yamen_founded  duration = -1 }

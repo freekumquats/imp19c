@@ -1,0 +1,428 @@
+########################################################################
+# se_USA_SECTION.txt — "THE HOUSE DIVIDED": the American road to the Civil
+# War (1815-1861), task #93. AI-OWNED and AI-AUTONOMOUS.
+#
+# DESIGN (see DESIGN_USA_CIVIL_WAR.md + memory imp19c-usa-japan-mexico-arc-design):
+# The player is almost always the Qing, so THIS arc must advance and resolve
+# with the USA under AI control. It therefore OWNS the sectional-crisis state on
+# c:USA, the Confederacy release machinery (relocated here out of the Qing #73
+# files), and the actual reconquest war. The Qing #73 arc (qing_uscw.*) is
+# refactored into a pure CONSUMER that only reacts to the war this arc starts.
+#
+# All decisive state changes are pulse-driven (USA_section_pulse) or in event
+# immediate blocks, never gated on a human choosing — the arc runs for AI USA.
+#
+# CONCRETE-OVER-ABSTRACT (standing rule): the five 0..100 counters below are the
+# AI/summary layer; every threshold hangs a real on-map object — a spawned
+# firebrand character, a province in open unrest, and at the climax a released
+# Confederate States country fought in a real war.
+#
+# ENGINE FEASIBILITY verified against the consult oracles (Terra-Indomita /
+# Invictus) before build — see memory imp19c-ai-autonomous-arc-verbs:
+#   - monthly_country_pulse runs its effect for AI countries (self-gate on tag,
+#     NEVER is_ai); LAND_release_from_list + reconquest_wargoal are AI-prosecuted
+#     (the shipped SEPARATISM engine proves it); a freshly released country is
+#     carried cross-event via a GLOBAL variable, not a raw saved scope.
+#
+# All paths log sys = USA (LOG_enter/exit/line, LOG_fail on guard-miss), per the
+# standing error-logging rule. Prefix = USA_. ROOT / this = c:USA throughout.
+#
+# Sources: Potter, The Impending Crisis 1848-1861 (1976); McPherson, Battle Cry
+#   of Freedom (1988); Freehling, The Road to Disunion v.1-2 (1990/2007); Foner,
+#   Free Soil, Free Labor, Free Men (1970); Varon, Disunion! (2008).
+########################################################################
+
+# ======================================================================
+# INIT — seed the sectional counters on c:USA. Idempotent; called from the
+# startup hook (usa_section_on_actions.txt) and self-heals on first pulse.
+#   usa_sectional_tension : master road-to-disunion meter (0..100, start 20)
+#   usa_slave_states / usa_free_states : the balance rule (legible count, 11/11)
+#   usa_abolitionism      : Northern antislavery opinion (start 15)
+#   usa_states_rights     : Southern nullification/secession doctrine (start 20)
+#   usa_party_system      : health of the 2nd Party System (100 = intact, start 80)
+# ======================================================================
+USA_section_init = {
+	LOG_enter = { sys = USA  fn = "USA_section_init" }
+	if = { limit = { NOT = { has_variable = usa_sectional_tension } }  set_variable = { name = usa_sectional_tension  value = 20 } }
+	if = { limit = { NOT = { has_variable = usa_slave_states } }       set_variable = { name = usa_slave_states  value = 11 } }
+	if = { limit = { NOT = { has_variable = usa_free_states } }        set_variable = { name = usa_free_states  value = 11 } }
+	if = { limit = { NOT = { has_variable = usa_abolitionism } }       set_variable = { name = usa_abolitionism  value = 15 } }
+	if = { limit = { NOT = { has_variable = usa_states_rights } }      set_variable = { name = usa_states_rights  value = 20 } }
+	if = { limit = { NOT = { has_variable = usa_party_system } }       set_variable = { name = usa_party_system  value = 80 } }
+	if = { limit = { NOT = { has_variable = usa_firebrand_count } }    set_variable = { name = usa_firebrand_count  value = 0 } }
+	# [#97-fix task #97] the two structural-economy modifiers were defined + loc'd but
+	# never applied (code-review finding). They represent the sectional economies that
+	# exist from the start (King Cotton South / Free Labor North), so stamp both once,
+	# idempotently, at init — the standing engines the arc's political meters ride on.
+	if = { limit = { NOT = { has_country_modifier = usa_king_cotton } }  add_country_modifier = { name = usa_king_cotton  duration = -1 } }
+	if = { limit = { NOT = { has_country_modifier = usa_free_labor } }   add_country_modifier = { name = usa_free_labor   duration = -1 } }
+	LOG_exit = { sys = USA  fn = "USA_section_init"  result = OK }
+}
+
+# ---- Generic clamped-counter helper (the USA twin of QING_DECLINE_nudge) ----
+# Nudge one 0..100 counter by $amount$ (may be negative) and clamp. sys = USA so
+# the log text carries no CHI-tied wording. Scope: c:USA. $var$, $amount$.
+USA_nudge = {
+	if = {
+		limit = { NOT = { has_variable = $var$ } }
+		set_variable = { name = $var$  value = 0 }
+	}
+	change_variable = { name = $var$  add = $amount$ }
+	if = { limit = { var:$var$ > 100 }  set_variable = { name = $var$  value = 100 } }
+	if = { limit = { var:$var$ < 0 }    set_variable = { name = $var$  value = 0 } }
+	LOG_line = { sys = USA  msg = "counter $var$ += $amount$ -> [ROOT.MakeScope.GetVariable('$var$').GetValue|0] for [ROOT.GetTag]" }
+}
+
+# ======================================================================
+# BAND APPLICATION — read usa_sectional_tension and (re)apply exactly one
+# economic band modifier (the North's free-labour boom vs the strain of a
+# divided house). Remove-all-then-add-one, the QING_DECLINE idiom. Cheap O(1).
+# Scope: c:USA.
+# ======================================================================
+USA_section_apply_bands = {
+	remove_country_modifier = usa_sectional_calm
+	remove_country_modifier = usa_sectional_strained
+	remove_country_modifier = usa_sectional_crisis
+	if = {
+		limit = { var:usa_sectional_tension >= 70 }
+		add_country_modifier = { name = usa_sectional_crisis  duration = -1 }
+		LOG_line = { sys = USA  msg = "band tension = crisis for [ROOT.GetTag] (tension=[ROOT.MakeScope.GetVariable('usa_sectional_tension').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:usa_sectional_tension >= 40 }
+		add_country_modifier = { name = usa_sectional_strained  duration = -1 }
+		LOG_line = { sys = USA  msg = "band tension = strained for [ROOT.GetTag] (tension=[ROOT.MakeScope.GetVariable('usa_sectional_tension').GetValue|0])" }
+	}
+	else = {
+		add_country_modifier = { name = usa_sectional_calm  duration = -1 }
+		LOG_line = { sys = USA  msg = "band tension = calm for [ROOT.GetTag] (tension=[ROOT.MakeScope.GetVariable('usa_sectional_tension').GetValue|0])" }
+	}
+}
+
+# ======================================================================
+# SPAWN A FIREBRAND — the concrete object on the high-doctrine bands. A real
+# agitator character enters the USA court to carry the sectional cause (a
+# Southern fire-eater at high states-rights, a Northern abolitionist at high
+# abolitionism). Flooding-capped at 4 (usa_firebrand_count) so the court is not
+# swamped, the QING_students_spawn_returnee idiom. create_character sets culture
+# / religion / age explicitly (oracle gotcha). Scope: c:USA.
+#   $side$ = south | north
+# ======================================================================
+USA_spawn_firebrand = {
+	USA_section_init = yes
+	if = {
+		limit = { var:usa_firebrand_count < 4 }
+		if = {
+			limit = { "$side$" = south }
+			create_character = {
+				age = 42
+				culture = dixie
+				religion = evangelical
+				# a Southern fire-eater: forceful orator, states-rights zealot.
+				add_martial = 3
+				add_charisma = 9
+				add_finesse = 6
+				add_zeal = 9
+				add_trait = ambitious
+				add_trait = aggressive
+				add_trait = stubborn
+				save_scope_as = usa_firebrand
+			}
+			LOG_line = { sys = USA  msg = "firebrand (Southern fire-eater) [scope:usa_firebrand.GetName] entered the court of [ROOT.GetTag]" }
+		}
+		else = {
+			create_character = {
+				age = 42
+				culture = yankee
+				religion = evangelical
+				# a Northern abolitionist: moral orator, antislavery zealot.
+				add_martial = 3
+				add_charisma = 9
+				add_finesse = 7
+				add_zeal = 9
+				add_trait = ambitious
+				add_trait = righteous
+				add_trait = stubborn
+				save_scope_as = usa_firebrand
+			}
+			LOG_line = { sys = USA  msg = "firebrand (Northern abolitionist) [scope:usa_firebrand.GetName] entered the court of [ROOT.GetTag]" }
+		}
+		change_variable = { name = usa_firebrand_count  add = 1 }
+	}
+	else = {
+		LOG_fail = { sys = USA  fn = "USA_spawn_firebrand"  reason = "firebrand flooding cap (4) reached; $side$ agitator not spawned for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# FLIP A BORDER PROVINCE INTO OPEN UNREST — "Bleeding Kansas" as a real map
+# object. Pick a non-capital USA province in the Great Plains / Appalachian
+# borderland and stamp the usa_bleeding province modifier (guarded so it is not
+# re-stamped). Scope: c:USA.
+# ======================================================================
+USA_flip_border_state = {
+	if = {
+		limit = {
+			any_owned_province = {
+				is_capital = no
+				NOT = { has_province_modifier = usa_bleeding }
+				OR = { is_in_region = Great_Plains  is_in_region = Appalachia }
+			}
+		}
+		random_owned_province = {
+			limit = {
+				is_capital = no
+				NOT = { has_province_modifier = usa_bleeding }
+				OR = { is_in_region = Great_Plains  is_in_region = Appalachia }
+			}
+			add_province_modifier = { name = usa_bleeding  duration = 3650 }
+			save_scope_as = usa_bleeding_province
+		}
+		LOG_line = { sys = USA  msg = "border violence: [scope:usa_bleeding_province.GetName] flares into open unrest (Bleeding Kansas) for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = USA  fn = "USA_flip_border_state"  reason = "no eligible Great Plains / Appalachian border province to inflame for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# MILESTONE CHECK — read the counters and hang concrete objects off the bands.
+# Once-per-band guards (marker vars) so a milestone fires exactly once. Called
+# from the pulse. Scope: c:USA.
+# ======================================================================
+USA_section_check_milestone = {
+	# high states-rights -> the doctrine's champion takes the stage (once). Calhoun
+	# is the Cast-Iron Man of states' rights; if a dated beat has already summoned
+	# him his once-only guard no-ops and an anonymous fire-eater fills the band
+	# instead, so the milestone is never silent.
+	if = {
+		limit = {
+			var:usa_states_rights >= 45
+			NOT = { has_variable = usa_milestone_south_firebrand }
+		}
+		set_variable = usa_milestone_south_firebrand
+		if = {
+			limit = { NOT = { has_variable = usa_spawned_calhoun } }
+			USA_spawn_calhoun = yes
+		}
+		else = { USA_spawn_firebrand = { side = south } }
+	}
+	# high abolitionism -> the abolitionist press finds its voice (once). Garrison
+	# the Liberator; same guard-then-fallback shape as the Southern milestone.
+	if = {
+		limit = {
+			var:usa_abolitionism >= 45
+			NOT = { has_variable = usa_milestone_north_firebrand }
+		}
+		set_variable = usa_milestone_north_firebrand
+		if = {
+			limit = { NOT = { has_variable = usa_spawned_garrison } }
+			USA_spawn_garrison = yes
+		}
+		else = { USA_spawn_firebrand = { side = north } }
+	}
+	# high tension -> the borderland bleeds (once)
+	if = {
+		limit = {
+			var:usa_sectional_tension >= 60
+			NOT = { has_variable = usa_milestone_bleeding }
+		}
+		set_variable = usa_milestone_bleeding
+		USA_flip_border_state = yes
+	}
+}
+
+# ======================================================================
+# SECESSION CHECK — the autonomous climax trigger, evaluated every pulse. The
+# Union fractures when the crisis peaks AND the political safety valve (the
+# party system) has collapsed AND the free states have out-paced the slave
+# states (Freehling's structural condition). A hard date fallback (>= 1861.4.1,
+# Fort Sumter) guarantees the AI reaches the war even if the meters lag. Fires
+# exactly once (usa_seceded guard). Scope: c:USA.
+# ======================================================================
+USA_secession_check = {
+	if = {
+		limit = {
+			NOT = { has_variable = usa_seceded }
+			OR = {
+				AND = {
+					var:usa_sectional_tension >= 80
+					var:usa_party_system < 30
+					# [#97-fix task #97] variable-to-variable compare needs var: on BOTH
+					# sides; a bare RHS resolves as a (nonexistent) script value -> 0, so the
+					# free>slave structural gate was always-true. Now compares the two counters.
+					var:usa_free_states > var:usa_slave_states
+				}
+				# fallback: history's own deadline, so an AI whose meters drifted
+				# short still secedes in the historical window.
+				current_date >= 1861.4.1
+			}
+		}
+		set_variable = usa_seceded
+		LOG_line = { sys = USA  msg = "SECESSION WINTER: the Union fractures for [ROOT.GetTag] (tension=[ROOT.MakeScope.GetVariable('usa_sectional_tension').GetValue|0] party=[ROOT.MakeScope.GetVariable('usa_party_system').GetValue|0])" }
+		USA_release_confederacy = yes
+		# tell the arc's event layer the war has begun (fires usa_section.12, which
+		# also notifies a human Qing player — the #73 inversion, see §6 of the design).
+		trigger_event = { id = usa_section.12  days = { 1 3 } }
+	}
+}
+
+# ======================================================================
+# RELEASE THE CONFEDERACY + START THE WAR — the concrete climax. Spins a
+# breakaway Confederate States off the USA's Deep-South (SC/GA/AL/MS/AR/LA/FL)
+# and Appalachian (WV/KY/TN) holdings, then the Union wages a war of reconquest
+# to hold the nation whole. This is the engine RELOCATED out of the Qing #73
+# file (QING_uscw_release_confederacy) into US ownership, extended with the war
+# the Qing arc never fought. Idiom cloned from the shipped, AI-proven
+# SEPARATISM_spawn_breakaway (release -> claim -> reconquest_wargoal war).
+#
+# The released Confederacy is carried to the event layer (and to the Qing #73
+# consumer) via a GLOBAL variable, not a raw saved scope — the oracle-confirmed
+# cross-event, cross-country handoff idiom.
+#
+# Guard: only if the Union actually holds >= 3 of that ground here; otherwise the
+# secession is diplomatic-only (logged). Scope / releaser: c:USA (this = USA).
+# ======================================================================
+USA_release_confederacy = {
+	LOG_enter = { sys = USA  fn = "USA_release_confederacy" }
+	# gather the Union's Southern & Appalachian holdings (non-capital)
+	every_owned_province = {
+		limit = {
+			is_capital = no
+			OR = {
+				is_in_region = Deep_South
+				is_in_region = Appalachia
+			}
+		}
+		add_to_list = usa_csa_provinces
+	}
+	if = {
+		limit = { any_in_list = { list = usa_csa_provinces  count >= 3 } }
+		LOG_line = { sys = USA  msg = "seceding the Confederacy from [ROOT.GetTag]" }
+		LAND_release_from_list = {
+			releaser = ROOT
+			list = usa_csa_provinces
+			capital_location = flag:by_population
+			primary_culture = flag:as_capital
+			country_religion = flag:as_capital
+			as_subject_type = flag:independent
+			# pass a concrete government so LAND_release_from_list skips its
+			# flag:dynamic -> viceroyalty branch (the SEPARATISM / #73 convention);
+			# the Confederacy is a sovereign republic, not a viceroyalty.
+			government_type = flag:oligarchic_republic
+			give_overlord_hos = no
+			# reuse the single canonical CSA name/adj shared with the Qing #73 arc,
+			# so a Qing observer sees the identical country either way.
+			country_name = qing_uscw_csa_name
+			country_adj = qing_uscw_csa_adj
+			country_flag = flag:dynamic
+			country_color = flag:dynamic
+		}
+		# The Union must hold an explicit CLAIM on the land it means to reclaim, or
+		# reconquest_wargoal's allow cannot pass for AI selection. Grant it on every
+		# seceded province while the list is still populated (SEPARATISM idiom: use a
+		# saved country scope, not ROOT, inside the province iteration).
+		ROOT = { save_scope_as = usa_reclaimer }
+		every_in_list = {
+			list = usa_csa_provinces
+			add_claim = scope:usa_reclaimer
+		}
+		# clear the working list immediately so no stale province leaks into a later
+		# call (codebase convention).
+		every_in_list = {
+			list = usa_csa_provinces
+			remove_from_list = usa_csa_provinces
+		}
+		if = {
+			limit = { exists = scope:new_country_scope }
+			scope:new_country_scope = { save_scope_as = usa_confederacy }
+			# CROSS-EVENT / CROSS-COUNTRY HANDLE: store the Confederacy in a global
+			# var so the event layer and the Qing #73 consumer can find it later. A
+			# raw scope: is not guaranteed to survive an independent trigger_event to
+			# another country (oracle finding).
+			set_global_variable = { name = usa_csa_country  value = scope:new_country_scope }
+			scope:new_country_scope.capital_scope = { save_scope_as = usa_confederacy_capital }
+			LOG_line = { sys = USA  msg = "Confederacy [scope:usa_confederacy.GetTag] released from [ROOT.GetTag]" }
+			# The Union strikes to hold the nation whole: a war of reconquest for the
+			# land it now (re)claims. FUNC handles subject-release edge cases and saves
+			# the war as scope:current_war_scope. AI-prosecuted (proven by SEPARATISM).
+			ROOT = {
+				FUNC_declare_war_with_wargoal_province = {
+					war_goal = reconquest_wargoal
+					target = scope:usa_confederacy
+					province = scope:usa_confederacy_capital
+				}
+			}
+			LOG_line = { sys = USA  msg = "the Union wages war to reconquer the seceded South ([scope:usa_confederacy.GetTag]) for [ROOT.GetTag]" }
+		}
+		else = {
+			LOG_fail = { sys = USA  fn = "USA_release_confederacy"  reason = "release produced no new_country_scope for [ROOT.GetTag]" }
+		}
+	}
+	else = {
+		# nothing to secede: still clear the list, then log the diplomatic-only miss.
+		every_in_list = {
+			list = usa_csa_provinces
+			remove_from_list = usa_csa_provinces
+		}
+		LOG_fail = { sys = USA  fn = "USA_release_confederacy"  reason = "USA holds too little of the Deep South/Appalachia to secede a Confederacy; secession is nominal only for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = USA  fn = "USA_release_confederacy"  result = OK }
+}
+
+# ======================================================================
+# THE PULSE — the autonomous driver. Runs monthly for c:USA (self-gated on tag,
+# NEVER is_ai, so it runs for an AI USA), throttled to ~quarterly via a cooldown
+# so drift is measured and cheap. Each run: (1) a gentle era-pressure drift that
+# trends tension up through the 1850s so the climax is always reachable, (2)
+# re-apply the economic band, (3) hang concrete objects off the milestones, (4)
+# check the secession climax. The dated beats (usa_section.1-.11) supply the
+# large, event-flavoured nudges; the pulse converts them to concrete outcomes.
+# Scope: c:USA.
+# ======================================================================
+USA_section_pulse = {
+	USA_section_init = yes
+	# (1) era pressure: after 1850 the sectional crisis compounds. A small monthly
+	# nudge toward a date-appropriate floor guarantees an AI USA drifts to the
+	# climax even if some dated beats were edge-cased out. Kept gentle so a live
+	# beat-driven game dominates the trajectory.
+	if = {
+		limit = {
+			current_date >= 1854.1.1
+			var:usa_sectional_tension < 75
+		}
+		USA_nudge = { var = usa_sectional_tension  amount = 1 }
+		# the party system keeps fraying after Kansas-Nebraska
+		if = {
+			limit = { var:usa_party_system > 25 }
+			USA_nudge = { var = usa_party_system  amount = -1 }
+		}
+	}
+	else_if = {
+		limit = {
+			current_date >= 1850.1.1
+			var:usa_sectional_tension < 45
+		}
+		USA_nudge = { var = usa_sectional_tension  amount = 1 }
+	}
+	# (2) bands, (3) milestones, (4) climax
+	USA_section_apply_bands = yes
+	USA_section_check_milestone = yes
+	USA_secession_check = yes
+	# [#93-fix M4] tear down the CSA global handle once the Union has reconquered the South,
+	# so downstream consumers see an accurate map. usa_csa_country was set at release (:343)
+	# and removed nowhere: MEX_empire_fall_check's reunification branch (NOT exists
+	# usa_csa_country) could never fire, and se_QING_USCW recognition could act on a dead
+	# handle. After secession, if the Confederacy no longer wars with the Union and holds no
+	# provinces (reconquered / annexed / collapsed), drop the global.
+	if = {
+		limit = {
+			has_variable = usa_seceded
+			exists = global_var:usa_csa_country
+			NOT = { war_with = global_var:usa_csa_country }
+			global_var:usa_csa_country = { NOT = { any_owned_province = { count >= 1 } } }
+		}
+		remove_global_variable = usa_csa_country
+		LOG_line = { sys = USA  msg = "the Confederacy is reconquered/annexed; usa_csa_country handle torn down for [ROOT.GetTag]" }
+	}
+}

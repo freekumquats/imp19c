@@ -1100,11 +1100,59 @@ qing_colonization_mission = {
 			# Mexico City (p:8516) — the seat of the throne being contested
 			if = { limit = { exists = p:8516  NOT = { owns = 8516 } }  add_claim = p:8516 }
 			add_country_modifier = { name = qing_col_mexican_crown  duration = -1 }
-			CURRENCY_grant_country_wealth = { thousands = 90 }
-			current_ruler = { add_prestige = 30 }
-			# FORK on Napoleon's presence at court.
+			# [#96-fix m5] decide ONCE whether this run pays the additive package (wealth /
+			# prestige / GP-tension provokes). The Qing has THREE prop entry points that share
+			# ROOT = CHI (this mission, qing_col_mexican_empire, and qing_mexico_adventure.1);
+			# qing_col_maximilian is a prerequisite of qing_col_mexican_empire, so both mission
+			# on_completions would otherwise stack the package. qing_mexico_propped is the shared
+			# first-wins flag; qing_mexico_pkg_this is this run's local decision (the always-run
+			# arc hook sits between the grants, so a single contiguous guard won't do). Name-
+			# unique crown modifiers don't stack and stay outside the guard.
+			set_variable = { name = qing_mexico_pkg_this  value = 0 }
 			if = {
-				limit = { has_variable = qing_napoleon_present }
+				limit = { NOT = { has_variable = qing_mexico_propped } }
+				set_variable = qing_mexico_propped
+				set_variable = { name = qing_mexico_pkg_this  value = 1 }
+				CURRENCY_grant_country_wealth = { thousands = 90 }
+				current_ruler = { add_prestige = 30 }
+			}
+			# [#96 REFACTOR — behavioural-equivalence-scrutinized change to shipped #69]
+			# HOOK INTO THE MEXICO ARC (se_MEXICO.txt is the source of truth). Instead of
+			# conjuring the adventure in a vacuum, react to whatever the Mexico arc has
+			# actually done to Mexico by now:
+			#   • If the Second Empire ALREADY stands (the arc's MEX_install_empire ran and
+			#     set global_var:mex_empire_country), the Qing PROPS it — set mex_foreign_
+			#     patron, the flag MEX_empire_fall_check honours to keep the Empire alive
+			#     past 1867 (the alt-history divergence this #69 arc exists to produce).
+			#   • If NOT yet (Mexico still a republic), the Qing ACCELERATES the road to a
+			#     throne — nudge the arc's foreign-debt meter toward the intervention
+			#     trigger and, if a live AI Mexico exists, poke its climax beat.
+			# The old Napoleon-fork / Daoguang-betrayal flavour below is preserved verbatim.
+			if = {
+				limit = { exists = global_var:mex_empire_country }
+				global_var:mex_empire_country = { set_variable = mex_foreign_patron }
+				LOG_line = { sys = QING  msg = "MISSION Mexican adventure PROPS the existing Second Empire [global_var:mex_empire_country.GetTag] (mex_foreign_patron set) for [ROOT.GetTag]" }
+			}
+			else = {
+				if = {
+					limit = { exists = c:MEX  c:MEX = { has_variable = mex_foreign_debt } }
+					c:MEX = {
+						MEX_nudge = { var = mex_foreign_debt  amount = 20 }
+						if = {
+							limit = { NOT = { has_variable = mex_empire_installed } }
+							trigger_event = { id = mex_instability.12  days = { 30 120 } }
+						}
+					}
+					LOG_line = { sys = QING  msg = "MISSION Mexican adventure ACCELERATES the arc (debt+20, climax poked) toward a throne for [ROOT.GetTag]" }
+				}
+				else = {
+					LOG_fail = { sys = QING  fn = qing_col_maximilian  reason = "no MEX on the map to hook into; Qing adventure proceeds on its own flavour only for [ROOT.GetTag]" }
+				}
+			}
+			# FORK on Napoleon's presence at court. [#96-fix m5] the GP-tension provokes below are
+			# additive one-shots too, so they only fire on the run that won the package decision.
+			if = {
+				limit = { var:qing_mexico_pkg_this = 1  has_variable = qing_napoleon_present }
 				# The condominium with the Second Empire. Provoke Britain (the Monroe
 				# Doctrine's tacit backer resents a European throne in the Americas),
 				# and warm relations with France, whose adventure this now shares.
@@ -1121,7 +1169,8 @@ qing_colonization_mission = {
 				}
 				LOG_line = { sys = QING  msg = "MISSION task Mexican adventure: FRANCO-QING condominium (Napoleon present) for [ROOT.GetTag]" }
 			}
-			else = {
+			else_if = {
+				limit = { var:qing_mexico_pkg_this = 1 }
 				# no French partner — the Qing grabs the adventure alone, and France,
 				# whose New-World project this pre-empts, is affronted.
 				QING_gp_provoke_france = { severity = 12 }
@@ -1130,11 +1179,12 @@ qing_colonization_mission = {
 			# Either way, planting a monarchy in the Americas violates the Pacific
 			# entente: the American republic feels betrayed by its erstwhile partner.
 			if = {
-				limit = { exists = c:USA  has_country_modifier = qing_daoguang_doctrine }
+				limit = { var:qing_mexico_pkg_this = 1  exists = c:USA  has_country_modifier = qing_daoguang_doctrine }
 				c:USA = { add_opinion = { modifier = qing_gp_rivalry_opinion  target = ROOT } }
 				LOG_line = { sys = QING  msg = "MISSION task Mexican adventure BETRAYED the Daoguang entente; USA affronted for [ROOT.GetTag]" }
 			}
 			LOG_line = { sys = QING  msg = "MISSION task Mexican adventure for [ROOT.GetTag]" }
+			remove_variable = qing_mexico_pkg_this
 		}
 	}
 
@@ -1169,28 +1219,52 @@ qing_colonization_mission = {
 		}
 		on_completion = {
 			custom_tooltip = qing_col_mexican_empire_tt
-			every_owned_province = {
-				limit = {
-					is_capital = no
-					OR = {
-						is_in_region = Pacific_Mexico
-						is_in_region = Eastern_Mexico
-						is_in_region = Northern_Mexico
-						is_in_region = Central_America
-					}
+			# [#96 REFACTOR — behavioural-equivalence-scrutinized change to shipped #69]
+			# RECONCILE WITH THE MEXICO ARC so the Qing never double-releases a rival
+			# throne against the arc's own Second Empire (se_MEXICO.txt MEX_install_empire).
+			# If that Empire already stands (mex_empire_installed / global_var:mex_empire_
+			# country), the Qing does NOT stand up a duplicate client Empire on the same
+			# ground — it becomes its PATRON instead (set mex_foreign_patron, the flag
+			# MEX_empire_fall_check honours). Otherwise the original Qing client-Empire
+			# release runs verbatim, as before this refactor.
+			if = {
+				limit = { exists = global_var:mex_empire_country }
+				global_var:mex_empire_country = { set_variable = mex_foreign_patron }
+				add_country_modifier = { name = qing_col_mexican_empire_mod  duration = -1 }
+				# [#96-fix m5] the additive prestige pays out only if no earlier prop path already
+				# did (qing_col_maximilian is this task's prerequisite, so its on_completion has
+				# usually already fired the package). Shared first-wins flag qing_mexico_propped.
+				if = {
+					limit = { NOT = { has_variable = qing_mexico_propped } }
+					set_variable = qing_mexico_propped
+					current_ruler = { add_prestige = 30 }
 				}
-				add_to_list = qing_protectorate_list
+				LOG_line = { sys = QING  msg = "MISSION Empire of Mexico: the arc's Second Empire [global_var:mex_empire_country.GetTag] already stands — Qing becomes its PATRON, no duplicate release, for [ROOT.GetTag]" }
 			}
-			QING_establish_protectorate = {
-				list = qing_protectorate_list
-				name_key = qing_protectorate_mexico_name
-				adj_key = qing_protectorate_mexico_adj
-				government = imperial_monarchy
-				log_tag = MEXICO
+			else = {
+				every_owned_province = {
+					limit = {
+						is_capital = no
+						OR = {
+							is_in_region = Pacific_Mexico
+							is_in_region = Eastern_Mexico
+							is_in_region = Northern_Mexico
+							is_in_region = Central_America
+						}
+					}
+					add_to_list = qing_protectorate_list
+				}
+				QING_establish_protectorate = {
+					list = qing_protectorate_list
+					name_key = qing_protectorate_mexico_name
+					adj_key = qing_protectorate_mexico_adj
+					government = imperial_monarchy
+					log_tag = MEXICO
+				}
+				add_country_modifier = { name = qing_col_mexican_empire_mod  duration = -1 }
+				current_ruler = { add_prestige = 30 }
+				LOG_line = { sys = QING  msg = "MISSION task Empire of Mexico established (no pre-existing arc Empire) for [ROOT.GetTag]" }
 			}
-			add_country_modifier = { name = qing_col_mexican_empire_mod  duration = -1 }
-			current_ruler = { add_prestige = 30 }
-			LOG_line = { sys = QING  msg = "MISSION task Empire of Mexico established for [ROOT.GetTag]" }
 		}
 	}
 

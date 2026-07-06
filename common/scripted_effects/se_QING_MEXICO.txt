@@ -1,0 +1,110 @@
+########################################################################
+# se_QING_MEXICO.txt — THE QING AND THE MEXICAN ADVENTURE (墨西哥帝業, task #96
+# consumer side; the Qing #69 colonization arc's hook INTO the Mexico subsystem).
+#
+# The Mexico arc (se_MEXICO.txt / mex_instability_events.txt) OWNS the road from
+# independence through La Reforma to the Second Mexican Empire. THIS file is the
+# consumer: when that arc has already put a Habsburg emperor on the throne
+# (global_var:mex_empire_country set by MEX_install_empire), a Qing that has
+# reached the far shore can prop the throne up — and a Franco-Qing patronage keeps
+# the Empire alive past the 1867 collapse the Republic would otherwise force
+# (MEX_empire_fall_check reads mex_foreign_patron). The alt-history divergence the
+# #69 arc exists to produce.
+#
+# COUPLING DIRECTION (user directive): "Qing intervention in Mexico will then hook
+# into Mexican content." So this file only READS the Mexico arc's state and sets AT
+# MOST one flag on it (mex_foreign_patron). It invents no Mexico state of its own,
+# and it never double-releases against the arc's own Empire — the #69 mission tasks
+# guard on mex_empire_installed / the global var (see qing_colonization_missions.txt).
+#
+# All verbs country-scope, ROOT = CHI (the player). Every path logged sys = QING;
+# guard-misses emit LOG_fail so a silent no-op surfaces (standing error-logging rule).
+#
+# Sources: Cunningham, Mexico and the Foreign Policy of Napoleon III; Schoonover,
+#   Dollars over Dominion (the French/US/Mexican triangle a Pacific power inserts
+#   itself into); Hamnett, Juárez (1994).
+########################################################################
+
+# ======================================================================
+# PROP THE THRONE — a Franco-Qing patronage of the Second Empire. Sets the
+# mex_foreign_patron flag the Mexico arc reads in MEX_empire_fall_check: with a
+# patron, the Empire is DEFENDED past 1867 rather than falling to the restored
+# Republic (mex_empire_defended, the alt-history branch). Reads the Empire off
+# global_var:mex_empire_country — the concrete on-map object the Mexico arc put
+# there — rather than conjuring one.
+#   ROOT / this = the Qing (CHI, player).
+# ======================================================================
+QING_mexico_prop_empire = {
+	LOG_enter = { sys = QING  fn = QING_mexico_prop_empire }
+	if = {
+		limit = { exists = global_var:mex_empire_country }
+		# The concrete throne this arc set in motion. Bind the two courts and set the
+		# patron flag the Mexico arc honours when it scores the Empire's survival.
+		global_var:mex_empire_country = {
+			set_variable = mex_foreign_patron
+			add_opinion = { modifier = qing_gp_accommodation_opinion  target = ROOT }
+			save_scope_as = mex_empire_scope
+		}
+		ROOT = { add_opinion = { modifier = qing_gp_accommodation_opinion  target = scope:mex_empire_scope } }
+		add_country_modifier = { name = qing_col_mexican_crown  duration = -1 }
+		# [#96-fix m5] the additive one-shots (wealth / prestige / GP-tension provokes) pay out
+		# ONCE across the three Qing 'prop the Second Empire' entry points (this event, and the
+		# qing_col_maximilian / qing_col_mexican_empire mission on_completions). Whichever fires
+		# first sets qing_mexico_propped on the Qing (ROOT = CHI in all three); the others skip
+		# the package. Name-unique crown modifiers don't stack, so they stay outside the guard.
+		if = {
+			limit = { NOT = { has_variable = qing_mexico_propped } }
+			set_variable = qing_mexico_propped
+			CURRENCY_grant_country_wealth = { thousands = 60 }
+			current_ruler = { add_prestige = 25 }
+			# Upholding a European throne in the Americas over Washington's Monroe Doctrine
+			# provokes Britain (the doctrine's tacit backer) and — if the Pacific entente
+			# was sealed — betrays it, affronting the American republic.
+			QING_gp_provoke_britain = { severity = 10 }
+			if = {
+				limit = { exists = c:USA  has_country_modifier = qing_daoguang_doctrine }
+				c:USA = { add_opinion = { modifier = qing_gp_rivalry_opinion  target = ROOT } }
+				LOG_line = { sys = QING  msg = "MEXICO: propping the Second Empire BETRAYED the Daoguang entente; USA affronted for [ROOT.GetTag]" }
+			}
+		}
+		# serves the Emperor Emeritus's own imperial house (his nephew's project): he is gratified
+		if = {
+			limit = { has_variable = qing_napoleon_char  var:qing_napoleon_char = { is_alive = yes } }
+			var:qing_napoleon_char = { add_loyalty = loyalty_qing_congenial }
+		}
+		LOG_line = { sys = QING  msg = "MEXICO: propped the Second Empire [global_var:mex_empire_country.GetTag] as foreign patron (mex_foreign_patron set) for [ROOT.GetTag]" }
+		LOG_exit = { sys = QING  fn = QING_mexico_prop_empire  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = QING_mexico_prop_empire  reason = "no Second Empire on the map (mex_empire_country unset); nothing to prop for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# BACK JUAREZ — throw in with the restored Republic against the throne. The Qing
+# declines the imperial adventure and instead courts the Juarista republic: the
+# opposite wager, betting the Empire falls (as history had it). No patron flag is
+# set, so the Mexico arc's MEX_empire_fall_check proceeds to topple the Empire on
+# schedule. A commercial windfall from the republican trade, and Republican amity.
+#   ROOT / this = the Qing (CHI, player).
+# ======================================================================
+QING_mexico_back_juarez = {
+	LOG_enter = { sys = QING  fn = QING_mexico_back_juarez }
+	CURRENCY_grant_country_wealth = { thousands = 50 }
+	current_ruler = { add_prestige = 15 }
+	# Standing with the Republic pleases the American colossus that backs it — and,
+	# if the Pacific entente holds, honours it rather than betraying it.
+	if = {
+		limit = { exists = c:USA }
+		c:USA = { add_opinion = { modifier = qing_gp_accommodation_opinion  target = ROOT } }
+		ROOT = { add_opinion = { modifier = qing_gp_accommodation_opinion  target = c:USA } }
+		LOG_line = { sys = QING  msg = "MEXICO: backed the Juarista Republic; the American republic is pleased for [ROOT.GetTag]" }
+	}
+	# France, whose throne this repudiates, is affronted.
+	if = {
+		limit = { exists = c:FRA }
+		c:FRA = { add_opinion = { modifier = qing_gp_rivalry_opinion  target = ROOT } }
+	}
+	LOG_line = { sys = QING  msg = "MEXICO: declined the throne, backed Juarez (no patron flag; the Empire falls on schedule) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = QING_mexico_back_juarez  result = OK }
+}

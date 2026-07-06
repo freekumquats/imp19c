@@ -70,8 +70,14 @@ QING_uscw_back_union = {
 
 # ======================================================================
 # BACK THE CONFEDERACY — recognise the South and run its cotton for silver.
-# Releases a Confederacy off the USA's Deep-South/Appalachian holdings (if the
-# Union holds that ground in this timeline) and affronts the Union.
+# COUPLING INVERSION (#93): the Confederacy is no longer conjured HERE. The US
+# sectional arc (se_USA_SECTION / USA_release_confederacy) OWNS the secession and
+# has already spun the Confederate States off the Union's own land and started
+# the war of reconquest before this event ever fires; it carried the released
+# country in the GLOBAL var usa_csa_country. This effect is now a pure CONSUMER:
+# it extends Qing recognition + credit to that already-existing Confederacy and
+# affronts the Union. (Previously this called QING_uscw_release_confederacy, now
+# DELETED — the release engine lived in the wrong arc.)
 #   ROOT / this = the Qing (CHI).
 # ======================================================================
 QING_uscw_back_confederacy = {
@@ -79,8 +85,16 @@ QING_uscw_back_confederacy = {
 	# the blockade-running cotton trade — a windfall in the world cotton famine
 	CURRENCY_grant_country_wealth = { thousands = 90 }
 	add_country_modifier = { name = qing_uscw_cotton_windfall  duration = -1 }
-	# spin the Confederacy off the Union's southern land, if the Union holds it here
-	QING_uscw_release_confederacy = yes
+	# recognise the Confederacy the US arc released, if it is on the map: the new
+	# Southern republic is grateful to its distant Qing patron.
+	if = {
+		limit = { exists = global_var:usa_csa_country }
+		global_var:usa_csa_country = { add_opinion = { modifier = qing_gp_accommodation_opinion  target = ROOT } }
+		LOG_line = { sys = QING  msg = "USCW: recognised the US-arc Confederacy [global_var:usa_csa_country.GetTag]; patron [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = QING_uscw_back_confederacy  reason = "no US-arc Confederacy on the map (usa_csa_country unset); recognition is nominal only for [ROOT.GetTag]" }
+	}
 	# recognising the rebels affronts Washington
 	if = {
 		limit = { exists = c:USA }
@@ -108,69 +122,12 @@ QING_uscw_neutral_profit = {
 }
 
 # ======================================================================
-# RELEASE THE CONFEDERACY — spin a breakaway Southern republic off the USA's
-# Deep-South (SC/GA/AL/MS/AR/LA/FL) and Appalachian (WV/KY/TN) holdings. Only
-# if the Union actually holds enough of that ground in this timeline; otherwise
-# the recognition is purely diplomatic (logged as a guarded miss). Idiom cloned
-# from SEPARATISM_spawn_breakaway / QING_establish_protectorate.
-#   ROOT = the Qing; the releaser is c:USA (it is USA's land that secedes).
+# [#93 COUPLING INVERSION] QING_uscw_release_confederacy was DELETED here.
+# The Confederacy-release engine was relocated to the US sectional arc, where it
+# belongs: USA_release_confederacy in se_USA_SECTION.txt now spins the Confederate
+# States off the Union's own land, grants the Union its reconquest claim, and
+# starts the war — all AI-autonomously, before the Qing ever hears of it. The
+# Qing arc consumes the result via global_var:usa_csa_country (see
+# QING_uscw_back_confederacy above). This removes the duplicate release logic and
+# makes the US arc the single source of truth for the secession.
 # ======================================================================
-QING_uscw_release_confederacy = {
-	LOG_enter = { sys = QING  fn = QING_uscw_release_confederacy }
-	if = {
-		limit = { exists = c:USA }
-		c:USA = {
-			every_owned_province = {
-				limit = {
-					is_capital = no
-					OR = {
-						is_in_region = Deep_South
-						is_in_region = Appalachia
-					}
-				}
-				add_to_list = uscw_csa_provinces
-			}
-		}
-		if = {
-			limit = { any_in_list = { list = uscw_csa_provinces  count >= 3 } }
-			LOG_line = { sys = QING  msg = "USCW: seceding the Confederacy from [c:USA.GetTag]" }
-			LAND_release_from_list = {
-				releaser = c:USA
-				list = uscw_csa_provinces
-				capital_location = flag:by_population
-				primary_culture = flag:as_capital
-				country_religion = flag:as_capital
-				as_subject_type = flag:independent
-				# pass a concrete (non-flag:dynamic) value so LAND_release_from_list skips its
-				# flag:dynamic -> viceroyalty branch, leaving create_country's default government
-				# (not a vassal viceroyalty) — the same convention SEPARATISM_spawn_breakaway uses.
-				# NB: this does NOT itself set oligarchic_republic (that arg is only read for
-				# flag:dynamic); it just avoids the viceroyalty default.
-				government_type = flag:oligarchic_republic
-				give_overlord_hos = no
-				country_name = qing_uscw_csa_name
-				country_adj = qing_uscw_csa_adj
-				country_flag = flag:dynamic
-				country_color = flag:dynamic
-			}
-			# the new Southern republic is grateful to its distant Qing patron
-			if = {
-				limit = { exists = scope:new_country_scope }
-				scope:new_country_scope = { add_opinion = { modifier = qing_gp_accommodation_opinion  target = ROOT } }
-				LOG_line = { sys = QING  msg = "USCW: Confederacy [scope:new_country_scope.GetTag] released, patron [ROOT.GetTag]" }
-			}
-			else = {
-				LOG_fail = { sys = QING  fn = QING_uscw_release_confederacy  reason = "release produced no new_country_scope for [ROOT.GetTag]" }
-			}
-		}
-		else = {
-			LOG_fail = { sys = QING  fn = QING_uscw_release_confederacy  reason = "USA holds too little of the Deep South/Appalachia to secede a Confederacy; recognition is diplomatic only for [ROOT.GetTag]" }
-		}
-	}
-	else = {
-		LOG_fail = { sys = QING  fn = QING_uscw_release_confederacy  reason = "USA absent; no Confederacy to release for [ROOT.GetTag]" }
-	}
-	# clean the working list so a later call starts empty
-	every_in_list = { list = uscw_csa_provinces  remove_from_list = uscw_csa_provinces }
-	LOG_exit = { sys = QING  fn = QING_uscw_release_confederacy  result = OK }
-}

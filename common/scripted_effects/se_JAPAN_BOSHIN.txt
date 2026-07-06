@@ -1,0 +1,208 @@
+########################################################################
+# se_JAPAN_BOSHIN.txt — "王政復古 / 戊辰": the Satcho Alliance, the Boshin War,
+# and the Meiji Restoration (task #94, the concrete climax layer). AI-AUTONOMOUS.
+#
+# This is the terminus of the bakumatsu arc that se_JAPAN_BAKUMATSU.txt drives.
+# It hangs THREE concrete on-map objects off the meters the pulse maintains:
+#   (1) the Satcho Alliance — a real diplomatic bond (add_alliance) between the
+#       two great tozama once both commit to the imperial cause;
+#   (2) the Boshin War — the imperial-side tozama are RELEASED from the Tokugawa
+#       (release_subject) and rise in a real civil war behind Saigo Takamori
+#       (start_civil_war), with Aizu + Sendai kept sabaku as the concrete northern
+#       bloc (Ouetsu Reppan Domei);
+#   (3) the Meiji state — on the Restoration the Tokugawa realm is reformed into
+#       the Empire of Japan (change_country_tag = JPN), lighting up the dormant
+#       exists = c:JPN fallbacks in the Qing post-Perry mission tree.
+#
+# AI-AUTONOMOUS: every step here is a scripted effect called from the TKG pulse
+# (JPN_baku_pulse), self-gated on tag only (NEVER is_ai), so an AI Japan reaches
+# the Restoration on its own. A hard date fallback (>= 1868.1.1) arms the climax
+# even if the meters lagged. The freshly formed Meiji Japan is carried to the
+# event/consumer layer via a GLOBAL variable (jpn_meiji_country), the oracle-
+# confirmed cross-event handle — a raw scope: would not survive an independent
+# trigger_event to another country.
+#
+# ENGINE FEASIBILITY (oracle-verified before build — memory imp19c-ai-autonomous-
+# arc-verbs): add_alliance between two AI tozama (Terra-Indomita/Invictus use it
+# widely); release_subject from an AI overlord (se_QING_VASSAL.txt:110);
+# start_civil_war = scope:<char> (se_QING_JAPAN_PREPERRY.txt:214); change_country_
+# tag inside hidden_effect with cosmetics (Terra-Indomita form_ainu.txt:51).
+#
+# All paths log sys = BOSHIN. Prefix = JPN_boshin_. ROOT / this = c:TKG throughout
+# (the pulse's scope), except where a helper explicitly rescopes into a domain.
+#
+# Sources: Jansen, The Making of Modern Japan (2000); Totman, The Collapse of the
+#   Tokugawa Bakufu (1980); Craig, Choshu in the Meiji Restoration (1961).
+########################################################################
+
+# ======================================================================
+# SATCHO ALLIANCE CHECK — the concrete diplo bond. When BOTH Choshu and Satsuma
+# have committed to the imperial cause (sonno_committed, set at their milestone),
+# broker the historical Satcho Alliance: a real alliance between CSU and SHZ, a
+# marker on each, and the prestige/legitimacy swing. Sakamoto Ryoma (Tosa) is the
+# broker — spawned here if the domain milestone did not already summon him. Fires
+# exactly once (jpn_satcho_done on TKG). Scope: c:TKG.
+# ======================================================================
+JPN_boshin_check_satcho = {
+	if = {
+		limit = {
+			NOT = { has_variable = jpn_satcho_done }
+			exists = c:CSU  c:CSU = { has_variable = sonno_committed }
+			exists = c:SHZ  c:SHZ = { has_variable = sonno_committed }
+		}
+		set_variable = jpn_satcho_done
+		LOG_enter = { sys = BOSHIN  fn = "JPN_boshin_check_satcho" }
+		# the concrete bond: Satsuma and Choshu, sworn enemies, ally against the bakufu.
+		c:SHZ = { add_alliance = c:CSU }
+		c:CSU = { set_variable = satcho_pact }
+		c:SHZ = { set_variable = satcho_pact }
+		# the imperial pole surges; Tokugawa authority takes the answering blow.
+		JPN_baku_nudge = { var = imperial_prestige  amount = 15 }
+		JPN_baku_nudge = { var = baku_legitimacy    amount = -10 }
+		LOG_line = { sys = BOSHIN  msg = "SATCHO ALLIANCE sworn: Satsuma + Choshu bound against the bakufu (imperial_prestige up, legitimacy down) for [ROOT.GetTag]" }
+		LOG_exit = { sys = BOSHIN  fn = "JPN_boshin_check_satcho"  result = OK }
+	}
+}
+
+# ======================================================================
+# CLIMAX CHECK — the autonomous Boshin trigger, evaluated every pulse. The
+# shogunate falls when its authority has broken AND the throne has already
+# reclaimed rule (taisei hokan), OR by the hard date fallback (>= 1868.1.1, the
+# Osei fukko coup) so an AI whose meters lagged still reaches the Restoration.
+# Fires exactly once (jpn_boshin_done guard). Scope: c:TKG.
+# ======================================================================
+JPN_boshin_check_climax = {
+	if = {
+		limit = {
+			NOT = { has_variable = jpn_boshin_done }
+			OR = {
+				AND = {
+					var:baku_legitimacy < 30
+					has_variable = jpn_taisei_hokan_done
+				}
+				current_date >= 1868.1.1
+			}
+		}
+		set_variable = jpn_boshin_done
+		LOG_line = { sys = BOSHIN  msg = "OSEI FUKKO: the shogunate falls for [ROOT.GetTag] (legit=[ROOT.MakeScope.GetVariable('baku_legitimacy').GetValue|0] prestige=[ROOT.MakeScope.GetVariable('imperial_prestige').GetValue|0])" }
+		JPN_boshin_execute = yes
+	}
+}
+
+# ======================================================================
+# RELEASE ONE IMPERIAL-SIDE TOZAMA — helper. If the given domain is a committed
+# sonno han still under the Tokugawa, throw off the yoke (release_subject). Runs
+# in ROOT = c:TKG; $tag$ = the domain. Guarded so a domain already free / annexed
+# is skipped (logged). The Boshin analog of QING_jppre_restoration_break's step 1.
+# ======================================================================
+JPN_boshin_release_domain = {
+	if = {
+		limit = {
+			exists = c:$tag$
+			c:$tag$ = { is_subject_of = ROOT }
+			c:$tag$ = { var:domain_sonno >= 45 }
+		}
+		release_subject = c:$tag$
+		LOG_line = { sys = BOSHIN  msg = "Boshin: $tag$ ([c:$tag$.GetName]) thrown off the Tokugawa and gone to the imperial side for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = BOSHIN  fn = "JPN_boshin_release_domain"  reason = "$tag$ not a committed TKG subject (already free / annexed / loyal) - not released for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# EXECUTE THE BOSHIN WAR + THE RESTORATION — the concrete climax. (1) the great
+# sonno tozama are released from the Tokugawa; (2) the leading domain (Satsuma,
+# fallback Choshu) raises the restoration civil war behind Saigo Takamori (fall
+# back to its ruler if Saigo has died, as #81 already does); (3) Aizu + Sendai
+# are LEFT sabaku so the war has a concrete northern bloc (Ouetsu Reppan Domei);
+# (4) the imperial prestige is floored high, the shogunate's authority to nil;
+# (5) the Tokugawa realm is reformed into Meiji Japan (JPN) and carried to the
+# event layer via a global var. Idiom cloned from QING_jppre_restoration_break
+# (release -> start_civil_war), extended with the domain realignment + JPN
+# formation the #81 sketch never reached. Scope: ROOT = c:TKG.
+# ======================================================================
+JPN_boshin_execute = {
+	LOG_enter = { sys = BOSHIN  fn = "JPN_boshin_execute" }
+	# (1) release the imperial-side tozama (each self-guards on commitment).
+	JPN_boshin_release_domain = { tag = SHZ }
+	JPN_boshin_release_domain = { tag = CSU }
+	JPN_boshin_release_domain = { tag = YCH }
+	JPN_boshin_release_domain = { tag = SGA }
+	# (2) the restoration rising: the leading imperial domain raises the civil war
+	# behind its great commander. Prefer Satsuma (Saigo led Toba-Fushimi and the
+	# march on Edo); fall back to Choshu.
+	if = {
+		limit = { exists = c:SHZ }
+		c:SHZ = { JPN_boshin_raise_rising = yes }
+	}
+	else_if = {
+		limit = { exists = c:CSU }
+		c:CSU = { JPN_boshin_raise_rising = yes }
+	}
+	else = {
+		LOG_fail = { sys = BOSHIN  fn = "JPN_boshin_execute"  reason = "no Satsuma or Choshu to raise the restoration rising for [ROOT.GetTag]" }
+	}
+	# (3) the northern bloc holds sabaku: Aizu + Sendai are deliberately NOT
+	# realigned, so the Ouetsu Reppan Domei is a concrete holdout (no new mechanic).
+	# (4) the meters settle into the Restoration.
+	set_variable = { name = baku_legitimacy    value = 5 }
+	set_variable = { name = imperial_prestige  value = 90 }
+	# [#94-fix M3] clear the shogunate authority band here, BEFORE the TKG->JPN retag.
+	# The TKG pulse (JPN_baku_apply_bands) gates on tag = TKG, so after the retag it can
+	# never re-run to reconcile the band; without this the last band (broken on the meter
+	# path, firm on the date-fallback path) is stranded on Meiji Japan forever. Remove all
+	# three (remove-all idiom; only one is ever active) so no bakufu-grip modifier survives.
+	remove_country_modifier = baku_grip_firm
+	remove_country_modifier = baku_grip_shaken
+	remove_country_modifier = baku_grip_broken
+	# (5) reform the realm into Meiji Japan.
+	JPN_boshin_form_meiji = yes
+	LOG_exit = { sys = BOSHIN  fn = "JPN_boshin_execute"  result = OK }
+}
+
+# ======================================================================
+# RAISE THE RESTORATION RISING — helper, runs INSIDE the leading domain's scope.
+# The domain's great commander (the spawned shishi, e.g. Saigo) raises the
+# imperial banner in a civil war; falls back to the domain's ruler if he has
+# died. Mirrors QING_jppre_restoration_break's civil-war step exactly.
+# Scope: the leading imperial domain (this = c:SHZ or c:CSU).
+# ======================================================================
+JPN_boshin_raise_rising = {
+	# Retrieve the domain's spawned shishi (stored in domain_commander at spawn).
+	# Fall back to the domain's ruler if he was never spawned or has since died —
+	# the #81 qing_jppre_restoration_break idiom exactly.
+	if = {
+		limit = {
+			has_variable = domain_commander
+			var:domain_commander = { is_alive = yes }
+		}
+		var:domain_commander = { save_scope_as = jpn_boshin_commander }
+	}
+	else = {
+		current_ruler = { save_scope_as = jpn_boshin_commander }
+	}
+	start_civil_war = scope:jpn_boshin_commander
+	LOG_line = { sys = BOSHIN  msg = "BOSHIN WAR: [This.GetTag] raises the restoration rising behind [scope:jpn_boshin_commander.GetName]" }
+}
+
+# ======================================================================
+# FORM MEIJI JAPAN — reform the Tokugawa realm into the Empire of Japan. The
+# cosmetics (tag/adjective/color) go in a hidden_effect, the Terra-Indomita
+# formable idiom (form_ainu.txt:51). Sets meiji_restoration_done and carries the
+# formed country to the consumer layer via a GLOBAL var (jpn_meiji_country) so a
+# human Qing's post-Perry tree can find it. Scope: ROOT = c:TKG (becomes JPN).
+# ======================================================================
+JPN_boshin_form_meiji = {
+	set_variable = meiji_restoration_done
+	hidden_effect = {
+		change_country_adjective = "JPN_ADJ"
+		change_country_name = "JPN_NAME"
+		change_country_tag = JPN
+	}
+	save_scope_as = jpn_meiji_scope
+	set_global_variable = { name = jpn_meiji_country  value = ROOT }
+	# announce it (and, inside .7, bridge to a human Qing's post-Perry tree).
+	trigger_event = { id = japan_bakumatsu.7  days = { 2 6 } }
+	LOG_line = { sys = BOSHIN  msg = "MEIJI RESTORATION: the realm reformed into the Empire of Japan ([ROOT.GetTag])" }
+}

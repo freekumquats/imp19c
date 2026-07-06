@@ -1,0 +1,531 @@
+########################################################################
+# se_MEXICO.txt — "LA REPUBLICA INESTABLE": Mexico's road from independence
+# through La Reforma to the Second Empire (1815-1867), task #96. AI-OWNED and
+# AI-AUTONOMOUS.
+#
+# DESIGN (see DESIGN_MEXICO.md): the player is almost always the Qing, so THIS
+# arc must advance and resolve with Mexico under AI control — the identical policy
+# applied to #93 (USA) and #94 (Japan). It OWNS the political-instability state on
+# c:MEX, the Conservative<->Liberal polarization, the foreign-debt meter that
+# TRIGGERS the European intervention, and the concrete climax: the French
+# Intervention and the released/installed Second Mexican Empire under Maximilian.
+# The Qing #69 "Mexican Adventure" colonization tree is refactored into a
+# CONSUMER/participant that reacts to (or props) an Empire this arc set in motion.
+#
+# All decisive state changes are pulse-driven (MEX_instability_pulse) or in event
+# immediate blocks, never gated on a human choosing — the arc runs for AI Mexico.
+#
+# CONCRETE-OVER-ABSTRACT (standing rule): the five 0..100 counters below are the
+# AI/summary layer; every threshold hangs a real on-map object — a spawned named
+# caudillo/reformer/general (se_MEXICO_ROSTER), a province in open unrest (the
+# Caste War), a real MEX->USA territorial cession, and at the climax a Second
+# Mexican Empire (a real government change / release, fought over in a real war).
+#
+# ENGINE FEASIBILITY verified in-repo / against the consult oracles before build
+# (memory imp19c-ai-autonomous-arc-verbs):
+#   - monthly_country_pulse runs its effect for AI countries (self-gate on tag,
+#     NEVER is_ai) — proven by the shipped CHI blocks and the #93/#94 pulses.
+#   - change_government (se_QING_REFORM.txt / se_QING_PROTECTORATE.txt), set_as_ruler
+#     (release_subject_button.txt:93), change_country_name/_adjective (Japan #94),
+#     set_owned_by (se_FUNC.txt), LAND_release_from_list + reconquest_wargoal +
+#     FUNC_declare_war_with_wargoal_province (SEPARATISM / #93), and cross-event
+#     handoff via set_global_variable (usa_csa_country idiom) are all AI-proven.
+#
+# All paths log sys = MEX (LOG_enter/exit/line, LOG_fail on guard-miss), per the
+# standing error-logging rule. Prefix = MEX_. ROOT / this = c:MEX throughout.
+#
+# Sources: Meyer/Sherman/Deeds, The Course of Mexican History; Hamnett, A Concise
+#   History of Mexico; Krauze, Mexico: Biography of Power (1997); Fowler, Santa
+#   Anna of Mexico (2007); Ridley, Maximilian and Juarez (1992).
+########################################################################
+
+# ======================================================================
+# INIT — seed the instability counters on c:MEX. Idempotent; called from the
+# startup hook (mex_instability_on_actions.txt) and self-heals on first pulse.
+#   mex_instability     : master road-to-collapse meter (coup pressure, 0..100, start 30)
+#   mex_conservative    : Conservative/Centralist/Church-party strength (start 45)
+#   mex_liberal         : Liberal/Federalist/anticlerical strength (start 40)
+#   mex_church_privilege: wealth & political power of the Church (start 70)
+#   mex_foreign_debt    : accumulated foreign debt -> default -> intervention (start 40)
+#   mex_territory_lost  : legible amputation tally (Texas, Cession, Gadsden)
+#   mex_pronunciado_count: flooding cap (4) on spawned coup generals
+# ======================================================================
+MEX_instability_init = {
+	LOG_enter = { sys = MEX  fn = "MEX_instability_init" }
+	if = { limit = { NOT = { has_variable = mex_instability } }      set_variable = { name = mex_instability       value = 30 } }
+	if = { limit = { NOT = { has_variable = mex_conservative } }     set_variable = { name = mex_conservative      value = 45 } }
+	if = { limit = { NOT = { has_variable = mex_liberal } }          set_variable = { name = mex_liberal           value = 40 } }
+	if = { limit = { NOT = { has_variable = mex_church_privilege } } set_variable = { name = mex_church_privilege  value = 70 } }
+	if = { limit = { NOT = { has_variable = mex_foreign_debt } }     set_variable = { name = mex_foreign_debt      value = 40 } }
+	if = { limit = { NOT = { has_variable = mex_territory_lost } }   set_variable = { name = mex_territory_lost    value = 0 } }
+	if = { limit = { NOT = { has_variable = mex_pronunciado_count } } set_variable = { name = mex_pronunciado_count value = 0 } }
+	LOG_exit = { sys = MEX  fn = "MEX_instability_init"  result = OK }
+}
+
+# ---- Generic clamped-counter helper (the USA_nudge / QING_DECLINE_nudge twin) --
+# Nudge one 0..100 counter by $amount$ (may be negative) and clamp. Scope: c:MEX.
+# $var$, $amount$.
+MEX_nudge = {
+	if = {
+		limit = { NOT = { has_variable = $var$ } }
+		set_variable = { name = $var$  value = 0 }
+	}
+	change_variable = { name = $var$  add = $amount$ }
+	if = { limit = { var:$var$ > 100 }  set_variable = { name = $var$  value = 100 } }
+	if = { limit = { var:$var$ < 0 }    set_variable = { name = $var$  value = 0 } }
+	# [#97-fix task #97] log the CURRENT scope (This), not ROOT: the #96 Qing hook calls
+	# this cross-scope as `c:MEX = { MEX_nudge ... }` with ROOT = CHI, so a ROOT-based
+	# read reported CHI's (nonexistent) var + tag while the nudge landed on MEX. This
+	# resolves to the actual nudged country in both the in-MEX and cross-scope cases.
+	LOG_line = { sys = MEX  msg = "counter $var$ += $amount$ -> [This.MakeScope.GetVariable('$var$').GetValue|0] for [This.GetTag]" }
+}
+
+# ======================================================================
+# BAND APPLICATION — read mex_instability and (re)apply exactly one economic band
+# (estable / inquieta / anarquia). Remove-all-then-add-one, the QING_DECLINE
+# idiom. Cheap O(1). Scope: c:MEX.
+# ======================================================================
+MEX_apply_bands = {
+	remove_country_modifier = mex_estable
+	remove_country_modifier = mex_inquieta
+	remove_country_modifier = mex_anarquia
+	if = {
+		limit = { var:mex_instability >= 70 }
+		add_country_modifier = { name = mex_anarquia  duration = -1 }
+		LOG_line = { sys = MEX  msg = "band instability = anarquia for [ROOT.GetTag] (instability=[ROOT.MakeScope.GetVariable('mex_instability').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:mex_instability >= 40 }
+		add_country_modifier = { name = mex_inquieta  duration = -1 }
+		LOG_line = { sys = MEX  msg = "band instability = inquieta for [ROOT.GetTag] (instability=[ROOT.MakeScope.GetVariable('mex_instability').GetValue|0])" }
+	}
+	else = {
+		add_country_modifier = { name = mex_estable  duration = -1 }
+		LOG_line = { sys = MEX  msg = "band instability = estable for [ROOT.GetTag] (instability=[ROOT.MakeScope.GetVariable('mex_instability').GetValue|0])" }
+	}
+}
+
+# ======================================================================
+# CHURCH BAND — read mex_church_privilege and (re)apply exactly one Church
+# modifier. High privilege = a rich, politically dominant Church (fiscal drag on
+# a Liberal state, a Conservative bulwark); low = disentailed (the Reforma has
+# broken its economic power). Scope: c:MEX.
+# ======================================================================
+MEX_apply_church_band = {
+	remove_country_modifier = mex_church_dominant
+	remove_country_modifier = mex_church_disentailed
+	if = {
+		limit = { var:mex_church_privilege >= 50 }
+		add_country_modifier = { name = mex_church_dominant  duration = -1 }
+	}
+	else = {
+		add_country_modifier = { name = mex_church_disentailed  duration = -1 }
+	}
+}
+
+# ======================================================================
+# SPAWN A PRONUNCIADO GENERAL — the concrete object on the high-instability band.
+# A real ambitious general enters the Mexican court to embody the coup /
+# pronunciamiento cycle (Fowler's mechanic: the pronunciamiento was the NORMAL
+# mode of political change, not the exception). Flooding-capped at 4
+# (mex_pronunciado_count) so the court is not swamped — the USA_spawn_firebrand
+# idiom. create_character sets culture / religion / age explicitly. Scope: c:MEX.
+# ======================================================================
+MEX_spawn_pronunciado = {
+	MEX_instability_init = yes
+	if = {
+		limit = { var:mex_pronunciado_count < 4 }
+		create_character = {
+			age = 44
+			culture = mexican
+			religion = catholic
+			# an ambitious praetorian caudillo: a soldier with a taste for power.
+			add_martial = 8
+			add_charisma = 7
+			add_finesse = 4
+			add_zeal = 4
+			add_trait = ambitious
+			add_trait = aggressive
+			add_trait = proud
+			save_scope_as = mex_pronunciado
+		}
+		change_variable = { name = mex_pronunciado_count  add = 1 }
+		LOG_line = { sys = MEX  msg = "pronunciado general [scope:mex_pronunciado.GetName] rises in the court of [ROOT.GetTag] (coup pressure)" }
+	}
+	else = {
+		LOG_fail = { sys = MEX  fn = "MEX_spawn_pronunciado"  reason = "pronunciado flooding cap (4) reached; caudillo not spawned for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# FLIP A YUCATAN PROVINCE INTO OPEN UNREST — the Caste War of Yucatan (1847-1901)
+# as a real map object. Pick a non-capital MEX province in Eastern_Mexico (which
+# holds Yucatan / Quintana_Roo) and stamp the mex_caste_war province modifier
+# (guarded so it is not re-stamped). The USA_flip_border_state idiom. Scope: c:MEX.
+# ======================================================================
+MEX_flip_caste_war = {
+	if = {
+		limit = {
+			any_owned_province = {
+				is_capital = no
+				NOT = { has_province_modifier = mex_caste_war }
+				is_in_region = Eastern_Mexico
+			}
+		}
+		random_owned_province = {
+			limit = {
+				is_capital = no
+				NOT = { has_province_modifier = mex_caste_war }
+				is_in_region = Eastern_Mexico
+			}
+			add_province_modifier = { name = mex_caste_war  duration = 3650 }
+			save_scope_as = mex_caste_province
+		}
+		LOG_line = { sys = MEX  msg = "the Caste War of Yucatan flares: [scope:mex_caste_province.GetName] rises in Maya revolt for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = MEX  fn = "MEX_flip_caste_war"  reason = "no eligible Eastern_Mexico (Yucatan) province to inflame for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# MILESTONE CHECK — read the counters and hang concrete objects off the bands.
+# Once-per-band guards (marker vars) so a milestone fires exactly once. Called
+# from the pulse. Scope: c:MEX.
+# ======================================================================
+MEX_check_milestone = {
+	# high Conservative strength -> the party's champion takes the stage (once).
+	# Alaman is the ideologue; if a dated beat already summoned him his once-only
+	# guard no-ops and Miramon (the Conservative general) fills the band instead,
+	# so the milestone is never silent.
+	if = {
+		limit = {
+			var:mex_conservative >= 55
+			NOT = { has_variable = mex_milestone_conservative }
+		}
+		set_variable = mex_milestone_conservative
+		if = {
+			limit = { NOT = { has_variable = mex_spawned_alaman } }
+			MEX_spawn_alaman = yes
+		}
+		else = { MEX_spawn_miramon = yes }
+	}
+	# high Liberal strength -> the Reforma finds its voice (once). Juarez leads; if
+	# already summoned, Ocampo the ideologue fills the band.
+	if = {
+		limit = {
+			var:mex_liberal >= 55
+			NOT = { has_variable = mex_milestone_liberal }
+		}
+		set_variable = mex_milestone_liberal
+		if = {
+			limit = { NOT = { has_variable = mex_spawned_juarez } }
+			MEX_spawn_juarez = yes
+		}
+		else = { MEX_spawn_ocampo = yes }
+	}
+	# high instability -> a pronunciado general rises (once)
+	if = {
+		limit = {
+			var:mex_instability >= 60
+			NOT = { has_variable = mex_milestone_pronunciado }
+		}
+		set_variable = mex_milestone_pronunciado
+		MEX_spawn_pronunciado = yes
+	}
+	# the Reforma bites -> the Caste War of Yucatan flares (once). Fires when the
+	# Church has been disentailed far enough that the Ley Lerdo has also stripped
+	# indigenous communal lands (the historical irony: Liberal reform provoked the
+	# Maya revolt).
+	if = {
+		limit = {
+			var:mex_church_privilege < 45
+			NOT = { has_variable = mex_milestone_caste_war }
+		}
+		set_variable = mex_milestone_caste_war
+		MEX_flip_caste_war = yes
+	}
+}
+
+# ======================================================================
+# CESSION OF THE NORTH — the concrete MEX->USA territorial transfer (the Mexican
+# Cession, 1848). MEX's 1815 own_control_core reaches only its northern frontier
+# (Sonora p:7416 is its northernmost holding; California / the Southwest are held
+# by native tags at start, not MEX), so the "loss of half the country" is modelled
+# as ceding MEX's northern frontier province(s) to the USA if the USA exists, plus
+# the national trauma spike. Fires the usa_section.4 receipt on the US side (the
+# #93 arc documents this dependency: "the Cession territory arrives from the
+# Mexico arc (#96)"). Guarded once (mex_beat_cession). Scope: c:MEX.
+# ======================================================================
+MEX_cede_the_north = {
+	LOG_enter = { sys = MEX  fn = "MEX_cede_the_north" }
+	# the trauma is inflicted regardless of whether a province physically changes
+	# hands: the war is lost, the north is gone, the Republic is humiliated.
+	MEX_nudge = { var = mex_instability  amount = 15 }
+	change_variable = { name = mex_territory_lost  add = 1 }
+	# the concrete transfer: MEX's northern frontier passes to the USA. Sonora
+	# (p:7416) is MEX's northernmost start holding; cede it (and any other owned
+	# Northern_Mexico province) to a USA that exists to receive it.
+	if = {
+		limit = { exists = c:USA }
+		every_owned_province = {
+			limit = {
+				is_capital = no
+				OR = {
+					is_in_region = Northern_Mexico
+					province_id = 7416
+				}
+			}
+			add_to_list = mex_cession_list
+		}
+		if = {
+			limit = { any_in_list = { list = mex_cession_list  count >= 1 } }
+			every_in_list = {
+				list = mex_cession_list
+				set_owned_by = c:USA
+			}
+			every_in_list = {
+				list = mex_cession_list
+				remove_from_list = mex_cession_list
+			}
+			LOG_line = { sys = MEX  msg = "THE CESSION: Mexico's northern frontier ceded to [c:USA.GetTag] for [ROOT.GetTag]" }
+		}
+		else = {
+			LOG_fail = { sys = MEX  fn = "MEX_cede_the_north"  reason = "MEX holds no cedable northern province; cession is nominal (trauma only) for [ROOT.GetTag]" }
+		}
+		# tell the US arc to book the Cession as sectional fuel (the #93 receipt).
+		c:USA = { trigger_event = { id = usa_section.4  days = { 3 12 } } }
+		LOG_line = { sys = MEX  msg = "notified [c:USA.GetTag] to receive the Cession (usa_section.4) for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = MEX  fn = "MEX_cede_the_north"  reason = "no USA on the map to receive the Cession; trauma inflicted, no transfer for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = MEX  fn = "MEX_cede_the_north"  result = OK }
+}
+
+# ======================================================================
+# DEFAULT CHECK — the autonomous intervention trigger, evaluated every pulse.
+# Mexico suspends foreign-debt payments when the debt meter peaks OR by the hard
+# date fallback (>= 1861.7.1, Juarez's real suspension), so an AI Mexico whose
+# meter lagged still reaches the intervention. Fires exactly once (mex_defaulted).
+# Scope: c:MEX.
+# ======================================================================
+MEX_default_check = {
+	if = {
+		limit = {
+			NOT = { has_variable = mex_defaulted }
+			OR = {
+				var:mex_foreign_debt >= 80
+				current_date >= 1861.7.1
+			}
+		}
+		set_variable = mex_defaulted
+		add_country_modifier = { name = mex_debt_suspension  duration = -1 }
+		LOG_line = { sys = MEX  msg = "DEBT SUSPENSION: Mexico defaults; the London Convention powers mass at Veracruz for [ROOT.GetTag] (debt=[ROOT.MakeScope.GetVariable('mex_foreign_debt').GetValue|0])" }
+		# the intervention beat: the European fleet arrives, then Britain/Spain
+		# withdraw and France escalates.
+		trigger_event = { id = mex_instability.11  days = { 2 8 } }
+	}
+}
+
+# ======================================================================
+# INTERVENTION CHECK — post-default, the French escalate toward the throne. This
+# is the US-COUPLING gate: the Monroe Doctrine cannot be enforced against a
+# European monarchy while the United States is consumed by its own Civil War, so
+# the intervention proceeds to a MONARCHY only while the Union is paralysed
+# (usa_seceded set and no Union victory yet) OR by the historical date. Fires
+# once (mex_intervention_escalated). Scope: c:MEX.
+# ======================================================================
+MEX_intervention_check = {
+	if = {
+		limit = {
+			has_variable = mex_defaulted
+			NOT = { has_variable = mex_intervention_escalated }
+			OR = {
+				# the historical window: France escalates 1862-64.
+				current_date >= 1862.5.1
+				# structural: a defaulted Mexico with the US distracted invites it.
+				AND = {
+					exists = c:USA
+					c:USA = { has_variable = usa_seceded }
+				}
+			}
+		}
+		set_variable = mex_intervention_escalated
+		LOG_line = { sys = MEX  msg = "FRENCH ESCALATION: Britain and Spain withdraw; France drives for a Mexican throne for [ROOT.GetTag]" }
+		# fire the climax beat (Puebla -> Maximilian) which also notifies the Qing
+		# #69 arc (the coupling inversion).
+		trigger_event = { id = mex_instability.12  days = { 5 15 } }
+	}
+}
+
+# ======================================================================
+# EMPIRE CHECK — install the Second Mexican Empire. Once the French intervention
+# has escalated (and enough time has passed for the march on the capital), the
+# Habsburg throne is planted. Guarded once (mex_empire_installed). Scope: c:MEX.
+# ======================================================================
+MEX_empire_check = {
+	if = {
+		limit = {
+			has_variable = mex_intervention_escalated
+			NOT = { has_variable = mex_empire_installed }
+			OR = {
+				current_date >= 1864.4.1
+				# structural fast-path: a collapsed Republic (very high instability
+				# and a still-distracted US) lets the Empire come early.
+				AND = {
+					var:mex_instability >= 85
+					exists = c:USA
+					c:USA = { has_variable = usa_seceded }
+				}
+			}
+		}
+		MEX_install_empire = yes
+	}
+}
+
+# ======================================================================
+# INSTALL THE SECOND MEXICAN EMPIRE — the concrete climax (the USA_release_
+# confederacy twin, relocating the #69 throne logic into Mexico ownership). Path A
+# (default): a GOVERNMENT CHANGE IN PLACE — c:MEX becomes an imperial_monarchy
+# under Maximilian, renamed the Second Mexican Empire. This is the historical
+# reality (Maximilian ruled the SAME state), keeps one Mexican country on the map,
+# and avoids double-releasing against the Qing #69 client-empire. The imperial
+# Mexico is carried to the event / #69-consumer layer via a GLOBAL variable
+# (mex_empire_country), the oracle-confirmed cross-event handle. Fires once.
+# Scope: ROOT = c:MEX.
+# ======================================================================
+MEX_install_empire = {
+	LOG_enter = { sys = MEX  fn = "MEX_install_empire" }
+	set_variable = mex_empire_installed
+	# spawn the Emperor (once-guarded inside the roster effect) and set him to rule.
+	MEX_spawn_maximilian = yes
+	if = {
+		limit = { exists = scope:mex_figure }
+		scope:mex_figure = { save_scope_as = mex_emperor }
+		set_as_ruler = scope:mex_emperor
+		LOG_line = { sys = MEX  msg = "Maximilian ([scope:mex_emperor.GetName]) enthroned as Emperor of Mexico for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = MEX  fn = "MEX_install_empire"  reason = "Maximilian spawn produced no character; the throne sits empty for [ROOT.GetTag]" }
+	}
+	# the regime flips to a monarchy; the realm is renamed the Second Empire.
+	change_government = imperial_monarchy
+	hidden_effect = {
+		change_country_name = "MEX_EMPIRE_NAME"
+		change_country_adjective = "MEX_EMPIRE_ADJ"
+	}
+	add_country_modifier = { name = mex_second_empire  duration = -1 }
+	# the meters settle into the imperial order: instability capped down (a foreign
+	# army holds the capital), Conservative pole dominant.
+	set_variable = { name = mex_conservative  value = 70 }
+	MEX_nudge = { var = mex_instability  amount = -20 }
+	# CROSS-EVENT / CROSS-COUNTRY HANDLE: the imperial Mexico, for the event layer
+	# and the Qing #69 consumer. A raw scope: would not survive an independent
+	# trigger_event to another country (oracle finding).
+	set_global_variable = { name = mex_empire_country  value = ROOT }
+	LOG_line = { sys = MEX  msg = "SECOND MEXICAN EMPIRE proclaimed; a Habsburg throne stands in the Americas for [ROOT.GetTag]" }
+	LOG_exit = { sys = MEX  fn = "MEX_install_empire"  result = OK }
+}
+
+# ======================================================================
+# EMPIRE FALL CHECK — the Empire's contingent survival, evaluated every pulse
+# once installed. History: the US Civil War ends (1865), Washington re-arms the
+# Monroe Doctrine, France withdraws, and the Empire falls (Queretaro, 1867). So
+# the Empire is TOPPLED when the Union has won its war OR by the date fallback
+# (>= 1867.6.1) — UNLESS a foreign patron props it up (mex_foreign_patron, the
+# hook the Qing #69 arc sets). That patron flag is the ALT-HISTORY divergence the
+# #69 "Mexican Adventure" exists to create: a Pacific Qing keeping the throne
+# alive past the point history let it fall. Fires once (mex_empire_fell).
+# Scope: c:MEX.
+# ======================================================================
+MEX_empire_fall_check = {
+	if = {
+		limit = {
+			has_variable = mex_empire_installed
+			NOT = { has_variable = mex_empire_fell }
+			NOT = { has_variable = mex_empire_defended }
+			# a foreign patron keeps the throne standing (the #69 alt-history hook).
+			NOT = { has_variable = mex_foreign_patron }
+			OR = {
+				current_date >= 1867.6.1
+				# the Union has reunited and turned to enforce the Monroe Doctrine:
+				# the CSA has been reconquered (usa_csa_country gone) after secession.
+				AND = {
+					exists = c:USA
+					c:USA = { has_variable = usa_seceded }
+					NOT = { exists = global_var:usa_csa_country }
+				}
+			}
+		}
+		set_variable = mex_empire_fell
+		LOG_line = { sys = MEX  msg = "THE EMPIRE FALLS: US pressure forces the French out; the Habsburg throne collapses, the Republic is restored for [ROOT.GetTag]" }
+		trigger_event = { id = mex_instability.13  days = { 2 8 } }
+	}
+	# note: if mex_foreign_patron is set (Qing #69 propping the throne), the Empire
+	# SURVIVES — logged loudly so the divergence is diagnosable, once.
+	else_if = {
+		limit = {
+			has_variable = mex_empire_installed
+			has_variable = mex_foreign_patron
+			NOT = { has_variable = mex_empire_defended }
+			current_date >= 1867.6.1
+		}
+		set_variable = mex_empire_defended
+		LOG_line = { sys = MEX  msg = "ALT-HISTORY: a foreign patron holds the Second Empire past 1867; the Habsburg throne endures for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# THE PULSE — the autonomous driver. Runs monthly for c:MEX (self-gated on tag,
+# NEVER is_ai, so it runs for an AI Mexico), throttled to ~quarterly via a cooldown
+# so drift is measured and cheap. Each run: (1) era-keyed pressure so the AI
+# reliably reaches its climaxes even if beats edge-cased out, (2) re-apply the
+# bands, (3) hang concrete objects off the milestones, (4) run the climax-chain
+# checks (default -> intervention -> empire -> empire-fall). The dated beats
+# (mex_instability.1-.12) supply the large, event-flavoured nudges; the pulse
+# converts them to concrete outcomes. Scope: c:MEX.
+# ======================================================================
+MEX_instability_pulse = {
+	MEX_instability_init = yes
+	# (1) era pressure:
+	# the caudillo era (post-1830): instability and debt trend up.
+	if = {
+		limit = {
+			current_date >= 1830.1.1
+			var:mex_instability < 70
+		}
+		MEX_nudge = { var = mex_instability  amount = 1 }
+	}
+	if = {
+		limit = {
+			current_date >= 1830.1.1
+			var:mex_foreign_debt < 75
+		}
+		MEX_nudge = { var = mex_foreign_debt  amount = 1 }
+	}
+	# La Reforma (post-1855): the two poles polarize, the Church is disentailed.
+	if = {
+		limit = { current_date >= 1855.1.1 }
+		if = { limit = { var:mex_liberal < 70 }      MEX_nudge = { var = mex_liberal       amount = 1 } }
+		if = { limit = { var:mex_conservative < 65 } MEX_nudge = { var = mex_conservative  amount = 1 } }
+		if = { limit = { var:mex_church_privilege > 30 } MEX_nudge = { var = mex_church_privilege  amount = -1 } }
+	}
+	# the debt crisis (post-1858): the meter climbs steeply toward default.
+	if = {
+		limit = {
+			current_date >= 1858.1.1
+			var:mex_foreign_debt < 90
+		}
+		MEX_nudge = { var = mex_foreign_debt  amount = 2 }
+	}
+	# (2) bands, (3) milestones
+	MEX_apply_bands = yes
+	MEX_apply_church_band = yes
+	MEX_check_milestone = yes
+	# (4) the climax chain (each self-guards once)
+	MEX_default_check = yes
+	MEX_intervention_check = yes
+	MEX_empire_check = yes
+	MEX_empire_fall_check = yes
+}

@@ -1,0 +1,289 @@
+########################################################################
+# se_JAPAN_BAKUMATSU.txt — "THE COLLAPSE OF THE TOKUGAWA": Japan's road from
+# Perry to the Meiji Restoration (1815-1868), task #94. AI-OWNED and AI-AUTONOMOUS.
+#
+# DESIGN (see DESIGN_JAPAN_BOSHIN.md + memory imp19c-usa-japan-mexico-arc-design):
+# The player is almost always the Qing, so THIS arc must advance and resolve with
+# Japan under AI control. It therefore OWNS the bakumatsu state ON THE JAPANESE
+# TAGS — Tokugawa central authority + Kyoto's rising prestige on TKG, and the
+# sabaku<->sonno alignment of each great domain on its own daimyo tag. This is the
+# fix for the #81 gap: the shipped Qing pre-Perry arc simulated Japan's fate on
+# CHI variables and only when a human played the Qing, so an AI Japan had NO
+# domestic state at all. Here Japan is the source of truth; the Qing #81 arc is
+# refactored (§6 of the design) into an optional OVERLAY input that only biases
+# these meters (JPN_baku_ingest_preperry), never drives them.
+#
+# CONCRETE-OVER-ABSTRACT (standing rule): the counters below are the AI/summary
+# layer; every threshold hangs a real on-map object — a spawned domain firebrand
+# (Yoshida Shoin in Choshu, Saigo in Satsuma), a concrete Satcho alliance bond,
+# and at the climax the released imperial-side tozama fighting a real Boshin War
+# (see se_JAPAN_BOSHIN.txt).
+#
+# ENGINE FEASIBILITY verified against the consult oracles (Terra-Indomita /
+# Invictus) before build — see memory imp19c-ai-autonomous-arc-verbs:
+#   - yearly_country_pulse.effect runs for EVERY country (self-gate on tag, NEVER
+#     is_ai) — proven by 00_yearly_country.txt's own per-tag blocks; release_subject
+#     + start_civil_war are AI-prosecuted (release_subject at se_QING_VASSAL.txt:110,
+#     start_civil_war at se_QING_JAPAN_PREPERRY.txt:214); a freshly formed side is
+#     carried cross-event via a GLOBAL variable, not a raw saved scope.
+#
+# All paths log sys = BAKU (LOG_enter/exit/line, LOG_fail on guard-miss), per the
+# standing error-logging rule. Prefix = JPN_baku_. ROOT / this = c:TKG unless a
+# domain helper explicitly rescopes (documented at each).
+#
+# Sources: Jansen, The Making of Modern Japan (2000); Totman, The Collapse of the
+#   Tokugawa Bakufu (1980); Beasley, The Meiji Restoration (1972); Craig, Choshu
+#   in the Meiji Restoration (1961); Wilson, Patriots and Redeemers (1992).
+########################################################################
+
+# ======================================================================
+# INIT — seed the bakumatsu counters on c:TKG. Idempotent; called from the
+# startup hook (japan_bakumatsu_on_actions.txt) and self-heals on first pulse.
+#   baku_legitimacy   : Tokugawa central authority (0..100, start 70)
+#   imperial_prestige : the Kyoto / sonno pole (0..100, start 20; rises as
+#                       legitimacy falls — the zero-sum transfer Perry set going)
+# ======================================================================
+JPN_baku_init = {
+	LOG_enter = { sys = BAKU  fn = "JPN_baku_init" }
+	if = { limit = { NOT = { has_variable = baku_legitimacy } }   set_variable = { name = baku_legitimacy    value = 70 } }
+	if = { limit = { NOT = { has_variable = imperial_prestige } } set_variable = { name = imperial_prestige  value = 20 } }
+	LOG_exit = { sys = BAKU  fn = "JPN_baku_init"  result = OK }
+}
+
+# ---- Generic clamped-counter helper (the BAKU twin of QING_DECLINE_nudge) ----
+# Nudge one 0..100 counter by $amount$ (may be negative) and clamp. Scope: the
+# tag that owns the counter (c:TKG for the national meters; a domain tag when a
+# domain caller rescopes into it). $var$, $amount$.
+JPN_baku_nudge = {
+	if = {
+		limit = { NOT = { has_variable = $var$ } }
+		set_variable = { name = $var$  value = 0 }
+	}
+	change_variable = { name = $var$  add = $amount$ }
+	if = { limit = { var:$var$ > 100 }  set_variable = { name = $var$  value = 100 } }
+	if = { limit = { var:$var$ < 0 }    set_variable = { name = $var$  value = 0 } }
+	LOG_line = { sys = BAKU  msg = "counter $var$ += $amount$ -> [This.MakeScope.GetVariable('$var$').GetValue|0] for [This.GetTag]" }
+}
+
+# ---- Seed one domain's sonno alignment (idempotent). Runs INSIDE the domain
+# scope. domain_sonno 0..100: the sabaku<->sonno pole for that han. The tozama
+# (Satsuma/Choshu/Tosa/Hizen) start restive; the shinpan/fudai holdouts (Aizu,
+# Sendai) start loyal to the bakufu. $start$ = the historical alignment default.
+JPN_baku_domain_seed = {
+	if = { limit = { NOT = { has_variable = domain_sonno } }  set_variable = { name = domain_sonno  value = $start$ } }
+}
+
+# ======================================================================
+# SEED ALL DOMAINS — set each great han's historical sonno default. Called from
+# the pulse (self-heals) and startup. Scope: c:TKG (rescopes into each domain).
+#   Tozama with the grievance + coastal exposure start higher; shinpan/fudai low.
+# ======================================================================
+JPN_baku_seed_domains = {
+	if = { limit = { exists = c:SHZ }  c:SHZ = { JPN_baku_domain_seed = { start = 25 } } }  # Satsuma — the leading tozama
+	if = { limit = { exists = c:CSU }  c:CSU = { JPN_baku_domain_seed = { start = 25 } } }  # Choshu  — the sonno-joi radicals
+	if = { limit = { exists = c:YCH }  c:YCH = { JPN_baku_domain_seed = { start = 15 } } }  # Tosa    — kobu-gattai, then loyalist
+	if = { limit = { exists = c:SGA }  c:SGA = { JPN_baku_domain_seed = { start = 12 } } }  # Hizen/Saga
+	if = { limit = { exists = c:DTE }  c:DTE = { JPN_baku_domain_seed = { start = 5 } } }   # Sendai/Date — northern, sabaku
+	if = { limit = { exists = c:AZU }  c:AZU = { JPN_baku_domain_seed = { start = 2 } } }   # Aizu — the fudai holdout
+}
+
+# ======================================================================
+# BAND APPLICATION — read baku_legitimacy and (re)apply exactly one authority
+# band modifier (the shogun's grip firm / shaken / broken). Remove-all-then-add-
+# one, the QING_DECLINE idiom. Cheap O(1). Scope: c:TKG.
+# ======================================================================
+JPN_baku_apply_bands = {
+	remove_country_modifier = baku_grip_firm
+	remove_country_modifier = baku_grip_shaken
+	remove_country_modifier = baku_grip_broken
+	if = {
+		limit = { var:baku_legitimacy < 40 }
+		add_country_modifier = { name = baku_grip_broken  duration = -1 }
+		LOG_line = { sys = BAKU  msg = "band legitimacy = broken for [This.GetTag] (legit=[This.MakeScope.GetVariable('baku_legitimacy').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:baku_legitimacy < 65 }
+		add_country_modifier = { name = baku_grip_shaken  duration = -1 }
+		LOG_line = { sys = BAKU  msg = "band legitimacy = shaken for [This.GetTag] (legit=[This.MakeScope.GetVariable('baku_legitimacy').GetValue|0])" }
+	}
+	else = {
+		add_country_modifier = { name = baku_grip_firm  duration = -1 }
+		LOG_line = { sys = BAKU  msg = "band legitimacy = firm for [This.GetTag] (legit=[This.MakeScope.GetVariable('baku_legitimacy').GetValue|0])" }
+	}
+}
+
+# ======================================================================
+# SPAWN A DOMAIN FIREBRAND — the concrete object on the high-sonno bands. A real
+# shishi (man of high purpose) enters the domain's court to carry the imperial
+# cause: Yoshida Shoin in Choshu, Saigo Takamori in Satsuma. Once-guarded per
+# domain (a domain flag) so the court is not swamped. create_character sets
+# culture / religion / age explicitly (oracle gotcha). Runs INSIDE the domain
+# scope. $nick$ = NICKNAME_JPN_* loc key; $flag$ = the per-domain once-only guard.
+# ======================================================================
+JPN_baku_spawn_shishi = {
+	if = {
+		limit = { NOT = { has_variable = $flag$ } }
+		set_variable = $flag$
+		create_character = {
+			age = 34
+			culture = japanese
+			religion = shinto
+			# a shishi: driven orator-soldier of the sonno-joi cause.
+			add_martial = 6
+			add_charisma = 8
+			add_finesse = 5
+			add_zeal = 9
+			add_trait = zealous
+			add_trait = brave
+			add_trait = orator
+			save_scope_as = jpn_shishi
+		}
+		set_home_country = this
+		scope:jpn_shishi = { add_nickname = "$nick$" }
+		# Store the shishi on the domain so the Boshin rising can retrieve him
+		# reliably later (the #81 qing_jppre_reform_leader idiom); a raw scope: would
+		# not survive to the climax pulse. Falls back to the ruler if he has died.
+		set_variable = { name = domain_commander  value = scope:jpn_shishi }
+		LOG_line = { sys = BAKU  msg = "shishi [scope:jpn_shishi.GetName] ($nick$) rose in the court of [This.GetTag] (sonno=[This.MakeScope.GetVariable('domain_sonno').GetValue|0])" }
+	}
+	else = {
+		LOG_fail = { sys = BAKU  fn = "JPN_baku_spawn_shishi"  reason = "$nick$ already risen in [This.GetTag]" }
+	}
+}
+
+# ======================================================================
+# DOMAIN MILESTONE CHECK — for each great tozama, once its domain_sonno crosses
+# the commitment band, hang the concrete objects: spawn the domain's real
+# firebrand and stamp sonno_committed (read by the Satcho check + the Boshin
+# realignment). Scope: c:TKG (rescopes into each domain). Guards make it
+# once-per-domain.
+# ======================================================================
+JPN_baku_check_domain_milestones = {
+	# Choshu — Yoshida Shoin / Kido; the sonno-joi crucible.
+	if = {
+		limit = { exists = c:CSU  c:CSU = { var:domain_sonno >= 60 } }
+		c:CSU = {
+			if = {
+				limit = { NOT = { has_variable = sonno_committed } }
+				set_variable = sonno_committed
+				JPN_baku_spawn_shishi = { nick = "NICKNAME_JPN_YOSHIDA"  flag = jpn_spawned_yoshida }
+			}
+		}
+	}
+	# Satsuma — Saigo Takamori / Okubo; the great military domain.
+	if = {
+		limit = { exists = c:SHZ  c:SHZ = { var:domain_sonno >= 60 } }
+		c:SHZ = {
+			if = {
+				limit = { NOT = { has_variable = sonno_committed } }
+				set_variable = sonno_committed
+				JPN_baku_spawn_shishi = { nick = "NICKNAME_JPN_SAIGO"  flag = jpn_spawned_saigo }
+			}
+		}
+	}
+	# Tosa — Sakamoto Ryoma, the Satcho broker (spawned at the alliance beat too;
+	# once-guarded so whichever fires first wins).
+	if = {
+		limit = { exists = c:YCH  c:YCH = { var:domain_sonno >= 55 } }
+		c:YCH = {
+			if = {
+				limit = { NOT = { has_variable = sonno_committed } }
+				set_variable = sonno_committed
+				JPN_baku_spawn_shishi = { nick = "NICKNAME_JPN_RYOMA"  flag = jpn_spawned_ryoma }
+			}
+		}
+	}
+}
+
+# ======================================================================
+# OVERLAY: INGEST THE QING #81 PRE-PERRY MEDDLING — the coupling inversion. If a
+# HUMAN Qing ran the shipped #81 arc, its CHI-side counters (qing_jppre_*) exist
+# and we read them ONCE at Perry (baku_perry_done just set) to bias Japan's seed:
+# a Qing who shored the shogunate seeds higher legitimacy; a Qing who backed a
+# tozama nudges that domain's sonno up. Absent a human Qing (the usual case), this
+# is a pure no-op and Japan uses its historical defaults. This is the ONLY channel
+# by which the Qing arc now touches Japan — Japan owns its fate (see design §6).
+# The separatism-backer rule is satisfied natively: the Qing is a plausible
+# neighbouring patron, and it can only nudge, never drive, the Restoration.
+# Scope: c:TKG.
+# ======================================================================
+JPN_baku_ingest_preperry = {
+	if = {
+		limit = { exists = c:CHI }
+		c:CHI = {
+			# shogunate-grip meddling -> Tokugawa legitimacy bias (grip starts 70;
+			# only a Qing who actively shored it above the baseline seeds a bonus).
+			if = {
+				limit = { has_variable = qing_jppre_shogun_grip  var:qing_jppre_shogun_grip > 70 }
+				ROOT = { JPN_baku_nudge = { var = baku_legitimacy  amount = 6 } }
+				LOG_line = { sys = BAKU  msg = "overlay: human Qing shored the shogunate (grip=[c:CHI.MakeScope.GetVariable('qing_jppre_shogun_grip').GetValue|0]) -> +legitimacy for [ROOT.GetTag]" }
+			}
+			# a strong Qing-fed reform faction -> a general sonno tailwind across the
+			# great tozama (biases them toward the imperial pole from the outset).
+			if = {
+				limit = { has_variable = qing_jppre_reform_faction  var:qing_jppre_reform_faction >= 40 }
+				if = { limit = { exists = c:CSU }  c:CSU = { JPN_baku_nudge = { var = domain_sonno  amount = 10 } } }
+				if = { limit = { exists = c:SHZ }  c:SHZ = { JPN_baku_nudge = { var = domain_sonno  amount = 10 } } }
+				LOG_line = { sys = BAKU  msg = "overlay: human Qing fed the reform faction (=[c:CHI.MakeScope.GetVariable('qing_jppre_reform_faction').GetValue|0]) -> +sonno tailwind for [ROOT.GetTag]" }
+			}
+			# the specific domain the Qing backed gets the sharper nudge.
+			if = {
+				limit = { has_variable = qing_jppre_backed_tag }
+				if = { limit = { var:qing_jppre_backed_tag = flag:CSU  exists = c:CSU }  c:CSU = { JPN_baku_nudge = { var = domain_sonno  amount = 12 } } }
+				if = { limit = { var:qing_jppre_backed_tag = flag:SHZ  exists = c:SHZ }  c:SHZ = { JPN_baku_nudge = { var = domain_sonno  amount = 12 } } }
+			}
+		}
+	}
+}
+
+# ======================================================================
+# THE PULSE — the autonomous driver. Runs yearly for c:TKG (self-gated on tag,
+# NEVER is_ai, so it runs for an AI Japan — the whole point of the design), off
+# yearly_country_pulse.effect. Each run: (1) init + seed domains, (2) a gentle
+# era-pressure drift that trends legitimacy DOWN and imperial prestige UP through
+# the 1850s-60s so the Restoration is always reachable, (3) re-apply the authority
+# band, (4) hang concrete firebrands off the domain milestones, (5) arm/execute
+# the Satcho bond and the Boshin climax (both in se_JAPAN_BOSHIN.txt). The dated
+# beats (japan_bakumatsu.*) supply the large, event-flavoured nudges; the pulse
+# converts them to concrete outcomes and guarantees the terminus. Scope: c:TKG.
+# ======================================================================
+JPN_baku_pulse = {
+	JPN_baku_init = yes
+	JPN_baku_seed_domains = yes
+	# (2) era pressure: after Perry the shogunate bleeds authority to Kyoto. Small
+	# yearly nudges toward a date-appropriate settlement guarantee an AI Japan
+	# drifts to the climax even if some dated beats were edge-cased out; kept gentle
+	# so a live beat-driven game dominates the trajectory.
+	if = {
+		limit = {
+			has_variable = baku_perry_done
+			var:baku_legitimacy > 25
+		}
+		JPN_baku_nudge = { var = baku_legitimacy    amount = -2 }
+		JPN_baku_nudge = { var = imperial_prestige  amount = 2 }
+		# the great tozama drift toward sonno as central authority visibly fails.
+		if = { limit = { exists = c:CSU }  c:CSU = { JPN_baku_nudge = { var = domain_sonno  amount = 2 } } }
+		if = { limit = { exists = c:SHZ }  c:SHZ = { JPN_baku_nudge = { var = domain_sonno  amount = 2 } } }
+	}
+	# [#94-fix M1 v2] the lesser sonno tozama (Tosa / Hizen-Saga) drift in their OWN block,
+	# gated on baku_perry_done ONLY -- deliberately NOT on baku_legitimacy > 25. The dated
+	# beats drive legitimacy below 25 by ~1861, which would freeze the leaders' drift; but
+	# YCH/SGA get NO beat nudges (.2/.5 touch only CSU/SHZ), so sharing that guard would
+	# freeze them at ~31, short of the >= 45 Boshin release gate (se_JAPAN_BOSHIN.txt:103)
+	# -- the exact defect the first M1 attempt left in place (review finding). Decoupled and
+	# at +3/yr, from Perry (~1854) to the 1868 climax they reach YCH ~57 / SGA ~54: clear of
+	# 45 with margin, YCH also clears the >= 55 Tosa milestone (se_JAPAN_BAKUMATSU.txt:187,
+	# resolving m6), and both stay behind the beat-driven leaders (CSU/SHZ ~85). Seed order
+	# keeps YCH ahead of SGA.
+	if = {
+		limit = { has_variable = baku_perry_done }
+		if = { limit = { exists = c:YCH }  c:YCH = { JPN_baku_nudge = { var = domain_sonno  amount = 3 } } }
+		if = { limit = { exists = c:SGA }  c:SGA = { JPN_baku_nudge = { var = domain_sonno  amount = 3 } } }
+	}
+	# (3) band, (4) domain milestones
+	JPN_baku_apply_bands = yes
+	JPN_baku_check_domain_milestones = yes
+	# (5) Satcho bond + Boshin climax (se_JAPAN_BOSHIN.txt). Both self-guard.
+	JPN_boshin_check_satcho = yes
+	JPN_boshin_check_climax = yes
+}

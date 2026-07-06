@@ -1,981 +1,981 @@
-﻿#IMP19C - 90% of vanilla stuff should be removed from this file some of it needs to stay though so this should be looked through.
-on_bastard_birth = {
-	events =
-	{
-		
-	}		
-}
-
-in_naval_battle = {
-
-}
-
-in_land_battle = {
-
-}
-
-on_battle_won = {
-
-}
-
-on_legion_raised = {
-   # what: on the end of the day after a legion is created
-   # scope: legion
-
-}
-
-
-on_state_secession = { #Fired for States that revolt only, for now. Civil wars require refactor.
-	effect = {
-		if = {
-			limit = {
-				owner = { is_ai = no }
-			}
-			every_state_province = { #This is a bit convoluted but gives the old owner a culture modifier for any culture dominant in at least 3 territories in the revolting state - unless it is an integrated or primary culture.
-				save_scope_as = revolting_territory
-				owner = {
-					random_country_culture = {
-						limit = { is_culture = scope:revolting_territory.culture }
-						if = {
-							limit = {
-								root = {
-									any_state_province = {
-										count >= 3
-										dominant_province_culture = scope:revolting_territory.culture
-									}
-								}
-							}
-							save_scope_as = revolt_culture
-						}
-					}
-					if = {
-						limit = { exists = scope:revolt_culture }
-						scope:revolt_culture = {
-							if = {
-								limit = {
-									NOT = { has_country_culture_modifier = revolting_culture }
-									is_integrated = no
-									NOT = { is_culture = root.owner.culture }
-								}
-								add_country_culture_modifier = {
-									name = "revolting_culture"
-									duration = 730 #2 years
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
-on_rebellion_in_country = { #root scope parent country
-	effect = {
-		if = {
-			limit = {
-				is_ai = yes
-			}
-			every_country_state = {
-				capital_scope = {
-					add_state_loyalty = 35
-				}
-			}
-		}
-	}
-}
-
-on_battle_lost = {
-
-}
-
-on_siege_won = { #Only triggers if sieging army has a commander (which is also ROOT in this on_action)
-
-}
-
-#scope:former_ruler, root = country,
-#same as on_ruler_change, but called before switching
-on_reign_ending = { 
-	on_actions = {
-		on_republic_reign_ending #NOTE: This has every party set a random agenda on reign end. This is needed.
-	}
-}
-
-#scope:former_ruler, root = country
-on_ruler_change = {
-	effect = {
-		if = {
-			limit = {
-				scope:former_ruler = {
-					num_of_rivals >= 1
-					any_rival = {
-						is_ruler = yes
-						NOT = {
-							employer = root
-						}
-					}
-					employer = {
-						has_land = yes
-					}
-				}
-			}
-			scope:former_ruler = {
-				every_rival = {
-					limit = {
-						is_ruler = yes
-						NOT = {
-							employer = root
-						}
-					}
-					remove_rival = scope:former_ruler
-				}
-			}
-		}
-		if = {
-			limit = {
-				current_ruler = {
-					has_variable = prominent_actor
-					var:prominent_actor = 1
-				}
-				has_land = yes
-			}
-			current_ruler = {
-				change_variable = {
-					name = prominent_actor
-					add = -1
-				}
-			}
-		}
-		if = {
-			limit = {
-				scope:former_ruler = {
-					is_alive = yes
-					has_variable = prominent_actor
-					var:prominent_actor = 0
-					employer = {
-						has_land = yes
-					}
-				}
-			}
-			scope:former_ruler = {
-				change_variable = {
-					name = prominent_actor
-					add = 1
-				}
-			}
-		}
-	}
-	on_actions = {
-		on_republic_ruler_change #Party approval stuff, this is needed.
-	}
-}
-
-
-#If the rebels won.
-#scope:target = ruler of losing side.
-on_civil_war_lost = {
-	effect = {
-		scope:losing_side = {
-			every_country_treasure = {
-				transfer_treasure_to_country = root
-			}
-		}
-		scope:losing_side = {
-			save_scope_as = civil_war_target
-		}
-	}
-}
-
-#If original country won.
-#scope:target = ruler of losing side.
-on_civil_war_won = {
-	effect = {
-		scope:losing_side = {
-			every_country_treasure = {
-				transfer_treasure_to_country = root
-			}
-		}
-		scope:losing_side = {
-			save_scope_as = civil_war_target
-		}
-	}
-}
-
-on_character_death = {
-	effect = {
-		clear_ambition_effect = yes
-		# #65/#67 A dying officeholder or grand councillor must relinquish his post so
-		# the office bonus (and, for the Emperor Emeritus, the conservative-backlash
-		# penalty that rides only while he sits) do not strand permanently on the
-		# country. QING_office_vacate_dispatch / QING_council_unseat_character are
-		# call-site-agnostic (they resolve the country via employer) and self-guard, so
-		# this is a safe no-op for the overwhelming majority of characters who hold
-		# neither. This closes the emeritus death-cleanup gap and the same latent gap
-		# for all ten regular great offices at once.
-		if = {
-			limit = { has_variable = qing_office_held }
-			QING_office_vacate_dispatch = yes
-		}
-		if = {
-			limit = { has_variable = qing_is_councillor }
-			QING_council_unseat_character = yes
-		}
-		if = {
-			limit = {
-				is_head_of_family = yes
-				exists = next_in_family
-			}
-			next_in_family = {
-				add_gold = family_inheritance_svalue
-			}
-			add_gold = {
-				value = 0
-				subtract = wealth
-			}
-		}
-		else_if = {
-			limit = {
-				is_head_of_family = no
-				exists = family.head_of_family
-				family.head_of_family = {
-					employer = root.employer
-				}
-			}
-			family.head_of_family = {
-				add_gold = family_individual_inheritance_svalue
-			}
-		}
-		if = {
-			limit = {
-				num_holdings_owned > 0
-				exists = next_in_family
-			}
-			next_in_family = {
-				save_scope_as = holding_target
-			}
-			if = {
-				limit = {
-					exists = scope:holding_target
-				}
-				while = {
-					limit = {
-						num_holdings_owned > 0
-					}
-					random_holdings = {
-						save_scope_as = holding_transfer
-					}
-					remove_holding = scope:holding_transfer
-					scope:holding_target = {
-						add_holding = scope:holding_transfer
-					}
-				}
-			}
-			scope:holding_target = {
-				trigger_event = {
-					id = holding_mech.1
-					days = 1 #Necessary
-				}
-			}
-		}
-	}
-}
-
-on_character_created = {
-	events = {
-		character_events.49 # Baldness
-	}
-}
-
-on_deified_ruler_death = {
-
-}
-
-on_tenth_birthday = {
-	events = {
-		character_events.49 # Baldness
-	}
-}
-
-on_deficit_pulse = { #IMP19C NOTE: I left these in for the ai, there is really no other way out of debt for them...for now.
-	random_events = {
-		# TODO: Add events about debt
-	}
-}
-
-yearly_comet_pulse = {
-
-}
-
-on_office_gained = {
-	events = {
-		office_gain.1
-	}
-}
-
-on_office_lost = {
-	events = {
-		office_gain.2
-	}
-}
-
-on_command_gained = {
-	events = {
-		office_gain.1
-	}
-}
-
-on_command_lost = {
-	events = {
-		office_gain.2
-	}
-}
-
-# Target is scope:target_culture, ROOT is country
-on_culture_integration_0 = {
-	
-}
-
-# Target is scope:target_culture, ROOT is country
-on_culture_integration_25 = {
-	trigger = {
-		NOT = { has_variable = culture_integration_25 } # To prevent this on_action from firing multiple times for the same integrating culture as a result of an event option reducing progress
-	}
-	effect = {
-		ordered_country_culture = {
-			limit = {
-				OR = {
-					is_integrated = yes
-					this.culture = root.culture
-				}
-			}
-			max = 1
-			check_range_bounds = no
-			order_by = country_culture_pop_count
-			ROOT = {
-				set_variable = {
-					name = biggest_country_culture_var
-					value = {
-						add = PREV.country_culture_pop_count
-						multiply = 1.5
-					}
-				}
-			}
-		}
-		remove_variable = culture_integration_75 # Remove variable in case player rapidly integrates multiple cultures faster than the variables disappear naturally
-		set_variable = {
-			name = culture_integration_25
-			days = 730
-		}
-	}
-}
-
-# Target is scope:target_culture, ROOT is country
-on_culture_integration_75 = {
-	trigger = {
-		NOT = { has_variable = culture_integration_75 } # To prevent this on_action from firing multiple times for the same integrating culture as a result of an event option reducing progress
-	}
-	effect = {
-		ordered_country_culture = {
-			limit = {
-				is_integrated = yes
-			}
-			max = 1
-			check_range_bounds = no
-			order_by = country_culture_pop_count
-			ROOT = {
-				set_variable = {
-					name = biggest_country_culture_var
-					value = PREV.country_culture_pop_count
-				}
-			}
-		}
-		remove_variable = culture_integration_25 # Remove variable in case player rapidly integrates multiple cultures faster than the variables disappear naturally
-		set_variable = {
-			name = culture_integration_75
-			days = 730
-		}
-	}
-}
-
-# Target is scope:target_culture, ROOT is country
-on_culture_integration_100 = {
-	
-}
-
-on_culture_increased_right = { 
-#scope:target_culture = The culture being affected, has_pop_type_right will return the old pop type rights
-#scope:target = The pop type, is_pop_type_right will return the new pop type right
-	effect = {
-		if = {
-			limit = {
-				scope:target_culture = {
-					NOT = {
-						has_country_culture_modifier = rights_increased
-					}
-				}
-			}
-			scope:target_culture = {
-				add_country_culture_modifier = {
-					name = rights_increased
-					duration = 3650 #10 years
-				}
-			}
-		}
-		slavery_unhappiness_cleanup = yes #This removes slave_rights_imposed if culture stopped being slaves
-		#IMP19C NOTE: THIS SECOND EFFECT NEEDS CHANGED!
-		increased_rights_cleanup_effect = yes #Clears up rights that can only be held by non-integrated cultures if the culture was integrated.
-	}
-}
-
-on_culture_reduced_right = {
-#scope:target_culture = The culture being affected, has_pop_type_right will return the old pop type rights
-#scope:target = The pop type, is_pop_type_right will return the new pop type right
-	effect = {
-		if = {
-			limit = {
-				scope:target_culture = {
-					NOT = {
-						has_country_culture_modifier = rights_revoked
-					}
-					NOT ={
-						has_pop_type_right = citizen
-						has_pop_type_right = nobles
-					}
-				}
-			}
-			scope:target_culture = {
-				add_country_culture_modifier = {
-					name = rights_revoked
-					duration = 3650 #10 years
-				}
-			}
-		}
-		if = { #Citizenship revoked
-			limit = {
-				scope:target_culture = {
-					OR ={
-						has_pop_type_right = citizen
-						has_pop_type_right = nobles
-					}
-					NOT = {
-						has_country_culture_modifier = integration_status_removed
-					}
-				}
-			}
-			scope:target_culture = {
-				add_country_culture_modifier = {
-					name = integration_status_removed
-					duration = 3650 #10 years
-				}
-			}
-		}
-		
-		if = {
-			limit = { scope:target_culture = { has_country_culture_modifier = rights_increased } }
-			scope:target_culture = { remove_country_culture_modifier = rights_increased }
-		}
-		
-		#Integrated to non Integrated Cleanup:
-		#IMP19C NOTE: THIS EFFECT NEEDS CHANGED!
-		reduced_rights_cleanup_effect = yes #Clears all rights that can only be held by integrated cultures if no longer integrated.
-		
-		# More angry if we were turned to slaves
-		if = {
-			limit = {
-				scope:target = { is_pop_type_right = slaves }
-				scope:target_culture = {
-					NOT = {
-						has_country_culture_modifier = slave_rights_imposed
-					}
-				}
-			}
-			scope:target_culture = {
-				add_country_culture_modifier = {
-					name = slave_rights_imposed
-					duration = -1
-				}
-			}
-		}
-		slavery_unhappiness_cleanup = yes #This removes slave_rights_imposed if culture stopped being slaves
-	}
-}
-
-on_giving_birth = {
-	#scope:newborn is child, root is mother
-	effect = {
-		scope:newborn = {
-			if = {
-				limit  = {
-					NOT = {
-						has_trait = lisp
-					}
-					is_alive = yes
-				}
-				random_list = {
-					1 = {
-						add_trait = lisp
-					}
-					99 = {  }
-				}
-			}
-		}
-	}
-	events = {
-		character_events.5
-	}
-	random_events = {
-		1 = health.1
-		1 = health.3
-		1 = health.4
-		30 = 0
-		30 = health.5
-	}
-}
-
-on_being_born = {
-    effect = {
-        inbreeding_effect = yes
-        #IMP19C NOTE: THIS EVENT IS HOW BLOODLINES ARE GAINED IN VANILLA, IF THEY WANT TO BE ADDED ASK PAULUS INSTEAD OF USING THIS EVENT.
-        #trigger_event = {
-        #    id = character_events.35
-        #    days = 1
-        #}
-    }
-}
-
-on_zero_health = {
-	effect = {
-		clear_ambition_effect = yes
-	}
-	events = {
-		death.1
-	}
-}
-
-on_becoming_adult = {
-	effect = {
-		if = {
-			limit = {
-				has_nickname = no
-				is_male = yes
-			}
-			random_list = {
-				95 = { }
-				5 = { add_nickname = random }
-			}
-		}
-		set_variable = {
-			name = ambition_tombola #NEEDED FOR AMBITIONS DO NOT REMOVE
-			value = { 
-				integer_range = { 
-					min = 1 
-					max = 7
-				} 
-			}
-			days = 10
-		}
-	}
-}
-
-on_winning_war = {
-	events = {
-
-	}
-}
-
-on_losing_war = {
-	events = {
-
-	}
-	
-}
-
-on_ending_war = {
-	effect = {
-	
-	}
-}
-
-dictator_power_return = {
-
-}
-
-on_being_captured = {
-	effect = {
-		if = {
-			limit = {
-				is_mercenary = no
-			}
-			set_variable = {
-				name = came_from
-				value = employer
-			}
-		}
-		clear_ambition_effect = yes
-	}
-	events = {
-		character_events.4
-	}
-}
-
-on_being_ransomed_back = {
-	effect = {
-		remove_character_modifier = foreign_citizen
-	}
-}
-
-on_being_released = {
-
-}
-
-on_enacting_omen = {
-}
-
-on_change_of_deity = {
-}
-
-on_change_pantheon = {
-}
-
-on_being_imprisoned = {
-	effect = {
-		clear_ambition_effect = yes
-	}
-	events = {
-		character_events.17
-	}
-}
-
-on_move_country = { #scope:old_country is the origin country
-	effect = {
-		clear_ambition_effect = yes
-		clear_loyalty_effect = yes #IMP19C NOTE: THIS EFFECT SHOULD BE UPDATED!
-		if = {
-			limit  = {
-				has_character_modifier = inspire_disloyalty_modifier
-			}
-			remove_character_modifier = inspire_disloyalty_modifier
-		}
-		if = {
-			limit = {
-				has_variable = imprisoned_manually
-			}
-			remove_variable = imprisoned_manually
-		}
-		if = {
-			limit = {
-				has_triggered_character_modifier = disloyal_family_head_cmod
-			}
-			remove_triggered_character_modifier = disloyal_family_head_cmod
-		}
-		if = {
-			limit = {
-				has_variable = disloyal_family_head_var
-			}
-			remove_variable = disloyal_family_head_var
-		}
-		if = {
-			limit = {
-				has_variable = prominent_actor
-			}
-			remove_variable = prominent_actor
-		}
-		if = {
-			limit = {
-				has_character_modifier = increased_family_wages
-			}
-			remove_character_modifier = increased_family_wages
-		}
-		if = {
-			limit = {
-				is_mercenary = no
-			}
-			set_variable = {
-				name = came_from
-				value = scope:old_country
-			}
-		}
-		if = {
-			limit = {
-				num_holdings_owned > 0
-				NOT = {
-					employer = c:MER
-				}
-				employer = {
-					has_civil_war = no
-				}
-			}
-			every_holdings = {
-				root = {
-					remove_holding = prev
-				}
-			}
-		}
-		if = {
-			limit = {
-				prominence > 0
-			}
-			add_prominence = {
-				value = 0
-				subtract = prominence
-			}
-		}
-		if = {
-			limit = {
-				popularity > 0
-			}
-			add_popularity = {
-				value = 0
-				subtract = {
-					value = popularity
-					divide = 2
-				}
-			}
-		}
-	}
-	events = {
-		character_events.4
-		character_events.16
-	}
-}
-
-on_province_colonized = {
-	events = {
-
-	}
-}
-
-on_ownership_change = { #province scope
-	effect = {
-		if = {
-			limit = {
-				exists = holding_owner
-			}
-			holding_owner = {
-				remove_holding = root
-			}
-		}
-		# Generic colonial-claims hostility: any other country holding a claim
-		# on this province resents the new owner (se_CLAIM_HOSTILITY.txt).
-		CLAIM_HOSTILITY_on_transfer = yes
-		# Generic de jure irredentism: if the new owner has not integrated this
-		# land's rightful (frozen 1815) culture, alien rule breeds disaffection
-		# and the rightful culture's kin-state gains a claim (se_DEJURE.txt).
-		DEJURE_on_ownership_change = yes
-		# audit-fix (#79): a state-set frontier pull (migr_gov_pull) belongs to the
-		# setting state, not the soil — clear it so the new owner does not inherit a
-		# phantom migration draw it never established (se_MIGRATION.txt).
-		MIGRATION_on_ownership_change = yes
-	}
-}
-
-on_province_occupied = { #province scope, it will fire AS WELL as on_siege_won
-	effect = {
-		# Generic colonial-claims hostility: a wartime occupation of land another
-		# country claims stings the claimant (milder than a seizure; se_CLAIM_HOSTILITY.txt).
-		CLAIM_HOSTILITY_on_incursion = yes
-	}
-}
-
-on_great_battle_won_country = { #root = country scope of the main unit on the winning side, scope:actor = main unit on the winning side, scope:target = main unit on the losing side
-	
-}
-
-on_battle_won_country = { #root = country scope of the main unit on the winning side, scope:actor = main unit on the winning side, scope:target = main unit on the losing side
-
-}
-
-on_great_battle_lost_country = { #root = country scope of the main unit on the losing side, scope:actor = main unit on the losing side, scope:target = main unit on the winning side
-
-}
-
-on_battle_lost_country = { #root = country scope of the main unit on the losing side, scope:actor = main unit on the losing side, scope:target = main unit on the winning side
-
-}
-
-# scope is country being annexed
-# scope:actor = country doing the annexing
-on_military_annex = {
-	effect = {
-		on_annexation_event_effect = yes
-		every_country_treasure = {
-			add_to_list = annexed_treasures
-		}
-	}
-}
-
-on_diplomatic_annex = {
-	effect = {
-		on_diplo_annexation_event_effect = yes
-	}
-}
-
-on_civil_war_annex = {
-	effect = {
-		on_annexation_event_effect = yes
-	}
-}
-
-
-on_invention = {
-
-}
-
-# Scope is the governor getting his policy changed
-on_policy_change = {
-	effect = {
-		if = {
-			limit = { is_ruler = no }
-			employer = { 
-				add_tyranny = {
-					value = 125
-					subtract = root.employer.current_ruler.popularity
-					multiply = 0.01
-				}
-			}
-		}
-	}
-}
-
-
-# Scope is character losing holding, with target the province lost.
-on_holding_lost = {
-	#effect = {
-		#if = { #Deprecated
-		#	limit = {
-		#		is_alive = yes
-		#	}
-		#	add_character_modifier = {
-		#		name = holding_lost
-		#		duration = 1825
-		#		mode = extend
-		#	}
-		#}
-	#}
-}
-
-#character yearly pulses
-disease_possibilities = {
-	trigger = {
-		is_alive = yes
-		exists = employer
-		has_any_tier_1_2_3_illness_trigger = yes
-	}
-	random_events = {
-		10 = traits.8
-		10 = traits.10
-		10 = traits.11
-		10 = traits.12
-		10 = traits.14 
-		10 = traits.15 
-		150 = 0
-	}	
-}
-
-treatment_pulse = {
-	trigger = {
-		is_alive = yes
-		has_variable = seeking_treatment
-	}
-
-}
-
-character_story_events = 
-{
-
-}
-
-character_traits_pulse = 
-{
-	random_events = 
-	{
-		1000 = 0
-		300 = traits.1 #VERY NEEDED DON'T REMOVE!
-		2 = traits.2
-	}
-
-}
-
-yearly_medical_pulse = 
-{
-	random_events = 
-	{
-		150 = 0
-		#Illness
-		4 = traits.4
-		2 = traits.6
-		2 = traits.8
-		1 = health.6 # depression
-		4 = health.7 # getting better from depression
-		30 = death.2 # old age
-		1 = traits.18
-	}
-}
-
-yearly_debt_pulse = {
-	trigger = {
-		wealth < 0
-		prisoner = no
-		is_adult = yes
-	}
-	random_events = {
-		20 = 0
-		20 = character_events.10
-		20 = character_events.12
-		20 = character_events.13
-		20 = character_events.19
-	}
-}
-
-yearly_culture_religion_switch_pulse = {
-	random_events = {
-		98 = 0
-		1 = character_events.21
-		1 = character_events.22
-		2 = character_events.23
-		2 = character_events.24
-	}
-}
-
-yearly_character_murder_pulse = {
-	events = {
-	
-	}
-}
-
-
-yearly_disloyal_generals_delay_pulse = {
-
-}
-
-yearly_financial_support_pulse = {
-	random_events = {
-		100 = 0
-		#50 = character_events.36
-		#50 = character_events.37
-	}
-}
-
-on_subject_defect = { #scope:future_overlord = country that stole vassal, scope:target_subject  = vassal being stolen
-	effect = {
-		add_opinion = {
-			modifier = stole_a_vassal_from_us
-			target = scope:future_overlord
-		}
-		
-		add_opinion = {
-			modifier = free_from_old_overlord
-			target = scope:target_subject
-		}
-	}
-}
-
-on_great_work_anniversary = {
-	events = {
-	}
-}
-
-on_great_work_completed = {	
+﻿#IMP19C - 90% of vanilla stuff should be removed from this file some of it needs to stay though so this should be looked through.
+on_bastard_birth = {
+	events =
+	{
+		
+	}		
+}
+
+in_naval_battle = {
+
+}
+
+in_land_battle = {
+
+}
+
+on_battle_won = {
+
+}
+
+on_legion_raised = {
+   # what: on the end of the day after a legion is created
+   # scope: legion
+
+}
+
+
+on_state_secession = { #Fired for States that revolt only, for now. Civil wars require refactor.
+	effect = {
+		if = {
+			limit = {
+				owner = { is_ai = no }
+			}
+			every_state_province = { #This is a bit convoluted but gives the old owner a culture modifier for any culture dominant in at least 3 territories in the revolting state - unless it is an integrated or primary culture.
+				save_scope_as = revolting_territory
+				owner = {
+					random_country_culture = {
+						limit = { is_culture = scope:revolting_territory.culture }
+						if = {
+							limit = {
+								root = {
+									any_state_province = {
+										count >= 3
+										dominant_province_culture = scope:revolting_territory.culture
+									}
+								}
+							}
+							save_scope_as = revolt_culture
+						}
+					}
+					if = {
+						limit = { exists = scope:revolt_culture }
+						scope:revolt_culture = {
+							if = {
+								limit = {
+									NOT = { has_country_culture_modifier = revolting_culture }
+									is_integrated = no
+									NOT = { is_culture = root.owner.culture }
+								}
+								add_country_culture_modifier = {
+									name = "revolting_culture"
+									duration = 730 #2 years
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+on_rebellion_in_country = { #root scope parent country
+	effect = {
+		if = {
+			limit = {
+				is_ai = yes
+			}
+			every_country_state = {
+				capital_scope = {
+					add_state_loyalty = 35
+				}
+			}
+		}
+	}
+}
+
+on_battle_lost = {
+
+}
+
+on_siege_won = { #Only triggers if sieging army has a commander (which is also ROOT in this on_action)
+
+}
+
+#scope:former_ruler, root = country,
+#same as on_ruler_change, but called before switching
+on_reign_ending = { 
+	on_actions = {
+		on_republic_reign_ending #NOTE: This has every party set a random agenda on reign end. This is needed.
+	}
+}
+
+#scope:former_ruler, root = country
+on_ruler_change = {
+	effect = {
+		if = {
+			limit = {
+				scope:former_ruler = {
+					num_of_rivals >= 1
+					any_rival = {
+						is_ruler = yes
+						NOT = {
+							employer = root
+						}
+					}
+					employer = {
+						has_land = yes
+					}
+				}
+			}
+			scope:former_ruler = {
+				every_rival = {
+					limit = {
+						is_ruler = yes
+						NOT = {
+							employer = root
+						}
+					}
+					remove_rival = scope:former_ruler
+				}
+			}
+		}
+		if = {
+			limit = {
+				current_ruler = {
+					has_variable = prominent_actor
+					var:prominent_actor = 1
+				}
+				has_land = yes
+			}
+			current_ruler = {
+				change_variable = {
+					name = prominent_actor
+					add = -1
+				}
+			}
+		}
+		if = {
+			limit = {
+				scope:former_ruler = {
+					is_alive = yes
+					has_variable = prominent_actor
+					var:prominent_actor = 0
+					employer = {
+						has_land = yes
+					}
+				}
+			}
+			scope:former_ruler = {
+				change_variable = {
+					name = prominent_actor
+					add = 1
+				}
+			}
+		}
+	}
+	on_actions = {
+		on_republic_ruler_change #Party approval stuff, this is needed.
+	}
+}
+
+
+#If the rebels won.
+#scope:target = ruler of losing side.
+on_civil_war_lost = {
+	effect = {
+		scope:losing_side = {
+			every_country_treasure = {
+				transfer_treasure_to_country = root
+			}
+		}
+		scope:losing_side = {
+			save_scope_as = civil_war_target
+		}
+	}
+}
+
+#If original country won.
+#scope:target = ruler of losing side.
+on_civil_war_won = {
+	effect = {
+		scope:losing_side = {
+			every_country_treasure = {
+				transfer_treasure_to_country = root
+			}
+		}
+		scope:losing_side = {
+			save_scope_as = civil_war_target
+		}
+	}
+}
+
+on_character_death = {
+	effect = {
+		clear_ambition_effect = yes
+		# #65/#67 A dying officeholder or grand councillor must relinquish his post so
+		# the office bonus (and, for the Emperor Emeritus, the conservative-backlash
+		# penalty that rides only while he sits) do not strand permanently on the
+		# country. QING_office_vacate_dispatch / QING_council_unseat_character are
+		# call-site-agnostic (they resolve the country via employer) and self-guard, so
+		# this is a safe no-op for the overwhelming majority of characters who hold
+		# neither. This closes the emeritus death-cleanup gap and the same latent gap
+		# for all ten regular great offices at once.
+		if = {
+			limit = { has_variable = qing_office_held }
+			QING_office_vacate_dispatch = yes
+		}
+		if = {
+			limit = { has_variable = qing_is_councillor }
+			QING_council_unseat_character = yes
+		}
+		if = {
+			limit = {
+				is_head_of_family = yes
+				exists = next_in_family
+			}
+			next_in_family = {
+				add_gold = family_inheritance_svalue
+			}
+			add_gold = {
+				value = 0
+				subtract = wealth
+			}
+		}
+		else_if = {
+			limit = {
+				is_head_of_family = no
+				exists = family.head_of_family
+				family.head_of_family = {
+					employer = root.employer
+				}
+			}
+			family.head_of_family = {
+				add_gold = family_individual_inheritance_svalue
+			}
+		}
+		if = {
+			limit = {
+				num_holdings_owned > 0
+				exists = next_in_family
+			}
+			next_in_family = {
+				save_scope_as = holding_target
+			}
+			if = {
+				limit = {
+					exists = scope:holding_target
+				}
+				while = {
+					limit = {
+						num_holdings_owned > 0
+					}
+					random_holdings = {
+						save_scope_as = holding_transfer
+					}
+					remove_holding = scope:holding_transfer
+					scope:holding_target = {
+						add_holding = scope:holding_transfer
+					}
+				}
+			}
+			scope:holding_target = {
+				trigger_event = {
+					id = holding_mech.1
+					days = 1 #Necessary
+				}
+			}
+		}
+	}
+}
+
+on_character_created = {
+	events = {
+		character_events.49 # Baldness
+	}
+}
+
+on_deified_ruler_death = {
+
+}
+
+on_tenth_birthday = {
+	events = {
+		character_events.49 # Baldness
+	}
+}
+
+on_deficit_pulse = { #IMP19C NOTE: I left these in for the ai, there is really no other way out of debt for them...for now.
+	random_events = {
+		# TODO: Add events about debt
+	}
+}
+
+yearly_comet_pulse = {
+
+}
+
+on_office_gained = {
+	events = {
+		office_gain.1
+	}
+}
+
+on_office_lost = {
+	events = {
+		office_gain.2
+	}
+}
+
+on_command_gained = {
+	events = {
+		office_gain.1
+	}
+}
+
+on_command_lost = {
+	events = {
+		office_gain.2
+	}
+}
+
+# Target is scope:target_culture, ROOT is country
+on_culture_integration_0 = {
+	
+}
+
+# Target is scope:target_culture, ROOT is country
+on_culture_integration_25 = {
+	trigger = {
+		NOT = { has_variable = culture_integration_25 } # To prevent this on_action from firing multiple times for the same integrating culture as a result of an event option reducing progress
+	}
+	effect = {
+		ordered_country_culture = {
+			limit = {
+				OR = {
+					is_integrated = yes
+					this.culture = root.culture
+				}
+			}
+			max = 1
+			check_range_bounds = no
+			order_by = country_culture_pop_count
+			ROOT = {
+				set_variable = {
+					name = biggest_country_culture_var
+					value = {
+						add = PREV.country_culture_pop_count
+						multiply = 1.5
+					}
+				}
+			}
+		}
+		remove_variable = culture_integration_75 # Remove variable in case player rapidly integrates multiple cultures faster than the variables disappear naturally
+		set_variable = {
+			name = culture_integration_25
+			days = 730
+		}
+	}
+}
+
+# Target is scope:target_culture, ROOT is country
+on_culture_integration_75 = {
+	trigger = {
+		NOT = { has_variable = culture_integration_75 } # To prevent this on_action from firing multiple times for the same integrating culture as a result of an event option reducing progress
+	}
+	effect = {
+		ordered_country_culture = {
+			limit = {
+				is_integrated = yes
+			}
+			max = 1
+			check_range_bounds = no
+			order_by = country_culture_pop_count
+			ROOT = {
+				set_variable = {
+					name = biggest_country_culture_var
+					value = PREV.country_culture_pop_count
+				}
+			}
+		}
+		remove_variable = culture_integration_25 # Remove variable in case player rapidly integrates multiple cultures faster than the variables disappear naturally
+		set_variable = {
+			name = culture_integration_75
+			days = 730
+		}
+	}
+}
+
+# Target is scope:target_culture, ROOT is country
+on_culture_integration_100 = {
+	
+}
+
+on_culture_increased_right = { 
+#scope:target_culture = The culture being affected, has_pop_type_right will return the old pop type rights
+#scope:target = The pop type, is_pop_type_right will return the new pop type right
+	effect = {
+		if = {
+			limit = {
+				scope:target_culture = {
+					NOT = {
+						has_country_culture_modifier = rights_increased
+					}
+				}
+			}
+			scope:target_culture = {
+				add_country_culture_modifier = {
+					name = rights_increased
+					duration = 3650 #10 years
+				}
+			}
+		}
+		slavery_unhappiness_cleanup = yes #This removes slave_rights_imposed if culture stopped being slaves
+		#IMP19C NOTE: THIS SECOND EFFECT NEEDS CHANGED!
+		increased_rights_cleanup_effect = yes #Clears up rights that can only be held by non-integrated cultures if the culture was integrated.
+	}
+}
+
+on_culture_reduced_right = {
+#scope:target_culture = The culture being affected, has_pop_type_right will return the old pop type rights
+#scope:target = The pop type, is_pop_type_right will return the new pop type right
+	effect = {
+		if = {
+			limit = {
+				scope:target_culture = {
+					NOT = {
+						has_country_culture_modifier = rights_revoked
+					}
+					NOT ={
+						has_pop_type_right = citizen
+						has_pop_type_right = nobles
+					}
+				}
+			}
+			scope:target_culture = {
+				add_country_culture_modifier = {
+					name = rights_revoked
+					duration = 3650 #10 years
+				}
+			}
+		}
+		if = { #Citizenship revoked
+			limit = {
+				scope:target_culture = {
+					OR ={
+						has_pop_type_right = citizen
+						has_pop_type_right = nobles
+					}
+					NOT = {
+						has_country_culture_modifier = integration_status_removed
+					}
+				}
+			}
+			scope:target_culture = {
+				add_country_culture_modifier = {
+					name = integration_status_removed
+					duration = 3650 #10 years
+				}
+			}
+		}
+		
+		if = {
+			limit = { scope:target_culture = { has_country_culture_modifier = rights_increased } }
+			scope:target_culture = { remove_country_culture_modifier = rights_increased }
+		}
+		
+		#Integrated to non Integrated Cleanup:
+		#IMP19C NOTE: THIS EFFECT NEEDS CHANGED!
+		reduced_rights_cleanup_effect = yes #Clears all rights that can only be held by integrated cultures if no longer integrated.
+		
+		# More angry if we were turned to slaves
+		if = {
+			limit = {
+				scope:target = { is_pop_type_right = slaves }
+				scope:target_culture = {
+					NOT = {
+						has_country_culture_modifier = slave_rights_imposed
+					}
+				}
+			}
+			scope:target_culture = {
+				add_country_culture_modifier = {
+					name = slave_rights_imposed
+					duration = -1
+				}
+			}
+		}
+		slavery_unhappiness_cleanup = yes #This removes slave_rights_imposed if culture stopped being slaves
+	}
+}
+
+on_giving_birth = {
+	#scope:newborn is child, root is mother
+	effect = {
+		scope:newborn = {
+			if = {
+				limit  = {
+					NOT = {
+						has_trait = lisp
+					}
+					is_alive = yes
+				}
+				random_list = {
+					1 = {
+						add_trait = lisp
+					}
+					99 = {  }
+				}
+			}
+		}
+	}
+	events = {
+		character_events.5
+	}
+	random_events = {
+		1 = health.1
+		1 = health.3
+		1 = health.4
+		30 = 0
+		30 = health.5
+	}
+}
+
+on_being_born = {
+    effect = {
+        inbreeding_effect = yes
+        #IMP19C NOTE: THIS EVENT IS HOW BLOODLINES ARE GAINED IN VANILLA, IF THEY WANT TO BE ADDED ASK PAULUS INSTEAD OF USING THIS EVENT.
+        #trigger_event = {
+        #    id = character_events.35
+        #    days = 1
+        #}
+    }
+}
+
+on_zero_health = {
+	effect = {
+		clear_ambition_effect = yes
+	}
+	events = {
+		death.1
+	}
+}
+
+on_becoming_adult = {
+	effect = {
+		if = {
+			limit = {
+				has_nickname = no
+				is_male = yes
+			}
+			random_list = {
+				95 = { }
+				5 = { add_nickname = random }
+			}
+		}
+		set_variable = {
+			name = ambition_tombola #NEEDED FOR AMBITIONS DO NOT REMOVE
+			value = { 
+				integer_range = { 
+					min = 1 
+					max = 7
+				} 
+			}
+			days = 10
+		}
+	}
+}
+
+on_winning_war = {
+	events = {
+
+	}
+}
+
+on_losing_war = {
+	events = {
+
+	}
+	
+}
+
+on_ending_war = {
+	effect = {
+	
+	}
+}
+
+dictator_power_return = {
+
+}
+
+on_being_captured = {
+	effect = {
+		if = {
+			limit = {
+				is_mercenary = no
+			}
+			set_variable = {
+				name = came_from
+				value = employer
+			}
+		}
+		clear_ambition_effect = yes
+	}
+	events = {
+		character_events.4
+	}
+}
+
+on_being_ransomed_back = {
+	effect = {
+		remove_character_modifier = foreign_citizen
+	}
+}
+
+on_being_released = {
+
+}
+
+on_enacting_omen = {
+}
+
+on_change_of_deity = {
+}
+
+on_change_pantheon = {
+}
+
+on_being_imprisoned = {
+	effect = {
+		clear_ambition_effect = yes
+	}
+	events = {
+		character_events.17
+	}
+}
+
+on_move_country = { #scope:old_country is the origin country
+	effect = {
+		clear_ambition_effect = yes
+		clear_loyalty_effect = yes #IMP19C NOTE: THIS EFFECT SHOULD BE UPDATED!
+		if = {
+			limit  = {
+				has_character_modifier = inspire_disloyalty_modifier
+			}
+			remove_character_modifier = inspire_disloyalty_modifier
+		}
+		if = {
+			limit = {
+				has_variable = imprisoned_manually
+			}
+			remove_variable = imprisoned_manually
+		}
+		if = {
+			limit = {
+				has_triggered_character_modifier = disloyal_family_head_cmod
+			}
+			remove_triggered_character_modifier = disloyal_family_head_cmod
+		}
+		if = {
+			limit = {
+				has_variable = disloyal_family_head_var
+			}
+			remove_variable = disloyal_family_head_var
+		}
+		if = {
+			limit = {
+				has_variable = prominent_actor
+			}
+			remove_variable = prominent_actor
+		}
+		if = {
+			limit = {
+				has_character_modifier = increased_family_wages
+			}
+			remove_character_modifier = increased_family_wages
+		}
+		if = {
+			limit = {
+				is_mercenary = no
+			}
+			set_variable = {
+				name = came_from
+				value = scope:old_country
+			}
+		}
+		if = {
+			limit = {
+				num_holdings_owned > 0
+				NOT = {
+					employer = c:MER
+				}
+				employer = {
+					has_civil_war = no
+				}
+			}
+			every_holdings = {
+				root = {
+					remove_holding = prev
+				}
+			}
+		}
+		if = {
+			limit = {
+				prominence > 0
+			}
+			add_prominence = {
+				value = 0
+				subtract = prominence
+			}
+		}
+		if = {
+			limit = {
+				popularity > 0
+			}
+			add_popularity = {
+				value = 0
+				subtract = {
+					value = popularity
+					divide = 2
+				}
+			}
+		}
+	}
+	events = {
+		character_events.4
+		character_events.16
+	}
+}
+
+on_province_colonized = {
+	events = {
+
+	}
+}
+
+on_ownership_change = { #province scope
+	effect = {
+		if = {
+			limit = {
+				exists = holding_owner
+			}
+			holding_owner = {
+				remove_holding = root
+			}
+		}
+		# Generic colonial-claims hostility: any other country holding a claim
+		# on this province resents the new owner (se_CLAIM_HOSTILITY.txt).
+		CLAIM_HOSTILITY_on_transfer = yes
+		# Generic de jure irredentism: if the new owner has not integrated this
+		# land's rightful (frozen 1815) culture, alien rule breeds disaffection
+		# and the rightful culture's kin-state gains a claim (se_DEJURE.txt).
+		DEJURE_on_ownership_change = yes
+		# audit-fix (#79): a state-set frontier pull (migr_gov_pull) belongs to the
+		# setting state, not the soil — clear it so the new owner does not inherit a
+		# phantom migration draw it never established (se_MIGRATION.txt).
+		MIGRATION_on_ownership_change = yes
+	}
+}
+
+on_province_occupied = { #province scope, it will fire AS WELL as on_siege_won
+	effect = {
+		# Generic colonial-claims hostility: a wartime occupation of land another
+		# country claims stings the claimant (milder than a seizure; se_CLAIM_HOSTILITY.txt).
+		CLAIM_HOSTILITY_on_incursion = yes
+	}
+}
+
+on_great_battle_won_country = { #root = country scope of the main unit on the winning side, scope:actor = main unit on the winning side, scope:target = main unit on the losing side
+	
+}
+
+on_battle_won_country = { #root = country scope of the main unit on the winning side, scope:actor = main unit on the winning side, scope:target = main unit on the losing side
+
+}
+
+on_great_battle_lost_country = { #root = country scope of the main unit on the losing side, scope:actor = main unit on the losing side, scope:target = main unit on the winning side
+
+}
+
+on_battle_lost_country = { #root = country scope of the main unit on the losing side, scope:actor = main unit on the losing side, scope:target = main unit on the winning side
+
+}
+
+# scope is country being annexed
+# scope:actor = country doing the annexing
+on_military_annex = {
+	effect = {
+		on_annexation_event_effect = yes
+		every_country_treasure = {
+			add_to_list = annexed_treasures
+		}
+	}
+}
+
+on_diplomatic_annex = {
+	effect = {
+		on_diplo_annexation_event_effect = yes
+	}
+}
+
+on_civil_war_annex = {
+	effect = {
+		on_annexation_event_effect = yes
+	}
+}
+
+
+on_invention = {
+
+}
+
+# Scope is the governor getting his policy changed
+on_policy_change = {
+	effect = {
+		if = {
+			limit = { is_ruler = no }
+			employer = { 
+				add_tyranny = {
+					value = 125
+					subtract = root.employer.current_ruler.popularity
+					multiply = 0.01
+				}
+			}
+		}
+	}
+}
+
+
+# Scope is character losing holding, with target the province lost.
+on_holding_lost = {
+	#effect = {
+		#if = { #Deprecated
+		#	limit = {
+		#		is_alive = yes
+		#	}
+		#	add_character_modifier = {
+		#		name = holding_lost
+		#		duration = 1825
+		#		mode = extend
+		#	}
+		#}
+	#}
+}
+
+#character yearly pulses
+disease_possibilities = {
+	trigger = {
+		is_alive = yes
+		exists = employer
+		has_any_tier_1_2_3_illness_trigger = yes
+	}
+	random_events = {
+		10 = traits.8
+		10 = traits.10
+		10 = traits.11
+		10 = traits.12
+		10 = traits.14 
+		10 = traits.15 
+		150 = 0
+	}	
+}
+
+treatment_pulse = {
+	trigger = {
+		is_alive = yes
+		has_variable = seeking_treatment
+	}
+
+}
+
+character_story_events = 
+{
+
+}
+
+character_traits_pulse = 
+{
+	random_events = 
+	{
+		1000 = 0
+		300 = traits.1 #VERY NEEDED DON'T REMOVE!
+		2 = traits.2
+	}
+
+}
+
+yearly_medical_pulse = 
+{
+	random_events = 
+	{
+		150 = 0
+		#Illness
+		4 = traits.4
+		2 = traits.6
+		2 = traits.8
+		1 = health.6 # depression
+		4 = health.7 # getting better from depression
+		30 = death.2 # old age
+		1 = traits.18
+	}
+}
+
+yearly_debt_pulse = {
+	trigger = {
+		wealth < 0
+		prisoner = no
+		is_adult = yes
+	}
+	random_events = {
+		20 = 0
+		20 = character_events.10
+		20 = character_events.12
+		20 = character_events.13
+		20 = character_events.19
+	}
+}
+
+yearly_culture_religion_switch_pulse = {
+	random_events = {
+		98 = 0
+		1 = character_events.21
+		1 = character_events.22
+		2 = character_events.23
+		2 = character_events.24
+	}
+}
+
+yearly_character_murder_pulse = {
+	events = {
+	
+	}
+}
+
+
+yearly_disloyal_generals_delay_pulse = {
+
+}
+
+yearly_financial_support_pulse = {
+	random_events = {
+		100 = 0
+		#50 = character_events.36
+		#50 = character_events.37
+	}
+}
+
+on_subject_defect = { #scope:future_overlord = country that stole vassal, scope:target_subject  = vassal being stolen
+	effect = {
+		add_opinion = {
+			modifier = stole_a_vassal_from_us
+			target = scope:future_overlord
+		}
+		
+		add_opinion = {
+			modifier = free_from_old_overlord
+			target = scope:target_subject
+		}
+	}
+}
+
+on_great_work_anniversary = {
+	events = {
+	}
+}
+
+on_great_work_completed = {	
 	effect = {
 		# CHI-only: a Great Work (the engine wonder system) completed — emit a LOG
 		# and nudge civic_identity (the narrative gardens + real wonders synergize).
@@ -988,63 +988,63 @@ on_great_work_completed = {
 			}
 		}
 	}
-
-}
-
-on_great_work_destroyed = {
-#scope:target = the builder of the destroyed great work
-
-}
-
-on_action_requiring_senate_approval = { #If you change this, also change the scripted effect: change_religion_effect
-	effect = {
-		if = {
-			limit = {
-				has_senate_approval < define:NPolitics|SENATE_REQUIRED_APPROVAL_WITHOUT_PENALTIES #This is just the number from defines.
-				is_republic = yes
-				is_ai = no
-				NOT = { has_variable = dictatorship_enabled }
-				NOT = { has_variable = one_senatorial_bypass }
-			}
-			add_tyranny = {
-				# Calculates the percentage of disapproval
-				value = define:NPolitics|SENATE_REQUIRED_APPROVAL_WITHOUT_PENALTIES
-				subtract = has_senate_approval
-				divide = define:NPolitics|SENATE_REQUIRED_APPROVAL
-				
-				# This is the real value that you want for 100% of the effect
-				multiply = 20
-			}
-		}
-		if = {
-			limit = { has_variable = one_senatorial_bypass }
-			custom_tooltip = senatorial_bypass_spent_tt
-			remove_variable = one_senatorial_bypass
-			set_ignore_senate_approval = no
-		}
-	}
-}
-
-on_disband_legion_unit = {
-	# what: when units belonging to a legion are disbanded.
-	# scope country, 
-	# scope:target legion,
-	# scope:unit unit,
-}
-
-on_legion_dissolved = {
-	# what: just before a legion is completely destroyed and their remaining units disbanded.
-	# note: empty legions are not destroyed automatically,
-	# scope legion,
-}
-
-on_gw_construction_job_completed = {
-	#Scope Character
-	effect = {
-		add_gold = 200
-		add_loyalty = loyalty_gw_job_completed
-		add_prominence = prominence_medium
-		add_popularity = popularity_large
-		add_finesse = 1
-	}
-}
+
+}
+
+on_great_work_destroyed = {
+#scope:target = the builder of the destroyed great work
+
+}
+
+on_action_requiring_senate_approval = { #If you change this, also change the scripted effect: change_religion_effect
+	effect = {
+		if = {
+			limit = {
+				has_senate_approval < define:NPolitics|SENATE_REQUIRED_APPROVAL_WITHOUT_PENALTIES #This is just the number from defines.
+				is_republic = yes
+				is_ai = no
+				NOT = { has_variable = dictatorship_enabled }
+				NOT = { has_variable = one_senatorial_bypass }
+			}
+			add_tyranny = {
+				# Calculates the percentage of disapproval
+				value = define:NPolitics|SENATE_REQUIRED_APPROVAL_WITHOUT_PENALTIES
+				subtract = has_senate_approval
+				divide = define:NPolitics|SENATE_REQUIRED_APPROVAL
+				
+				# This is the real value that you want for 100% of the effect
+				multiply = 20
+			}
+		}
+		if = {
+			limit = { has_variable = one_senatorial_bypass }
+			custom_tooltip = senatorial_bypass_spent_tt
+			remove_variable = one_senatorial_bypass
+			set_ignore_senate_approval = no
+		}
+	}
+}
+
+on_disband_legion_unit = {
+	# what: when units belonging to a legion are disbanded.
+	# scope country, 
+	# scope:target legion,
+	# scope:unit unit,
+}
+
+on_legion_dissolved = {
+	# what: just before a legion is completely destroyed and their remaining units disbanded.
+	# note: empty legions are not destroyed automatically,
+	# scope legion,
+}
+
+on_gw_construction_job_completed = {
+	#Scope Character
+	effect = {
+		add_gold = 200
+		add_loyalty = loyalty_gw_job_completed
+		add_prominence = prominence_medium
+		add_popularity = popularity_large
+		add_finesse = 1
+	}
+}

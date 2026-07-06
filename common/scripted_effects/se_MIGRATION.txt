@@ -253,6 +253,8 @@ MIGRATION_border_friction_on_arrival = {
 # restacks faster than it fades. Scope: destination province; expects
 # scope:migr_receiver and scope:migr_sender set by the caller.
 MIGRATION_border_friction_opinions = {
+	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
+	LOG_enter = { sys = MIGR  fn = "MIGRATION_border_friction_opinions" }
 	if = {
 		limit = { NOT = { scope:migr_receiver = { this = scope:migr_sender } } }
 		scope:migr_receiver = {
@@ -263,6 +265,7 @@ MIGRATION_border_friction_opinions = {
 		}
 		LOG_line = { sys = MIGR  msg = "border friction: two-way opinion knock [scope:migr_receiver.GetTag]<->[scope:migr_sender.GetTag]" }   # audit-fix (#79): standing LOG rule
 	}
+	LOG_exit = { sys = MIGR  fn = "MIGRATION_border_friction_opinions"  result = OK }
 }
 
 # ======================================================================
@@ -282,6 +285,8 @@ MIGRATION_border_friction_opinions = {
 # ======================================================================
 MIGRATION_border_friction_breaking_point = {
 	# A play needs two distinct countries; a stateless/self-owned edge case aborts.
+	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
+	LOG_enter = { sys = MIGR  fn = "MIGRATION_border_friction_breaking_point" }
 	if = {
 		limit = { NOT = { scope:migr_receiver = { this = scope:migr_sender } } }
 
@@ -315,7 +320,12 @@ MIGRATION_border_friction_breaking_point = {
 				# only on a genuine match this iteration; the found_kin flag drives the
 				# clean-fail log for the no-match case.
 				save_scope_as = migr_irredentist
-				root = { set_variable = { name = migr_found_irredentist_kin  value = 1 } }
+				# [#98-fix task #98] set the found-kin flag on the SAME scope the sibling
+				# reads use (the friction province, this-scope of this effect), NOT on
+				# root: root here is the on_action's country, so the province-scope reads
+				# below never saw the flag and the no-kin clean-fail log fired even on a
+				# successful irredentist launch.
+				scope:migr_friction_prov = { set_variable = { name = migr_found_irredentist_kin  value = 1 } }
 				LOG_line = { sys = MIGR  msg = "BREAKING POINT (irredentist): settlers of [scope:migr_irredentist.GetTag]'s culture now dominate [scope:migr_friction_prov.GetName]; [scope:migr_irredentist.GetTag] presses a play vs [scope:migr_receiver.GetTag]" }
 				AI_begin_diplomatic_play = {
 					play_instigator = scope:migr_irredentist
@@ -329,13 +339,15 @@ MIGRATION_border_friction_breaking_point = {
 				DIPLOMACY_seed_feature_play_success = yes
 			}
 			if = {
-				limit = { NOT = { has_variable = migr_found_irredentist_kin } }
+				# [#98-fix task #98] read the flag on the SAME province scope it is set on.
+				limit = { NOT = { scope:migr_friction_prov = { has_variable = migr_found_irredentist_kin } } }
 				# the flipped culture speaks for no state (or only for the owner):
 				# no coherent irredentist claimant — the strain + opinion hit stand,
 				# but no play fires.
 				LOG_fail = { sys = MIGR  fn = "MIGRATION_border_friction_breaking_point"  reason = "province flipped to a culture with no kin-state to press an irredentist play; opinions banked, no play" }
 			}
-			if = { limit = { has_variable = migr_found_irredentist_kin }  remove_variable = migr_found_irredentist_kin }
+			# [#98-fix task #98] clear the marker on the province scope it lives on.
+			if = { limit = { scope:migr_friction_prov = { has_variable = migr_found_irredentist_kin } }  scope:migr_friction_prov = { remove_variable = migr_found_irredentist_kin } }
 		}
 		else = {
 			# NOT FLIPPED — a resented foreign minority who have NOT taken over; the
@@ -358,6 +370,7 @@ MIGRATION_border_friction_breaking_point = {
 	else = {
 		LOG_fail = { sys = MIGR  fn = "MIGRATION_border_friction_breaking_point"  reason = "receiver and sender are the same country; no play launched" }
 	}
+	LOG_exit = { sys = MIGR  fn = "MIGRATION_border_friction_breaking_point"  result = OK }
 }
 
 # Bleed one notch of accumulated influx off an owned province each decade pulse.
@@ -438,9 +451,12 @@ MIGRATION_seed_claim_if_flipped = {
 #   this = the province that just changed owner.
 # ======================================================================
 MIGRATION_on_ownership_change = {
+	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
+	LOG_enter = { sys = MIGR  fn = "MIGRATION_on_ownership_change" }
 	if = {
 		limit = { has_variable = migr_gov_pull }
 		remove_variable = migr_gov_pull
 		LOG_line = { sys = MIGR  msg = "ownership change: cleared inherited frontier pull on [this.GetName] (state incentive does not transfer with the land)" }
 	}
+	LOG_exit = { sys = MIGR  fn = "MIGRATION_on_ownership_change"  result = OK }
 }
