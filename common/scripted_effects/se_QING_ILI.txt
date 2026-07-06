@@ -77,6 +77,9 @@ QING_ili_commit_frontier = {
 	# and a spur to the reformers who want the arsenals that armed it.
 	QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
 	add_country_modifier = { name = qing_ili_campaign_mobilised  duration = 3650 }
+	# [#91 item D] concrete: the mobilisation is a REAL host now — Zuo's Chu Army 楚軍
+	# musters and marches toward the New Dominion, riding alongside the abstract modifier.
+	QING_ili_raise_reconquest_legion = yes
 	LOG_line = { sys = QING  msg = "ili: throne backs the FRONTIER (Zuo Zongtang) for [ROOT.GetTag]" }
 	# queue the reconquest reckoning.
 	trigger_event = { id = qing_ili.2  days = { 120 300 } }
@@ -100,6 +103,11 @@ QING_ili_choose_coast = {
 	# the coastal-defence dividend: the funds Zuo would have burned go to the Beiyang fleet.
 	add_country_modifier = { name = qing_ili_coastal_priority  duration = -1 }
 	QING_ili_apply_control_band = yes
+	QING_ili_apply_prov_band = yes   # [#91-fix task #91] stamp the map at this discrete stage (de-pulsed)
+	# [#91 item D] concrete: this is the worst stage — the New Dominion is formally
+	# written off. The real ILI autonomous_governorship actually breaks away from the
+	# throne (falls back to the contested-province band if ILI is not a live subject).
+	QING_ili_break_ili_free = yes
 	LOG_line = { sys = QING  msg = "ili: throne chooses the COAST (Li Hongzhang) — Xinjiang abandoned for [ROOT.GetTag]" }
 	LOG_exit = { sys = QING  fn = "QING_ili_choose_coast"  result = OK }
 }
@@ -125,6 +133,7 @@ QING_ili_reconquest_win = {
 		QING_ili_close_dungan = yes
 	}
 	QING_ili_apply_control_band = yes
+	QING_ili_apply_prov_band = yes   # [#91-fix task #91] stamp the map at this discrete stage (de-pulsed)
 	LOG_line = { sys = QING  msg = "ili: RECONQUEST succeeds (Yaqub Beg destroyed) for [ROOT.GetTag]" }
 	# the campaign modifier lifts; the Ili valley remains under Russian occupation → the showdown.
 	remove_country_modifier = qing_ili_campaign_mobilised
@@ -148,6 +157,7 @@ QING_ili_reconquest_fail = {
 	add_legitimacy = -5
 	remove_country_modifier = qing_ili_campaign_mobilised
 	QING_ili_apply_control_band = yes
+	QING_ili_apply_prov_band = yes   # [#91-fix task #91] stamp the map at this discrete stage (de-pulsed)
 	LOG_line = { sys = QING  msg = "ili: reconquest FALTERS (frontier lost, treasury spent) for [ROOT.GetTag]" }
 	LOG_exit = { sys = QING  fn = "QING_ili_reconquest_fail"  result = OK }
 }
@@ -201,6 +211,7 @@ QING_ili_ratify_livadia = {
 	QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 8 }
 	add_legitimacy = -5
 	QING_ili_apply_control_band = yes
+	QING_ili_apply_prov_band = yes   # [#91-fix task #91] stamp the map at this discrete stage (de-pulsed)
 	LOG_line = { sys = QING  msg = "ili: Livadia RATIFIED (Ili passes ceded, humiliation) for [ROOT.GetTag]" }
 	LOG_exit = { sys = QING  fn = "QING_ili_ratify_livadia"  result = OK }
 }
@@ -228,6 +239,7 @@ QING_ili_zeng_triumph = {
 	add_stability = 1
 	add_country_modifier = { name = qing_ili_frontier_secured  duration = -1 }
 	QING_ili_apply_control_band = yes
+	QING_ili_apply_prov_band = yes   # [#91-fix task #91] stamp the map at this discrete stage (de-pulsed)
 	LOG_line = { sys = QING  msg = "ili: ZENG JIZE wins St Petersburg (Ili recovered) — diplomatic victory for [ROOT.GetTag]" }
 	LOG_exit = { sys = QING  fn = "QING_ili_zeng_triumph"  result = OK }
 }
@@ -275,4 +287,182 @@ QING_ili_apply_control_band = {
 		add_country_modifier = { name = qing_xinjiang_grip_lost  duration = -1 }
 		LOG_line = { sys = QING  msg = "band xinjiang = grip_lost for [ROOT.GetTag] (control=[ROOT.MakeScope.GetVariable('qing_xinjiang_control').GetValue|0])" }
 	}
+	# [#91 item D] concrete: the province band is mirrored onto the REAL Xinjiang ground
+	# by QING_ili_apply_prov_band — but NOT here. That sweep is DISCRETE, driven only by
+	# the stage-resolution effects where the grip meter actually changes (choose-coast,
+	# reconquest win/fail, ratify, Zeng triumph). Calling it from this per-pulse band
+	# applier was a perf regression (#91-fix, task #91): a full-area scan every quarter
+	# for a meter that only moves at fixed chain stages. Keep this applier O(1) — the
+	# country-modifier band above is all the pulse needs; the province sweep is fired at
+	# the stage transitions instead (mirrors #83's de-pulsing of the nwcrop scan).
+}
+
+# ======================================================================
+# [#91 item D] PROVINCE-BAND APPLICATION — stamp the grip onto the real Xinjiang
+# ground. Xinjiang (新疆) = the two oasis-and-steppe areas Dzungaria (準部) and Tarim
+# (回部); Urumqi p:2930 sits in Tarim. We iterate the AREAS themselves, OWNER-
+# INDEPENDENTLY: at the 1815 setup this ground is held not by CHI directly but by
+# its subjects — the ILI autonomous_governorship (own_control_core 2930/9597/6973…)
+# and the XNG client_state (Kashgaria) — so the old every_owned_province scan of
+# CHI's directly-held provinces stamped NOTHING and the meter never reached the map
+# (#91-fix, task #91: was a BLOCKER — concrete rule silently broken). area:<Name> =
+# { every_area_province } is the proven owner-independent idiom (Terra-Indomita
+# punt_decisions.txt:220, Invictus jomon_decisions.txt:182 — 768/889 uses). Keeps
+# exactly one band modifier per province in step with the meter; idempotent + self-
+# correcting. This is O(area) and DISCRETE — called only at stage transitions, never
+# per pulse. Scope: country (ROOT = CHI).
+# ======================================================================
+QING_ili_apply_prov_band = {
+	LOG_enter = { sys = QING  fn = "QING_ili_apply_prov_band" }
+	# a firm grip → the New Dominion pacified and productive.
+	if = {
+		limit = { var:qing_xinjiang_control >= 70 }
+		area:Dzungaria = {
+			every_area_province = {
+				limit = { NOT = { has_province_modifier = qing_xinjiang_prov_secured } }
+				remove_province_modifier = qing_xinjiang_prov_contested
+				add_province_modifier = { name = qing_xinjiang_prov_secured  duration = -1 }
+			}
+		}
+		area:Tarim = {
+			every_area_province = {
+				limit = { NOT = { has_province_modifier = qing_xinjiang_prov_secured } }
+				remove_province_modifier = qing_xinjiang_prov_contested
+				add_province_modifier = { name = qing_xinjiang_prov_secured  duration = -1 }
+			}
+		}
+		LOG_line = { sys = QING  msg = "ili: prov band = SECURED on the New Dominion ground for [ROOT.GetTag]" }
+	}
+	# a collapsed grip → the far march contested, unruly, bleeding.
+	else_if = {
+		limit = { var:qing_xinjiang_control <= 20 }
+		area:Dzungaria = {
+			every_area_province = {
+				limit = { NOT = { has_province_modifier = qing_xinjiang_prov_contested } }
+				remove_province_modifier = qing_xinjiang_prov_secured
+				add_province_modifier = { name = qing_xinjiang_prov_contested  duration = -1 }
+			}
+		}
+		area:Tarim = {
+			every_area_province = {
+				limit = { NOT = { has_province_modifier = qing_xinjiang_prov_contested } }
+				remove_province_modifier = qing_xinjiang_prov_secured
+				add_province_modifier = { name = qing_xinjiang_prov_contested  duration = -1 }
+			}
+		}
+		LOG_line = { sys = QING  msg = "ili: prov band = CONTESTED on the New Dominion ground for [ROOT.GetTag]" }
+	}
+	# mid-range → neither band; clear any stale stamp from a prior extreme.
+	else = {
+		area:Dzungaria = {
+			every_area_province = {
+				limit = {
+					OR = {
+						has_province_modifier = qing_xinjiang_prov_secured
+						has_province_modifier = qing_xinjiang_prov_contested
+					}
+				}
+				remove_province_modifier = qing_xinjiang_prov_secured
+				remove_province_modifier = qing_xinjiang_prov_contested
+			}
+		}
+		area:Tarim = {
+			every_area_province = {
+				limit = {
+					OR = {
+						has_province_modifier = qing_xinjiang_prov_secured
+						has_province_modifier = qing_xinjiang_prov_contested
+					}
+				}
+				remove_province_modifier = qing_xinjiang_prov_secured
+				remove_province_modifier = qing_xinjiang_prov_contested
+			}
+		}
+		LOG_line = { sys = QING  msg = "ili: prov band = CLEARED (mid-range grip) on the New Dominion ground for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_ili_apply_prov_band"  result = OK }
+}
+
+# ======================================================================
+# [#91 item D] RAISE THE RECONQUEST HOST — Zuo Zongtang's Chu Army (楚軍) musters
+# and marches west. A REAL legion hung off the mobilisation modifier: prefer to
+# raise it on the frontier itself (a Qing-held Xinjiang province — Urumqi p:2930
+# if held, else any owned Dzungaria/Tarim province), so it stands where the war
+# will be fought; fall back to the capital if the far west is wholly lost, and
+# LOG_fail if there is nowhere at all to muster. raise_legion via governorship
+# scope, the proven idiom (se_QING_SELFSTR.txt:301-340). Scope: country (ROOT=CHI).
+# ======================================================================
+QING_ili_raise_reconquest_legion = {
+	LOG_enter = { sys = QING  fn = "QING_ili_raise_reconquest_legion" }
+	# 1) Urumqi (p:2930) if the Qing hold it — the historical forward base.
+	if = {
+		limit = { exists = p:2930  p:2930 = { owner = ROOT } }
+		p:2930 = { state.governorship = { QING_ili_raise_reconquest_legion_at = { loc = p:2930 } } }
+		LOG_line = { sys = QING  msg = "ili: Chu Army 楚軍 raised at Urumqi (p:2930) for [ROOT.GetTag]" }
+	}
+	# 2) any owned Xinjiang province (Dzungaria/Tarim) as the muster point.
+	else_if = {
+		limit = {
+			any_owned_province = { OR = { is_in_area = Dzungaria  is_in_area = Tarim } }
+		}
+		random_owned_province = {
+			limit = { OR = { is_in_area = Dzungaria  is_in_area = Tarim } }
+			save_scope_as = ili_muster_prov
+			state.governorship = { QING_ili_raise_reconquest_legion_at = { loc = scope:ili_muster_prov } }
+		}
+		LOG_line = { sys = QING  msg = "ili: Chu Army 楚軍 raised on the Xinjiang frontier for [ROOT.GetTag]" }
+	}
+	# 3) the far west is wholly lost — muster at the capital and march west.
+	else_if = {
+		limit = { exists = capital_scope }
+		capital_scope = { state.governorship = { QING_ili_raise_reconquest_legion_at = { loc = ROOT.capital_scope } } }
+		LOG_line = { sys = QING  msg = "ili: Chu Army 楚軍 raised at capital (no Xinjiang province held) for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_ili_raise_reconquest_legion"  reason = "no Xinjiang province and no capital to muster the Chu Army for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_ili_raise_reconquest_legion"  result = OK }
+}
+
+# Raise one Chu Army legion at $loc$ (a province scope). Called in governorship
+# scope. A frontier field host built around Zuo's massed field guns — 3 line
+# battalions + 2 artillery pieces. Mirrors QING_selfstr_raise_evarmy_legion.
+QING_ili_raise_reconquest_legion_at = {
+	# $loc$ = province scope for the legion's muster point
+	raise_legion = {
+		create_unit = {
+			name = "Chu Army"
+			location = $loc$
+			sub_unit = regular_infantry
+			add_subunit = regular_infantry
+			add_subunit = regular_infantry
+			add_subunit = artillery
+			add_subunit = artillery
+		}
+	}
+}
+
+# ======================================================================
+# [#91 item D] BREAK ILI FREE — the worst-stage concrete: when the New Dominion is
+# written off, the real ILI autonomous_governorship (setup/main/00_default.txt:847)
+# actually breaks away from the Son of Heaven. release_subject is the proven idiom
+# (se_QING_VASSAL.txt:110; Invictus release_subject=c:MSL), ROOT = the overlord.
+# GUARDED on ILI being a LIVE CHI subject: if it is not (already freed, annexed, or
+# absent at runtime), we LOG_fail and fall back to stamping the contested-province
+# band so the loss still shows on the map. Scope: country (ROOT = CHI).
+# ======================================================================
+QING_ili_break_ili_free = {
+	LOG_enter = { sys = QING  fn = "QING_ili_break_ili_free" }
+	if = {
+		limit = { exists = c:ILI  c:ILI = { is_subject_of = ROOT } }
+		release_subject = c:ILI
+		LOG_line = { sys = QING  msg = "ili: the New Dominion written off — real subject ILI (伊犁) breaks free of [ROOT.GetTag]" }
+	}
+	else = {
+		# ILI is not a live CHI subject at runtime — fall back to the province band so
+		# the collapse of the grip is still stamped on the real Xinjiang ground.
+		LOG_fail = { sys = QING  fn = "QING_ili_break_ili_free"  reason = "ILI not a live CHI subject (already freed/annexed/absent) — fall back to contested province band for [ROOT.GetTag]" }
+		QING_ili_apply_prov_band = yes
+	}
+	LOG_exit = { sys = QING  fn = "QING_ili_break_ili_free"  result = OK }
 }

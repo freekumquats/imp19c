@@ -118,6 +118,9 @@ QING_students_graduate = {
 		# by the caller (it drains abroad), so add its magnitude to returned here.
 		change_variable = { name = qing_students_returned  add = var:qing_students_graduate_mag }
 		if = { limit = { var:qing_students_returned > 100 } set_variable = { name = qing_students_returned  value = 100 } }
+		# [#91 item C] the returned pool is now the SUMMARY counter; hang a real
+		# returnee character off it at every +25 milestone (concrete over abstract).
+		QING_students_check_milestone = yes
 		# the human-capital dividend: trained men advance the reform tracks.
 		QING_selfstr_advance = { amount = 6 }
 		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = 4 }
@@ -151,6 +154,9 @@ QING_students_recall = {
 		change_variable = { name = qing_students_salvage_tmp  divide = 4 }
 		change_variable = { name = qing_students_returned  add = var:qing_students_salvage_tmp }
 		if = { limit = { var:qing_students_returned > 100 } set_variable = { name = qing_students_returned  value = 100 } }
+		# [#91 item C] the salvaged near-finished men are real returnees too — let
+		# the milestone check hang a concrete character off the raised summary pool.
+		QING_students_check_milestone = yes
 		# the rest are forfeit — the cohort abroad is dissolved.
 		set_variable = { name = qing_students_abroad  value = 0 }
 		# the blow: prestige loss + a jolt of reform pressure, and the alarm subsides
@@ -161,6 +167,91 @@ QING_students_recall = {
 		LOG_line = { sys = QING  msg = "students: MISSION RECALLED (the 1881 blow) for [ROOT.GetTag]" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_students_recall"  result = OK }
+}
+
+# ======================================================================
+# [#91 item C] MILESTONE — hang a REAL returnee character off the returned pool.
+# CONCRETE OVER ABSTRACT: qing_students_returned stays the 0..100 summary counter;
+# every time it crosses a new +25 band (25/50/75/100) a real, named Western-trained
+# returnee walks into the Qing court to man the arsenals and academies. Guarded so
+# it fires ONCE PER MILESTONE (qing_students_last_milestone remembers the highest
+# band already honoured) AND capped against court flooding (skip if the returnee
+# corps is already at strength). Country scope (ROOT = CHI).
+# ======================================================================
+QING_students_check_milestone = {
+	LOG_enter = { sys = QING  fn = "QING_students_check_milestone" }
+	if = { limit = { NOT = { has_variable = qing_students_last_milestone } } set_variable = { name = qing_students_last_milestone  value = 0 } }
+	# the milestone band the pool has now reached: the highest +25 threshold <= returned.
+	# [#91-fix task #91] was floor(returned/25)*25 via change_variable divide-then-multiply
+	# — a NO-OP because Imperator variables are floating-point and change_variable takes no
+	# rounding key, so milestone_tmp == returned and the once-per-band guard below never
+	# held (a returnee spawned nearly every graduation pulse up to the flooding cap of 6).
+	# Snapped to an exact band by literal thresholds (proven primitives only — no unproven
+	# round idiom), so 'milestone_tmp > last_milestone' fires exactly once per +25 band.
+	if =      { limit = { var:qing_students_returned >= 100 } set_variable = { name = qing_students_milestone_tmp  value = 100 } }
+	else_if = { limit = { var:qing_students_returned >= 75  } set_variable = { name = qing_students_milestone_tmp  value = 75  } }
+	else_if = { limit = { var:qing_students_returned >= 50  } set_variable = { name = qing_students_milestone_tmp  value = 50  } }
+	else_if = { limit = { var:qing_students_returned >= 25  } set_variable = { name = qing_students_milestone_tmp  value = 25  } }
+	else =    { set_variable = { name = qing_students_milestone_tmp  value = 0 } }
+	if = {
+		# a NEW band has been crossed since we last honoured one.
+		limit = {
+			var:qing_students_milestone_tmp >= 25
+			var:qing_students_milestone_tmp > var:qing_students_last_milestone
+		}
+		# advance the remembered milestone regardless of the flooding cap, so a
+		# capped court does not re-trigger every pulse once it drops below the cap.
+		set_variable = { name = qing_students_last_milestone  value = var:qing_students_milestone_tmp }
+		if = {
+			# COURT-FLOODING GUARD: only conjure a man if fewer than 6 living
+			# mission returnees are already at ROOT's court (each carries the
+			# qing_student_returnee marker variable so they are countable).
+			limit = {
+				any_character = {
+					count < 6
+					employer = ROOT
+					is_alive = yes
+					has_variable = qing_student_returnee
+				}
+			}
+			QING_students_spawn_returnee = yes
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_students_check_milestone"  reason = "milestone reached but returnee court full (flooding cap) — no spawn" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_students_check_milestone"  result = OK }
+}
+
+# ======================================================================
+# [#91 item C] SPAWN A RETURNEE — the concrete object. A young Western-trained man
+# (a Zhan Tianyou / Tang Shaoyi figure) is conjured via the roster idiom
+# (se_QING_MECHANICS.txt:201-214), given a modernizer/education trait, and placed
+# at ROOT's court by QING_roster_finalize (home_country = ROOT). Marked with the
+# qing_student_returnee variable so the flooding guard can count him. Country scope.
+# ======================================================================
+QING_students_spawn_returnee = {
+	LOG_enter = { sys = QING  fn = "QING_students_spawn_returnee" }
+	create_character = {
+		age = 24
+		culture = han
+		religion = ROOT.religion
+		add_finesse = 7
+		add_charisma = 5
+		add_zeal = 3
+		add_martial = 4
+		# a modern, book-schooled man: the Western-academy education trait pair.
+		add_trait = scholar
+		add_trait = orator
+		save_scope_as = qing_student_returnee_new
+	}
+	scope:qing_student_returnee_new = {
+		QING_roster_finalize = { nick = "NICKNAME_QING_STUDENT_RETURNEE" }
+		# mark him as a countable mission returnee (concrete link back to the counter).
+		set_variable = { name = qing_student_returnee  value = 1 }
+		LOG_line = { sys = QING  msg = "students: returnee [this.GetName] entered the [ROOT.GetTag] court (milestone-spawned)" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_students_spawn_returnee"  result = OK }
 }
 
 # ======================================================================

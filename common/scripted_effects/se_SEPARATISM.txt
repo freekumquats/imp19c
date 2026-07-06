@@ -534,3 +534,91 @@ SEPARATISM_qing_pulse = {
 		LOG_fail = { sys = SEPAR  fn = SEPARATISM_qing_pulse  reason = "Qing separatism gate not met: neither ethnic tension over floor nor provincial power at warlord threshold, or on cooldown, or no disaffected high-unrest province" }
 	}
 }
+
+# ======================================================================
+# [#91 item M]  ETHNIC TENSION -> A REAL NAMED SEPARATIST REVOLT-LEADER.
+# The abstract qing_ethnic_tension counter drives the (rare, structural)
+# SEPARATISM_qing_pulse secession machinery above; this hangs a CONCRETE FACE off
+# the same counter — a real named revolt-leader who embodies the restive people
+# BEFORE (or instead of) a full breakaway. He is of the very ethnicity that is
+# chafing under Qing rule: his culture is taken from the FROZEN de jure culture
+# (var:dejure_culture) of the angriest alien-ruled province — the same rightful-
+# culture banner the secession core rallies to — so he is, by construction, "from
+# the ethnicity that actually lives there" (the firm backer rule). He is martial,
+# ambitious and brave, and estranged from the throne.
+#
+# THROTTLE: a cooldown variable (qing_revolt_leader_cd, ~4 years) rather than a
+# once-only flag, because a sprawling multiethnic realm may face SUCCESSIVE
+# frontier revolt-leaders (a Miao headman, then a Hui, then a Yakub-Beg-style
+# figure) as tension persists — but never more than one per window. Cheap: the
+# expensive province scan only runs after the tension gate + cooldown pass.
+# Throttled to the single human CHI player (called from QING_DECLINE_pulse).
+#   ROOT / this = c:CHI (human).
+# ======================================================================
+SEPARATISM_qing_spawn_revolt_leader = {
+	if = {
+		limit = {
+			NOT = { has_variable = qing_revolt_leader_cd }
+			has_variable = qing_ethnic_tension
+			var:qing_ethnic_tension >= @separatism_qing_tension_floor
+			# a genuinely restive alien-ruled province must exist to give the leader
+			# his cause and his culture (the same cheap seed gate the pulse uses).
+			any_owned_province = {
+				has_province_modifier = dejure_disaffection
+				has_variable = dejure_culture
+				province_unrest >= @separatism_unrest_threshold
+			}
+		}
+		LOG_enter = { sys = SEPAR  fn = SEPARATISM_qing_spawn_revolt_leader }
+		# ~4-year cooldown so persistent tension yields a slow succession of
+		# ringleaders, not a monthly flood.
+		set_variable = { name = qing_revolt_leader_cd  days = 1460 }
+		# the angriest disaffected de jure province names the aggrieved people.
+		ordered_owned_province = {
+			order_by = province_unrest
+			max = 1
+			limit = {
+				has_province_modifier = dejure_disaffection
+				has_variable = dejure_culture
+				province_unrest >= @separatism_unrest_threshold
+			}
+			save_scope_as = sep_revolt_focus
+			var:dejure_culture = { save_scope_as = sep_revolt_culture }
+		}
+		if = {
+			limit = { exists = scope:sep_revolt_culture }
+			# a frontier revolt captain: martial, ambitious, brave. Created with the
+			# aggrieved people's culture directly (proven: create_character
+			# culture = scope:X.culture at 00_ambitions.txt:1606) and re-pinned with
+			# set_culture = <scope> (se_QING_AFFINITY.txt:226) so he is unmistakably
+			# of the ethnicity that actually lives on the restive land.
+			create_character = {
+				age = 42
+				culture = scope:sep_revolt_culture
+				religion = ROOT.religion
+				add_martial = 7
+				add_charisma = 6
+				add_zeal = 5
+				add_trait = brave
+				add_trait = ambitious
+				save_scope_as = sep_revolt_leader
+			}
+			scope:sep_revolt_leader = {
+				# nail the culture to the aggrieved people even if the create-time
+				# culture scope resolved loosely.
+				set_culture = scope:sep_revolt_culture
+				QING_roster_finalize = { nick = "NICKNAME_QING_REVOLT_LEADER" }
+				# a frontier ringleader is no friend of the dynasty.
+				add_loyalty = loyalty_qing_estranged
+				LOG_line = { sys = SEPAR  msg = "revolt leader [this.GetName] (of the aggrieved [scope:sep_revolt_focus.GetName] people) arisen against [ROOT.GetTag] (ethnic_tension=[ROOT.MakeScope.GetVariable('qing_ethnic_tension').GetValue|0])" }
+			}
+		}
+		else = {
+			LOG_fail = { sys = SEPAR  fn = SEPARATISM_qing_spawn_revolt_leader  reason = "tension gate passed but no restive de jure province resolved a culture" }
+		}
+		LOG_exit = { sys = SEPAR  fn = SEPARATISM_qing_spawn_revolt_leader  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = SEPAR  fn = SEPARATISM_qing_spawn_revolt_leader  reason = "no revolt leader: ethnic tension below floor, on cooldown, or no high-unrest disaffected de jure province" }
+	}
+}

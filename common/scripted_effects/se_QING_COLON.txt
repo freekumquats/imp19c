@@ -265,35 +265,51 @@ QING_MIGR_move_one_nomad = {
 # ======================================================================
 QING_COLON_apply_nwcrop_capacity = {
 	LOG_enter = { sys = QING  fn = QING_COLON_apply_nwcrop_capacity }
+	# [#83 C1 perf] SINGLE full-map pass (was TWO every_province sweeps). The
+	# add-set (grows a NW crop AND lacks the modifier) and the remove-set (has the
+	# modifier AND no longer grows a NW crop) are mutually exclusive, so folding the
+	# two sweeps into one if/else-if visits each province ONCE instead of twice —
+	# behaviour-identical (same provinces gain/lose the modifier), half the visits.
+	# Scope stays GLOBAL by design: the lift is a property of the CROP, not the
+	# polity (see header) — gating to CHI-owned provinces was REJECTED as a
+	# behaviour change (it would strip the lift from non-Qing crop provinces).
 	every_province = {
 		limit = {
 			OR = {
-				trade_goods = maize
-				trade_goods = sweet_potato
-				trade_goods = potato
-				trade_goods = peanut
-				trade_goods = chili
+				# grows a NW crop but not yet lifted  -> ADD branch
+				AND = {
+					NOT = { has_province_modifier = qing_nwcrop_abundance }
+					OR = {
+						trade_goods = maize
+						trade_goods = sweet_potato
+						trade_goods = potato
+						trade_goods = peanut
+						trade_goods = chili
+					}
+				}
+				# lifted but no longer grows a NW crop  -> REMOVE branch
+				AND = {
+					has_province_modifier = qing_nwcrop_abundance
+					NOR = {
+						trade_goods = maize
+						trade_goods = sweet_potato
+						trade_goods = potato
+						trade_goods = peanut
+						trade_goods = chili
+					}
+				}
 			}
-			NOT = { has_province_modifier = qing_nwcrop_abundance }
 		}
-		add_province_modifier = { name = qing_nwcrop_abundance  duration = -1 }
-		LOG_line = { sys = QING  msg = "NWCROP capacity lift applied to [this.GetName] (grows [this.GetTradeGoods.GetName])" }
-	}
-	# lift the modifier from any province that no longer grows a New World crop
-	# (e.g. a re-seeded / transferred province) so it never lingers falsely
-	every_province = {
-		limit = {
-			has_province_modifier = qing_nwcrop_abundance
-			NOR = {
-				trade_goods = maize
-				trade_goods = sweet_potato
-				trade_goods = potato
-				trade_goods = peanut
-				trade_goods = chili
-			}
+		if = {
+			limit = { NOT = { has_province_modifier = qing_nwcrop_abundance } }
+			add_province_modifier = { name = qing_nwcrop_abundance  duration = -1 }
+			LOG_line = { sys = QING  msg = "NWCROP capacity lift applied to [this.GetName] (grows [this.GetTradeGoods.GetName])" }
 		}
-		remove_province_modifier = qing_nwcrop_abundance
-		LOG_line = { sys = QING  msg = "NWCROP capacity lift removed from [this.GetName] (no longer a New World crop)" }
+		else = {
+			# has the modifier but fell out of the crop set (re-seeded / transferred)
+			remove_province_modifier = qing_nwcrop_abundance
+			LOG_line = { sys = QING  msg = "NWCROP capacity lift removed from [this.GetName] (no longer a New World crop)" }
+		}
 	}
 	LOG_exit = { sys = QING  fn = QING_COLON_apply_nwcrop_capacity  result = OK }
 }

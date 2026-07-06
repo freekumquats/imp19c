@@ -78,11 +78,83 @@ QING_vassal_abandon = {
 		add_prestige = -25
 		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 6 }
 		LOG_line = { sys = QING  msg = "vassal: ABANDONED $vassal$ (tributary order crumbles) for [ROOT.GetTag]" }
+		# [#91 item A] CONCRETE ADDITION (additive; the counter nudges above are UNCHANGED):
+		# actually FREE the real tributary subject country that this vassal-word maps to.
+		# Only vassals that are genuinely current CHI subjects at 1815 are released;
+		# ryukyu is out of scope (folded to #81) and burma is not a CHI subject — both skip.
+		QING_vassal_free_real_subject = { vassal = $vassal$ }
 	}
 	else = {
 		LOG_fail = { sys = QING  fn = "QING_vassal_abandon"  reason = "$vassal$ already lost" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_vassal_abandon"  result = OK }
+}
+
+# ======================================================================
+# [#91 item A] CONCRETE ADDITION — free the REAL tributary subject country.
+# Maps the abstract vassal-word to the on-map subject tag and, IF that tag is
+# genuinely a current CHI subject, ends the subject relationship (release_subject,
+# ROOT = the overlord — same idiom as se_FUNC.txt:351 overlord={release_subject=...}
+# and Invictus release_subject=c:MSL). VERIFIED against setup/main/00_default.txt:
+#   korea   -> KOR  (real CHI tributary at 1815)            -> RELEASE
+#   vietnam -> VIE  (real CHI tributary at 1815)            -> RELEASE
+#   ryukyu  -> RYU  OUT OF SCOPE (folded to #81)            -> SKIP (do not touch)
+#   burma   -> BUR  NOT a CHI subject (independent at 1815) -> SKIP
+# The is_subject_of guard makes this idempotent and safe: anything not actually a
+# current CHI subject is LOG_fail'd, never touched. Country scope (ROOT = CHI).
+# ======================================================================
+QING_vassal_free_real_subject = {
+	LOG_enter = { sys = QING  fn = "QING_vassal_free_real_subject ($vassal$)" }
+	if = {
+		limit = { $vassal$ = korea  c:KOR = { is_subject_of = ROOT } }
+		release_subject = c:KOR
+		LOG_line = { sys = QING  msg = "vassal: freed real subject KOR (korea) from [ROOT.GetTag]" }
+	}
+	else_if = {
+		limit = { $vassal$ = vietnam  c:VIE = { is_subject_of = ROOT } }
+		release_subject = c:VIE
+		LOG_line = { sys = QING  msg = "vassal: freed real subject VIE (vietnam) from [ROOT.GetTag]" }
+	}
+	else = {
+		# ryukyu (#81), burma (not a CHI subject), or an already-freed KOR/VIE: no real subject to release.
+		LOG_fail = { sys = QING  fn = "QING_vassal_free_real_subject"  reason = "$vassal$ not a current CHI tributary subject (skip: ryukyu#81 / burma / already freed)" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_vassal_free_real_subject"  result = OK }
+}
+
+# ======================================================================
+# [#91 item A] DERIVABLE lost-marks — re-derive qing_vassal_lost_<v> from the LIVE
+# map so the summary flag always reflects reality (a tributary freed by ANY means —
+# abandonment here, war, a diplomatic play — flips its flag). korea/vietnam map to
+# real tags; ryukyu/burma have no CHI-subject tag to test, so their flags are left
+# untouched (managed by their own arcs). O(1) reads; called from QING_vassal_pulse.
+# This does NOT alter the qing_suzerain_prestige meter — the numeric AI/summary
+# layer is behaviourally unchanged (item A adds concrete objects, not new numbers).
+# ======================================================================
+QING_vassal_sync_lost_flags = {
+	LOG_enter = { sys = QING  fn = "QING_vassal_sync_lost_flags" }   # [#91-fix task #91] standing se_LOG rule: enter/exit were missing
+	# korea -> KOR
+	if = {
+		limit = { NOT = { exists = c:KOR } }
+		set_variable = { name = qing_vassal_lost_korea  value = 1 }
+	}
+	else_if = {
+		limit = { c:KOR = { is_subject_of = ROOT } }
+		if = { limit = { has_variable = qing_vassal_lost_korea } remove_variable = qing_vassal_lost_korea }
+	}
+	else = { set_variable = { name = qing_vassal_lost_korea  value = 1 } }
+	# vietnam -> VIE
+	if = {
+		limit = { NOT = { exists = c:VIE } }
+		set_variable = { name = qing_vassal_lost_vietnam  value = 1 }
+	}
+	else_if = {
+		limit = { c:VIE = { is_subject_of = ROOT } }
+		if = { limit = { has_variable = qing_vassal_lost_vietnam } remove_variable = qing_vassal_lost_vietnam }
+	}
+	else = { set_variable = { name = qing_vassal_lost_vietnam  value = 1 } }
+	LOG_line = { sys = QING  msg = "vassal: synced lost-marks from live map for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_vassal_sync_lost_flags"  result = OK }
 }
 
 # Pressure the encroaching power (defence spikes tension). Japan uses the rivalry
@@ -103,6 +175,7 @@ QING_vassal_pressure_encroacher = {
 QING_vassal_pulse = {
 	LOG_enter = { sys = QING  fn = "QING_vassal_pulse" }
 	QING_vassal_init = yes
+	QING_vassal_sync_lost_flags = yes   # [#91 item A] keep lost-marks derivable from the live map (summary layer only)
 	QING_vassal_apply_band = yes
 	LOG_exit = { sys = QING  fn = "QING_vassal_pulse"  result = OK }
 }

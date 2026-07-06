@@ -612,62 +612,170 @@ QING_gp_scan_plays = {
 	LOG_enter = { sys = QING  fn = "QING_gp_scan_plays" }
 	save_scope_as = qing_gp_self
 
-	# --- (A) plays the QING INSTIGATES that reach into a power's sphere ---------
-	# The Qing is the aggressor; the power whose Great-Game sphere the target land
-	# sits in bristles, its two rivals are quietly pleased.
+	# --- (A)+(B) MERGED single pass over the live-play list ---------------------
+	# [#86 task #86 — perf C4] This formerly ran TWO full every_in_global_list sweeps
+	# of global_all_diplomatic_plays per Qing pulse: (A) the Qing's OWN plays reaching
+	# into a power's sphere, and (B) a power's plays AGAINST the Qing. The two sweeps
+	# have PROVABLY DISJOINT filters — (A) requires play_instigator = self, (B) requires
+	# play_instigator != self — so no play ever matched both; they are folded into ONE
+	# pass with an if(A-filter)/else_if(B-filter) split, halving the list iteration.
+	#
+	# BEHAVIOURAL EQUIVALENCE (heightened-scrutiny per the fix-traceability rule): each
+	# play still does exactly its one A- or B-action (mutual exclusion preserved). The
+	# only effect of folding is the ORDER in which the per-play QING_DECLINE_nudge calls
+	# apply. Those nudges are clamped 0..100, so order can change a raw counter value
+	# ONLY at the 0/100 rails. Every consumer of these counters reads them through
+	# THRESHOLD bands (>=50 rivalry, >=75 predatory / QING_gp_rival_launch_play), and a
+	# rail discrepancy (99 vs 100, or 0 vs 1) lies on the SAME side of every threshold —
+	# so no downstream consumer can observe the reorder. Away from the rails addition is
+	# commutative and the result is bit-identical. The merge is equivalent for all
+	# observers.
+	#   (A) instigator = self  → classify TARGET LAND by sphere geography, press owner.
+	#   (B) target    = self  → classify KNOWN INSTIGATOR identity, press that power.
 	every_in_global_list = {
 		variable = global_all_diplomatic_plays
 		limit = {
-			# only the Qing's OWN plays, and only those about a piece of land
 			exists = var:play_instigator
-			var:play_instigator = scope:qing_gp_self
-			exists = var:play_target_area
+			# a play is relevant iff it is (A) the Qing's own land-grab, or (B) aimed
+			# at the Qing by someone else — the union of the two old filters.
+			OR = {
+				AND = {
+					var:play_instigator = scope:qing_gp_self
+					exists = var:play_target_area
+				}
+				AND = {
+					exists = var:play_target_country
+					var:play_target_country = scope:qing_gp_self
+					NOT = { var:play_instigator = scope:qing_gp_self }
+				}
+			}
 		}
-		# France sphere — Southeast Asia
+		# --- (A) the Qing is the aggressor: the power whose Great-Game sphere the
+		# target land sits in bristles, its two rivals are quietly pleased. -----------
 		if = {
-			limit = { var:play_target_area = { QING_gp_sphere_is_france = yes } }
-			scope:qing_gp_self = { QING_gp_play_pressure_france = { severity = 3 } }
+			limit = {
+				var:play_instigator = scope:qing_gp_self
+				exists = var:play_target_area
+			}
+			# France sphere — Southeast Asia
+			if = {
+				limit = { var:play_target_area = { QING_gp_sphere_is_france = yes } }
+				scope:qing_gp_self = { QING_gp_play_pressure_france = { severity = 3 } }
+			}
+			# Britain sphere — Burma + India
+			else_if = {
+				limit = { var:play_target_area = { QING_gp_sphere_is_britain = yes } }
+				scope:qing_gp_self = { QING_gp_play_pressure_britain = { severity = 3 } }
+			}
+			# Russia sphere — Central Asia, Siberia, Alaska
+			else_if = {
+				limit = { var:play_target_area = { QING_gp_sphere_is_russia = yes } }
+				scope:qing_gp_self = { QING_gp_play_pressure_russia = { severity = 3 } }
+			}
+			# else: the play is in no contested theater — no great power reacts.
 		}
-		# Britain sphere — Burma + India
-		else_if = {
-			limit = { var:play_target_area = { QING_gp_sphere_is_britain = yes } }
-			scope:qing_gp_self = { QING_gp_play_pressure_britain = { severity = 3 } }
+		# --- (B) the Qing is the target of one of the three powers' aggression. The
+		# menacing power's tension mounts; its two rivals ease (以夷制夷 from the
+		# defensive side). Classified by the KNOWN instigator identity, not geography. -
+		else = {
+			if = {
+				limit = { var:play_instigator = { tag = FRA } }
+				scope:qing_gp_self = { QING_gp_play_pressure_france = { severity = 3 } }
+			}
+			else_if = {
+				limit = { var:play_instigator = { tag = GBR } }
+				scope:qing_gp_self = { QING_gp_play_pressure_britain = { severity = 3 } }
+			}
+			else_if = {
+				limit = { var:play_instigator = { tag = RUS } }
+				scope:qing_gp_self = { QING_gp_play_pressure_russia = { severity = 3 } }
+			}
+			# else: the aggressor is not one of the three Great-Game powers — no
+			# named counter to move (the generic claim-hostility layer covers it).
 		}
-		# Russia sphere — Central Asia, Siberia, Alaska
-		else_if = {
-			limit = { var:play_target_area = { QING_gp_sphere_is_russia = yes } }
-			scope:qing_gp_self = { QING_gp_play_pressure_russia = { severity = 3 } }
-		}
-		# else: the play is in no contested theater — no great power reacts.
 	}
 
-	# --- (B) plays a great power INSTIGATES AGAINST the Qing --------------------
-	# The Qing is the target of one of the three powers' aggression. The menacing
-	# power's tension mounts (the Qing resents the pressure); its two rivals ease
-	# (the Qing can appeal to them against the aggressor's gain — 以夷制夷 from the
-	# defensive side). Classified by the KNOWN instigator identity, not geography.
-	every_in_global_list = {
-		variable = global_all_diplomatic_plays
-		limit = {
-			exists = var:play_instigator
-			exists = var:play_target_country
-			var:play_target_country = scope:qing_gp_self
-			NOT = { var:play_instigator = scope:qing_gp_self }
-		}
-		if = {
-			limit = { var:play_instigator = { tag = FRA } }
-			scope:qing_gp_self = { QING_gp_play_pressure_france = { severity = 3 } }
-		}
-		else_if = {
-			limit = { var:play_instigator = { tag = GBR } }
-			scope:qing_gp_self = { QING_gp_play_pressure_britain = { severity = 3 } }
-		}
-		else_if = {
-			limit = { var:play_instigator = { tag = RUS } }
-			scope:qing_gp_self = { QING_gp_play_pressure_russia = { severity = 3 } }
-		}
-		# else: the aggressor is not one of the three Great-Game powers — no
-		# named counter to move (the generic claim-hostility layer covers it).
-	}
+		# --- (C) [#91 item H] concretize the counter: a rival GP whose tension has
+		# boiled past the PREDATORY band opens a REAL diplomatic play against a Qing
+		# frontier province. The counter above stays the drift/summary layer; this
+		# hangs a live confrontation off it. Cooldown-throttled per rival so a hot
+		# counter does not spawn a fresh play every pulse. Runs in ROOT (CHI) scope.
+		QING_gp_rival_plays = yes
+
 	LOG_exit = { sys = QING  fn = "QING_gp_scan_plays"  result = OK }
+}
+
+# ======================================================================
+# [#91 item H] RIVAL PREDATORY PLAY — the concrete object hung off the tension
+# counter. When a great power's tension counter crosses the PREDATORY band, that
+# power (an aggressor that plausibly borders the Qing — the launch is gated on a
+# genuinely SHARED frontier) opens a first-class diplomatic play FOR TERRITORY
+# against the Qing, rather than the antagonism living only as a number. This is
+# the mirror of QING_gp_frontier_play (there the Qing is the instigator); here the
+# rival is. ADDITIVE: the counter is untouched and still drives the rivalry bands
+# / opinion / advisor-gating exactly as before — this only ADDS the play.
+#
+# Guard so it fires AT MOST ONCE PER COOLDOWN PER RIVAL (a timed variable, the same
+# throttle idiom as qing_mechanics_pulse_cooldown): the cooldown is stamped the
+# moment the band+live checks pass, whether or not a pressable frontier exists this
+# window, so a sustained-hot counter neither spams plays nor spams the trace.
+#   $power$ = britain | france | russia   (the tension-counter suffix)
+#   $tag$   = GBR | FRA | RUS              (the rival's country tag)
+#   $goal$  = flag:get_territory           (a frontier land grab)
+# Scope: ROOT / this = the Qing (the play TARGET). play_type=manual for the same
+# reason as QING_gp_frontier_play — respect the passed instigator/target rather than
+# let the engine re-derive them from the target area's top adversary.
+# ======================================================================
+QING_gp_rival_launch_play = {
+	if = {
+		limit = {
+			# tension past the PREDATORY band — well above the mere-rivalry 50 that
+			# already lights the rivalry modifier; this is the band that turns enmity
+			# into an act.
+			var:qing_gp_tension_$power$ >= 75
+			# at most once per cooldown per rival
+			NOT = { has_variable = qing_gp_rival_play_cd_$power$ }
+			# a live, distinct rival power to do the pressing
+			exists = c:$tag$
+			NOT = { c:$tag$ = { this = ROOT } }
+		}
+		# stamp the cooldown up front so a counter that sits hot does not re-attempt
+		# (and re-log) every 90-day pulse — the throttle holds even if no frontier is
+		# pressable this window. ~10 game years between a given rival's escalations.
+		set_variable = { name = qing_gp_rival_play_cd_$power$  days = 3650 }
+		if = {
+			# only launch from a rival that PLAUSIBLY BORDERS the Qing: it must be able
+			# to press a genuinely SHARED frontier province, not reach across the map.
+			limit = { any_owned_province = { any_neighbor_province = { owner = c:$tag$ } } }
+			random_owned_province = {
+				limit = { any_neighbor_province = { owner = c:$tag$ } }
+				save_scope_as = qing_gp_rival_border
+			}
+			LOG_line = { sys = QING  msg = "GP rival play (#91 H): $tag$ (tension past predatory band) opens a play vs the Qing over [scope:qing_gp_rival_border.GetName] for [ROOT.GetTag]" }
+			AI_begin_diplomatic_play = {
+				play_instigator = c:$tag$
+				play_target_area = scope:qing_gp_rival_border
+				play_target_country = ROOT
+				play_goal = $goal$
+				play_type = manual
+			}
+		}
+		else = {
+			# the rival is hot but shares no frontier with the Qing (no adjacent Qing
+			# province): the counter + rivalry band still stand, but there is no ground
+			# for it to press a land play over. Cooldown is already set to throttle.
+			LOG_fail = { sys = QING  fn = "QING_gp_rival_launch_play"  reason = "$tag$ tension past predatory band but no Qing province borders it; predatory play not launched (counter + band still stand)" }
+		}
+	}
+	# else: the rival is below the predatory band, on cooldown, or absent — the
+	# normal recurring case; silent (no per-pulse log spam), the counter drives the
+	# rivalry band as before.
+}
+
+# Fan out over the three Great-Game rivals each pulse. Each is independently
+# band-gated + cooldown-throttled inside QING_gp_rival_launch_play.
+QING_gp_rival_plays = {
+	QING_gp_rival_launch_play = { power = britain  tag = GBR  goal = flag:get_territory }
+	QING_gp_rival_launch_play = { power = france   tag = FRA  goal = flag:get_territory }
+	QING_gp_rival_launch_play = { power = russia   tag = RUS  goal = flag:get_territory }
 }

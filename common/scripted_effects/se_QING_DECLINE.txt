@@ -775,6 +775,28 @@ QING_DECLINE_pulse = {
 	QING_DECLINE_apply_ethnic_band = yes
 	QING_DECLINE_apply_civic_band = yes
 
+	# [#91 item G] Hang the CONCRETE army consequence off the #88 decay counters:
+	# stamp real morale/discipline debuffs on the standing legions while a central
+	# army is in its severe band, and raise a real 新軍 (New Army) legion when the
+	# modern-army share crosses into the national band. Both self-guarded (stamp
+	# cooldown / once-flag) so neither spams. Army-side effects live in
+	# se_QING_MECHANICS.txt (QING_army_*); the counters stay here.
+	QING_army_apply_decay_debuffs = yes
+	QING_army_spawn_newarmy = yes
+
+	# [#91 items K/L/M/O] Hang the other concrete objects off their summary counters:
+	#   K  granary_stock  -> build/deplete a real qing_granary_building in 黃河 provinces
+	#   L  sect_pressure  -> spawn a real secret-society leader character
+	#   M  ethnic_tension -> spawn a real named separatist revolt-leader character
+	#   O  currency_stress-> spawn a foreign smuggler pop in a Canton treaty port
+	# Each is once/rarity-guarded so it never runs away. Counters stay intact.
+	QING_DECLINE_granary_concrete = yes
+	QING_DECLINE_spawn_sect_leader = yes
+	# item M lives in se_SEPARATISM.txt (sys=SEPAR): a real named revolt-leader
+	# backed only from the ethnicity that actually lives on the restive land.
+	SEPARATISM_qing_spawn_revolt_leader = yes
+	QING_DECLINE_spawn_smuggler = yes
+
 	# Unlock the reform track once pressure is high enough (and not already on).
 	if = {
 		limit = {
@@ -1332,5 +1354,159 @@ QING_DECLINE_roll_reaction = {
 			trigger_event = { id = qing_decline.20  days = { 3 12 } }
 		}
 	}
+}
+
+# ======================================================================
+# [#91 item K]  GRANARY STOCK -> REAL 糧倉 BUILDINGS in the Yellow River basin.
+# The abstract qing_granary_stock counter (se_QING_DECLINE.txt:25,66) is KEPT as
+# the summary/AI layer; this hangs the CONCRETE object off it. In a good year with
+# reserves high (stock >= 60) the throne raises a real qing_granary_building
+# (defined in common/buildings/qing_granary_buildings.txt) in a Yellow River (黃河)
+# region province that lacks one; in a famine with stock exhausted (stock <= 15)
+# the granaries are eaten — remove one building level. The Yellow River basin is
+# the regions Zhili / Shandong / Henan (the historical 常平倉 heartland; see the
+# flood event .12). add_building_level / remove_building_level are proven engine
+# effects (QING_selfstr_build; TI 05_joseon_mission remove_building_level).
+# Cheap: ordered_owned_province capped at 1, gated on the stock bands.
+#   ROOT / this = the Qing overlord (CHI, human).
+# ======================================================================
+QING_DECLINE_granary_concrete = {
+	LOG_enter = { sys = QING  fn = "QING_DECLINE_granary_concrete" }
+	if = {
+		# GOOD YEAR, reserves high: build ONE new granary where the basin lacks one.
+		limit = {
+			var:qing_granary_stock >= 60
+			any_owned_province = {
+				has_city_status = yes
+				OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Henan }
+				NOT = { has_building = qing_granary_building }
+			}
+		}
+		ordered_owned_province = {
+			order_by = total_population
+			max = 1
+			limit = {
+				has_city_status = yes
+				OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Henan }
+				NOT = { has_building = qing_granary_building }
+			}
+			add_building_level = qing_granary_building
+			LOG_line = { sys = QING  msg = "granary: real 糧倉 built in [this.GetName] (Yellow River basin) for [ROOT.GetTag] (stock=[ROOT.MakeScope.GetVariable('qing_granary_stock').GetValue|0])" }
+		}
+	}
+	else_if = {
+		# FAMINE, reserves exhausted: the granaries are eaten — tear one down.
+		limit = {
+			var:qing_granary_stock <= 15
+			any_owned_province = {
+				has_building = qing_granary_building
+				OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Henan }
+			}
+		}
+		ordered_owned_province = {
+			order_by = total_population
+			max = 1
+			limit = {
+				has_building = qing_granary_building
+				OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Henan }
+			}
+			remove_building_level = qing_granary_building
+			LOG_line = { sys = QING  msg = "granary: 糧倉 in [this.GetName] emptied and razed in famine for [ROOT.GetTag] (stock=[ROOT.MakeScope.GetVariable('qing_granary_stock').GetValue|0])" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_DECLINE_granary_concrete"  reason = "no granary object change: stock in the middle band, or no eligible Yellow River province to build in / raze" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_DECLINE_granary_concrete"  result = OK }
+}
+
+# ======================================================================
+# [#91 item L]  SECT PRESSURE -> A REAL SECRET-SOCIETY LEADER character.
+# At high sect pressure the abstract counter gets a concrete face: a real named
+# secret-society leader (White Lotus 白蓮教 / Triad 天地會 archetype) is conjured
+# via create_character + QING_roster_finalize (the proven roster idiom), given a
+# zealous personality (the millenarian preacher) and marked disloyal to the
+# throne. ONCE-guarded (qing_sect_leader_spawned) so it never spams — the counter
+# keeps driving the sect events; this is the one embodied ringleader. The
+# societies were Han-based popular movements, so the leader is Han-cultured.
+#   ROOT / this = the Qing overlord (CHI, human).
+# ======================================================================
+QING_DECLINE_spawn_sect_leader = {
+	LOG_enter = { sys = QING  fn = "QING_DECLINE_spawn_sect_leader" }
+	if = {
+		limit = {
+			var:qing_sect_pressure >= 60
+			NOT = { has_variable = qing_sect_leader_spawned }
+		}
+		set_variable = { name = qing_sect_leader_spawned  value = 1 }
+		# a Han popular-sect preacher: high zeal + charisma, a zealous firebrand.
+		create_character = {
+			age = 40
+			culture = han
+			religion = ROOT.religion
+			add_charisma = 7
+			add_zeal = 9
+			add_martial = 4
+			add_trait = zealous
+			add_trait = brave
+			save_scope_as = qing_sect_leader
+		}
+		scope:qing_sect_leader = {
+			QING_roster_finalize = { nick = "NICKNAME_QING_SECT_LEADER" }
+			# a heterodox ringleader is no friend of the dynasty.
+			add_loyalty = loyalty_qing_estranged
+			LOG_line = { sys = QING  msg = "sect: real secret-society leader [this.GetName] (白蓮教/天地會 archetype) arisen for [ROOT.GetTag] (sect_pressure=[ROOT.MakeScope.GetVariable('qing_sect_pressure').GetValue|0])" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_DECLINE_spawn_sect_leader"  reason = "no sect leader spawned: sect pressure below 60 or one already arisen" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_DECLINE_spawn_sect_leader"  result = OK }
+}
+
+# ======================================================================
+# [#91 item O]  CURRENCY / OPIUM STRESS -> A REAL FOREIGN SMUGGLER POP.
+# The abstract qing_currency_stress counter (se_QING_DECLINE.txt:23,64) tracks the
+# opium silver drain; this hangs the CONCRETE object off it. At high stress a
+# foreign smuggler community takes root in the Canton coastal treaty port
+# (Guangzhou, p:9298 — the historical 廣州 gate, coastal): a real European pop is
+# spawned via define_pop (proven Invictus diadochi_effects.txt: type/culture/
+# religion literals in province scope), and the province is marked with the
+# qing_smuggler_den modifier. GUARDED AGAINST RUNAWAY SPAWNS: a stamp cooldown
+# variable (qing_smuggler_spawn_cd) plus a hard cap of one smuggler den at a time,
+# so at most one foreign pod arrives per window while stress stays high.
+#   ROOT / this = the Qing overlord (CHI, human).
+# ======================================================================
+QING_DECLINE_spawn_smuggler = {
+	LOG_enter = { sys = QING  fn = "QING_DECLINE_spawn_smuggler" }
+	if = {
+		limit = {
+			var:qing_currency_stress >= 60
+			NOT = { has_variable = qing_smuggler_spawn_cd }
+			# the Canton gate must be held by the Qing and not already a smuggler den.
+			exists = p:9298
+			p:9298 = {
+				owner = ROOT
+				NOT = { has_province_modifier = qing_smuggler_den }
+			}
+		}
+		# ~4-year cooldown so a persistently high stress does not flood the port.
+		set_variable = { name = qing_smuggler_spawn_cd  days = 1460 }
+		p:9298 = {
+			# a foreign (English) smuggler community: a citizen pop of an alien
+			# European culture + religion (foreign literals OK — proven idiom).
+			define_pop = {
+				type = citizen
+				culture = english
+				religion = anglican
+			}
+			add_province_modifier = { name = qing_smuggler_den  duration = -1 }
+			LOG_line = { sys = QING  msg = "currency: foreign smuggler pod rooted in Canton (p:9298) for [ROOT.GetTag] (currency_stress=[ROOT.MakeScope.GetVariable('qing_currency_stress').GetValue|0])" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_DECLINE_spawn_smuggler"  reason = "no smuggler pod: currency stress below 60, on spawn cooldown, or Canton (p:9298) not held / already a smuggler den" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_DECLINE_spawn_smuggler"  result = OK }
 }
 

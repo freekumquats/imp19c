@@ -331,6 +331,112 @@ QING_fund_modern_army = {
 }
 
 # ======================================================================
+# [#91 item G]  ARMY-SIDE OF THE #88 DECAY COUNTERS — real units, real objects.
+#
+# The #88 qing_banner_decay / qing_greenstandard_decay counters are the
+# summary/AI layer (kept intact). These effects hang the CONCRETE consequence off
+# them: when a central-army decay counter is in its SEVERE band, the actual
+# standing legions take a real morale/discipline debuff (a UNIT modifier stamped
+# via the proven add_unit_modifier idiom, Invictus 00_from_missions.txt); and when
+# the modern-army share climbs into the national band, a real 新軍 (New Army)
+# legion is raised via raise_legion (proven SE_qing_raise_garrison idiom).
+#
+# ENGINE-LIMIT NOTE (honest): the engine offers no reliable "this legion is a
+# banner legion vs a green-standard legion" tag we can filter every_unit on, and
+# remove_unit_modifier is unproven in this codebase. So the "type-tagging" is
+# expressed through WHICH flavoured modifier is stamped (banner-rot vs
+# greenstandard-rot, chosen by which decay is worse), the debuff is applied to the
+# realm's land units, and it is given a FINITE duration so it lapses on its own —
+# re-stamped only when the stamp cooldown has elapsed AND the decay is still
+# severe. A fully-modernized realm (qing_fully_modernized) has escaped the
+# dynastic cycle and takes no decay debuff. Called from QING_DECLINE_pulse.
+#   ROOT / this = the Qing overlord (CHI, human).
+# ======================================================================
+QING_army_apply_decay_debuffs = {
+	LOG_enter = { sys = QING  fn = "QING_army_apply_decay_debuffs" }
+	if = {
+		limit = {
+			NOT = { has_variable = qing_fully_modernized }
+			# a central army is genuinely in its severe band (>=60)...
+			OR = {
+				var:qing_banner_decay >= 60
+				var:qing_greenstandard_decay >= 60
+			}
+			# ...and we are not still inside a freshly-stamped debuff window (the
+			# debuff self-expires; re-stamp only after the cooldown lapses so a
+			# still-severe army stays debuffed without per-pulse re-stacking).
+			NOT = { has_variable = qing_army_decay_debuff_cd }
+			# there is actually a land unit in the field to bite.
+			any_unit = { is_navy = no }
+		}
+		# cooldown ~ the modifier's own life, so the debuff is continuous while decay
+		# stays severe but never stacks (1460 days = 4y, matching the stamp below).
+		set_variable = { name = qing_army_decay_debuff_cd  days = 1460 }
+		# choose the flavoured modifier by which central army has rotted worse.
+		if = {
+			limit = { var:qing_banner_decay >= var:qing_greenstandard_decay }
+			every_unit = {
+				limit = { is_navy = no }
+				add_unit_modifier = { name = qing_unit_banner_rot  duration = 1460 }
+			}
+			LOG_line = { sys = QING  msg = "army decay: banner rot stamped on the standing legions for [ROOT.GetTag] (banner_decay=[ROOT.MakeScope.GetVariable('qing_banner_decay').GetValue|0])" }
+		}
+		else = {
+			every_unit = {
+				limit = { is_navy = no }
+				add_unit_modifier = { name = qing_unit_greenstandard_rot  duration = 1460 }
+			}
+			LOG_line = { sys = QING  msg = "army decay: Green Standard rot stamped on the standing legions for [ROOT.GetTag] (gs_decay=[ROOT.MakeScope.GetVariable('qing_greenstandard_decay').GetValue|0])" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_army_apply_decay_debuffs"  reason = "no army-decay debuff: modernized, or no central army in the severe band, or on stamp cooldown, or no land unit present" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_army_apply_decay_debuffs"  result = OK }
+}
+
+# [#91 item G]  RAISE A REAL 新軍 (New Army) LEGION when the modern-army share
+# climbs into the national band. The abstract qing_modernarmy_share counter is the
+# summary; this is the concrete force it represents — a modern, centrally-commanded
+# legion (line infantry + field artillery) mustered at the capital. Once-guarded so
+# the crossing spawns exactly one founding legion, never a per-pulse spam.
+QING_army_spawn_newarmy = {
+	LOG_enter = { sys = QING  fn = "QING_army_spawn_newarmy" }   # [#91-fix task #91] standing se_LOG rule: enter/exit were missing
+	if = {
+		limit = {
+			var:qing_modernarmy_share >= 60
+			NOT = { has_variable = qing_newarmy_legion_raised }
+			exists = capital_scope
+		}
+		set_variable = { name = qing_newarmy_legion_raised  value = 1 }
+		# raise the legion in the capital's governorship (proven idiom,
+		# se_QING_SELFSTR.txt:308: capital_scope = { state.governorship = { raise_legion ... } }).
+		capital_scope = {
+			state.governorship = {
+				raise_legion = {
+					create_unit = {
+						name = "New Army 新軍"
+						location = ROOT.capital_scope
+						sub_unit = regular_infantry
+						save_scope_as = qing_newarmy_legion
+						add_subunit = regular_infantry
+						add_subunit = regular_infantry
+						add_subunit = regular_infantry
+						add_subunit = artillery
+						add_subunit = artillery
+					}
+				}
+			}
+		}
+		LOG_line = { sys = QING  msg = "modern-army share crossed into the national band — real 新軍 (New Army) legion raised at the capital for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_army_spawn_newarmy"  reason = "no New Army raised: modern-army share below the national band, already raised once, or no capital province" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_army_spawn_newarmy"  result = OK }
+}
+
+# ======================================================================
 # D  ANTI-CORRUPTION AUDIT / yanglian yin 養廉銀
 # Cut the corruption counter at a treasury cost.
 # ======================================================================

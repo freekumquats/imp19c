@@ -1,0 +1,317 @@
+########################################################################
+# qing_japan_preperry_missions.txt — THE PRE-PERRY OPENING ARC (幕末前夜).
+# (#81). The PRECURSOR to qing_japan_missions.txt (the 1871+ Meiji tree). The
+# four decades from the 1815 start to Commodore Perry's black ships (1854),
+# when the only Sino-Japanese contact was the Qing junk trade at Nagasaki and
+# the isles were the Tokugawa Shogunate (TKG) with its 37 daimyo subjects.
+#
+# CHI-only, player-driven. The tree opens the Nagasaki intelligence channel,
+# relays the Opium War as a cautionary tale, and — the heart of it — lets the
+# court BACK or OPPOSE individual daimyo (Choshu CSU / Satsuma SHZ, the real
+# anti-shogunate tozama) to steer the sonno-joi (尊王攘夷) movement toward a
+# Restoration, or shore up the Tokugawa for a stable conservative neighbour.
+#
+# It FORKS after the shared opening:
+#   ARC R — 尊王攘夷 THE LOYALIST ROAD: back a daimyo as a reform leader, erode
+#     the shogun's grip, and — at the climax — free that daimyo and raise the
+#     Restoration civil war (a concrete release_subject + start_civil_war).
+#   ARC B — 佐幕 THE BAKUFU ROAD: prop up Tokugawa authority for a stable
+#     (if closed) neighbour, and be ready when Perry forces the door.
+#
+# Both roads hand off at Perry (1854) into the existing post-Perry tree via
+# QING_jppre_perry_handoff, carrying the outcome onto the existing accord/
+# rivalry poles (se_QING_DIPLO.txt). All effects live in
+# se_QING_JAPAN_PREPERRY.txt (QING_jppre_*).
+#
+# Gating: CHI-only via potential = { tag = CHI  is_ai = no }; the tasks gate on
+# treasury / political influence, on the relevant Japan tag being on the map,
+# and (the daimyo tasks) on the target daimyo existing. The whole tree gates
+# CLOSED once Perry has fired (qing_jppre_perry_done) so it cannot run past its
+# era — the post-Perry tree takes over then.
+#
+# NOTE (cosmetic): task icons reuse the stock test1/2/3 sprites and the header
+# reuses mission_image_test, matching the rest of the Qing suite.
+#
+# Sources: see se_QING_JAPAN_PREPERRY.txt header + memory imp19c-japan-preperry-research.
+########################################################################
+
+qing_japan_preperry_mission = {
+	icon = test1
+	header = mission_image_test
+
+	repeatable = no
+
+	chance = { }
+	ai_chance = { factor = 0 }   # player-only, like the rest of the Qing suite
+
+	potential = {
+		tag = CHI
+		is_ai = no
+		# pre-Perry only: once Perry has forced Japan open the post-Perry tree runs.
+		NOT = { has_variable = qing_jppre_perry_done }
+	}
+
+	abort = {
+		NOT = { tag = CHI }
+	}
+
+	on_start = {
+		LOG_line = { sys = QING  msg = "MISSION japan/pre-Perry started for [ROOT.GetTag]" }
+		QING_jppre_init = yes
+	}
+
+	on_completion = {
+		LOG_line = { sys = QING  msg = "MISSION japan/pre-Perry COMPLETED for [ROOT.GetTag]" }
+	}
+
+	# ==================================================================
+	# ROOT TASK — 長崎の唐人屋敷 the Nagasaki China-house. Establish a regular
+	# intelligence flow through the one legal contact: the Qing junk merchants
+	# at Nagasaki, whose Fusetsugaki news-reports were Edo's window on the world.
+	# ==================================================================
+	qing_jppre_nagasaki_channel = {
+		icon = test1
+		allow = {
+			political_influence >= 10
+			custom_tooltip = {
+				text = qing_jppre_needs_japan_tt
+				exists = c:TKG
+			}
+		}
+		on_start = {
+			add_political_influence = -10
+		}
+		on_completion = {
+			custom_tooltip = qing_jppre_nagasaki_channel_tt
+			add_country_modifier = { name = qing_jppre_nagasaki_channel_mod  duration = -1 }
+			QING_jppre_deepen_intel = { amount = 20 }
+			LOG_line = { sys = QING  msg = "MISSION task nagasaki-channel for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 風説書 read the news-reports (deepen the channel) ---------------
+	qing_jppre_fusetsugaki = {
+		icon = test2
+		requires = { qing_jppre_nagasaki_channel }
+		allow = {
+			political_influence >= 15
+			custom_tooltip = {
+				text = qing_jppre_needs_intel_tt
+				var:qing_jppre_intel >= 20
+			}
+		}
+		on_start = {
+			add_political_influence = -15
+		}
+		on_completion = {
+			custom_tooltip = qing_jppre_fusetsugaki_tt
+			QING_jppre_deepen_intel = { amount = 20 }
+			# a running knowledge of Japan's court readies the diplomacy to come
+			add_country_modifier = { name = qing_jppre_fusetsugaki_mod  duration = -1 }
+			LOG_line = { sys = QING  msg = "MISSION task fusetsugaki for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 前車之鑑 the cautionary tale — relay the Opium War to Edo -------
+	# Once the unequal-treaty system is imposed on the Qing, the lesson of
+	# China's fate can be pressed on Japan (as the Tenpo/Bakumatsu debate did
+	# historically). A sharp jolt to intelligence-sharing AND a warning that
+	# stiffens the reform camp across the sea.
+	qing_jppre_cautionary_tale = {
+		icon = test3
+		requires = { qing_jppre_fusetsugaki }
+		allow = {
+			custom_tooltip = {
+				text = qing_jppre_needs_opium_lesson_tt
+				has_variable = qing_treaty_system_imposed
+			}
+			custom_tooltip = {
+				text = qing_jppre_needs_intel_deep_tt
+				var:qing_jppre_intel >= 40
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_jppre_cautionary_tale_tt
+			QING_jppre_deepen_intel = { amount = 15 }
+			# the shared alarm at the Western tide grows the reform/loyalist camp
+			QING_DECLINE_nudge = { var = qing_jppre_reform_faction  amount = 8 }
+			trigger_event = { id = qing_japan_preperry.1  days = { 30 90 } }
+			LOG_line = { sys = QING  msg = "MISSION task cautionary-tale (opium war relayed) for [ROOT.GetTag]" }
+		}
+	}
+
+	# ##################################################################
+	# ARC R — 尊王攘夷 THE LOYALIST ROAD (back a daimyo, restore the emperor)
+	# ##################################################################
+
+	# --- 薩長 back a tozama daimyo as a reform leader -------------------
+	# ENTRY of the loyalist arc. Choose which daimyo to cultivate through the
+	# event (Choshu or Satsuma); completing it commits the loyalist road
+	# (qing_jppre_road = flag:loyalist), locking the bakufu arc's entry.
+	qing_jppre_back_daimyo = {
+		icon = test2
+		requires = { qing_jppre_cautionary_tale }
+		allow = {
+			treasury >= 60
+			custom_tooltip = {
+				text = qing_jppre_road_uncommitted_tt
+				NOT = { var:qing_jppre_road = flag:bakufu }
+			}
+			custom_tooltip = {
+				text = qing_jppre_needs_a_tozama_tt
+				OR = { exists = c:CSU  exists = c:SHZ }
+			}
+		}
+		on_start = {
+			add_treasury = -60
+		}
+		on_completion = {
+			custom_tooltip = qing_jppre_back_daimyo_tt
+			# commit to the loyalist road (guarded so it is set once)
+			if = {
+				limit = { NOT = { has_variable = qing_jppre_road } }
+				set_variable = { name = qing_jppre_road  value = flag:loyalist }
+			}
+			# choose the daimyo to back (Choshu preferred, else Satsuma)
+			trigger_event = { id = qing_japan_preperry.2  days = { 10 40 } }
+			LOG_line = { sys = QING  msg = "MISSION task back-daimyo (road=loyalist) for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 尊王攘夷 fan the loyalist movement (erode the shogun's grip) ----
+	qing_jppre_fan_sonno_joi = {
+		icon = test3
+		requires = { qing_jppre_back_daimyo }
+		allow = {
+			treasury >= 80
+			custom_tooltip = {
+				text = qing_jppre_needs_faction_tt
+				var:qing_jppre_reform_faction >= 40
+			}
+		}
+		on_start = {
+			add_treasury = -80
+		}
+		on_completion = {
+			custom_tooltip = qing_jppre_fan_sonno_joi_tt
+			# reinforce whichever daimyo the court chose to back (var set by .2)
+			if = {
+				limit = { var:qing_jppre_backed_tag = flag:CSU }
+				QING_jppre_back_daimyo = { tag = CSU  amount = 12 }
+			}
+			else_if = {
+				limit = { var:qing_jppre_backed_tag = flag:SHZ }
+				QING_jppre_back_daimyo = { tag = SHZ  amount = 12 }
+			}
+			add_country_modifier = { name = qing_jppre_loyalist_patron  duration = -1 }
+			LOG_line = { sys = QING  msg = "MISSION task fan-sonno-joi for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 王政復古 CAPSTONE R — the Restoration (topple the shogunate) ----
+	qing_jppre_restoration = {
+		icon = test1
+		requires = { qing_jppre_fan_sonno_joi }
+		allow = {
+			custom_tooltip = {
+				text = qing_jppre_needs_restoration_tt
+				var:qing_jppre_reform_faction >= 70
+				var:qing_jppre_shogun_grip < 40
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_jppre_restoration_tt
+			# the concrete break: free the backed daimyo and raise the civil war
+			if = {
+				limit = { var:qing_jppre_backed_tag = flag:CSU }
+				QING_jppre_restoration_break = { tag = CSU }
+			}
+			else_if = {
+				limit = { var:qing_jppre_backed_tag = flag:SHZ }
+				QING_jppre_restoration_break = { tag = SHZ }
+			}
+			add_country_modifier = { name = qing_jppre_restoration_patron  duration = -1 }
+			current_ruler = { add_prestige = 40 }
+			# a Japan restored with Qing backing enters the post-Perry era an ally
+			QING_japan_warm_accord = { amount = 15 }
+			LOG_line = { sys = QING  msg = "MISSION japan pre-Perry CAPSTONE R (restoration) for [ROOT.GetTag]" }
+		}
+	}
+
+	# ##################################################################
+	# ARC B — 佐幕 THE BAKUFU ROAD (prop up the shogunate)
+	# ##################################################################
+
+	# --- 佐幕 shore up the Tokugawa (a stable conservative neighbour) ----
+	# ENTRY of the bakufu arc. Commits the bakufu road, locking the loyalist entry.
+	qing_jppre_shore_bakufu = {
+		icon = test2
+		requires = { qing_jppre_cautionary_tale }
+		allow = {
+			treasury >= 60
+			custom_tooltip = {
+				text = qing_jppre_road_uncommitted_tt
+				NOT = { var:qing_jppre_road = flag:loyalist }
+			}
+			custom_tooltip = {
+				text = qing_jppre_needs_japan_tt
+				exists = c:TKG
+			}
+		}
+		on_start = {
+			add_treasury = -60
+		}
+		on_completion = {
+			custom_tooltip = qing_jppre_shore_bakufu_tt
+			if = {
+				limit = { NOT = { has_variable = qing_jppre_road } }
+				set_variable = { name = qing_jppre_road  value = flag:bakufu }
+			}
+			QING_jppre_shore_shogunate = { amount = 12 }
+			add_country_modifier = { name = qing_jppre_bakufu_friend  duration = -1 }
+			LOG_line = { sys = QING  msg = "MISSION task shore-bakufu (road=bakufu) for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 海防 ready the shogunate's coast defences ----------------------
+	qing_jppre_ready_bakufu = {
+		icon = test3
+		requires = { qing_jppre_shore_bakufu }
+		allow = {
+			treasury >= 80
+			custom_tooltip = {
+				text = qing_jppre_needs_grip_tt
+				var:qing_jppre_shogun_grip >= 75
+			}
+		}
+		on_start = {
+			add_treasury = -80
+		}
+		on_completion = {
+			custom_tooltip = qing_jppre_ready_bakufu_tt
+			QING_jppre_shore_shogunate = { amount = 10 }
+			add_country_modifier = { name = qing_jppre_bakufu_coast  duration = -1 }
+			LOG_line = { sys = QING  msg = "MISSION task ready-bakufu for [ROOT.GetTag]" }
+		}
+	}
+
+	# --- 黒船来航 CAPSTONE B — meet the black ships in good order --------
+	qing_jppre_meet_perry = {
+		icon = test1
+		requires = { qing_jppre_ready_bakufu }
+		allow = {
+			custom_tooltip = {
+				text = qing_jppre_needs_strong_grip_tt
+				var:qing_jppre_shogun_grip >= 85
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_jppre_meet_perry_tt
+			add_country_modifier = { name = qing_jppre_bakufu_stable  duration = -1 }
+			current_ruler = { add_prestige = 30 }
+			# a shogunate steadied by the Qing meets Perry warily — the rivalry road
+			QING_japan_raise_rivalry = { amount = 10 }
+			LOG_line = { sys = QING  msg = "MISSION japan pre-Perry CAPSTONE B (bakufu meets perry) for [ROOT.GetTag]" }
+		}
+	}
+}

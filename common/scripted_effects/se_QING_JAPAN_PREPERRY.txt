@@ -1,0 +1,258 @@
+########################################################################
+# se_QING_JAPAN_PREPERRY.txt — THE PRE-PERRY OPENING ARC (幕末前夜, 1815-1854)
+# (#81). The PRECURSOR to the existing 1871+ Japan/Meiji tree
+# (qing_japan_missions.txt): the four decades of silence before Commodore
+# Perry's black ships (1854) forced Japan open. This layer is DELIBERATELY
+# built in NEW files and only CALLS the existing QING_japan_* verbs in
+# se_QING_DIPLO.txt (accord/rivalry/meiji poles) — it never edits them.
+#
+# ----------------------------------------------------------------------
+# DESIGN PHILOSOPHY — concrete-over-abstract (the standing rule). Where the
+# post-Perry tree relates to "Japan" as a single tag, THIS arc relates to the
+# real, on-map daimyo. At the 1815 start the isles are the Tokugawa Shogunate
+# (TKG) plus 37 daimyo subjects; there is NO unified JPN tag (it is never
+# formed — the post-Perry tree's exists=c:JPN guards are dormant fallbacks, so
+# TKG IS Japan here). The two historical anti-shogunate tozama, CHOSHU (CSU)
+# and SATSUMA/Shimazu (SHZ), sit at the loosest tie (nominal_vassal). This arc
+# lets the Qing court:
+#   - run a NAGASAKI intelligence channel (長崎の唐人屋敷 / 風説書): the only
+#     legal Sino-Japanese contact, a trickle of news that deepens over time;
+#   - relay the OPIUM WAR as a cautionary tale (Japan's Tenpo/Bakumatsu debate
+#     watched China's fate) once the treaty system is imposed on the Qing;
+#   - BACK or OPPOSE individual daimyo — pour silver/prestige into CSU or SHZ
+#     as reform leaders (spawning a real reform-minded character in them), or
+#     shore up the shogunate — steering the sonno-joi (尊王攘夷, "revere the
+#     emperor, expel the barbarian") movement toward a Restoration;
+#   - at the climax, if the reform faction is strong and the shogun's grip
+#     broken, trigger the concrete break: RELEASE the backed daimyo from TKG
+#     and start a civil war (the Boshin-war analog) behind a spawned leader.
+#
+# All the "backing" is CONCRETE engine acts on real tags (add_opinion,
+# create_character, release_subject, start_civil_war), verified in the consult
+# oracles (Terra-Indomita / Invictus) before use, not private counters. The
+# three counters below are only the AI/summary layer that gates the events.
+#
+# All paths log sys = QING (LOG_enter/LOG_exit/LOG_line, LOG_fail on guard
+# misses). Prefix = QING_jppre_ (distinct from se_QING_DIPLO's QING_japan_).
+#
+# Sources: memory imp19c-japan-preperry-research (Nagasaki Tojin trade, the
+#   Fusetsugaki news conduit, the Opium War as Japan's cautionary tale, Ryukyu
+#   dual-tributary); Marius Jansen, The Making of Modern Japan (2000); Bob Tadashi
+#   Wakabayashi, Anti-Foreignism and Western Learning in Early-Modern Japan (1986).
+########################################################################
+
+# ======================================================================
+# INIT — seed the pre-Perry counters for a fresh CHI game. Idempotent; called
+# from the mechanics startup hook (qing_mechanics_on_actions.txt) alongside the
+# other QING_*_init verbs, and self-heals via QING_japan_init on first use.
+#   qing_jppre_intel         : depth of the Nagasaki intelligence channel (0..100)
+#   qing_jppre_reform_faction: strength of the pro-modernization/sonno-joi camp
+#                              the Qing has cultivated among the daimyo (0..100)
+#   qing_jppre_shogun_grip   : Tokugawa central authority (starts high at 70;
+#                              sonno-joi agitation erodes it, shoring it up lifts it)
+# ======================================================================
+QING_jppre_init = {
+	if = { limit = { NOT = { has_variable = qing_jppre_intel } }          set_variable = { name = qing_jppre_intel           value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_jppre_reform_faction } } set_variable = { name = qing_jppre_reform_faction  value = 0 } }
+	# the shogunate starts firmly in control in 1815 (the crisis is decades off)
+	if = { limit = { NOT = { has_variable = qing_jppre_shogun_grip } }    set_variable = { name = qing_jppre_shogun_grip     value = 70 } }
+}
+
+# ======================================================================
+# RESOLVE A BACKED DAIMYO — the two historical anti-shogunate tozama, resolved
+# to a real on-map country scope. Saves scope:qing_jppre_daimyo. Callers must
+# check exists = scope:qing_jppre_daimyo before use (a daimyo may have been
+# annexed/absorbed by the time the arc runs).
+#   $tag$ = CSU (Choshu) | SHZ (Satsuma)
+# ======================================================================
+QING_jppre_resolve_daimyo = {
+	if = {
+		limit = { exists = c:$tag$ }
+		c:$tag$ = { save_scope_as = qing_jppre_daimyo }
+	}
+}
+
+# ======================================================================
+# THE NAGASAKI INTELLIGENCE CHANNEL (長崎 / 風説書). The Qing junk trade at
+# Nagasaki was the one legal Sino-Japanese contact; the Fusetsugaki ("news
+# reports") the Chinese and Dutch filed were Edo's window on the world. Deepen
+# the channel: intelligence climbs, and a warm exchange nudges the accord pole
+# of the existing (post-Perry) relationship a touch — the two courts learning
+# of one another before any formal tie.
+#   $amount$ = intelligence points gained.
+# ======================================================================
+QING_jppre_deepen_intel = {
+	QING_jppre_init = yes
+	QING_DECLINE_nudge = { var = qing_jppre_intel  amount = $amount$ }
+	# a friendly trading contact warms the (still-informal) relationship slightly;
+	# QING_japan_warm_accord self-inits the accord pole and resolves the lead tag.
+	QING_japan_warm_accord = { amount = 3 }
+	LOG_line = { sys = QING  msg = "JPPRE Nagasaki intel += $amount$ -> [ROOT.MakeScope.GetVariable('qing_jppre_intel').GetValue|0] for [ROOT.GetTag]" }
+}
+
+# ======================================================================
+# BACK A DAIMYO AS A REFORM LEADER (尊王攘夷). Pour the court's silver and
+# prestige behind one of the tozama daimyo as a modernizing, pro-imperial
+# power — the concrete act, not a counter bump:
+#   - the daimyo's OPINION of the Qing warms sharply (a real patron tie);
+#   - a reform-minded councillor CHARACTER is spawned INTO the daimyo the first
+#     time it is backed (a real person to carry the cause, per concrete rule);
+#   - the reform-faction counter climbs and the shogun's grip is eroded (the
+#     agitation the backing feeds).
+# Scope: country (ROOT = CHI). $tag$ = CSU | SHZ. $amount$ = faction points.
+# ======================================================================
+QING_jppre_back_daimyo = {
+	LOG_enter = { sys = QING  fn = "QING_jppre_back_daimyo $tag$ x$amount$" }
+	QING_jppre_init = yes
+	QING_jppre_resolve_daimyo = { tag = $tag$ }
+	if = {
+		limit = { exists = scope:qing_jppre_daimyo }
+		scope:qing_jppre_daimyo = {
+			# a real patron tie: the daimyo's court warms to Beijing
+			add_opinion = { modifier = qing_jppre_patron_opinion  target = ROOT }
+			# spawn the reform leader ONCE per daimyo (guarded on our marker var).
+			if = {
+				limit = { NOT = { has_variable = qing_jppre_reform_leader } }
+				QING_jppre_spawn_reform_leader = yes
+			}
+		}
+		# the movement grows and the shogunate's authority frays
+		QING_DECLINE_nudge = { var = qing_jppre_reform_faction  amount = $amount$ }
+		QING_DECLINE_nudge = { var = qing_jppre_shogun_grip     amount = -3 }
+		LOG_line = { sys = QING  msg = "JPPRE backed daimyo $tag$ ([scope:qing_jppre_daimyo.GetName]) reform_faction -> [ROOT.MakeScope.GetVariable('qing_jppre_reform_faction').GetValue|0] for [ROOT.GetTag]" }
+		LOG_exit = { sys = QING  fn = "QING_jppre_back_daimyo"  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_jppre_back_daimyo"  reason = "daimyo $tag$ not on map (annexed?) - backing skipped" }
+	}
+}
+
+# Spawn a reform-minded councillor INTO the currently-scoped daimyo (this =
+# the daimyo country). A real person carrying the sonno-joi cause; follows the
+# create_character idiom (no name arg — a nickname pins the flavour). Marks the
+# daimyo so the leader is spawned only once. Scope: the daimyo country.
+QING_jppre_spawn_reform_leader = {
+	create_character = {
+		age = 30
+		culture = japanese
+		religion = shinto
+		# a capable reformer-agitator: strong finesse (administration) and charisma
+		# (rallying the loyalist samurai), sound martial — not a superhuman.
+		add_martial = 6
+		add_charisma = 8
+		add_finesse = 8
+		add_zeal = 7
+		add_trait = brave
+		add_trait = ambitious
+		add_trait = righteous
+		save_scope_as = qing_jppre_leader
+	}
+	set_variable = { name = qing_jppre_reform_leader  value = scope:qing_jppre_leader }
+	LOG_line = { sys = QING  msg = "JPPRE reform leader spawned in [this.GetName] (sonno-joi councillor) backed by [ROOT.GetTag]" }
+}
+
+# ======================================================================
+# SHORE UP THE SHOGUNATE (佐幕). The opposite lever: back Tokugawa authority
+# instead — the Qing preferring a stable, conservative neighbour to a
+# revolutionary one. The shogun's grip climbs and the reform faction cools;
+# TKG's opinion of the Qing warms.
+# Scope: country (ROOT = CHI). $amount$ = grip points restored.
+# ======================================================================
+QING_jppre_shore_shogunate = {
+	LOG_enter = { sys = QING  fn = "QING_jppre_shore_shogunate x$amount$" }
+	QING_jppre_init = yes
+	QING_DECLINE_nudge = { var = qing_jppre_shogun_grip     amount = $amount$ }
+	QING_DECLINE_nudge = { var = qing_jppre_reform_faction  amount = -3 }
+	if = {
+		limit = { exists = c:TKG }
+		c:TKG = { add_opinion = { modifier = qing_jppre_patron_opinion  target = ROOT } }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_jppre_shore_shogunate"  reason = "TKG not on map - opinion swing skipped" }
+	}
+	LOG_line = { sys = QING  msg = "JPPRE shored shogunate grip -> [ROOT.MakeScope.GetVariable('qing_jppre_shogun_grip').GetValue|0] for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_jppre_shore_shogunate"  result = OK }
+}
+
+# ======================================================================
+# THE RESTORATION BREAK (王政復古 / 戊辰). The climax of the backing path: if
+# the reform faction has grown strong and the shogun's grip has broken, the
+# backed daimyo throws off the Tokugawa in a concrete civil war — the analog of
+# the Boshin War that toppled the shogunate. NOT a counter flip: a real
+# release_subject + start_civil_war behind the spawned reform leader.
+#
+# Verbs verified in the consult oracles: release_subject (form
+# <overlord> = { release_subject = <tag> }) and start_civil_war = scope:<char>.
+#
+# Scope: country (ROOT = CHI). $tag$ = the backed daimyo (CSU | SHZ).
+# ======================================================================
+QING_jppre_restoration_break = {
+	LOG_enter = { sys = QING  fn = "QING_jppre_restoration_break $tag$" }
+	QING_jppre_resolve_daimyo = { tag = $tag$ }
+	if = {
+		limit = {
+			exists = scope:qing_jppre_daimyo
+			exists = c:TKG
+			scope:qing_jppre_daimyo = { is_subject_of = c:TKG }
+		}
+		# 1) throw off the Tokugawa yoke — the daimyo goes independent
+		c:TKG = { release_subject = scope:qing_jppre_daimyo }
+		# 2) the loyalist rising: the reform leader (spawned when the daimyo was
+		#    first backed) raises the Restoration banner in a civil war. Fall back
+		#    to the daimyo's ruler if the leader has died in the intervening years.
+		scope:qing_jppre_daimyo = {
+			if = {
+				limit = {
+					has_variable = qing_jppre_reform_leader
+					var:qing_jppre_reform_leader = { is_alive = yes }
+				}
+				var:qing_jppre_reform_leader = { save_scope_as = qing_jppre_instigator }
+			}
+			else = {
+				current_ruler = { save_scope_as = qing_jppre_instigator }
+			}
+			start_civil_war = scope:qing_jppre_instigator
+		}
+		LOG_line = { sys = QING  msg = "JPPRE RESTORATION break: [scope:qing_jppre_daimyo.GetName] freed from Tokugawa and risen in civil war (backed by [ROOT.GetTag])" }
+		LOG_exit = { sys = QING  fn = "QING_jppre_restoration_break"  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_jppre_restoration_break"  reason = "daimyo $tag$ not a TKG subject (already free / annexed / no TKG) - break skipped" }
+	}
+}
+
+# ======================================================================
+# PERRY HAND-OFF (黒船来航, 1854). The dated event closes the pre-Perry arc and
+# opens the existing 1871+ Japan/Meiji tree. Whatever road the Qing walked here
+# carries forward through the EXISTING accord/rivalry poles (se_QING_DIPLO.txt):
+#   - a deep Nagasaki channel and a Restoration success bias the relationship
+#     toward the ACCORD (a Japan modernized with Qing sympathy);
+#   - having propped up a conservative shogunate biases it toward RIVALRY (a
+#     wary, closed neighbour forced open on Western terms).
+# Sets qing_jppre_perry_done so the arc's tasks/events cannot re-run and the
+# post-Perry mission's opening beat can gate on the channel having existed.
+# Scope: country (ROOT = CHI).
+# ======================================================================
+QING_jppre_perry_handoff = {
+	LOG_enter = { sys = QING  fn = "QING_jppre_perry_handoff" }
+	QING_jppre_init = yes
+	set_variable = qing_jppre_perry_done
+	# carry the arc's outcome into the existing poles
+	if = {
+		limit = { var:qing_jppre_reform_faction >= 50 }
+		# a Japan opened with Qing-sympathetic reformers in the ascendant
+		QING_japan_warm_accord = { amount = 12 }
+	}
+	else_if = {
+		limit = { var:qing_jppre_shogun_grip >= 60 }
+		# a wary conservative neighbour, forced open and resentful
+		QING_japan_raise_rivalry = { amount = 10 }
+	}
+	# a deep intelligence channel gives Japan a running start on its own Meiji clock
+	if = {
+		limit = { var:qing_jppre_intel >= 50 }
+		QING_japan_meiji_advance = { amount = 8 }
+	}
+	LOG_line = { sys = QING  msg = "JPPRE Perry hand-off: pre-Perry arc closed, post-Perry tree open for [ROOT.GetTag] (intel=[ROOT.MakeScope.GetVariable('qing_jppre_intel').GetValue|0] faction=[ROOT.MakeScope.GetVariable('qing_jppre_reform_faction').GetValue|0] grip=[ROOT.MakeScope.GetVariable('qing_jppre_shogun_grip').GetValue|0])" }
+	LOG_exit = { sys = QING  fn = "QING_jppre_perry_handoff"  result = OK }
+}

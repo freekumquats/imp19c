@@ -303,3 +303,126 @@ Re-verified braces on the three touched files (gui 1024/1024, MECHANICS 149/149,
 - LOW (conjured magnates can accumulate) — intended + bounded by the sanction button's decay≥40 is_shown gate; left as a conscious choice.
 
 **Validation:** se_QING_MECHANICS.txt braces 183/183; byte conventions preserved (script no-BOM/LF; loc + char-modifier files BOM, unchanged from HEAD). All engine verbs PROVEN in-mod: `add_loyal_veterans` (se_QING_COUNCIL.txt:69), `ordered_character`+order_by+check_range_bounds+max (se_QING_COUNCIL.txt:128, annexation.txt, Invictus oracle), `create_character`+`QING_roster_finalize` (qing_roster_events.txt), `is_governor` char trigger (character_events.txt:494), `culture = han`, traits disciplined/brave. se_LOG-wired sys=QING with LOG_fail on the no-magnate path. Task #90 COMPLETE.
+
+## #82 — NAPOLEON REWORK FOLLOW-UPS: DOCTRINE-NAME DE-COLLISION (2026-07-05)
+
+**User directive (overarching):** "finish Napoleon rework first, then continue with Japan."
+
+**Scope finding:** on surveying the six #82 sub-items (GP reactivity, embassies, self-str tie-in, court friction, char mechanics, doctrine rename) against the shipped code, five were ALREADY delivered by #65/#80: GP reactivity = `QING_napoleon_revenge_tilt`->`qing_gp_tension_britain/russia`; embassies = the qing_napoleon.5/.6 Amherst-at-St-Helena kickoff; self-str tie-in = every reform verb advances Self-Strengthening; court friction = qing_napoleon.3 conservative-Manchu backlash + `QING_napoleon_apply_conservative_backlash`; char mechanics = `QING_napoleon_loyalty_pulse` (conditional loyalty on the revenge line). The one genuinely-open item was the **doctrine rename** -- and it was a real player-facing DEFECT, not cosmetic: two DISTINCT modifiers both rendered in the UI as **"The Daoguang Doctrine (道光主義)"** -- `qing_napoleon_daoguang_doctrine` (the Napoleon reform capstone) and `qing_daoguang_doctrine` (a Pacific-basin US-entente in the colonization tree, qing_colonization_modifiers.txt:209, also the USCW fork key).
+
+**Decision (user, AskUserQuestion):** colonization KEEPS "The Daoguang Doctrine"; the Napoleon capstone is renamed to **"The Emeritus Doctrine (太上皇主義)"** -- display-only, NO key rename (lowest-risk path; the modifier key `qing_napoleon_daoguang_doctrine` and all script references stay, so no behavioural change). Narratively cleaner: the doctrine is named for the 太上皇 (Emperor Emeritus, Napoleon) who wrought it, proclaimed by the heir he tutored.
+
+**Edits (display + coherence only, no logic change):**
+- **qing_mechanics_l_english.yml** -- `qing_napoleon_daoguang_doctrine:0` display name -> "The Emeritus Doctrine (太上皇主義)"; desc reworded to explain the name honours the Emperor Emeritus.
+- **qing_napoleon_l_english.yml** -- `.2.f` option label (道光主義->太上皇主義) + its tooltip; `.4.t` title, `.4.desc` flavour (the heir names it 太上皇主義 for his tutor the Retired Emperor), `.4.a` option button ("Proclaim the Emeritus Doctrine"); top + .4 section comments.
+- **se_QING_NAPOLEON.txt** -- dead write-only var `qing_daoguang_doctrine_proclaimed`->`qing_emeritus_doctrine_proclaimed` (grepped: set once, never read, safe to rename); the proclaim LOG_line text.
+- **qing_napoleon_events.txt** -- .4 namespace/section comments + the .4 LOG_line event tag.
+
+**Validation:** `char:227` "Daoguang **Emperor**" references (the historical person/reign -- Prince Mianning) correctly PRESERVED; only the *doctrine's* name changed. Grep confirms zero "Daoguang Doctrine"/道光主義 left in the Napoleon loc, and the colonization `qing_daoguang_doctrine:0` line is byte-identical to HEAD. BOM preserved per-file (mechanics/napoleon/events loc = BOM; se_QING_NAPOLEON.txt = no-BOM). Post-implementation review dispatched. Task #82 COMPLETE (all six sub-items resolved: five pre-existing, doctrine de-collision this pass).
+
+**#82 follow-up (same session, user-directed escalation):** the user then asked to (a) fix the code-facing comment/LOG "Daoguang" references too, (b) rename the KEY itself, and (c) rename the whole capstone away from "doctrine" — approving "Emeritus Enlightenment". Final state SUPERSEDES the display-only decision above:
+- **Key renamed** `qing_napoleon_daoguang_doctrine` -> `qing_napoleon_emeritus_enlightenment` across all 5 files (definition + every add_country_modifier/has_country_modifier/NOT reference + both loc keys). Zero old-key remnants (grep-verified).
+- **Display + CJK** -> "The Emeritus Enlightenment (太上皇啟蒙)" (啟蒙 = Enlightenment).
+- **Dead var** `qing_daoguang_doctrine_proclaimed` -> `qing_emeritus_enlightenment_proclaimed` (still set-once/never-read).
+- **All code comments + LOG_line text** updated Daoguang->Emeritus for the DOCTRINE/capstone sense; **preserved** every `char:227` "Daoguang **Emperor**", `is_daoguang_era`, `daoguang_heir` reference (historical person/reign) and the untouched colonization `qing_daoguang_doctrine` modifier.
+- **Flavour** common-noun "doctrine" reworded to "settlement of state" so it reads correctly against the new name.
+- **Design note (user asked "why a doctrine at all?"):** the capstone is mechanically just a permanent stat-buff country_modifier; "doctrine" was a #65 flavour label with no engine meaning. Renaming is free. A genuinely CONCRETE capstone (per the concrete-over-abstract rule) would instead `change_government` to a modernized type (proven at se_QING_REFORM.txt) — FLAGGED as a possible future upgrade, not done this pass.
+Braces + BOM/LF re-verified on all 5 files. Second post-implementation review (Review82) dispatched for the rename-completeness (highest-risk: a missed rename site).
+
+**#82 review outcome (Review82, 2026-07-05):** PASS — rename is behaviourally equivalent to HEAD except for the intended display/key change; no CRITICAL/MEDIUM. Top-priority rename-completeness check CLEAN: old key `qing_napoleon_daoguang_doctrine` has ZERO live references (only prose + the migration-note comment); new key `qing_napoleon_emeritus_enlightenment` defined once, every gate/grant (se_QING_NAPOLEON.txt:399/401, qing_napoleon_events.txt:175/258) uses it. Loc keys match; colonization `qing_daoguang_doctrine` genuinely untouched (still "The Daoguang Doctrine"); dead var still write-only; historical char:227/daoguang_heir/"Daoguang Emperor" refs preserved; braces (mechanics 57/57, se_QING_NAPOLEON 133/133, events 93/93) + BOM/LF verified vs HEAD. One LOW (doc drift): QING_FEATURES.md §Napoleon still documented the old key/name — FIXED (updated to 太上皇啟蒙 The Emeritus Enlightenment / qing_napoleon_emeritus_enlightenment, task #82 note). Task #82 COMPLETE.
+
+**ConcreteAudit deliverable (2026-07-05):** the abstract→concrete research agent returned a ranked backlog of 6 HYBRID/low-risk conversion candidates for the Qing suite (tributary vassals #1, treaty ports, students-abroad, Xinjiang/Ili, customs house, Meiji meter) — all with proven in-mod hooks. Saved to memory imp19c-concrete-conversion-backlog.md (indexed). NOT actioned this pass; #1 (tributary vassals) has thematic overlap with #81 Japan (Ryukyu dual-tributary) so is best built near/within the Japan arc. Standing directive remains finish-Napoleon-then-Japan; #82 done, #81 next.
+
+---
+
+## AUTONOMOUS RUN 2 (2026-07-05/06) — #81 Japan + perf cluster #83-#87
+
+User instruction: "continue with Japan and the performance fixes (very carefully with lots of scrutiny on performance changes) without stopping ... log the decisions taken". Later: "the pre-Perry missions should interact with individual daimyos, can support or oppose individuals to modernize and restore the emperor against the shogunate".
+
+### Concurrency / collision plan (DECISION)
+- The **#91 concrete-conversions workflow** (runId wf_cbbf71fb-94a) is running in the background, editing many se_QING_*.txt files. Its bundle **B7 owns se_QING_DIPLO.txt** (item H: GP rivalry -> real plays).
+- Verified perf-task file map (Explore agent): #83=se_QING_COLON.txt, #84=se_DIPLOMACY.txt, #85=se_DIPLOMACY.txt, #86=**se_QING_DIPLO.txt**, #87=se_CURRENCY.txt.
+- **DECISION: defer #86 until #91 finishes** (only #86 collides with se_QING_DIPLO.txt). Do #83/#84/#85/#87 now (collision-free). 
+- **DECISION: build #81 Japan in NEW files** + touch only qing_japan_modifiers.txt & qing_japan_l_english.yml (no #91 bundle owns those). Do NOT edit se_QING_DIPLO.txt for Japan until #91 done; the accord/rivalry/meiji verbs there are READ/CALLED, not modified.
+
+### YAML linter false positives (NOTE, not a bug)
+- Live diagnostics on qing_treaties/customs/selfstrengthening/missionary _l_english.yml ("mapping items must start at same column") are the #91 workflow's new loc lines being linted. These are FALSE POSITIVES: the mod's Paradox loc format is `l_english:` at col 0 with leading-space `key:0 "val"` keys — a generic YAML linter rejects it, but EVERY existing loc file uses this format. The #91 workflow's own review phase covers those bundles. Not chasing.
+
+### #81 Japan — pre-Perry arc: verified facts + design (DECISION)
+- No Emperor/Kyoto tag exists at 1815. JPN is a formable never created in-mod (all refs guard `exists = c:JPN`). TKG (Tokugawa Shogunate, hereditary_dictatorship, japanese/shinto, cap Edo p:3684) is the only Japan-level tag at start, with 37 real daimyo subjects (setup 00_default.txt:557-593).
+- Key daimyo for the sonno-joi arc: **CSU (Choshu)** and **SHZ (Satsuma/Shimazu)** are both nominal_vassal (loosest tie) — the two historical anti-shogunate tozama. Both japanese/shinto. SHZ cap Kagoshima p:7012; SHZ core also holds Kyoto p:4624 (NB: Imperial capital sits under Satsuma, not TKG, in this setup). RYU (Ryukyu, okinawan/mahayana, cap Naha p:524) is CHI tributary AND under TKG's SHZ vassal = the dual-tributary (両属) hook. Nagasaki p:5415.
+- Existing qing_japan_missions.txt is the 1871+ POST-Perry tree (open-relations -> accord/rivalry forks). #81 is the c.1815-1854 PRECURSOR arc that hands off to it at Perry(1854).
+- DESIGN (expanded per user daimyo instruction): pre-Perry tree that (a) runs the Nagasaki intelligence channel + Opium-War-cautionary-tale beats, AND (b) lets the Qing back or oppose individual daimyo (CSU/SHZ as reform/anti-shogunate leaders) and the sonno-joi "restore the emperor" dynamic, using the real subject tags. Concrete-over-abstract: spawn/steer real daimyo subjects & characters, not just counters.
+
+### #83 DONE (Perf C1) — nwcrop capacity double-sweep merged
+- `QING_COLON_apply_nwcrop_capacity` (se_QING_COLON.txt) ran TWO global `every_province` sweeps (add + remove/reconcile). MERGED into ONE pass with a limit OR-ing the add-set and remove-set (provably disjoint), then an if/else picking add vs remove. Behaviour-identical (same provinces gain/lose the modifier), half the visits. REJECTED the literal task text ("gate off CHI") as a regression — the lift is a crop property, gating to CHI would strip it from non-Qing crop provinces. Braces 103/103.
+
+### #84 DONE (Perf C2) — index active diplomatic-play provinces
+- `DIPLOMACY_update_all_diplomatic_plays` (se_DIPLOMACY.txt) changed from a monthly global `every_province { limit={has_variable=is_diplomatic_play} }` map scan to `every_in_global_list { variable = global_all_diplomatic_plays  limit={has_variable=is_diplomatic_play} }`. The list is the maintained index of play provinces (added at creation se_AI.txt:622, removed at teardown se_AI.txt:900-903 together with the is_diplomatic_play var — so the limit is a belt-and-braces guard, never gates out a live play). Mid-loop teardown proven safe (se_AI.txt:934 already removes the current element mid-iteration). Behaviour-identical set, no full-map scan.
+
+### #85 DONE (Perf C3) — hoist tradezone-independent base power
+- `DIPLOMACY_cache_country_power_tradezone` (se_DIPLOMACY.txt) multiplies the heavy `DIPLOMACY_power` svalue (economy+military+tech+RECURSIVE every_subject+admin+stability, DIPLOMACY_svalues.txt:1) by a per-TZ penetration factor — but DIPLOMACY_power has ZERO $tradezone$ dependence, so it was recomputed 22× per country per quarter. FIX: `DIPLOMACY_update_global_power_status` now sets `DIPLOMACY_power_base_cached` ONCE per country (right before that country's TZ loop, removed right after), and the helper reads the cache. SAFETY: helper falls back to a fresh DIPLOMACY_power compute when the cache is absent, so the DEBUG timetest harness (timetest_quarterly_tick.txt:371, which calls the helper without the pre-pass) is byte-for-byte unchanged — no edit needed there. Passes 2-5 untouched. Cache variable never outlives pass 1. Braces 366/366.
+- NB: the 5 passes in DIPLOMACY_update_global_power_status are dependency-ordered (cache -> add-subject -> finalise-subject -> play -> top-players) and CANNOT be merged; only the redundant base-power recompute inside pass 1 was hoistable. Verified before editing.
+
+### #86 STILL DEFERRED — collides with #91 bundle B7 (se_QING_DIPLO.txt). Do after #91 completes.
+
+### #81 Japan — pre-Perry arc DONE (幕末前夜, 2026-07-05)
+
+The 1815→1854 opening arc, feeding the existing post-Perry Meiji tree. Built entirely in NEW files (+ two non-#91-owned edits) per the collision plan, so it never touched se_QING_DIPLO.txt.
+
+**Files created:**
+- `common/scripted_effects/se_QING_JAPAN_PREPERRY.txt` (85/85) — the machinery, prefix `QING_jppre_`. Three 0-100 counters (reuse `QING_DECLINE_nudge`): `qing_jppre_intel`, `qing_jppre_reform_faction`, `qing_jppre_shogun_grip` (starts 70). Verbs: init, resolve_daimyo (`$tag$`→`scope:qing_jppre_daimyo`), deepen_intel, back_daimyo (patron opinion + one-time reform-leader spawn via `qing_jppre_reform_leader` marker + faction++/grip--), spawn_reform_leader (`create_character` japanese/shinto, martial 6/charisma 8/finesse 8/zeal 7, traits brave/ambitious/righteous), shore_shogunate (grip++/faction-- + TKG opinion), restoration_break (`release_subject` from TKG + `start_civil_war = scope:...`, falls back to current_ruler if the leader is dead), perry_handoff (sets `qing_jppre_perry_done`, carries the outcome onto the existing `QING_japan_warm_accord`/`raise_rivalry`/`meiji_advance`).
+- `common/missions/qing_japan_preperry_missions.txt` (118/118) — `qing_japan_preperry_mission`, potential `{ tag=CHI, is_ai=no, NOT has_variable=qing_jppre_perry_done }`. Shared root (Nagasaki channel → Fusetsugaki → cautionary-tale, the last gated on `qing_treaty_system_imposed`), then FORKS: ARC R loyalist (back_daimyo → fan_sonno_joi → restoration capstone, faction≥70 & grip<40) vs ARC B bakufu (shore_bakufu → ready_bakufu → meet_perry). Road committed once via `qing_jppre_road` flag var; each entry locks the other.
+- `events/imp19c_mod_events/qing_japan_preperry_events.txt` (30/30, BOM+LF) — `.1` cautionary tale (warn vs reform), `.2` daimyo choice (CSU/SHZ, trigger-gated on existence, sets `qing_jppre_backed_tag`), `.10` Perry black ships (date≥1853 + NOT perry_done, immediate → perry_handoff).
+- `common/modifiers/qing_japan_preperry_modifiers.txt` (7/7) — reward modifiers; all keys validated against the mod's country-modifier vocabulary.
+- `localization/english/qing_japan_preperry_l_english.yml` (BOM+LF) — full loc, verified 100% coverage (every task title/tt, modifier, event option, mission body defined; USED-BUT-UNDEFINED = []).
+
+**Files edited (non-#91-owned):**
+- `common/on_action/qing_mechanics_on_actions.txt` (16/16) — `QING_jppre_init = yes` at setup + a player-only Perry scheduler (`trigger_event qing_japan_preperry.10 days={13820 13940}`, ~1853; event re-checks its own date guard).
+- `common/missions/qing_japan_missions.txt` (124/124) — **behavioural change (documented in-code):** added `has_variable = qing_jppre_perry_done` to the post-Perry mission's potential so the two Japan trees never show at once; the post-Perry tree now opens only at the hand-off. Deliberate.
+- `common/opinions/imp19c_opinions.txt` (27/27) — added `qing_jppre_patron_opinion { value=40 yearly_decay=3 }`.
+
+**Key design decisions & findings:**
+- **JPN is never formed** (formable, all refs guard `exists = c:JPN`; TKG *is* Japan at 1815). So the Restoration payoff is made CONCRETE via the real daimyo tags — `release_subject` (CSU/SHZ from TKG) + `start_civil_war` behind the spawned loyalist leader — NOT a tag formation. Satisfies the concrete-over-abstract rule: real on-map subject + real character + real civil war, with the counters kept as the AI/summary layer.
+- **Daimyo interaction** (per user instruction): the player backs or opposes individual daimyo — CSU (Chōshū) / SHZ (Satsuma), the real anti-shogunate tozama — to drive sonnō-jōi toward Restoration, or shores up the Tokugawa (TKG) for a stable conservative neighbour. Both roads are concrete: opinions on the real tags, a spawned reform councillor, the release+civil-war break.
+- **Oracle-verified verbs** (Terra-Indomita + Invictus, per the standing rule): `release_subject` (`<overlord> = { release_subject = <tag> }`), `start_civil_war = scope:<char>`, `create_character`, foreign-scope `c:XXX` effects — all confirmed in-engine before building on them.
+- **Loc-key namespace collision fixed:** `qing_jppre_nagasaki_channel`/`qing_jppre_fusetsugaki` were each both a task key and a modifier key; the two MODIFIERS were renamed to `_mod` suffix (definitions, both `add_country_modifier` calls, loc keys aligned). Invalid trait `popularist` → `righteous`.
+- se_LOG wired at every task on_completion + every verb (sys=QING), per the error-logging standing rule.
+
+**Validation:** all 7 files brace-balanced (figures above); every `add_country_modifier` name used has a matching definition; full loc coverage; BOM/LF preserved per file.
+
+**Standing directive status:** Japan done. Remaining autonomous work = #86 (Perf C4, unblocks once #91 finishes editing se_QING_DIPLO.txt) + the #91 workflow FAIL-bundle fixes.
+
+### #91 workflow FAIL-bundle fixes + #86 (Perf C4) DONE (2026-07-05)
+
+The #91 concrete-conversions workflow (runId wf_cbbf71fb-94a) landed all its edits and self-reviewed 11 bundles: 4 FAIL (B2/B3/B4/B6), 6 PASS_WITH_NITS, 1 PASS. I applied every MANDATORY fix (all FAIL findings + the two standing-rule se_LOG violations + the one cheap traceability nit). Optional balance/cosmetic nits were left as documented (see below). Every fix carries a `[#91-fix task #91]` in-code comment per the fix-traceability rule; all touched files re-verified brace-balanced with BOM/LF preserved.
+
+**B4 (D:xinjiang-ili) — se_QING_ILI.txt — BLOCKER + 2 major + 1 minor, ALL FIXED (braces 176/176):**
+- *Blocker (concrete rule silently broken):* `QING_ili_apply_prov_band` iterated `every_owned_province` + `p:2930={owner=ROOT}`, but Xinjiang (Dzungaria+Tarim, incl. Urumqi p:2930) is held by the **ILI** autonomous_governorship + **XNG** client_state SUBJECTS, never by CHI directly (verified setup/main/00_default.txt:35979 ILI own_control_core `2930 9597 6973`, XNG `174 1732 2977…`). So the sweep stamped NOTHING and the grip meter never reached the map. FIX: rewrote to the owner-independent `area:Dzungaria={every_area_province}` / `area:Tarim={…}` idiom — oracle-proven (Terra-Indomita punt_decisions.txt:220, Invictus jomon_decisions.txt:182; 768/889 uses). Area keys verified in map_data/areas.txt.
+- *Major (perf regression):* the province sweep was called every quarterly pulse from `QING_ili_apply_control_band`. FIX: de-pulsed — removed from the pulse applier, driven only from the 5 discrete stage-resolution effects where the grip meter changes (choose-coast, reconquest win/fail, ratify, Zeng triumph) + the break-free fallback. Mirrors #83's nwcrop de-pulsing.
+- *Major (se_LOG):* `QING_ili_apply_prov_band` had no LOG wiring. FIX: added LOG_enter/LOG_exit + a LOG_line on each band branch.
+- *Minor (stale comments):* the "read O(1)/All O(1)" header/pulse comments are now accurate again (resolved by the de-pulsing).
+
+**B6 (F:great-office-powerbase) — se_QING_COUNCIL.txt — major + minor, FIXED (braces 218/218):**
+- *Major (runtime error, dropped cohort):* `add_subunit = archers` — `archers` is UNDEFINED (army_archers.txt is a 3-byte BOM-only stub; the mod's only army sub_units are regular_infantry/artillery/conscripts/engineer_cohort/warelephant/supply_train). FIX: → `regular_infantry`, matching the host's other four cohorts.
+- *Minor (dead loc / raw-string display):* `create_unit name = "qing_grandee_rebel_army"` relied on an unquoted-key auto-resolve the mod never demonstrates. FIX: quoted LITERAL `"A Grandee's Private Army"` per the proven SELFSTR fleet idiom (name="Beiyang Fleet"); retired the now-dead loc key (left as a traceability comment).
+
+**B2 (B:treaty-ports) — qing_treaties_modifiers.txt — major, FIXED (braces 7/7):**
+- `qing_treaty_port` used `local_commerce_modifier` — NOT an engine-read key (the modifier_icons:298 .dds belongs to `state_commerce_modifier`; `local_commerce_modifier` is declared nowhere and appears only in unloaded common/WIP/), so the port's headline +15% commerce silently applied nothing. FIX: → `local_commerce_value_modifier` (proven province-scope commerce-production key, 16 live in-mod uses). The other three lines were already valid.
+
+**B3 (item C — students-abroad) — se_QING_STUDENTS.txt — 2 major (one root cause), FIXED (braces 134/134):**
+- The milestone "floor" `change_variable divide=25 then multiply=25` is a NO-OP (Imperator vars are floating-point; change_variable takes no rounding key), so `milestone_tmp == returned` and the once-per-+25-band guard never held → a returnee spawned nearly every graduation pulse up to the flooding cap of 6, instead of once per band. FIX: replaced with explicit literal-threshold banding (returned≥100/75/50/25 → 100/75/50/25/0) using only proven primitives (comparison + literal set_variable — avoided the unproven round-in-set_variable idiom), so `milestone_tmp` snaps exactly to a band and the `> last_milestone` guard fires once per band as specified.
+
+**B1 (se_log_ok=false) — se_QING_VASSAL.txt — FIXED (braces 88/88):** added LOG_enter/LOG_exit to `QING_vassal_sync_lost_flags` (had only LOG_line). The disclosed re-subjugation-then-re-loss nudge behaviour is authorized by the brief's derivable-flag instruction — left as-is (transparency note only).
+
+**B9 (se_log_ok=false + traceability) — se_QING_MECHANICS.txt + qing_mechanics_modifiers.txt — FIXED (braces 222/222, 60/60):** added LOG_enter/LOG_exit to `QING_army_spawn_newarmy` (had only LOG_line + LOG_fail); corrected the `qing_smuggler_den` comment naming a non-existent effect `QING_currency_spawn_smuggler` → `QING_DECLINE_spawn_smuggler` (se_QING_DECLINE.txt:1480).
+
+**Optional nits LEFT (documented, not defects):** B5 custom-house slot-exhaustion log wording; B11 one-shot agitator guard; B7 sustained-confrontation feedback loop + predatory-band balance-tuning note (cooldown caps launches — correctness unaffected); B8 multi-band building drift + allow-on-add_building_level assumption; B9 whole-army decay-tag imprecision + spawn once-guard ordering. All flagged in the workflow review as acceptable/cosmetic; none affects correctness. B7 balance note carried forward for the tuning pass.
+
+### #86 (Perf C4) DONE — se_QING_DIPLO.txt (braces 311/311)
+
+`QING_gp_scan_plays` ran TWO full `every_in_global_list` sweeps of `global_all_diplomatic_plays` per Qing pulse: (A) the Qing's own plays reaching into a power's sphere, (B) a power's plays against the Qing. The two filters are PROVABLY DISJOINT — (A) `play_instigator = self`, (B) `play_instigator != self` — so no play ever matched both. MERGED into ONE pass (union filter with `AND`-block OR; then if(A)/else(B) split), halving the list iteration.
+
+**Behavioural-equivalence proof (heightened scrutiny per directive "lots of scrutiny on performance changes"):** each play still performs exactly its one A- or B-action (mutual exclusion preserved → same SET of pressure calls). The only change is the ORDER of the per-play `QING_DECLINE_nudge` calls; those clamp 0..100, so order can perturb a raw counter value ONLY at the 0/100 rails. Every consumer reads these counters through THRESHOLD bands (≥50 rivalry modifier, ≥75 predatory `QING_gp_rival_launch_play`), and a rail discrepancy (99 vs 100, 0 vs 1) sits on the same side of every threshold — unobservable downstream. Away from rails addition is commutative → bit-identical. `AND`-in-limit idiom verified proven (se_AI.txt, se_DEMAND.txt). This is the lower-risk equivalent of the task's "cache Qing-involved plays" intent — it removes the redundant second full scan without hooking the play create/teardown lifecycle in se_AI.txt (which the directive's caution argues against).
+
+**Perf cluster #83-#87 now COMPLETE** (#83/#84/#85 prior; #86 this pass; #87 currency-name bug prior). All autonomous perf + #91-quality work done; commit pending user request.

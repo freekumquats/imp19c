@@ -189,6 +189,116 @@ QING_GOV_apply_exam_ladder_band = {
 }
 
 # ======================================================================
+# [#91 item I] CONCRETE 衙門 (YAMEN) — bureaucracy-CAPACITY made real.
+# The 0..100 qing_bureau_capacity counter is KEPT as the AI/summary layer; here
+# we hang a REAL building off it. We track the counter's band (0=<30, 1=30..49,
+# 2=50..69, 3=>=70) in qing_yamen_band_prev and, whenever the band CROSSES, add a
+# level of qing_yamen_building to the empire's most-populous province on a RISE,
+# or remove one on a FALL. Additive: the counter/modifier bands are untouched.
+# Uses the proven QING_selfstr_build idiom (ordered_owned_province / max=1) and
+# remove_building_level (guarded by has_building). O(1)-ish; one province op only
+# on the rare pulse where a band boundary is crossed.
+# ======================================================================
+QING_GOV_yamen_band_track = {
+	LOG_enter = { sys = QING  fn = "QING_GOV_yamen_band_track" }
+	# current band of the capacity counter
+	set_variable = { name = qing_yamen_band_cur  value = 0 }
+	if = { limit = { var:qing_bureau_capacity >= 30 } set_variable = { name = qing_yamen_band_cur  value = 1 } }
+	if = { limit = { var:qing_bureau_capacity >= 50 } set_variable = { name = qing_yamen_band_cur  value = 2 } }
+	if = { limit = { var:qing_bureau_capacity >= 70 } set_variable = { name = qing_yamen_band_cur  value = 3 } }
+	if = {
+		# first sighting: seed the tracker to the current band WITHOUT building, so
+		# a fresh/loaded game does not spawn a burst of yamens.
+		limit = { NOT = { has_variable = qing_yamen_band_prev } }
+		set_variable = { name = qing_yamen_band_prev  value = var:qing_yamen_band_cur }
+		LOG_line = { sys = QING  msg = "yamen band seeded at [ROOT.MakeScope.GetVariable('qing_yamen_band_cur').GetValue|0] for [ROOT.GetTag]" }
+	}
+	else_if = {
+		limit = { var:qing_yamen_band_cur > var:qing_yamen_band_prev }
+		# RISE — build a real 衙門 in the most-populous owned province.
+		if = {
+			limit = { any_owned_province = { count >= 1 } }
+			ordered_owned_province = {
+				order_by = total_population
+				max = 1
+				add_building_level = qing_yamen_building
+			}
+			LOG_line = { sys = QING  msg = "yamen band ROSE to [ROOT.MakeScope.GetVariable('qing_yamen_band_cur').GetValue|0] -> built qing_yamen_building for [ROOT.GetTag]" }
+		}
+		else = { LOG_fail = { sys = QING  fn = "QING_GOV_yamen_band_track"  reason = "no owned province to build yamen" } }
+		set_variable = { name = qing_yamen_band_prev  value = var:qing_yamen_band_cur }
+	}
+	else_if = {
+		limit = { var:qing_yamen_band_cur < var:qing_yamen_band_prev }
+		# FALL — tear down a real 衙門 (guarded: only where one stands).
+		if = {
+			limit = { any_owned_province = { has_building = qing_yamen_building } }
+			ordered_owned_province = {
+				limit = { has_building = qing_yamen_building }
+				order_by = total_population
+				max = 1
+				remove_building_level = qing_yamen_building
+			}
+			LOG_line = { sys = QING  msg = "yamen band FELL to [ROOT.MakeScope.GetVariable('qing_yamen_band_cur').GetValue|0] -> removed qing_yamen_building for [ROOT.GetTag]" }
+		}
+		else = { LOG_fail = { sys = QING  fn = "QING_GOV_yamen_band_track"  reason = "no standing yamen to remove" } }
+		set_variable = { name = qing_yamen_band_prev  value = var:qing_yamen_band_cur }
+	}
+	LOG_exit = { sys = QING  fn = "QING_GOV_yamen_band_track"  result = OK }
+}
+
+# ======================================================================
+# [#91 item J] CONCRETE 書院 (SHUYUAN / ACADEMY) — the exam-LADDER made real.
+# The 0..100 qing_exam_ladder counter is KEPT as the summary layer; here we hang
+# a REAL academy off it. We track the ladder's band (0=<=30 clogged, 1=31..69,
+# 2=>=70 vigorous) in qing_shuyuan_band_prev and, on a band CROSS, add a level of
+# qing_shuyuan_building to the most-populous province on a RISE (able men rise,
+# academies flourish) or remove one on a FALL (halls silt up and close). Additive:
+# the counter/modifier bands are untouched. Same proven idiom as the yamen tracker.
+# ======================================================================
+QING_GOV_shuyuan_band_track = {
+	LOG_enter = { sys = QING  fn = "QING_GOV_shuyuan_band_track" }
+	set_variable = { name = qing_shuyuan_band_cur  value = 0 }
+	if = { limit = { var:qing_exam_ladder > 30 } set_variable = { name = qing_shuyuan_band_cur  value = 1 } }
+	if = { limit = { var:qing_exam_ladder >= 70 } set_variable = { name = qing_shuyuan_band_cur  value = 2 } }
+	if = {
+		limit = { NOT = { has_variable = qing_shuyuan_band_prev } }
+		set_variable = { name = qing_shuyuan_band_prev  value = var:qing_shuyuan_band_cur }
+		LOG_line = { sys = QING  msg = "shuyuan band seeded at [ROOT.MakeScope.GetVariable('qing_shuyuan_band_cur').GetValue|0] for [ROOT.GetTag]" }
+	}
+	else_if = {
+		limit = { var:qing_shuyuan_band_cur > var:qing_shuyuan_band_prev }
+		if = {
+			limit = { any_owned_province = { count >= 1 } }
+			ordered_owned_province = {
+				order_by = total_population
+				max = 1
+				add_building_level = qing_shuyuan_building
+			}
+			LOG_line = { sys = QING  msg = "shuyuan band ROSE to [ROOT.MakeScope.GetVariable('qing_shuyuan_band_cur').GetValue|0] -> built qing_shuyuan_building for [ROOT.GetTag]" }
+		}
+		else = { LOG_fail = { sys = QING  fn = "QING_GOV_shuyuan_band_track"  reason = "no owned province to build shuyuan" } }
+		set_variable = { name = qing_shuyuan_band_prev  value = var:qing_shuyuan_band_cur }
+	}
+	else_if = {
+		limit = { var:qing_shuyuan_band_cur < var:qing_shuyuan_band_prev }
+		if = {
+			limit = { any_owned_province = { has_building = qing_shuyuan_building } }
+			ordered_owned_province = {
+				limit = { has_building = qing_shuyuan_building }
+				order_by = total_population
+				max = 1
+				remove_building_level = qing_shuyuan_building
+			}
+			LOG_line = { sys = QING  msg = "shuyuan band FELL to [ROOT.MakeScope.GetVariable('qing_shuyuan_band_cur').GetValue|0] -> removed qing_shuyuan_building for [ROOT.GetTag]" }
+		}
+		else = { LOG_fail = { sys = QING  fn = "QING_GOV_shuyuan_band_track"  reason = "no standing shuyuan to remove" } }
+		set_variable = { name = qing_shuyuan_band_prev  value = var:qing_shuyuan_band_cur }
+	}
+	LOG_exit = { sys = QING  fn = "QING_GOV_shuyuan_band_track"  result = OK }
+}
+
+# ======================================================================
 # THE GOVERNANCE PULSE ENTRY POINT
 # Called from the throttled monthly pulse (00_monthly_country.txt) right after
 # the decline pulse, so the council recompute below sees fresh decline counters.
@@ -212,6 +322,12 @@ QING_GOV_pulse = {
 	QING_GOV_apply_capacity_band = yes
 	QING_GOV_apply_integrity_band = yes
 	QING_GOV_apply_exam_ladder_band = yes
+
+	# 3b. [#91 items I & J] Hang REAL buildings off the capacity + exam-ladder
+	#     counters: build/remove a 衙門 (yamen) or 書院 (academy) on a band cross.
+	#     Counters kept as the summary layer; these add the concrete on-map object.
+	QING_GOV_yamen_band_track = yes
+	QING_GOV_shuyuan_band_track = yes
 
 	# 4. Self-Strengthening progress band (reads qing_selfstr_progress, advanced
 	#    by the Self-Strengthening mission tree). Cheap O(1) band swap.

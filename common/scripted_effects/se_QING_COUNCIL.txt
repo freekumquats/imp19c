@@ -291,6 +291,104 @@ QING_council_apply_band = {
 	if = {
 		limit = { var:qing_council_overmighty_flag = 1 }
 		add_country_modifier = { name = qing_council_overmighty  duration = -1 }
+		# [#91 item F] CONCRETE FACE of the overmighty grandee. The counter/flag above
+		# stays the AI/summary layer; here we hang a REAL object off it. If the
+		# overmighty chief has ALSO turned disloyal he stops being a mere loyalty
+		# number and raises a personal army — a visible rebel-army seed whose cohorts
+		# answer to HIM, not the throne (the loyal-cohorts civil-war seed). The flip
+		# is guarded inside the effect so a merely-popular loyal chief never revolts.
+		if = { limit = { has_variable = qing_council_chief }  var:qing_council_chief = { QING_council_grandee_flip = yes } }
+	}
+}
+
+# ======================================================================
+# [#91 item F] THE OVERMIGHTY GRANDEE TURNS — CONCRETE REBEL-ARMY SEED
+# Called inside the chief councillor's CHARACTER scope from QING_council_apply_band
+# (this = the 領班 chief; ROOT = CHI). The overmighty flag is the AI/summary layer;
+# this hangs the REAL object off it. If the overmighty chief has ALSO turned
+# disloyal (loyalty < 40, the AFFINITY "estranged" band), his personal power base
+# — the loyal veterans the seat/office conferred — becomes a REAL personal army:
+# a legion raised under him whose cohorts are set_personal_loyalty to HIM, not the
+# throne (the loyal-cohorts civil-war seed — the Heshen/warlord danger given a
+# military face). Idiom proven: raise_legion+create_unit+add_subunit and the
+# add_to_legion/set_as_commander commander attach (se_QING_SELFSTR.txt:320-342,
+# se_QING_NAPOLEON.txt:357-375); every_sub_unit + set_personal_loyalty on the raised
+# cohorts (common/unit_abilities/military_colonies.txt:57-69; TI warfare_events.txt:269-271).
+# Fires ONCE per chief (qing_grandee_rebelled marker). KEEPS all council counters:
+# effectiveness / overmighty flag / seat list are untouched here — we only convert
+# part of his abstract loyal-veteran pool into the concrete legion (mirror -N).
+# ======================================================================
+QING_council_grandee_flip = {
+	LOG_enter = { sys = QING  fn = "QING_council_grandee_flip" }
+	if = {
+		limit = {
+			is_alive = yes
+			loyalty < 40
+			NOT = { has_variable = qing_grandee_rebelled }
+		}
+		# fire-once marker on the man himself.
+		set_variable = { name = qing_grandee_rebelled  value = 1 }
+		save_scope_as = grandee_rebel_commander
+		# convert part of his abstract power base into the concrete legion: the loyal
+		# veterans the office/seat granted march off as his personal army (mirror of the
+		# +3 seat / +2 chief / +4 office grants). The 0..100 council counters are KEPT.
+		add_loyal_veterans = -5
+		# raise the real force under him. Prefer the capital; guarded so a landless Qing
+		# still gets the marker (and the log) without a scope error.
+		if = {
+			limit = { exists = ROOT.capital_scope }
+			ROOT.capital_scope = { state.governorship = { QING_council_raise_grandee_legion = yes } }
+			LOG_line = { sys = QING  msg = "grandee flip: overmighty chief [scope:grandee_rebel_commander.GetName] turned — personal army raised at capital (cohorts loyal to HIM) for [ROOT.GetTag]" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_council_grandee_flip"  reason = "no capital_scope; grandee marked rebel but no legion raised for [ROOT.GetTag]" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_council_grandee_flip"  reason = "chief still loyal (loyalty>=40) or already flipped; no rebel army for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_council_grandee_flip"  result = OK }
+}
+
+# [#91 item F] Raise the grandee's personal legion. Called in governorship scope;
+# scope:grandee_rebel_commander = the flipped chief. Mirrors QING_selfstr_raise_evarmy_legion:
+# base sub_unit + add_subunit, commander attached via add_to_legion=PREV +
+# set_as_commander. The one addition is the loyal-cohorts bind: every raised sub_unit
+# is set_personal_loyalty to the grandee, so the cohorts answer to HIM — the concrete
+# civil-war seed rather than a loyalty number.
+QING_council_raise_grandee_legion = {
+	raise_legion = {
+		create_unit = {
+			# [#91-fix task #91] quoted LITERAL display name — the proven in-mod idiom
+			# (QING_selfstr_raise_fleet name="Beiyang Fleet", se_QING_SELFSTR.txt:180;
+			# Invictus name="Basilike Taxis"). The former "qing_grandee_rebel_army" relied
+			# on an unquoted-key auto-resolve that this mod never demonstrates, so it would
+			# have shown the raw string; its loc line has been retired.
+			name = "A Grandee's Private Army"
+			location = ROOT.capital_scope
+			sub_unit = regular_infantry
+			save_scope_as = qing_grandee_legion
+			add_subunit = regular_infantry
+			add_subunit = regular_infantry
+			add_subunit = regular_infantry
+			# [#91-fix task #91] was 'archers' — an UNDEFINED unit type (army_archers.txt is
+			# a 3-byte BOM-only stub, no 'archers = {}' anywhere in common/units); it threw a
+			# runtime error and dropped the 5th cohort. regular_infantry is the mod's only
+			# line-infantry sub_unit, matching the other four cohorts of this field host.
+			add_subunit = regular_infantry
+		}
+		if = {
+			limit = { exists = scope:grandee_rebel_commander }
+			scope:grandee_rebel_commander = { add_to_legion = PREV }
+			random_legion_unit = { set_as_commander = scope:grandee_rebel_commander }
+		}
+	}
+	# bind the raised cohorts to the grandee personally (loyal-cohorts civil-war seed).
+	if = {
+		limit = { exists = scope:qing_grandee_legion  exists = scope:grandee_rebel_commander }
+		scope:qing_grandee_legion = {
+			every_sub_unit = { set_personal_loyalty = scope:grandee_rebel_commander }
+		}
 	}
 }
 

@@ -1023,12 +1023,13 @@ historical post-Waterloo lifespan), CHI-only, player-only. All logged `sys = QIN
    alongside the buffs from the moment he takes office, and the `qing_manchu_staunch`
    conservatives (§ identity band) lose loyalty. The throne stands with him (ease reform
    pressure, −1 stability) or reins him in (soothe the old guard, +1 stability — but he sours).
-4. **道光主義 The Daoguang Doctrine** (`qing_napoleon.4`) — the **capstone**, gated on the
+4. **太上皇啟蒙 The Emeritus Enlightenment** (`qing_napoleon.4`) — the **capstone**, gated on the
    reform slate being substantially complete (`qing_napoleon_reforms_done >= 3`). The heir
-   Napoleon tutored proclaims the reforms and the anti-GBR/RUS pro-FRA line a lasting doctrine
-   of state, granting the permanent apex modifier `qing_napoleon_daoguang_doctrine` (renamed
-   from the bare `qing_daoguang_doctrine`, which is already taken by an unrelated colonization
-   modifier — same 道光主義 display name, distinct key).
+   Napoleon tutored proclaims the reforms and the anti-GBR/RUS pro-FRA line a lasting settlement
+   of state, granting the permanent apex modifier `qing_napoleon_emeritus_enlightenment` (task #82:
+   renamed from `qing_napoleon_daoguang_doctrine` and now displaying as 太上皇啟蒙 The Emeritus
+   Enlightenment, to de-collide with the DISTINCT colonization modifier `qing_daoguang_doctrine`,
+   which keeps 道光主義 The Daoguang Doctrine — named for the 太上皇 Emperor Emeritus who wrought it).
 
 **Conditional loyalty.** Napoleon is loyal only while his revenge project is served. The
 monthly pulse (`QING_napoleon_loyalty_pulse`, wired into `qing_mechanics_pulse_on_action`)

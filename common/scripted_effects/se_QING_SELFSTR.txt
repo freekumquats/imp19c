@@ -591,6 +591,49 @@ QING_selfstr_capstone_modernized = {
 	LOG_exit = { sys = QING  fn = "QING_selfstr_capstone_modernized"  result = OK }
 }
 
+# ======================================================================
+# [#91 item N] THE GREAT-WORK WONDER — the concrete crown of the golden age.
+# At the golden-age band (progress 85+) the realm raises a single monumental
+# civil work (qing_selfstr_wonder_building, common/buildings/qing_selfstr_
+# buildings.txt): a REAL on-map building radiating prestige/research/civilisation
+# from the capital, hung off the KEPT 0..100 progress counter (additive: the
+# counter stays as the summary layer, the wonder is the object). Once-guarded via
+# a variable flag (no CK country flags — set_variable idiom, per project memory)
+# so it is built exactly once. Prefer the capital province; fall back to our most-
+# populous city province; else LOG_fail so a landless/city-less realm surfaces the
+# miss without a scope error.
+# ======================================================================
+QING_selfstr_build_wonder = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_build_wonder" }
+	if = {
+		limit = {
+			NOT = { has_variable = qing_selfstr_wonder_built }
+			var:qing_selfstr_progress >= 85
+		}
+		if = {
+			limit = { exists = capital_scope  capital_scope = { has_city_status = yes } }
+			capital_scope = { add_building_level = qing_selfstr_wonder_building }
+			set_variable = { name = qing_selfstr_wonder_built  value = 1 }
+			LOG_line = { sys = QING  msg = "[#91 item N] Self-Strengthening WONDER raised at the capital for [ROOT.GetTag]" }
+		}
+		else_if = {
+			limit = { any_owned_province = { has_city_status = yes } }
+			ordered_owned_province = {
+				limit = { has_city_status = yes }
+				order_by = total_population
+				max = 1
+				add_building_level = qing_selfstr_wonder_building
+			}
+			set_variable = { name = qing_selfstr_wonder_built  value = 1 }
+			LOG_line = { sys = QING  msg = "[#91 item N] Self-Strengthening WONDER raised at top city province (capital not eligible) for [ROOT.GetTag]" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_selfstr_build_wonder"  reason = "no city province owned; wonder not raised for [ROOT.GetTag]" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_build_wonder"  result = OK }
+}
+
 QING_selfstr_apply_band = {
 	remove_country_modifier = qing_selfstr_nascent
 	remove_country_modifier = qing_selfstr_advancing
@@ -598,6 +641,8 @@ QING_selfstr_apply_band = {
 	if = {
 		limit = { var:qing_selfstr_progress >= 85 }
 		add_country_modifier = { name = qing_selfstr_golden_age  duration = -1 }
+		# [#91 item N] at the golden-age band, raise the great-work wonder (once-guarded).
+		QING_selfstr_build_wonder = yes
 		LOG_line = { sys = QING  msg = "band selfstr = golden_age for [ROOT.GetTag] (progress=[ROOT.MakeScope.GetVariable('qing_selfstr_progress').GetValue|0])" }
 	}
 	else_if = {

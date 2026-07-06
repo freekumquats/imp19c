@@ -69,6 +69,9 @@ QING_treaty_impose = {
 		# the first treaty ports open (Nanjing's five: Canton, Xiamen, Fuzhou,
 		# Ningbo, Shanghai).
 		change_variable = { name = qing_treaty_ports  add = 5 }
+		# [#91 item B] stamp the five as REAL treaty ports on the map (concrete
+		# objects the counter now summarises), largest coastal ports first.
+		while = { count = 5  QING_treaty_stamp_port = yes }
 		# the order lands as a heavy humiliation.
 		QING_DECLINE_nudge = { var = qing_treaty_burden  amount = 60 }
 		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 10 }
@@ -95,6 +98,8 @@ QING_treaty_open_port = {
 		limit = { has_variable = qing_treaty_system_imposed }
 		change_variable = { name = qing_treaty_ports  add = 1 }
 		QING_DECLINE_nudge = { var = qing_treaty_burden  amount = 5 }
+		# [#91 item B] stamp this further port as a REAL object on the map.
+		QING_treaty_stamp_port = yes
 		QING_treaty_apply_ports_modifier = yes
 		LOG_line = { sys = QING  msg = "treaty: further port opened for [ROOT.GetTag] (ports=[ROOT.MakeScope.GetVariable('qing_treaty_ports').GetValue|0])" }
 	}
@@ -137,6 +142,41 @@ QING_treaty_revise = {
 		LOG_fail = { sys = QING  fn = "QING_treaty_revise"  reason = "extrality already abolished or bad track $track$" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_treaty_revise"  result = OK }
+}
+
+# ======================================================================
+# [#91 item B] STAMP A REAL TREATY PORT — hang a concrete on-map object off the
+# qing_treaty_ports tally. Pick an actual coastal Qing port that is not already a
+# treaty port (largest by population first — the great entrepôts open first) and
+# stamp the qing_treaty_port province modifier on it. The counter stays the running
+# summary; this is the real object it summarises. Country scope (ROOT = CHI). O(1)
+# per call. Idiom: ordered_owned_province + is_coastal (se_QING_SELFSTR.txt:188);
+# add_province_modifier (se_QING_COLON.txt:279).
+# ======================================================================
+QING_treaty_stamp_port = {
+	LOG_enter = { sys = QING  fn = "QING_treaty_stamp_port" }
+	if = {
+		limit = {
+			any_owned_province = {
+				is_coastal = yes
+				NOT = { has_province_modifier = qing_treaty_port }
+			}
+		}
+		ordered_owned_province = {
+			limit = {
+				is_coastal = yes
+				NOT = { has_province_modifier = qing_treaty_port }
+			}
+			order_by = total_population
+			max = 1
+			add_province_modifier = { name = qing_treaty_port  duration = -1 }
+			LOG_line = { sys = QING  msg = "treaty: REAL treaty port opened at [this.GetName] for [ROOT.GetTag]" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_treaty_stamp_port"  reason = "no un-stamped coastal province owned; counter advanced but no on-map port stamped for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_treaty_stamp_port"  result = OK }
 }
 
 # ======================================================================

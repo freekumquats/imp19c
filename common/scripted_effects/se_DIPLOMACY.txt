@@ -92,10 +92,25 @@ DIPLOMACY_cache_country_power_tradezone = {
 	# Scope: Country
 	# Function: Save the country's power in each tradezone, if above 100
 	save_scope_as = country_scope
+	# [#85 C3 perf] The base DIPLOMACY_power svalue (economy+military+tech+RECURSIVE
+	# subjects+admin+stability) is tradezone-INDEPENDENT, yet this helper runs once
+	# per (country, tradezone) and re-evaluated it all 22 times per country every
+	# quarter. Read the once-per-country cache set by the caller
+	# (DIPLOMACY_update_global_power_status pre-pass); fall back to a fresh compute
+	# when the cache is absent (e.g. the DEBUG timetest harness calls this helper
+	# without the pre-pass), so the value is identical for every caller. Only the
+	# base term is hoisted — the TZ-specific multipliers below are unchanged.
+	if = {
+		limit = { has_variable = DIPLOMACY_power_base_cached }
+		set_local_variable = { name = base_power  value = var:DIPLOMACY_power_base_cached }
+	}
+	else = {
+		set_local_variable = { name = base_power  value = DIPLOMACY_power }
+	}
 	set_variable = {
 		name = DIPLOMACY_power_$tradezone$
 		value = {
-			value = DIPLOMACY_power
+			value = local_var:base_power
 			multiply = var:TZ_penetration_$tradezone$
 			# Bonus multiplier for home-turf, % of this country's GDP in the TZ
 			# e.g. if this TZ contains 75% of the country's wealth, multiply the power rating by 1.75
@@ -267,10 +282,24 @@ DIPLOMACY_get_top_global_powers = {
 }
 
 DIPLOMACY_update_global_power_status = {
+	# [#85 C3 perf] Base-power hoist. DIPLOMACY_cache_country_power_tradezone
+	# multiplies the heavy, tradezone-INDEPENDENT DIPLOMACY_power svalue
+	# (economy+military+tech+RECURSIVE subjects+admin+stability) by a per-TZ
+	# penetration factor, once per (country, tradezone) — i.e. it re-evaluated the
+	# whole base svalue 22× per country every quarter. Here we compute it ONCE per
+	# country into DIPLOMACY_power_base_cached; the helper reads that cache and only
+	# does the cheap per-TZ multiply. Set right before this country's TZ loop and
+	# removed right after, so the variable never outlives the first pass and passes
+	# 2-5 are byte-for-byte unchanged. Behaviour-identical: the helper falls back to
+	# a fresh DIPLOMACY_power compute when the cache is absent (the DEBUG timetest
+	# harness calls the helper without this pre-pass), so every caller sees the same
+	# value; only the redundant recompute is removed.
 	every_country = {
+		set_variable = { name = DIPLOMACY_power_base_cached  value = DIPLOMACY_power }
 		every_tradezone_complex = {
 			APPLY = DIPLOMACY_cache_country_power_tradezone
 		}
+		remove_variable = DIPLOMACY_power_base_cached
 	}
 	every_country = {
 		every_tradezone_complex = {
@@ -467,7 +496,20 @@ DIPLOMACY_add_colonial_outpost = {
 }
 
 DIPLOMACY_update_all_diplomatic_plays = {
-	every_province = {
+	# [#84 C2 perf] Iterate the maintained index of play provinces instead of
+	# scanning EVERY province on the map each month. INVARIANT (verified): a play
+	# province is added to global_all_diplomatic_plays at creation (se_AI.txt:622,
+	# beside set_variable is_diplomatic_play) and removed from the list together
+	# with is_diplomatic_play at teardown (se_AI.txt:900-903), so the list holds
+	# EXACTLY the is_diplomatic_play provinces — behaviour-identical to the old
+	# full-map filter, but O(active plays) not O(all provinces).
+	# Mid-loop teardown is safe: DIPLOMACY_diplomatic_play_update_status may call
+	# DIPLOMACY_complete_play, which remove_list_global_variable's the CURRENT play;
+	# removing the current element mid-iteration is the same idiom the teardown
+	# sweeps use (se_AI.txt:934) and the Qing scan uses on this very list
+	# (se_QING_DIPLO.txt:618). Loop body has no cross-play/order dependency.
+	every_in_global_list = {
+		variable = global_all_diplomatic_plays
 		limit = {
 			has_variable = is_diplomatic_play
 		}
