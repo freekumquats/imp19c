@@ -456,16 +456,44 @@ SEPARATISM_liberate_across_borders = {
 #   ROOT / this = c:CHI (human).
 # ======================================================================
 @separatism_qing_tension_floor = 45
+# task #88 — the warlord threshold: at/above this, Han provincial military power
+# (勇營 → 湘軍/淮軍 → 軍閥) has devolved so far that a governor-general's fief can
+# cleave away even when the realm is ETHNICALLY calm. Matches the warlord band in
+# qing_mechanics_modifiers.txt / QING_DECLINE_apply_han_provincial_band.
+@separatism_qing_warlord_floor = 80
 # Own cooldown (~3 years) so even a boiling realm secedes in waves, not monthly.
 @separatism_qing_cooldown_days = 1095
 
+# The Qing fractures through TWO failure modes, either of which arms this pulse:
+#   (1) ETHNIC — alien-ruled land whose people were never integrated (the L1-3
+#       tension counter). The historical frontier revolts.
+#   (2) WARLORD (task #88) — the CENTRE'S OWN collapse: when Han provincial
+#       military power reaches the 軍閥 band, a regional militarist's province can
+#       break away as his personal domain, independent of any ethnic grievance.
+# Both drive the SAME proven secession core (SEPARATISM_try_secession): a breakaway
+# forms around the angriest disaffected de jure province and is dragged back in a
+# war of reconquest. Warlord collapse simply supplies a SECOND activation path and,
+# because the whole realm is in unrest (the warlord band adds global_unrest = 3),
+# the structural seed the core needs is readily present.
 SEPARATISM_qing_pulse = {
+	# effective activation: either ethnic tension over the floor, OR provincial
+	# power at the warlord threshold. Computed as a plain OR so either path arms it.
 	if = {
 		limit = {
-			has_variable = qing_ethnic_tension
-			var:qing_ethnic_tension >= @separatism_qing_tension_floor
 			NOT = { has_variable = separatism_qing_cd }
-			# same cheap structural gate as the generic engine: a real seed exists
+			OR = {
+				AND = {
+					has_variable = qing_ethnic_tension
+					var:qing_ethnic_tension >= @separatism_qing_tension_floor
+				}
+				AND = {
+					has_variable = qing_han_provincial_power
+					var:qing_han_provincial_power >= @separatism_qing_warlord_floor
+				}
+			}
+			# same cheap structural gate as the generic engine: a real seed exists.
+			# (In warlord collapse the band's global_unrest = 3 makes disaffected
+			# de jure provinces cross the unrest threshold readily.)
 			any_owned_province = {
 				has_province_modifier = dejure_disaffection
 				has_variable = dejure_culture
@@ -474,15 +502,27 @@ SEPARATISM_qing_pulse = {
 		}
 		LOG_enter = { sys = SEPAR  fn = SEPARATISM_qing_pulse }
 		set_variable = { name = separatism_qing_cd  days = @separatism_qing_cooldown_days }
-		# Chance scales with how far tension has run past the floor: at the floor
-		# it is a modest roll, near boiling point it is nearly certain. Bands
-		# rather than a raw formula, to stay within proven random{chance=} syntax.
+		# Chance scales with the SEVERITY of whichever crisis is worse. Ethnic
+		# tension bands as before; the warlord threshold contributes a strong floor
+		# of its own (a realm whose centre has collapsed fractures readily). We take
+		# the higher of the two implied chances via ordered if-bands. Bands rather
+		# than a raw formula, to stay within proven random{chance=} syntax.
 		if = {
-			limit = { var:qing_ethnic_tension >= 80 }
+			limit = {
+				OR = {
+					var:qing_ethnic_tension >= 80
+					AND = { has_variable = qing_han_provincial_power  var:qing_han_provincial_power >= 90 }
+				}
+			}
 			random = { chance = 75  SEPARATISM_try_secession = yes }
 		}
 		else_if = {
-			limit = { var:qing_ethnic_tension >= 60 }
+			limit = {
+				OR = {
+					var:qing_ethnic_tension >= 60
+					AND = { has_variable = qing_han_provincial_power  var:qing_han_provincial_power >= @separatism_qing_warlord_floor }
+				}
+			}
 			random = { chance = 50  SEPARATISM_try_secession = yes }
 		}
 		else = {
@@ -491,6 +531,6 @@ SEPARATISM_qing_pulse = {
 		LOG_exit = { sys = SEPAR  fn = SEPARATISM_qing_pulse  result = OK }
 	}
 	else = {
-		LOG_fail = { sys = SEPAR  fn = SEPARATISM_qing_pulse  reason = "Qing separatism gate not met: tension below floor, on cooldown, or no disaffected high-unrest province" }
+		LOG_fail = { sys = SEPAR  fn = SEPARATISM_qing_pulse  reason = "Qing separatism gate not met: neither ethnic tension over floor nor provincial power at warlord threshold, or on cooldown, or no disaffected high-unrest province" }
 	}
 }

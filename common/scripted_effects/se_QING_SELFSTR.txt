@@ -284,6 +284,16 @@ QING_selfstr_found_evarmy = {
 		# task #89: ensure the field-gun arm is available so the artillery subunits
 		# below are valid (tech_cannons is a CHI starting tech; safety for released tags).
 		unlock_invention = tech_cannons
+		# task #88: the 常勝軍 is the SEED of the modern centrally-commanded army — the
+		# centralizing answer to banner/green-standard rot and Han provincial power.
+		# A one-time +30 boost to the modern-army share (it then drifts toward the
+		# self-strengthening ceiling). Guarded on < 30 so it lifts a fresh realm to at
+		# least the emerging band and fires only once.
+		if = {
+			limit = { var:qing_modernarmy_share < 30 }
+			QING_DECLINE_nudge = { var = qing_modernarmy_share  amount = 30 }
+			LOG_line = { sys = QING  msg = "task #88: Ever-Victorious Army seeds the modern national army — modernarmy_share boosted for [ROOT.GetTag]" }
+		}
 		QING_selfstr_advance = { amount = 12 }
 		# Raise the real force. Prefer Shanghai (its historical base); fall back to
 		# the capital province if Shanghai is not owned. Guarded so a landless or
@@ -499,6 +509,88 @@ QING_selfstr_apply_hollow_band = {
 # BAND APPLICATION — one active progress band, matching the counter.
 # Called from the governance pulse (QING_GOV_pulse) so it re-applies each quarter.
 # ======================================================================
+# ======================================================================
+# THE CAPSTONE: A FULLY MODERNIZED STATE (task #88, user).
+# When the Self-Strengthening tree is completed (its golden-age capstone), the
+# realm has genuinely modernized: the structural pathologies of the old order are
+# resolved, not merely papered over. This verb DRAINS every decline/decay/
+# corruption meter and STRIPS their active malus bands in one stroke, and drives
+# the modern-army share to its ceiling — the mechanical signature of a state that
+# has escaped the dynastic cycle. Called from the qing_ss_capstone mission task.
+#
+# Design notes:
+#   • We zero the COUNTERS (so they read "resolved" in the UI and stay low unless
+#     new crises push them back up — this is a fresh start, not an eternal freeze),
+#     AND remove the band MODIFIERS immediately so the player sees the payoff at
+#     once rather than waiting for the next quarterly pulse.
+#   • Banner/green-standard decay are set to a low residual (5), not 0: even a
+#     modern state keeps a token of the old institutions. Below every band floor.
+#   • Han provincial power is zeroed: a modern national army has fully displaced
+#     the regional magnates — the anti-warlord terminus of the divergence.
+#   • The reform-pressure counter is drained too: the modernization crisis is over.
+#   • Idempotent-friendly: setting variables and removing modifiers are both safe
+#     to repeat, so a double-fire (mission + manual) cannot corrupt state.
+# ======================================================================
+QING_selfstr_capstone_modernized = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_capstone_modernized" }
+
+	# Mark the realm permanently modernized. The decline pulse reads this flag and
+	# STOPS the passive old-order regeneration (the martial-caste decay creep and
+	# the decline-reaction event roll) — a modern professional state does not rot
+	# back into the dynastic cycle. Player-driven nudges (selling offices, losing a
+	# war) can still move the meters, so the state is modern, not invulnerable.
+	set_variable = { name = qing_fully_modernized  value = 1 }
+
+	# --- drain the decline / decay / corruption meters -------------------------
+	set_variable = { name = qing_corruption_level     value = 0 }
+	set_variable = { name = qing_sect_pressure        value = 0 }
+	set_variable = { name = qing_currency_stress      value = 0 }
+	set_variable = { name = qing_reform_pressure      value = 0 }
+	set_variable = { name = qing_han_provincial_power value = 0 }
+	# a low residual for the two central-army decay meters (below every band floor).
+	set_variable = { name = qing_banner_decay         value = 5 }
+	set_variable = { name = qing_greenstandard_decay  value = 5 }
+	# the modern national army is now the realm's shield: seed the share at 100. The
+	# monthly drift (QING_DECLINE_drift_modernarmy_share) will ease it back toward the
+	# self-strengthening ceiling over time, but it stays well inside the national band
+	# (>=60) — and the capstone force-adds qing_modernarmy_national below regardless.
+	set_variable = { name = qing_modernarmy_share     value = 100 }
+
+	# --- strip every active decline / decay / corruption malus band ------------
+	remove_country_modifier = qing_corrupt_endemic
+	remove_country_modifier = qing_corrupt_rampant
+	remove_country_modifier = qing_sect_infiltration
+	remove_country_modifier = qing_banner_decay_mild
+	remove_country_modifier = qing_banner_decay_severe
+	remove_country_modifier = qing_greenstandard_decay_mild
+	remove_country_modifier = qing_greenstandard_decay_severe
+	remove_country_modifier = qing_han_provincial_emerging
+	remove_country_modifier = qing_han_provincial_entrenched
+	remove_country_modifier = qing_han_provincial_warlord
+	remove_country_modifier = qing_curr_silver_drain
+	remove_country_modifier = qing_curr_monetary_crisis
+	remove_country_modifier = qing_ethnic_high_tension
+	# the hollow-modernization malus is meaningless for a genuinely-modernized state.
+	remove_country_modifier = qing_selfstr_hollow
+	if = { limit = { has_variable = qing_selfstr_hollow_flag } set_variable = { name = qing_selfstr_hollow_flag  value = 0 } }
+
+	# --- reward the modernized state: grant the clean-administration + national-
+	# army bands at once (rather than waiting for the pulse), the positive mirror
+	# of the maluses just stripped.
+	set_variable = { name = qing_corruption_level  value = 5 }   # low enough for the clean band
+	if = {
+		limit = { NOT = { has_country_modifier = qing_corrupt_clean_government } }
+		add_country_modifier = { name = qing_corrupt_clean_government  duration = -1 }
+	}
+	if = {
+		limit = { NOT = { has_country_modifier = qing_modernarmy_national } }
+		add_country_modifier = { name = qing_modernarmy_national  duration = -1 }
+	}
+
+	LOG_line = { sys = QING  msg = "CAPSTONE: fully modernized — decline/decay/corruption meters drained and malus bands stripped for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_selfstr_capstone_modernized"  result = OK }
+}
+
 QING_selfstr_apply_band = {
 	remove_country_modifier = qing_selfstr_nascent
 	remove_country_modifier = qing_selfstr_advancing

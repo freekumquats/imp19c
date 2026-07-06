@@ -122,6 +122,88 @@ QING_banner_drill = {
 	add_country_modifier = { name = qing_banner_reform_drill  duration = 1825 }
 }
 
+# task #88 — GREEN STANDARD (綠營) DRILL. The parallel lever to the banner drill,
+# but on the Han line army: purge the ghost-soldier rolls (吃空額) and re-drill the
+# garrisons. Cuts the green-standard decay counter at a treasury cost. Distinct
+# from the banner drill so the player manages the two central armies SEPARATELY —
+# neglecting either raises the mean that feeds Han provincial power (勇營). Cheaper
+# per point than the banner drill (the Green Standard was cheaper, lower-status men).
+QING_greenstandard_drill = {
+	LOG_line = { sys = QING  msg = "ran Green Standard reform drill for [ROOT.GetTag]" }
+	add_treasury = -45
+	QING_DECLINE_nudge = { var = qing_greenstandard_decay  amount = -20 }
+	add_country_modifier = { name = qing_greenstandard_reform_drill  duration = 1825 }
+}
+
+# task #88 — SANCTION A REGIONAL ARMY (勇營). The emergency lever when the central
+# armies cannot hold: authorise a Han governor-general to raise a personal
+# provincial force (the 湘軍/淮軍 pattern). A powerful IMMEDIATE martial answer —
+# it buys down BOTH central-army-decay pressures at a stroke (the regional army
+# does the fighting) — but it PUSHES the Han-provincial-power vector up directly,
+# accelerating the slide toward warlordism. The double-edged choice at the heart
+# of the divergence: survive the rebellion now, mortgage central authority later.
+QING_sanction_regional_army = {
+	LOG_enter = { sys = QING  fn = "QING_sanction_regional_army" }
+	# the regional army takes the field, easing the strain on the rotten centre...
+	QING_DECLINE_nudge = { var = qing_banner_decay  amount = -8 }
+	QING_DECLINE_nudge = { var = qing_greenstandard_decay  amount = -8 }
+	# ...but a personal army answerable to its founder, not the throne, is the seed
+	# of devolution: push Han provincial power up hard.
+	QING_DECLINE_nudge = { var = qing_han_provincial_power  amount = 15 }
+	LOG_line = { sys = QING  msg = "sanctioned a Han regional army (勇營): central strain eased, provincial power +15 for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_sanction_regional_army"  result = OK }
+}
+
+# task #88 — REASSERT CENTRAL COMMAND over the regional armies (兵權收歸中央). The
+# throne's costly bid to claw military power back from the provincial magnates —
+# disband or nationalise a personal army, pension off its founder. Cuts Han
+# provincial power at a real treasury + stability cost (the magnates resent it,
+# and a botched attempt is how warlord revolts start). Only meaningful if there
+# is provincial power to reclaim.
+QING_reassert_central_command = {
+	LOG_enter = { sys = QING  fn = "QING_reassert_central_command" }
+	if = {
+		limit = { var:qing_han_provincial_power >= 20  treasury >= 90 }
+		add_treasury = -90
+		QING_DECLINE_nudge = { var = qing_han_provincial_power  amount = -20 }
+		# the dispossessed magnates bristle: a short-term unrest cost.
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 3 }
+		# task #88 (review): nationalising a personal army folds its troops back under
+		# central discipline — modelled by re-granting the Green Standard drill buff
+		# (the reclaimed men re-enter the regular line), on a shorter 2-year duration.
+		add_country_modifier = { name = qing_greenstandard_reform_drill  duration = 730 }
+		LOG_line = { sys = QING  msg = "reasserted central command: provincial power -20 for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_reassert_central_command"  reason = "insufficient provincial power to reclaim (<20) or treasury too low (<90)" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_reassert_central_command"  result = OK }
+}
+
+# task #88 — COMMIT TO A MODERN NATIONAL ARMY (新軍). Fund a modern, centrally-
+# commanded force directly — the accelerant for the modernarmy_share meter (which
+# otherwise only drifts up toward its self-strengthening ceiling). The centralizing
+# answer to BOTH caste rot and provincial devolution. Gated on Self-Strengthening
+# being genuinely underway (you cannot field 新軍 without the arsenals and drill).
+QING_fund_modern_army = {
+	LOG_enter = { sys = QING  fn = "QING_fund_modern_army" }
+	QING_selfstr_init = yes
+	if = {
+		limit = { treasury >= 100  var:qing_selfstr_progress >= 25 }
+		add_treasury = -100
+		QING_DECLINE_nudge = { var = qing_modernarmy_share  amount = 12 }
+		# a modern national army also cools banner decay (the elite need no longer
+		# pretend to be the realm's shield) and lifts self-strengthening momentum.
+		QING_DECLINE_nudge = { var = qing_banner_decay  amount = -6 }
+		QING_selfstr_advance = { amount = 4 }
+		LOG_line = { sys = QING  msg = "funded the modern national army (新軍): modern-army share +12 for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_fund_modern_army"  reason = "treasury <100 or Self-Strengthening not yet underway (progress <25)" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_fund_modern_army"  result = OK }
+}
+
 # ======================================================================
 # D  ANTI-CORRUPTION AUDIT / yanglian yin 養廉銀
 # Cut the corruption counter at a treasury cost.

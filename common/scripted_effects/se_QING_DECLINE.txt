@@ -47,6 +47,19 @@ QING_DECLINE_init = {
 	if = { limit = { NOT = { has_variable = qing_corruption_level } }  set_variable = { name = qing_corruption_level  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_sect_pressure } }     set_variable = { name = qing_sect_pressure  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_banner_decay } }      set_variable = { name = qing_banner_decay  value = 10 } }
+	# task #88 — the Green Standard (綠營) rots IN PARALLEL to the banners: a second
+	# army-decay vector on the Han line infantry. Starts slightly higher than the
+	# banners: the Green Standard was already the more neglected, garrison-bound force.
+	if = { limit = { NOT = { has_variable = qing_greenstandard_decay } } set_variable = { name = qing_greenstandard_decay  value = 15 } }
+	# task #88 — Han provincial military power (勇營 → 湘軍/淮軍 → 軍閥). Starts at 0:
+	# in 1815 the throne still commands its own armies. Rises only when BOTH central
+	# armies fail and the throne must lean on regional magnates (derived in the pulse).
+	if = { limit = { NOT = { has_variable = qing_han_provincial_power } } set_variable = { name = qing_han_provincial_power  value = 0 } }
+	# task #88 — the modern national-army share (新軍/levee). Starts at 0: no modern
+	# centrally-commanded force exists at the 1815 start. Built by Self-Strengthening
+	# (Ever-Victorious) and the alt-history Napoleon levee; drifts toward a
+	# self-strengthening-gated ceiling, with founding floors front-loading it.
+	if = { limit = { NOT = { has_variable = qing_modernarmy_share } }     set_variable = { name = qing_modernarmy_share  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_ethnic_tension } }    set_variable = { name = qing_ethnic_tension  value = 20 } }
 	if = { limit = { NOT = { has_variable = qing_currency_stress } }   set_variable = { name = qing_currency_stress  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_reform_pressure } }   set_variable = { name = qing_reform_pressure  value = 0 } }
@@ -145,6 +158,62 @@ QING_DECLINE_apply_banner_band = {
 	}
 }
 
+# task #88 — GREEN STANDARD decay band (parallel to the banner band, on the line).
+QING_DECLINE_apply_greenstandard_band = {
+	remove_country_modifier = qing_greenstandard_decay_mild
+	remove_country_modifier = qing_greenstandard_decay_severe
+	if = {
+		limit = { var:qing_greenstandard_decay >= 60 }
+		add_country_modifier = { name = qing_greenstandard_decay_severe  duration = -1 }
+		LOG_line = { sys = QING  msg = "band greenstandard = severe for [ROOT.GetTag] (decay=[ROOT.MakeScope.GetVariable('qing_greenstandard_decay').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_greenstandard_decay >= 30 }
+		add_country_modifier = { name = qing_greenstandard_decay_mild  duration = -1 }
+		LOG_line = { sys = QING  msg = "band greenstandard = mild for [ROOT.GetTag] (decay=[ROOT.MakeScope.GetVariable('qing_greenstandard_decay').GetValue|0])" }
+	}
+}
+
+# task #88 — HAN PROVINCIAL MILITARY POWER band (勇營 → 湘軍/淮軍 → 軍閥). The
+# double-edged devolution vector: martial vigour bought at the price of central
+# authority, ending in the warlord threshold that arms tension-driven separatism.
+QING_DECLINE_apply_han_provincial_band = {
+	remove_country_modifier = qing_han_provincial_emerging
+	remove_country_modifier = qing_han_provincial_entrenched
+	remove_country_modifier = qing_han_provincial_warlord
+	if = {
+		limit = { var:qing_han_provincial_power >= 80 }
+		add_country_modifier = { name = qing_han_provincial_warlord  duration = -1 }
+		LOG_line = { sys = QING  msg = "band han_provincial = WARLORD for [ROOT.GetTag] (power=[ROOT.MakeScope.GetVariable('qing_han_provincial_power').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_han_provincial_power >= 55 }
+		add_country_modifier = { name = qing_han_provincial_entrenched  duration = -1 }
+		LOG_line = { sys = QING  msg = "band han_provincial = entrenched for [ROOT.GetTag] (power=[ROOT.MakeScope.GetVariable('qing_han_provincial_power').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_han_provincial_power >= 30 }
+		add_country_modifier = { name = qing_han_provincial_emerging  duration = -1 }
+		LOG_line = { sys = QING  msg = "band han_provincial = emerging for [ROOT.GetTag] (power=[ROOT.MakeScope.GetVariable('qing_han_provincial_power').GetValue|0])" }
+	}
+}
+
+# task #88 — MODERN NATIONAL ARMY SHARE band (新軍/levee). The centralizing answer.
+QING_DECLINE_apply_modernarmy_band = {
+	remove_country_modifier = qing_modernarmy_emerging
+	remove_country_modifier = qing_modernarmy_national
+	if = {
+		limit = { var:qing_modernarmy_share >= 60 }
+		add_country_modifier = { name = qing_modernarmy_national  duration = -1 }
+		LOG_line = { sys = QING  msg = "band modernarmy = national for [ROOT.GetTag] (share=[ROOT.MakeScope.GetVariable('qing_modernarmy_share').GetValue|0])" }
+	}
+	else_if = {
+		limit = { var:qing_modernarmy_share >= 30 }
+		add_country_modifier = { name = qing_modernarmy_emerging  duration = -1 }
+		LOG_line = { sys = QING  msg = "band modernarmy = emerging for [ROOT.GetTag] (share=[ROOT.MakeScope.GetVariable('qing_modernarmy_share').GetValue|0])" }
+	}
+}
+
 QING_DECLINE_apply_ethnic_band = {
 	remove_country_modifier = qing_ethnic_high_tension
 	if = {
@@ -205,6 +274,73 @@ QING_DECLINE_update_reform_pressure = {
 	else_if = {
 		limit = { var:qing_reform_pressure > var:qing_reform_pressure_target }
 		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -1 }
+	}
+}
+
+# ======================================================================
+# MODERN NATIONAL-ARMY SHARE — DERIVED drift (task #88).
+# The share of the realm's army that is a modern, centrally-commanded force
+# drifts toward a ceiling set by Self-Strengthening progress: you cannot field a
+# modern national army without the arsenals, drill and schools the movement
+# builds. Founding effects (Ever-Victorious, Napoleon's levee) front-load it with
+# floors; between those events it drifts toward the selfstr ceiling. Hollow
+# modernization (the refraction flag) halves the ceiling — a paper army is not a
+# real modern force. Cheap O(1). Mirrors QING_DECLINE_drift_civic_identity.
+# ======================================================================
+QING_DECLINE_drift_modernarmy_share = {
+	if = { limit = { NOT = { has_variable = qing_modernarmy_share } }  set_variable = { name = qing_modernarmy_share  value = 0 } }
+	QING_selfstr_init = yes
+	set_variable = { name = qing_modernarmy_target_tmp  value = var:qing_selfstr_progress }
+	# a hollow, for-show modernization fields no real modern army — halve the ceiling.
+	if = {
+		limit = { has_variable = qing_selfstr_hollow_flag  var:qing_selfstr_hollow_flag = 1 }
+		change_variable = { name = qing_modernarmy_target_tmp  divide = 2 }
+	}
+	if = { limit = { var:qing_modernarmy_target_tmp < 0 }    set_variable = { name = qing_modernarmy_target_tmp  value = 0 } }
+	if = { limit = { var:qing_modernarmy_target_tmp > 100 }  set_variable = { name = qing_modernarmy_target_tmp  value = 100 } }
+	if = {
+		limit = { var:qing_modernarmy_share < var:qing_modernarmy_target_tmp }
+		QING_DECLINE_nudge = { var = qing_modernarmy_share  amount = 2 }
+	}
+	else_if = {
+		limit = { var:qing_modernarmy_share > var:qing_modernarmy_target_tmp }
+		QING_DECLINE_nudge = { var = qing_modernarmy_share  amount = -2 }
+	}
+}
+
+# ======================================================================
+# HAN PROVINCIAL MILITARY POWER — DERIVED drift (task #88).
+# The genuinely-new decline vector. Its target is a function of the OTHER army
+# meters, capturing the historical causal chain: when BOTH central armies have
+# rotted (banner + green-standard decay high) the throne is FORCED to let Han
+# governors-general raise personal regional armies (勇營 → 湘軍/淮軍) — which then
+# accrete autonomy. A strong modern NATIONAL army (新軍/levee) is the throne's way
+# out: it SUPPRESSES the target, because the centre no longer depends on the
+# warlords. So:
+#     target = (banner_decay + greenstandard_decay)/2  - modernarmy_share
+#   clamped 0..100, drifted +/-2 (slow: regional power bases form over years).
+# Governance levers (a green-standard drill, banner reform) cut the central-army
+# decay counters and thus indirectly starve this vector; committing to the modern
+# national army cuts it directly. Cheap O(1).
+# ======================================================================
+QING_DECLINE_drift_han_provincial_power = {
+	if = { limit = { NOT = { has_variable = qing_han_provincial_power } }  set_variable = { name = qing_han_provincial_power  value = 0 } }
+	# target = mean of the two central-army decay meters...
+	set_variable = { name = qing_han_prov_target_tmp  value = var:qing_banner_decay }
+	change_variable = { name = qing_han_prov_target_tmp  add = var:qing_greenstandard_decay }
+	change_variable = { name = qing_han_prov_target_tmp  divide = 2 }
+	# ...minus the modern national-army share (the centralizing counterweight).
+	if = { limit = { NOT = { has_variable = qing_modernarmy_share } }  set_variable = { name = qing_modernarmy_share  value = 0 } }
+	change_variable = { name = qing_han_prov_target_tmp  subtract = var:qing_modernarmy_share }
+	if = { limit = { var:qing_han_prov_target_tmp < 0 }    set_variable = { name = qing_han_prov_target_tmp  value = 0 } }
+	if = { limit = { var:qing_han_prov_target_tmp > 100 }  set_variable = { name = qing_han_prov_target_tmp  value = 100 } }
+	if = {
+		limit = { var:qing_han_provincial_power < var:qing_han_prov_target_tmp }
+		QING_DECLINE_nudge = { var = qing_han_provincial_power  amount = 2 }
+	}
+	else_if = {
+		limit = { var:qing_han_provincial_power > var:qing_han_prov_target_tmp }
+		QING_DECLINE_nudge = { var = qing_han_provincial_power  amount = -2 }
 	}
 }
 
@@ -596,7 +732,27 @@ QING_DECLINE_pulse = {
 
 	# Banner decay creeps up with time (the martial caste rots); reform drills
 	# and events push back. Small monthly creep.
-	QING_DECLINE_nudge = { var = qing_banner_decay  amount = 1 }
+	# task #88 (user): a FULLY MODERNIZED realm (Self-Strengthening capstone) has
+	# escaped the dynastic cycle — the passive martial-caste rot no longer creeps.
+	# Player choices can still move the meters, but they no longer regenerate on
+	# their own. Guarded on the qing_fully_modernized flag set by the capstone.
+	if = {
+		limit = { NOT = { has_variable = qing_fully_modernized } }
+		QING_DECLINE_nudge = { var = qing_banner_decay  amount = 1 }
+		# task #88 — the Green Standard rots in parallel, and slightly faster: the more
+		# neglected, garrison-bound Han standing army. Green-standard drills push back.
+		QING_DECLINE_nudge = { var = qing_greenstandard_decay  amount = 1 }
+	}
+
+	# task #88 — the modern national-army share drifts toward its self-strengthening
+	# ceiling FIRST, so the Han-provincial derivation below reads a fresh value (a
+	# modern national army is what suppresses the warlord vector).
+	QING_DECLINE_drift_modernarmy_share = yes
+	# task #88 — Han provincial military power is DERIVED from the two central-army
+	# decay meters minus the modern-army share: it rises only when the centre's own
+	# armies have failed AND no modern national army has replaced them. Runs AFTER
+	# both inputs are fresh this pulse.
+	QING_DECLINE_drift_han_provincial_power = yes
 
 	QING_DECLINE_update_currency_stress = yes
 	# Civic identity drifts toward its self-strengthening-gated target FIRST, so
@@ -613,6 +769,9 @@ QING_DECLINE_pulse = {
 	QING_DECLINE_apply_corruption_band = yes
 	QING_DECLINE_apply_sect_band = yes
 	QING_DECLINE_apply_banner_band = yes
+	QING_DECLINE_apply_greenstandard_band = yes    # task #88
+	QING_DECLINE_apply_modernarmy_band = yes       # task #88
+	QING_DECLINE_apply_han_provincial_band = yes   # task #88
 	QING_DECLINE_apply_ethnic_band = yes
 	QING_DECLINE_apply_civic_band = yes
 
@@ -629,9 +788,14 @@ QING_DECLINE_pulse = {
 
 	# Fire a decline reaction event on a modest chance (kept rare; the pulse is
 	# already throttled to ~quarterly by the on_action cooldown).
-	random = {
-		chance = 35
-		QING_DECLINE_roll_reaction = yes
+	# task #88 (user): a fully-modernized realm no longer suffers the old-order
+	# decline reactions (flood-by-corruption, sect unrest, banner incidents).
+	if = {
+		limit = { NOT = { has_variable = qing_fully_modernized } }
+		random = {
+			chance = 35
+			QING_DECLINE_roll_reaction = yes
+		}
 	}
 
 	LOG_exit = { sys = QING  fn = "QING_DECLINE_pulse"  result = OK }
