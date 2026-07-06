@@ -757,3 +757,28 @@ Source: REVIEW_9396_FINDINGS.md (workflow w7iipeldq synthesis). All six survivor
 
 All six files brace-balanced; byte conventions preserved (se_* / missions no-BOM/LF, usa events
 BOM/LF). se_LOG markers added where new (M4 teardown LOG_line).
+
+## [#93-fix crash] Deterministic startup CRASH — nested scoped-effect in create_character (2026-07-06)
+
+**Symptom:** deterministic EXCEPTION_ACCESS_VIOLATION (C0000005) at startup. Commit `8a41e06f`
+loaded; the very next commit `781785b3` (the #93–#96 arcs) crashed. No fatal line flushed to
+error.log; parse completed, map loaded (`map.cpp:796 ... has no area assigned`), then the access
+violation at gamestate/definition construction with no USA-specific error logged.
+
+**Root cause (found by additive binary-split bisection from the good baseline — 4 launches:
+arcs-on-good → arcs-no-jpn → arcs-usa-only → roster-stub):** `se_USA_ROSTER.txt`'s 10 spawns each
+called the scoped effect `USA_roster_finalize` (which runs `set_home_country = ROOT` +
+`add_nickname` + `save_scope_as`) **INSIDE** the `create_character` block. Running a scoped effect
+inside create_character access-violates at character construction. The proven-safe twin,
+`se_QING_ROSTER.txt`, calls finalize OUTSIDE the block via `scope:figure = { ... }`.
+
+**Fix:** for all 10 spawns (Clay/Calhoun/Webster/Garrison/Douglas/Brown/Lincoln/Davis/Lee/Grant),
+the create_character block now ends with `save_scope_as = usa_figure`, and finalize runs after the
+block as `scope:usa_figure = { USA_roster_finalize = { nick = "NICKNAME_USA_<NAME>" } }` — mirroring
+the Qing idiom exactly. Task-tagged `[#93-fix crash]` comment on each. Braces 92/92; se_USA_ROSTER
+is no-BOM/LF (preserved). se_LOG coverage retained (LOG_line still fires inside USA_roster_finalize).
+`USA_spawn_firebrand` (se_USA_SECTION.txt) already used the correct outside pattern — untouched.
+
+**Verification:** roster-stub branch (finalize-callers removed) LOADED clean; full-feature-set
+branch with this fix applied is the fix-forward. Scan confirms no scoped-effect call remains nested
+in any create_character block across the USA arc.
