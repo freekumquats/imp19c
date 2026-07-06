@@ -760,6 +760,13 @@ BOM/LF). se_LOG markers added where new (M4 teardown LOG_line).
 
 ## [#93-fix crash] Deterministic startup CRASH — nested scoped-effect in create_character (2026-07-06)
 
+> **⚠️ RETRACTED — WRONG ROOT CAUSE. Superseded by [#90-fix crash] below.** This entry blamed
+> `se_USA_ROSTER.txt`. That diagnosis was invalid: the "good" baseline `8a41e06f` it bisected from
+> was NEVER verified with the mod actually enabled (it was a base-game false positive — the mod was
+> not selected). Re-bisecting from the genuinely-verified-good `0990fe6` pinned the crash to a
+> DIFFERENT commit (`ec4d8a72`, #90). The roster refactor below is harmless and kept (it matches the
+> proven se_QING_ROSTER idiom), but it does NOT fix the crash — the crash is pre-script (see below).
+
 **Symptom:** deterministic EXCEPTION_ACCESS_VIOLATION (C0000005) at startup. Commit `8a41e06f`
 loaded; the very next commit `781785b3` (the #93–#96 arcs) crashed. No fatal line flushed to
 error.log; parse completed, map loaded (`map.cpp:796 ... has no area assigned`), then the access
@@ -782,3 +789,34 @@ is no-BOM/LF (preserved). se_LOG coverage retained (LOG_line still fires inside 
 **Verification:** roster-stub branch (finalize-callers removed) LOADED clean; full-feature-set
 branch with this fix applied is the fix-forward. Scan confirms no scoped-effect call remains nested
 in any create_character block across the USA arc.
+
+## [#90-fix crash] Deterministic startup CRASH — country modifier key in a CHARACTER modifier (2026-07-06)
+
+**This is the REAL fix.** Supersedes the retracted [#93-fix crash] above.
+
+**Symptom:** deterministic EXCEPTION_ACCESS_VIOLATION (C0000005) at startup, in `-debug_mode`, with
+**ZERO `[IMP19C]` breadcrumbs** in debug.log — i.e. the crash happens during file parse / gamestate
+CONSTRUCTION, before any scripted effect (even `on_game_initialized`) runs. That signature exonerates
+all events/effects/the roster/the pulse: the bug is in DATA parsed at load.
+
+**Bisection (clean, from the genuinely-verified-good baseline `0990fe6`):**
+`0990fe6` good → `3de82c87` loads → `d7ebffa8` loads → `ec4d8a72` **CRASHES** → `be96733f` loads.
+`be96733f` loads and `ec4d8a72` crashes and they are adjacent ⇒ culprit = **`ec4d8a72`** (#90 Tie
+Han regional-army counter into loyal-cohorts power base). The only construction-time (parsed-at-load)
+change in that commit is a new character modifier; everything else is scripted_effects (runtime).
+
+**Root cause:** `common/modifiers/00_imp19c_character_modifiers.txt` — the new `qing_regional_magnate`
+CHARACTER-scope modifier included `land_morale_modifier = 0.1`, which is a COUNTRY/UNIT modifier key.
+An invalid key in a character-modifier definition access-violates at gamestate construction. Verified
+against the mod's own files (land_morale_modifier appears ONLY in country-scope modifier files) and TI
+(land_morale_modifier only in country/mission modifiers; character modifiers like `renowned_fighter`
+use monthly_character_prominence/monthly_character_popularity — never land_morale_modifier). The other
+three keys are all character-valid: `martial` (traits/00_military etc.), `monthly_character_prominence`
+(clan-chief/tribal char modifiers), `loyalty_gain_chance_modifier` (traits/00_personality:713).
+
+**Fix:** removed `land_morale_modifier` from `qing_regional_magnate`; folded his martial worth into
+the character-valid `martial` bonus (1→2). Task-tagged `[#90-fix crash]` comment in-file. File kept
+BOM/LF; braces 14/14. No se_LOG change (a modifier definition has no execution path; the granting
+effects QING_regional_army_bind_commander / _strip_magnate already log sys=QING).
+
+**Verification:** pending in-game load test by user (the definitive test for a construction crash).
