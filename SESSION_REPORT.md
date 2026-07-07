@@ -870,3 +870,38 @@ across all 7 LOG_ macros, switching to a bracket-free but still-greppable scheme
 (failures: `IMP19C FAIL <SYS>:`). This changes ONLY the emitted string format — every one of the 505
 call sites keeps its identical `$sys$`/`$fn$`/`$reason$`/... signature, so it is behaviourally
 equivalent for callers. Header grep examples updated to the new delimiter. Braces 6/6; kept no-BOM/LF.
+
+---
+
+## [ethnic-gov] Governor–subject affinity feeds ethnic tension
+
+**Request:** a contributing factor to Qing ethnic tension should be whether the governor set over a
+people is one of them; both culture (strong) and culture group (weak) matter, in both directions.
+
+**Where:** `QING_DECLINE_scan_ethnic_target` in `common/scripted_effects/se_QING_DECLINE.txt` — the
+ANNUAL demographic scan that already weights each restive province by three additive terms (base
+restive +1, high-unrest +1, demographic-displacement +1) into `qing_ethnic_restive_weighted`, from
+which `qing_ethnic_tension_target` is derived. Added a FOURTH term inside the same per-province loop.
+
+**Design (concrete-over-abstract):** reads the REAL governing character on the map via the verified
+idiom `province -> governorship -> governor_or_ruler` (falls back to the ruler for the capital region;
+guarded by `exists = governor_or_ruler`). Three-tier ladder, applied only to already-restive provinces:
+- governor's exact `culture` = the province's frozen rightful culture (scope:dj_rightful_c) -> **-2**
+- else same `culture.culture_group` as the rightful culture -> **-1**
+- else (alien culture group) -> **+1**
+Also accumulates the same deltas into a new diagnostic var `qing_ethnic_gov_signal` (scan-local; NO
+external readers — grep-confirmed) surfaced via a LOG_line so a trace shows the governor contribution.
+
+**Engine idioms verified against base game + TI/Invictus (oracle rule):** `governor_or_ruler` from a
+governorship scope (Invictus `grant_satrap_autonomy.txt`); `culture = <culture scope>` on a character
+(TI `culture = root.culture`); `culture.culture_group = <scope>.culture_group` (TI
+`this.culture.culture_group = ...`; dynamic right-hand side proven by base `dominant_province_culture_
+group = root.culture_group`). Rewrote an initial WRONG nested if/else_if into the repo's SIBLING
+if/else_if/else form (matches the other bands in this same file).
+
+**Behavioural-equivalence note (CHANGE to shipped code):** at the FIRST scan the weighted tally —
+now including the governor term — is frozen into `qing_ethnic_restive_base`, and the target is
+`20 + (current - base)/2`. So the 1815 governor arrangement is absorbed into the baseline: the
+historical start still sits at ~20 and ONLY later governor reshuffles (or conquest/integration/
+migration, as before) move tension. No existing counter's meaning changes; this only adds signed
+deltas to an already-summed intermediate. Braces 814/814; file kept no-BOM/LF.

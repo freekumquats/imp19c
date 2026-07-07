@@ -377,6 +377,9 @@ QING_DECLINE_scan_ethnic_target = {
 	# unhappy (unrest high), +1 if its rightful people have been demographically
 	# displaced (live plurality no longer the frozen de jure culture).
 	set_variable = { name = qing_ethnic_restive_weighted  value = 0 }
+	# [ethnic-gov] Separately track the net governor–subject affinity contribution
+	# so the trace can show how much of the tally came from alien/native governors.
+	set_variable = { name = qing_ethnic_gov_signal  value = 0 }
 	every_owned_province = {
 		limit = {
 			is_sea = no
@@ -413,6 +416,48 @@ QING_DECLINE_scan_ethnic_target = {
 				limit = { NOT = { dominant_province_culture = scope:dj_rightful_c } }
 				ROOT = { change_variable = { name = qing_ethnic_restive_weighted  add = 1 } }
 			}
+			# [ethnic-gov] Governor–subject affinity. Whether the man SET OVER this
+			# restive land is one of its people materially shapes the strife: a
+			# native governor-general soothes it, an alien overlord inflames it.
+			# Concrete, not abstract — this reads the REAL governing character on the
+			# map (governorship.governor_or_ruler, which falls back to the ruler for
+			# the capital region), not a bookkeeping counter. Three-tier ladder,
+			# both directions (culture is the strong signal, culture_group the weak):
+			#   exact culture match          -> -2 (a local son; strong soothe)
+			#   same group, different culture -> -1 (a kinsman people; mild soothe)
+			#   different culture group       -> +1 (an alien overlord; aggravate)
+			# Verified idiom (TI/Invictus): province -> governorship -> governor_or_
+			# ruler; culture = <culture scope> and culture.culture_group = <..group>.
+			governorship = {
+				if = {
+					limit = { exists = governor_or_ruler }
+					governor_or_ruler = {
+						if = {
+							# strong soothe: the governor IS of the rightful people
+							limit = { culture = scope:dj_rightful_c }
+							ROOT = {
+								change_variable = { name = qing_ethnic_restive_weighted  subtract = 2 }
+								change_variable = { name = qing_ethnic_gov_signal       subtract = 2 }
+							}
+						}
+						else_if = {
+							# mild soothe: same broad group, different exact culture
+							limit = { culture.culture_group = scope:dj_rightful_c.culture_group }
+							ROOT = {
+								change_variable = { name = qing_ethnic_restive_weighted  subtract = 1 }
+								change_variable = { name = qing_ethnic_gov_signal       subtract = 1 }
+							}
+						}
+						else = {
+							# alien overlord: a different culture group entirely
+							ROOT = {
+								change_variable = { name = qing_ethnic_restive_weighted  add = 1 }
+								change_variable = { name = qing_ethnic_gov_signal       add = 1 }
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -432,6 +477,10 @@ QING_DECLINE_scan_ethnic_target = {
 	change_variable = { name = qing_ethnic_tension_target  add = 20 }
 	if = { limit = { var:qing_ethnic_tension_target > 100 }  set_variable = { name = qing_ethnic_tension_target  value = 100 } }
 	if = { limit = { var:qing_ethnic_tension_target < 0 }    set_variable = { name = qing_ethnic_tension_target  value = 0 } }
+
+	# [ethnic-gov] Surface the net governor-affinity contribution to the tally so a
+	# trace shows how much of this year's tension came from who governs whom.
+	LOG_line = { sys = QING  msg = "ethnic scan: restive_weighted=[ROOT.MakeScope.GetVariable('qing_ethnic_restive_weighted').GetValue|0] gov_signal=[ROOT.MakeScope.GetVariable('qing_ethnic_gov_signal').GetValue|0]" }
 
 	LOG_exit = { sys = QING  fn = "QING_DECLINE_scan_ethnic_target"  result = OK }
 }
