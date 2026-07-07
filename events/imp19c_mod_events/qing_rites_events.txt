@@ -1,0 +1,376 @@
+########################################################################
+# qing_rites_events.txt — Grand Minister of Rites (禮部) ceremonial events.
+#
+# The 禮部 governed state ritual, the examinations' ceremonial, imperial
+# ancestral rites, and the reception of tributary embassies. These events model
+# the Rites minister's role in conducting ceremonies that renew the Mandate
+# (legitimacy) and receiving tribute missions that affirm the tributary order.
+#
+# A capable, high-zeal Rites minister makes ceremonies efficacious; a vacant
+# office or low-zeal holder means botched ritual. Costs and outcomes are gated
+# on the Rites holder's zeal + loyalty (read via has_variable =
+# qing_office_rites_holder and var:qing_office_rites_holder.zeal).
+#
+#   ROOT / this = the Qing country (CHI, player)
+#
+# CHI-only, player-only suite. All logged to sys = QING. Triggered from the
+# QING_frontier_flavour_roll dispatcher (se_QING_DECLINE.txt).
+#
+# Namespace = qing_rites
+#   .1  祭天 — the grand Sacrifice to Heaven at the Altar of Heaven
+#   .2  賓禮/朝貢 — a tributary embassy arrives to present tribute
+#   .3  ritual dispute / precedent question (禮部 adjudication)
+#   .4  imperial ancestral rite / mourning (祭祖/國喪)
+########################################################################
+
+namespace = qing_rites
+
+########################################################################
+# .1  祭天 — THE SACRIFICE TO HEAVEN
+# The Son of Heaven renews the Mandate at the Altar of Heaven (天壇). The Rites
+# minister conducts the ceremony. A capable, zealous holder makes the ritual
+# efficacious (legitimacy); a vacant office or low-zeal holder means the rite
+# rings hollow or is botched.
+########################################################################
+qing_rites.1 = {
+	type = country_event
+	title = "qing_rites.1.t"
+	desc = "qing_rites.1.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = var:qing_office_rites_holder
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		is_ai = no
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_rites.1 (祭天 Sacrifice to Heaven) [ROOT.GetTag]" }
+		# save the Rites holder if filled
+		if = {
+			limit = {
+				has_variable = qing_office_rites_holder
+				var:qing_office_rites_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_rites_holder = { save_scope_as = rites_minister }
+		}
+	}
+
+	# --- Conduct the ceremony with full solemnity (costly, best outcome if holder capable) ---
+	option = {
+		name = "qing_rites.1.a"
+		custom_tooltip = "qing_rites.1.a.tt"
+		
+		# cost: treasury + political influence (the full imperial entourage)
+		trigger = {
+			treasury >= 50
+			political_influence >= 30
+		}
+		
+		add_treasury = -50
+		add_political_influence = -30
+		
+		# outcome gated on Rites holder's zeal: high zeal -> success, low -> mediocre
+		if = {
+			limit = {
+				has_variable = qing_office_rites_holder
+				var:qing_office_rites_holder = { is_alive = yes  employer = ROOT  zeal >= 8 }
+			}
+			QING_rites_sacrifice_heaven = { outcome = success }
+		}
+		else_if = {
+			limit = {
+				has_variable = qing_office_rites_holder
+				var:qing_office_rites_holder = { is_alive = yes  employer = ROOT }
+			}
+			QING_rites_sacrifice_heaven_mediocre = yes
+		}
+		else = {
+			# vacant office: mediocre outcome (ritual performed but hollow)
+			QING_rites_sacrifice_heaven_mediocre = yes
+		}
+	}
+
+	# --- Observe the rite with reduced ceremony (cheaper, mediocre outcome) ---
+	option = {
+		name = "qing_rites.1.b"
+		custom_tooltip = "qing_rites.1.b.tt"
+		
+		add_treasury = -20
+		QING_rites_sacrifice_heaven_mediocre = yes
+	}
+
+	# --- Neglect the ceremony this year (save cost, but legitimacy falls) ---
+	option = {
+		name = "qing_rites.1.c"
+		custom_tooltip = "qing_rites.1.c.tt"
+		
+		QING_rites_sacrifice_heaven_failure = yes
+	}
+}
+
+########################################################################
+# .2  賓禮/朝貢 — TRIBUTARY EMBASSY ARRIVES
+# A tributary state presents tribute at the capital. The Rites minister conducts
+# the reception per correct ritual. A capable holder affirms the tributary order
+# (subject loyalty, prestige); a botched reception offends the vassal. CONCRETE:
+# prefers to save a REAL subject where one exists.
+########################################################################
+qing_rites.2 = {
+	type = country_event
+	title = "qing_rites.2.t"
+	desc = "qing_rites.2.desc"
+	picture = senate
+
+	left_portrait = var:qing_office_rites_holder
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		is_ai = no
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_rites.2 (tributary embassy arrives) [ROOT.GetTag]" }
+		# CONCRETE: save a REAL tributary subject if any exist (prefer tributary or
+		# sinosphere_tributary type; fall back to any subject if none).
+		if = {
+			limit = { any_subject = { is_subject_type = tributary } }
+			random_subject = {
+				limit = { is_subject_type = tributary }
+				save_scope_as = tribute_subject
+			}
+		}
+		else_if = {
+			limit = { any_subject = { is_subject_type = sinosphere_tributary } }
+			random_subject = {
+				limit = { is_subject_type = sinosphere_tributary }
+				save_scope_as = tribute_subject
+			}
+		}
+		else_if = {
+			limit = { any_subject = { always = yes } }
+			random_subject = {
+				limit = { always = yes }
+				save_scope_as = tribute_subject
+			}
+		}
+		# save the Rites holder if filled
+		if = {
+			limit = {
+				has_variable = qing_office_rites_holder
+				var:qing_office_rites_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_rites_holder = { save_scope_as = rites_minister }
+		}
+	}
+
+	# --- Receive the embassy with full honours (correct ritual, affirms order) ---
+	option = {
+		name = "qing_rites.2.a"
+		custom_tooltip = "qing_rites.2.a.tt"
+		
+		# cost: treasury (ceremonial gifts, banquet)
+		trigger = { treasury >= 30 }
+		add_treasury = -30
+		
+		# outcome gated on Rites holder's zeal + loyalty
+		if = {
+			limit = {
+				has_variable = qing_office_rites_holder
+				var:qing_office_rites_holder = {
+					is_alive = yes
+					employer = ROOT
+					zeal >= 7
+					loyalty >= 50
+				}
+			}
+			QING_rites_receive_tribute = { outcome = success }
+		}
+		else = {
+			# low-zeal or disloyal holder -> slight risk
+			QING_rites_receive_tribute_slight = yes
+		}
+	}
+
+	# --- Receive the embassy with reduced ceremony (cheaper, risk of slight) ---
+	option = {
+		name = "qing_rites.2.b"
+		custom_tooltip = "qing_rites.2.b.tt"
+		
+		add_treasury = -10
+		# reduced ceremony always risks slighting the vassal
+		QING_rites_receive_tribute_slight = yes
+	}
+
+	# --- Decline to receive the embassy (save cost, but vassal deeply offended) ---
+	option = {
+		name = "qing_rites.2.c"
+		custom_tooltip = "qing_rites.2.c.tt"
+		
+		trigger = {
+			# only offered if Rites office is vacant (no minister to conduct it)
+			NOT = { has_variable = qing_office_rites_holder }
+		}
+		
+		if = {
+			limit = { exists = scope:tribute_subject }
+			scope:tribute_subject = {
+				add_opinion = {
+					modifier = opinion_qing_tributary_spurned
+					target = ROOT
+				}
+			}
+		}
+		add_prestige = -15
+		QING_vassal_init = yes
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = -10 }
+	}
+}
+
+########################################################################
+# .3  RITUAL DISPUTE / PRECEDENT QUESTION
+# The 禮部 must adjudicate a controversy over correct ritual. Uphold orthodoxy
+# (legitimacy, but slight reform pressure) or bend to pragmatism (ease reform
+# pressure, but legitimacy falls). The Rites holder's zeal colours the framing.
+########################################################################
+qing_rites.3 = {
+	type = country_event
+	title = "qing_rites.3.t"
+	desc = {
+		# desc variant on Rites holder's zeal: high-zeal frames orthodoxy strongly
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					has_variable = qing_office_rites_holder
+					var:qing_office_rites_holder = { is_alive = yes  employer = ROOT  zeal >= 8 }
+				}
+				desc = "qing_rites.3.desc_zealous"
+			}
+			triggered_desc = {
+				trigger = { always = yes }
+				desc = "qing_rites.3.desc"
+			}
+		}
+	}
+	picture = senate_debate
+
+	left_portrait = var:qing_office_rites_holder
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		is_ai = no
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_rites.3 (ritual dispute) [ROOT.GetTag]" }
+		if = {
+			limit = {
+				has_variable = qing_office_rites_holder
+				var:qing_office_rites_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_rites_holder = { save_scope_as = rites_minister }
+		}
+	}
+
+	# --- Uphold orthodoxy (tradition, legitimacy, but reform pressure) ---
+	option = {
+		name = "qing_rites.3.a"
+		custom_tooltip = "qing_rites.3.a.tt"
+		
+		QING_rites_dispute = { choice = orthodoxy }
+	}
+
+	# --- Bend to pragmatism (ease reform pressure, but legitimacy falls) ---
+	option = {
+		name = "qing_rites.3.b"
+		custom_tooltip = "qing_rites.3.b.tt"
+		
+		QING_rites_dispute_pragmatism = yes
+	}
+}
+
+########################################################################
+# .4  IMPERIAL ANCESTRAL RITE / MOURNING (祭祖/國喪)
+# An imperial ancestor is honoured or a period of state mourning observed.
+# Correct observance affirms dynastic continuity (legitimacy); neglect or
+# impropriety shakes the throne.
+########################################################################
+qing_rites.4 = {
+	type = country_event
+	title = "qing_rites.4.t"
+	desc = "qing_rites.4.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = var:qing_office_rites_holder
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		is_ai = no
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_rites.4 (ancestral rite/mourning) [ROOT.GetTag]" }
+		if = {
+			limit = {
+				has_variable = qing_office_rites_holder
+				var:qing_office_rites_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_rites_holder = { save_scope_as = rites_minister }
+		}
+	}
+
+	# --- Observe the rite with full ceremony (legitimacy, piety buff) ---
+	option = {
+		name = "qing_rites.4.a"
+		custom_tooltip = "qing_rites.4.a.tt"
+		
+		trigger = {
+			treasury >= 25
+			political_influence >= 20
+		}
+		
+		add_treasury = -25
+		add_political_influence = -20
+		
+		# outcome gated on Rites holder presence + zeal
+		if = {
+			limit = {
+				has_variable = qing_office_rites_holder
+				var:qing_office_rites_holder = { is_alive = yes  employer = ROOT  zeal >= 6 }
+			}
+			QING_rites_ancestral = { outcome = observed }
+		}
+		else = {
+			# vacant or low-zeal: rite is performed but less efficacious
+			add_legitimacy = 2
+		}
+	}
+
+	# --- Observe with reduced ceremony (cheaper, lesser benefit) ---
+	option = {
+		name = "qing_rites.4.b"
+		custom_tooltip = "qing_rites.4.b.tt"
+		
+		add_treasury = -10
+		add_legitimacy = 2
+	}
+
+	# --- Neglect the rite (save cost, but legitimacy + tyranny penalty) ---
+	option = {
+		name = "qing_rites.4.c"
+		custom_tooltip = "qing_rites.4.c.tt"
+		
+		QING_rites_ancestral_neglected = yes
+	}
+}

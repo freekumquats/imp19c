@@ -1,0 +1,251 @@
+########################################################################
+# qing_household_events.txt — the Grand Secretary's charge: the Imperial Household
+# (內務府), the privy purse (內帑), the eunuchs (太監), and the imperial workshops
+# (造辦處). Feature #126.
+########################################################################
+
+namespace = qing_household
+
+# ======================================================================
+# qing_household.1 — THE PRIVY PURSE (內帑): the emperor's private silver
+# The privy purse is running low. Replenish it (from where? a trade-off: divert
+# state funds at a fiscal cost, or levy a "donation" from the grandees at a
+# prestige cost), tap it in a crisis (bail out the state treasury at a personal-
+# prestige cost to the ruler), or let it drain (the throne's private cushion gone).
+# ======================================================================
+qing_household.1 = {
+	type = country_event
+	title = "qing_household.1.t"
+	desc = "qing_household.1.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_privy_purse
+		var:qing_privy_purse < 35
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_household.1 (privy purse low) [ROOT.GetTag]" }
+	}
+
+	# Replenish from state treasury — fiscal cost, purse +20
+	option = {
+		name = "qing_household.1.a"
+		custom_tooltip = "qing_household.1.a.tt"
+		trigger = { treasury >= 150 }
+		QING_household_replenish_purse = { amount = 20  cost = -150 }
+	}
+
+	# Levy a "donation" from the grandees — prestige cost, purse +15
+	option = {
+		name = "qing_household.1.b"
+		custom_tooltip = "qing_household.1.b.tt"
+		QING_household_replenish_purse = { amount = 15  cost = 0 }
+		add_prestige = -50
+	}
+
+	# Let it drain — no immediate cost, but the throne's private reserve is gone
+	option = {
+		name = "qing_household.1.c"
+		custom_tooltip = "qing_household.1.c.tt"
+		QING_DECLINE_nudge = { var = qing_privy_purse  amount = -10 }
+	}
+}
+
+# ======================================================================
+# qing_household.2 — THE EUNUCHS (太監) OVERREACH: a powerful eunuch faction
+# A powerful eunuch (CONCRETE character) has built a faction. Check him hard
+# (the Qing way — strip his power, good but ruthless), indulge him (convenience
+# now, danger later), or co-opt him as the throne's private instrument (he serves
+# the ruler directly, friction with the Grand Secretary).
+# ======================================================================
+qing_household.2 = {
+	type = country_event
+	title = "qing_household.2.t"
+	desc = "qing_household.2.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+	right_portrait = scope:eunuch_leader
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		any_character = {
+			employer = ROOT
+			has_variable = qing_eunuch_faction_leader
+			is_alive = yes
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_household.2 (eunuch overreach) [ROOT.GetTag]" }
+		random_character = {
+			limit = {
+				employer = ROOT
+				has_variable = qing_eunuch_faction_leader
+				is_alive = yes
+			}
+			save_scope_as = eunuch_leader
+		}
+	}
+
+	# Check him hard — the Qing way: strip power, clear faction, corruption -3
+	option = {
+		name = "qing_household.2.a"
+		custom_tooltip = "qing_household.2.a.tt"
+		scope:eunuch_leader = {
+			QING_household_eunuch_check = yes
+		}
+	}
+
+	# Indulge him — buy off: wealth +80, danger deferred, corruption +2
+	option = {
+		name = "qing_household.2.b"
+		custom_tooltip = "qing_household.2.b.tt"
+		scope:eunuch_leader = {
+			QING_household_eunuch_indulge = yes
+		}
+	}
+
+	# Co-opt as the throne's private instrument — loyal veterans +2, loyalty +20,
+	# but friction with the Grand Secretary (rival)
+	option = {
+		name = "qing_household.2.c"
+		custom_tooltip = "qing_household.2.c.tt"
+		trigger = {
+			has_variable = qing_office_grand_secretary_holder
+			var:qing_office_grand_secretary_holder = { is_alive = yes  employer = ROOT }
+		}
+		scope:eunuch_leader = {
+			QING_household_eunuch_instrument = yes
+		}
+	}
+}
+
+# ======================================================================
+# qing_household.3 — THE IMPERIAL WORKSHOPS (造辦處): commission a great work
+# The Grand Secretary's charisma gates a prestige project. The workshops can
+# craft a luxury / great work (prestige +150, gold -200), a modest commission
+# (prestige +60, gold -80), or be left idle (no cost, no gain).
+# ======================================================================
+qing_household.3 = {
+	type = country_event
+	title = "qing_household.3.t"
+	desc = "qing_household.3.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+	right_portrait = scope:grand_sec
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_grand_secretary_holder
+		var:qing_office_grand_secretary_holder = {
+			is_alive = yes
+			employer = ROOT
+			charisma >= 8
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_household.3 (workshop commission) [ROOT.GetTag]" }
+		if = {
+			limit = {
+				has_variable = qing_office_grand_secretary_holder
+				var:qing_office_grand_secretary_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_grand_secretary_holder = { save_scope_as = grand_sec }
+		}
+	}
+
+	# Commission a great work — prestige +150, cost -200, 5yr flourish modifier
+	option = {
+		name = "qing_household.3.a"
+		custom_tooltip = "qing_household.3.a.tt"
+		trigger = { treasury >= 200 }
+		QING_household_workshop_commission = { prestige_gain = 150  cost = -200 }
+	}
+
+	# A modest commission — prestige +60, cost -80
+	option = {
+		name = "qing_household.3.b"
+		custom_tooltip = "qing_household.3.b.tt"
+		trigger = { treasury >= 80 }
+		QING_household_workshop_commission = { prestige_gain = 60  cost = -80 }
+	}
+
+	# Leave the workshops idle — no cost, no gain
+	option = {
+		name = "qing_household.3.c"
+		custom_tooltip = "qing_household.3.c.tt"
+	}
+}
+
+# ======================================================================
+# qing_household.4 — HOUSEHOLD CORRUPTION SCANDAL: the Grand Secretary as Heshen
+# The Grand Secretary himself has turned venal — a household-corruption scandal
+# (the Heshen-adjacent figure). Dismiss him (office vacant, corruption -5, but
+# effectiveness hit), demand restitution (treasury +100, loyalty -20), or tolerate
+# it (corruption +3, no other immediate cost).
+# ======================================================================
+qing_household.4 = {
+	type = country_event
+	title = "qing_household.4.t"
+	desc = "qing_household.4.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+	right_portrait = scope:grand_sec
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		var:qing_corruption_level >= 60
+		has_variable = qing_office_grand_secretary_holder
+		var:qing_office_grand_secretary_holder = {
+			is_alive = yes
+			employer = ROOT
+			OR = {
+				has_trait = corrupt
+				corruption >= 40
+			}
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_household.4 (Grand Secretary corruption scandal) [ROOT.GetTag]" }
+		var:qing_office_grand_secretary_holder = { save_scope_as = grand_sec }
+	}
+
+	# Dismiss him — office vacant, corruption -5, effectiveness hit
+	option = {
+		name = "qing_household.4.a"
+		custom_tooltip = "qing_household.4.a.tt"
+		QING_office_vacate = { office = grand_secretary }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -5 }
+	}
+
+	# Demand restitution — treasury +100, loyalty -20, he stays in office
+	option = {
+		name = "qing_household.4.b"
+		custom_tooltip = "qing_household.4.b.tt"
+		add_treasury = 100
+		scope:grand_sec = {
+			add_loyalty = -20
+			add_corruption = -10
+		}
+	}
+
+	# Tolerate it — corruption +3, no immediate cost (the Heshen path)
+	option = {
+		name = "qing_household.4.c"
+		custom_tooltip = "qing_household.4.c.tt"
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 3 }
+		scope:grand_sec = {
+			add_corruption = 10
+			add_wealth = 50
+		}
+	}
+}

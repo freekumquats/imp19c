@@ -1,0 +1,255 @@
+########################################################################
+# se_QING_HOUSEHOLD.txt — the Grand Secretary's charge: the Imperial Household
+# Department (內務府 / 總管內務府大臣), the privy purse (內帑), the eunuchs
+# (太監), and the imperial workshops (造辦處).
+#
+# The Grand Secretary (內務府) heads the throne's PERSONAL establishment — the
+# privy purse (內帑, the emperor's private treasury, distinct from the state
+# 戶部 treasury), the palace eunuchs (太監, a perennial danger — the Qing kept
+# them tightly checked after past dynasties fell to eunuch power), and the
+# imperial workshops (造辦處). The closest man to the sovereign; his charge is
+# the emperor's own household and standing.
+#
+# A capable, loyal, high-charisma Grand Secretary keeps the privy purse full
+# (a private reserve the throne can tap), the eunuchs in check (no eunuch
+# faction), and the workshops productive (prestige/luxury); a venal or vacant
+# office means eunuch overreach, a drained privy purse, and a diminished sovereign.
+#
+# STATE (CHI country scope):
+#   qing_privy_purse       0..100 private silver reserve (init 50)
+#   qing_eunuch_power      0..100 faction strength (NOT stored — derived from
+#                          the presence of a flagged eunuch character; 0 when
+#                          no eunuch faction exists)
+# Character-scope mark on the faction-leading eunuch (if one exists):
+#   qing_eunuch_faction_leader   flag (the dangerous eunuch)
+#
+# PREFIX: QING_household_
+########################################################################
+
+# ======================================================================
+# INIT — seed the privy purse. Called once at game start from on_game_initialized.
+# ======================================================================
+QING_household_init = {
+	LOG_enter = { sys = QING  fn = "QING_household_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_privy_purse } }
+		set_variable = { name = qing_privy_purse  value = 50 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_household_init"  result = OK }
+}
+
+# ======================================================================
+# PULSE — quarterly drift of the privy purse and eunuch danger, gated on the
+# Grand Secretary holder's charisma + loyalty. Called from the quarterly
+# governance pulse (after accountability recompute, so the metric is fresh).
+# ======================================================================
+QING_household_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_household_pulse" }
+	QING_household_init = yes
+
+	# --- PRIVY PURSE DRIFT: capable loyal high-charisma Grand Secretary fills it
+	# (+2/quarter), vacant or venal office drains it (-3/quarter).
+	if = {
+		limit = {
+			has_variable = qing_office_grand_secretary_holder
+			var:qing_office_grand_secretary_holder = {
+				is_alive = yes
+				employer = ROOT
+				charisma >= 8
+				loyalty >= 60
+			}
+		}
+		QING_DECLINE_nudge = { var = qing_privy_purse  amount = 2 }
+		LOG_line = { sys = QING  msg = "household pulse: privy purse +2 (capable Grand Secretary) for [ROOT.GetTag]" }
+	}
+	else_if = {
+		limit = {
+			OR = {
+				NOT = { has_variable = qing_office_grand_secretary_holder }
+				var:qing_office_grand_secretary_holder = {
+					OR = {
+						NOT = { is_alive = yes }
+						NOT = { employer = ROOT }
+						loyalty < 40
+						has_trait = corrupt
+					}
+				}
+			}
+		}
+		QING_DECLINE_nudge = { var = qing_privy_purse  amount = -3 }
+		LOG_line = { sys = QING  msg = "household pulse: privy purse -3 (vacant/venal office) for [ROOT.GetTag]" }
+	}
+
+	# --- EUNUCH DANGER CHECK: if the Grand Secretary is absent/weak/disloyal AND
+	# corruption is high, a eunuch faction MAY arise (one-time spawn when no faction
+	# leader exists yet). CONCRETE: create a real eunuch character, flag him, and
+	# grant him a power base (the eunuch danger is a man with clout, not a counter).
+	if = {
+		limit = {
+			var:qing_corruption_level >= 50
+			OR = {
+				NOT = { has_variable = qing_office_grand_secretary_holder }
+				var:qing_office_grand_secretary_holder = {
+					OR = {
+						NOT = { is_alive = yes }
+						NOT = { employer = ROOT }
+						charisma < 6
+						loyalty < 50
+					}
+				}
+			}
+			# no eunuch faction already exists
+			NOT = {
+				any_character = {
+					employer = ROOT
+					has_variable = qing_eunuch_faction_leader
+				}
+			}
+		}
+		random = {
+			chance = 20
+			LOG_line = { sys = QING  msg = "household pulse: eunuch faction arising (corrupt + weak Grand Secretary) for [ROOT.GetTag]" }
+			# CONCRETE: create the eunuch character first (#90 rule: no modifiers inside create_character)
+			create_character = {
+				culture = ROOT.primary_culture
+				religion = ROOT.religion
+				age = 35
+				add_trait = corrupt
+				add_trait = ambitious
+			}
+			# then flag + empower him in a SEPARATE effect
+			random_character = {
+				limit = {
+					employer = ROOT
+					NOT = { has_variable = qing_eunuch_faction_leader }
+					has_trait = corrupt
+					has_trait = ambitious
+					age < 40
+				}
+				set_variable = { name = qing_eunuch_faction_leader  value = 1 }
+				add_loyal_veterans = 3
+				add_wealth = 50
+				add_corruption = 20
+				LOG_line = { sys = QING  msg = "household pulse: eunuch [this.GetName] leads faction (power base +3) for [ROOT.GetTag]" }
+			}
+		}
+	}
+
+	LOG_exit = { sys = QING  fn = "QING_household_pulse"  result = OK }
+}
+
+# ======================================================================
+# REPLENISH PRIVY PURSE — top up the emperor's private silver. $amount$ (int, 10-30)
+# and $cost$ (treasury gold or prestige). Called from events. Country scope.
+# ======================================================================
+QING_household_replenish_purse = {
+	LOG_enter = { sys = QING  fn = "QING_household_replenish_purse" }
+	QING_DECLINE_nudge = { var = qing_privy_purse  amount = $amount$ }
+	add_treasury = $cost$
+	LOG_line = { sys = QING  msg = "household: privy purse += $amount$ (cost $cost$ treasury) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_household_replenish_purse"  result = OK }
+}
+
+# ======================================================================
+# TAP PRIVY PURSE — the throne draws on the private reserve to bail out the state
+# treasury (a crisis measure). $relief$ (treasury gold gained), $prestige_cost$
+# (the personal-prestige price of raiding the privy purse). Drains the purse by
+# half. Country scope.
+# ======================================================================
+QING_household_tap_purse = {
+	LOG_enter = { sys = QING  fn = "QING_household_tap_purse" }
+	set_variable = { name = qing_purse_drain_tmp  value = var:qing_privy_purse }
+	change_variable = { name = qing_purse_drain_tmp  divide = 2 }
+	QING_DECLINE_nudge = { var = qing_privy_purse  amount = -40 }
+	add_treasury = $relief$
+	if = {
+		limit = { exists = current_ruler }
+		current_ruler = {
+			add_popularity = $prestige_cost$
+			LOG_line = { sys = QING  msg = "household: privy purse tapped (ruler popularity $prestige_cost$) for [ROOT.GetTag]" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_household_tap_purse"  result = OK }
+}
+
+# ======================================================================
+# EUNUCH FACTION CHECK — the throne deals with the dangerous eunuch. Character
+# scope (this = the eunuch). $outcome$ = check|indulge|instrument.
+#   check    — the Qing way: strip his power base hard (remove loyal veterans,
+#              confiscate wealth), clear the faction, nudge corruption down.
+#   indulge  — buy him off: grant wealth, he stays powerful (danger deferred).
+#   instrument — co-opt him as the throne's private agent: he becomes a rival
+#              of the Grand Secretary (friction), gains loyal veterans, but
+#              loyalty to the throne rises (the dirty-work lever).
+# ======================================================================
+QING_household_eunuch_check = {
+	LOG_enter = { sys = QING  fn = "QING_household_eunuch_check" }
+	if = {
+		limit = { has_variable = qing_eunuch_faction_leader }
+		# strip the flag + power base
+		remove_variable = qing_eunuch_faction_leader
+		add_loyal_veterans = -3
+		add_wealth = -50
+		add_corruption = -20
+		employer = {
+			QING_DECLINE_nudge = { var = qing_corruption_level  amount = -3 }
+		}
+		LOG_line = { sys = QING  msg = "household: eunuch [this.GetName] checked (power stripped) for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_household_eunuch_check"  result = OK }
+}
+
+QING_household_eunuch_indulge = {
+	LOG_enter = { sys = QING  fn = "QING_household_eunuch_indulge" }
+	add_wealth = 80
+	add_corruption = 10
+	employer = {
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 2 }
+	}
+	LOG_line = { sys = QING  msg = "household: eunuch [this.GetName] indulged (wealth +80, danger deferred) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_household_eunuch_indulge"  result = OK }
+}
+
+QING_household_eunuch_instrument = {
+	LOG_enter = { sys = QING  fn = "QING_household_eunuch_instrument" }
+	add_loyal_veterans = 2
+	add_loyalty = 20
+	# set him as rival of the Grand Secretary (if one exists) — friction between
+	# the private instrument and the official household head.
+	if = {
+		limit = {
+			employer = {
+				has_variable = qing_office_grand_secretary_holder
+				var:qing_office_grand_secretary_holder = {
+					is_alive = yes
+					employer = ROOT
+					NOT = { is_rival = prev }
+				}
+			}
+		}
+		employer = {
+			var:qing_office_grand_secretary_holder = {
+				if = {
+					limit = { NOT = { is_rival = prev } }
+					add_rival = prev
+				}
+			}
+		}
+	}
+	LOG_line = { sys = QING  msg = "household: eunuch [this.GetName] co-opted as instrument (loyal veterans +2, loyalty +20) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_household_eunuch_instrument"  result = OK }
+}
+
+# ======================================================================
+# WORKSHOP COMMISSION — the Grand Secretary's charisma gates a prestige project
+# (the imperial workshops craft a luxury / great work). $prestige_gain$, $cost$.
+# Country scope.
+# ======================================================================
+QING_household_workshop_commission = {
+	LOG_enter = { sys = QING  fn = "QING_household_workshop_commission" }
+	add_treasury = $cost$
+	add_prestige = $prestige_gain$
+	add_country_modifier = { name = qing_household_workshop_flourish  duration = 1825 }
+	LOG_line = { sys = QING  msg = "household: workshop commission (prestige +$prestige_gain$, cost $cost$) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_household_workshop_commission"  result = OK }
+}

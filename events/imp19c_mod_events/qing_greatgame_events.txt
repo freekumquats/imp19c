@@ -1,0 +1,391 @@
+########################################################################
+# qing_greatgame_events.txt — the Zongli Yamen / Great Game events (#108).
+#
+# The DRAMA of 以夷制夷 ("use barbarians to control barbarians"): the Zongli holder
+# mediates great-power overtures/threats, and the player plays the powers off each
+# other. Gated on: tag=CHI + Zongli office existing + some GP tension present.
+#
+# These are WEIGHTED entries in the QING_frontier_flavour_roll dispatcher
+# (se_QING_DECLINE.txt) — not dated, not on_action. They fire alongside the rest
+# of the Qing pulse-driven flavour (reforms, embassies, rebellions) when the
+# conditions align.
+#
+# The holder's skill/loyalty gates the OPTIONS: a capable holder opens the "play
+# one power against another" finesse path; a weak / absent holder forces costly
+# concessions. The affinity spine (QING_char_affinity / QING_char_bind) is used
+# where the Zongli holder is a concrete character involved in the decision.
+#
+# Namespace = qing_greatgame
+########################################################################
+
+namespace = qing_greatgame
+
+# ======================================================================
+# .1 — A GREAT POWER OVERTURE / THREAT. One of the three powers (Britain / France
+# / Russia) whose tension is elevated opens a diplomatic overture or presses a
+# demand — a frontier concession, a trade privilege, a diplomatic slight redressed.
+# The Zongli holder (if present + capable) can PLAY the power's two rivals against
+# it (以夷制夷: placate one at the cost of affronting another); or the Qing can
+# concede (lower tension with the pressing power) or stand firm (tension rises).
+#
+# The power is chosen RANDOMLY from those whose tension is >= 40 (the band where
+# overtures / threats become plausible). If multiple are high, the highest is
+# picked with a weight bias.
+# ======================================================================
+qing_greatgame.1 = {
+	type = country_event
+	title = "qing_greatgame.1.t"
+	desc = "qing_greatgame.1.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+	right_portrait = scope:qing_gg_zongli
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		# at least one GP tension counter is elevated (the band where overtures begin)
+		OR = {
+			AND = { has_variable = qing_gp_tension_britain  var:qing_gp_tension_britain >= 40 }
+			AND = { has_variable = qing_gp_tension_france   var:qing_gp_tension_france  >= 40 }
+			AND = { has_variable = qing_gp_tension_russia   var:qing_gp_tension_russia  >= 40 }
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_greatgame.1 (GP overture/threat) [ROOT.GetTag]" }
+		# Save the Zongli holder (if present) — gates the finesse path.
+		if = {
+			limit = {
+				has_variable = qing_office_zongli_holder
+				var:qing_office_zongli_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_zongli_holder = { save_scope_as = qing_gg_zongli }
+		}
+		# Pick the pressing power: the HIGHEST tension counter among those >= 40.
+		# Weighted random if multiple are tied.
+		if = {
+			limit = {
+				has_variable = qing_gp_tension_britain
+				var:qing_gp_tension_britain >= 40
+				OR = {
+					NOT = { has_variable = qing_gp_tension_france }
+					var:qing_gp_tension_britain >= var:qing_gp_tension_france
+				}
+				OR = {
+					NOT = { has_variable = qing_gp_tension_russia }
+					var:qing_gp_tension_britain >= var:qing_gp_tension_russia
+				}
+			}
+			set_variable = { name = qing_gg_pressing_power  value = flag:britain }
+		}
+		else_if = {
+			limit = {
+				has_variable = qing_gp_tension_france
+				var:qing_gp_tension_france >= 40
+				OR = {
+					NOT = { has_variable = qing_gp_tension_russia }
+					var:qing_gp_tension_france >= var:qing_gp_tension_russia
+				}
+			}
+			set_variable = { name = qing_gg_pressing_power  value = flag:france }
+		}
+		else = {
+			set_variable = { name = qing_gg_pressing_power  value = flag:russia }
+		}
+	}
+
+	# OPTION A — PLAY THE RIVALS (以夷制夷). Gate on the Zongli holder being
+	# present + capable (finesse + charisma high, loyalty >= 50). Placate the
+	# pressing power at the cost of affronting its two rivals (they see the Qing
+	# taking a side). Cost: prestige (the court resents a compromise).
+	option = {
+		name = "qing_greatgame.1.a"
+		custom_tooltip = "qing_greatgame.1.a.tt"
+		trigger = {
+			exists = scope:qing_gg_zongli
+			scope:qing_gg_zongli = {
+				loyalty >= 50
+				finesse >= 6
+				charisma >= 6
+			}
+		}
+		current_ruler = { add_prestige = -8 }
+		# Accommodate the pressing power (lower its tension) + improve relations.
+		if = {
+			limit = { var:qing_gg_pressing_power = flag:britain }
+			QING_gp_accommodate = { power = britain  tag = GBR  amount = -12 }
+			# Affront its two rivals (they bristle at the Qing's partisanship).
+			QING_gp_rivals_bristle = { rival_a = france  rtag_a = FRA  rival_b = russia  rtag_b = RUS }
+		}
+		else_if = {
+			limit = { var:qing_gg_pressing_power = flag:france }
+			QING_gp_accommodate = { power = france  tag = FRA  amount = -12 }
+			QING_gp_rivals_bristle = { rival_a = britain  rtag_a = GBR  rival_b = russia  rtag_b = RUS }
+		}
+		else = {
+			QING_gp_accommodate = { power = russia  tag = RUS  amount = -12 }
+			QING_gp_rivals_bristle = { rival_a = britain  rtag_a = GBR  rival_b = france  rtag_b = FRA }
+		}
+		# The Zongli holder's finesse is vindicated — reward him via the affinity
+		# spine (the same idiom as QING_acc_reward).
+		scope:qing_gg_zongli = {
+			QING_char_promote_standing = { pop = 3  prom = 2 }
+			QING_char_affinity = yes
+			if = {
+				limit = { var:qing_char_affinity >= 55 }
+				QING_char_bind = yes
+			}
+		}
+	}
+
+	# OPTION B — CONCEDE. Lower tension with the pressing power at the cost of
+	# treasury + prestige. The safe, low-risk path (the Qing buys peace).
+	option = {
+		name = "qing_greatgame.1.b"
+		custom_tooltip = "qing_greatgame.1.b.tt"
+		add_treasury = -60
+		current_ruler = { add_prestige = -12 }
+		if = {
+			limit = { var:qing_gg_pressing_power = flag:britain }
+			QING_gp_accommodate = { power = britain  tag = GBR  amount = -15 }
+		}
+		else_if = {
+			limit = { var:qing_gg_pressing_power = flag:france }
+			QING_gp_accommodate = { power = france  tag = FRA  amount = -15 }
+		}
+		else = {
+			QING_gp_accommodate = { power = russia  tag = RUS  amount = -15 }
+		}
+	}
+
+	# OPTION C — STAND FIRM. Refuse the demand; tension with the pressing power
+	# rises. Gains prestige (the court applauds defiance) but risks a crisis.
+	option = {
+		name = "qing_greatgame.1.c"
+		custom_tooltip = "qing_greatgame.1.c.tt"
+		current_ruler = { add_prestige = 10 }
+		if = {
+			limit = { var:qing_gg_pressing_power = flag:britain }
+			QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = 8 }
+		}
+		else_if = {
+			limit = { var:qing_gg_pressing_power = flag:france }
+			QING_DECLINE_nudge = { var = qing_gp_tension_france  amount = 8 }
+		}
+		else = {
+			QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = 8 }
+		}
+	}
+}
+
+# ======================================================================
+# .2 — THE POWERS COORDINATE AGAINST THE QING. When MULTIPLE tensions are high,
+# the powers sense a common opportunity and press together — a coordinated threat
+# that is harder to deflect. The Qing can play them off (if the Zongli holder is
+# capable) or buy them off (expensive) or weather the storm (all tensions rise).
+#
+# Trigger: at least TWO of the three GP tensions >= 55 (the coordination band).
+# ======================================================================
+qing_greatgame.2 = {
+	type = country_event
+	title = "qing_greatgame.2.t"
+	desc = "qing_greatgame.2.desc"
+	picture = senate_debate
+	left_portrait = root.current_ruler
+	right_portrait = scope:qing_gg_zongli
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		# at least TWO tensions >= 55
+		calc_true_if = {
+			amount >= 2
+			AND = { has_variable = qing_gp_tension_britain  var:qing_gp_tension_britain >= 55 }
+			AND = { has_variable = qing_gp_tension_france   var:qing_gp_tension_france  >= 55 }
+			AND = { has_variable = qing_gp_tension_russia   var:qing_gp_tension_russia  >= 55 }
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_greatgame.2 (powers coordinate) [ROOT.GetTag]" }
+		if = {
+			limit = {
+				has_variable = qing_office_zongli_holder
+				var:qing_office_zongli_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_zongli_holder = { save_scope_as = qing_gg_zongli }
+		}
+	}
+
+	# OPTION A — DIVIDE THEM (以夷制夷 at full strength). Gate on the Zongli
+	# holder being present + VERY capable (the coordination is harder to break).
+	# Play two powers against the third: lower tension with two, raise with one.
+	option = {
+		name = "qing_greatgame.2.a"
+		custom_tooltip = "qing_greatgame.2.a.tt"
+		trigger = {
+			exists = scope:qing_gg_zongli
+			scope:qing_gg_zongli = {
+				loyalty >= 60
+				finesse >= 8
+				charisma >= 8
+			}
+		}
+		current_ruler = { add_prestige = -10 }
+		# Placate Britain + France (send embassies); affront Russia (it is left out).
+		QING_gp_accommodate = { power = britain  tag = GBR  amount = -10 }
+		QING_gp_accommodate = { power = france   tag = FRA  amount = -10 }
+		QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = 6 }
+		# Reward the Zongli holder (a diplomatic coup).
+		scope:qing_gg_zongli = {
+			QING_char_promote_standing = { pop = 6  prom = 4 }
+			QING_char_affinity = yes
+			if = {
+				limit = { var:qing_char_affinity >= 55 }
+				QING_char_bind = yes
+			}
+		}
+	}
+
+	# OPTION B — BUY THEM OFF. Pay a heavy treasury cost to lower tension with all
+	# three (a bribe / settlement that placates the coordinated threat).
+	option = {
+		name = "qing_greatgame.2.b"
+		custom_tooltip = "qing_greatgame.2.b.tt"
+		add_treasury = -120
+		current_ruler = { add_prestige = -15 }
+		QING_gp_accommodate = { power = britain  tag = GBR  amount = -12 }
+		QING_gp_accommodate = { power = france   tag = FRA  amount = -12 }
+		QING_gp_accommodate = { power = russia   tag = RUS  amount = -12 }
+	}
+
+	# OPTION C — WEATHER THE STORM. Refuse; all three tensions rise (the powers
+	# press their coordinated advantage). Gains prestige but risks crisis.
+	option = {
+		name = "qing_greatgame.2.c"
+		custom_tooltip = "qing_greatgame.2.c.tt"
+		current_ruler = { add_prestige = 12 }
+		QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = 6 }
+		QING_DECLINE_nudge = { var = qing_gp_tension_france   amount = 6 }
+		QING_DECLINE_nudge = { var = qing_gp_tension_russia   amount = 6 }
+	}
+}
+
+# ======================================================================
+# .3 — A ZONGLI HOLDER'S DIPLOMATIC COUP. When the Zongli holder is capable + loyal
+# AND at least one GP tension is elevated, he engineers a breakthrough — a treaty /
+# settlement that meaningfully lowers tension with one power. Reward event (low
+# weight, high payoff). Gated on the holder's charisma + finesse.
+# ======================================================================
+qing_greatgame.3 = {
+	type = country_event
+	title = "qing_greatgame.3.t"
+	desc = "qing_greatgame.3.desc"
+	picture = senate
+	left_portrait = root.current_ruler
+	right_portrait = scope:qing_gg_zongli
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		# Zongli holder exists + is capable
+		has_variable = qing_office_zongli_holder
+		var:qing_office_zongli_holder = {
+			is_alive = yes
+			employer = ROOT
+			loyalty >= 60
+			finesse >= 8
+			charisma >= 8
+		}
+		# at least one GP tension >= 35 (there is a frontier to settle)
+		OR = {
+			AND = { has_variable = qing_gp_tension_britain  var:qing_gp_tension_britain >= 35 }
+			AND = { has_variable = qing_gp_tension_france   var:qing_gp_tension_france  >= 35 }
+			AND = { has_variable = qing_gp_tension_russia   var:qing_gp_tension_russia  >= 35 }
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_greatgame.3 (Zongli coup) [ROOT.GetTag]" }
+		var:qing_office_zongli_holder = { save_scope_as = qing_gg_zongli }
+		# Pick the highest tension counter (the frontier the holder settles).
+		if = {
+			limit = {
+				has_variable = qing_gp_tension_britain
+				var:qing_gp_tension_britain >= 35
+				OR = {
+					NOT = { has_variable = qing_gp_tension_france }
+					var:qing_gp_tension_britain >= var:qing_gp_tension_france
+				}
+				OR = {
+					NOT = { has_variable = qing_gp_tension_russia }
+					var:qing_gp_tension_britain >= var:qing_gp_tension_russia
+				}
+			}
+			set_variable = { name = qing_gg_settled_power  value = flag:britain }
+		}
+		else_if = {
+			limit = {
+				has_variable = qing_gp_tension_france
+				var:qing_gp_tension_france >= 35
+				OR = {
+					NOT = { has_variable = qing_gp_tension_russia }
+					var:qing_gp_tension_france >= var:qing_gp_tension_russia
+				}
+			}
+			set_variable = { name = qing_gg_settled_power  value = flag:france }
+		}
+		else = {
+			set_variable = { name = qing_gg_settled_power  value = flag:russia }
+		}
+	}
+
+	# OPTION A — APPLAUD THE COUP. The throne endorses the settlement; tension
+	# drops meaningfully, and the Zongli holder is rewarded (prestige, standing,
+	# loyalty). The high-payoff path.
+	option = {
+		name = "qing_greatgame.3.a"
+		custom_tooltip = "qing_greatgame.3.a.tt"
+		current_ruler = { add_prestige = 10 }
+		if = {
+			limit = { var:qing_gg_settled_power = flag:britain }
+			QING_gp_accommodate = { power = britain  tag = GBR  amount = -20 }
+		}
+		else_if = {
+			limit = { var:qing_gg_settled_power = flag:france }
+			QING_gp_accommodate = { power = france  tag = FRA  amount = -20 }
+		}
+		else = {
+			QING_gp_accommodate = { power = russia  tag = RUS  amount = -20 }
+		}
+		# Reward the holder (a major diplomatic triumph).
+		scope:qing_gg_zongli = {
+			add_prestige = 15
+			QING_char_promote_standing = { pop = 8  prom = 5 }
+			QING_char_affinity = yes
+			QING_char_bind = yes
+		}
+	}
+
+	# OPTION B — TEMPER THE COUP. The throne accepts the settlement but does not
+	# publicly applaud (the court is split). Tension drops, but the holder gains
+	# only modest reward.
+	option = {
+		name = "qing_greatgame.3.b"
+		custom_tooltip = "qing_greatgame.3.b.tt"
+		if = {
+			limit = { var:qing_gg_settled_power = flag:britain }
+			QING_gp_accommodate = { power = britain  tag = GBR  amount = -15 }
+		}
+		else_if = {
+			limit = { var:qing_gg_settled_power = flag:france }
+			QING_gp_accommodate = { power = france  tag = FRA  amount = -15 }
+		}
+		else = {
+			QING_gp_accommodate = { power = russia  tag = RUS  amount = -15 }
+		}
+		scope:qing_gg_zongli = {
+			QING_char_promote_standing = { pop = 4  prom = 2 }
+		}
+	}
+}

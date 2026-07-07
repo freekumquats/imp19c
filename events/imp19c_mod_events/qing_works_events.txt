@@ -1,0 +1,342 @@
+########################################################################
+# qing_works_events.txt — Grand Minister of Works (工部) content: river dikes,
+# canals, and the Great Wall. Feature #121.
+#
+# The Board of Works maintained the Grand Canal (大運河 漕運), the Yellow River
+# dikes (黃河河堤, 河工 — the hydraulic-works budget that consumed 10-15% of
+# central revenue and was a locus of endemic corruption), and imperial
+# monumental works. Great Wall upkeep was largely symbolic by the Qing but
+# resonant as a demonstration of imperial majesty.
+#
+# CHI-only, player-only. Fired from QING_frontier_flavour_roll. All logged to
+# sys = QING. Options lean on VERIFIED effects: QING_works_* (se_QING_WORKS.txt),
+# QING_DECLINE_nudge, QING_char_* (se_QING_AFFINITY.txt), add_country_modifier.
+#
+#   ROOT / this = the Qing overlord (CHI, player)
+#
+# Historical sources:
+#   • Pierre-Étienne Will & R. Bin Wong, Nourish the People: The State Civilian
+#     Granary System in China, 1650–1850 (1991) — on the canal grain-tribute system.
+#   • Randall A. Dodgen, Controlling the Dragon: Confucian Engineers and the
+#     Yellow River in Late Imperial China (2001) — on Yellow River hydraulics.
+#   • Hoshi Ayao 星斌夫, The Ming Tribute Grain System (1980s) — canal logistics.
+#   • Beatrice Bartlett, Monarchs and Ministers (1991) — Board of Works in the
+#     Qing governance hierarchy.
+#
+# Namespace = qing_works
+#   .1  Yellow River dike breach (flood crisis)
+#   .2  the Grand Canal silts up (grain tribute decay)
+#   .3  rebuild a section of the Great Wall (prestige project)
+#   .4  river-works embezzlement scandal (河工 graft, when corruption high)
+########################################################################
+
+namespace = qing_works
+
+########################################################################
+# .1  YELLOW RIVER DIKE BREACH
+# A section of the Yellow River (黃河) dike system fails, threatening floods.
+# Repair well (costly, needs a capable Works minister) or cheap out (graft +
+# recurring risk). The Yellow River shifted course catastrophically in 1851
+# and 1855; the Qing河工 system cost 10-15% of the central budget annually.
+########################################################################
+qing_works.1 = {
+	type = country_event
+	title = "qing_works.1.t"
+	desc = "qing_works.1.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:works_minister
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		# fires when treasury is adequate but not in a fiscal crisis (so the
+		# cost is meaningful but not crippling)
+		treasury >= 100
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_works.1 (Yellow River dike breach) [ROOT.GetTag]" }
+		if = {
+			limit = { has_variable = qing_office_works_holder }
+			var:qing_office_works_holder = { save_scope_as = works_minister }
+		}
+	}
+
+	# --- Repair well: commission a proper dike (河堤) building ----------------
+	option = {
+		name = "qing_works.1.a"
+		trigger = {
+			has_variable = qing_office_works_holder
+			var:qing_office_works_holder = { is_alive = yes  employer = ROOT }
+		}
+		custom_tooltip = "qing_works.1.a.tt"
+		# the capable-minister route: build a real dike (qing_dike_building)
+		# via QING_works_build_dike with cheap=no (so finesse gates cost).
+		QING_works_build_dike = { cheap = no }
+		# the well-maintained dike protects the populace — stability + loyalty
+		add_stability = 1
+		add_country_modifier = { name = qing_works_dike_maintained  duration = 3650 }
+	}
+
+	# --- Cheap repair: cut corners (graft + recurring risk) ------------------
+	option = {
+		name = "qing_works.1.b"
+		custom_tooltip = "qing_works.1.b.tt"
+		# the graft-ridden shortcut: build a dike but at inflated cost + corruption
+		QING_works_build_dike = { cheap = yes }
+		# recurring flood risk — unrest + a delayed follow-up crisis
+		add_country_modifier = { name = qing_works_dike_shoddy  duration = 1825 }
+		trigger_event = { id = qing_works.5  days = { 730 1095 } }
+	}
+
+	# --- Ignore it (the realm can't afford it / no Works minister) -----------
+	option = {
+		name = "qing_works.1.c"
+		trigger = {
+			OR = {
+				NOT = { has_variable = qing_office_works_holder }
+				treasury < 100
+			}
+		}
+		custom_tooltip = "qing_works.1.c.tt"
+		# the dike fails — flood damage (unrest, population loss proxy via loyalty hit)
+		add_country_modifier = { name = qing_works_flood_damage  duration = 1825 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
+	}
+}
+
+########################################################################
+# .2  THE GRAND CANAL SILTS UP
+# The Grand Canal (大運河) system is clogging with silt, threatening the
+# grain-tribute lifeline (漕運). Dredge/maintain (build a canal depot) or let
+# it decay (shift to sea transport, but unrest + loyalty hit as the old
+# system collapses). The canal fell into disrepair by the 1820s-30s, forcing
+# a shift to sea-borne grain tribute (Hoshi Ayao; Will & Wong).
+########################################################################
+qing_works.2 = {
+	type = country_event
+	title = "qing_works.2.t"
+	desc = "qing_works.2.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:works_minister
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		treasury >= 80
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_works.2 (Grand Canal silting) [ROOT.GetTag]" }
+		if = {
+			limit = { has_variable = qing_office_works_holder }
+			var:qing_office_works_holder = { save_scope_as = works_minister }
+		}
+	}
+
+	# --- Dredge & maintain: commission a canal depot (漕運倉) ----------------
+	option = {
+		name = "qing_works.2.a"
+		trigger = {
+			has_variable = qing_office_works_holder
+			var:qing_office_works_holder = { is_alive = yes  employer = ROOT }
+		}
+		custom_tooltip = "qing_works.2.a.tt"
+		QING_works_build_canal_depot = { cheap = no }
+		# the grain tribute flows — food, trade, stability
+		add_country_modifier = { name = qing_works_canal_maintained  duration = 3650 }
+	}
+
+	# --- Cheap dredge (graft) -------------------------------------------------
+	option = {
+		name = "qing_works.2.b"
+		custom_tooltip = "qing_works.2.b.tt"
+		QING_works_build_canal_depot = { cheap = yes }
+		# the canal works but the corruption layer is fed
+		add_country_modifier = { name = qing_works_canal_decay  duration = 1825 }
+	}
+
+	# --- Shift to sea transport (abandon the canal) ---------------------------
+	option = {
+		name = "qing_works.2.c"
+		custom_tooltip = "qing_works.2.c.tt"
+		# the old system collapses — unrest among canal workers / dependent regions
+		add_country_modifier = { name = qing_works_canal_abandoned  duration = 3650 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 3 }
+		add_stability = -1
+	}
+}
+
+########################################################################
+# .3  REBUILD A SECTION OF THE GREAT WALL
+# The Board of Works proposes restoring a monumental section of the Great
+# Wall (長城) as a prestige project. Militarily obsolete by the Qing (the
+# dynasty's own conquest came from Manchuria, not stopped by the Wall), but
+# symbolically resonant — a demonstration of imperial majesty and defensive
+# resolve. Costly but grants prestige + defensive benefit.
+########################################################################
+qing_works.3 = {
+	type = country_event
+	title = "qing_works.3.t"
+	desc = "qing_works.3.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:works_minister
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		treasury >= 120
+		# offered when the realm is stable enough to afford a prestige project
+		stability >= 40
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_works.3 (Great Wall rebuild) [ROOT.GetTag]" }
+		if = {
+			limit = { has_variable = qing_office_works_holder }
+			var:qing_office_works_holder = { save_scope_as = works_minister }
+		}
+	}
+
+	# --- Commission the Great Wall section ------------------------------------
+	option = {
+		name = "qing_works.3.a"
+		trigger = {
+			has_variable = qing_office_works_holder
+			var:qing_office_works_holder = { is_alive = yes  employer = ROOT }
+		}
+		custom_tooltip = "qing_works.3.a.tt"
+		QING_works_build_wall_section = { cheap = no }
+		# prestige + defensive resolve
+		add_country_modifier = { name = qing_works_wall_restored  duration = 7300 }
+		add_political_influence = 25
+	}
+
+	# --- Cheap rebuild (graft) ------------------------------------------------
+	option = {
+		name = "qing_works.3.b"
+		custom_tooltip = "qing_works.3.b.tt"
+		QING_works_build_wall_section = { cheap = yes }
+		# the Wall is rebuilt but the corruption layer fed
+		add_country_modifier = { name = qing_works_wall_shoddy  duration = 3650 }
+		add_political_influence = 15
+	}
+
+	# --- Decline the project (fiscal conservatism) ----------------------------
+	option = {
+		name = "qing_works.3.c"
+		custom_tooltip = "qing_works.3.c.tt"
+		# save the treasury, forgo the prestige
+		add_country_modifier = { name = qing_works_wall_deferred  duration = 1825 }
+	}
+}
+
+########################################################################
+# .4  RIVER-WORKS EMBEZZLEMENT SCANDAL
+# The Works minister is caught siphoning funds from the hydraulic-works
+# budget (河工 graft endemic to Yellow River projects). Fires when corruption
+# is high and a Works holder exists. Confiscate the embezzled funds + taint
+# the minister, or let it slide (corruption deepens).
+########################################################################
+qing_works.4 = {
+	type = country_event
+	title = "qing_works.4.t"
+	desc = "qing_works.4.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:works_minister
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_corruption_level
+		var:qing_corruption_level >= 50
+		has_variable = qing_office_works_holder
+		var:qing_office_works_holder = { is_alive = yes  employer = ROOT }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_works.4 (river-works embezzlement) [ROOT.GetTag]" }
+		var:qing_office_works_holder = { save_scope_as = works_minister }
+	}
+
+	# --- Punish the minister: confiscate + taint ------------------------------
+	option = {
+		name = "qing_works.4.a"
+		custom_tooltip = "qing_works.4.a.tt"
+		QING_works_graft_scandal = yes
+		# recovered funds + corruption reduction
+		add_tyranny = 2
+	}
+
+	# --- Let it slide (the minister is too powerful / politically useful) ----
+	option = {
+		name = "qing_works.4.b"
+		custom_tooltip = "qing_works.4.b.tt"
+		# the corruption deepens
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 10 }
+		scope:works_minister = {
+			# the minister prospers from the graft
+			QING_char_endow = { amount = 80 }
+			QING_char_corruption = { amount = 15 }
+		}
+		add_country_modifier = { name = qing_works_graft_tolerated  duration = 3650 }
+	}
+}
+
+########################################################################
+# .5  SHODDY DIKE FOLLOW-UP
+# The cheap dike repair (qing_works.1.b) fails. A follow-up flood crisis.
+# Hidden event, fired delayed from .1.b. Represents the recurring flood risk
+# when river works are done on the cheap.
+########################################################################
+qing_works.5 = {
+	type = country_event
+	title = "qing_works.5.t"
+	desc = "qing_works.5.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		# only fires if the shoddy-dike modifier is still active (i.e., the
+		# realm hasn't already fixed it via another event or action)
+		has_country_modifier = qing_works_dike_shoddy
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_works.5 (shoddy dike fails) [ROOT.GetTag]" }
+		remove_country_modifier = qing_works_dike_shoddy
+	}
+
+	# --- Pay to repair properly this time -------------------------------------
+	option = {
+		name = "qing_works.5.a"
+		trigger = { treasury >= 100 }
+		custom_tooltip = "qing_works.5.a.tt"
+		QING_works_build_dike = { cheap = no }
+		add_country_modifier = { name = qing_works_dike_maintained  duration = 3650 }
+	}
+
+	# --- Accept the flood damage ---------------------------------------------
+	option = {
+		name = "qing_works.5.b"
+		custom_tooltip = "qing_works.5.b.tt"
+		add_country_modifier = { name = qing_works_flood_damage  duration = 1825 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 8 }
+	}
+}

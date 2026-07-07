@@ -1,0 +1,348 @@
+########################################################################
+# qing_revenue_events.txt — Grand Minister of Revenue (戶部) domain events.
+# namespace qing_revenue
+# Task #124
+########################################################################
+
+namespace = qing_revenue
+
+# ======================================================================
+# qing_revenue.1 — REFORM THE SALT GABELLE (鹽政)
+# The salt monopoly is a vast revenue source, but the salt-merchant patronage
+# system is riddled with graft. The Revenue minister proposes reform: clean up
+# the monopoly (more revenue, upsets patronage networks, corruption down) or
+# milk it for short-term cash (corruption up, entrenched graft).
+# ======================================================================
+qing_revenue.1 = {
+	type = country_event
+	title = "qing_revenue.1.t"
+	desc = "qing_revenue.1.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+	right_portrait = scope:revenue_minister
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_revenue_holder
+		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+		NOT = { has_variable = qing_salt_gabelle_reformed }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_revenue.1 (salt gabelle reform) [ROOT.GetTag]" }
+		var:qing_office_revenue_holder = { save_scope_as = revenue_minister }
+		# assess the minister's fitness for fiscal oversight
+		set_variable = { name = qing_revenue_task  value = flag:oversight }
+		QING_revenue_assess_fitness = { task = oversight }
+	}
+
+	# OPTION A: reform the salt monopoly — honest revenue, upsetting patronage
+	option = {
+		name = "qing_revenue.1.a"
+		custom_tooltip = "qing_revenue.1.a.tt"
+		trigger = {
+			has_variable = qing_revenue_fitness
+			var:qing_revenue_fitness >= 50
+		}
+		# clean up the gabelle: more revenue, corruption down
+		add_country_modifier = { name = qing_salt_gabelle_reformed_mod  duration = -1 }
+		set_variable = { name = qing_salt_gabelle_reformed  value = 1 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -8 }
+		# but upsetting the salt-merchant networks costs the minister loyalty
+		scope:revenue_minister = {
+			add_loyalty = loyalty_qing_estranged
+			QING_char_promote_standing = { pop = -10  prom = 5 }
+		}
+		LOG_line = { sys = QING  msg = "revenue: salt gabelle reformed (+income, -corruption, minister unpopular) for [ROOT.GetTag]" }
+	}
+
+	# OPTION B: milk the monopoly — short-term cash, entrenched graft
+	option = {
+		name = "qing_revenue.1.b"
+		custom_tooltip = "qing_revenue.1.b.tt"
+		# quick cash infusion
+		add_treasury = 80
+		# but corruption entrenches
+		add_country_modifier = { name = qing_salt_gabelle_graft  duration = 3650 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
+		# a venal minister benefits
+		if = {
+			limit = { scope:revenue_minister = { has_trait = corrupt } }
+			scope:revenue_minister = {
+				add_gold = 25
+				QING_char_corruption = { amount = 10 }
+			}
+		}
+		LOG_line = { sys = QING  msg = "revenue: salt gabelle milked (+cash, +corruption) for [ROOT.GetTag]" }
+	}
+
+	# OPTION C: defer — no action (vacant or incapable minister outcome)
+	option = {
+		name = "qing_revenue.1.c"
+		custom_tooltip = "qing_revenue.1.c.tt"
+		trigger = {
+			has_variable = qing_revenue_fitness
+			var:qing_revenue_fitness < 50
+		}
+		# status quo: the patronage system persists, modest graft continues
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 2 }
+		LOG_line = { sys = QING  msg = "revenue: salt gabelle reform deferred (minister unfit) for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# qing_revenue.2 — STOCK THE EVER-NORMAL GRANARIES (常平倉)
+# A good harvest lets the Revenue minister stock the granaries (price-stabilising
+# grain reserves). Stock them (unrest control via concrete granary building) or
+# divert the surplus to other needs (revenue, but no unrest buff).
+# ======================================================================
+qing_revenue.2 = {
+	type = country_event
+	title = "qing_revenue.2.t"
+	desc = "qing_revenue.2.desc"
+	picture = senate
+	left_portrait = root.current_ruler
+	right_portrait = scope:revenue_minister
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_revenue_holder
+		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+		# can only stock if we have suitable provinces
+		any_owned_province = {
+			OR = {
+				province_id = 7229
+				province_id = 7230
+				province_id = 7234
+				province_id = 1
+				province_id = 7235
+			}
+			has_city_status = yes
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_revenue.2 (granary stocking) [ROOT.GetTag]" }
+		var:qing_office_revenue_holder = { save_scope_as = revenue_minister }
+		set_variable = { name = qing_revenue_task  value = flag:fiscal }
+		QING_revenue_assess_fitness = { task = fiscal }
+	}
+
+	# OPTION A: stock the granaries — unrest control
+	option = {
+		name = "qing_revenue.2.a"
+		custom_tooltip = "qing_revenue.2.a.tt"
+		QING_revenue_stock_granary = yes
+		add_country_modifier = { name = qing_granaries_stocked  duration = 1825 }
+		LOG_line = { sys = QING  msg = "revenue: granaries stocked (building +1, unrest buff) for [ROOT.GetTag]" }
+	}
+
+	# OPTION B: divert the surplus to the treasury
+	option = {
+		name = "qing_revenue.2.b"
+		custom_tooltip = "qing_revenue.2.b.tt"
+		add_treasury = 50
+		# but no unrest buff, and the minister's reputation suffers (short-term thinking)
+		scope:revenue_minister = {
+			QING_char_promote_standing = { pop = -5  prom = 0 }
+		}
+		LOG_line = { sys = QING  msg = "revenue: granary surplus diverted to treasury for [ROOT.GetTag]" }
+	}
+
+	# OPTION C (alternate scenario): famine tests the reserves
+	# This option only appears if we already have granaries to deplete.
+	option = {
+		name = "qing_revenue.2.c"
+		custom_tooltip = "qing_revenue.2.c.tt"
+		trigger = {
+			any_owned_province = {
+				OR = {
+					province_id = 7229
+					province_id = 7230
+					province_id = 7234
+					province_id = 1
+					province_id = 7235
+				}
+				num_of_building = { building = qing_granary_building  value >= 1 }
+			}
+		}
+		# deplete a granary (famine consumes the reserves)
+		QING_revenue_deplete_granary = yes
+		# but the reserves cushioned the blow (temp unrest reduction)
+		add_country_modifier = { name = qing_granaries_cushioned_famine  duration = 730 }
+		LOG_line = { sys = QING  msg = "revenue: famine tested granaries (building -1, but unrest cushioned) for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# qing_revenue.3 — THE SILVER CRISIS RESPONSE (銀荒/銀貴錢賤)
+# The silver crisis (opium drain + copper-cash inflation) is THE fiscal emergency
+# of the 19thC. Can the Revenue minister act? A capable, loyal minister can nudge
+# currency stress down (policy response); a venal or incapable one botches it
+# (stress worsens).
+# ======================================================================
+qing_revenue.3 = {
+	type = country_event
+	title = "qing_revenue.3.t"
+	desc = "qing_revenue.3.desc"
+	picture = senate_debate
+	left_portrait = root.current_ruler
+	right_portrait = scope:revenue_minister
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_revenue_holder
+		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+		has_variable = qing_currency_stress
+		var:qing_currency_stress >= 30
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_revenue.3 (silver crisis response) [ROOT.GetTag]" }
+		var:qing_office_revenue_holder = { save_scope_as = revenue_minister }
+		set_variable = { name = qing_revenue_task  value = flag:crisis }
+		QING_revenue_assess_fitness = { task = crisis }
+	}
+
+	# OPTION A: decisive policy response (minister capable, stress down)
+	option = {
+		name = "qing_revenue.3.a"
+		custom_tooltip = "qing_revenue.3.a.tt"
+		trigger = {
+			has_variable = qing_revenue_fitness
+			var:qing_revenue_fitness >= 60
+		}
+		# effective intervention: currency stress down
+		QING_DECLINE_nudge = { var = qing_currency_stress  amount = -10 }
+		add_country_modifier = { name = qing_silver_crisis_managed  duration = 1825 }
+		# but it costs political capital and treasury
+		add_treasury = -60
+		scope:revenue_minister = {
+			add_loyalty = loyalty_qing_congenial
+			QING_char_promote_standing = { pop = -8  prom = 8 }
+		}
+		LOG_line = { sys = QING  msg = "revenue: silver crisis managed (-currency stress, -treasury, minister's standing +/-) for [ROOT.GetTag]" }
+	}
+
+	# OPTION B: half-measures (minister mediocre, modest effect)
+	option = {
+		name = "qing_revenue.3.b"
+		custom_tooltip = "qing_revenue.3.b.tt"
+		trigger = {
+			has_variable = qing_revenue_fitness
+			var:qing_revenue_fitness >= 40
+			var:qing_revenue_fitness < 60
+		}
+		# partial intervention: small currency stress reduction
+		QING_DECLINE_nudge = { var = qing_currency_stress  amount = -3 }
+		add_treasury = -30
+		LOG_line = { sys = QING  msg = "revenue: silver crisis half-measures (-3 currency stress, -30 treasury) for [ROOT.GetTag]" }
+	}
+
+	# OPTION C: botched response (minister incapable or corrupt, stress worsens)
+	option = {
+		name = "qing_revenue.3.c"
+		custom_tooltip = "qing_revenue.3.c.tt"
+		trigger = {
+			has_variable = qing_revenue_fitness
+			var:qing_revenue_fitness < 40
+		}
+		# failed intervention: currency stress INCREASES
+		QING_DECLINE_nudge = { var = qing_currency_stress  amount = 5 }
+		add_country_modifier = { name = qing_silver_crisis_botched  duration = 1825 }
+		# minister's reputation collapses
+		scope:revenue_minister = {
+			add_loyalty = loyalty_qing_estranged
+			QING_char_promote_standing = { pop = -15  prom = -5 }
+		}
+		LOG_line = { sys = QING  msg = "revenue: silver crisis botched (+currency stress, minister discredited) for [ROOT.GetTag]" }
+	}
+
+	# OPTION D: do nothing (stress continues to rise)
+	option = {
+		name = "qing_revenue.3.d"
+		custom_tooltip = "qing_revenue.3.d.tt"
+		QING_DECLINE_nudge = { var = qing_currency_stress  amount = 3 }
+		LOG_line = { sys = QING  msg = "revenue: silver crisis unaddressed (+currency stress) for [ROOT.GetTag]" }
+	}
+}
+
+# ======================================================================
+# qing_revenue.4 — TREASURY AUDIT (uncovering embezzled land-tax)
+# When corruption is high, the Revenue minister conducts a treasury audit.
+# Uncover embezzlement (recover funds, fire the culprits, corruption down) or
+# find nothing (the graft is too well-hidden, or the minister is complicit).
+# ======================================================================
+qing_revenue.4 = {
+	type = country_event
+	title = "qing_revenue.4.t"
+	desc = "qing_revenue.4.desc"
+	picture = senate_debate
+	left_portrait = root.current_ruler
+	right_portrait = scope:revenue_minister
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_revenue_holder
+		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+		has_variable = qing_corruption_level
+		var:qing_corruption_level >= 40
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_revenue.4 (treasury audit) [ROOT.GetTag]" }
+		var:qing_office_revenue_holder = { save_scope_as = revenue_minister }
+		set_variable = { name = qing_revenue_task  value = flag:oversight }
+		QING_revenue_assess_fitness = { task = oversight }
+	}
+
+	# OPTION A: uncover embezzlement (minister honest, corruption down)
+	option = {
+		name = "qing_revenue.4.a"
+		custom_tooltip = "qing_revenue.4.a.tt"
+		trigger = {
+			has_variable = qing_revenue_fitness
+			var:qing_revenue_fitness >= 55
+		}
+		# recover embezzled funds
+		add_treasury = 70
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -10 }
+		add_country_modifier = { name = qing_treasury_audit_success  duration = 1825 }
+		# but this makes powerful enemies
+		scope:revenue_minister = {
+			add_loyalty = loyalty_qing_congenial
+			QING_char_promote_standing = { pop = -12  prom = 10 }
+		}
+		LOG_line = { sys = QING  msg = "revenue: treasury audit uncovered embezzlement (+treasury, -corruption, minister made enemies) for [ROOT.GetTag]" }
+	}
+
+	# OPTION B: find nothing (audit blocked, minister complicit or intimidated)
+	option = {
+		name = "qing_revenue.4.b"
+		custom_tooltip = "qing_revenue.4.b.tt"
+		trigger = {
+			has_variable = qing_revenue_fitness
+			var:qing_revenue_fitness < 55
+		}
+		# graft persists, minister's reputation suffers
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 3 }
+		scope:revenue_minister = {
+			QING_char_corruption = { amount = 10 }
+			QING_char_promote_standing = { pop = -8  prom = -3 }
+		}
+		LOG_line = { sys = QING  msg = "revenue: treasury audit found nothing (graft persists, minister tainted) for [ROOT.GetTag]" }
+	}
+
+	# OPTION C: partial recovery (minister finds some graft, but not all)
+	option = {
+		name = "qing_revenue.4.c"
+		custom_tooltip = "qing_revenue.4.c.tt"
+		add_treasury = 35
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -3 }
+		LOG_line = { sys = QING  msg = "revenue: treasury audit partial recovery (+35 treasury, -3 corruption) for [ROOT.GetTag]" }
+	}
+}

@@ -1,0 +1,254 @@
+########################################################################
+# se_QING_REVENUE.txt — the Grand Minister of Revenue (戶部) domain.
+#
+# The 戶部 (Ministry of Revenue) held the imperial fisc: the census, land tax,
+# the salt gabelle (鹽政 — a vast revenue source riddled with patronage), and
+# the ever-normal granaries (常平倉, grain reserves for price stabilisation).
+# The 19thC silver crisis (銀荒/銀貴錢賤 — silver draining out via opium, copper-
+# cash inflation ruining taxpayers) was THE fiscal emergency of the era.
+#
+# This suite reuses the EXISTING granary building (add_building_level on
+# qing_granary_building in Yellow River provinces) and the EXISTING currency-
+# stress counter (qing_currency_stress, bands at 30/60). It does NOT duplicate
+# parallel state — the Revenue holder acts ON the concrete objects and counters
+# already in the decline engine.
+#
+# Coupling: a capable, honest, high-finesse Revenue minister keeps the salt
+# gabelle honest (income buff), stocks the granaries (unrest control via the
+# concrete building), and can act against the silver crisis (nudge currency
+# stress down). A venal or vacant office lets salt graft and currency stress
+# worsen. Uses QING_pair_friction for governor/tax-commissioner charge coupling.
+#
+# State (all on CHI):
+#   qing_office_revenue_holder    the character (se_QING_COUNCIL.txt)
+#   qing_salt_gabelle_reformed     0/1 flag: has the salt monopoly been cleaned up
+#   qing_revenue_event_cooldown    days: throttle the revenue events
+#
+# Character-scope marks (on the Revenue holder):
+#   (reuses qing_office_held from se_QING_COUNCIL.txt)
+#
+# Prefix = QING_revenue_ / sys = QING
+# Task #124
+########################################################################
+
+# ======================================================================
+# QUARTERLY REVENUE PULSE — called from QING_GOV_pulse (quarterly cadence).
+# Checks the Revenue holder's state and offers the domain events (salt gabelle,
+# granary, silver crisis, treasury audit) on a throttled roll. A vacant office
+# lets the domain drift (salt graft up, currency stress up, granaries neglected).
+# ======================================================================
+QING_revenue_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_revenue_pulse" }
+
+	# If the office is VACANT, let the domain drift negatively.
+	if = {
+		limit = { NOT = { has_variable = qing_office_revenue_holder } }
+		# salt gabelle: without oversight, graft entrenches (+corruption)
+		if = {
+			limit = {
+				has_variable = qing_salt_gabelle_reformed
+				var:qing_salt_gabelle_reformed = 1
+			}
+			QING_DECLINE_nudge = { var = qing_corruption_level  amount = 1 }
+			LOG_line = { sys = QING  msg = "revenue: office vacant -> salt gabelle oversight lapses (+corruption) for [ROOT.GetTag]" }
+		}
+		# silver crisis: without a capable minister, currency stress worsens
+		if = {
+			limit = {
+				has_variable = qing_currency_stress
+				var:qing_currency_stress >= 20
+			}
+			QING_DECLINE_nudge = { var = qing_currency_stress  amount = 1 }
+			LOG_line = { sys = QING  msg = "revenue: office vacant -> silver crisis unmanaged (+currency stress) for [ROOT.GetTag]" }
+		}
+	}
+	# Office filled: offer the domain events on a throttled roll.
+	else_if = {
+		limit = {
+			has_variable = qing_office_revenue_holder
+			var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+			NOT = { has_variable = qing_revenue_event_cooldown }
+		}
+		set_variable = { name = qing_revenue_event_cooldown  days = 270 }  # ~3 quarters
+		random = {
+			chance = 40
+			random_list = {
+				# salt gabelle reform (鹽政): revenue vs patronage trade-off
+				20 = {
+					trigger = {
+						NOT = { has_variable = qing_salt_gabelle_reformed }
+					}
+					trigger_event = { id = qing_revenue.1  days = { 5 20 } }
+				}
+				# granary stocking (常平倉): a good harvest lets you build reserves
+				15 = {
+					trigger = {
+						# can only stock granaries if we have the capacity (Yellow River
+						# provinces with cities and free building slots)
+						any_owned_province = {
+							OR = {
+								province_id = 7229    # 北京
+								province_id = 7230    # 天津
+								province_id = 7234    # 保定
+								province_id = 1    # 開封
+								province_id = 7235    # 濟南
+							}
+							has_city_status = yes
+						}
+					}
+					trigger_event = { id = qing_revenue.2  days = { 5 20 } }
+				}
+				# silver crisis response (銀荒): can the minister act?
+				20 = {
+					trigger = {
+						has_variable = qing_currency_stress
+						var:qing_currency_stress >= 30
+					}
+					trigger_event = { id = qing_revenue.3  days = { 5 20 } }
+				}
+				# treasury audit (uncovering embezzled land-tax)
+				15 = {
+					trigger = {
+						has_variable = qing_corruption_level
+						var:qing_corruption_level >= 40
+					}
+					trigger_event = { id = qing_revenue.4  days = { 5 20 } }
+				}
+			}
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_revenue_pulse"  result = OK }
+}
+
+# ======================================================================
+# HELPER: assess the Revenue holder's fitness for a given task.
+# Writes a 0..100 score into qing_revenue_fitness based on the holder's:
+#   - finesse (the core skill for fiscal administration)
+#   - honesty/just traits vs corrupt trait
+#   - numeric corruption stat
+#   - loyalty (a disloyal minister won't act for the throne's interest)
+# $task$ = "fiscal" (general finance), "oversight" (anti-corruption), or "crisis"
+# (decisive action under pressure). Scope: country.
+# ======================================================================
+QING_revenue_assess_fitness = {
+	LOG_enter = { sys = QING  fn = "QING_revenue_assess_fitness" }
+	set_variable = { name = qing_revenue_fitness  value = 50 }
+
+	if = {
+		limit = {
+			has_variable = qing_office_revenue_holder
+			var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+		}
+		var:qing_office_revenue_holder = {
+			# FINESSE is the core skill (administrator's gift)
+			ROOT = {
+				change_variable = { name = qing_revenue_fitness  add = prev.finesse }
+				change_variable = { name = qing_revenue_fitness  subtract = 5 }
+			}
+			# HONESTY vs CORRUPTION
+			if = {
+				limit = { OR = { has_trait = honest  has_trait = just } }
+				ROOT = { change_variable = { name = qing_revenue_fitness  add = 15 } }
+			}
+			if = {
+				limit = { has_trait = corrupt }
+				ROOT = { change_variable = { name = qing_revenue_fitness  subtract = 20 } }
+			}
+			if = {
+				limit = { corruption >= 40 }
+				ROOT = { change_variable = { name = qing_revenue_fitness  subtract = 15 } }
+			}
+			else_if = {
+				limit = { corruption >= 20 }
+				ROOT = { change_variable = { name = qing_revenue_fitness  subtract = 8 } }
+			}
+			# LOYALTY: a disloyal minister won't act for the throne
+			if = {
+				limit = { loyalty < 40 }
+				ROOT = { change_variable = { name = qing_revenue_fitness  subtract = 20 } }
+			}
+			else_if = {
+				limit = { loyalty >= 70 }
+				ROOT = { change_variable = { name = qing_revenue_fitness  add = 10 } }
+			}
+			# TASK-SPECIFIC adjustments
+			# "oversight" (anti-corruption) demands high honesty
+			if = {
+				limit = { ROOT.var:qing_revenue_task = flag:oversight }
+				if = {
+					limit = { OR = { has_trait = honest  has_trait = just } }
+					ROOT = { change_variable = { name = qing_revenue_fitness  add = 10 } }
+				}
+				if = {
+					limit = { has_trait = corrupt }
+					ROOT = { change_variable = { name = qing_revenue_fitness  subtract = 15 } }
+				}
+			}
+			# "crisis" (decisive action) demands high finesse + martial (nerve)
+			else_if = {
+				limit = { ROOT.var:qing_revenue_task = flag:crisis }
+				ROOT = {
+					change_variable = { name = qing_revenue_fitness  add = prev.martial }
+					change_variable = { name = qing_revenue_fitness  subtract = 5 }
+				}
+			}
+		}
+	}
+	# clamp 0..100
+	if = { limit = { var:qing_revenue_fitness > 100 }  set_variable = { name = qing_revenue_fitness  value = 100 } }
+	if = { limit = { var:qing_revenue_fitness < 0 }    set_variable = { name = qing_revenue_fitness  value = 0 } }
+
+	LOG_line = { sys = QING  msg = "revenue fitness ($task$) = [ROOT.MakeScope.GetVariable('qing_revenue_fitness').GetValue|0] for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_revenue_assess_fitness"  result = OK }
+}
+
+# ======================================================================
+# CONCRETE: stock a granary in a Yellow River province (常平倉).
+# Adds a qing_granary_building via add_building_level in a suitable province
+# (city-status, Yellow River core). Scope: country.
+# ======================================================================
+QING_revenue_stock_granary = {
+	LOG_enter = { sys = QING  fn = "QING_revenue_stock_granary" }
+	# Pick the first suitable Yellow River province and add the building.
+	random_owned_province = {
+		limit = {
+			OR = {
+				province_id = 7229    # 北京
+				province_id = 7230    # 天津
+				province_id = 7234    # 保定
+				province_id = 1       # 開封
+				province_id = 7235    # 濟南
+			}
+			has_city_status = yes
+		}
+		add_building_level = qing_granary_building
+		save_scope_as = granary_province
+		LOG_line = { sys = QING  msg = "revenue: stocked granary (building +1) at [scope:granary_province.GetName] for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_revenue_stock_granary"  result = OK }
+}
+
+# ======================================================================
+# CONCRETE: deplete a granary (famine draws down the reserves).
+# Removes a qing_granary_building from a Yellow River province that has one.
+# Scope: country.
+# ======================================================================
+QING_revenue_deplete_granary = {
+	LOG_enter = { sys = QING  fn = "QING_revenue_deplete_granary" }
+	random_owned_province = {
+		limit = {
+			OR = {
+				province_id = 7229
+				province_id = 7230
+				province_id = 7234
+				province_id = 1
+				province_id = 7235
+			}
+			num_of_building = { building = qing_granary_building  value >= 1 }
+		}
+		remove_building_level = qing_granary_building
+		save_scope_as = depleted_province
+		LOG_line = { sys = QING  msg = "revenue: depleted granary (building -1) at [scope:depleted_province.GetName] for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_revenue_deplete_granary"  result = OK }
+}

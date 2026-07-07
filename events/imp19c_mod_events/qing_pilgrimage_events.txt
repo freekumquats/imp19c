@@ -1,0 +1,294 @@
+########################################################################
+# qing_pilgrimage_events.txt — THE MONGOL → TIBETAN PILGRIMAGE CHAIN (#114).
+#
+# Tibetan Buddhism (藏傳佛教, Gelug/Yellow-Hat) was the ideological cement of
+# Qing Inner Asia. The Mongols were devout adherents; the throne cultivated
+# the faith deliberately (Qianlong styled himself a patron of the Dalai and
+# Panchen Lamas). A Mongol noble's pilgrimage to Tibet (Lhasa, Jokhang,
+# Potala) or to the imperial temples at 承德 Chengde / 多倫 Dolonnor was both
+# an act of devotion and a thread of loyalty running back to Peking, which
+# controlled the routes and the recognition of reincarnations (金瓶掣籤 Golden
+# Urn, instituted 1793). This chain models a Mongol pilgrim's journey and the
+# throne's chance to turn devotion into allegiance — or see it turn elsewhere.
+#
+# Historical anchor: the 1780 visit of the Third Panchen Lama to Chengde (the
+# Qianlong emperor's 70th birthday); Mongol pilgrimage routes as imperial
+# control infrastructure; Russian encroachment over the Buryat/Khalkha
+# (late-19th-century separatism seed, but present as a latent threat).
+#
+# Sources: Max Oidtmann, *Forging the Golden Urn* (2018); Qianlong's patronage
+# of Tibetan Buddhism as Inner Asian statecraft; the 外八廟 (Eight Outer
+# Temples) at Chengde as pilgrimage destinations.
+#
+# Namespace = qing_pilgrimage
+########################################################################
+
+namespace = qing_pilgrimage
+
+########################################################################
+# .1  A MONGOL NOBLE SETS OUT ON PILGRIMAGE — the opening.
+# A Mongol courtier (found or created) announces his intention to journey to
+# Lhasa (or Chengde). The throne chooses: sponsor the pilgrimage (prestige +
+# gold cost → loyalty + devotion-thread), stay aloof (neutral), or block it
+# (sect_pressure spike, resentment).
+########################################################################
+qing_pilgrimage.1 = {
+	type = country_event
+	title = "qing_pilgrimage.1.t"
+	desc = "qing_pilgrimage.1.desc"
+	picture = religious_rite
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:pilgrim
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		# not already mid-pilgrimage (self-guard against re-entry)
+		NOT = { has_variable = qing_pilgrimage_active }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_pilgrimage.1 (Mongol pilgrimage opens) [ROOT.GetTag]" }
+		# find or create the Mongol pilgrim
+		QING_pilgrim_find_or_create = yes
+		# mark pilgrimage active (will be cleared at chain end)
+		set_variable = { name = qing_pilgrimage_active  value = 1 }
+		# save pilgrim to country var so later events can reference him
+		set_variable = { name = qing_pilgrim_char  value = scope:pilgrim }
+	}
+
+	# --- Sponsor the pilgrimage — prestige + gold, bind the pilgrim ------
+	option = {
+		name = "qing_pilgrimage.1.sponsor"
+		custom_tooltip = "qing_pilgrimage.1.sponsor.tt"
+		trigger = { treasury >= 50 }
+		add_treasury = -50
+		scope:pilgrim = { QING_pilgrim_sponsor = yes }
+		# the journey continues (fire the en-route incident)
+		trigger_event = { id = qing_pilgrimage.2  days = { 40 80 } }
+	}
+
+	# --- Stay aloof — acknowledge but do not leverage ------------------
+	option = {
+		name = "qing_pilgrimage.1.aloof"
+		custom_tooltip = "qing_pilgrimage.1.aloof.tt"
+		QING_pilgrim_aloof = yes
+		# the journey continues, but unsponsored (en-route incident)
+		trigger_event = { id = qing_pilgrimage.2  days = { 40 80 } }
+	}
+
+	# --- Block the pilgrimage — suppress the journey --------------------
+	option = {
+		name = "qing_pilgrimage.1.suppress"
+		custom_tooltip = "qing_pilgrimage.1.suppress.tt"
+		scope:pilgrim = { QING_pilgrim_suppress = yes }
+		# chain ends here (no en-route event; pilgrimage aborted)
+		trigger_event = { id = qing_pilgrimage.5  days = 5 }
+	}
+}
+
+########################################################################
+# .2  EN ROUTE INCIDENT — bandits / rival overture / sectarian tension.
+# The pilgrim passes through the dependency. An incident tests the throne's
+# reach: bandits threaten the caravan, or a Russian envoy approaches the
+# Buryat pilgrim, or a rival sect challenges the Gelug pilgrim.
+########################################################################
+qing_pilgrimage.2 = {
+	type = country_event
+	title = "qing_pilgrimage.2.t"
+	desc = "qing_pilgrimage.2.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:pilgrim
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_pilgrimage_active
+		# pilgrim still alive and employed
+		has_variable = qing_pilgrim_char
+		var:qing_pilgrim_char = { is_alive = yes  employer = ROOT }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_pilgrimage.2 (en route incident) [ROOT.GetTag]" }
+		# restore pilgrim scope from saved var
+		var:qing_pilgrim_char = { save_scope_as = pilgrim }
+	}
+
+	# --- Dispatch a guard / amban escort — gold cost, secure the route ---
+	option = {
+		name = "qing_pilgrimage.2.guard"
+		custom_tooltip = "qing_pilgrimage.2.guard.tt"
+		trigger = { treasury >= 30 }
+		add_treasury = -30
+		# securing the route affirms the throne's reach (prestige, sect_pressure relief)
+		current_ruler = { add_prestige = 10 }
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -3 }
+		# pilgrim arrives safely (proceed to arrival event)
+		trigger_event = { id = qing_pilgrimage.3  days = { 30 60 } }
+	}
+
+	# --- Let the pilgrim proceed on his own — free, but risky ------------
+	option = {
+		name = "qing_pilgrimage.2.proceed"
+		custom_tooltip = "qing_pilgrimage.2.proceed.tt"
+		# pilgrim proceeds unguarded (arrival event, but with a strained tone)
+		trigger_event = { id = qing_pilgrimage.3  days = { 30 60 } }
+	}
+
+	# --- A rival power makes an overture — Russia to a Buryat pilgrim ----
+	option = {
+		name = "qing_pilgrimage.2.rival"
+		custom_tooltip = "qing_pilgrimage.2.rival.tt"
+		trigger = {
+			exists = c:RUS
+			# only if the pilgrim is Buryat (the Russian Mongols)
+			scope:pilgrim = { has_culture = buryat }
+		}
+		# the Russian overture pulls devotion away from Peking
+		scope:pilgrim = { QING_pilgrim_rival_overture = yes }
+		# chain ends here (devotion lost to rival)
+		trigger_event = { id = qing_pilgrimage.5  days = 5 }
+	}
+}
+
+########################################################################
+# .3  ARRIVAL & AUDIENCE — Lhasa / Chengde / the Golden Urn blessing.
+# The pilgrim reaches the pilgrimage site (Potala, Jokhang, or the imperial
+# temples at Chengde). The throne can grant recognition (a title / lama's
+# blessing / Golden Urn legitimacy), bind the pilgrim fully, and spread the
+# throne's prestige among the Mongols. Or the throne can treat it as a
+# formality and gain little.
+########################################################################
+qing_pilgrimage.3 = {
+	type = country_event
+	title = "qing_pilgrimage.3.t"
+	desc = "qing_pilgrimage.3.desc"
+	picture = religious_rite
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:pilgrim
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_pilgrimage_active
+		has_variable = qing_pilgrim_char
+		var:qing_pilgrim_char = { is_alive = yes  employer = ROOT }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_pilgrimage.3 (arrival & audience) [ROOT.GetTag]" }
+		var:qing_pilgrim_char = { save_scope_as = pilgrim }
+	}
+
+	# --- Grand recognition — Golden Urn / lama's blessing / title --------
+	option = {
+		name = "qing_pilgrimage.3.recognize"
+		custom_tooltip = "qing_pilgrimage.3.recognize.tt"
+		trigger = { political_influence >= 15 }
+		add_political_influence = -15
+		scope:pilgrim = {
+			# bind the pilgrim as a concrete loyal thread
+			QING_char_bind = yes
+			add_loyalty = loyalty_qing_elevated
+			# honour the family (prestige, standing)
+			QING_char_honour_family = { amount = 50 }
+			add_popularity = 15
+		}
+		# the throne, patron of the faith, spreads prestige among Mongols
+		current_ruler = { add_prestige = 30 }
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -10 }
+		# the return journey (long-term payoff event)
+		trigger_event = { id = qing_pilgrimage.4  days = { 60 120 } }
+	}
+
+	# --- Formal audience — acknowledge, but no special favour -------------
+	option = {
+		name = "qing_pilgrimage.3.formal"
+		custom_tooltip = "qing_pilgrimage.3.formal.tt"
+		# modest prestige, modest sect_pressure relief
+		current_ruler = { add_prestige = 10 }
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -4 }
+		# the return journey (less binding)
+		trigger_event = { id = qing_pilgrimage.4  days = { 60 120 } }
+	}
+}
+
+########################################################################
+# .4  RETURN & LONG-TERM — the pilgrim returns, the thread persists or fades.
+# A well-received pilgrim spreads the throne's prestige; a loyal Mongol
+# notable remains bound. If the throne was aloof, the devotion fades. This
+# event is the payoff / long-term consequence node.
+########################################################################
+qing_pilgrimage.4 = {
+	type = country_event
+	title = "qing_pilgrimage.4.t"
+	desc = "qing_pilgrimage.4.desc"
+	picture = senate
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:pilgrim
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_pilgrimage_active
+		has_variable = qing_pilgrim_char
+		var:qing_pilgrim_char = { is_alive = yes  employer = ROOT }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_pilgrimage.4 (return & long-term) [ROOT.GetTag]" }
+		var:qing_pilgrim_char = { save_scope_as = pilgrim }
+	}
+
+	# --- The thread holds — a loyal Mongol notable bound to the throne ---
+	option = {
+		name = "qing_pilgrimage.4.bind"
+		custom_tooltip = "qing_pilgrimage.4.bind.tt"
+		# the pilgrim becomes a lasting asset (loyalty, power_base via loyal veterans)
+		scope:pilgrim = {
+			add_loyalty = loyalty_qing_congenial
+			# a clientele of Mongol adherents (門生故吏 idiom, reused from keju)
+			add_loyal_veterans = 4
+		}
+		# the throne's prestige among Mongols (stability bonus)
+		add_stability = 1
+		# chain ends cleanly
+		trigger_event = { id = qing_pilgrimage.5  days = 5 }
+	}
+
+	# --- The devotion fades — neither bound nor hostile, just neutral -----
+	option = {
+		name = "qing_pilgrimage.4.fade"
+		custom_tooltip = "qing_pilgrimage.4.fade.tt"
+		# no lasting bond, modest sect_pressure creep (faith not leveraged)
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = 3 }
+		# chain ends
+		trigger_event = { id = qing_pilgrimage.5  days = 5 }
+	}
+}
+
+########################################################################
+# .5  CLEANUP — clear pilgrimage-active flag. Silent housekeeping event.
+########################################################################
+qing_pilgrimage.5 = {
+	type = country_event
+	hidden = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_pilgrimage.5 (cleanup) [ROOT.GetTag]" }
+		if = { limit = { has_variable = qing_pilgrimage_active }  remove_variable = qing_pilgrimage_active }
+		if = { limit = { has_variable = qing_pilgrim_char }  remove_variable = qing_pilgrim_char }
+	}
+}

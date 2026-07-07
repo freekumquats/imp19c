@@ -1,0 +1,426 @@
+########################################################################
+# qing_war_events.txt — Grand Minister of War (兵部) officer management events.
+#
+# The 兵部 administered the Green Standard Army, military examinations (武舉),
+# and officer appointments. These events reflect the War minister's oversight
+# of army and navy commanders, and the 19th-century danger of regional armies
+# whose commanders answered to their patrons, not the throne.
+#
+# Namespace: qing_war
+########################################################################
+
+namespace = qing_war
+
+# ======================================================================
+# qing_war.1 — OFFICER REVIEW / PROMOTION BOARD
+# A capable War minister convenes a board to review field commanders: reward
+# the able, cashier the negligent. Outcomes gated on the War minister's martial.
+# ======================================================================
+qing_war.1 = {
+	type = country_event
+	title = "qing_war.1.t"
+	desc = "qing_war.1.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+	right_portrait = scope:war_minister
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_war_holder
+		var:qing_office_war_holder = { is_alive = yes  employer = ROOT }
+		# at least one commander to review (martial >= 8, power_base >= 1)
+		any_character = {
+			employer = ROOT
+			is_alive = yes
+			is_adult = yes
+			is_ruler = no
+			martial >= 8
+			power_base >= 1
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_war.1 (officer review board) [ROOT.GetTag]" }
+		var:qing_office_war_holder = { save_scope_as = war_minister }
+		# find a capable commander to reward
+		ordered_character = {
+			limit = {
+				employer = ROOT
+				is_alive = yes
+				is_adult = yes
+				is_ruler = no
+				martial >= 8
+				power_base >= 1
+				loyalty >= 50
+			}
+			order_by = martial
+			check_range_bounds = no
+			max = 1
+			save_scope_as = able_commander
+		}
+		# find a negligent or disloyal commander to cashier
+		random_character = {
+			limit = {
+				employer = ROOT
+				is_alive = yes
+				is_adult = yes
+				is_ruler = no
+				martial >= 8
+				power_base >= 1
+				OR = {
+					loyalty < 40
+					martial < 6
+				}
+			}
+			save_scope_as = negligent_commander
+		}
+	}
+
+	# Option A: Reward the able commander (requires War minister martial >= 10)
+	option = {
+		name = "qing_war.1.a"
+		trigger = {
+			exists = scope:able_commander
+			scope:war_minister = { martial >= 10 }
+		}
+		custom_tooltip = "qing_war.1.a.tt"
+		scope:able_commander = {
+			QING_char_cultivate = { stat = martial  amount = 2 }
+			add_loyalty = loyalty_qing_congenial
+			QING_char_endow = { amount = 50 }
+			add_character_modifier = { name = qing_war_commended_officer  duration = 1825 }
+		}
+		add_political_influence = -20
+	}
+
+	# Option B: Cashier the negligent commander (requires War minister martial >= 8)
+	option = {
+		name = "qing_war.1.b"
+		trigger = {
+			exists = scope:negligent_commander
+			scope:war_minister = { martial >= 8 }
+		}
+		custom_tooltip = "qing_war.1.b.tt"
+		scope:negligent_commander = {
+			add_loyalty = loyalty_qing_estranged
+			# strip some of the officer's power base (disbanding part of his force)
+			add_loyal_veterans = -3
+			add_character_modifier = { name = qing_war_cashiered_officer  duration = 1825 }
+		}
+		# a purge strains the officer corps
+		add_country_modifier = { name = qing_war_officer_purge  duration = 1825 }
+	}
+
+	# Option C: A general review (no specific action, modest benefit)
+	option = {
+		name = "qing_war.1.c"
+		custom_tooltip = "qing_war.1.c.tt"
+		add_country_modifier = { name = qing_war_general_review  duration = 1825 }
+		add_legitimacy = 5
+	}
+}
+
+# ======================================================================
+# qing_war.2 — COMMANDER TOO CLOSE TO HIS TROOPS (warlord danger)
+# A commander has grown too close to his own troops (personal loyalty / warlord
+# danger). Reads qing_pair_friction and the commander's power_base. Options:
+# recall, promote to office, or watch.
+# ======================================================================
+qing_war.2 = {
+	type = country_event
+	title = "qing_war.2.t"
+	desc = "qing_war.2.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+	right_portrait = scope:wayward_commander
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		# at least one commander with significant power_base and low loyalty
+		any_character = {
+			employer = ROOT
+			is_alive = yes
+			is_adult = yes
+			is_ruler = no
+			martial >= 8
+			power_base >= 8
+			loyalty < 50
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_war.2 (wayward commander) [ROOT.GetTag]" }
+		# find the most dangerous wayward commander (high power_base, low loyalty)
+		ordered_character = {
+			limit = {
+				employer = ROOT
+				is_alive = yes
+				is_adult = yes
+				is_ruler = no
+				martial >= 8
+				power_base >= 8
+				loyalty < 50
+			}
+			order_by = power_base
+			check_range_bounds = no
+			max = 1
+			save_scope_as = wayward_commander
+		}
+		# if War minister exists, score friction
+		if = {
+			limit = {
+				has_variable = qing_office_war_holder
+				var:qing_office_war_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_war_holder = { save_scope_as = war_minister }
+			QING_pair_friction = { a = scope:war_minister  b = scope:wayward_commander }
+		}
+	}
+
+	# Option A: Recall the commander and disband his force (defuses the threat)
+	option = {
+		name = "qing_war.2.a"
+		custom_tooltip = "qing_war.2.a.tt"
+		scope:wayward_commander = {
+			# strip the commander's personal power base (disband the regional army)
+			add_loyal_veterans = -6
+			add_loyalty = loyalty_qing_estranged
+			add_character_modifier = { name = qing_war_recalled_commander  duration = 1825 }
+		}
+		# recalling a powerful commander strains stability
+		add_stability = -10
+		add_tyranny = 5
+	}
+
+	# Option B: Promote him to a great office (if vacant; binds him to the court)
+	option = {
+		name = "qing_war.2.b"
+		trigger = {
+			scope:wayward_commander = { NOT = { has_variable = qing_office_held } }
+			OR = {
+				NOT = { has_variable = qing_office_war_holder }
+				NOT = { has_variable = qing_office_works_holder }
+				NOT = { has_variable = qing_office_censor_holder }
+			}
+		}
+		custom_tooltip = "qing_war.2.b.tt"
+		scope:wayward_commander = {
+			QING_office_appoint_first_vacant = yes
+			# promotion to court binds him closer to the throne
+			QING_char_bind = yes
+		}
+		add_political_influence = -15
+	}
+
+	# Option C: Watch and wait (gamble that he remains loyal)
+	option = {
+		name = "qing_war.2.c"
+		custom_tooltip = "qing_war.2.c.tt"
+		scope:wayward_commander = {
+			# his loyalty drifts further
+			add_loyalty = loyalty_qing_estranged
+			# and his power base grows
+			add_loyal_veterans = 2
+			add_character_modifier = { name = qing_war_unmonitored_commander  duration = 1825 }
+		}
+		# watching a warlord seed grow is a risk
+		# [#118 integ-fix] agent referenced a non-existent counter qing_military_strain;
+		# redirect to qing_greenstandard_decay (seeded in QING_DECLINE_init, the closest
+		# fit for Green-Standard / regional-army warlordism strain).
+		QING_DECLINE_nudge = { var = qing_greenstandard_decay  amount = 5 }
+	}
+}
+
+# ======================================================================
+# qing_war.3 — NAVAL / ARMY COMMISSION DECISION
+# The War minister recommends a new fleet or army commission. Gated on the
+# minister's martial skill and the realm's treasury. Grants a concrete legion
+# or navy.
+# ======================================================================
+qing_war.3 = {
+	type = country_event
+	title = "qing_war.3.t"
+	desc = "qing_war.3.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+	right_portrait = scope:war_minister
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_war_holder
+		var:qing_office_war_holder = { is_alive = yes  employer = ROOT }
+		treasury >= 150
+		# not already at war (peacetime expansion)
+		is_at_war = no
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_war.3 (commission decision) [ROOT.GetTag]" }
+		var:qing_office_war_holder = { save_scope_as = war_minister }
+	}
+
+	# Option A: Commission a new army (costs treasury, raises legion)
+	option = {
+		name = "qing_war.3.a"
+		trigger = {
+			scope:war_minister = { martial >= 10 }
+		}
+		custom_tooltip = "qing_war.3.a.tt"
+		add_treasury = -150
+		if = {
+			limit = { exists = capital_scope }
+			capital_scope = {
+				state.governorship = {
+					raise_legion = {
+						create_unit = {
+							name = "New Army Commission"
+							location = ROOT.capital_scope
+							sub_unit = regular_infantry
+							add_subunit = regular_infantry
+							add_subunit = regular_infantry
+						}
+					}
+				}
+			}
+			LOG_line = { sys = QING  msg = "new army commissioned under War minister [scope:war_minister.GetName] for [ROOT.GetTag]" }
+		}
+		add_country_modifier = { name = qing_war_army_expansion  duration = 1825 }
+	}
+
+	# Option B: Commission a naval squadron (costs treasury, raises navy)
+	option = {
+		name = "qing_war.3.b"
+		trigger = {
+			scope:war_minister = { martial >= 12 }
+		}
+		custom_tooltip = "qing_war.3.b.tt"
+		add_treasury = -180
+		if = {
+			limit = { exists = capital_scope }
+			capital_scope = {
+				state.governorship = {
+					raise_legion = {
+						create_unit = {
+							name = "New Naval Squadron"
+							location = ROOT.capital_scope
+							navy = yes
+							sub_unit = trireme
+							add_subunit = trireme
+						}
+					}
+				}
+			}
+			LOG_line = { sys = QING  msg = "new naval squadron commissioned under War minister [scope:war_minister.GetName] for [ROOT.GetTag]" }
+		}
+		add_country_modifier = { name = qing_war_naval_expansion  duration = 1825 }
+	}
+
+	# Option C: Decline (save treasury)
+	option = {
+		name = "qing_war.3.c"
+		custom_tooltip = "qing_war.3.c.tt"
+		scope:war_minister = {
+			# disappointed minister loses loyalty
+			add_loyalty = loyalty_qing_estranged
+		}
+	}
+}
+
+# ======================================================================
+# qing_war.4 — MILITARY-EXAMINATION (武舉) INTAKE
+# A military-examination cycle recruits fresh officers when the War office is
+# strong. Adds capable courtiers to the court (the examination system's
+# meritocratic face for the military).
+# ======================================================================
+qing_war.4 = {
+	type = country_event
+	title = "qing_war.4.t"
+	desc = "qing_war.4.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+	right_portrait = scope:war_minister
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_war_holder
+		var:qing_office_war_holder = { is_alive = yes  employer = ROOT }
+		treasury >= 50
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_war.4 (military-examination) [ROOT.GetTag]" }
+		var:qing_office_war_holder = { save_scope_as = war_minister }
+	}
+
+	# Option A: Fund the full examination cycle (2-3 new officers)
+	option = {
+		name = "qing_war.4.a"
+		trigger = {
+			scope:war_minister = { martial >= 12  finesse >= 8 }
+		}
+		custom_tooltip = "qing_war.4.a.tt"
+		add_treasury = -80
+		# create 2-3 capable martial courtiers (examination graduates)
+		create_character = {
+			culture = ROOT.primary_culture
+			religion = ROOT.religion
+			age = 25
+			martial = 8
+			finesse = 6
+			charisma = 5
+			zeal = 5
+		}
+		create_character = {
+			culture = han
+			religion = ROOT.religion
+			age = 26
+			martial = 9
+			finesse = 5
+			charisma = 6
+			zeal = 5
+		}
+		random = {
+			chance = 50
+			create_character = {
+				culture = han
+				religion = ROOT.religion
+				age = 24
+				martial = 10
+				finesse = 7
+				charisma = 4
+				zeal = 6
+			}
+		}
+		add_country_modifier = { name = qing_war_examination_success  duration = 1825 }
+		LOG_line = { sys = QING  msg = "military-examination produced fresh officers under War minister [scope:war_minister.GetName] for [ROOT.GetTag]" }
+	}
+
+	# Option B: A modest intake (1 officer)
+	option = {
+		name = "qing_war.4.b"
+		custom_tooltip = "qing_war.4.b.tt"
+		add_treasury = -50
+		create_character = {
+			culture = han
+			religion = ROOT.religion
+			age = 25
+			martial = 8
+			finesse = 6
+			charisma = 5
+			zeal = 5
+		}
+		add_country_modifier = { name = qing_war_examination_modest  duration = 1095 }
+	}
+
+	# Option C: Defer the examination (save treasury)
+	option = {
+		name = "qing_war.4.c"
+		custom_tooltip = "qing_war.4.c.tt"
+		# deferring the examination disappoints officer candidates
+		add_stability = -5
+	}
+}

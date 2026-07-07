@@ -1,0 +1,189 @@
+########################################################################
+# se_QING_JUSTICE.txt — the Grand Minister of Justice (刑部) content domain.
+#
+# BUILD #125: penal code (大清律例), autumn assizes (秋審), appeals (京控).
+#
+# The 刑部 (Board of Punishments) was the empire's high court and keeper of the
+# penal code. A capable, just Justice minister means the law is applied evenly
+# (unrest down, stability up), the appeal backlog is cleared, and the autumn
+# assizes are conducted fairly. A venal or vacant office means arbitrary justice
+# and festering grievances (unrest up). Events in qing_justice_events.txt bring
+# this domain alive.
+#
+# Operates on REUSED global counters (stability, legitimacy, unrest) and on REAL
+# characters where a case involves a named official. The Justice minister is
+# judged on global unrest (QING_acc_metric_unrest) in se_QING_ACCOUNTABILITY.txt.
+#
+# Called from flavour-roll dispatcher (se_QING_DECLINE.txt). CHI-only, player-only.
+# se_LOG: sys = QING throughout per the standing rule.
+# Prefix = QING_justice_
+########################################################################
+
+# ======================================================================
+# TOP-LEVEL JUSTICE-DOMAIN PULSE — quarterly or event-triggered. Country scope
+# (ROOT = CHI). Checks Justice holder quality, applies drift when vacant or
+# corrupt, and may queue justice-domain events. A capable, just, high-zeal
+# Justice minister suppresses unrest via the existing office modifier
+# (qing_office_justice_active: global_unrest -1, global_monthly_state_loyalty).
+# A vacant or venal office lets arbitrary justice fester (unrest up).
+# ======================================================================
+QING_justice_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_justice_pulse" }
+	
+	# --- Judge the Justice holder: capable & honest vs vacant/venal ---
+	if = {
+		limit = {
+			has_variable = qing_office_justice_holder
+			var:qing_office_justice_holder = {
+				is_alive = yes
+				employer = ROOT
+				zeal >= 8
+				NOT = { has_trait = corrupt }
+				NOT = { corruption >= 30 }
+			}
+		}
+		# A just, zealous Justice minister: the law is evenly applied. Add small
+		# unrest suppression beyond the office's standing modifier (via stability).
+		add_stability = 5
+		LOG_line = { sys = QING  msg = "justice pulse: capable just holder ([var:qing_office_justice_holder.GetName]) — law evenly applied (+stability) for [ROOT.GetTag]" }
+	}
+	else_if = {
+		limit = {
+			has_variable = qing_office_justice_holder
+			var:qing_office_justice_holder = {
+				is_alive = yes
+				employer = ROOT
+				OR = {
+					has_trait = corrupt
+					corruption >= 40
+				}
+			}
+		}
+		# A venal Justice minister: arbitrary justice breeds resentment. Unrest up
+		# via QING_DECLINE_nudge on the accountability counter (reuse, don't double-count).
+		if = {
+			limit = { any_owned_province = { count >= 1  province_unrest < 8 } }
+			random_owned_province = {
+				limit = { province_unrest < 8 }
+				add_province_modifier = { name = qing_justice_arbitrary  duration = 1825 }
+			}
+		}
+		LOG_line = { sys = QING  msg = "justice pulse: venal holder ([var:qing_office_justice_holder.GetName]) — arbitrary justice (unrest via province modifier) for [ROOT.GetTag]" }
+	}
+	else = {
+		# Vacant or incapable: the law drifts. Small unrest/stability penalty.
+		add_stability = -3
+		LOG_line = { sys = QING  msg = "justice pulse: vacant/weak holder — law drifts (-stability) for [ROOT.GetTag]" }
+	}
+	
+	LOG_exit = { sys = QING  fn = "QING_justice_pulse"  result = OK }
+}
+
+# ======================================================================
+# JUSTICE-DOMAIN EVENT VERBS — called from events in qing_justice_events.txt.
+# These are the CONCRETE effects of just vs arbitrary justice.
+# ======================================================================
+
+# Conduct a fair Autumn Assize (秋審) — capital-case review. Temper justice with
+# mercy. Country scope; the Justice holder should be saved as scope:justice_minister.
+QING_justice_fair_assize = {
+	LOG_enter = { sys = QING  fn = "QING_justice_fair_assize" }
+	add_legitimacy = 5
+	add_stability = 10
+	add_country_modifier = { name = qing_justice_merciful_assize  duration = 1825 }
+	if = {
+		limit = { exists = scope:justice_minister }
+		scope:justice_minister = {
+			QING_char_promote_standing = { pop = 3  prom = 2 }
+		}
+	}
+	LOG_line = { sys = QING  msg = "justice: fair autumn assize conducted (legitimacy, stability, mercy modifier) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_justice_fair_assize"  result = OK }
+}
+
+# Apply the full rigor of the code — deterrence over mercy. Country scope.
+QING_justice_harsh_assize = {
+	LOG_enter = { sys = QING  fn = "QING_justice_harsh_assize" }
+	add_country_modifier = { name = qing_justice_harsh_code  duration = 1825 }
+	add_tyranny = 3
+	if = {
+		limit = { exists = scope:justice_minister }
+		scope:justice_minister = {
+			add_popularity = -5
+		}
+	}
+	LOG_line = { sys = QING  msg = "justice: harsh assize — full rigor applied (order, tyranny) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_justice_harsh_assize"  result = OK }
+}
+
+# Revise the penal code (大清律例) — modernize / clarify. Country scope.
+QING_justice_codify = {
+	LOG_enter = { sys = QING  fn = "QING_justice_codify" }
+	add_country_modifier = { name = qing_justice_code_revised  duration = 3650 }
+	add_legitimacy = 3
+	if = {
+		limit = { exists = scope:justice_minister }
+		scope:justice_minister = {
+			QING_char_promote_standing = { pop = 4  prom = 5 }
+		}
+	}
+	LOG_line = { sys = QING  msg = "justice: penal code revised (code_revised modifier, legitimacy) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_justice_codify"  result = OK }
+}
+
+# Vindicate an appellant (京控) — punish the corrupt local official. Operates on
+# a REAL saved character scope:corrupt_official. Country scope.
+QING_justice_vindicate_appeal = {
+	LOG_enter = { sys = QING  fn = "QING_justice_vindicate_appeal" }
+	if = {
+		limit = { exists = scope:corrupt_official  scope:corrupt_official = { is_alive = yes  employer = ROOT } }
+		scope:corrupt_official = {
+			QING_char_taint = yes
+			add_loyalty = loyalty_qing_disgraced
+			add_popularity = -10
+			# strip office if he holds one (proven dispatch idiom)
+			if = {
+				limit = { has_variable = qing_office_held }
+				QING_office_vacate_dispatch = yes
+			}
+		}
+		LOG_line = { sys = QING  msg = "justice: appellant vindicated — [scope:corrupt_official.GetName] punished (tainted, disgraced, stripped if office-holder) for [ROOT.GetTag]" }
+	}
+	# unrest down in a province
+	if = {
+		limit = { any_owned_province = { count >= 1  province_unrest >= 2 } }
+		random_owned_province = {
+			limit = { province_unrest >= 2 }
+			add_province_modifier = { name = qing_justice_appeal_vindicated  duration = 1825 }
+		}
+	}
+	add_legitimacy = 3
+	if = {
+		limit = { exists = scope:justice_minister }
+		scope:justice_minister = {
+			QING_char_promote_standing = { pop = 3  prom = 2 }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_justice_vindicate_appeal"  result = OK }
+}
+
+# Protect the official (京控 denied) — shield the magistrate, suppress the appeal.
+QING_justice_deny_appeal = {
+	LOG_enter = { sys = QING  fn = "QING_justice_deny_appeal" }
+	if = {
+		limit = { any_owned_province = { count >= 1  province_unrest < 8 } }
+		random_owned_province = {
+			limit = { province_unrest < 8 }
+			add_province_modifier = { name = qing_justice_appeal_denied  duration = 1825 }
+		}
+	}
+	add_tyranny = 2
+	if = {
+		limit = { exists = scope:corrupt_official  scope:corrupt_official = { is_alive = yes  employer = ROOT } }
+		scope:corrupt_official = {
+			add_loyalty = loyalty_qing_commended
+		}
+	}
+	LOG_line = { sys = QING  msg = "justice: appeal denied — official protected (unrest up, tyranny) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_justice_deny_appeal"  result = OK }
+}

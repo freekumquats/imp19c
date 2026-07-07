@@ -1,0 +1,339 @@
+########################################################################
+# qing_censorate_events.txt — Grand Inspector of the Censorate (都察院) content.
+#
+# The Censorate's impeachment, remonstrance, and surveillance machinery. These
+# events extend qing_office.2 (the existing censor impeachment) with NAMED
+# CHARACTER impeachments (find a real venal courtier, act on HIM concretely),
+# remonstrance against the throne itself, surveillance reports exposing
+# factional networks, and the captured censorate (weaponized for purges).
+#
+# Fires quarterly from QING_frontier_flavour_roll (se_QING_DECLINE.txt),
+# weighted by corruption level and whether the Censor office is filled.
+#
+# Historical anchor: the 都察院 御史 / 言官 impeached venal ministers however
+# highly placed (Heshen escaped scrutiny only while Qianlong shielded him;
+# Jiaqing purged him the day after Qianlong's death). A captured or cowed
+# censorate was the sign a dynasty had lost its internal checks.
+#
+# CHI player-only. All logged to sys = QING.
+# Namespace = qing_censorate
+########################################################################
+
+namespace = qing_censorate
+
+########################################################################
+# .1  IMPEACH A NAMED CORRUPT OFFICIAL  (彈劾)
+# The Censor-in-Chief impeaches a SPECIFIC venal courtier or office-holder
+# (picked by corruption stat + corrupt trait + disloyalty). The throne upholds
+# (cleanse the man, corruption down, office vacated if held) or suppresses
+# (corruption up, tyranny). DIFFERENT from qing_office.2 (which is generic);
+# this one acts on a REAL named character found by QING_censorate_find_corrupt.
+# Pair friction: a censor who clashes with the impeached (qing_pair_friction)
+# presses harder (described in desc/options).
+########################################################################
+qing_censorate.1 = {
+	type = country_event
+	title = "qing_censorate.1.t"
+	desc = "qing_censorate.1.desc"
+	picture = senate_debate
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:qing_censorate_target
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_censor_holder
+		var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
+		any_character = {
+			employer = ROOT
+			is_ruler = no
+			is_adult = yes
+			is_alive = yes
+			NOT = { has_variable = qing_rebel_foil }
+			OR = {
+				corruption >= 30
+				has_trait = corrupt
+				loyalty < 40
+			}
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_censorate.1 (impeach named official) [ROOT.GetTag]" }
+		QING_censorate_find_corrupt = yes
+		if = {
+			limit = { exists = scope:qing_censorate_target }
+			# score friction between censor and target (transient, not stored per-pair)
+			var:qing_office_censor_holder = { save_scope_as = censor_holder }
+			QING_pair_friction = { a = scope:censor_holder  b = scope:qing_censorate_target }
+		}
+	}
+
+	# --- Uphold the impeachment (cleanse the accused, corruption down) ------
+	option = {
+		name = "qing_censorate.1.a"
+		custom_tooltip = "qing_censorate.1.a.tt"
+		QING_censorate_impeach = { outcome = uphold }
+		add_stability = 1
+		# censorate emboldened
+		add_country_modifier = { name = qing_censorate_vigilant  duration = 1825 }
+	}
+
+	# --- Exonerate the accused (censorate chastened, target spared) ---------
+	option = {
+		name = "qing_censorate.1.b"
+		custom_tooltip = "qing_censorate.1.b.tt"
+		if = {
+			limit = { exists = scope:qing_censorate_target }
+			scope:qing_censorate_target = {
+				add_loyalty = loyalty_qing_indulged
+				add_popularity = 10
+			}
+		}
+		if = {
+			limit = { exists = scope:censor_holder }
+			scope:censor_holder = {
+				add_loyalty = loyalty_qing_estranged
+				add_popularity = -15
+			}
+		}
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 3 }
+		add_tyranny = 2
+	}
+
+	# --- Suppress the memorial; punish the censor for insolence -------------
+	option = {
+		name = "qing_censorate.1.c"
+		custom_tooltip = "qing_censorate.1.c.tt"
+		QING_censorate_impeach = { outcome = suppress }
+		if = {
+			limit = { exists = scope:censor_holder }
+			# the censor himself is disgraced
+			scope:censor_holder = {
+				QING_office_vacate_dispatch = yes
+				add_loyalty = loyalty_qing_disgraced
+				add_popularity = -30
+			}
+		}
+		# add a "cowed censorate" debuff
+		add_country_modifier = { name = qing_censorate_cowed  duration = 1825 }
+	}
+}
+
+########################################################################
+# .2  REMONSTRANCE AGAINST THE THRONE  (言官直諫)
+# A censor criticizes IMPERIAL POLICY itself (not a courtier, but the throne).
+# The emperor heeds it (legitimacy/reform) or punishes the censor (tyranny,
+# chilled oversight). Fires when corruption OR reform pressure is high.
+########################################################################
+qing_censorate.2 = {
+	type = country_event
+	title = "qing_censorate.2.t"
+	desc = "qing_censorate.2.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:censor_holder
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_censor_holder
+		var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
+		OR = {
+			AND = { has_variable = qing_corruption_level  var:qing_corruption_level >= 40 }
+			AND = { has_variable = qing_reform_pressure  var:qing_reform_pressure >= 50 }
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_censorate.2 (remonstrance against throne) [ROOT.GetTag]" }
+		var:qing_office_censor_holder = { save_scope_as = censor_holder }
+	}
+
+	# --- Heed the remonstrance (legitimacy/reform, censor praised) ----------
+	option = {
+		name = "qing_censorate.2.a"
+		custom_tooltip = "qing_censorate.2.a.tt"
+		add_legitimacy = 5
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -5 }
+		scope:censor_holder = {
+			add_loyalty = loyalty_qing_commended
+			add_popularity = 20
+			QING_char_promote_standing = { pop = 10  prom = 8 }
+		}
+		add_stability = 1
+	}
+
+	# --- Rebuke the censor privately (middle path) --------------------------
+	option = {
+		name = "qing_censorate.2.b"
+		custom_tooltip = "qing_censorate.2.b.tt"
+		scope:censor_holder = {
+			add_loyalty = loyalty_qing_estranged
+			add_popularity = -10
+		}
+		add_tyranny = 1
+	}
+
+	# --- Punish the censor for lèse-majesté (tyranny, chilled oversight) ----
+	option = {
+		name = "qing_censorate.2.c"
+		custom_tooltip = "qing_censorate.2.c.tt"
+		scope:censor_holder = {
+			QING_office_vacate_dispatch = yes
+			add_loyalty = loyalty_qing_disgraced
+			add_popularity = -25
+			QING_char_taint = yes
+		}
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
+		add_tyranny = 5
+		add_country_modifier = { name = qing_censorate_cowed  duration = 3650 }
+	}
+}
+
+########################################################################
+# .3  SURVEILLANCE REPORT: A FACTIONAL NETWORK EXPOSED  (廠衛偵緝)
+# A censor's investigation uncovers a factional network (a clique of corrupt
+# officials). Act decisively (purge the network, corruption down) or let it
+# lie (corruption festers, but no tyranny). Fires when corruption is high.
+########################################################################
+qing_censorate.3 = {
+	type = country_event
+	title = "qing_censorate.3.t"
+	desc = "qing_censorate.3.desc"
+	picture = senate_debate
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:censor_holder
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_censor_holder
+		var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
+		has_variable = qing_corruption_level
+		var:qing_corruption_level >= 50
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_censorate.3 (factional network exposed) [ROOT.GetTag]" }
+		var:qing_office_censor_holder = { save_scope_as = censor_holder }
+	}
+
+	# --- Purge the network (corruption down, tyranny, stability) ------------
+	option = {
+		name = "qing_censorate.3.a"
+		custom_tooltip = "qing_censorate.3.a.tt"
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -10 }
+		add_tyranny = 3
+		add_stability = -1
+		# censor praised for exposing the rot
+		scope:censor_holder = {
+			add_loyalty = loyalty_qing_commended
+			add_popularity = 15
+		}
+		add_country_modifier = { name = qing_censorate_vigilant  duration = 1825 }
+	}
+
+	# --- Investigate further (no immediate action, mild reform pressure down)
+	option = {
+		name = "qing_censorate.3.b"
+		custom_tooltip = "qing_censorate.3.b.tt"
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -3 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -2 }
+	}
+
+	# --- Let it lie (the network survives, corruption festers) --------------
+	option = {
+		name = "qing_censorate.3.c"
+		custom_tooltip = "qing_censorate.3.c.tt"
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
+		scope:censor_holder = {
+			add_loyalty = loyalty_qing_estranged
+			add_popularity = -10
+		}
+	}
+}
+
+########################################################################
+# .4  THE CENSORATE CAPTURED  (朋黨清洗)
+# When corruption is VERY high AND the censorate itself is filled, the
+# censorate has been weaponized for factional purges dressed as anti-corruption.
+# The throne can break the captured censorate (vacate the censor, corruption
+# down but tyranny) or let the purge proceed (corruption shifts sideways,
+# tyranny spikes). Fires only at extreme corruption (>=70).
+########################################################################
+qing_censorate.4 = {
+	type = country_event
+	title = "qing_censorate.4.t"
+	desc = "qing_censorate.4.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:censor_holder
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_censor_holder
+		var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
+		has_variable = qing_corruption_level
+		var:qing_corruption_level >= 70
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_censorate.4 (censorate captured for factional purge) [ROOT.GetTag]" }
+		var:qing_office_censor_holder = { save_scope_as = censor_holder }
+	}
+
+	# --- Break the captured censorate (vacate censor, corruption down) ------
+	option = {
+		name = "qing_censorate.4.a"
+		custom_tooltip = "qing_censorate.4.a.tt"
+		scope:censor_holder = {
+			QING_office_vacate_dispatch = yes
+			add_loyalty = loyalty_qing_disgraced
+			add_popularity = -30
+		}
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -8 }
+		add_tyranny = 4
+		add_stability = -1
+	}
+
+	# --- Let the factional purge proceed (tyranny spikes, corruption sideways)
+	option = {
+		name = "qing_censorate.4.b"
+		custom_tooltip = "qing_censorate.4.b.tt"
+		# corruption shifts but doesn't fall (one faction purged, another rises)
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 3 }
+		add_tyranny = 6
+		add_stability = -2
+		scope:censor_holder = {
+			add_loyalty = loyalty_qing_indulged
+			add_popularity = 20
+		}
+		add_country_modifier = { name = qing_censorate_captured  duration = 3650 }
+	}
+
+	# --- Dissolve the censorate entirely (extreme tyranny, unrest) ----------
+	option = {
+		name = "qing_censorate.4.c"
+		custom_tooltip = "qing_censorate.4.c.tt"
+		scope:censor_holder = {
+			QING_office_vacate_dispatch = yes
+			add_loyalty = loyalty_qing_disgraced
+		}
+		# permanently vacate the office (no autofill for a generation)
+		QING_office_vacate = { office = censor }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 10 }
+		add_tyranny = 10
+		add_stability = -3
+		add_country_modifier = { name = qing_censorate_dissolved  duration = 7300 }
+	}
+}

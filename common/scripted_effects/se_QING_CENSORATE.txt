@@ -1,0 +1,150 @@
+########################################################################
+# se_QING_CENSORATE.txt — Grand Inspector of the Censorate (都察院) domain.
+#
+# The Censorate (都察院) and its investigating censors (御史/言官) are the
+# dynasty's chief internal check on venality — they impeach corrupt officials
+# and remonstrate even with the throne. A fearless, honest, high-finesse
+# Censor-in-Chief drives down corruption and exposes venal characters; a
+# captured or vacant censorate lets corruption fester. Events in
+# qing_censorate_events.txt fire quarterly from the accountability pulse when
+# the censorate is active (or failing).
+#
+# Integrates with:
+#   • se_QING_ACCOUNTABILITY.txt: the Censor office-holder is judged on
+#     var:qing_corruption_level (lines 179-191).
+#   • se_QING_AFFINITY.txt: QING_char_taint / QING_char_cleanse, pair_friction.
+#   • se_QING_COUNCIL.txt: office-holder stored in qing_office_censor_holder.
+#   • qing_office_events.txt: qing_office.2 (a censor's impeachment) already
+#     exists; the NEW events in qing_censorate_events.txt extend it with
+#     named-character impeachments, remonstrance, surveillance reports, and
+#     factional capture (the weaponized censorate).
+#
+# PREFIX = QING_censorate_
+# CHI player-only. All logged to sys = QING.
+########################################################################
+
+# ======================================================================
+# CENSORATE PULSE — called quarterly from QING_GOV_pulse alongside the
+# accountability sweep. If the office is FILLED, the holder's character
+# (finesse + has_trait honest/just + loyalty) gates the censorate's vigor:
+# a capable, honest, loyal Censor drives down corruption and surfaces venal
+# characters for impeachment; a weak or absent one lets corruption creep.
+# If the office is VACANT, corruption drifts upward unchecked.
+# ======================================================================
+QING_censorate_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_censorate_pulse" }
+	if = {
+		limit = {
+			has_variable = qing_office_censor_holder
+			var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
+		}
+		# Censor is in place: score his effectiveness from character traits
+		var:qing_office_censor_holder = {
+			save_scope_as = censor_holder
+			# finesse (the censor's governing skill) + honesty/justice traits + loyalty
+			ROOT = {
+				set_variable = { name = qing_censorate_vigor  value = 0 }
+				# finesse contribution (0..15 scaled from 0..10, mid=7.5)
+				set_variable = { name = qing_cens_fin  value = scope:censor_holder.finesse }
+				change_variable = { name = qing_cens_fin  multiply = 1.5 }
+				change_variable = { name = qing_censorate_vigor  add = var:qing_cens_fin }
+				# honesty / justice traits (+10 each)
+				if = { limit = { scope:censor_holder = { has_trait = honest } }  change_variable = { name = qing_censorate_vigor  add = 10 } }
+				if = { limit = { scope:censor_holder = { has_trait = just } }    change_variable = { name = qing_censorate_vigor  add = 10 } }
+				# loyalty (>=65 +8, <40 -8)
+				if = { limit = { scope:censor_holder = { loyalty >= 65 } }  change_variable = { name = qing_censorate_vigor  add = 8 } }
+				else_if = { limit = { scope:censor_holder = { loyalty < 40 } }  change_variable = { name = qing_censorate_vigor  subtract = 8 } }
+				# clamp 0..50 (high vigor = fearless censorate)
+				if = { limit = { var:qing_censorate_vigor < 0 }   set_variable = { name = qing_censorate_vigor  value = 0 } }
+				if = { limit = { var:qing_censorate_vigor > 50 } set_variable = { name = qing_censorate_vigor  value = 50 } }
+			}
+		}
+		LOG_line = { sys = QING  msg = "censorate pulse: vigor=[ROOT.MakeScope.GetVariable('qing_censorate_vigor').GetValue|0] (censor [scope:censor_holder.GetName]) for [ROOT.GetTag]" }
+		# high vigor -> corruption down; low -> corruption creeps
+		if = {
+			limit = { var:qing_censorate_vigor >= 30 }
+			QING_DECLINE_nudge = { var = qing_corruption_level  amount = -3 }
+		}
+		else_if = {
+			limit = { var:qing_censorate_vigor <= 10 }
+			QING_DECLINE_nudge = { var = qing_corruption_level  amount = 2 }
+		}
+	}
+	else = {
+		# VACANT office: corruption drifts unchecked
+		LOG_line = { sys = QING  msg = "censorate pulse: VACANT office, corruption drifts for [ROOT.GetTag]" }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 3 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_censorate_pulse"  result = OK }
+}
+
+# ======================================================================
+# FIND CORRUPT CHARACTER — search for a REAL venal courtier or office-holder
+# (concrete face of corruption) and save as scope:qing_censorate_target.
+# Picks the MOST corrupt character who is not already marked as a rebel foil.
+# Called from events that impeach or surveil. Country scope.
+# ======================================================================
+QING_censorate_find_corrupt = {
+	LOG_enter = { sys = QING  fn = "QING_censorate_find_corrupt" }
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_ruler = no
+			is_adult = yes
+			is_alive = yes
+			NOT = { has_variable = qing_rebel_foil }
+			OR = {
+				corruption >= 30
+				has_trait = corrupt
+				loyalty < 40
+			}
+		}
+		order_by = corruption
+		check_range_bounds = no
+		max = 1
+		save_scope_as = qing_censorate_target
+	}
+	if = {
+		limit = { exists = scope:qing_censorate_target }
+		LOG_line = { sys = QING  msg = "censorate target found: [scope:qing_censorate_target.GetName] (corruption=[scope:qing_censorate_target.MakeScope.GetVariable('corruption').GetValue|0]) for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_censorate_find_corrupt"  reason = "no corrupt character found for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_censorate_find_corrupt"  result = OK }
+}
+
+# ======================================================================
+# IMPEACH CHARACTER — act on a named corrupt official. $outcome$ = uphold
+# (cleanse + corruption down) OR suppress (corruption up + tyranny). Called
+# from events with scope:qing_censorate_target already saved. Country scope.
+# ======================================================================
+QING_censorate_impeach = {
+	LOG_enter = { sys = QING  fn = "QING_censorate_impeach" }
+	if = {
+		limit = { NOT = { exists = scope:qing_censorate_target } }
+		LOG_fail = { sys = QING  fn = "QING_censorate_impeach"  reason = "no target scope for [ROOT.GetTag]" }
+	}
+	else = {
+		if = {
+			limit = { always = $outcome$ = uphold }
+			# uphold the impeachment: cleanse the target, corruption down
+			scope:qing_censorate_target = {
+				QING_char_cleanse = yes
+				add_loyalty = loyalty_qing_disgraced
+				add_popularity = -20
+				# if he holds a great office, vacate it (disgraced officials lose their posts)
+				if = { limit = { has_variable = qing_office_held }  QING_office_vacate_dispatch = yes }
+			}
+			QING_DECLINE_nudge = { var = qing_corruption_level  amount = -6 }
+			LOG_line = { sys = QING  msg = "censorate impeachment UPHELD: [scope:qing_censorate_target.GetName] cleansed, corruption down for [ROOT.GetTag]" }
+		}
+		else = {
+			# suppress the impeachment: corruption up, tyranny
+			QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
+			add_tyranny = 3
+			LOG_line = { sys = QING  msg = "censorate impeachment SUPPRESSED: corruption up for [ROOT.GetTag]" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_censorate_impeach"  result = OK }
+}

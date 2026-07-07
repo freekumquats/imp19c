@@ -1,0 +1,104 @@
+########################################################################
+# se_QING_GREATGAME.txt — the GREAT GAME / ZONGLI YAMEN coupling (#108).
+#
+# The Zongli Yamen (總理衙門, founded 1861) was the Qing's proto-foreign-ministry.
+# This couples the office to the Great Game EXACTLY like the other office-couplings
+# (see se_QING_ACCOUNTABILITY.txt):
+#   • the Zongli holder's skill/loyalty GATES the outcomes+costs of foreign-affairs
+#     events — a capable holder dampens GP tension / wins concessions;
+#   • a vacant office = foreign affairs DRIFT (tension creeps up);
+#   • the office is judged on its realm metric (the qing_gp_tension_* counters).
+#
+# The quarterly pulse (QING_greatgame_pulse) reads the Zongli holder and nudges the
+# tension counters; events (qing_greatgame_events.txt) provide the drama. The panel
+# (qing_greatgame.gui) surfaces the rivalry state to the player.
+#
+# Called from QING_GOV_pulse (se_QING_COUNCIL.txt) alongside accountability.
+# Prefix = QING_greatgame_
+# se_LOG: sys = QING throughout per the standing rule.
+########################################################################
+
+# ======================================================================
+# QUARTERLY PULSE — read the Zongli holder and nudge the tension counters.
+# A capable + loyal holder nudges tension DOWN (skilled diplomacy dampens the
+# powers' enmity); a vacant / weak holder lets tension drift UP (the powers press
+# their advantage). Country scope (ROOT = CHI).
+#
+# This is the SAME accountability-pulse idiom as QING_accountability_pulse: the
+# holder's character gates the outcome. The realm metric the Zongli is judged on
+# is the mean GP tension — see QING_acc_metric_foreign in se_QING_ACCOUNTABILITY.txt.
+# This pulse moves the counters; the accountability pulse judges the holder.
+# ======================================================================
+QING_greatgame_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_greatgame_pulse" }
+	# init the three GP counters if missing (same guard as QING_gp_init)
+	if = { limit = { NOT = { has_variable = qing_gp_tension_britain } }  set_variable = { name = qing_gp_tension_britain  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_gp_tension_france } }   set_variable = { name = qing_gp_tension_france   value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_gp_tension_russia } }   set_variable = { name = qing_gp_tension_russia   value = 0 } }
+
+	if = {
+		# The Zongli Yamen is filled — read the holder and score his suitability.
+		limit = {
+			has_variable = qing_office_zongli_holder
+			var:qing_office_zongli_holder = { is_alive = yes  employer = ROOT }
+		}
+		var:qing_office_zongli_holder = { save_scope_as = qing_gg_zongli }
+		# A capable + loyal holder dampens tension (the powers respect a formidable
+		# counterpart). Capability: finesse + charisma (diplomatic arts); loyalty:
+		# he serves the throne, not the powers.
+		if = {
+			limit = {
+				scope:qing_gg_zongli = {
+					loyalty >= 50
+					trigger_if = {
+						limit = { has_attribute = finesse }
+						finesse >= 7
+					}
+					trigger_else = { finesse >= 5 }
+					trigger_if = {
+						limit = { has_attribute = charisma }
+						charisma >= 7
+					}
+					trigger_else = { charisma >= 5 }
+				}
+			}
+			# A skilled diplomat LOWERS tension across the board (以夷制夷 executed
+			# by an able hand). The affinity spine is used where a concrete diplomat
+			# character is involved in an event (see qing_greatgame_events.txt).
+			QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = -4 }
+			QING_DECLINE_nudge = { var = qing_gp_tension_france   amount = -4 }
+			QING_DECLINE_nudge = { var = qing_gp_tension_russia   amount = -4 }
+			LOG_line = { sys = QING  msg = "greatgame pulse: able Zongli holder [scope:qing_gg_zongli.GetName] dampens tension for [ROOT.GetTag]" }
+		}
+		else_if = {
+			# A weak / disloyal holder is a liability: the powers sense the weakness
+			# and press harder. Tension rises.
+			limit = {
+				scope:qing_gg_zongli = {
+					OR = {
+						loyalty < 50
+						finesse < 5
+						charisma < 5
+					}
+				}
+			}
+			QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = 2 }
+			QING_DECLINE_nudge = { var = qing_gp_tension_france   amount = 2 }
+			QING_DECLINE_nudge = { var = qing_gp_tension_russia   amount = 2 }
+			LOG_line = { sys = QING  msg = "greatgame pulse: weak Zongli holder [scope:qing_gg_zongli.GetName] lets tension rise for [ROOT.GetTag]" }
+		}
+		# else: a middling holder — tension neither rises nor falls (the ordinary
+		# run of government; the baseline is already the passive monthly cooling in
+		# QING_gp_apply_bands, so no nudge here).
+	}
+	else = {
+		# The Zongli Yamen is VACANT — foreign affairs drift (the powers press their
+		# advantage when there is no steady hand). Tension rises across the board.
+		QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = 3 }
+		QING_DECLINE_nudge = { var = qing_gp_tension_france   amount = 3 }
+		QING_DECLINE_nudge = { var = qing_gp_tension_russia   amount = 3 }
+		LOG_line = { sys = QING  msg = "greatgame pulse: Zongli Yamen VACANT — foreign affairs drift for [ROOT.GetTag]" }
+	}
+
+	LOG_exit = { sys = QING  fn = "QING_greatgame_pulse"  result = OK }
+}

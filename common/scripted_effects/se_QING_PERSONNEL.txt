@@ -1,0 +1,271 @@
+########################################################################
+# se_QING_PERSONNEL.txt — the Grand Minister of Personnel (吏部尚書) governing
+# the provincial officialdom. The 吏部 controlled appointment, evaluation (考課),
+# and promotion of the entire civil service; the triennial 大計 reviewed
+# provincial officials (governors, treasurers), and the 京察 reviewed
+# metropolitan ones. Governors (總督/巡撫) were the Personnel minister's
+# most important charges.
+#
+# COUPLING-FAMILY MODEL: the Personnel holder's skill/loyalty GATES outcomes
+# and costs in governor-evaluation events; governors join the character-affinity
+# chart via QING_pair_friction with the holder; a VACANT Personnel office = the
+# governorates drift without oversight.
+#
+# State (CHI country):
+#   qing_office_personnel_holder         the character holding the office (se_QING_COUNCIL.txt)
+#   qing_personnel_daji_last_year        year of the last 大計 review (triennial guard)
+#
+# Prefix = QING_personnel_
+########################################################################
+
+# ======================================================================
+# EVALUATE GOVERNORS — quarterly pulse called from QING_GOV_pulse.
+# Iterate every governor (character with is_governor = yes) in CHI's employ,
+# score each against the Personnel office-holder via QING_pair_friction AND
+# against the throne via QING_char_affinity. A capable, loyal Personnel
+# minister + a congenial governor = the governor is cultivated (loyalty/
+# standing up, maybe finesse). A vacant Personnel office OR a clashing pair
+# = the governor drifts (loyalty risk, a chance to queue an evaluation event).
+# O(governors), quarterly. All derefs guarded.
+# ======================================================================
+QING_personnel_evaluate_governors = {
+	LOG_enter = { sys = QING  fn = "QING_personnel_evaluate_governors" }
+	
+	# guard: only CHI, only if governors exist
+	if = {
+		limit = {
+			tag = CHI
+			any_character = {
+				count >= 1
+				employer = ROOT
+				is_governor = yes
+				is_alive = yes
+			}
+		}
+		
+		# iterate every governor in the realm
+		every_character = {
+			limit = {
+				employer = ROOT
+				is_governor = yes
+				is_alive = yes
+			}
+			save_scope_as = the_governor
+			
+			# CASE A: Personnel office FILLED
+			if = {
+				limit = {
+					ROOT = {
+						has_variable = qing_office_personnel_holder
+						var:qing_office_personnel_holder = {
+							is_alive = yes
+							employer = ROOT
+						}
+					}
+				}
+				ROOT.var:qing_office_personnel_holder = { save_scope_as = the_minister }
+				
+				# score friction between the Personnel minister and this governor
+				ROOT = {
+					QING_pair_friction = { a = scope:the_minister  b = scope:the_governor }
+				}
+				
+				# LOW FRICTION (<40): they cooperate — minister cultivates the governor
+				if = {
+					limit = { ROOT = { var:qing_pair_friction < 40 } }
+					# capable minister (finesse>=9) + congenial governor = effective cultivation
+					if = {
+						limit = { scope:the_minister = { finesse >= 9 } }
+						add_loyalty = 3
+						# if the governor is also compatible with the throne, promote his standing
+						QING_char_affinity = yes
+						if = {
+							limit = { var:qing_char_affinity >= 60 }
+							QING_char_promote_standing = { pop = 2  prom = 1 }
+							# a talented governor under a strong minister may gain administrative skill
+							random = {
+								chance = 15
+								QING_char_cultivate = { stat = finesse  amount = 1 }
+							}
+						}
+						ROOT = {
+							LOG_line = { sys = QING  msg = "personnel: [scope:the_governor.GetName] cultivated by able minister [scope:the_minister.GetName] (friction=[ROOT.MakeScope.GetVariable('qing_pair_friction').GetValue|0]) for [ROOT.GetTag]" }
+						}
+					}
+					else = {
+						# weaker minister (finesse<9) — modest loyalty hold
+						add_loyalty = 1
+						ROOT = {
+							LOG_line = { sys = QING  msg = "personnel: [scope:the_governor.GetName] maintained by weaker minister [scope:the_minister.GetName] for [ROOT.GetTag]" }
+						}
+					}
+				}
+				# HIGH FRICTION (>=40): they clash — risk of recall or drift
+				else = {
+					# check if the governor is loyal to the throne regardless
+					QING_char_affinity = yes
+					if = {
+						limit = { var:qing_char_affinity >= 65 }
+						# loyal governor buffers the clash
+						ROOT = {
+							LOG_line = { sys = QING  msg = "personnel: [scope:the_governor.GetName] clashes with minister [scope:the_minister.GetName] but loyal to throne (friction=[ROOT.MakeScope.GetVariable('qing_pair_friction').GetValue|0]) for [ROOT.GetTag]" }
+						}
+					}
+					else = {
+						# neither congenial with minister nor loyal to throne = drift risk
+						add_loyalty = -2
+						# chance to queue a recall/clash event (10% per quarter when friction is high)
+						random = {
+							chance = 10
+							ROOT = {
+								trigger_event = {
+									id = qing_personnel.2
+									days = { 30 90 }
+								}
+								LOG_line = { sys = QING  msg = "personnel: clash event queued (governor [scope:the_governor.GetName] vs minister [scope:the_minister.GetName]) for [ROOT.GetTag]" }
+							}
+						}
+						ROOT = {
+							LOG_line = { sys = QING  msg = "personnel: [scope:the_governor.GetName] drifts (clashes with minister [scope:the_minister.GetName], friction=[ROOT.MakeScope.GetVariable('qing_pair_friction').GetValue|0]) for [ROOT.GetTag]" }
+						}
+					}
+				}
+			}
+			# CASE B: Personnel office VACANT
+			else = {
+				# no oversight = governors drift
+				QING_char_affinity = yes
+				if = {
+					limit = { var:qing_char_affinity < 50 }
+					# uncongenial governors grow more independent without a Personnel minister
+					add_loyalty = -1
+					# small chance of a "provincial official ambition" event
+					random = {
+						chance = 5
+						ROOT = {
+							trigger_event = {
+								id = qing_personnel.3
+								days = { 30 90 }
+							}
+						}
+					}
+					ROOT = {
+						LOG_line = { sys = QING  msg = "personnel: [scope:the_governor.GetName] drifts without Personnel oversight for [ROOT.GetTag]" }
+					}
+				}
+				else = {
+					# congenial governors hold steady even without a minister
+					ROOT = {
+						LOG_line = { sys = QING  msg = "personnel: [scope:the_governor.GetName] holds steady (no Personnel minister, but loyal) for [ROOT.GetTag]" }
+					}
+				}
+			}
+		}
+	}
+	else = {
+		LOG_line = { sys = QING  msg = "personnel: no governors to evaluate for [ROOT.GetTag]" }
+	}
+	
+	LOG_exit = { sys = QING  fn = "QING_personnel_evaluate_governors"  result = OK }
+}
+
+# ======================================================================
+# 大計 TRIENNIAL REVIEW — the event-called effect for the Great Reckoning.
+# Called from qing_personnel.1 (the 大計 event). Country scope, CHI.
+# Rewards able governors, cashiers venal ones, promotes talent based on the
+# Personnel holder's finesse. Iterates governors; O(governors).
+# ======================================================================
+QING_personnel_daji_review = {
+	LOG_enter = { sys = QING  fn = "QING_personnel_daji_review" }
+	
+	# mark the year of this 大計
+	if = {
+		limit = { NOT = { has_variable = qing_personnel_daji_last_year } }
+		set_variable = { name = qing_personnel_daji_last_year  value = 1815 }
+	}
+	set_variable = { name = qing_personnel_daji_last_year  value = current_date.year }
+	
+	# iterate every governor, scoring and applying outcomes
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_governor = yes
+			is_alive = yes
+		}
+		save_scope_as = reviewed_governor
+		
+		# score the governor on governing skill (finesse + martial, the administrator/pacifier)
+		set_variable = { name = qing_daji_score  value = finesse }
+		change_variable = { name = qing_daji_score  add = martial }
+		
+		# ABLE governors (score >= 16) are rewarded
+		if = {
+			limit = { var:qing_daji_score >= 16 }
+			QING_char_promote_standing = { pop = 3  prom = 2 }
+			add_loyalty = 5
+			# if Personnel office filled + minister is capable, the reward is richer
+			if = {
+				limit = {
+					ROOT = {
+						has_variable = qing_office_personnel_holder
+						var:qing_office_personnel_holder = {
+							is_alive = yes
+							employer = ROOT
+							finesse >= 9
+						}
+					}
+				}
+				QING_char_honour_family = { amount = 10 }
+				ROOT = {
+					LOG_line = { sys = QING  msg = "大計: able governor [scope:reviewed_governor.GetName] (score=[scope:reviewed_governor.MakeScope.GetVariable('qing_daji_score').GetValue|0]) rewarded under strong Personnel minister for [ROOT.GetTag]" }
+				}
+			}
+			else = {
+				ROOT = {
+					LOG_line = { sys = QING  msg = "大計: able governor [scope:reviewed_governor.GetName] (score=[scope:reviewed_governor.MakeScope.GetVariable('qing_daji_score').GetValue|0]) noted for [ROOT.GetTag]" }
+				}
+			}
+		}
+		# VENAL governors (corrupt trait OR corruption>=40) are cashiered
+		else_if = {
+			limit = {
+				OR = {
+					has_trait = corrupt
+					corruption >= 40
+				}
+			}
+			add_loyalty = -10
+			add_prominence = -5
+			# if Personnel office filled + minister is strong, corruption is purged harder
+			if = {
+				limit = {
+					ROOT = {
+						has_variable = qing_office_personnel_holder
+						var:qing_office_personnel_holder = {
+							is_alive = yes
+							employer = ROOT
+							finesse >= 9
+						}
+					}
+				}
+				QING_char_cleanse = yes
+				ROOT = {
+					LOG_line = { sys = QING  msg = "大計: venal governor [scope:reviewed_governor.GetName] cashiered under strong Personnel minister for [ROOT.GetTag]" }
+				}
+			}
+			else = {
+				ROOT = {
+					LOG_line = { sys = QING  msg = "大計: venal governor [scope:reviewed_governor.GetName] marked (weak/no Personnel minister) for [ROOT.GetTag]" }
+				}
+			}
+		}
+		# MEDIOCRE governors (score < 16, not venal) are merely noted
+		else = {
+			ROOT = {
+				LOG_line = { sys = QING  msg = "大計: mediocre governor [scope:reviewed_governor.GetName] (score=[scope:reviewed_governor.MakeScope.GetVariable('qing_daji_score').GetValue|0]) noted for [ROOT.GetTag]" }
+			}
+		}
+	}
+	
+	LOG_exit = { sys = QING  fn = "QING_personnel_daji_review"  result = OK }
+}

@@ -1,0 +1,330 @@
+########################################################################
+# qing_justice_events.txt — the Grand Minister of Justice (刑部) event content.
+#
+# BUILD #125: penal code (大清律例), autumn assizes (秋審), appeals (京控).
+#
+# The 刑部 was the empire's high court and keeper of the penal code. These events
+# bring the Justice minister's domain alive: the annual capital-case review (秋審),
+# codification of the law, a 京控 appeal exposing local corruption, and a notorious
+# case testing the code. Outcomes gated on the Justice holder's zeal, honesty, and
+# loyalty; reflect drift when vacant.
+#
+# All logged to sys = QING. CHI-only, player-only. Called from the flavour-roll
+# dispatcher (se_QING_DECLINE.txt). Verified idioms only: QING_justice_* effects
+# (se_QING_JUSTICE.txt), QING_char_* mutators (se_QING_AFFINITY.txt), office guards.
+#
+# Namespace = qing_justice
+#   .1  the Autumn Assizes (秋審) — capital-case review
+#   .2  codification of the 大清律例 — revise the penal code
+#   .3  a 京控 appeal reaches the capital — expose local corruption
+#   .4  a notorious case — hard legal-philosophy choice
+########################################################################
+
+namespace = qing_justice
+
+########################################################################
+# .1  THE AUTUMN ASSIZES (秋審) — the annual review of capital cases.
+# Every autumn the Board of Punishments reviews all pending death sentences.
+# The throne may temper justice with mercy (commute some, win legitimacy) or
+# apply the full rigor of the code (deterrence, but harshness).
+########################################################################
+qing_justice.1 = {
+	type = country_event
+	title = "qing_justice.1.t"
+	desc = "qing_justice.1.desc"
+	picture = chinese_throne_room
+	
+	left_portrait = root.current_ruler
+	right_portrait = var:qing_office_justice_holder
+	
+	is_triggered_only = yes
+	
+	trigger = {
+		tag = CHI
+		exists = current_ruler
+	}
+	
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_justice.1 (Autumn Assizes 秋審) [ROOT.GetTag]" }
+		if = {
+			limit = {
+				has_variable = qing_office_justice_holder
+				var:qing_office_justice_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_justice_holder = { save_scope_as = justice_minister }
+		}
+	}
+	
+	# --- Temper justice with mercy (commute some) ---
+	option = {
+		name = "qing_justice.1.a"
+		custom_tooltip = "qing_justice.1.a.tt"
+		# Fair assize: legitimacy, stability, merciful modifier. Best if Justice
+		# holder is zealous and just (trigger on that for the extra flavor).
+		trigger = {
+			OR = {
+				NOT = { has_variable = qing_office_justice_holder }
+				var:qing_office_justice_holder = {
+					is_alive = yes
+					employer = ROOT
+					zeal >= 6
+				}
+			}
+		}
+		QING_justice_fair_assize = yes
+	}
+	
+	# --- Apply the full rigor of the code (deterrence) ---
+	option = {
+		name = "qing_justice.1.b"
+		custom_tooltip = "qing_justice.1.b.tt"
+		# Harsh assize: order (via modifier) but tyranny. Available even with a
+		# merciful Justice holder (the throne can overrule), but costs more tyranny.
+		QING_justice_harsh_assize = yes
+	}
+}
+
+########################################################################
+# .2  CODIFICATION OF THE 大清律例 — revise / clarify the penal code.
+# A zealous Justice minister proposes a systematic revision of the penal code
+# to clarify ambiguities and modernize archaic provisions. Requires competence
+# (zeal) and integrity (not corrupt). Grants a long-term legitimacy/justice modifier.
+########################################################################
+qing_justice.2 = {
+	type = country_event
+	title = "qing_justice.2.t"
+	desc = "qing_justice.2.desc"
+	picture = senate_debate
+	
+	left_portrait = var:qing_office_justice_holder
+	right_portrait = root.current_ruler
+	
+	is_triggered_only = yes
+	
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_justice_holder
+		var:qing_office_justice_holder = {
+			is_alive = yes
+			employer = ROOT
+			zeal >= 8
+			NOT = { has_trait = corrupt }
+			NOT = { corruption >= 30 }
+		}
+		# not already revised recently
+		NOT = { has_country_modifier = qing_justice_code_revised }
+	}
+	
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_justice.2 (penal code revision 大清律例) [ROOT.GetTag]" }
+		var:qing_office_justice_holder = { save_scope_as = justice_minister }
+	}
+	
+	# --- Approve the revision ---
+	option = {
+		name = "qing_justice.2.a"
+		custom_tooltip = "qing_justice.2.a.tt"
+		QING_justice_codify = yes
+		add_treasury = -50
+	}
+	
+	# --- Decline (too costly / disruptive) ---
+	option = {
+		name = "qing_justice.2.b"
+		custom_tooltip = "qing_justice.2.b.tt"
+		scope:justice_minister = {
+			add_loyalty = loyalty_qing_estranged
+			add_popularity = -3
+		}
+	}
+}
+
+########################################################################
+# .3  A 京控 APPEAL REACHES THE CAPITAL — expose local corruption.
+# A commoner has traveled to the capital to lodge a 京控 (capital appeal),
+# bypassing the local magistrate who wronged him. Investigation reveals the
+# magistrate (a courtier) is corrupt. Vindicate the appellant (punish the
+# official, win legitimacy) or protect the official (unrest, tyranny).
+########################################################################
+qing_justice.3 = {
+	type = country_event
+	title = "qing_justice.3.t"
+	desc = "qing_justice.3.desc"
+	picture = senate_debate
+	
+	left_portrait = root.current_ruler
+	right_portrait = var:qing_office_justice_holder
+	
+	is_triggered_only = yes
+	
+	trigger = {
+		tag = CHI
+		# need at least one official who could be corrupt (not ruler, adult, alive)
+		any_character = {
+			count >= 1
+			employer = ROOT
+			is_ruler = no
+			is_adult = yes
+			is_alive = yes
+			OR = {
+				has_trait = corrupt
+				corruption >= 30
+			}
+		}
+	}
+	
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_justice.3 (京控 appeal) [ROOT.GetTag]" }
+		# pick a corrupt official to be the accused magistrate
+		random_character = {
+			limit = {
+				employer = ROOT
+				is_ruler = no
+				is_adult = yes
+				is_alive = yes
+				OR = {
+					has_trait = corrupt
+					corruption >= 30
+				}
+			}
+			save_scope_as = corrupt_official
+		}
+		if = {
+			limit = {
+				has_variable = qing_office_justice_holder
+				var:qing_office_justice_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_justice_holder = { save_scope_as = justice_minister }
+		}
+	}
+	
+	# --- Vindicate the appellant (punish the corrupt magistrate) ---
+	option = {
+		name = "qing_justice.3.a"
+		custom_tooltip = "qing_justice.3.a.tt"
+		# Concrete: punish the REAL saved character, strip office if any. Unrest down,
+		# legitimacy up. Best if Justice holder is honest/just.
+		trigger = {
+			OR = {
+				NOT = { has_variable = qing_office_justice_holder }
+				var:qing_office_justice_holder = {
+					is_alive = yes
+					employer = ROOT
+					OR = {
+						has_trait = honest
+						has_trait = just
+						corruption <= 20
+					}
+				}
+			}
+		}
+		QING_justice_vindicate_appeal = yes
+	}
+	
+	# --- Protect the official (deny the appeal) ---
+	option = {
+		name = "qing_justice.3.b"
+		custom_tooltip = "qing_justice.3.b.tt"
+		# Shield the magistrate, suppress the appeal. Unrest up, tyranny. The corrupt
+		# official gains loyalty (he was protected), but Justice suffers standing loss
+		# if he exists and is upright.
+		QING_justice_deny_appeal = yes
+		if = {
+			limit = {
+				exists = scope:justice_minister
+				scope:justice_minister = {
+					NOT = { has_trait = corrupt }
+					corruption <= 30
+				}
+			}
+			scope:justice_minister = {
+				add_popularity = -5
+				add_loyalty = loyalty_qing_estranged
+			}
+		}
+	}
+}
+
+########################################################################
+# .4  A NOTORIOUS CASE — hard legal-philosophy choice.
+# A high-profile case divides the court: strict application of the code vs
+# equity. Tests the Justice minister's principles and the throne's judgement.
+# No obviously "right" answer — both choices have costs.
+########################################################################
+qing_justice.4 = {
+	type = country_event
+	title = "qing_justice.4.t"
+	desc = "qing_justice.4.desc"
+	picture = senate_debate
+	
+	left_portrait = root.current_ruler
+	right_portrait = var:qing_office_justice_holder
+	
+	is_triggered_only = yes
+	
+	trigger = {
+		tag = CHI
+		exists = current_ruler
+	}
+	
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_justice.4 (notorious case) [ROOT.GetTag]" }
+		if = {
+			limit = {
+				has_variable = qing_office_justice_holder
+				var:qing_office_justice_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_justice_holder = { save_scope_as = justice_minister }
+		}
+	}
+	
+	# --- Strict letter of the law (order, but harsh) ---
+	option = {
+		name = "qing_justice.4.a"
+		custom_tooltip = "qing_justice.4.a.tt"
+		# Uphold the code strictly. Order (stability) but tyranny. Zealous Justice
+		# minister approves; others wary.
+		add_stability = 10
+		add_tyranny = 2
+		if = {
+			limit = {
+				exists = scope:justice_minister
+				scope:justice_minister = { zeal >= 8 }
+			}
+			scope:justice_minister = {
+				add_loyalty = loyalty_qing_commended
+			}
+		}
+		else_if = {
+			limit = { exists = scope:justice_minister }
+			scope:justice_minister = {
+				add_loyalty = loyalty_qing_estranged
+			}
+		}
+	}
+	
+	# --- Equity over letter (mercy, but sets precedent weakening the code) ---
+	option = {
+		name = "qing_justice.4.b"
+		custom_tooltip = "qing_justice.4.b.tt"
+		# Bend the law for fairness. Legitimacy (humane) but weakens legal order.
+		# Low-zeal Justice minister relieved; high-zeal troubled but loyal.
+		add_legitimacy = 5
+		add_stability = -5
+		if = {
+			limit = {
+				exists = scope:justice_minister
+				scope:justice_minister = { zeal <= 5 }
+			}
+			scope:justice_minister = {
+				add_popularity = 3
+			}
+		}
+		else_if = {
+			limit = { exists = scope:justice_minister }
+			scope:justice_minister = {
+				add_loyalty = loyalty_qing_estranged
+			}
+		}
+	}
+}

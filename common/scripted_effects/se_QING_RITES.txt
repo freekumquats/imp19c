@@ -1,0 +1,203 @@
+########################################################################
+# se_QING_RITES.txt — Grand Minister of Rites (禮部) ceremonial effects.
+#
+# The 禮部 governed state ritual, the examinations' ceremonial layer, imperial
+# ancestral rites, and the reception of tributary embassies (賓禮, 朝貢). These
+# effects model the Rites minister's efficacy at conducting ceremonies that
+# renew the Mandate (legitimacy) and receiving tribute missions that affirm the
+# tributary order (subject loyalty, prestige).
+#
+# A capable, high-zeal Rites minister makes ceremonies efficacious; a vacant
+# office or low-zeal holder means botched ritual (legitimacy leaks). Events
+# (qing_rites_events.txt) call these; their costs and outcomes are gated on the
+# Rites holder's zeal + loyalty.
+#
+# CONCRETE OVER ABSTRACT: tribute reception prefers to operate on REAL subject
+# states (iterate any_subject where apt) over an abstract tribute counter; the
+# 保藩威望 suzerain-prestige meter already exists (se_QING_VASSAL.txt) and is
+# reused where the event touches tributary standing broadly.
+#
+#   ROOT / this = the Qing country (CHI, player)
+#
+# All logged to sys = QING. CHI-only, player-only suite.
+# Prefix = QING_rites_
+########################################################################
+
+# ======================================================================
+# SACRIFICE TO HEAVEN (祭天) — the grand ceremony at the Altar of Heaven (天壇).
+# The Son of Heaven renews the Mandate. A capable, zealous Rites minister makes
+# the ritual efficacious (legitimacy gain); a vacant office or low-zeal holder
+# means the ceremony rings hollow or is botched (lesser gain or legitimacy leak).
+# Country scope. $outcome$ = success|mediocre|failure (passed by the event based
+# on the Rites holder's zeal).
+# ======================================================================
+QING_rites_sacrifice_heaven = {
+	LOG_enter = { sys = QING  fn = "QING_rites_sacrifice_heaven ($outcome$)" }
+	
+	if = {
+		limit = { always = yes }
+		# The event has already judged the outcome based on the Rites holder's
+		# capability; we apply the matching consequence.
+		
+		# --- SUCCESS: rites correctly observed, Mandate renewed -----------
+		if = {
+			limit = { always = no }  # always = no makes this the param-switched block
+			# (the param $outcome$ = "success" gates this at call-site in the event)
+		}
+		# param check is done in event; here we just apply the literal outcome.
+		# success branch:
+		add_legitimacy = 8
+		add_prestige = 15
+		add_country_modifier = { name = qing_rites_heavenly_mandate_renewed  duration = 1825 }
+		LOG_line = { sys = QING  msg = "祭天 ceremony SUCCESS: Mandate renewed, legitimacy +8, prestige +15 for [ROOT.GetTag]" }
+	}
+	
+	LOG_exit = { sys = QING  fn = "QING_rites_sacrifice_heaven"  result = OK }
+}
+
+# ======================================================================
+# SACRIFICE TO HEAVEN — mediocre outcome (vacant office or low-zeal holder).
+# The ritual is performed but rings hollow; modest legitimacy gain.
+# ======================================================================
+QING_rites_sacrifice_heaven_mediocre = {
+	LOG_enter = { sys = QING  fn = "QING_rites_sacrifice_heaven_mediocre" }
+	add_legitimacy = 3
+	add_prestige = 5
+	LOG_line = { sys = QING  msg = "祭天 ceremony MEDIOCRE: ritual hollow, legitimacy +3, prestige +5 for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_rites_sacrifice_heaven_mediocre"  result = OK }
+}
+
+# ======================================================================
+# SACRIFICE TO HEAVEN — failure (ritual impropriety or scandal during the rite).
+# The ceremony is botched; the Mandate is questioned (legitimacy falls).
+# ======================================================================
+QING_rites_sacrifice_heaven_failure = {
+	LOG_enter = { sys = QING  fn = "QING_rites_sacrifice_heaven_failure" }
+	add_legitimacy = -6
+	add_country_modifier = { name = qing_rites_ritual_impropriety  duration = 1825 }
+	LOG_line = { sys = QING  msg = "祭天 ceremony FAILURE: ritual botched, legitimacy -6, impropriety debuff for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_rites_sacrifice_heaven_failure"  result = OK }
+}
+
+# ======================================================================
+# RECEIVE TRIBUTARY EMBASSY (賓禮/朝貢) — a tributary state presents tribute.
+# The Rites minister conducts the reception per correct ritual. A capable holder
+# affirms the tributary order (subject loyalty of the presenting vassal, prestige,
+# and a modest bump to 保藩威望); a botched reception offends the vassal (loyalty
+# loss, suzerain prestige hit). CONCRETE: operates on scope:tribute_subject, a
+# REAL subject state saved by the event (prefers any_subject where one exists).
+# Country scope. $outcome$ = success|slight (event-gated on Rites holder).
+# ======================================================================
+QING_rites_receive_tribute = {
+	LOG_enter = { sys = QING  fn = "QING_rites_receive_tribute ($outcome$)" }
+	
+	# success branch: correct reception, vassal honoured
+	if = {
+		limit = { exists = scope:tribute_subject }
+		scope:tribute_subject = {
+			add_opinion = {
+				modifier = opinion_qing_tributary_honoured
+				target = ROOT
+			}
+		}
+		add_prestige = 12
+		# bump the 保藩威望 suzerain-prestige meter (reuse se_QING_VASSAL.txt counter)
+		QING_vassal_init = yes
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = 4 }
+		LOG_line = { sys = QING  msg = "tribute reception SUCCESS: [scope:tribute_subject.GetTag] honoured, prestige +12, 保藩威望 +4 for [ROOT.GetTag]" }
+	}
+	else = {
+		# generic reception (no real subject; abstract prestige gain only)
+		add_prestige = 8
+		LOG_line = { sys = QING  msg = "tribute reception SUCCESS (generic, no real subject) for [ROOT.GetTag]" }
+	}
+	
+	LOG_exit = { sys = QING  fn = "QING_rites_receive_tribute"  result = OK }
+}
+
+# ======================================================================
+# RECEIVE TRIBUTARY EMBASSY — slight/botched reception (low-zeal holder).
+# The vassal is slighted by ritual impropriety; opinion falls, prestige hit.
+# ======================================================================
+QING_rites_receive_tribute_slight = {
+	LOG_enter = { sys = QING  fn = "QING_rites_receive_tribute_slight" }
+	
+	if = {
+		limit = { exists = scope:tribute_subject }
+		scope:tribute_subject = {
+			add_opinion = {
+				modifier = opinion_qing_tributary_slighted
+				target = ROOT
+			}
+		}
+		add_prestige = -8
+		QING_vassal_init = yes
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = -6 }
+		LOG_line = { sys = QING  msg = "tribute reception SLIGHT: [scope:tribute_subject.GetTag] offended, prestige -8, 保藩威望 -6 for [ROOT.GetTag]" }
+	}
+	else = {
+		add_prestige = -5
+		LOG_line = { sys = QING  msg = "tribute reception SLIGHT (generic) for [ROOT.GetTag]" }
+	}
+	
+	LOG_exit = { sys = QING  fn = "QING_rites_receive_tribute_slight"  result = OK }
+}
+
+# ======================================================================
+# RITUAL DISPUTE / PRECEDENT QUESTION — the 禮部 adjudicates a controversy.
+# Uphold orthodoxy (legitimacy, but slight reform pressure) or bend the ritual
+# to pragmatism (ease reform pressure, but legitimacy falls). The Rites holder's
+# zeal colours the event's framing but both paths are offered. Country scope.
+# $choice$ = orthodoxy|pragmatism (param from event option).
+# ======================================================================
+QING_rites_dispute = {
+	LOG_enter = { sys = QING  fn = "QING_rites_dispute ($choice$)" }
+	
+	# orthodoxy branch: uphold tradition, affirm legitimacy
+	add_legitimacy = 5
+	add_stability = 5
+	QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 2 }
+	LOG_line = { sys = QING  msg = "ritual dispute: orthodoxy upheld, legitimacy +5, reform pressure +2 for [ROOT.GetTag]" }
+	
+	LOG_exit = { sys = QING  fn = "QING_rites_dispute"  result = OK }
+}
+
+# pragmatism branch (separate effect so the event can call the right one per option)
+QING_rites_dispute_pragmatism = {
+	LOG_enter = { sys = QING  fn = "QING_rites_dispute_pragmatism" }
+	
+	add_legitimacy = -3
+	QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -4 }
+	add_country_modifier = { name = qing_rites_pragmatic_adaptation  duration = 1825 }
+	LOG_line = { sys = QING  msg = "ritual dispute: pragmatism chosen, legitimacy -3, reform pressure -4 for [ROOT.GetTag]" }
+	
+	LOG_exit = { sys = QING  fn = "QING_rites_dispute_pragmatism"  result = OK }
+}
+
+# ======================================================================
+# IMPERIAL ANCESTRAL RITE / MOURNING (祭祖/國喪) — an imperial ancestor is
+# honoured or a period of state mourning observed. Correct observance affirms
+# dynastic continuity (legitimacy); neglect or impropriety shakes the throne.
+# Country scope. $outcome$ = observed|neglected (event-gated on Rites holder).
+# ======================================================================
+QING_rites_ancestral = {
+	LOG_enter = { sys = QING  fn = "QING_rites_ancestral ($outcome$)" }
+	
+	# observed branch: rites correctly performed
+	add_legitimacy = 4
+	add_country_modifier = { name = qing_rites_ancestral_piety  duration = 1825 }
+	LOG_line = { sys = QING  msg = "ancestral rite OBSERVED: legitimacy +4, piety buff for [ROOT.GetTag]" }
+	
+	LOG_exit = { sys = QING  fn = "QING_rites_ancestral"  result = OK }
+}
+
+# neglected branch
+QING_rites_ancestral_neglected = {
+	LOG_enter = { sys = QING  fn = "QING_rites_ancestral_neglected" }
+	
+	add_legitimacy = -5
+	add_tyranny = 1
+	LOG_line = { sys = QING  msg = "ancestral rite NEGLECTED: legitimacy -5, tyranny +1 for [ROOT.GetTag]" }
+	
+	LOG_exit = { sys = QING  fn = "QING_rites_ancestral_neglected"  result = OK }
+}

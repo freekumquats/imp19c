@@ -1,0 +1,228 @@
+########################################################################
+# se_QING_WORKS.txt — Grand Minister of Works (工部) content: river dikes,
+# canals, and the Great Wall. Feature #121.
+#
+# The Board of Works maintained the Grand Canal (大運河 漕運, the grain-tribute
+# lifeline), the Yellow River dikes (黃河河堤, a vast perennial expense and a
+# locus of corruption), and imperial monumental works. Great Wall upkeep was
+# largely symbolic by the Qing but resonant. These effects place REAL BUILDINGS
+# (qing_dike_building / qing_canal_depot_building / qing_wall_section_building)
+# in provinces, gated + costed on the Works office-holder's finesse. A capable
+# minister builds well and cheaply; a vacant office means the works decay.
+#
+# Called from qing_works_events.txt. CHI-only, player-only. All logged to sys = QING.
+#
+# Prefix = QING_works_
+########################################################################
+
+# ======================================================================
+# COMMISSION A RIVER DIKE / LEVEE (河堤) in a high-population province.
+# The Yellow River flood-control system. Built in country scope; picks the
+# most populous province that doesn't already have one (mirrors the yamen/shuyuan
+# idiom in se_QING_GOVERNANCE.txt). Cost + effectiveness scaled by the Works
+# holder's finesse: a capable minister (finesse >= 9) builds at standard cost,
+# a mediocre one (finesse < 9) incurs overruns (the corruption/graft layer), and
+# a VACANT office means the project fails entirely (no holder -> no build).
+# ======================================================================
+QING_works_build_dike = {
+	LOG_enter = { sys = QING  fn = "QING_works_build_dike" }
+	# $cheap$ = yes/no flag: cheap route skips finesse check, always builds but
+	# drives up corruption (the graft-ridden shortcut). If not cheap, gate on holder.
+	if = {
+		limit = { has_variable = qing_office_works_holder }
+		var:qing_office_works_holder = { save_scope_as = works_minister }
+	}
+	
+	if = {
+		limit = {
+			OR = {
+				# cheap route: always builds (gated at call site on no holder / low finesse)
+				"$cheap$" = yes
+				# capable route: Works holder exists + finesse adequate
+				AND = {
+					has_variable = qing_office_works_holder
+					var:qing_office_works_holder = { is_alive = yes  employer = ROOT  finesse >= 7 }
+				}
+			}
+			any_owned_province = { count >= 1  NOT = { has_building = qing_dike_building } }
+		}
+		# pick the most populous province without a dike and build one
+		ordered_owned_province = {
+			limit = { NOT = { has_building = qing_dike_building } }
+			order_by = total_population
+			max = 1
+			add_building_level = qing_dike_building
+			save_scope_as = dike_province
+		}
+		# cost: if holder finesse >= 9 (expert), standard 70; else overrun +20
+		if = {
+			limit = {
+				has_variable = qing_office_works_holder
+				var:qing_office_works_holder = { is_alive = yes  finesse >= 9 }
+			}
+			add_treasury = -70
+			LOG_line = { sys = QING  msg = "works: built dike (capable minister, cost 70) at [scope:dike_province.GetName] for [ROOT.GetTag]" }
+		}
+		else = {
+			add_treasury = -90
+			# cheap route or mediocre holder -> graft
+			if = {
+				limit = { "$cheap$" = yes }
+				QING_DECLINE_nudge = { var = qing_corruption_level  amount = 8 }
+				LOG_line = { sys = QING  msg = "works: built dike CHEAPLY (corruption +8, cost 90) at [scope:dike_province.GetName] for [ROOT.GetTag]" }
+			}
+			else = {
+				QING_DECLINE_nudge = { var = qing_corruption_level  amount = 4 }
+				LOG_line = { sys = QING  msg = "works: built dike (mediocre minister finesse<9, corruption +4, cost 90) at [scope:dike_province.GetName] for [ROOT.GetTag]" }
+			}
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_works_build_dike"  reason = "no Works holder or no suitable province for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_works_build_dike"  result = OK }
+}
+
+# ======================================================================
+# COMMISSION A GRAND CANAL DEPOT (漕運倉) in a trade/population centre.
+# The grain-tribute canal system. Same finesse-gated cost scaling as dike.
+# ======================================================================
+QING_works_build_canal_depot = {
+	LOG_enter = { sys = QING  fn = "QING_works_build_canal_depot" }
+	if = {
+		limit = { has_variable = qing_office_works_holder }
+		var:qing_office_works_holder = { save_scope_as = works_minister }
+	}
+	
+	if = {
+		limit = {
+			OR = {
+				"$cheap$" = yes
+				AND = {
+					has_variable = qing_office_works_holder
+					var:qing_office_works_holder = { is_alive = yes  employer = ROOT  finesse >= 7 }
+				}
+			}
+			any_owned_province = { count >= 1  NOT = { has_building = qing_canal_depot_building } }
+		}
+		ordered_owned_province = {
+			limit = { NOT = { has_building = qing_canal_depot_building } }
+			order_by = total_population
+			max = 1
+			add_building_level = qing_canal_depot_building
+			save_scope_as = canal_province
+		}
+		if = {
+			limit = {
+				has_variable = qing_office_works_holder
+				var:qing_office_works_holder = { is_alive = yes  finesse >= 9 }
+			}
+			add_treasury = -65
+			LOG_line = { sys = QING  msg = "works: built canal depot (capable, cost 65) at [scope:canal_province.GetName] for [ROOT.GetTag]" }
+		}
+		else = {
+			add_treasury = -85
+			if = {
+				limit = { "$cheap$" = yes }
+				QING_DECLINE_nudge = { var = qing_corruption_level  amount = 7 }
+				LOG_line = { sys = QING  msg = "works: built canal depot CHEAPLY (corruption +7, cost 85) at [scope:canal_province.GetName] for [ROOT.GetTag]" }
+			}
+			else = {
+				QING_DECLINE_nudge = { var = qing_corruption_level  amount = 3 }
+				LOG_line = { sys = QING  msg = "works: built canal depot (mediocre minister, corruption +3, cost 85) at [scope:canal_province.GetName] for [ROOT.GetTag]" }
+			}
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_works_build_canal_depot"  reason = "no Works holder or no suitable province for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_works_build_canal_depot"  result = OK }
+}
+
+# ======================================================================
+# COMMISSION A GREAT WALL SECTION (長城段) — a grand prestige project.
+# Highest cost of the three. Same finesse-gated scaling.
+# ======================================================================
+QING_works_build_wall_section = {
+	LOG_enter = { sys = QING  fn = "QING_works_build_wall_section" }
+	if = {
+		limit = { has_variable = qing_office_works_holder }
+		var:qing_office_works_holder = { save_scope_as = works_minister }
+	}
+	
+	if = {
+		limit = {
+			OR = {
+				"$cheap$" = yes
+				AND = {
+					has_variable = qing_office_works_holder
+					var:qing_office_works_holder = { is_alive = yes  employer = ROOT  finesse >= 7 }
+				}
+			}
+			any_owned_province = { count >= 1  NOT = { has_building = qing_wall_section_building } }
+		}
+		# pick a northern frontier province (proxy: any province without a wall section)
+		ordered_owned_province = {
+			limit = { NOT = { has_building = qing_wall_section_building } }
+			order_by = total_population
+			max = 1
+			add_building_level = qing_wall_section_building
+			save_scope_as = wall_province
+		}
+		if = {
+			limit = {
+				has_variable = qing_office_works_holder
+				var:qing_office_works_holder = { is_alive = yes  finesse >= 9 }
+			}
+			add_treasury = -90
+			add_stability = 1
+			LOG_line = { sys = QING  msg = "works: built Great Wall section (capable, cost 90) at [scope:wall_province.GetName] for [ROOT.GetTag]" }
+		}
+		else = {
+			add_treasury = -120
+			if = {
+				limit = { "$cheap$" = yes }
+				QING_DECLINE_nudge = { var = qing_corruption_level  amount = 10 }
+				LOG_line = { sys = QING  msg = "works: built Wall section CHEAPLY (corruption +10, cost 120) at [scope:wall_province.GetName] for [ROOT.GetTag]" }
+			}
+			else = {
+				QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
+				add_stability = 1
+				LOG_line = { sys = QING  msg = "works: built Wall section (mediocre minister, corruption +5, cost 120) at [scope:wall_province.GetName] for [ROOT.GetTag]" }
+			}
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_works_build_wall_section"  reason = "no Works holder or no suitable province for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_works_build_wall_section"  result = OK }
+}
+
+# ======================================================================
+# RIVER-WORKS EMBEZZLEMENT: a Works minister caught siphoning funds from the
+# hydraulic budget (the 河工 graft endemic to Yellow River projects). Called
+# from the embezzlement event; taint the minister, confiscate part of his take.
+# ======================================================================
+QING_works_graft_scandal = {
+	LOG_enter = { sys = QING  fn = "QING_works_graft_scandal" }
+	if = {
+		limit = {
+			has_variable = qing_office_works_holder
+			var:qing_office_works_holder = { is_alive = yes  employer = ROOT }
+		}
+		var:qing_office_works_holder = {
+			save_scope_as = works_minister
+			QING_char_taint = yes
+			QING_char_endow = { amount = -100 }
+			add_loyalty = loyalty_qing_disgraced
+		}
+		# recover part of the embezzled funds
+		add_treasury = 40
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -6 }
+		LOG_line = { sys = QING  msg = "works: graft scandal — [scope:works_minister.GetName] tainted, fined 100, recovered 40 for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_works_graft_scandal"  reason = "no Works holder to scandalize for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_works_graft_scandal"  result = OK }
+}
