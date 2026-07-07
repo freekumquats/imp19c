@@ -1106,3 +1106,73 @@ the office KEY was consistent everywhere, so no logic changed.
 Braces (all touched files): government_view.gui 1476/1476, characterwindow.gui 429/429,
 QING_governance_actions.txt 170/170, se_QING_ACCOUNTABILITY.txt 184/184, qing_accountability_events.txt
 63/63. Byte conventions preserved (se_QING_*.txt no-BOM/LF/final-nl; loc .yml BOM/LF; .gui TAB indent).
+
+
+### [OVERNIGHT WAVE #107/#108/#111-#126] Office-coupling families + province ethnic tension + integration capstone (2026-07-07)
+Autonomous overnight build of the pending queue (#107-#126). Governing idea: the "coupling-family"
+pattern — each Grand Council office OWNS its historical charges, so (a) the holder's skill/loyalty
+gates its event outcomes and costs, (b) its charges join the character-affinity chart via
+QING_pair_friction / QING_char_affinity, and (c) a vacant office lets its domain drift. Crucially
+the families do NOT double-count the accountability metric (se_QING_ACCOUNTABILITY.txt already grades
+each office) — they add flavour/decision events keyed on the same holders.
+
+**Commits (all authored+committed freekumquats, on fix-usa-roster-create-character):**
+- `a68758d9` #113 Amban repair + activation
+- `33876549` #108/#114/#117/#121-#126 office-coupling event families
+- `3ff17360` #107 province-level ethnic tension engine
+- `f1913ad9` #111/#112 integration capstone (Solution A)
+- `683603b8` pulse + dispatcher wiring, #107/#126 inits
+- `7aa052d5` #108/#109/#120 GUI panels (DORMANT)
+- `1d2afc47` decision log + build brief
+
+**#113 Amban (駐藏/駐紮大臣).** The delegated repair agent (oracle-verified vs Terra-Indomita +
+Invictus) replaced the UNPROVEN tag-interpolated variable names (`qing_amban_$x$.GetTag`) with a
+fixed-name subject var `qing_amban_here`, and swapped invalid add_liberty_desire/subject-loyalty
+verbs for `add_opinion` + 4 new opinion modifiers (clash -12/coop 8/capable 10/ineffective -8).
+I then found the feature had NO initial posting entry point (only qing_amban.4.a re-posted on
+turnover — the whole system was inert) and authored `QING_amban_post_sweep`: gated on a filled
+lifanyuan holder, it posts an amban to a Mongol/Tibetan-ruled subject via random_subject. Wired
+into QING_GOV_pulse ahead of QING_amban_evaluate.
+
+**#107 province-level ethnic tension.** Bottom-up per-province counter qing_prov_ethnic_tension
+(0..100) accruing from culture/religion mismatch, province_unrest, low governorship loyalty, and
+governor-subject affinity; modulated by the top-down ethnic stance; snowballs to owned neighbours
+above 70 and erupts (qing_ethnic.1) above 80. Authored the missing QING_ethnic_tension_init — the
+prior splice-prose used INVENTED lowercase region keys (tarim_region etc.) that do not exist; I
+used the PROVEN province-scope is_in_region trigger with REAL capitalized keys from
+map_data/regions.txt (Turkestan 20 / Tibet 15 / Mongolia 10 / Qinghai+Sichuan_Kham 10). Idempotent;
+wired into on_game_initialized + QING_GOV_pulse.
+
+**#111/#112 integration capstone (Solution A, CHANGES-to-existing scrutiny).** In
+SUBJ_QING_advance_integration, an autonomous_governorship reaching progress>=5 now fires the
+qing_integ.30 capstone CHOICE event instead of silently auto-absorbing; a non-governorship subject
+keeps the direct-absorb path via an else_if fallback (behavioural equivalence for the untouched
+case). qing_integ.30 re-checks progress>=5 in its own trigger and each option calls
+SUBJ_QING_absorb_subject itself, so double-resolve is impossible.
+
+**Office families #117/#121-#126/#108/#114.** Net-new subsystems: Personnel 吏部 (#117 大計 triennial
+review — triennial spacing via a day-expiry cooldown stamped in the .1 immediate, so the dispatcher
+gate is a pure read), Revenue 戶部, Rites 禮部 (#122), War 兵部, Justice 刑部 (#125 — the 秋審
+autumn-assizes SEASONAL GATE was DROPPED because current_month is unproven in this repo AND both
+oracle mods; documented in-code), Works 工部 (#121 + dike/canal/wall buildings), Censorate 都察院
+(#123), Household 內務府 (#126 — the one net-new counter, qing_privy_purse 內帑=50, a private purse
+distinct from the state 戶部 treasury), Great Game 大博弈 (#108), Pilgrimage 朝聖 (#114). All effects
+se_LOG-wired; all verbs oracle-verified.
+
+**Wiring.** 10 self-guarded O(1) coupling-family calls spliced into QING_GOV_pulse before its final
+LOG_exit; flavour-roll dispatcher random_list weight-entries added for the events that are NOT
+pulse-fired (pulse-fired events — War/Revenue/ethnic.1/integ.30/.40 — deliberately NOT re-listed to
+avoid double-firing). #118 fix carried: qing_military_strain -> qing_greenstandard_decay in
+qing_war_events.txt.
+
+**HELD / DORMANT (#108/#109/#120).** The Great Game + province-report GUI panels ship as harmless
+unreferenced .gui + scripted_gui definitions; their open-BUTTONS are left UNSPLICED because the
+button idioms (ToggleGameViewWindow / GetCountryByTag) are unproven against both oracle mods.
+Documented as a TODO in OVERNIGHT_DECISIONS.md per the unproven-capability rule.
+
+**Verification.** Full identifier-resolution + modifier-existence sweep: all 10 QING_GOV_pulse
+effects resolve; both new inits resolve; 13 spot-checked dispatcher event IDs exist; 35 referenced
+country modifiers + 4 amban opinion modifiers + 3 works building keys + the loyalty/local_unrest
+constants all defined (0 missing). Consolidated byte/brace check across all 60+ changed files: 0
+problems (common/**/*.txt no-BOM/LF/final-nl; the pre-existing BOM on qing_mechanics_on_actions.txt
++ se_QING_GOVERNANCE.txt PRESERVED — the baseline works with it; loc .yml BOM/LF starts l_english:).
