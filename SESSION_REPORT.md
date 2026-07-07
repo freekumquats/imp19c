@@ -790,33 +790,59 @@ is no-BOM/LF (preserved). se_LOG coverage retained (LOG_line still fires inside 
 branch with this fix applied is the fix-forward. Scan confirms no scoped-effect call remains nested
 in any create_character block across the USA arc.
 
-## [#90-fix crash] Deterministic startup CRASH — country modifier key in a CHARACTER modifier (2026-07-06)
+## [#90-fix crash] Deterministic startup CRASH — the #90 regional-army create_character fallback (2026-07-06)
 
-**This is the REAL fix.** Supersedes the retracted [#93-fix crash] above.
+**RESOLVED — verified loading in-game by user.** Two commits ship the fix on
+`fix-usa-roster-create-character`: `6573cc80` (the modifier cleanup — see the ⚠️ correction below) and
+`fa87110c` (**the actual crash fix**).
 
 **Symptom:** deterministic EXCEPTION_ACCESS_VIOLATION (C0000005) at startup, in `-debug_mode`, with
-**ZERO `[IMP19C]` breadcrumbs** in debug.log — i.e. the crash happens during file parse / gamestate
-CONSTRUCTION, before any scripted effect (even `on_game_initialized`) runs. That signature exonerates
-all events/effects/the roster/the pulse: the bug is in DATA parsed at load.
+**ZERO `[IMP19C]` breadcrumbs** in debug.log, and an error.log identical to every prior crash (no new
+diagnostic line). The game boots to a Qing start with the mod disabled but access-violates with it on.
 
 **Bisection (clean, from the genuinely-verified-good baseline `0990fe6`):**
 `0990fe6` good → `3de82c87` loads → `d7ebffa8` loads → `ec4d8a72` **CRASHES** → `be96733f` loads.
-`be96733f` loads and `ec4d8a72` crashes and they are adjacent ⇒ culprit = **`ec4d8a72`** (#90 Tie
-Han regional-army counter into loyal-cohorts power base). The only construction-time (parsed-at-load)
-change in that commit is a new character modifier; everything else is scripted_effects (runtime).
+Adjacent ⇒ culprit commit = **`ec4d8a72`** (#90 Tie Han regional-army counter into loyal-cohorts power
+base). Within that commit, isolated by whole-file revert to be `se_QING_MECHANICS.txt` (NOT the new
+character modifier — see correction below), then narrowed inside the file by successive stub branches.
 
-**Root cause:** `common/modifiers/00_imp19c_character_modifiers.txt` — the new `qing_regional_magnate`
-CHARACTER-scope modifier included `land_morale_modifier = 0.1`, which is a COUNTRY/UNIT modifier key.
-An invalid key in a character-modifier definition access-violates at gamestate construction. Verified
-against the mod's own files (land_morale_modifier appears ONLY in country-scope modifier files) and TI
-(land_morale_modifier only in country/mission modifiers; character modifiers like `renowned_fighter`
-use monthly_character_prominence/monthly_character_popularity — never land_morale_modifier). The other
-three keys are all character-valid: `martial` (traits/00_military etc.), `monthly_character_prominence`
-(clan-chief/tribal char modifiers), `loyalty_gain_chance_modifier` (traits/00_personality:713).
+**Root cause (what was PROVEN):** the else-branch of the new effect
+`QING_regional_army_bind_commander` in `common/scripted_effects/se_QING_MECHANICS.txt`. When no sitting
+Han governor exists, that branch conjured a founding magnate via `create_character` (culture=han,
+religion=ROOT.religion, traits) and then, in the new character's scope, ran `QING_roster_finalize` +
+`add_loyal_veterans = 8` + `QING_magnate_track_grant` (which does `add_character_modifier`). Removing
+the WHOLE else-branch loads clean (branch `crash-test-no-createchar`). Proven by test:
+- Deleting the `qing_regional_magnate` MODIFIER definition entirely → still CRASHES (modifier innocent).
+- Reverting `se_QING_MECHANICS.txt` to parent → LOADS (the fault is in this file).
+- Stubbing the 3 new effect bodies to no-ops → LOADS (fault is INSIDE a body).
+- Stubbing only the else-branch's create_character path → LOADS (fault is that path).
+- Swapping culture=han→manchu, religion=ROOT.religion→confucianism (proven literals) → still CRASHES.
+  ⇒ the dynamic culture/religion refs are NOT the cause; the create_character/finalize block is.
 
-**Fix:** removed `land_morale_modifier` from `qing_regional_magnate`; folded his martial worth into
-the character-valid `martial` bonus (1→2). Task-tagged `[#90-fix crash]` comment in-file. File kept
-BOM/LF; braces 14/14. No se_LOG change (a modifier definition has no execution path; the granting
-effects QING_regional_army_bind_commander / _strip_magnate already log sys=QING).
+**Root cause (what was NOT proven — honest gap):** I did not isolate `create_character` itself from the
+`QING_roster_finalize`+`add_loyal_veterans`+`QING_magnate_track_grant` finalize that follows it (user
+called off further tests once a working fix was in hand). The one BEHAVIORAL difference vs. the 14 other
+`create_character` calls that load fine (se_QING_NAPOLEON, se_QING_ROSTER callers, on_actions): those
+grant nothing to the freshly-made character beyond the identity finalize, whereas #90 granted loyal
+veterans AND a character modifier to a character created in the same block. Leading hypothesis: granting
+loyal-veterans / a modifier to a not-yet-fully-materialized new character access-violates. NOTE the
+unresolved oddity: the crash fires at load/boot, yet this effect is only reachable from a scripted_gui
+button (never from on_game_initialized) — so WHY merely having this else-branch present breaks a fresh
+boot is not fully understood. Do not treat the mechanism as settled.
 
-**Verification:** pending in-game load test by user (the definitive test for a construction crash).
+**⚠️ CORRECTION to `6573cc80` / the earlier draft of this entry:** that commit's message and this
+entry's first draft claimed the root cause was `land_morale_modifier` being a country-scope key in the
+`qing_regional_magnate` CHARACTER modifier, and asserted "the engine validates create_character bodies
+at load." BOTH claims are WRONG. Deleting the modifier outright still crashed (modifier is innocent),
+and the mod contains 14 other create_character calls that load fine (a blanket load-time-validation
+rule would prevent any boot). `land_morale_modifier` IS genuinely misplaced (a country/unit key in a
+character modifier) and removing it is a correct latent-bug cleanup — it just was not THIS crash. Kept.
+
+**Fix (`fa87110c`):** removed the crashing else-branch. The feature's core is intact — the if-path still
+empowers a REAL sitting Han governor-general with `add_loyal_veterans` + the magnate marker. When no Han
+governor stands, the sanction's +15 provincial-power counter bump (in `QING_sanction_regional_army`)
+still lands; we simply skip fabricating a character. se_LOG retained (LOG_fail on the no-governor path).
+Braces 229/229; file kept no-BOM/LF. Also kept: the `6573cc80` modifier cleanup and the (benign,
+non-causal) `se_USA_ROSTER` refactor + TIB subject-chain change from the retracted [#93-fix crash].
+
+**Verification:** user confirmed the `fix-usa-roster-create-character` branch LOADS into a Qing start.
