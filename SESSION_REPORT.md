@@ -1023,3 +1023,19 @@ never zeroed output.
 se_LOG breadcrumbs on the new cache effect. Braces: GOODS_svalues 869/869, se_GOODS 370/370, se_FUNC
 182/182, oa_economy_setup 526/526, se_CONSUME 42/42, se_LOGISTICS 91/91. All files kept their byte
 conventions (se_LOGISTICS no-BOM/LF; the rest BOM+CRLF).
+
+### [logistics-review] Follow-up: the two low findings above, now FIXED
+Cleared the backlog items instead of leaving them:
+- **Scan-pass fusion.** `LOGISTICS_scan_worst_land_shortage` + `LOGISTICS_scan_worst_naval_shortage`
+  (two separate `every_governorships` passes) merged into ONE `LOGISTICS_scan_worst_shortages` that walks
+  the governorship list once and accumulates both `LOGISTICS_tmp_worst_land` (4 land goods) and
+  `LOGISTICS_tmp_worst_naval` (coal + naval_supplies). The naval half runs unconditionally (6 cheap
+  var-reads/governorship) — the steam-hull gate stays on the PENALTY (`LOGISTICS_apply_coal_shortage_penalty`),
+  so non-steam countries just discard the naval driver. `LOGISTICS_quarter` now owns the single scan call,
+  the `save_scope_as = logistics_country`, and the `LOGISTICS_tmp_worst_*` cleanup; the two apply-effects
+  read the pre-computed vars (they keep their own `save_scope_as` so they remain independently callable).
+  Behaviour is unchanged — same worst-case max per driver, same tier thresholds — just one list walk/quarter.
+- **`LOGISTICS_quarter` breadcrumb.** Added `LOG_enter`/`LOG_exit` (sys = LOGISTICS), satisfying the module
+  header claim that every effect carries them.
+
+Braces: se_LOGISTICS 89/89 (was 91/91 — two effect definitions collapsed into one). No-BOM/LF preserved.

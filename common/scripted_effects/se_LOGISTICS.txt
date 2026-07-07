@@ -39,25 +39,31 @@
 ########################################################################
 
 # ======================================================================
-# WORST MILITARY-GOODS SHORTAGE — country scope.
-# Walks the country's governorships and records the single worst (largest)
-# shortage ratio seen for any of the four land military goods into the country's
-# own LOGISTICS_tmp_worst_land var (0..1). Worst-case (not average) is deliberate:
-# a front-line army drawing from a stripped-bare governorship is starved regardless
-# of surplus elsewhere, and it keeps the tiering legible.
-# Requires scope:logistics_country to be saved by the caller.
+# WORST MILITARY-GOODS SHORTAGE — country scope. FUSED land + naval scan.
+# Walks the country's governorships ONCE and records the single worst (largest)
+# physical-shortage ratio seen for the four LAND military goods into
+# LOGISTICS_tmp_worst_land, and for the two NAVAL goods into LOGISTICS_tmp_worst_naval
+# (both 0..1). Worst-case (not average) is deliberate: a front-line army/fleet drawing
+# from a stripped-bare governorship is starved regardless of surplus elsewhere, and it
+# keeps the tiering legible.
+# [logistics-review] Previously two separate every_governorships passes (land, then naval);
+# fused into one pass so the governorship list is walked once per quarter. The naval half is
+# computed unconditionally (6 cheap var-reads/governorship) — the steam-hull gate lives on the
+# PENALTY (LOGISTICS_apply_coal_shortage_penalty), so non-steam countries just discard it.
+# Requires scope:logistics_country to be saved by the caller (LOGISTICS_quarter).
 # ======================================================================
-LOGISTICS_scan_worst_land_shortage = {
+LOGISTICS_scan_worst_shortages = {
 	# Scope: country (== scope:logistics_country)
-	LOG_enter = { sys = LOGISTICS  fn = "LOGISTICS_scan_worst_land_shortage" }
-	set_variable = { name = LOGISTICS_tmp_worst_land  value = 0 }
+	LOG_enter = { sys = LOGISTICS  fn = "LOGISTICS_scan_worst_shortages" }
+	set_variable = { name = LOGISTICS_tmp_worst_land   value = 0 }
+	set_variable = { name = LOGISTICS_tmp_worst_naval  value = 0 }
 	every_governorships = {
 		# [logistics-phys] Read shortage_phys_<good>, the PURE physical-deficit snapshot taken
 		# in se_CONSUME.txt BEFORE deflation/elasticity inflate the composite shortage_ var.
 		# Reacting to the composite meant a deflating economy (e.g. the Qing player) with full
-		# arsenals took attrition/morale/movement maluses for a munitions shortage it did not
-		# have. Each shortage_phys_* is present only while that good is in genuine deficit; take
-		# the max across the four land military goods.
+		# arsenals took attrition/morale/movement maluses for a shortage it did not have. Each
+		# shortage_phys_* is present only while that good is in genuine deficit; take the max.
+		# --- land goods ---
 		if = {
 			limit = { has_variable = shortage_phys_early_munitions }
 			if = {
@@ -86,8 +92,23 @@ LOGISTICS_scan_worst_land_shortage = {
 				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_land  value = prev.var:shortage_phys_late_artillery } }
 			}
 		}
+		# --- naval goods (consumed only by steam-hull owners; gated at the penalty) ---
+		if = {
+			limit = { has_variable = shortage_phys_coal }
+			if = {
+				limit = { var:shortage_phys_coal > scope:logistics_country.var:LOGISTICS_tmp_worst_naval }
+				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_naval  value = prev.var:shortage_phys_coal } }
+			}
+		}
+		if = {
+			limit = { has_variable = shortage_phys_naval_supplies }
+			if = {
+				limit = { var:shortage_phys_naval_supplies > scope:logistics_country.var:LOGISTICS_tmp_worst_naval }
+				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_naval  value = prev.var:shortage_phys_naval_supplies } }
+			}
+		}
 	}
-	LOG_exit = { sys = LOGISTICS  fn = "LOGISTICS_scan_worst_land_shortage"  result = OK }
+	LOG_exit = { sys = LOGISTICS  fn = "LOGISTICS_scan_worst_shortages"  result = OK }
 }
 
 # ======================================================================
@@ -106,7 +127,9 @@ LOGISTICS_apply_munitions_shortage_penalty = {
 	# Scope: country
 	LOG_enter = { sys = LOGISTICS  fn = "LOGISTICS_apply_munitions_shortage_penalty" }
 	save_scope_as = logistics_country
-	LOGISTICS_scan_worst_land_shortage = yes
+	# [logistics-review] LOGISTICS_tmp_worst_land is pre-computed by the fused scan
+	# (LOGISTICS_scan_worst_shortages) that LOGISTICS_quarter runs once before this effect,
+	# so we no longer walk the governorship list here. Quarter also owns the var cleanup.
 	# clear last quarter's stamp first so exactly one (or zero) tier is ever active
 	if = {
 		limit = { has_country_modifier = country_munitions_shortage_minor }
@@ -131,7 +154,6 @@ LOGISTICS_apply_munitions_shortage_penalty = {
 	else = {
 		LOG_line = { sys = LOGISTICS  msg = "[MUNI] [scope:logistics_country.GetTag] OK worst_land=[ROOT.MakeScope.GetVariable('LOGISTICS_tmp_log').GetValue|2]" }
 	}
-	remove_variable = LOGISTICS_tmp_worst_land
 	root = { remove_variable = LOGISTICS_tmp_log }
 	LOG_exit = { sys = LOGISTICS  fn = "LOGISTICS_apply_munitions_shortage_penalty"  result = OK }
 }
@@ -146,33 +168,11 @@ LOGISTICS_apply_munitions_shortage_penalty = {
 # Coal is a raw good consumed both by industry and (conceptually) by steamers;
 # naval_supplies is the manufactured naval good. We take the worst of the two
 # governorship shortages as the driver, same worst-case rationale as P1.
-# Requires scope:logistics_country to be saved by the caller.
+# [logistics-review] LOGISTICS_tmp_worst_naval is pre-computed by the fused scan
+# (LOGISTICS_scan_worst_shortages) that LOGISTICS_quarter runs once before this effect,
+# so no governorship walk happens here — only the steam-hull gate + penalty stamp.
+# Requires scope:logistics_country to be saved and the scan to have run by the caller.
 # ======================================================================
-LOGISTICS_scan_worst_naval_shortage = {
-	# Scope: country (== scope:logistics_country)
-	LOG_enter = { sys = LOGISTICS  fn = "LOGISTICS_scan_worst_naval_shortage" }
-	set_variable = { name = LOGISTICS_tmp_worst_naval  value = 0 }
-	every_governorships = {
-		# [logistics-phys] Physical-deficit snapshots only (see se_CONSUME.txt), so deflation
-		# never fabricates a coal/naval-supply shortage on a fully-bunkered steam fleet.
-		if = {
-			limit = { has_variable = shortage_phys_coal }
-			if = {
-				limit = { var:shortage_phys_coal > scope:logistics_country.var:LOGISTICS_tmp_worst_naval }
-				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_naval  value = prev.var:shortage_phys_coal } }
-			}
-		}
-		if = {
-			limit = { has_variable = shortage_phys_naval_supplies }
-			if = {
-				limit = { var:shortage_phys_naval_supplies > scope:logistics_country.var:LOGISTICS_tmp_worst_naval }
-				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_naval  value = prev.var:shortage_phys_naval_supplies } }
-			}
-		}
-	}
-	LOG_exit = { sys = LOGISTICS  fn = "LOGISTICS_scan_worst_naval_shortage"  result = OK }
-}
-
 LOGISTICS_apply_coal_shortage_penalty = {
 	# Scope: country
 	LOG_enter = { sys = LOGISTICS  fn = "LOGISTICS_apply_coal_shortage_penalty" }
@@ -185,7 +185,6 @@ LOGISTICS_apply_coal_shortage_penalty = {
 				num_of_unit_type = { type = screw_frigate    value >= 1 }
 			}
 		}
-		LOGISTICS_scan_worst_naval_shortage = yes
 		if = {
 			limit = { has_country_modifier = country_coal_shortage }
 			remove_country_modifier = country_coal_shortage
@@ -199,7 +198,6 @@ LOGISTICS_apply_coal_shortage_penalty = {
 		else = {
 			LOG_line = { sys = LOGISTICS  msg = "[COAL] [scope:logistics_country.GetTag] OK worst_naval=[ROOT.MakeScope.GetVariable('LOGISTICS_tmp_log').GetValue|2]" }
 		}
-		remove_variable = LOGISTICS_tmp_worst_naval
 		root = { remove_variable = LOGISTICS_tmp_log }
 	}
 	else = {
@@ -221,6 +219,16 @@ LOGISTICS_apply_coal_shortage_penalty = {
 # ======================================================================
 LOGISTICS_quarter = {
 	# Scope: country
+	LOG_enter = { sys = LOGISTICS  fn = "LOGISTICS_quarter" }
+	# [logistics-review] Walk the governorship list ONCE for both the land and naval worst-
+	# shortage drivers, then stamp each penalty from the pre-computed vars. save_scope_as is
+	# repeated inside each apply-effect (they remain independently callable), but the scan and
+	# the shared LOGISTICS_tmp_worst_* cleanup are owned here so the list is not walked twice.
+	save_scope_as = logistics_country
+	LOGISTICS_scan_worst_shortages = yes
 	LOGISTICS_apply_munitions_shortage_penalty = yes
 	LOGISTICS_apply_coal_shortage_penalty = yes
+	remove_variable = LOGISTICS_tmp_worst_land
+	remove_variable = LOGISTICS_tmp_worst_naval
+	LOG_exit = { sys = LOGISTICS  fn = "LOGISTICS_quarter"  result = OK }
 }
