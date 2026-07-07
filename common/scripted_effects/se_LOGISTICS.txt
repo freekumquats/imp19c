@@ -12,9 +12,13 @@
 # (soldiers must still eat); this is the *equipment* layer on top.
 #
 # SCOPE FACTS this design rests on (verified):
-#   - shortage_<good> is a GOVERNORSHIP-scope variable (se_CONSUME.txt:49), a
-#     0..1 ratio, present only while that good is in deficit. So the country-level
-#     penalty must AGGREGATE across governorships (worst-case) before stamping.
+#   - shortage_phys_<good> is a GOVERNORSHIP-scope variable (se_CONSUME.txt), a 0..1
+#     ratio, present only while that good is in genuine PHYSICAL deficit. It is the
+#     snapshot of the deficit ratio taken BEFORE se_CONSUME adds monetary-deflation and
+#     demand-elasticity terms to the composite shortage_<good>. This layer deliberately
+#     reads the PHYSICAL snapshot — an equipment-supply penalty must not fire on a
+#     currency swing (a deflating economy with full arsenals is not out of munitions).
+#     The country-level penalty AGGREGATES across governorships (worst-case) before stamping.
 #   - every_governorships is valid from country scope (oa_wealth_changes.txt:296).
 #   - num_of_unit_type = { type = X value >= N } is PROVEN (oracle: Terra-Indomita).
 #   - modifier keys land_unit_attrition / land_morale_recovery / army_movement_speed
@@ -48,33 +52,38 @@ LOGISTICS_scan_worst_land_shortage = {
 	LOG_enter = { sys = LOGISTICS  fn = "LOGISTICS_scan_worst_land_shortage" }
 	set_variable = { name = LOGISTICS_tmp_worst_land  value = 0 }
 	every_governorships = {
-		# each shortage_* is present only while that good is in deficit; take the max
+		# [logistics-phys] Read shortage_phys_<good>, the PURE physical-deficit snapshot taken
+		# in se_CONSUME.txt BEFORE deflation/elasticity inflate the composite shortage_ var.
+		# Reacting to the composite meant a deflating economy (e.g. the Qing player) with full
+		# arsenals took attrition/morale/movement maluses for a munitions shortage it did not
+		# have. Each shortage_phys_* is present only while that good is in genuine deficit; take
+		# the max across the four land military goods.
 		if = {
-			limit = { has_variable = shortage_early_munitions }
+			limit = { has_variable = shortage_phys_early_munitions }
 			if = {
-				limit = { var:shortage_early_munitions > scope:logistics_country.var:LOGISTICS_tmp_worst_land }
-				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_land  value = prev.var:shortage_early_munitions } }
+				limit = { var:shortage_phys_early_munitions > scope:logistics_country.var:LOGISTICS_tmp_worst_land }
+				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_land  value = prev.var:shortage_phys_early_munitions } }
 			}
 		}
 		if = {
-			limit = { has_variable = shortage_late_munitions }
+			limit = { has_variable = shortage_phys_late_munitions }
 			if = {
-				limit = { var:shortage_late_munitions > scope:logistics_country.var:LOGISTICS_tmp_worst_land }
-				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_land  value = prev.var:shortage_late_munitions } }
+				limit = { var:shortage_phys_late_munitions > scope:logistics_country.var:LOGISTICS_tmp_worst_land }
+				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_land  value = prev.var:shortage_phys_late_munitions } }
 			}
 		}
 		if = {
-			limit = { has_variable = shortage_early_artillery }
+			limit = { has_variable = shortage_phys_early_artillery }
 			if = {
-				limit = { var:shortage_early_artillery > scope:logistics_country.var:LOGISTICS_tmp_worst_land }
-				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_land  value = prev.var:shortage_early_artillery } }
+				limit = { var:shortage_phys_early_artillery > scope:logistics_country.var:LOGISTICS_tmp_worst_land }
+				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_land  value = prev.var:shortage_phys_early_artillery } }
 			}
 		}
 		if = {
-			limit = { has_variable = shortage_late_artillery }
+			limit = { has_variable = shortage_phys_late_artillery }
 			if = {
-				limit = { var:shortage_late_artillery > scope:logistics_country.var:LOGISTICS_tmp_worst_land }
-				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_land  value = prev.var:shortage_late_artillery } }
+				limit = { var:shortage_phys_late_artillery > scope:logistics_country.var:LOGISTICS_tmp_worst_land }
+				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_land  value = prev.var:shortage_phys_late_artillery } }
 			}
 		}
 	}
@@ -144,18 +153,20 @@ LOGISTICS_scan_worst_naval_shortage = {
 	LOG_enter = { sys = LOGISTICS  fn = "LOGISTICS_scan_worst_naval_shortage" }
 	set_variable = { name = LOGISTICS_tmp_worst_naval  value = 0 }
 	every_governorships = {
+		# [logistics-phys] Physical-deficit snapshots only (see se_CONSUME.txt), so deflation
+		# never fabricates a coal/naval-supply shortage on a fully-bunkered steam fleet.
 		if = {
-			limit = { has_variable = shortage_coal }
+			limit = { has_variable = shortage_phys_coal }
 			if = {
-				limit = { var:shortage_coal > scope:logistics_country.var:LOGISTICS_tmp_worst_naval }
-				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_naval  value = prev.var:shortage_coal } }
+				limit = { var:shortage_phys_coal > scope:logistics_country.var:LOGISTICS_tmp_worst_naval }
+				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_naval  value = prev.var:shortage_phys_coal } }
 			}
 		}
 		if = {
-			limit = { has_variable = shortage_naval_supplies }
+			limit = { has_variable = shortage_phys_naval_supplies }
 			if = {
-				limit = { var:shortage_naval_supplies > scope:logistics_country.var:LOGISTICS_tmp_worst_naval }
-				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_naval  value = prev.var:shortage_naval_supplies } }
+				limit = { var:shortage_phys_naval_supplies > scope:logistics_country.var:LOGISTICS_tmp_worst_naval }
+				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_naval  value = prev.var:shortage_phys_naval_supplies } }
 			}
 		}
 	}

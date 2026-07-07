@@ -21,6 +21,22 @@ GOODS_cache_industrialisation_bonus = {
 	LOG_exit = { sys = ECON  fn = "GOODS_cache_industrialisation_bonus"  result = OK }
 }
 
+GOODS_cache_munitions_infra = {
+	# [logistics-perf #71] Cache the arsenal/depot munitions-output ONCE per governorship
+	# per quarter. GOODS_governorship_early_munitions_produced is evaluated more than once
+	# per quarter (production pass + DEMAND_difference/trade/currency passes) and previously
+	# re-walked every province each time. Computing it once here collapses that to a single
+	# state×province traversal; the wrapper svalue reads var:munitions_infra_cached when
+	# present, else recomputes, so a missing cache degrades to correctness, never zeroed output.
+	LOG_enter = { sys = ECON  fn = "GOODS_cache_munitions_infra" }
+	set_variable = {
+		name = munitions_infra_cached
+		value = GOODS_governorship_munitions_infra_output_compute
+	}
+	LOG_line = { sys = ECON  msg = "cached munitions-infra output for governorship" }
+	LOG_exit = { sys = ECON  fn = "GOODS_cache_munitions_infra"  result = OK }
+}
+
 GOODS_setup_governorship_stockpiles = {
 	# Manufactured goods
 	set_variable = {
@@ -985,6 +1001,7 @@ GOODS_governorship_produce_all = {
 	# before the ~28 industrial-good reads below, so the cache is always current for
 	# this quarter (civilization_value drifts over time) and never stale.
 	GOODS_cache_industrialisation_bonus = yes
+	GOODS_cache_munitions_infra = yes # perf #71: cache arsenal/depot munitions output once per quarter
 	GOODS_governorship_produce = {
 		do_if = produces_grain
 		amount = GOODS_governorship_grain_produced

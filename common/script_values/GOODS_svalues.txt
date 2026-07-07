@@ -2500,8 +2500,34 @@ GOODS_governorship_early_munitions_produced = {
 	# depot in this governorship's provinces contributes a flat munitions output.
 	# Symmetric with the demand side, which already counts these same buildings
 	# (DEMAND_svalues.txt:1448). This is the scripted supply-production hook the
-	# arsenal previously lacked (RESEARCH_MILITARY_LOGISTICS.md §A2/§E2). Only
-	# firearms-capable owners actually field munitions demand, so gate to match.
+	# arsenal previously lacked (RESEARCH_MILITARY_LOGISTICS.md §A2/§E2).
+	# [logistics-perf #71] Read the CACHED per-governorship value rather than re-walking
+	# every province here: this svalue is evaluated >1x/quarter (production pass + the
+	# DEMAND_difference/trade/currency passes), and an inline province loop re-ran each
+	# time. GOODS_cache_munitions_infra computes it once into var:munitions_infra_cached;
+	# the wrapper falls back to computing inline if the cache is absent, so a missing
+	# cache degrades to correctness, never to zeroed output (mirrors the #71 idiom).
+	add = GOODS_governorship_munitions_infra_output
+}
+
+GOODS_governorship_munitions_infra_output = {
+	# Scope: Governorship
+	# [logistics-perf #71] Cached wrapper over the arsenal/depot munitions-output walk.
+	# Read the cache if present; otherwise compute inline (never zero on a cache miss).
+	if = {
+		limit = { has_variable = munitions_infra_cached }
+		value = var:munitions_infra_cached
+	}
+	else = {
+		value = GOODS_governorship_munitions_infra_output_compute
+	}
+}
+
+GOODS_governorship_munitions_infra_output_compute = {
+	# Scope: Governorship
+	# The actual arsenal/depot munitions-output walk (see the cached wrapper above).
+	# Only firearms-capable owners field munitions demand, so gate to match the demand side.
+	value = 0
 	if = {
 		limit = {
 			owner = { invention = tech_firearms }

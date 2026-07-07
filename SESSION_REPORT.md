@@ -974,3 +974,52 @@ required, matching the pre-existing `# TODO: t1 and t2 education` marker at se_L
 se_LOG breadcrumbs (enter/line/exit) on the new effect. Braces: se_EDU 121/121, EDU_svalues 144/144.
 Files kept BOM+CRLF. `capital_scope.civilization_value` value-block idiom verified in-repo
 (DIPLOMACY_svalues.txt:514) and against TI/Invictus.
+
+---
+
+## [logistics-phys] [logistics-perf] Military-logistics review fixes
+
+Workflow-reviewed the military-logistics suite (12 agents, 7 findings, all adversarially verified,
+0 refuted). Fixed the two substantive findings; the three low/cosmetic ones left as-is.
+
+### [logistics-phys] Correctness (medium): penalties fired on monetary deflation, not physical shortage
+**Bug:** se_LOGISTICS.txt read `shortage_<good>` as a pure 0..1 PHYSICAL-deficit ratio, but
+se_CONSUME.txt's `CONSUME_update_shortage` builds that variable in three layers: (1) the physical
+deficit `(-stockpile)/DEMAND`, then (2) `+ CURRENCY_amt_circulated_deflation` (monetary deflation, up
+to ~0.1), then (3) `+ (1 - DEMAND_elasticity_impact)` (up to +0.9 when governorship wealth falls). So a
+currency-system country in deflation (e.g. the Qing player) with FULL arsenals could see
+`shortage_early_munitions` inflated to ~0.68 → `country_munitions_shortage_severe` stamping
++0.30 attrition / -0.25 morale recovery / -0.15 movement on armies that had no equipment shortage;
+same path hit coal/naval_supplies → steam-fleet attrition.
+
+**Fix:** snapshot the PURE physical ratio at the source. `CONSUME_update_shortage` now sets
+`shortage_phys_$tradegood$` immediately after the physical ratio is computed (before deflation/elasticity
+are added), and removes it in lockstep with the composite in the surplus branch. se_LOGISTICS.txt's two
+scans (land: early/late munitions+artillery; naval: coal+naval_supplies) now read `shortage_phys_*`
+instead of the composite. The composite `shortage_<good>` is untouched — the currency/consume layer that
+legitimately wants deflation in it keeps working. Inverting the terms back out in LOGISTICS was
+impossible (composite capped at 1), so a source snapshot is the correct layer.
+
+### [logistics-perf #71] Performance (medium): uncached province walk in a hot svalue
+**Bug:** `GOODS_governorship_early_munitions_produced` (GOODS_svalues.txt) appended an INLINE
+`every_governorship_state → every_state_province` arsenal/depot count. That svalue is evaluated >1x/quarter
+(production pass + DEMAND_difference_early_munitions → trade/currency/rollup passes), so the province walk
+re-ran each time — exactly the PERF_AUDIT #3 class.
+
+**Fix:** applied the existing #71 cache idiom already in this file. Split the inline loop into
+`GOODS_governorship_munitions_infra_output` (cached wrapper: read `var:munitions_infra_cached` if present,
+else compute) + `_compute` (the actual walk). New `GOODS_cache_munitions_infra` effect computes it once
+into the var, wired at all three sites that already call `GOODS_cache_industrialisation_bonus` (per-quarter
+production refresh in se_GOODS.txt `GOODS_governorship_produce_all`, plus the two setup/formation sites in
+oa_economy_setup.txt and se_FUNC.txt). Cache-miss falls back to inline compute → degrades to correctness,
+never zeroed output.
+
+### Not fixed (low/cosmetic, logged for the backlog)
+- Two `every_governorships` scan passes (land + naval) could be fused into the existing CONSUME walk —
+  minor, cheap var-reads only.
+- `LOGISTICS_quarter` lacks LOG_enter/exit (its two sub-effects both log unconditionally, so a trace still
+  shows whether the quarter fired) — near-cosmetic.
+
+se_LOG breadcrumbs on the new cache effect. Braces: GOODS_svalues 869/869, se_GOODS 370/370, se_FUNC
+182/182, oa_economy_setup 526/526, se_CONSUME 42/42, se_LOGISTICS 91/91. All files kept their byte
+conventions (se_LOGISTICS no-BOM/LF; the rest BOM+CRLF).
