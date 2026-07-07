@@ -1,0 +1,273 @@
+########################################################################
+# se_QING_SEATS.txt — the PERMANENT / DYNASTIC Grand Council seats (#115, #116).
+#
+# The eleven great offices (se_QING_COUNCIL.txt) are APPOINTED, VACATABLE, and
+# scored by the accountability loop. This file adds a DISTINCT seat class that
+# is NONE of those things: the throne itself and its blood.
+#
+#   emperor        皇帝    the reigning sovereign — always current_ruler
+#   crownprince    皇太子  the primary heir — the throne-in-waiting
+#   regent         攝政    a Grand Regent, seated ONLY while the emperor is a
+#                          child or incapacitated (#116); vacated when he can rule
+#
+# These seats reuse the SAME storage shape as the appointable offices
+# (qing_office_<key>_holder country vars + a qing_office_held character flag) so
+# the government-view roster can render them with the existing card idiom and the
+# same GetCharacter datacontext. But they are held OUT of every appointable-office
+# loop — the autofill sweep, the accountability pulse, the effectiveness recompute,
+# the appoint/vacate GUIs, the challenger search — because they are filled by BLOOD
+# and by REGENCY EVENT, never by the player picking a courtier, and judging the
+# Son of Heaven on a "realm metric challenge" is a category error. They are a
+# read-and-refresh overlay, recomputed each quarter from the dynasty's actual state.
+#
+# Engine idioms (all oracle-verified 2026-07-07, INV+TI — see OVERNIGHT_DECISIONS.md):
+#   • child ruler          current_ruler = { is_adult = no }   (adulthood = age 16)
+#   • incapacity           has_trait = incapable  (only first-class marker;
+#                          PARTIAL — paired with an age>=70 dotage proxy)
+#   • primary heir         primary_heir scope + has_primary_heir gate (monarchy)
+#   • empress dowager      current_ruler.mother  (guard exists + is_alive + is_female;
+#                          Invictus regency literally saves the mother as regent)
+#   • var-holds-a-char-ref SAFE (se_QING_NAPOLEON.txt:107 emeritus precedent)
+#   • succession hook      on_ruler_change (live on_action, 00_specific_from_code.txt:105)
+#
+# All logged sys = QING. CHI-only; the refresh is called from QING_GOV_pulse and
+# on_ruler_change. Prefix = QING_seat_
+########################################################################
+
+# ======================================================================
+# REFRESH ALL DYNASTIC SEATS — the single entry point. Country scope (ROOT = CHI).
+# Idempotent: recomputes the emperor + crown-prince seats from the dynasty's
+# current state every call, and re-evaluates whether a regency is warranted.
+# Cheap: O(1) — current_ruler / primary_heir / mother scope reads, no sweeps.
+# ======================================================================
+QING_seat_refresh_all = {
+	LOG_enter = { sys = QING  fn = "QING_seat_refresh_all" }
+	QING_seat_refresh_emperor = yes
+	QING_seat_refresh_crownprince = yes
+	QING_seat_evaluate_regency = yes
+	LOG_exit = { sys = QING  fn = "QING_seat_refresh_all"  result = OK }
+}
+
+# ======================================================================
+# EMPEROR 皇帝 — always the reigning sovereign. A pure mirror of current_ruler
+# onto the seat var so the roster card can render him with the shared idiom.
+# The seat flag is NOT set on the ruler (he is not "an office-holder"); the seat
+# is display-only and never enters the appointable loops.
+# ======================================================================
+QING_seat_refresh_emperor = {
+	if = {
+		limit = { exists = current_ruler }
+		set_variable = { name = qing_office_emperor_holder  value = current_ruler }
+	}
+	else = {
+		# interregnum / no ruler — clear the seat so the card falls back to vacant
+		if = { limit = { has_variable = qing_office_emperor_holder }  remove_variable = qing_office_emperor_holder }
+	}
+}
+
+# ======================================================================
+# CROWN PRINCE 皇太子 — the primary heir. Mirrors primary_heir onto the seat var.
+# Monarchy-gated (has_primary_heir). When there is no designated heir (a live
+# succession crisis, or secret succession sealed — see #119) the seat is vacant.
+# ======================================================================
+QING_seat_refresh_crownprince = {
+	if = {
+		limit = {
+			has_primary_heir = yes
+			exists = primary_heir
+			# a sealed secret-succession (#119) deliberately HIDES the heir: the
+			# tablet in the 正大光明 frame names no public crown prince. Show vacant.
+			NOT = { has_variable = qing_secret_succession_sealed }
+		}
+		set_variable = { name = qing_office_crownprince_holder  value = primary_heir }
+	}
+	else = {
+		if = { limit = { has_variable = qing_office_crownprince_holder }  remove_variable = qing_office_crownprince_holder }
+	}
+}
+
+# ======================================================================
+# REGENCY EVALUATION 攝政 (#116) — seat or vacate the Grand Regent seat.
+# A regency is WARRANTED when the emperor cannot personally rule:
+#   • MINORITY   current_ruler = { is_adult = no }   (a child on the throne)
+#   • INCAPACITY current_ruler = { has_trait = incapable } OR the age>=70 dotage
+#                proxy (the engine's only first-class incapacity marker is the
+#                incapable trait; extreme age stands in for the senile/bedridden
+#                emperor the trait does not always model).
+# When warranted and no regent sits, fire the regent-selection event. When NOT
+# warranted and a regent still sits, dissolve the regency (the emperor has come
+# of age or recovered — auto-detected here, since the engine has no
+# on_coming_of_age / on_trait_removed hook; this quarterly re-eval is the
+# Invictus ip_monarchy.52 pattern).
+# ======================================================================
+QING_seat_evaluate_regency = {
+	if = {
+		limit = { QING_seat_regency_warranted = yes }
+		# a regency is needed. If none is seated, summon the court to name one.
+		if = {
+			limit = { NOT = { has_variable = qing_office_regent_holder } }
+			LOG_line = { sys = QING  msg = "regency WARRANTED and seat empty — summoning regent selection for [ROOT.GetTag]" }
+			trigger_event = { id = qing_regency.1  days = { 1 5 } }
+		}
+		else = {
+			# a regent already sits; verify he is still alive & in our service, else clear
+			if = {
+				limit = { NOT = { var:qing_office_regent_holder = { is_alive = yes  employer = ROOT } } }
+				QING_seat_regent_clear = yes
+				LOG_line = { sys = QING  msg = "seated regent gone (dead/departed) — regency seat cleared for [ROOT.GetTag]" }
+			}
+		}
+	}
+	else = {
+		# no regency warranted. If one is still seated, the emperor can now rule —
+		# dissolve it (coming-of-age / recovery), firing the hand-back event.
+		if = {
+			limit = { has_variable = qing_office_regent_holder }
+			LOG_line = { sys = QING  msg = "regency no longer warranted — emperor resumes personal rule for [ROOT.GetTag]" }
+			trigger_event = { id = qing_regency.3  days = { 1 5 } }
+		}
+	}
+}
+
+# Trigger: is a regency warranted right now? (child OR incapable OR dotage)
+QING_seat_regency_warranted = {
+	exists = current_ruler
+	OR = {
+		current_ruler = { is_adult = no }
+		current_ruler = { has_trait = incapable }
+		current_ruler = { age >= 70 }
+	}
+}
+
+# ======================================================================
+# SEAT THE REGENT — called from qing_regency.1 with scope:qing_regent_pick as
+# the chosen character. Stores the seat var, flags the character, and grants the
+# regent-authority country modifier. this = country (ROOT = CHI).
+# ======================================================================
+QING_seat_regent_install = {
+	LOG_enter = { sys = QING  fn = "QING_seat_regent_install" }
+	if = {
+		limit = { exists = scope:qing_regent_pick }
+		# clear any prior regent first (defensive; normally already empty)
+		if = { limit = { has_variable = qing_office_regent_holder }  QING_seat_regent_clear = yes }
+		set_variable = { name = qing_office_regent_holder  value = scope:qing_regent_pick }
+		scope:qing_regent_pick = {
+			set_variable = { name = qing_office_held  value = flag:regent }
+			add_character_modifier = { name = qing_regent_authority  duration = -1 }
+			# the regent wields the throne's power base while he governs
+			add_loyal_veterans = 4
+		}
+		add_country_modifier = { name = qing_regency_active  duration = -1 }
+		LOG_line = { sys = QING  msg = "regency installed: [scope:qing_regent_pick.GetName] made Grand Regent 攝政王 for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_seat_regent_install"  reason = "no qing_regent_pick scope for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_seat_regent_install"  result = OK }
+}
+
+# ======================================================================
+# CLEAR THE REGENT — strip the seat, the character flag/modifier/power base, and
+# the country modifier. Called on dissolution (qing_regency.3), on the regent's
+# death/departure, and defensively before a re-install.
+# ======================================================================
+QING_seat_regent_clear = {
+	LOG_enter = { sys = QING  fn = "QING_seat_regent_clear" }
+	if = {
+		limit = { has_variable = qing_office_regent_holder }
+		if = {
+			limit = { var:qing_office_regent_holder = { is_alive = yes } }
+			var:qing_office_regent_holder = {
+				if = { limit = { has_variable = qing_office_held  var:qing_office_held = flag:regent }  remove_variable = qing_office_held }
+				remove_character_modifier = qing_regent_authority
+				add_loyal_veterans = -4
+			}
+		}
+		remove_variable = qing_office_regent_holder
+	}
+	remove_country_modifier = qing_regency_active
+	LOG_exit = { sys = QING  fn = "QING_seat_regent_clear"  result = OK }
+}
+
+# ======================================================================
+# EMPRESS DOWAGER PICK 皇太后 (#116) — score the pool of regent candidates and
+# save the leading one as scope:qing_regent_pick. Priority (locked 2026-07-07):
+#   1. the EMPRESS DOWAGER — current_ruler.mother, living: the 垂簾聽政 default.
+#      The mother of a child-emperor is the historical first regent (Cixi).
+#   2. an adult IMPERIAL PRINCE — a close male relative of the throne (a 親王
+#      regent in the Dorgon / Prince Gong mould).
+#   3. the ablest GRAND COUNCILLOR — a serving great-office holder as regent.
+# Sets scope:qing_regent_pick if any is found; leaves it unset otherwise.
+# Called at country scope from qing_regency.1's immediate.
+# ======================================================================
+QING_seat_pick_regent = {
+	LOG_enter = { sys = QING  fn = "QING_seat_pick_regent" }
+	# 1. Empress Dowager (the emperor's living mother)
+	if = {
+		limit = {
+			exists = current_ruler.mother
+			current_ruler.mother = { is_alive = yes }
+		}
+		current_ruler.mother = { save_scope_as = qing_regent_pick }
+		set_variable = { name = qing_regent_pick_kind  value = flag:dowager }
+		LOG_line = { sys = QING  msg = "regent pick: Empress Dowager 皇太后 [scope:qing_regent_pick.GetName] (mother-first) for [ROOT.GetTag]" }
+	}
+	# 2. an adult imperial prince (close relative of the ruler, not the ruler/heir)
+	else_if = {
+		limit = {
+			any_character = {
+				count >= 1
+				employer = ROOT
+				is_adult = yes
+				is_alive = yes
+				is_close_relative = current_ruler
+				NOT = { this = current_ruler }
+			}
+		}
+		ordered_character = {
+			limit = {
+				employer = ROOT
+				is_adult = yes
+				is_alive = yes
+				is_close_relative = current_ruler
+				NOT = { this = current_ruler }
+			}
+			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_regent_pick
+		}
+		set_variable = { name = qing_regent_pick_kind  value = flag:prince }
+		LOG_line = { sys = QING  msg = "regent pick: Imperial Prince 親王 [scope:qing_regent_pick.GetName] for [ROOT.GetTag]" }
+	}
+	# 3. the ablest serving grand councillor (any great-office holder)
+	else_if = {
+		limit = {
+			any_character = {
+				count >= 1
+				employer = ROOT
+				is_adult = yes
+				is_alive = yes
+				has_variable = qing_office_held
+			}
+		}
+		ordered_character = {
+			limit = {
+				employer = ROOT
+				is_adult = yes
+				is_alive = yes
+				has_variable = qing_office_held
+			}
+			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_regent_pick
+		}
+		set_variable = { name = qing_regent_pick_kind  value = flag:councillor }
+		LOG_line = { sys = QING  msg = "regent pick: Grand Councillor [scope:qing_regent_pick.GetName] (no dowager/prince) for [ROOT.GetTag]" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_seat_pick_regent"  reason = "no eligible regent (no mother/prince/councillor) for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_seat_pick_regent"  result = OK }
+}

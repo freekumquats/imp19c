@@ -1,0 +1,271 @@
+########################################################################
+# qing_regency_events.txt — the DYNASTIC-SEAT drama (#116, #119).
+#
+# Two intertwined arcs on top of se_QING_SEATS.txt:
+#
+#   REGENCY (#116) — namespace qing_regency
+#     .1  a regency is needed (child/infirm emperor): the court names a Grand
+#         Regent. The Empress Dowager 皇太后 is the leading candidate (垂簾聽政),
+#         then an imperial prince, then a grand councillor.
+#     .3  the regency ends (the emperor comes of age or recovers): the regent
+#         hands back power — graciously, or clinging to it (the Cixi danger).
+#
+#   SUCCESSION JOCKEYING (#119) — namespace qing_succession
+#     .1  the princes intrigue over the succession (九子奪嫡): the sons of the
+#         emperor form factions. RESOLVED by secret succession (秘密立儲).
+#     .2  the sealed tablet is opened at the emperor's death — a smooth transfer
+#         if it was sealed, a disputed one if it never was.
+#
+# HISTORY: the 九子奪嫡 (the Nine Lords' struggle for Kangxi's succession,
+# 1708-1722) so scarred the dynasty that the Yongzheng Emperor instituted
+# 秘密立儲 — the heir's name sealed in a box behind the 正大光明 tablet in the
+# Qianqing Palace, opened only at the emperor's death. This ENDED open succession
+# wars for a century. Regency precedents: Dorgon for the child Shunzhi (1643);
+# the Empress Dowagers Cixi & Ci'an for Tongzhi & Guangxu (垂簾聽政, 1861-).
+#
+# CHI-only, player-focused. Regency .1/.3 are fired by QING_seat_evaluate_regency
+# (the quarterly re-eval in se_QING_SEATS.txt). Succession .1 is offered by the
+# flavour roll; .2 is fired on_ruler_change. All logged sys = QING.
+#
+# Sources: Silas Wu, Passage to Power: K'ang-hsi and His Heir Apparent (1979);
+#   Pei Huang, Autocracy at Work (Yongzheng, 1974); the 垂簾聽政 regency system.
+########################################################################
+
+namespace = qing_regency
+
+########################################################################
+# .1  A REGENCY IS NEEDED — name a Grand Regent (攝政).
+# Fired by QING_seat_evaluate_regency when the emperor cannot personally rule
+# (minority / incapacity / dotage) and no regent yet sits. The immediate scores
+# the candidate pool (QING_seat_pick_regent) and saves the leading one; the
+# options confirm the Dowager, override to a prince/councillor, or rule directly
+# through the council (no regent — a weak, factional interregnum).
+########################################################################
+qing_regency.1 = {
+	type = country_event
+	title = "qing_regency.1.t"
+	desc = "qing_regency.1.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:qing_regent_pick
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		QING_seat_regency_warranted = yes
+		NOT = { has_variable = qing_office_regent_holder }
+	}
+
+	immediate = {
+		QING_seat_pick_regent = yes
+		LOG_line = { sys = QING  msg = "EVENT qing_regency.1 (regency needed) pick=[ROOT.MakeScope.GetVariable('qing_regent_pick_kind')|none] for [ROOT.GetTag]" }
+	}
+
+	# --- Install the court's leading candidate (Dowager first) -----------
+	option = {
+		name = "qing_regency.1.a"
+		trigger = { exists = scope:qing_regent_pick }
+		custom_tooltip = "qing_regency.1.a.tt"
+		QING_seat_regent_install = yes
+		QING_seat_refresh_all = yes
+	}
+
+	# --- Rule through the Grand Council alone (no regent) ----------------
+	# A dangerous interregnum: legitimacy leaks and factions test the throne.
+	option = {
+		name = "qing_regency.1.b"
+		custom_tooltip = "qing_regency.1.b.tt"
+		add_country_modifier = { name = qing_regency_active  duration = 1825 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
+		# a leaderless minority invites the princes to jockey (couples to #119)
+		trigger_event = { id = qing_succession.1  days = { 30 120 } }
+	}
+}
+
+########################################################################
+# .3  THE REGENCY ENDS — the emperor resumes personal rule.
+# Fired by QING_seat_evaluate_regency when a regent sits but a regency is no
+# longer warranted (the child came of age / the emperor recovered). Whether the
+# regent lets go cleanly turns on his affinity to the (now-capable) throne.
+########################################################################
+qing_regency.3 = {
+	type = country_event
+	title = "qing_regency.3.t"
+	desc = "qing_regency.3.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:qing_outgoing_regent
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_regent_holder
+		NOT = { QING_seat_regency_warranted = yes }
+	}
+
+	immediate = {
+		var:qing_office_regent_holder = {
+			save_scope_as = qing_outgoing_regent
+			QING_char_affinity = yes
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_regency.3 (regency ends) regent=[scope:qing_outgoing_regent.GetName] for [ROOT.GetTag]" }
+	}
+
+	# --- A gracious hand-back (a congenial regent, or an honest prince) --
+	option = {
+		name = "qing_regency.3.a"
+		trigger = { scope:qing_outgoing_regent = { var:qing_char_affinity >= 45 } }
+		custom_tooltip = "qing_regency.3.a.tt"
+		scope:qing_outgoing_regent = { QING_char_promote_standing = { pop = 6  prom = 5 } }
+		add_legitimacy = 10
+		QING_seat_regent_clear = yes
+		QING_seat_refresh_all = yes
+	}
+
+	# --- Retire the regent by decree (a clean but curt dismissal) --------
+	option = {
+		name = "qing_regency.3.b"
+		custom_tooltip = "qing_regency.3.b.tt"
+		add_legitimacy = 3
+		QING_seat_regent_clear = yes
+		QING_seat_refresh_all = yes
+	}
+
+	# --- The regent clings to power (the Cixi danger) --------------------
+	# Only offered when the regent is ESTRANGED from the throne: he refuses to
+	# yield, and the young emperor reigns without ruling. A lingering regency
+	# and a resentful sovereign.
+	option = {
+		name = "qing_regency.3.c"
+		trigger = { scope:qing_outgoing_regent = { var:qing_char_affinity < 45 } }
+		custom_tooltip = "qing_regency.3.c.tt"
+		add_country_modifier = { name = qing_regency_active  duration = 3650 }
+		scope:qing_outgoing_regent = { add_loyalty = -10 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 6 }
+		# the regency PERSISTS: leave qing_office_regent_holder in place, do NOT clear.
+	}
+}
+
+########################################################################
+# SUCCESSION JOCKEYING (#119) — namespace qing_succession
+########################################################################
+namespace = qing_succession
+
+########################################################################
+# .1  THE PRINCES INTRIGUE (九子奪嫡)
+# Fired by the flavour roll when the emperor has several adult sons and no
+# public heir is safely designated. The sons form factions; the court divides.
+# RESOLUTION: 秘密立儲 — seal the heir's name behind the 正大光明 tablet, to be
+# opened only at death. This is the historical fix (Yongzheng), and it is the
+# mechanic's answer: sealing DAMPS the jockeying and yields a smooth transfer.
+########################################################################
+qing_succession.1 = {
+	type = country_event
+	title = "qing_succession.1.t"
+	desc = "qing_succession.1.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		is_monarchy = yes
+		# more than one adult child of the emperor — the makings of a faction fight
+		current_ruler = {
+			any_child = { count >= 2  is_adult = yes  is_alive = yes }
+		}
+		NOT = { has_variable = qing_secret_succession_sealed }
+	}
+
+	immediate = {
+		# raise the factional-strife marker (drives the roster/health read + the
+		# option costs). The princes are jockeying until resolved.
+		set_variable = { name = qing_succession_jockeying  value = 1 }
+		LOG_line = { sys = QING  msg = "EVENT qing_succession.1 (九子奪嫡 princes intrigue) for [ROOT.GetTag]" }
+	}
+
+	# --- SEAL THE SECRET SUCCESSION (秘密立儲) — the Yongzheng solution -----
+	# The heir's name is sealed behind the 正大光明 tablet. The public jockeying
+	# loses its object; the transfer will be smooth. This is the resolution.
+	option = {
+		name = "qing_succession.1.a"
+		custom_tooltip = "qing_succession.1.a.tt"
+		set_variable = { name = qing_secret_succession_sealed  value = 1 }
+		remove_variable = qing_succession_jockeying
+		add_legitimacy = 8
+		add_stability = 1
+		# the crown-prince seat goes deliberately vacant (the heir is now secret)
+		QING_seat_refresh_all = yes
+		LOG_line = { sys = QING  msg = "秘密立儲 sealed — succession secured for [ROOT.GetTag]" }
+	}
+
+	# --- NAME A CROWN PRINCE OPENLY (立太子) — the old way ------------------
+	# Designating an heir in the open placates one faction and inflames the rest —
+	# the very pattern that produced the 九子奪嫡. Jockeying persists.
+	option = {
+		name = "qing_succession.1.b"
+		custom_tooltip = "qing_succession.1.b.tt"
+		add_legitimacy = 3
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
+		add_country_modifier = { name = qing_succession_faction_strife  duration = 1825 }
+		# jockeying continues; re-offer later
+		trigger_event = { id = qing_succession.1  days = { 720 1440 } }
+	}
+
+	# --- LET THEM CONTEND (do nothing) — the throne stands aloof -----------
+	option = {
+		name = "qing_succession.1.c"
+		custom_tooltip = "qing_succession.1.c.tt"
+		add_country_modifier = { name = qing_succession_faction_strife  duration = 1825 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 2 }
+	}
+}
+
+########################################################################
+# .2  THE SEALED TABLET IS OPENED — succession resolves at death.
+# Fired on_ruler_change. If the secret succession was sealed, the transfer is
+# smooth (legitimacy dividend, strife cleared). If it was NOT — and the princes
+# were jockeying — the accession is disputed (legitimacy hit, a faction modifier,
+# a shot at open strife). The sealed flag is consumed either way (the new reign
+# starts fresh; the new emperor may seal his own in time).
+########################################################################
+qing_succession.2 = {
+	type = country_event
+	title = "qing_succession.2.t"
+	desc = "qing_succession.2.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_succession.2 (accession) sealed=[ROOT.MakeScope.GetVariable('qing_secret_succession_sealed')|0] jockey=[ROOT.MakeScope.GetVariable('qing_succession_jockeying')|0] for [ROOT.GetTag]" }
+		if = {
+			# SMOOTH: the tablet named the heir. A clean, legitimate transfer.
+			limit = { has_variable = qing_secret_succession_sealed }
+			add_legitimacy = 12
+			add_stability = 1
+			remove_variable = qing_secret_succession_sealed
+			remove_variable = qing_succession_jockeying
+			remove_country_modifier = qing_succession_faction_strife
+			LOG_line = { sys = QING  msg = "秘密立儲 tablet opened — smooth accession for [ROOT.GetTag]" }
+		}
+		else_if = {
+			# DISPUTED: no sealed heir amid active jockeying — a contested throne.
+			limit = { has_variable = qing_succession_jockeying }
+			add_legitimacy = -10
+			add_country_modifier = { name = qing_succession_faction_strife  duration = 3650 }
+			remove_variable = qing_succession_jockeying
+			LOG_line = { sys = QING  msg = "disputed accession (no sealed heir) for [ROOT.GetTag]" }
+		}
+		# always refresh the dynastic seats for the new reign
+		QING_seat_refresh_all = yes
+	}
+}

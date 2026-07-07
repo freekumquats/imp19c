@@ -80,4 +80,41 @@ with the *why*. Companion to SESSION_REPORT.md (which gets the per-feature detai
   (the final adversarial workflow covers 5a79ddcd..HEAD).
 
 ## Per-feature decisions
-<!-- appended as features are built -->
+
+### #110 Dynastic Health (finish + review) — DONE, committed 1c0e5365
+- Code review found ONE real bug: QING_HEALTH_CURRENCY_TT cited a silver-drain threshold of 40; the
+  real classifier bands at 30 (silver drain) / 60 (crisis). Fixed the tooltip to name both true
+  breakpoints. Cosmetic GUI indent nit left as-is (whitespace-insensitive, review confirmed no impact;
+  a re-tab of the block is riskier than the nit).
+
+### #115 Emperor + Crown Prince permanent seats & #116 Grand Regent — DONE (trunk)
+- NEW file `se_QING_SEATS.txt` holds the whole dynastic-seat class, DELIBERATELY separate from the
+  appointable-office backend (se_QING_COUNCIL.txt) so the autofill sweep / accountability pulse /
+  effectiveness recompute / appoint-vacate GUIs / challenger search stay UNTOUCHED. The seats reuse the
+  same `qing_office_<key>_holder` var shape (emperor/crownprince/regent) purely so the GUI roster renders
+  them with the existing card idiom — but they never enter any appointable loop.
+- Emperor seat = mirror of current_ruler; Crown Prince = mirror of primary_heir (monarchy-gated,
+  hidden when secret succession sealed); refreshed every quarter (QING_GOV_pulse) + on_ruler_change +
+  game start.
+- Regency (#116): QING_seat_evaluate_regency fires qing_regency.1 when warranted (child is_adult=no /
+  incapable trait / age>=70 dotage proxy) and no regent sits; fires qing_regency.3 to DISSOLVE when no
+  longer warranted (quarterly re-eval stands in for the missing on_coming_of_age hook — Invictus
+  ip_monarchy.52 pattern). Regent PICK priority = Empress Dowager (current_ruler.mother, living) FIRST,
+  then imperial prince (close relative), then ablest grand councillor. qing_regency.3 branch on outgoing
+  regent's affinity models the Cixi cling-to-power danger (regency persists, does NOT clear).
+- Seat modifiers added to qing_governance_modifiers.txt: qing_regency_active (country; legitimacy/PI drain +
+  unrest — a regency is workable but never as sure as majority rule), qing_regent_authority (character;
+  prominence/popularity/loyalty — the lightning-rod regent).
+- GUI: new "The Throne (大統)" seat row (3 read-only cards, no appoint/vacate buttons) inserted above the
+  Dynastic Health panel in government_view.gui. Braces balanced 1595/1595.
+
+### #119 九子奪嫡 + 秘密立儲 (secret succession as resolution) — DONE (trunk)
+- In the SAME qing_regency_events.txt (namespace qing_succession). qing_succession.1 (princes intrigue,
+  offered by flavour roll when ≥2 adult imperial sons + no sealed succession) RESOLVES via option .a
+  "Institute secret succession" — sets qing_secret_succession_sealed, clears jockeying, legitimacy
+  dividend, hides the crown-prince seat (the Yongzheng 正大光明-tablet fix). Open designation (.b) or
+  aloofness (.c) leave the qing_succession_faction_strife modifier biting.
+- qing_succession.2 fires on_ruler_change: SEALED → smooth accession (legitimacy+12); UNSEALED amid
+  jockeying → disputed accession (legitimacy-10 + strife modifier). Sealed flag consumed each reign.
+- Dispatcher: added weight-7 qing_succession.1 entry to QING_frontier_flavour_roll (se_QING_DECLINE.txt),
+  self-guarded on the trigger. on_ruler_change hook added to qing_mechanics_on_actions.txt (CHI, AI+player).
