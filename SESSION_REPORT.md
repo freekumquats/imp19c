@@ -1176,3 +1176,63 @@ country modifiers + 4 amban opinion modifiers + 3 works building keys + the loya
 constants all defined (0 missing). Consolidated byte/brace check across all 60+ changed files: 0
 problems (common/**/*.txt no-BOM/LF/final-nl; the pre-existing BOM on qing_mechanics_on_actions.txt
 + se_QING_GOVERNANCE.txt PRESERVED — the baseline works with it; loc .yml BOM/LF starts l_english:).
+
+
+### Post-implementation adversarial review + fixes (mandatory-review + fix-traceability rules)
+
+Ran the mandated Workflow-tool deep adversarial review over ALL code not on the known-good
+baseline (`origin/fix-usa-roster-create-character` @ 5a79ddcd .. HEAD, 86 files): clustered
+finders -> adversarial verifiers (default-REFUTED) -> synthesis (34 agents, ~1.77M tokens).
+Verdict: NOT SOUND — 21 CONFIRMED defects + 1 PLAUSIBLE. Ship-blocked until fixed.
+
+Applied all 13 must-fix findings + 3 high-value should-considers (commit e5c06ad3). Every
+introduced idiom re-verified against the repo and both oracle mods (Terra-Indomita, Invictus);
+byte/brace conventions preserved; task-tagged in-code comments + se_LOG markers on each.
+
+CRITICAL
+- qing_succession.2 had ZERO options (non-hidden country_event) => undismissable accession
+  popup soft-locking the human CHI player on every succession. Added a dismiss option + loc key
+  (qing_succession.2.a).
+
+CHOICE INVERSION
+- se_QING_CENSORATE impeachment: `limit = { always = $outcome$ = uphold }` macro-expanded to the
+  malformed `always = uphold = uphold`, never matched, so "uphold" fell through to SUPPRESS
+  (corruption +5 / tyranny +3 — the inverse of the player's choice). Split into two dedicated
+  effects (QING_censorate_impeach_uphold / _suppress) selected by call site.
+
+RUNAWAY / STUCK-STATE (feature-killers)
+- se_QING_ETHNIC_TENSION revolt cooldown flag (qing_prov_ethnic_revolted) had a clear effect with
+  ZERO callers — a province erupted once then locked out forever. Wired the clear into pulse STEP 4
+  (tension < 70). Also bound qing_ethnic.1 to scope:erupt_province (was re-picking randomly,
+  double-targeting on multi-eruption pulses).
+- se_QING_AMBAN + on_character_death: a posted amban dying of natural causes stranded the subject's
+  qing_amban_here var forever. Added qing_amban_marker + a death-cleanup branch.
+- qing_pilgrimage: pilgrim dying between chain links stranded qing_pilgrimage_active, killing the
+  whole feature. Added qing_pilgrim_marker + death-hook release + .5 cleanup.
+- se_QING_SEATS/qing_regency: .1.b (council-rule) and .3.c (usurper clings) re-fired every quarter,
+  re-nudging reform_pressure and stacking modifiers. Added qing_regency_council_rule /
+  qing_regency_usurped suppression flags cleared on dissolution; also clear a dead/departed usurper.
+
+DANGLING / INVALID KEYS (silently dropped effects)
+- qing_war.3.b raised a fleet of undefined `trireme` (empty BOM stub) inside a raise_legion ARMY
+  wrapper and charged 180 treasury unconditionally. Rewrote to the proven navy idiom
+  (create_unit navy=yes, add_subunit=brig, country scope), charging only when a coastal hull raises.
+- se_QING_HOUSEHOLD eunuch `add_rival = prev` resolved to the COUNTRY (if/limit don't push scope),
+  so no rivalry formed. Saved scope:qing_eunuch_instrument and used is_rival/add_rival = scope:.
+- qing_justice_modifiers: local_pop_happyness -> local_population_happiness (x3, was silently
+  dropped — the intended happiness swings never applied).
+- qing_integ_capstone_modifiers: character_prominence -> prominence (the +10 co-opt reward).
+- qing_integ.41 had no trigger — could fire on an already-absorbed landless subject when .30 won
+  the race. Added a re-validation trigger mirroring .30.
+- se_QING_PERSONNEL: removed a vestigial dead write via the unproven current_date.year accessor
+  (never read; the real triennial guard is qing_personnel_daji_cooldown).
+
+DEFERRED (logged, not fixed this pass): the PLAUSIBLE average_loyalty token
+(se_QING_ETHNIC_TENSION.txt:148) + the lower-value should-considers (amban .2/.3/.4 lifecycle
+dispatch, personnel.3 dead-content queue path, on_character_death regent branch, dead
+qing_pilgrim_patron_of_faith/_devotion_to_rival modifiers) — none are soft-locks or choice
+inversions; tracked for a follow-up pass.
+
+Consolidated re-check after fixes: all 16 edited files byte/brace-clean (0 problems); confirmed
+zero remaining `local_pop_happyness`, `character_prominence`, `value = current_date.year`, or
+`trireme` refs (bar one explanatory comment).
