@@ -103,26 +103,57 @@ QING_seat_refresh_crownprince = {
 QING_seat_evaluate_regency = {
 	if = {
 		limit = { QING_seat_regency_warranted = yes }
-		# a regency is needed. If none is seated, summon the court to name one.
+		# a regency is needed. If none is seated, summon the court to name one —
+		# UNLESS the court already chose to rule through the council with no regent
+		# ([#116 review-fix] qing_regency.1.b sets qing_regency_council_rule; without
+		# this guard the quarterly pulse re-fired qing_regency.1 every ~90 days for the
+		# whole minority, since .1.b never sets qing_office_regent_holder).
 		if = {
-			limit = { NOT = { has_variable = qing_office_regent_holder } }
+			limit = {
+				NOT = { has_variable = qing_office_regent_holder }
+				NOT = { has_variable = qing_regency_council_rule }
+			}
 			LOG_line = { sys = QING  msg = "regency WARRANTED and seat empty — summoning regent selection for [ROOT.GetTag]" }
 			trigger_event = { id = qing_regency.1  days = { 1 5 } }
 		}
 		else = {
 			# a regent already sits; verify he is still alive & in our service, else clear
 			if = {
-				limit = { NOT = { var:qing_office_regent_holder = { is_alive = yes  employer = ROOT } } }
+				limit = {
+					has_variable = qing_office_regent_holder
+					NOT = { var:qing_office_regent_holder = { is_alive = yes  employer = ROOT } }
+				}
 				QING_seat_regent_clear = yes
 				LOG_line = { sys = QING  msg = "seated regent gone (dead/departed) — regency seat cleared for [ROOT.GetTag]" }
 			}
 		}
 	}
 	else = {
-		# no regency warranted. If one is still seated, the emperor can now rule —
-		# dissolve it (coming-of-age / recovery), firing the hand-back event.
+		# no regency warranted. The council-rule interregnum (if any) is over — the
+		# emperor can rule, so clear that suppression flag for a possible future regency.
+		if = { limit = { has_variable = qing_regency_council_rule }  remove_variable = qing_regency_council_rule }
+		# A clinging usurper (qing_regency.3.c) whose holder has since died/departed:
+		# clear the seat so a future regency can be summoned cleanly (regent_clear
+		# also drops the usurped/council-rule flags).
 		if = {
-			limit = { has_variable = qing_office_regent_holder }
+			limit = {
+				has_variable = qing_office_regent_holder
+				NOT = { var:qing_office_regent_holder = { is_alive = yes  employer = ROOT } }
+			}
+			QING_seat_regent_clear = yes
+			LOG_line = { sys = QING  msg = "usurping regent gone (dead/departed) — regency seat cleared for [ROOT.GetTag]" }
+		}
+		# If a live regent is still seated, the emperor can now rule — dissolve it
+		# (coming-of-age / recovery), firing the hand-back event ONCE. [#116 review-fix]
+		# qing_regency.3.c (the regent clings to power) deliberately leaves the holder
+		# var set; it stamps qing_regency_usurped so this else-branch does not re-fire
+		# qing_regency.3 every quarter (which re-nudged reform_pressure +6 and stacked a
+		# fresh qing_regency_active modifier each pulse).
+		else_if = {
+			limit = {
+				has_variable = qing_office_regent_holder
+				NOT = { has_variable = qing_regency_usurped }
+			}
 			LOG_line = { sys = QING  msg = "regency no longer warranted — emperor resumes personal rule for [ROOT.GetTag]" }
 			trigger_event = { id = qing_regency.3  days = { 1 5 } }
 		}
@@ -186,6 +217,10 @@ QING_seat_regent_clear = {
 		remove_variable = qing_office_regent_holder
 	}
 	remove_country_modifier = qing_regency_active
+	# [#116 review-fix] a full dissolution resets both re-fire suppression flags so a
+	# future minority can summon a fresh regency (and re-offer council-rule).
+	if = { limit = { has_variable = qing_regency_usurped }  remove_variable = qing_regency_usurped }
+	if = { limit = { has_variable = qing_regency_council_rule }  remove_variable = qing_regency_council_rule }
 	LOG_exit = { sys = QING  fn = "QING_seat_regent_clear"  result = OK }
 }
 

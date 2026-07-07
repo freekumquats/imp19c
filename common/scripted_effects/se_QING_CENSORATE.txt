@@ -115,36 +115,44 @@ QING_censorate_find_corrupt = {
 }
 
 # ======================================================================
-# IMPEACH CHARACTER — act on a named corrupt official. $outcome$ = uphold
-# (cleanse + corruption down) OR suppress (corruption up + tyranny). Called
-# from events with scope:qing_censorate_target already saved. Country scope.
+# IMPEACH CHARACTER — act on a named corrupt official. Called from events with
+# scope:qing_censorate_target already saved. Country scope.
+#
+# [#123 review-fix] The prior single-entry form used `limit = { always = $outcome$
+# = uphold }`, which macro-expands to `always = uphold = uphold` — a malformed
+# comparison the engine never evaluates true, so picking "uphold the impeachment"
+# silently fell through to the SUPPRESS branch (corruption +5, tyranny +3, target
+# never cleansed) — the exact inverse of the player's choice. `always` accepts only
+# yes/no and cannot compare text tokens. Split into two dedicated effects invoked
+# directly by the two call sites (qing_censorate_events.txt:78 uphold, :110 suppress),
+# so the branch is chosen by which effect is called — no runtime comparison at all.
 # ======================================================================
-QING_censorate_impeach = {
-	LOG_enter = { sys = QING  fn = "QING_censorate_impeach" }
+QING_censorate_impeach_uphold = {
+	LOG_enter = { sys = QING  fn = "QING_censorate_impeach_uphold" }
 	if = {
 		limit = { NOT = { exists = scope:qing_censorate_target } }
-		LOG_fail = { sys = QING  fn = "QING_censorate_impeach"  reason = "no target scope for [ROOT.GetTag]" }
+		LOG_fail = { sys = QING  fn = "QING_censorate_impeach_uphold"  reason = "no target scope for [ROOT.GetTag]" }
 	}
 	else = {
-		if = {
-			limit = { always = $outcome$ = uphold }
-			# uphold the impeachment: cleanse the target, corruption down
-			scope:qing_censorate_target = {
-				QING_char_cleanse = yes
-				add_loyalty = loyalty_qing_disgraced
-				add_popularity = -20
-				# if he holds a great office, vacate it (disgraced officials lose their posts)
-				if = { limit = { has_variable = qing_office_held }  QING_office_vacate_dispatch = yes }
-			}
-			QING_DECLINE_nudge = { var = qing_corruption_level  amount = -6 }
-			LOG_line = { sys = QING  msg = "censorate impeachment UPHELD: [scope:qing_censorate_target.GetName] cleansed, corruption down for [ROOT.GetTag]" }
+		# uphold the impeachment: cleanse the target, corruption down
+		scope:qing_censorate_target = {
+			QING_char_cleanse = yes
+			add_loyalty = loyalty_qing_disgraced
+			add_popularity = -20
+			# if he holds a great office, vacate it (disgraced officials lose their posts)
+			if = { limit = { has_variable = qing_office_held }  QING_office_vacate_dispatch = yes }
 		}
-		else = {
-			# suppress the impeachment: corruption up, tyranny
-			QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
-			add_tyranny = 3
-			LOG_line = { sys = QING  msg = "censorate impeachment SUPPRESSED: corruption up for [ROOT.GetTag]" }
-		}
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -6 }
+		LOG_line = { sys = QING  msg = "censorate impeachment UPHELD: [scope:qing_censorate_target.GetName] cleansed, corruption down for [ROOT.GetTag]" }
 	}
-	LOG_exit = { sys = QING  fn = "QING_censorate_impeach"  result = OK }
+	LOG_exit = { sys = QING  fn = "QING_censorate_impeach_uphold"  result = OK }
+}
+
+QING_censorate_impeach_suppress = {
+	LOG_enter = { sys = QING  fn = "QING_censorate_impeach_suppress" }
+	# suppress the impeachment: corruption up, tyranny (no target deref needed)
+	QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
+	add_tyranny = 3
+	LOG_line = { sys = QING  msg = "censorate impeachment SUPPRESSED: corruption up for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_censorate_impeach_suppress"  result = OK }
 }

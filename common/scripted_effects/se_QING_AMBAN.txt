@@ -78,6 +78,16 @@ QING_amban_post = {
 	$subject$ = {
 		set_variable = { name = qing_amban_here  value = scope:qing_amban_new }
 	}
+	# [#113 review-fix] stamp a marker on the resident himself so on_character_death
+	# can recognise a dying amban and clear the subject's qing_amban_here (mirrors the
+	# qing_office_held marker the office model keys death-cleanup off). While posted the
+	# resident's employer IS the subject, so the death hook reaches the right country.
+	# Without this, an amban who died of natural causes stranded qing_amban_here forever:
+	# evaluate skipped the dead ref and post_sweep saw the var still present, so the
+	# dependency was never re-staffed.
+	scope:qing_amban_new = {
+		set_variable = { name = qing_amban_marker  value = 1 }
+	}
 	LOG_line = { sys = QING  msg = "amban: posted [scope:qing_amban_new.GetName] to [$subject$.GetTag] for [ROOT.GetTag]" }
 	LOG_exit = { sys = QING  fn = "QING_amban_post"  result = OK }
 }
@@ -100,6 +110,10 @@ QING_amban_recall = {
 		}
 		$subject$.var:qing_amban_here = {
 			remove_character_modifier = qing_amban_resident
+			# [#113 review-fix] drop the amban marker: the recalled man rejoins the court
+			# pool and is no longer a resident (so a later death does not run the amban
+			# death-cleanup for a subject he no longer serves).
+			if = { limit = { has_variable = qing_amban_marker }  remove_variable = qing_amban_marker }
 			# recall: move back to CHI (he rejoins the court pool)
 			move_country = ROOT
 			save_scope_as = qing_amban_recalled

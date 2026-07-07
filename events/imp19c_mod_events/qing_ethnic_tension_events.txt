@@ -41,14 +41,26 @@ qing_ethnic.1 = {
 
 	immediate = {
 		LOG_line = { sys = QING  msg = "EVENT qing_ethnic.1 (province revolt) [ROOT.GetTag]" }
-		# Save the erupting province (the one that called this event).
-		random_owned_province = {
-			limit = {
-				has_variable = qing_prov_ethnic_tension
-				var:qing_prov_ethnic_tension >= 80
-				has_variable = qing_prov_ethnic_revolted
+		# [#107 review-fix] Use the EXACT province the eruption effect saved
+		# (scope:erupt_province, set in QING_ethnic_tension_erupt_province) rather than
+		# re-deriving via random_owned_province. When STEP 3's every_owned_province loop
+		# erupts several provinces in one pulse, each queues its own qing_ethnic.1; the
+		# old random pick over the shared {tension>=80 AND flagged} pool let two events
+		# land on the SAME province (double -30) while another erupting province was never
+		# addressed. Fall back to the random pick only if the passed scope is missing.
+		if = {
+			limit = { exists = scope:erupt_province }
+			scope:erupt_province = { save_scope_as = revolt_province }
+		}
+		else = {
+			random_owned_province = {
+				limit = {
+					has_variable = qing_prov_ethnic_tension
+					var:qing_prov_ethnic_tension >= 80
+					has_variable = qing_prov_ethnic_revolted
+				}
+				save_scope_as = revolt_province
 			}
-			save_scope_as = revolt_province
 		}
 	}
 

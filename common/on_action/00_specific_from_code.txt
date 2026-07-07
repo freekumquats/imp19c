@@ -218,6 +218,44 @@ on_character_death = {
 			limit = { has_variable = qing_office_held }
 			QING_office_vacate_dispatch = yes
 		}
+		# [#113 review-fix] A dying AMBAN (Inner Asian resident, se_QING_AMBAN.txt) must
+		# clear the stranding link on the subject he served, else the subject's
+		# qing_amban_here var points at a dead character forever: QING_amban_evaluate
+		# skips it (is_alive guard) and QING_amban_post_sweep sees the var still present
+		# (NOT has_variable guard) and never re-staffs — the dependency is orphaned for
+		# the rest of the game. The amban is a minor_character with no office, so the
+		# qing_office_held branch above never covers him; key off the qing_amban_marker
+		# stamped at post time. While posted, employer = the subject that holds the var.
+		if = {
+			limit = { has_variable = qing_amban_marker }
+			if = {
+				limit = {
+					exists = employer
+					employer = {
+						has_variable = qing_amban_here
+					}
+				}
+				employer = { remove_variable = qing_amban_here }
+			}
+		}
+		# [#114 review-fix] A dying PILGRIM (Mongol pilgrimage chain, se_QING_PILGRIMAGE.txt)
+		# must release the country-level pilgrimage lock, else qing_pilgrimage_active
+		# strands set forever when the pilgrim dies between chain links — the dispatcher
+		# gate (NOT has_variable) then locks the whole pilgrimage feature dead for the
+		# rest of the game. The pilgrim's employer is CHI (he stays in the court).
+		if = {
+			limit = { has_variable = qing_pilgrim_marker }
+			if = {
+				limit = {
+					exists = employer
+					employer = { has_variable = qing_pilgrimage_active }
+				}
+				employer = {
+					if = { limit = { has_variable = qing_pilgrimage_active }  remove_variable = qing_pilgrimage_active }
+					if = { limit = { has_variable = qing_pilgrim_char }  remove_variable = qing_pilgrim_char }
+				}
+			}
+		}
 		if = {
 			limit = {
 				is_head_of_family = yes

@@ -57,6 +57,19 @@ qing_pilgrimage.1 = {
 		set_variable = { name = qing_pilgrimage_active  value = 1 }
 		# save pilgrim to country var so later events can reference him
 		set_variable = { name = qing_pilgrim_char  value = scope:pilgrim }
+		# [#114 review-fix] stamp a marker on the pilgrim himself so on_character_death
+		# can clear the country-level pilgrimage flags if he dies mid-journey. The
+		# is_triggered_only chain (.1->.2->.3->.4) spans 40-80/30-60/60-120-day gaps and
+		# each link gates on var:qing_pilgrim_char={is_alive=yes employer=ROOT}; if the
+		# randomly-picked courtier dies or leaves ROOT's employ in a gap the chain
+		# silently cancels with nothing clearing qing_pilgrimage_active — and the
+		# dispatcher gate (se_QING_DECLINE.txt:1388, NOT has_variable) then locks the
+		# whole pilgrimage feature dead for the rest of the game. This marker lets the
+		# death hook release the lock so a future pilgrimage can open.
+		if = {
+			limit = { exists = scope:pilgrim }
+			scope:pilgrim = { set_variable = { name = qing_pilgrim_marker  value = 1 } }
+		}
 	}
 
 	# --- Sponsor the pilgrimage — prestige + gold, bind the pilgrim ------
@@ -288,6 +301,16 @@ qing_pilgrimage.5 = {
 
 	immediate = {
 		LOG_line = { sys = QING  msg = "EVENT qing_pilgrimage.5 (cleanup) [ROOT.GetTag]" }
+		# [#114 review-fix] drop the pilgrim's marker (if he is still alive) before
+		# releasing the country flags, so a stale marker cannot later fire the death hook
+		# for a pilgrimage that already ended.
+		if = {
+			limit = {
+				has_variable = qing_pilgrim_char
+				var:qing_pilgrim_char = { is_alive = yes }
+			}
+			var:qing_pilgrim_char = { if = { limit = { has_variable = qing_pilgrim_marker }  remove_variable = qing_pilgrim_marker } }
+		}
 		if = { limit = { has_variable = qing_pilgrimage_active }  remove_variable = qing_pilgrimage_active }
 		if = { limit = { has_variable = qing_pilgrim_char }  remove_variable = qing_pilgrim_char }
 	}

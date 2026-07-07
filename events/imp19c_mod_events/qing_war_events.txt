@@ -297,25 +297,35 @@ qing_war.3 = {
 			scope:war_minister = { martial >= 12 }
 		}
 		custom_tooltip = "qing_war.3.b.tt"
-		add_treasury = -180
+		# [#118 review-fix] Rewritten to the PROVEN navy idiom (QING_selfstr_raise_fleet,
+		# se_QING_SELFSTR.txt:181-214): create_unit navy=yes at COUNTRY scope, NO
+		# raise_legion army wrapper and NO sub_unit base line, using a DEFINED ship type
+		# (brig — trireme is an empty BOM-only stub in this TC, so the old squadron never
+		# spawned). Also: only charge the 180 treasury when a hull is actually raised
+		# (a coastal port exists); the prior add_treasury sat outside the spawn guard and
+		# deducted unconditionally, so a landlocked/portless Qing paid for nothing.
 		if = {
-			limit = { exists = capital_scope }
-			capital_scope = {
-				state.governorship = {
-					raise_legion = {
-						create_unit = {
-							name = "New Naval Squadron"
-							location = ROOT.capital_scope
-							navy = yes
-							sub_unit = trireme
-							add_subunit = trireme
-						}
-					}
-				}
+			limit = { any_owned_province = { is_coastal = yes } }
+			ordered_owned_province = {
+				limit = { is_coastal = yes }
+				order_by = total_population
+				max = 1
+				save_scope_as = qing_war_fleet_port
 			}
-			LOG_line = { sys = QING  msg = "new naval squadron commissioned under War minister [scope:war_minister.GetName] for [ROOT.GetTag]" }
+			create_unit = {
+				navy = yes
+				name = "New Naval Squadron"
+				location = scope:qing_war_fleet_port
+				add_subunit = brig
+				add_subunit = brig
+			}
+			add_treasury = -180
+			add_country_modifier = { name = qing_war_naval_expansion  duration = 1825 }
+			LOG_line = { sys = QING  msg = "new naval squadron commissioned (2x brig) under War minister [scope:war_minister.GetName] for [ROOT.GetTag]" }
 		}
-		add_country_modifier = { name = qing_war_naval_expansion  duration = 1825 }
+		else = {
+			LOG_fail = { sys = QING  fn = "qing_war.3.b"  reason = "no coastal province owned; no squadron raised, no treasury charged for [ROOT.GetTag]" }
+		}
 	}
 
 	# Option C: Decline (save treasury)
