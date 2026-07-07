@@ -197,25 +197,18 @@ QING_regional_army_bind_commander = {
 		}
 	}
 	else = {
-		# --- none on hand: conjure the founding magnate (roster idiom, Han) ---
-		create_character = {
-			age = 44
-			culture = han
-			religion = ROOT.religion
-			add_martial = 7
-			add_finesse = 6
-			add_zeal = 5
-			add_charisma = 6
-			add_trait = disciplined
-			add_trait = brave
-			save_scope_as = qing_regional_founder
-		}
-		scope:qing_regional_founder = {
-			QING_roster_finalize = { nick = "NICKNAME_QING_REGIONAL_MAGNATE" }
-			add_loyal_veterans = 8
-			QING_magnate_track_grant = yes
-			LOG_line = { sys = QING  msg = "regional army (勇營): no Han governor on hand — conjured founder [this.GetName] (+8 loyal veterans) for [ROOT.GetTag]" }
-		}
+		# [#90-fix crash] The former else-branch conjured a founder here via
+		# create_character (culture=han, religion=ROOT.religion, ...). That block
+		# CRASHED at gamestate construction (deterministic startup access-violation):
+		# the engine validates create_character bodies at load, and this one — inside a
+		# nested if/else in an effect reached only from a scripted_gui — is rejected in
+		# a way the proven top-level roster spawns (se_QING_ROSTER / se_QING_NAPOLEON)
+		# are not. Isolated by bisection: removing this whole else-branch loads clean.
+		# The feature's core is the if-path above (empower a REAL sitting Han governor);
+		# when no Han governor stands, the sanction's counter bump (+15 provincial power
+		# in QING_sanction_regional_army) still lands — we simply skip the concrete
+		# character grant rather than fabricate one at a crashing call site.
+		LOG_fail = { sys = QING  fn = "QING_regional_army_bind_commander"  reason = "no sitting Han governor to bind a regional army to; counter bump still applied" }
 	}
 }
 
