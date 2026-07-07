@@ -1,0 +1,288 @@
+########################################################################
+# qing_amban_events.txt — the AMBAN / RESIDENT lifecycle events (#113).
+#
+# The 駐紮大臣 (amban, resident commissioner) posted to Inner Asian dependencies:
+# Tibet, Mongolia, Xinjiang. Coupled to the LIFAN YUAN (理藩院) office. Events:
+#   qing_amban.1 — a clash between the resident and the Lifan Yuan holder (recall
+#                  crisis; player chooses to recall or back the resident)
+#   qing_amban.2 — an amban goes native (or is co-opted by the local elite; player
+#                  recalls him or lets him stay, accepting the drift)
+#   qing_amban.3 — an able resident suppresses unrest in the dependency (reward)
+#   qing_amban.4 — death or replacement of a long-serving resident (turnover)
+#
+# CHI player-only; fired from QING_amban_evaluate or as follow-ons. Namespace qing_amban.
+########################################################################
+
+namespace = qing_amban
+
+# ======================================================================
+# qing_amban.1 — CLASH: the resident and the Lifan Yuan holder disagree on how
+# to manage the dependency. The holder demands recall; the resident defends his
+# conduct. Player chooses: recall (back the Lifan holder, dependency stabilizes)
+# or back the resident (holder loses face, resident stays, friction persists).
+# ======================================================================
+qing_amban.1 = {
+	type = country_event
+	title = "qing_amban.1.t"
+	desc = "qing_amban.1.desc"
+	picture = chinese_throne_room
+	left_portrait = scope:qing_amban_crisis_holder
+	right_portrait = scope:qing_amban_crisis_resident
+	is_triggered_only = yes
+	trigger = {
+		tag = CHI
+		exists = scope:qing_amban_crisis_subject
+		exists = scope:qing_amban_crisis_resident
+		exists = scope:qing_amban_crisis_holder
+		scope:qing_amban_crisis_resident = { is_alive = yes  employer = scope:qing_amban_crisis_subject }
+	}
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_amban.1 (resident-holder clash) [ROOT.GetTag]" }
+	}
+	option = {
+		name = "qing_amban.1.a"
+		custom_tooltip = "qing_amban.1.a.tt"
+		# RECALL: back the Lifan holder. Resident is recalled, dependency stabilizes.
+		QING_amban_recall = { subject = scope:qing_amban_crisis_subject  reason = "holder-clash" }
+		scope:qing_amban_crisis_subject = {
+			add_opinion = { modifier = qing_amban_cooperation_opinion  target = ROOT }
+		}
+		# the Lifan holder gains standing (he prevailed)
+		scope:qing_amban_crisis_holder = {
+			QING_char_promote_standing = { pop = 3  prom = 2 }
+		}
+		# the recalled resident loses face
+		scope:qing_amban_crisis_resident = {
+			QING_char_promote_standing = { pop = -5  prom = -3 }
+			add_loyalty = loyalty_qing_estranged
+		}
+	}
+	option = {
+		name = "qing_amban.1.b"
+		custom_tooltip = "qing_amban.1.b.tt"
+		# BACK THE RESIDENT: overrule the Lifan holder. Resident stays, but the
+		# friction persists and the dependency drifts further. Holder loses face.
+		scope:qing_amban_crisis_subject = {
+			add_opinion = { modifier = qing_amban_clash_opinion  target = ROOT }
+		}
+		scope:qing_amban_crisis_holder = {
+			QING_char_promote_standing = { pop = -4  prom = -2 }
+			add_loyalty = loyalty_qing_estranged
+		}
+		# the resident gains standing (backed by the throne)
+		scope:qing_amban_crisis_resident = {
+			QING_char_promote_standing = { pop = 4  prom = 3 }
+		}
+	}
+}
+
+# ======================================================================
+# qing_amban.2 — GOING NATIVE: the resident has been in post so long that he has
+# gone native, or is co-opted by the local elite. The Lifan Yuan reports he is
+# no longer reliably representing Peking's interests. Player recalls or accepts
+# the drift (a nominal resident who is effectively a local figure).
+# ======================================================================
+qing_amban.2 = {
+	type = country_event
+	title = "qing_amban.2.t"
+	desc = "qing_amban.2.desc"
+	picture = senate_debate
+	left_portrait = scope:qing_amban_native
+	is_triggered_only = yes
+	trigger = {
+		tag = CHI
+		# fires for a subject with a posted amban who has been in post >= 8 years
+		# and has low affinity with the throne (< 40)
+		any_subject = {
+			has_variable = qing_amban_here
+			var:qing_amban_here = {
+				is_alive = yes
+				employer = prev
+				time_in_office >= 2920
+				has_variable = qing_char_affinity
+				var:qing_char_affinity < 40
+			}
+		}
+	}
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_amban.2 (going native) [ROOT.GetTag]" }
+		# pick one such subject + resident
+		random_subject = {
+			limit = {
+				has_variable = qing_amban_here
+				var:qing_amban_here = {
+					is_alive = yes
+					employer = prev
+					time_in_office >= 2920
+					has_variable = qing_char_affinity
+					var:qing_char_affinity < 40
+				}
+			}
+			save_scope_as = qing_amban_native_subject
+			var:qing_amban_here = { save_scope_as = qing_amban_native }
+		}
+	}
+	option = {
+		name = "qing_amban.2.a"
+		custom_tooltip = "qing_amban.2.a.tt"
+		# RECALL: replace him. Dependency stabilizes briefly, but turnover cost.
+		QING_amban_recall = { subject = scope:qing_amban_native_subject  reason = "gone-native" }
+		scope:qing_amban_native_subject = {
+			add_opinion = { modifier = qing_amban_cooperation_opinion  target = ROOT }
+		}
+		add_treasury = -20
+	}
+	option = {
+		name = "qing_amban.2.b"
+		custom_tooltip = "qing_amban.2.b.tt"
+		# LET HIM STAY: accept the drift. Dependency slips further, but no turnover cost.
+		scope:qing_amban_native_subject = {
+			add_opinion = { modifier = qing_amban_ineffective_opinion  target = ROOT }
+		}
+		# the resident's affinity falls further (he is now a local figure)
+		scope:qing_amban_native = {
+			QING_char_affinity = yes
+			change_variable = { name = qing_char_affinity  subtract = 10 }
+		}
+	}
+}
+
+# ======================================================================
+# qing_amban.3 — ABLE RESIDENT: a capable amban suppresses unrest in the dependency
+# or mediates a local dispute, keeping the march stable. Reward event. Player
+# commends him (loyalty, standing, small gold grant) or simply notes it.
+# ======================================================================
+qing_amban.3 = {
+	type = country_event
+	title = "qing_amban.3.t"
+	desc = "qing_amban.3.desc"
+	picture = senate
+	left_portrait = scope:qing_amban_able
+	is_triggered_only = yes
+	trigger = {
+		tag = CHI
+		# fires for a subject with a posted amban who has high affinity (>= 70)
+		# and the subject itself has moderate unrest or recent unrest
+		any_subject = {
+			OR = {
+				any_owned_province = { count >= 1  province_unrest >= 2 }
+				has_variable = qing_amban_unrest_suppressed_recently
+			}
+			has_variable = qing_amban_here
+			var:qing_amban_here = {
+				is_alive = yes
+				employer = prev
+				has_variable = qing_char_affinity
+				var:qing_char_affinity >= 70
+			}
+		}
+	}
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_amban.3 (able resident reward) [ROOT.GetTag]" }
+		random_subject = {
+			limit = {
+				OR = {
+					any_owned_province = { count >= 1  province_unrest >= 2 }
+					has_variable = qing_amban_unrest_suppressed_recently
+				}
+				has_variable = qing_amban_here
+				var:qing_amban_here = {
+					is_alive = yes
+					employer = prev
+					has_variable = qing_char_affinity
+					var:qing_char_affinity >= 70
+				}
+			}
+			save_scope_as = qing_amban_able_subject
+			var:qing_amban_here = { save_scope_as = qing_amban_able }
+			# suppress a province's unrest if any
+			random_owned_province = {
+				limit = { province_unrest >= 2 }
+				add_province_unrest = -3
+			}
+			add_opinion = { modifier = qing_amban_capable_opinion  target = ROOT }
+			set_variable = { name = qing_amban_unrest_suppressed_recently  value = 1  days = 730 }
+		}
+	}
+	option = {
+		name = "qing_amban.3.a"
+		custom_tooltip = "qing_amban.3.a.tt"
+		# COMMEND: reward the resident. He gains loyalty, standing, a small gold grant.
+		scope:qing_amban_able = {
+			add_loyalty = loyalty_qing_congenial
+			QING_char_promote_standing = { pop = 4  prom = 3 }
+			add_gold = 15
+		}
+		add_treasury = -15
+	}
+	option = {
+		name = "qing_amban.3.b"
+		custom_tooltip = "qing_amban.3.b.tt"
+		# NOTE IT: no reward, but no cost either.
+		scope:qing_amban_able = { QING_char_promote_standing = { pop = 2  prom = 1 } }
+	}
+}
+
+# ======================================================================
+# qing_amban.4 — TURNOVER: a long-serving resident dies or is replaced due to age
+# or health. Player appoints a replacement or leaves the post vacant (dependency
+# drifts until a new resident is posted).
+# ======================================================================
+qing_amban.4 = {
+	type = country_event
+	title = "qing_amban.4.t"
+	desc = "qing_amban.4.desc"
+	picture = chinese_throne_room
+	left_portrait = scope:qing_amban_old
+	is_triggered_only = yes
+	trigger = {
+		tag = CHI
+		# fires for a subject with a posted amban who is old (>= 65) or unhealthy (< 0.4)
+		any_subject = {
+			has_variable = qing_amban_here
+			var:qing_amban_here = {
+				is_alive = yes
+				employer = prev
+				OR = {
+					age >= 65
+					health < 0.4
+				}
+			}
+		}
+	}
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_amban.4 (resident turnover) [ROOT.GetTag]" }
+		random_subject = {
+			limit = {
+				has_variable = qing_amban_here
+				var:qing_amban_here = {
+					is_alive = yes
+					employer = prev
+					OR = {
+						age >= 65
+						health < 0.4
+					}
+				}
+			}
+			save_scope_as = qing_amban_old_subject
+			var:qing_amban_here = { save_scope_as = qing_amban_old }
+		}
+	}
+	option = {
+		name = "qing_amban.4.a"
+		custom_tooltip = "qing_amban.4.a.tt"
+		# REPLACE: recall the old resident, post a new one. Cost in gold (appointment).
+		QING_amban_recall = { subject = scope:qing_amban_old_subject  reason = "turnover" }
+		QING_amban_post = { subject = scope:qing_amban_old_subject }
+		add_treasury = -25
+	}
+	option = {
+		name = "qing_amban.4.b"
+		custom_tooltip = "qing_amban.4.b.tt"
+		# LEAVE VACANT: recall without replacement. Dependency drifts.
+		QING_amban_recall = { subject = scope:qing_amban_old_subject  reason = "turnover-vacant" }
+		scope:qing_amban_old_subject = {
+			add_opinion = { modifier = qing_amban_ineffective_opinion  target = ROOT }
+		}
+	}
+}

@@ -1,0 +1,248 @@
+########################################################################
+# se_QING_AMBAN.txt — the AMBAN / RESIDENT lifecycle (#113).
+#
+# The 駐紮大臣 (amban, resident commissioner) was the Qing throne's man on the
+# ground in Inner Asian dependencies: Lhasa, Urga (Khüree, modern Ulaanbaatar),
+# Kashgar, Ili, and the other frontier posts. The office of LIFAN YUAN (理藩院,
+# Court of Colonial Affairs) governed relations with Mongolia, Tibet, Xinjiang
+# and the Inner Asian march — the amban was its instrument, posted to a subject
+# to oversee the dependency on behalf of the throne.
+#
+# The lifecycle: QING_amban_post creates a resident character at CHI, moves him
+# to the subject country, grants him the qing_amban_resident modifier (duration
+# -1), and stores the link on the OVERLORD (CHI) keyed by the subject. Every
+# quarter QING_amban_evaluate scores each posted resident (a) against the Lifan
+# Yuan holder via QING_pair_friction — a clash between resident and the Peking
+# supervisor leads to drift (subject loyalty/liberty_desire) and a recall crisis;
+# (b) against the throne via QING_char_affinity — a capable, loyal resident
+# keeps the dependency firmly in hand. A VACANT Lifan Yuan office = the residents
+# go unsupervised (drift). Teardown via QING_amban_recall.
+#
+# TARGETING: applies to Inner Asian dependencies — the subject types most apt
+# for a resident are vassal_tribe (tribal vassals), sinosphere_tributary (the
+# Ryukyu + Korea tier), protectorate, and feudatory. The engine allows gating
+# on is_subject_type OR on being ANY subject at all (gated on is_subject = yes).
+# We use the broader ANY-subject gate (safer, proven) with a culture/region
+# filter: the resident is posted to dependencies where Manchu/Mongol/Tibetan
+# cultures OR bodish/mongolic culture_groups are present (the Inner Asian march).
+#
+# DOES NOT double-count the Lifan Yuan accountability metric (se_QING_ACCOUNTABILITY
+# line 74 already judges the office on subject loyalty aggregate). This layer adds
+# CHARACTER-level interplay: a capable+loyal resident + capable Lifan holder =
+# dependency held firm; a weak/clashing resident = drift.
+#
+# CHI-only, player-only. Called from QING_GOV_pulse quarterly. se_LOG throughout.
+########################################################################
+
+# ======================================================================
+# POST AN AMBAN (駐紮大臣). $subject$ = the subject country scope to which we
+# post the resident. Creates a character at CHI, moves him to the subject,
+# applies the qing_amban_resident modifier (OUTSIDE the create_character block,
+# per the #90 boot-crash gotcha), and stores the link on CHI keyed by the
+# subject's tag. Country scope (ROOT = CHI).
+# ======================================================================
+QING_amban_post = {
+	LOG_enter = { sys = QING  fn = "QING_amban_post" }
+	# The resident is a minor character, adult, Manchu or Han (Inner Asian post
+	# went to conquest-elite or sinicized officials), middling stats (not a
+	# great statesman — the great offices kept the best men in Peking).
+	create_character = {
+		age = { 35 50 }
+		culture = ROOT.primary_culture
+		religion = ROOT.religion
+		add_finesse = { 3 6 }
+		add_martial = { 2 5 }
+		add_charisma = { 3 6 }
+		add_zeal = { 2 5 }
+		minor_character = yes
+		save_scope_as = qing_amban_new
+	}
+	# move him to the subject, apply the role modifier, store the link
+	scope:qing_amban_new = {
+		move_country = $subject$
+		add_character_modifier = { name = qing_amban_resident  duration = -1 }
+		# score his compatibility with the throne (the Lifan holder will be
+		# scored separately at evaluate time)
+		ROOT = { save_scope_as = qing_overlord_for_affinity }
+		scope:qing_overlord_for_affinity = {
+			scope:qing_amban_new = { QING_char_affinity = yes }
+		}
+	}
+	# [#113 integ-fix] STORAGE. The agent's original stored the link on CHI via a
+	# variable NAME built from tag interpolation (name = "qing_amban_$subject$.GetTag")
+	# — an UNPROVEN idiom (nothing else in the repo constructs a var name from a tag;
+	# it can silently no-op). Replaced with the PROVEN shape: a FIXED-name variable
+	# stored on the SUBJECT country itself (each dependency holds at most one resident),
+	# so there is no dynamic name and no list-indexing. Guarded reads elsewhere use the
+	# same fixed name in the subject's own scope.
+	$subject$ = {
+		set_variable = { name = qing_amban_here  value = scope:qing_amban_new }
+	}
+	LOG_line = { sys = QING  msg = "amban: posted [scope:qing_amban_new.GetName] to [$subject$.GetTag] for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_amban_post"  result = OK }
+}
+
+# ======================================================================
+# RECALL AN AMBAN. $subject$ = the subject country scope, $reason$ = log text.
+# Removes the stored var, strips the modifier, and either moves the character
+# back to CHI or retires him (death). Country scope (ROOT = CHI).
+# ======================================================================
+QING_amban_recall = {
+	LOG_enter = { sys = QING  fn = "QING_amban_recall" }
+	# [#113 integ-fix] retrieve the stored resident from the SUBJECT's own fixed-name
+	# var (qing_amban_here); guard on var-present + is_alive + employer match.
+	if = {
+		limit = {
+			$subject$ = {
+				has_variable = qing_amban_here
+				var:qing_amban_here = { is_alive = yes  employer = $subject$ }
+			}
+		}
+		$subject$.var:qing_amban_here = {
+			remove_character_modifier = qing_amban_resident
+			# recall: move back to CHI (he rejoins the court pool)
+			move_country = ROOT
+			save_scope_as = qing_amban_recalled
+		}
+		LOG_line = { sys = QING  msg = "amban: recalled [scope:qing_amban_recalled.GetName] from [$subject$.GetTag] ($reason$) for [ROOT.GetTag]" }
+	}
+	$subject$ = { remove_variable = qing_amban_here }
+	LOG_exit = { sys = QING  fn = "QING_amban_recall"  result = OK }
+}
+
+# ======================================================================
+# POST SWEEP — quarterly. Post a resident to any Inner Asian dependency (a
+# subject whose ruler is of a mongolic/bodish culture group, i.e. Mongolia /
+# Tibet / the Inner Asian march) that lacks one, PROVIDED the Lifan Yuan office
+# is filled (a vacant 理藩院 has no man to post). This is what makes the coupling
+# LIVE — the lifecycle events (clash / gone-native / reward / turnover) then run
+# off the posted residents. Bounded: at most ONE posting per pulse (a random
+# unattended dependency), so the court staffs the march gradually. Country scope
+# (ROOT = CHI). [#113 integ-fix: the feature had NO posting entry point — only
+# turnover re-posted — so it was inert; this sweep makes it live.]
+# ======================================================================
+QING_amban_post_sweep = {
+	LOG_enter = { sys = QING  fn = "QING_amban_post_sweep" }
+	# only post if the Lifan Yuan supervisor is in place
+	if = {
+		limit = {
+			has_variable = qing_office_lifanyuan_holder
+			var:qing_office_lifanyuan_holder = { is_alive = yes  employer = ROOT }
+		}
+		# find ONE Inner Asian dependency with no resident and post there
+		random_subject = {
+			limit = {
+				NOT = { has_variable = qing_amban_here }
+				any_owned_province = { count >= 1 }
+				exists = current_ruler
+				current_ruler = {
+					OR = {
+						culture_group = mongolic
+						culture_group = bodish
+					}
+				}
+			}
+			save_scope_as = qing_amban_post_target
+			ROOT = { QING_amban_post = { subject = scope:qing_amban_post_target } }
+			LOG_line = { sys = QING  msg = "amban: post-sweep staffed [scope:qing_amban_post_target.GetTag] for [ROOT.GetTag]" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_amban_post_sweep"  result = OK }
+}
+
+# ======================================================================
+# EVALUATE ALL RESIDENTS — quarterly pulse. For each subject that has a posted
+# amban, score (a) the resident vs the Lifan Yuan holder (QING_pair_friction —
+# high friction = they clash, the dependency slips: subject loyalty/liberty_desire
+# drifts), (b) the resident vs the throne (QING_char_affinity — a capable, loyal
+# resident keeps it firm). A VACANT Lifan Yuan office = no supervision, residents
+# drift. Country scope (ROOT = CHI).
+# ======================================================================
+QING_amban_evaluate = {
+	LOG_enter = { sys = QING  fn = "QING_amban_evaluate" }
+	# check if the Lifan Yuan office is filled (the supervisor)
+	if = {
+		limit = {
+			has_variable = qing_office_lifanyuan_holder
+			var:qing_office_lifanyuan_holder = { is_alive = yes  employer = ROOT }
+		}
+		var:qing_office_lifanyuan_holder = { save_scope_as = qing_lifan_holder }
+	}
+	# [#113 integ-fix] iterate every subject; for each with a posted amban (stored in
+	# the subject's OWN fixed-name var qing_amban_here), evaluate. No tag interpolation.
+	every_subject = {
+		limit = {
+			# guard: the amban must be alive and still in this subject's employ
+			has_variable = qing_amban_here
+			var:qing_amban_here = { is_alive = yes  employer = prev }
+		}
+		# save the subject scope + its resident, then do the scoring work in ROOT (CHI)
+		save_scope_as = qing_amban_subject
+		var:qing_amban_here = { save_scope_as = qing_amban_current }
+		ROOT = {
+			# (a) score resident vs Lifan holder (if holder exists)
+			if = {
+				limit = { exists = scope:qing_lifan_holder }
+				QING_pair_friction = { a = scope:qing_lifan_holder  b = scope:qing_amban_current }
+				if = {
+					limit = { var:qing_pair_friction >= 50 }
+					# CLASH: the resident and the Lifan holder disagree — the dependency
+					# slips. Subject's opinion of the overlord worsens. Log it; a severe
+					# clash may queue a recall event (not auto-fired here; the event
+					# system handles it).
+					scope:qing_amban_subject = {
+						add_opinion = { modifier = qing_amban_clash_opinion  target = ROOT }
+					}
+					LOG_line = { sys = QING  msg = "amban: CLASH [scope:qing_amban_current.GetName] vs Lifan holder [scope:qing_lifan_holder.GetName] (friction [ROOT.MakeScope.GetVariable('qing_pair_friction').GetValue|0]) in [scope:qing_amban_subject.GetTag], dependency slips for [ROOT.GetTag]" }
+					# queue a recall crisis at high friction
+					if = {
+						limit = { var:qing_pair_friction >= 65 }
+						scope:qing_amban_subject = { save_scope_as = qing_amban_crisis_subject }
+						scope:qing_amban_current = { save_scope_as = qing_amban_crisis_resident }
+						scope:qing_lifan_holder = { save_scope_as = qing_amban_crisis_holder }
+						trigger_event = { id = qing_amban.1  days = { 5 15 } }
+					}
+				}
+				else = {
+					# COOPERATION: resident and holder agree — dependency held firm.
+					# Subject's opinion of the overlord improves.
+					scope:qing_amban_subject = {
+						add_opinion = { modifier = qing_amban_cooperation_opinion  target = ROOT }
+					}
+					LOG_line = { sys = QING  msg = "amban: cooperation [scope:qing_amban_current.GetName] + Lifan holder in [scope:qing_amban_subject.GetTag], dependency firm for [ROOT.GetTag]" }
+				}
+			}
+			else = {
+				# NO LIFAN HOLDER: the residents go unsupervised — drift.
+				# Subject's opinion of the overlord worsens slightly.
+				scope:qing_amban_subject = {
+					add_opinion = { modifier = qing_amban_ineffective_opinion  target = ROOT }
+				}
+				LOG_line = { sys = QING  msg = "amban: [scope:qing_amban_current.GetName] in [scope:qing_amban_subject.GetTag] unsupervised (vacant Lifan Yuan), drift for [ROOT.GetTag]" }
+			}
+			# (b) score resident vs throne (affinity — a loyal, capable resident is
+			# a pillar; a disloyal one is a risk). Already scored at post time, but
+			# re-score quarterly as the character's loyalty/stats shift.
+			scope:qing_amban_current = { QING_char_affinity = yes }
+			if = {
+				limit = { scope:qing_amban_current = { var:qing_char_affinity < 40 } }
+				# LOW AFFINITY: the resident is estranged from the throne — a risk.
+				# Dependency slips. Subject's opinion of the overlord worsens.
+				scope:qing_amban_subject = {
+					add_opinion = { modifier = qing_amban_ineffective_opinion  target = ROOT }
+				}
+				LOG_line = { sys = QING  msg = "amban: [scope:qing_amban_current.GetName] in [scope:qing_amban_subject.GetTag] disloyal to throne (affinity [scope:qing_amban_current.MakeScope.GetVariable('qing_char_affinity').GetValue|0]), risk for [ROOT.GetTag]" }
+			}
+			else_if = {
+				limit = { scope:qing_amban_current = { var:qing_char_affinity >= 70 } }
+				# HIGH AFFINITY: the resident is loyal and capable — a pillar.
+				# Dependency held firmer still. Subject's opinion of the overlord improves.
+				scope:qing_amban_subject = {
+					add_opinion = { modifier = qing_amban_capable_opinion  target = ROOT }
+				}
+				LOG_line = { sys = QING  msg = "amban: [scope:qing_amban_current.GetName] in [scope:qing_amban_subject.GetTag] loyal+capable (affinity [scope:qing_amban_current.MakeScope.GetVariable('qing_char_affinity').GetValue|0]), dependency firm for [ROOT.GetTag]" }
+			}
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_amban_evaluate"  result = OK }
+}
