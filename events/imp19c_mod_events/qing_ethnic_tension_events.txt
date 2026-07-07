@@ -1,0 +1,332 @@
+########################################################################
+# qing_ethnic_tension_events.txt — province-level ethnic tension eruptions
+# (feature #107).
+#
+# When a province's bottom-up ethnic tension (qing_prov_ethnic_tension)
+# crosses the eruption threshold, the local population rises in open revolt.
+# The throne can conciliate the minority, send a pacification army, or crush
+# harshly — each with real trade-offs and tension consequences.
+#
+# Per the separatism-backer standing rule, any external backing of rebels
+# must come from a NEIGHBOURING power where that ethnicity lives — never a
+# random far power.
+#
+# Namespace: qing_ethnic
+########################################################################
+
+namespace = qing_ethnic
+
+# ======================================================================
+# qing_ethnic.1 — A province tips into open revolt (離心叛亂).
+# Triggered by QING_ethnic_tension_erupt_province when tension >= 80.
+# ======================================================================
+qing_ethnic.1 = {
+	type = country_event
+	title = "qing_ethnic.1.t"
+	desc = "qing_ethnic.1.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		# must have at least one erupting province (the trigger should always
+		# pass if called correctly, but guard anyway).
+		any_owned_province = {
+			has_variable = qing_prov_ethnic_tension
+			var:qing_prov_ethnic_tension >= 80
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_ethnic.1 (province revolt) [ROOT.GetTag]" }
+		# Save the erupting province (the one that called this event).
+		random_owned_province = {
+			limit = {
+				has_variable = qing_prov_ethnic_tension
+				var:qing_prov_ethnic_tension >= 80
+				has_variable = qing_prov_ethnic_revolted
+			}
+			save_scope_as = revolt_province
+		}
+	}
+
+	# OPTION A: Conciliate the minority — grant autonomy, lower taxes.
+	option = {
+		name = "qing_ethnic.1.a"
+		custom_tooltip = "qing_ethnic.1.a.tt"
+		trigger = {
+			exists = scope:revolt_province
+		}
+
+		# Lower the province's tension substantially (-30).
+		scope:revolt_province = {
+			change_variable = { name = qing_prov_ethnic_tension  subtract = 30 }
+			if = { limit = { var:qing_prov_ethnic_tension < 0 }  set_variable = { name = qing_prov_ethnic_tension  value = 0 } }
+			# Grant a short-duration "autonomy granted" modifier (lower unrest, tax).
+			add_province_modifier = { name = qing_ethnic_autonomy_granted  duration = 1825 }
+		}
+		# Cost: legitimacy hit (the court sees this as weakness).
+		add_legitimacy = -5
+		# Lower the country-level ethnic tension slightly.
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -3 }
+
+		LOG_line = { sys = QING  msg = "qing_ethnic.1.a: conciliate [scope:revolt_province.GetName]; tension -30, legitimacy -5" }
+
+		ai_chance = {
+			factor = 40
+			modifier = {
+				factor = 1.5
+				var:qing_ethnic_stance_active = flag:dyarchy
+			}
+		}
+	}
+
+	# OPTION B: Send a pacification army — martial response, but not full crush.
+	option = {
+		name = "qing_ethnic.1.b"
+		custom_tooltip = "qing_ethnic.1.b.tt"
+		trigger = {
+			exists = scope:revolt_province
+		}
+
+		# Lower the province's tension moderately (-15) — force suppresses it,
+		# but not as gently as autonomy.
+		scope:revolt_province = {
+			change_variable = { name = qing_prov_ethnic_tension  subtract = 15 }
+			if = { limit = { var:qing_prov_ethnic_tension < 0 }  set_variable = { name = qing_prov_ethnic_tension  value = 0 } }
+		}
+		# Cost: manpower and gold (the pacification expedition).
+		add_manpower = -5
+		add_treasury = -200
+		# Raise banner decay slightly (the banners are sent to the field).
+		QING_DECLINE_nudge = { var = qing_banner_decay  amount = 2 }
+		# No change to country-level ethnic tension (balanced response).
+
+		LOG_line = { sys = QING  msg = "qing_ethnic.1.b: pacify [scope:revolt_province.GetName]; tension -15, manpower -5, gold -200" }
+
+		ai_chance = {
+			factor = 40
+		}
+	}
+
+	# OPTION C: Crush harshly — full martial suppression, no quarter.
+	option = {
+		name = "qing_ethnic.1.c"
+		custom_tooltip = "qing_ethnic.1.c.tt"
+		trigger = {
+			exists = scope:revolt_province
+		}
+
+		# Lower the province's tension in the short term (-20), but RAISE
+		# neighbouring tensions (creates a spillover grudge).
+		scope:revolt_province = {
+			change_variable = { name = qing_prov_ethnic_tension  subtract = 20 }
+			if = { limit = { var:qing_prov_ethnic_tension < 0 }  set_variable = { name = qing_prov_ethnic_tension  value = 0 } }
+			# Stamp a "crushed brutally" modifier (high unrest, but also high loyalty
+			# from fear — the population is cowed).
+			add_province_modifier = { name = qing_ethnic_crushed_brutally  duration = 1825 }
+			# Spread tension to neighbours (+5 each).
+			every_neighbor_province = {
+				limit = {
+					owner = ROOT
+					is_sea = no
+					total_population > 0
+				}
+				if = {
+					limit = { NOT = { has_variable = qing_prov_ethnic_tension } }
+					set_variable = { name = qing_prov_ethnic_tension  value = 0 }
+				}
+				change_variable = { name = qing_prov_ethnic_tension  add = 5 }
+				if = { limit = { var:qing_prov_ethnic_tension > 100 }  set_variable = { name = qing_prov_ethnic_tension  value = 100 } }
+			}
+		}
+		# Cost: heavy manpower (a full suppression campaign).
+		add_manpower = -10
+		# Raise country-level ethnic tension (+5 — the harsh response inflames others).
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 5 }
+
+		LOG_line = { sys = QING  msg = "qing_ethnic.1.c: crush [scope:revolt_province.GetName]; tension -20 locally, +5 neighbours, ethnic_tension +5" }
+
+		ai_chance = {
+			factor = 20
+			modifier = {
+				factor = 2.0
+				OR = {
+					var:qing_ethnic_stance_active = flag:banner
+					var:qing_ethnic_stance_active = flag:han
+				}
+			}
+		}
+	}
+}
+
+# ======================================================================
+# qing_ethnic.2 — Early warning: a province is becoming restive (未寧).
+# Fires when a province crosses into the "high tension" band (60..79) for
+# the first time.
+# ======================================================================
+qing_ethnic.2 = {
+	type = country_event
+	title = "qing_ethnic.2.t"
+	desc = "qing_ethnic.2.desc"
+	picture = senate_debate
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		any_owned_province = {
+			has_variable = qing_prov_ethnic_tension
+			var:qing_prov_ethnic_tension >= 60
+			var:qing_prov_ethnic_tension < 80
+			NOT = { has_variable = qing_prov_ethnic_warned }
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_ethnic.2 (restive province warning) [ROOT.GetTag]" }
+		random_owned_province = {
+			limit = {
+				has_variable = qing_prov_ethnic_tension
+				var:qing_prov_ethnic_tension >= 60
+				var:qing_prov_ethnic_tension < 80
+				NOT = { has_variable = qing_prov_ethnic_warned }
+			}
+			save_scope_as = restive_province
+			set_variable = { name = qing_prov_ethnic_warned  value = 1 }
+		}
+	}
+
+	# OPTION A: Send a trusted envoy to investigate and report.
+	option = {
+		name = "qing_ethnic.2.a"
+		custom_tooltip = "qing_ethnic.2.a.tt"
+
+		# Lower the province's tension slightly (-5 — attention soothes).
+		scope:restive_province = {
+			change_variable = { name = qing_prov_ethnic_tension  subtract = 5 }
+			if = { limit = { var:qing_prov_ethnic_tension < 0 }  set_variable = { name = qing_prov_ethnic_tension  value = 0 } }
+		}
+		# Small gold cost (the envoy's expenses).
+		add_treasury = -50
+
+		LOG_line = { sys = QING  msg = "qing_ethnic.2.a: investigate [scope:restive_province.GetName]; tension -5, gold -50" }
+
+		ai_chance = {
+			factor = 60
+		}
+	}
+
+	# OPTION B: Noted. (Do nothing — the warning is informational.)
+	option = {
+		name = "qing_ethnic.2.b"
+		custom_tooltip = "qing_ethnic.2.b.tt"
+
+		# No mechanical effect — the player is simply warned.
+
+		LOG_line = { sys = QING  msg = "qing_ethnic.2.b: noted, no action on [scope:restive_province.GetName]" }
+
+		ai_chance = {
+			factor = 40
+		}
+	}
+}
+
+# ======================================================================
+# qing_ethnic.3 — The revolt snowballs to neighbours (蔓延).
+# Fires when a province has been in eruption state (>= 80) for multiple
+# cycles and has successfully spread high tension to neighbours. This is
+# an optional escalation event — NOT always fired, but can be triggered
+# manually or by a follow-up pulse if the player did not suppress the
+# initial revolt.
+# ======================================================================
+qing_ethnic.3 = {
+	type = country_event
+	title = "qing_ethnic.3.t"
+	desc = "qing_ethnic.3.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		# The triggering province must be in sustained eruption (>= 80) AND
+		# have at least one neighbour also in high tension (>= 60).
+		any_owned_province = {
+			has_variable = qing_prov_ethnic_tension
+			var:qing_prov_ethnic_tension >= 80
+			any_neighbor_province = {
+				owner = ROOT
+				has_variable = qing_prov_ethnic_tension
+				var:qing_prov_ethnic_tension >= 60
+			}
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_ethnic.3 (revolt snowball) [ROOT.GetTag]" }
+		random_owned_province = {
+			limit = {
+				has_variable = qing_prov_ethnic_tension
+				var:qing_prov_ethnic_tension >= 80
+				any_neighbor_province = {
+					owner = ROOT
+					has_variable = qing_prov_ethnic_tension
+					var:qing_prov_ethnic_tension >= 60
+				}
+			}
+			save_scope_as = snowball_source
+		}
+	}
+
+	# OPTION A: Deploy regional forces to contain the spread.
+	option = {
+		name = "qing_ethnic.3.a"
+		custom_tooltip = "qing_ethnic.3.a.tt"
+
+		# Lower tension in the source and all high-tension neighbours (-10 each).
+		scope:snowball_source = {
+			change_variable = { name = qing_prov_ethnic_tension  subtract = 10 }
+			if = { limit = { var:qing_prov_ethnic_tension < 0 }  set_variable = { name = qing_prov_ethnic_tension  value = 0 } }
+			every_neighbor_province = {
+				limit = {
+					owner = ROOT
+					has_variable = qing_prov_ethnic_tension
+					var:qing_prov_ethnic_tension >= 60
+				}
+				change_variable = { name = qing_prov_ethnic_tension  subtract = 10 }
+				if = { limit = { var:qing_prov_ethnic_tension < 0 }  set_variable = { name = qing_prov_ethnic_tension  value = 0 } }
+			}
+		}
+		# Heavy cost: manpower and gold (regional campaign).
+		add_manpower = -15
+		add_treasury = -500
+
+		LOG_line = { sys = QING  msg = "qing_ethnic.3.a: contain snowball from [scope:snowball_source.GetName]; manpower -15, gold -500" }
+
+		ai_chance = {
+			factor = 70
+		}
+	}
+
+	# OPTION B: Let it burn out — the regional forces will handle it eventually.
+	option = {
+		name = "qing_ethnic.3.b"
+		custom_tooltip = "qing_ethnic.3.b.tt"
+
+		# No immediate tension reduction, but also no cost. The revolt continues
+		# to fester — tension will naturally spread further in subsequent pulses.
+		# Raise country-level ethnic tension (+3 — the inaction signals weakness).
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 3 }
+
+		LOG_line = { sys = QING  msg = "qing_ethnic.3.b: no action on snowball from [scope:snowball_source.GetName]; ethnic_tension +3" }
+
+		ai_chance = {
+			factor = 30
+		}
+	}
+}

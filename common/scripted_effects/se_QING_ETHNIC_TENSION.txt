@@ -1,0 +1,363 @@
+########################################################################
+# se_QING_ETHNIC_TENSION.txt — the bottom-up PROVINCE-LEVEL ethnic
+# tension engine (feature #107).
+#
+# THE IDEA: tension accrues at the PROVINCE level from local conditions
+# (culture/religion mismatch + tax burden + low happiness/unrest + restive
+# region) and, left unchecked, SNOWBALLS — a high-tension province raises
+# tension in its neighbours and eventually erupts into a revolt that is
+# HARDER to contain the longer it festered.
+#
+# OWNERSHIP: this feature OWNS the per-province tension variable
+# `qing_prov_ethnic_tension` (a province-scope variable, 0..100). Feature
+# #109 (built in parallel) reads it for a report panel.
+#
+# COUPLING: this is the BOTTOM-UP counterpart to the existing top-down
+# ethnic-stance system (dyarchy/banner/han stances, qing_ethnic_tension
+# country-level counter in se_QING_DECLINE.txt). The top-down stance
+# MODULATES province-level tension accrual — a dyarchy stance lowers the
+# accrual rate, a favouritist stance raises it. The province-level system
+# does NOT duplicate the annual ethnic scan (QING_DECLINE_scan_ethnic_
+# target) — it EXTENDS it with finer-grained, faster-moving local strife.
+#
+# PERFORMANCE: the quarterly pulse iterates all provinces once (guarded on
+# has-dejure-culture + non-zero-pop), does O(1) reads per province (culture/
+# unrest/happiness from engine fields; ethnic stance from the country var),
+# and only runs the neighbour-snowball loop for provinces ABOVE a high
+# threshold. Throttled to CHI only, quarterly. The heavy every_owned_province
+# scan parallels the existing migration pulse (MIGRATION_country_pulse) —
+# both run quarterly, both iterate provinces once.
+#
+# All lines logged sys = QING (zero-cost outside -debug_mode).
+# Prefix = QING_ethnic_tension_
+########################################################################
+
+# ======================================================================
+# ENTRY — run once per country per quarterly pulse. ROOT / this = CHI.
+# ======================================================================
+QING_ethnic_tension_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_ethnic_tension_pulse" }
+
+	# Skip if no capital or too small.
+	if = {
+		limit = {
+			exists = capital_scope
+			num_of_provinces >= 2
+		}
+
+		# STEP 1: compute each province's tension delta from local conditions and
+		# nudge qing_prov_ethnic_tension toward that level (clamped 0..100).
+		every_owned_province = {
+			limit = {
+				is_sea = no
+				total_population > 0
+				has_variable = dejure_culture
+			}
+			QING_ethnic_tension_update_province = yes
+		}
+
+		# STEP 2: SNOWBALL — a province above a high threshold raises tension in
+		# neighbouring provinces. Only provinces that are genuinely HIGH (>= 70)
+		# spread; this keeps the snowball loop cheap.
+		every_owned_province = {
+			limit = {
+				is_sea = no
+				total_population > 0
+				has_variable = qing_prov_ethnic_tension
+				var:qing_prov_ethnic_tension >= 70
+			}
+			QING_ethnic_tension_snowball_province = yes
+		}
+
+		# STEP 3: where tension crosses an ERUPTION threshold (>= 80), seed a
+		# revolt. Only provinces that have not already revolted this cycle.
+		every_owned_province = {
+			limit = {
+				is_sea = no
+				total_population > 0
+				has_variable = qing_prov_ethnic_tension
+				var:qing_prov_ethnic_tension >= 80
+				NOT = { has_variable = qing_prov_ethnic_revolted }
+			}
+			QING_ethnic_tension_erupt_province = yes
+		}
+
+		LOG_exit = { sys = QING  fn = "QING_ethnic_tension_pulse"  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_ethnic_tension_pulse"  reason = "country too small/empty for province-level tension (no capital or <2 provinces)" }
+	}
+}
+
+# ======================================================================
+# Update ONE province's tension from local conditions.
+#   this = the province; ROOT = CHI.
+# ======================================================================
+QING_ethnic_tension_update_province = {
+	# init the province's tension to 0 if unset.
+	if = {
+		limit = { NOT = { has_variable = qing_prov_ethnic_tension } }
+		set_variable = { name = qing_prov_ethnic_tension  value = 0 }
+	}
+
+	# Compute the LOCAL tension TARGET from conditions. Start at 0.
+	set_variable = { name = qing_prov_tension_target_tmp  value = 0 }
+
+	# Pull the frozen rightful culture into a scope for testing.
+	var:dejure_culture = { save_scope_as = dj_rightful_c }
+
+	# CULTURE/RELIGION MISMATCH with ruling culture: base tension source.
+	# The province is restive if the Qing has NOT integrated this land's
+	# rightful culture (mirrors QING_DECLINE_scan_ethnic_target logic).
+	set_variable = { name = qing_prov_is_restive_tmp  value = 0 }
+	if = {
+		limit = {
+			NOT = {
+				ROOT = {
+					any_country_culture = {
+						is_integrated = yes
+						is_culture = scope:dj_rightful_c
+					}
+				}
+			}
+		}
+		set_variable = { name = qing_prov_is_restive_tmp  value = 1 }
+		# Base restive land: +15 to target.
+		change_variable = { name = qing_prov_tension_target_tmp  add = 15 }
+		# Displacement premium: the rightful people are no longer the plurality
+		# (Han settlers swamped a frontier province) — a strife driver. +10 more.
+		if = {
+			limit = { NOT = { dominant_province_culture = scope:dj_rightful_c } }
+			change_variable = { name = qing_prov_tension_target_tmp  add = 10 }
+		}
+	}
+
+	# PROVINCE UNREST: high unrest directly feeds tension. Scale 0..10 engine
+	# field to 0..20 tension points.
+	set_variable = { name = qing_prov_unrest_tmp  value = this.province_unrest }
+	change_variable = { name = qing_prov_unrest_tmp  multiply = 2 }
+	change_variable = { name = qing_prov_tension_target_tmp  add = var:qing_prov_unrest_tmp }
+	remove_variable = qing_prov_unrest_tmp
+
+	# RECENTLY CONQUERED / LOW LOYALTY: a province in a low-loyalty region is
+	# more prone to strife. Use the governorship average_loyalty field (engine).
+	governorship = {
+		if = {
+			limit = { exists = governor_or_ruler }
+			if = {
+				limit = { average_loyalty < 40 }
+				PREV = {
+					change_variable = { name = qing_prov_tension_target_tmp  add = 10 }
+				}
+			}
+		}
+	}
+
+	# HEAVY TAX BURDEN: provinces with high local_tax_modifier (from buildings/
+	# modifiers) are under fiscal strain. This is an APPROXIMATION (the engine
+	# does not expose a clean "tax burden" field at province scope) — we check
+	# if the province has a high-tax building or modifier. For simplicity, add
+	# +5 if any province-level tax modifier is present (a proxy for fiscal strain).
+	# (Note: this is a design compromise; a true per-province tax-burden read
+	# would require scanning every building/modifier, which is not performant.)
+	# We'll use a heuristic: if the province has a customs house or other tax
+	# building, or if province_unrest is driven by tax (not distinguishable), we
+	# fold this into unrest. So we SKIP explicit tax here and rely on unrest.
+
+	# GOVERNOR-SUBJECT AFFINITY (from the annual scan): a native governor soothes,
+	# an alien overlord inflames. This mirrors the logic in QING_DECLINE_scan_
+	# ethnic_target, but applied LOCALLY.
+	if = {
+		limit = { var:qing_prov_is_restive_tmp = 1 }
+		save_scope_as = prov_tmp_scope
+		governorship = {
+			if = {
+				limit = { exists = governor_or_ruler }
+				governor_or_ruler = {
+					if = {
+						# strong soothe: the governor IS of the rightful people
+						limit = { culture = scope:dj_rightful_c }
+						scope:prov_tmp_scope = {
+							change_variable = { name = qing_prov_tension_target_tmp  subtract = 10 }
+						}
+					}
+					else_if = {
+						# mild soothe: same broad group, different exact culture
+						limit = { culture.culture_group = scope:dj_rightful_c.culture_group }
+						scope:prov_tmp_scope = {
+							change_variable = { name = qing_prov_tension_target_tmp  subtract = 5 }
+						}
+					}
+					else = {
+						# alien overlord: a different culture group entirely
+						scope:prov_tmp_scope = {
+							change_variable = { name = qing_prov_tension_target_tmp  add = 5 }
+						}
+					}
+				}
+			}
+		}
+	}
+
+	# ETHNIC STANCE MODULATION: the top-down stance affects local accrual.
+	# Dyarchy (balanced) lowers the target; favouritist stances raise it.
+	if = {
+		limit = { ROOT = { var:qing_ethnic_stance_active = flag:dyarchy } }
+		change_variable = { name = qing_prov_tension_target_tmp  subtract = 5 }
+	}
+	else_if = {
+		limit = {
+			ROOT = {
+				OR = {
+					var:qing_ethnic_stance_active = flag:banner
+					var:qing_ethnic_stance_active = flag:han
+				}
+			}
+		}
+		change_variable = { name = qing_prov_tension_target_tmp  add = 5 }
+	}
+
+	# Clamp the target to 0..100.
+	if = { limit = { var:qing_prov_tension_target_tmp < 0 }    set_variable = { name = qing_prov_tension_target_tmp  value = 0 } }
+	if = { limit = { var:qing_prov_tension_target_tmp > 100 }  set_variable = { name = qing_prov_tension_target_tmp  value = 100 } }
+
+	# Drift the live tension toward the target by +/-5 per pulse (quarterly).
+	# Faster than the country-level drift (which is +/-3) because local conditions
+	# are more volatile.
+	if = {
+		limit = { var:qing_prov_ethnic_tension < var:qing_prov_tension_target_tmp }
+		change_variable = { name = qing_prov_ethnic_tension  add = 5 }
+	}
+	else_if = {
+		limit = { var:qing_prov_ethnic_tension > var:qing_prov_tension_target_tmp }
+		change_variable = { name = qing_prov_ethnic_tension  subtract = 5 }
+	}
+	# Clamp the live tension to 0..100.
+	if = { limit = { var:qing_prov_ethnic_tension < 0 }    set_variable = { name = qing_prov_ethnic_tension  value = 0 } }
+	if = { limit = { var:qing_prov_ethnic_tension > 100 }  set_variable = { name = qing_prov_ethnic_tension  value = 100 } }
+
+	# Clean up temp vars.
+	remove_variable = qing_prov_tension_target_tmp
+	remove_variable = qing_prov_is_restive_tmp
+}
+
+# ======================================================================
+# SNOWBALL: a high-tension province raises tension in its neighbours.
+#   this = the high-tension source province; ROOT = CHI.
+# ======================================================================
+QING_ethnic_tension_snowball_province = {
+	LOG_line = { sys = QING  msg = "snowball: [this.GetName] (tension=[this.MakeScope.GetVariable('qing_prov_ethnic_tension').GetValue|0]) spreading to neighbours" }
+	save_scope_as = snowball_source
+
+	# Spread tension to neighbouring provinces we own. The engine provides
+	# every_neighbor_province (verified in se_AI.txt). Guarded: only to provinces
+	# that actually exist and are owned by us.
+	every_neighbor_province = {
+		limit = {
+			owner = ROOT
+			is_sea = no
+			total_population > 0
+		}
+		# init the neighbour's tension if unset.
+		if = {
+			limit = { NOT = { has_variable = qing_prov_ethnic_tension } }
+			set_variable = { name = qing_prov_ethnic_tension  value = 0 }
+		}
+		# Raise the neighbour's tension by +3 (spillover effect).
+		change_variable = { name = qing_prov_ethnic_tension  add = 3 }
+		# Clamp to 100.
+		if = { limit = { var:qing_prov_ethnic_tension > 100 }  set_variable = { name = qing_prov_ethnic_tension  value = 100 } }
+		LOG_line = { sys = QING  msg = "snowball: [this.GetName] tension +3 (from [scope:snowball_source.GetName]) -> [this.MakeScope.GetVariable('qing_prov_ethnic_tension').GetValue|0]" }
+	}
+}
+
+# ======================================================================
+# ERUPTION: a province crosses the revolt threshold — trigger an event.
+#   this = the erupting province; ROOT = CHI.
+# ======================================================================
+QING_ethnic_tension_erupt_province = {
+	LOG_line = { sys = QING  msg = "ERUPTION: [this.GetName] (tension=[this.MakeScope.GetVariable('qing_prov_ethnic_tension').GetValue|0]) tips into revolt" }
+	save_scope_as = erupt_province
+
+	# Stamp a cooldown flag so this province doesn't revolt again this cycle.
+	# The flag is cleared by a separate decay effect (not yet built; for now
+	# the player must manually suppress the revolt or it will re-trigger).
+	set_variable = { name = qing_prov_ethnic_revolted  value = 1 }
+
+	# Fire the province revolt event (qing_ethnic.1) with this province saved.
+	ROOT = {
+		trigger_event = { id = qing_ethnic.1  days = { 1 5 } }
+	}
+}
+
+# ======================================================================
+# HELPERS — read/seed/clear province tension (for external callers).
+# ======================================================================
+
+# Seed a province's tension to a given value.
+#   this = the province; $amount$ = 0..100.
+QING_ethnic_tension_seed_province = {
+	set_variable = { name = qing_prov_ethnic_tension  value = $amount$ }
+	LOG_line = { sys = QING  msg = "seed: [this.GetName] tension set to $amount$" }
+}
+
+# Clear a province's revolt cooldown flag.
+#   this = the province.
+QING_ethnic_tension_clear_revolt_flag = {
+	if = {
+		limit = { has_variable = qing_prov_ethnic_revolted }
+		remove_variable = qing_prov_ethnic_revolted
+		LOG_line = { sys = QING  msg = "clear: [this.GetName] revolt cooldown cleared" }
+	}
+}
+
+# Read a province's tension (for display / decision gates).
+#   this = the province; returns var:qing_prov_ethnic_tension (0..100).
+# (No effect needed — callers read var:qing_prov_ethnic_tension directly.)
+
+# ======================================================================
+# GAME-START SEED. [#107 integ-fix: this effect was returned as splice-prose
+# but never written into the file, and its region keys were invented lowercase
+# strings (tarim_region etc.) that do not exist. AUTHORED here with the REAL
+# capitalized region keys from map_data/regions.txt, gated with the PROVEN
+# province-scope trigger is_in_region (see se_QING_DECLINE.txt:1438,
+# se_USA_SECTION.txt:169).]
+#
+# The Inner Asian march starts restive: Xinjiang (Turkestan) the sharpest
+# (the recently-conquered New Dominion, 20), Tibet (15), Mongolia (10), and the
+# Qinghai/Kham fringe (10). Everywhere else starts at 0 and accrues from local
+# conditions via the quarterly pulse. ROOT / this = CHI. Idempotent (skips if a
+# province already carries the tension var). Runs once at on_game_initialized.
+# ======================================================================
+QING_ethnic_tension_init = {
+	LOG_enter = { sys = QING  fn = "QING_ethnic_tension_init" }
+	every_owned_province = {
+		limit = {
+			is_sea = no
+			total_population > 0
+			NOT = { has_variable = qing_prov_ethnic_tension }
+		}
+		if = {
+			limit = { is_in_region = Turkestan }
+			QING_ethnic_tension_seed_province = { amount = 20 }
+		}
+		else_if = {
+			limit = { is_in_region = Tibet }
+			QING_ethnic_tension_seed_province = { amount = 15 }
+		}
+		else_if = {
+			limit = { is_in_region = Mongolia }
+			QING_ethnic_tension_seed_province = { amount = 10 }
+		}
+		else_if = {
+			limit = {
+				OR = {
+					is_in_region = Qinghai
+					is_in_region = Sichuan_Kham
+				}
+			}
+			QING_ethnic_tension_seed_province = { amount = 10 }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_ethnic_tension_init"  result = OK }
+}
