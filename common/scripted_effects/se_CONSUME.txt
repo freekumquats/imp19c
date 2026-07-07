@@ -19,9 +19,26 @@ CONSUME_setup_variables_tradegood = {
 CONSUME_all_stockpiles = {
 	# Scope: Governorship
 	# Function: trigger CONSUME_from_stockpile for every named tradegood stockpile in a governorship
+	# [#139 perf] Cache the two LOOP-INVARIANT macro factors ONCE per governorship before the
+	# per-tradegood loop. CONSUME_update_shortage read owner.CURRENCY_amt_circulated_deflation and
+	# DEMAND_elasticity_impact once PER TRADEGOOD (~60x/gov); both are governorship/country-scoped
+	# svalues that the loop never mutates, so re-evaluating them per good was pure redundant work.
+	# Byte-identical: the cached vars hold exactly the value a live read would return at every
+	# iteration. Cleared at loop exit so no stale var leaks to the next quarter. (No inline se_LOG
+	# marker: a log call inside the 60x loop would itself be a regression; ECON_LOG wraps this phase.)
+	set_variable = {
+		name = CONSUME_deflation_cached
+		value = owner.CURRENCY_amt_circulated_deflation
+	}
+	set_variable = {
+		name = CONSUME_elasticity_cached
+		value = DEMAND_elasticity_impact
+	}
 	every_tradegood_complex = {
 		APPLY = CONSUME_from_stockpile
 	}
+	remove_variable = CONSUME_deflation_cached
+	remove_variable = CONSUME_elasticity_cached
 }
 
 CONSUME_from_stockpile = {
@@ -89,12 +106,12 @@ CONSUME_update_shortage = {
 		}
 		if = {
 			limit = {
-				owner.CURRENCY_amt_circulated_deflation > 0
+				var:CONSUME_deflation_cached > 0                       # [#139 perf] was owner.CURRENCY_amt_circulated_deflation
 				has_variable = shortage_$tradegood$
 			}
 			change_variable = {
 				name = shortage_$tradegood$
-				add = owner.CURRENCY_amt_circulated_deflation
+				add = var:CONSUME_deflation_cached                     # [#139 perf]
 			}
 			if = {
 				limit = {
@@ -108,12 +125,12 @@ CONSUME_update_shortage = {
 		}
 		else_if = {
 			limit = {
-				owner.CURRENCY_amt_circulated_deflation > 0
+				var:CONSUME_deflation_cached > 0                       # [#139 perf]
 				NOT = { has_variable = shortage_$tradegood$ }
 			}
 			set_variable = {
 				name = shortage_$tradegood$
-				value = owner.CURRENCY_amt_circulated_deflation
+				value = var:CONSUME_deflation_cached                   # [#139 perf]
 			}
 		}
 		# Add shortage from price elasticity impact
@@ -127,7 +144,7 @@ CONSUME_update_shortage = {
 				name = shortage_$tradegood$
 				add = {
 					value = 1
-					subtract = DEMAND_elasticity_impact
+					subtract = var:CONSUME_elasticity_cached          # [#139 perf] was DEMAND_elasticity_impact
 				}
 			}
 		}

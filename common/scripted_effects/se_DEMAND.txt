@@ -497,7 +497,7 @@ DEMAND_set_demand_from_luxury = {
 		}
 		change_local_variable = {
 			name = l_$tradegood$_price_div_average_governorship_wealth
-			divide = WEALTH_governorship_per_capita # TODO: Cache this value
+			divide = var:DEMAND_luxury_per_capita_cached # [#139 perf] was WEALTH_governorship_per_capita (re-read 18x/gov, one per luxury good). Cached once by the _all wrappers below; identical value incl. the svalue's min=0.001 div/0 floor.
 		}
 		change_variable = {
 			name = DEMAND_luxury_$tradegood$
@@ -548,6 +548,14 @@ DEMAND_set_demand_from_luxury = {
 }
 
 DEMAND_set_demand_from_luxury_all = {
+	# [#139 perf] Cache the governorship's WEALTH_governorship_per_capita ONCE. The per-good effect
+	# DEMAND_set_demand_from_luxury divided by it once for each of the 18 luxury goods; it is
+	# governorship-scoped and the loop never mutates the underlying wealth/population, so 17 of the
+	# 18 evaluations were redundant. Value identical (incl. the svalue's min=0.001 div/0 floor).
+	set_variable = {
+		name = DEMAND_luxury_per_capita_cached
+		value = WEALTH_governorship_per_capita
+	}
 	DEMAND_set_demand_from_luxury = { tradegood = luxury_clothing }
 	DEMAND_set_demand_from_luxury = { tradegood = luxury_furniture }
 	DEMAND_set_demand_from_luxury = { tradegood = spices }
@@ -566,9 +574,17 @@ DEMAND_set_demand_from_luxury_all = {
 	DEMAND_set_demand_from_luxury = { tradegood = coffee }
 	DEMAND_set_demand_from_luxury = { tradegood = glass }
 	DEMAND_set_demand_from_luxury = { tradegood = tea }
+	remove_variable = DEMAND_luxury_per_capita_cached # [#139 perf] clear cache; no stale leak to next quarter
 }
 
 DEMAND_set_demand_from_luxury_all_first_time = {
+	# [#139 perf] mirror the cache in the first-time path so DEMAND_set_demand_from_luxury's
+	# var:DEMAND_luxury_per_capita_cached read resolves here too (the gated divide block is skipped
+	# on first setup — first_time_price_setup_done not yet set — but caching is harmless if reached).
+	set_variable = {
+		name = DEMAND_luxury_per_capita_cached
+		value = WEALTH_governorship_per_capita
+	}
 	DEMAND_set_demand_from_luxury = { tradegood = luxury_clothing }
 	DEMAND_set_demand_from_luxury = { tradegood = luxury_furniture }
 	DEMAND_set_demand_from_luxury = { tradegood = spices }
@@ -587,6 +603,7 @@ DEMAND_set_demand_from_luxury_all_first_time = {
 	DEMAND_set_demand_from_luxury = { tradegood = coffee }
 	DEMAND_set_demand_from_luxury = { tradegood = glass }
 	DEMAND_set_demand_from_luxury = { tradegood = tea }
+	remove_variable = DEMAND_luxury_per_capita_cached # [#139 perf] clear cache
 	set_global_variable = first_time_price_setup_luxury_done
 }
 

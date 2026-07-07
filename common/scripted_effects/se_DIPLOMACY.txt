@@ -854,6 +854,36 @@ DIPLOMACY_trigger_diplomatic_play_finale_event = {
 		limit = { var:play_goal = flag:subjugate_nation }
 		DIPLOMACY_resolve_subjugate = yes
 	}
+	# --- ANNEX STATE (#147): cede the target STATE (not the whole area) to the ----
+	# instigator. Player-initiated goal. Decisive = the whole state; partial = the
+	# single contested province. Reuses the proven LAND_transfer idiom.
+	else_if = {
+		limit = { var:play_goal = flag:annex_state }
+		DIPLOMACY_resolve_annex_state = yes
+	}
+	# --- PURCHASE STATE (#147): as annex_state, but the instigator PAYS the loser --
+	# a treasury sum scaled to the ceded land's wealth (a Louisiana/Alaska-style
+	# purchase). Player-initiated goal.
+	else_if = {
+		limit = { var:play_goal = flag:purchase_state }
+		DIPLOMACY_resolve_purchase_state = yes
+	}
+	# --- LIBERATE STATE (#147): free the target state from its owner as a NEW ------
+	# independent nation, taking its dominant culture/religion. Player-initiated
+	# goal. Reuses the proven LAND_release_from_list wrapper (create_country +
+	# LAND_transfer + optional subject binding). Oracle-verified idiom (#148).
+	else_if = {
+		limit = { var:play_goal = flag:liberate_state }
+		DIPLOMACY_resolve_liberate = yes
+	}
+	# --- COLONISE AREA (#147): plant a colonial subject in the target area (works --
+	# on unclaimed frontier land, where play_target_country normalised to c:BAR).
+	# Player-initiated goal. LAND_release_from_list with flag:dynamic lets the
+	# wrapper's civ-value/border test resolve the subject to a client_colony.
+	else_if = {
+		limit = { var:play_goal = flag:colonise_area }
+		DIPLOMACY_resolve_colonise = yes
+	}
 	# --- FALLBACK: an unhandled goal — treat as a territorial claim so the win is
 	# not silently dropped, and surface it so the gap is visible in the trace.
 	else = {
@@ -1051,6 +1081,423 @@ DIPLOMACY_resolve_subjugate = {
 		LOG_fail = { sys = DIPLO  fn = "DIPLOMACY_resolve_subjugate"  reason = "target country absent, is the instigator, or already a subject; no subjugation for [scope:play_instigator.GetTag]" }
 	}
 	LOG_exit = { sys = DIPLO  fn = "DIPLOMACY_resolve_subjugate"  result = OK }
+}
+
+# ======================================================================
+# COLLECT STATE CEDE CANDIDATES (#147) — shared helper for the state-scoped
+# resolvers (annex_state, purchase_state). Fills the list play_cede_candidates
+# with the foreign-owned, not-already-ours, inhabitable provinces of the STATE
+# that play_target_area sits in. Scope: the play provobj (expects
+# scope:play_instigator). Mirrors the area collection in resolve_get_territory
+# but scoped to a single state rather than the whole area.
+# ======================================================================
+DIPLOMACY_collect_state_cede_candidates = {
+	scope:play_target_area.state = {
+		every_state_province = {
+			limit = {
+				is_uninhabitable = no
+				exists = owner
+				NOT = { owner = scope:play_instigator }
+			}
+			add_to_list = play_cede_candidates
+		}
+	}
+}
+
+# ======================================================================
+# RESOLVE ANNEX_STATE (#147) — cede the target STATE to the instigator.
+# Scope: the play provobj; expects scope:play_instigator / scope:play_target_area
+# and local_var:play_decisive (1 = full state, 0 = single contested province).
+# The state-scoped analogue of DIPLOMACY_resolve_get_territory: a decisive win
+# takes the whole state, a partial win takes only the contested province (with
+# the same most-valuable fallback), and a stateless win banks a claim.
+# ======================================================================
+DIPLOMACY_resolve_annex_state = {
+	LOG_enter = { sys = DIPLO  fn = "DIPLOMACY_resolve_annex_state" }
+	DIPLOMACY_collect_state_cede_candidates = yes
+
+	if = {
+		limit = { any_in_list = { list = play_cede_candidates  count >= 1 } }
+		if = {
+			# DECISIVE — the whole state changes hands (one LAND_transfer_provinces call).
+			limit = { local_var:play_decisive = 1 }
+			LAND_transfer_provinces = {
+				target_provinces = play_cede_candidates
+				grantee = scope:play_instigator
+			}
+			LOG_line = { sys = DIPLO  msg = "play annex_state DECISIVE: [scope:play_instigator.GetTag] annexes the [scope:play_target_area.GetName] state" }
+		}
+		else = {
+			# PARTIAL — a single province, the contested one if cedable, else the most
+			# valuable eligible province in the state (same rule as get_territory).
+			if = {
+				limit = {
+					scope:play_target_area = {
+						is_uninhabitable = no
+						exists = owner
+						NOT = { owner = scope:play_instigator }
+					}
+				}
+				scope:play_target_area = {
+					save_scope_as = play_cede_prov
+					LAND_transfer_province = { grantee = scope:play_instigator }
+				}
+				LOG_line = { sys = DIPLO  msg = "play annex_state PARTIAL: [scope:play_instigator.GetTag] takes the contested province [scope:play_cede_prov.GetName]" }
+			}
+			else = {
+				ordered_in_list = {
+					list = play_cede_candidates
+					order_by = DIPLOMACY_province_wealth_value
+					max = 1
+					save_scope_as = play_cede_prov
+					LAND_transfer_province = { grantee = scope:play_instigator }
+				}
+				LOG_line = { sys = DIPLO  msg = "play annex_state PARTIAL (contested province not cedable; most-valuable fallback): [scope:play_instigator.GetTag] takes [scope:play_cede_prov.GetName]" }
+			}
+		}
+		# relations fallout — the loser resents the annexation (same guard as get_territory).
+		if = {
+			limit = {
+				exists = scope:play_target_country
+				NOT = { scope:play_target_country = { this = scope:play_instigator } }
+				NOT = { scope:play_target_country = { tag = BAR } }
+			}
+			scope:play_target_country = {
+				add_opinion = { modifier = bitter_over_occupation  target = scope:play_instigator }
+			}
+		}
+	}
+	else = {
+		LOG_line = { sys = DIPLO  msg = "play annex_state: no cedable province in the [scope:play_target_area.GetName] state for [scope:play_instigator.GetTag]; banking a claim" }
+		scope:play_target_area = {
+			if = {
+				limit = { exists = owner  NOT = { owner = scope:play_instigator } }
+				add_claim = scope:play_instigator
+			}
+		}
+	}
+	every_in_list = { list = play_cede_candidates  remove_from_list = play_cede_candidates }
+	LOG_exit = { sys = DIPLO  fn = "DIPLOMACY_resolve_annex_state"  result = OK }
+}
+
+# ======================================================================
+# RESOLVE PURCHASE_STATE (#147) — like annex_state, but the instigator PAYS the
+# former owner a treasury sum scaled to the ceded land's wealth (Alaska/Louisiana
+# purchase). The payment is bounded by what the instigator can afford: it never
+# drives the buyer below zero, and the seller receives exactly what the buyer
+# pays. Scope: the play provobj. Because a purchase is consensual land, there is
+# NO bitter_over_occupation opinion penalty (that is the whole point vs annex).
+# ======================================================================
+DIPLOMACY_resolve_purchase_state = {
+	LOG_enter = { sys = DIPLO  fn = "DIPLOMACY_resolve_purchase_state" }
+	DIPLOMACY_collect_state_cede_candidates = yes
+
+	if = {
+		limit = { any_in_list = { list = play_cede_candidates  count >= 1 } }
+
+		if = {
+			limit = { local_var:play_decisive = 1 }
+			# decisive buys the whole state: price = summed wealth-value of every ceded
+			# province, bounded by the buyer's treasury so the purchase can never push
+			# the buyer negative (cap floored at 0 so a debtor buyer pays nothing rather
+			# than hitting a max<min contradiction).
+			set_variable = {
+				name = play_purchase_price
+				value = {
+					value = 0
+					every_in_list = {
+						list = play_cede_candidates
+						add = DIPLOMACY_province_wealth_value
+					}
+					min = 0
+					max = {
+						value = scope:play_instigator.treasury
+						min = 0
+					}
+				}
+			}
+			LAND_transfer_provinces = {
+				target_provinces = play_cede_candidates
+				grantee = scope:play_instigator
+			}
+			LOG_line = { sys = DIPLO  msg = "play purchase_state DECISIVE: [scope:play_instigator.GetTag] buys the [scope:play_target_area.GetName] state for [scope:diplomatic_play.MakeScope.GetVariable('play_purchase_price').GetValue|0]" }
+		}
+		else = {
+			# partial buys only ONE province: the contested province if still cedable,
+			# else the most-valuable candidate. Select it FIRST, then price the province
+			# actually transferred (pricing play_target_area up front would floor the
+			# price to 0 whenever the contested province is no longer cedable — a free
+			# acquisition — see #147 review finding 2).
+			if = {
+				limit = {
+					scope:play_target_area = {
+						is_uninhabitable = no
+						exists = owner
+						NOT = { owner = scope:play_instigator }
+					}
+				}
+				scope:play_target_area = { save_scope_as = play_cede_prov }
+			}
+			else = {
+				ordered_in_list = {
+					list = play_cede_candidates
+					order_by = DIPLOMACY_province_wealth_value
+					max = 1
+					save_scope_as = play_cede_prov
+				}
+			}
+			set_variable = {
+				name = play_purchase_price
+				value = {
+					value = scope:play_cede_prov.DIPLOMACY_province_wealth_value
+					min = 0
+					max = {
+						value = scope:play_instigator.treasury
+						min = 0
+					}
+				}
+			}
+			scope:play_cede_prov = {
+				LAND_transfer_province = { grantee = scope:play_instigator }
+			}
+			LOG_line = { sys = DIPLO  msg = "play purchase_state PARTIAL: [scope:play_instigator.GetTag] buys [scope:play_cede_prov.GetName] for [scope:diplomatic_play.MakeScope.GetVariable('play_purchase_price').GetValue|0]" }
+		}
+
+		# settle the payment: buyer pays, former owner receives the SAME sum. Guarded
+		# so we never pay the c:BAR placeholder or the instigator itself.
+		scope:play_instigator = {
+			# qualified with scope:diplomatic_play — play_purchase_price lives on the play
+			# provobj, NOT on the instigator country whose scope this block runs in.
+			add_treasury = { value = scope:diplomatic_play.var:play_purchase_price  multiply = -1 }
+		}
+		if = {
+			limit = {
+				exists = scope:play_target_country
+				NOT = { scope:play_target_country = { this = scope:play_instigator } }
+				NOT = { scope:play_target_country = { tag = BAR } }
+			}
+			scope:play_target_country = {
+				add_treasury = scope:diplomatic_play.var:play_purchase_price
+			}
+		}
+		remove_variable = play_purchase_price
+	}
+	else = {
+		LOG_line = { sys = DIPLO  msg = "play purchase_state: no purchasable province in the [scope:play_target_area.GetName] state for [scope:play_instigator.GetTag]; banking a claim" }
+		scope:play_target_area = {
+			if = {
+				limit = { exists = owner  NOT = { owner = scope:play_instigator } }
+				add_claim = scope:play_instigator
+			}
+		}
+	}
+	every_in_list = { list = play_cede_candidates  remove_from_list = play_cede_candidates }
+	LOG_exit = { sys = DIPLO  fn = "DIPLOMACY_resolve_purchase_state"  result = OK }
+}
+
+# ======================================================================
+# RESOLVE LIBERATE_STATE (#147) — free the target state from its owner as a new
+# nation taking the state's dominant culture/religion. Scope: the play provobj;
+# expects scope:play_instigator / scope:play_target_area / scope:play_target_country
+# and local_var:play_decisive. Reuses the oracle-verified LAND_release_from_list
+# wrapper (#148: create_country + LAND_transfer_provinces + optional subject bind).
+# DECISIVE = a fully INDEPENDENT nation; PARTIAL = freed but as a client_state of
+# the instigator (a sponsored puppet rather than a free state). The releaser is the
+# OWNER being liberated FROM (play_target_country) — the wrapper transfers the land
+# off it — matching the send_settlers.txt precedent.
+# ======================================================================
+DIPLOMACY_resolve_liberate = {
+	LOG_enter = { sys = DIPLO  fn = "DIPLOMACY_resolve_liberate" }
+	# collect the foreign-owned, inhabitable provinces of the target state.
+	scope:play_target_area.state = {
+		every_state_province = {
+			limit = {
+				is_uninhabitable = no
+				exists = owner
+				NOT = { owner = scope:play_instigator }
+			}
+			add_to_list = play_release_candidates
+		}
+	}
+
+	if = {
+		limit = {
+			any_in_list = { list = play_release_candidates  count >= 1 }
+			# the wrapper needs a valid owner to release FROM.
+			exists = scope:play_target_country
+			NOT = { scope:play_target_country = { tag = BAR } }
+			NOT = { scope:play_target_country = { this = scope:play_instigator } }
+		}
+		if = {
+			# DECISIVE — a fully independent nation.
+			limit = { local_var:play_decisive = 1 }
+			LAND_release_from_list = {
+				releaser = scope:play_target_country
+				list = play_release_candidates
+				capital_location = flag:by_population
+				primary_culture = flag:as_capital
+				country_religion = flag:as_capital
+				as_subject_type = flag:independent
+				government_type = flag:dynamic
+				give_overlord_hos = no
+				country_name = flag:dynamic
+				country_adj = flag:dynamic
+				country_flag = flag:dynamic
+				country_color = flag:dynamic
+			}
+			LOG_line = { sys = DIPLO  msg = "play liberate_state DECISIVE: [scope:play_instigator.GetTag] frees the [scope:play_target_area.GetName] state as an independent nation from [scope:play_target_country.GetTag]" }
+		}
+		else = {
+			# PARTIAL — freed, but as a client_state of the sponsoring instigator.
+			LAND_release_from_list = {
+				releaser = scope:play_target_country
+				list = play_release_candidates
+				capital_location = flag:by_population
+				primary_culture = flag:as_capital
+				country_religion = flag:as_capital
+				as_subject_type = flag:dynamic
+				government_type = flag:dynamic
+				give_overlord_hos = no
+				country_name = flag:dynamic
+				country_adj = flag:dynamic
+				country_flag = flag:dynamic
+				country_color = flag:dynamic
+			}
+			# LAND_release_from_list's flag:dynamic binds the new country to its RELEASER
+			# (the former owner), which is not what a sponsored liberation wants; re-bind
+			# the fresh nation to the INSTIGATOR as its client_state. scope:new_country_scope
+			# is left set by the wrapper.
+			if = {
+				limit = { exists = scope:new_country_scope }
+				FUNC_make_subject = {
+					overlord = scope:play_instigator
+					target = scope:new_country_scope
+					type = client_state
+				}
+			}
+			LOG_line = { sys = DIPLO  msg = "play liberate_state PARTIAL: [scope:play_instigator.GetTag] frees the [scope:play_target_area.GetName] state as its client_state" }
+		}
+		# the former owner resents the dismemberment.
+		scope:play_target_country = {
+			add_opinion = { modifier = bitter_over_occupation  target = scope:play_instigator }
+		}
+	}
+	else = {
+		LOG_line = { sys = DIPLO  msg = "play liberate_state: no releasable foreign province in the [scope:play_target_area.GetName] state for [scope:play_instigator.GetTag]; no nation freed" }
+	}
+	every_in_list = { list = play_release_candidates  remove_from_list = play_release_candidates }
+	LOG_exit = { sys = DIPLO  fn = "DIPLOMACY_resolve_liberate"  result = OK }
+}
+
+# ======================================================================
+# RESOLVE COLONISE_AREA (#147) — plant a colonial subject of the instigator in
+# the target area. Works on unclaimed frontier land (where play_target_country
+# normalised to c:BAR) as well as sparsely-held foreign land. Scope: the play
+# provobj. Uses LAND_release_from_list with releaser = the INSTIGATOR and
+# as_subject_type = flag:dynamic, so the wrapper's civilisation-value / border
+# test resolves the new country to a client_colony bound to the instigator.
+# DECISIVE = a colony over the whole area; PARTIAL = over the contested province.
+# ======================================================================
+DIPLOMACY_resolve_colonise = {
+	LOG_enter = { sys = DIPLO  fn = "DIPLOMACY_resolve_colonise" }
+	# collect inhabitable provinces of the area the instigator does not already own
+	# (unowned frontier included — a colony can be planted on empty land).
+	if = {
+		limit = { local_var:play_decisive = 1 }
+		scope:play_target_area.area = {
+			every_area_province = {
+				limit = {
+					is_uninhabitable = no
+					NOT = { owner = scope:play_instigator }
+				}
+				add_to_list = play_colony_candidates
+			}
+		}
+	}
+	else = {
+		# PARTIAL — only the contested province, if it is colonisable.
+		scope:play_target_area = {
+			if = {
+				limit = {
+					is_uninhabitable = no
+					NOT = { owner = scope:play_instigator }
+				}
+				add_to_list = play_colony_candidates
+			}
+		}
+	}
+
+	if = {
+		limit = { any_in_list = { list = play_colony_candidates  count >= 1 } }
+		# [#147 review-fix 4] Colonise admits sparsely-held FOREIGN land (not just empty
+		# frontier), so a displaced third-party owner must resent the land grab exactly
+		# as in annex/get_territory — otherwise it is a free, consequence-free seizure.
+		# Applied BEFORE the release (which reassigns ownership) and once per distinct
+		# displaced owner (the every_country loop dedups), skipping the instigator.
+		every_country = {
+			limit = {
+				NOT = { this = scope:play_instigator }
+				any_owned_province = { is_in_list = { list = play_colony_candidates } }
+			}
+			add_opinion = { modifier = bitter_over_occupation  target = scope:play_instigator }
+		}
+		LAND_release_from_list = {
+			releaser = scope:play_instigator
+			list = play_colony_candidates
+			capital_location = flag:by_population
+			primary_culture = flag:as_capital
+			country_religion = flag:as_capital
+			as_subject_type = flag:dynamic
+			government_type = flag:dynamic
+			give_overlord_hos = no
+			country_name = flag:dynamic
+			country_adj = flag:dynamic
+			country_flag = flag:dynamic
+			country_color = flag:dynamic
+		}
+		LOG_line = { sys = DIPLO  msg = "play colonise_area: [scope:play_instigator.GetTag] establishes a colony in the [scope:play_target_area.GetName] area (decisive [local_var:play_decisive|0])" }
+	}
+	else = {
+		LOG_line = { sys = DIPLO  msg = "play colonise_area: no colonisable province in the [scope:play_target_area.GetName] area for [scope:play_instigator.GetTag]; no colony planted" }
+	}
+	every_in_list = { list = play_colony_candidates  remove_from_list = play_colony_candidates }
+	LOG_exit = { sys = DIPLO  fn = "DIPLOMACY_resolve_colonise"  result = OK }
+}
+
+# ======================================================================
+# PLAYER-INITIATED PLAY BEGIN (#147) — the shared effect behind every per-goal
+# player GUI button. Scope: the instigating COUNTRY (the player). Expects
+# scope:target_province set to the province the player clicked. Parameterised by
+# $goal$ (a play_goal flag). Wraps AI_begin_diplomatic_play with the manual play
+# type and pays the standard begin price. Colonise normalises the target country
+# to the instigator itself, so AI_begin_diplomatic_play's own c:BAR fallback fires
+# (a colony is planted on frontier land with no defending country).
+# ======================================================================
+DIPLOMACY_player_begin_play = {
+	LOG_enter = { sys = DIPLO  fn = "DIPLOMACY_player_begin_play" }
+	pay_price = begin_diplomatic_play_price
+	if = {
+		# colonise: no target country — set target = instigator so the begin effect
+		# normalises play_target_country to c:BAR (its unclaimed-land convention).
+		limit = { $goal$ = flag:colonise_area }
+		AI_begin_diplomatic_play = {
+			play_instigator = this
+			play_target_area = scope:target_province
+			play_target_country = this
+			play_goal = $goal$
+			play_type = manual
+		}
+	}
+	else = {
+		AI_begin_diplomatic_play = {
+			play_instigator = this
+			play_target_area = scope:target_province
+			play_target_country = scope:target_province.owner
+			play_goal = $goal$
+			play_type = manual
+		}
+	}
+	LOG_exit = { sys = DIPLO  fn = "DIPLOMACY_player_begin_play"  result = OK }
 }
 
 DIPLOMACY_add_state_foreign_influence = {

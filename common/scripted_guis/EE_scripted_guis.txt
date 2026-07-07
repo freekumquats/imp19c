@@ -1362,6 +1362,256 @@ DIPLO_begin_or_end_play = {
     
 }
 
+# ======================================================================
+# PLAYER GOAL-PICKER BEGIN GUIS (#147). One thin scripted_gui per play goal, each
+# a clone of the proven DIPLO_begin_or_end_play shape but hardcoding its own
+# play_goal and delegating the begin to DIPLOMACY_player_begin_play (se_DIPLOMACY.txt),
+# which pays the standard price. They read scope:player.var:selected_province — the
+# SAME var the existing province-window button relies on (set by save_selected_province
+# on the window's on_start) — so they need no extra plumbing. Shared validity: the
+# player must have a selected province, hold political influence + stability, and not
+# already have a play of any goal in that area (stateless global-list guard). The
+# per-goal extras (not-your-own-land, must-be-owned, treasury) live in each is_valid.
+# The whole button container is enabled/onclick via .IsValid/.Execute exactly like
+# DIPLO_begin_or_end_play at gui/province_window.gui:4632.
+# ======================================================================
+
+DIPLO_begin_play_get_territory = {
+    scope = province
+    ai_is_valid = { always = no }
+    is_valid = {
+        scope:player = { has_variable = selected_province }
+        NOT = { scope:player.var:selected_province.owner = scope:player }
+        scope:player = { political_influence >= 30  stability > 10 }
+        NOT = {
+            any_in_global_list = {
+                variable = global_all_diplomatic_plays
+                var:play_instigator = scope:player
+                var:play_target_area = { area = scope:player.var:selected_province.area }
+            }
+        }
+    }
+    effect = {
+        scope:player = {
+            var:selected_province = { save_scope_as = target_province }
+            DIPLOMACY_player_begin_play = { goal = flag:get_territory }
+        }
+    }
+}
+
+DIPLO_begin_play_annex_state = {
+    scope = province
+    ai_is_valid = { always = no }
+    is_valid = {
+        scope:player = { has_variable = selected_province }
+        NOT = { scope:player.var:selected_province.owner = scope:player }
+        exists = scope:player.var:selected_province.owner
+        scope:player = { political_influence >= 30  stability > 10 }
+        NOT = {
+            any_in_global_list = {
+                variable = global_all_diplomatic_plays
+                var:play_instigator = scope:player
+                var:play_target_area = { area = scope:player.var:selected_province.area }
+            }
+        }
+    }
+    effect = {
+        scope:player = {
+            var:selected_province = { save_scope_as = target_province }
+            DIPLOMACY_player_begin_play = { goal = flag:annex_state }
+        }
+    }
+}
+
+DIPLO_begin_play_purchase_state = {
+    scope = province
+    ai_is_valid = { always = no }
+    is_valid = {
+        scope:player = { has_variable = selected_province }
+        NOT = { scope:player.var:selected_province.owner = scope:player }
+        exists = scope:player.var:selected_province.owner
+        # a purchase needs money on the table
+        scope:player = { political_influence >= 30  stability > 10  treasury > 0 }
+        NOT = {
+            any_in_global_list = {
+                variable = global_all_diplomatic_plays
+                var:play_instigator = scope:player
+                var:play_target_area = { area = scope:player.var:selected_province.area }
+            }
+        }
+    }
+    effect = {
+        scope:player = {
+            var:selected_province = { save_scope_as = target_province }
+            DIPLOMACY_player_begin_play = { goal = flag:purchase_state }
+        }
+    }
+}
+
+DIPLO_begin_play_subjugate = {
+    scope = province
+    ai_is_valid = { always = no }
+    is_valid = {
+        scope:player = { has_variable = selected_province }
+        NOT = { scope:player.var:selected_province.owner = scope:player }
+        exists = scope:player.var:selected_province.owner
+        scope:player = { political_influence >= 30  stability > 10 }
+        # you must be the stronger power to demand subjugation
+        scope:player = {
+            DIPLOMACY_power > scope:player.var:selected_province.owner.DIPLOMACY_power
+        }
+        # target isn't already our subject
+        NOT = { scope:player.var:selected_province.owner = { is_subject_of = scope:player } }
+        NOT = {
+            any_in_global_list = {
+                variable = global_all_diplomatic_plays
+                var:play_instigator = scope:player
+                var:play_target_area = { area = scope:player.var:selected_province.area }
+            }
+        }
+    }
+    effect = {
+        scope:player = {
+            var:selected_province = { save_scope_as = target_province }
+            DIPLOMACY_player_begin_play = { goal = flag:subjugate_nation }
+        }
+    }
+}
+
+DIPLO_begin_play_liberate = {
+    scope = province
+    ai_is_valid = { always = no }
+    is_valid = {
+        scope:player = { has_variable = selected_province }
+        NOT = { scope:player.var:selected_province.owner = scope:player }
+        exists = scope:player.var:selected_province.owner
+        # only worth liberating land whose dominant culture differs from its owner's
+        # primary culture (a culturally distinct state chafing under foreign rule).
+        NOT = {
+            scope:player.var:selected_province.owner = {
+                primary_culture = scope:player.var:selected_province.dominant_province_culture
+            }
+        }
+        scope:player = { political_influence >= 30  stability > 10 }
+        NOT = {
+            any_in_global_list = {
+                variable = global_all_diplomatic_plays
+                var:play_instigator = scope:player
+                var:play_target_area = { area = scope:player.var:selected_province.area }
+            }
+        }
+    }
+    effect = {
+        scope:player = {
+            var:selected_province = { save_scope_as = target_province }
+            DIPLOMACY_player_begin_play = { goal = flag:liberate_state }
+        }
+    }
+}
+
+DIPLO_begin_play_colonise = {
+    scope = province
+    ai_is_valid = { always = no }
+    is_valid = {
+        scope:player = { has_variable = selected_province }
+        # colonise works on frontier/foreign land alike — just not our own.
+        NOT = { scope:player.var:selected_province.owner = scope:player }
+        scope:player = { political_influence >= 30  stability > 10 }
+        NOT = {
+            any_in_global_list = {
+                variable = global_all_diplomatic_plays
+                var:play_instigator = scope:player
+                var:play_target_area = { area = scope:player.var:selected_province.area }
+            }
+        }
+    }
+    effect = {
+        scope:player = {
+            var:selected_province = { save_scope_as = target_province }
+            DIPLOMACY_player_begin_play = { goal = flag:colonise_area }
+        }
+    }
+}
+
+# ======================================================================
+# PLAYER SUPPORT-PLAY GUI (#147). Backs an existing diplomatic play, nudging its
+# success upward for a political-influence cost. Root scope = the play provobj
+# (the plays-management list binds each item's Scope to the play province);
+# scope:player = the backing country. Valid when the play still exists, the player
+# holds influence, and the player is not already maxing an unrelated concern. The
+# success bump routes through DIPLOMACY_modify_play_success (province scope), which
+# scales the gain by the balance of power and caps at 100.
+# ======================================================================
+DIPLO_player_support_play = {
+    scope = province
+    ai_is_valid = { always = no }
+    is_valid = {
+        has_variable = is_diplomatic_play
+        scope:player = { political_influence >= 10 }
+        # [#147 review-fix 1] Backing a play always raises the INSTIGATOR's success, so
+        # the player must never be the target of the play they are supporting — else the
+        # (list-wide) Support button becomes silent self-harm. Only bar the target; an
+        # uninvolved third party backing an ally's play is legitimate diplomacy.
+        NOT = { var:play_target_country = scope:player }
+        # no point paying influence once the play is already certain to succeed.
+        var:diplomatic_play_success < 100
+    }
+    effect = {
+        scope:player = {
+            pay_price = support_diplomatic_play_price
+        }
+        # this = the play provobj (root scope of the GUI).
+        DIPLOMACY_modify_play_success = { amt = 10 }
+        LOG_line = { sys = DIPLO  msg = "player [scope:player.GetTag] supports play, +10 success" }
+    }
+}
+
+# [scan Tier-C] OPPOSE a diplomatic play — the mirror of DIPLO_player_support_play.
+# Spend political influence to push the play's success DOWN (toward a fizzle). Root =
+# the play provobj; 'player' scope added by the GUI. Same influence outlay as support.
+DIPLO_player_oppose_play = {
+    scope = province
+    ai_is_valid = { always = no }
+    is_valid = {
+        has_variable = is_diplomatic_play
+        scope:player = { political_influence >= 10 }
+        # Opposing a play you INSTIGATED is nonsense — that is what Cancel is for. Bar
+        # the instigator; anyone else (the target, or a concerned third party) may oppose.
+        NOT = { var:play_instigator = scope:player }
+        # no point paying influence once the play has already collapsed to nothing.
+        var:diplomatic_play_success > 0
+    }
+    effect = {
+        scope:player = {
+            pay_price = oppose_diplomatic_play_price
+        }
+        # this = the play provobj (root scope of the GUI). Negative amt runs the
+        # weak-instigator divide branch in DIPLOMACY_modify_play_success (floored, #79).
+        DIPLOMACY_modify_play_success = { amt = -10 }
+        LOG_line = { sys = DIPLO  msg = "player [scope:player.GetTag] opposes play, -10 success" }
+    }
+}
+
+# [scan Tier-C] CANCEL your own diplomatic play — withdraw a play you instigated before
+# it resolves. Only the instigator of a MANUAL (player-started) play may cancel; the
+# influence already spent to begin it is not refunded (matches end-play semantics). Reuses
+# the proven AI_remove_diplomatic_play teardown, which strips is_diplomatic_play + every
+# play_* var and de-indexes the provobj, so the next update pass finds nothing to resolve.
+DIPLO_player_cancel_play = {
+    scope = province
+    ai_is_valid = { always = no }
+    is_valid = {
+        has_variable = is_diplomatic_play
+        has_variable = manual_play
+        var:play_instigator = scope:player
+    }
+    effect = {
+        # this = the play provobj (root scope of the GUI).
+        LOG_line = { sys = DIPLO  msg = "player [scope:player.GetTag] cancels own play over [this.GetName]" }
+        AI_remove_diplomatic_play = yes
+    }
+}
+
 DIPLOMACY_state_has_influence = {
     scope = state
 

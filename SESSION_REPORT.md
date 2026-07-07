@@ -1269,3 +1269,258 @@ both oracles and replaced with proven idioms.
 
 All 8 edited files byte/brace-clean (0 problems); zero invalid tokens remain in code (only in
 explanatory comments). Task-tagged [deferred-fix #N] comments + se_LOG on every dispatch.
+
+
+---
+
+## #139 — Economy performance pass (trade / industry / production)
+
+Behavior-preserving optimization sweep over the quarterly economy tick. Method honored the
+"extreme caution" mandate: EVERY profiler claim was verified against the actual code before any
+edit, and CHANGES to existing hot paths were held to byte/behavioral-equivalence. Outcome — of 7
+candidate fixes, 4 implemented as byte-identical, 2 rejected as unsafe (would change gameplay), 1
+skipped as dead code. The profilers materially over-claimed: several "hotspots" were dead code,
+intentional per-category accumulation, or already optimized.
+
+### Implemented (behavior-preserving)
+
+- **[#139-B] se_CONSUME.txt** — `CONSUME_all_stockpiles` now caches the two LOOP-INVARIANT macro
+  factors ONCE per governorship (`owner.CURRENCY_amt_circulated_deflation` -> var
+  `CONSUME_deflation_cached`; `DEMAND_elasticity_impact` -> var `CONSUME_elasticity_cached`) before
+  the `every_tradegood_complex` loop, and `CONSUME_update_shortage` reads the cached vars at all 4
+  sites (3 deflation, 1 elasticity). Both were re-evaluated ~60×/gov though the loop never mutates
+  them. Cleared at loop exit. Byte-identical: the cached var holds exactly the value a live read
+  would return at every iteration. No inline log (a log inside the 60× loop would be a regression;
+  ECON_LOG wraps the phase). Braces 44/44, BOM preserved.
+
+- **[#139-C] se_DEMAND.txt** — `DEMAND_set_demand_from_luxury` divides by `WEALTH_governorship_per_capita`
+  once per luxury good; hoisted to var `DEMAND_luxury_per_capita_cached` set at the top of both
+  `DEMAND_set_demand_from_luxury_all` and `_all_first_time`, cleared at each end. The div/0 guard
+  (min behavior) is preserved via the cached value. Braces 198/198, BOM preserved.
+
+- **[#139-E] se_GLOBALTRADE_split.txt + oa_wealth_changes.txt** — `GT_split_do_global_trade_split`
+  ran a trailing `every_trade_center = { PRICE_set_food_mean_normalised_price = yes }` on EVERY one
+  of the 7 category passes, but that effect recomputes the food-price mean from `local_price_<food>`
+  vars written ONLY during the food pass, so passes 2-7 recomputed an identical value over every
+  trade center. Removed from the shared split effect (replaced with an explanatory comment) and
+  relocated to `quarterly_global_trade_food` immediately after the food split, so it runs once.
+  Byte-identical for every reader. NOTE: 3 of the 4 profiler claims for this file were FALSE
+  POSITIVES (GT_set_tradegood_price already type-scoped; shipping-traffic accumulation is intentional
+  per-category; TZ penetration values already hoisted) — only this one was genuine. Split braces
+  1611/1611 (BOM+CRLF); on_action braces 146/146 (BOM+LF).
+
+- **[#139-F] se_COTTAGEIND.txt** — `COTTAGEIND_cache_all_values` now caches all 21 raw-good
+  production svalues (`GOODS_governorship_<good>_produced` -> var `COTTAGEIND_raw_<good>` for copper,
+  dye, fish, fur, gems, gold, industrial_fibres, iron, lead, salt, silk, silver, stone, sugar,
+  sulphur, temperate_fruit, textile_fibres, tin, vegetables, whales, wood), and all 45 cottage-recipe
+  reads use the cached var instead of re-deriving each producing svalue per recipe. Braces 136/136,
+  BOM+CRLF (564) preserved (initial write flattened CRLF->LF — self-caught via git diff --stat, byte-
+  restored per the BOM+CRLF-trap rule).
+
+### Rejected as unsafe (would change gameplay — flagged for user design decision)
+
+- **[#139-A] Fuse the two currency-province sweeps** (CURRENCY_cache_power then
+  CURRENCY_cache_power_trade_bonus, oa_wealth_changes.txt:173-184). REJECTED. `CURRENCY_power_trade_bonus`
+  (CURRENCY_svalues.txt:1547) divides by a WORLD-TOTAL sum `every_province { add = var:CURRENCY_power_cached }`,
+  so pass 2 depends on pass 1 being COMPLETE across every currency province. Fusing them would read
+  a partially-populated sum = silent economic drift. The profiler's fusion recommendation was wrong.
+
+- **[#139-D] "Finish/delete the half-done food/wealth cache migration".** REJECTED. The
+  `var_WEALTH_governorship_per_capita`-prefixed guarded reads in DEMAND_food_svalues.txt are DORMANT
+  (no live setter). Deleting the TRADE_cache_svalues_* builders would drop vars other svalues read;
+  FINISHING the migration (activating a live setter) would switch on dormant food-demand wealth-
+  dampening = a gameplay change. Neither is behavior-preserving. Left as-is; flagged for user.
+
+### Skipped as dead code
+
+- **[#139-G] The O(TZ²×goods²) TZ-scoring core + double 22-branch dispatch** (se_TRADE.txt:
+  TRADE_score_tradezone_connections chain and TRADE_rank_supplier_TZs_all_tradegoods). Call-graph
+  trace shows EVERY mention is internal to se_TRADE.txt with ZERO external caller from any on_action
+  or event, and the chain even calls the undefined effect TRADE_get_tradezone_connection_score
+  (defs=0). Dead/dormant code — no runtime cost to remove, so no fix warranted; touching it is pure
+  risk. The live quarterly trade path uses GT_split_do_global_trade_split, not this cluster.
+
+
+### #139 adversarial review (Workflow: 6 agents, one hostile skeptic per fix + independent verify + integrity)
+
+Ran a deep adversarial review via the Workflow tool: one skeptic per fix prompted to REFUTE
+behavior-preservation across 6 failure modes (invariance, ordering, scope, other-callers, cleanup,
+lost guards), each non-nit finding independently re-verified by a second agent, plus a mechanical
+brace/BOM/CRLF/no-rewrite integrity sweep.
+
+- **B (CONSUME), C (DEMAND), F (COTTAGEIND): CLEARED.** Skeptics could not refute invariance.
+  Notably F (highest-risk): GOODS_governorship_<good>_produced derives from engine-side
+  num_goods_produced × productivity modifiers, NOT from any stockpile the cottage recipes mutate —
+  so even the ORIGINAL live-read code could never have seen the svalue change mid-loop. Cache is
+  exact.
+- **Integrity: ALL PASS.** 5 files brace-balanced, BOM present, correct line-endings (4 economy
+  se_*.txt = CRLF+BOM, oa_wealth_changes.txt = LF+BOM), no whole-file rewrite.
+- **E (GLOBALTRADE): ONE REAL regression found and FIXED (CONFIRMED_REAL_BUG, low severity).**
+  Relocating PRICE_set_food_mean_normalised_price out of GT_split_do_global_trade_split overlooked
+  that GT_split has a SECOND caller — the game-setup path (oa_economy_setup.txt:2296-2302) runs the
+  7 splits directly at day 0 and relied on the removed block to seed PRICE_food_mean_normalised
+  before the first quarterly pulse (~day 20). In the gap, a land transfer (debug_land.1, war peace
+  deals, diplomatic-play resolution, AI peace transfers, Qing subject transfers) runs
+  DEMAND_set_demand_from_food guarded on has_variable=PRICE_food_mean_normalised; with the var
+  absent the food-mean divide is skipped, yielding a divergent persistent demand for the transferred
+  governorship. FIX: re-seeded the food mean in the setup path right after the food split
+  (oa_economy_setup.txt, [#139 perf review-fix]), mirroring the quarterly path. Byte-identical to the
+  original setup end-state (passes 2-7 never touch food prices, and nothing reads the var between the
+  synchronous setup splits). Braces 527/527, BOM+CRLF preserved.
+
+Net: 4 fixes implemented, all now behavior-preserving; 2 rejected as unsafe; 1 skipped as dead code.
+The review's single catch was the other-callers failure mode on the one relocation (not a caching)
+fix — now closed.
+
+
+---
+
+## #147 — Player-initiated diplomatic plays via GUI (2026-07-07)
+
+**Request:** "Look at diplomatic plays and building how the player can initiate them for many
+different reasons via GUI (none of which I think exists right now)." Scope chosen by the user:
+ALL play goals (Territory/Influence/Subjugate + Liberate state + Colonise unclaimed area +
+Purchase/annex state — new backend resolvers for the latter four) AND the full plays-management
+window (province-window goal picker + supranational plays list + a working Support action).
+
+Before #147 the only player entry point was the single `DIPLO_begin_or_end_play` toggle button,
+which always started a `flag:get_territory` play — no goal choice, no Support action, and the two
+Support buttons in the play-list templates were dead stubs (`#onclick = ""`).
+
+### Backend (common/scripted_effects/se_DIPLOMACY.txt)
+- **`DIPLOMACY_player_begin_play = { goal = flag:X }`** — shared country-scope effect behind every
+  goal button. Pays `begin_diplomatic_play_price`, wraps `AI_begin_diplomatic_play` with
+  `play_type = manual`. Colonise normalises `play_target_country = this` so the engine's c:BAR
+  unclaimed-land fallback fires; every other goal uses `scope:target_province.owner`.
+- **Four new resolvers**, dispatched from `DIPLOMACY_trigger_diplomatic_play_finale_event`:
+  - `DIPLOMACY_resolve_annex_state` — state-scoped clone of the proven `resolve_get_territory`;
+    decisive = whole state via `LAND_transfer_provinces`, partial = contested province (most-valuable
+    fallback), `bitter_over_occupation` on the former owner, bank-a-claim on fizzle.
+  - `DIPLOMACY_resolve_purchase_state` — like annex but the buyer PAYS the seller a treasury sum
+    scaled to the ceded land's `DIPLOMACY_province_wealth_value`, capped at the buyer's treasury
+    (never drives the buyer negative). No opinion penalty (consensual purchase). `play_purchase_price`
+    lives on the provobj and is read back as `scope:diplomatic_play.var:play_purchase_price` inside
+    the country-scoped payment blocks.
+  - `DIPLOMACY_resolve_liberate` — frees the target state via `LAND_release_from_list`; decisive =
+    fully independent nation (`as_subject_type = flag:independent`), partial = client_state of the
+    instigator (release `flag:dynamic`, then re-bind via `FUNC_make_subject`). `bitter_over_occupation`
+    on the former owner.
+  - `DIPLOMACY_resolve_colonise` — plants a colonial subject via `LAND_release_from_list`
+    (`releaser = play_instigator`, `as_subject_type = flag:dynamic`). Works on empty frontier AND
+    sparsely-held foreign land; decisive = whole area, partial = contested province.
+- **`DIPLOMACY_collect_state_cede_candidates`** — helper filling `play_cede_candidates` from the
+  target state's foreign-owned, inhabitable, non-instigator provinces.
+
+### GUI
+- **common/scripted_guis/EE_scripted_guis.txt** — 6 thin per-goal begin GUIs
+  (`DIPLO_begin_play_get_territory/_annex_state/_purchase_state/_subjugate/_liberate/_colonise`),
+  each cloning the proven `DIPLO_begin_or_end_play` two-scope shape and reading
+  `scope:player.var:selected_province`. Shared gating: has selected province, not-your-own-land,
+  political influence >= 30 + stability > 10, and a stateless duplicate-play guard
+  (`any_in_global_list` on instigator + target-area's `.area`). Per-goal extras: exists-owner
+  (annex/purchase/subjugate/liberate), treasury > 0 (purchase), stronger-power + not-already-subject
+  (subjugate), culture-mismatch (liberate). Plus **`DIPLO_player_support_play`** (backs an existing
+  play for `support_diplomatic_play_price` = 10 PI, `DIPLOMACY_modify_play_success = { amt = 10 }`).
+- **gui/province_window.gui** — replaced the hidden 2-button placeholder with a visible row of 6
+  goal buttons, each enabled via `.IsValid(...)` and starting its play + refreshing the local list
+  via `.Execute(...)`.
+- **gui/shared/gui_templates.gui** — wired the two previously-dead Support buttons (in
+  `diplomatic_play_item` and `diplomatic_play_global_item`) to `DIPLO_player_support_play`.
+- **common/prices/00_diplomacy_prices.txt** — `support_diplomatic_play_price = { political_influence = 10 }`.
+- **localization/english/imp19c_interface_l_english.yml** — 12 `play_goal_*(_tt)` keys + 2
+  `play_support_button(_tt)` keys (BOM+LF, all entries exactly 2 quotes).
+
+### Post-implementation adversarial review (code-review agent) — 4 findings, ALL fixed
+The risky treasury/scope code was cleared as correct (purchase price qualified with
+`scope:diplomatic_play`, cap floored at 0, empty-list guards on every LAND_* call, goal flags
+consistent across GUI → begin → finale → resolver). Four gating/correctness edges were found and
+fixed:
+1. **Support self-harm (MEDIUM).** The Support button appears on every play in the list, and backing
+   always raises the INSTIGATOR's success — so a player could pay to help a play against themselves.
+   FIX: `DIPLO_player_support_play` is_valid now bars `var:play_target_country = scope:player` (a
+   third party helping an ally is still allowed) and skips a play already at 100 success.
+2. **Purchase partial free-acquisition (LOW).** Pricing `play_target_area` up front floored the price
+   to 0 whenever the contested province was no longer cedable, yet the fallback still transferred a
+   real province. FIX: select the transferred province FIRST, then price the province actually ceded.
+3. **PI gate vs cost mismatch (LOW).** Begin buttons gated on `political_influence > 0` but the cost
+   is 30 PI, so a player with 1-29 PI could go negative. FIX: gate raised to `>= 30` on all 6 buttons;
+   tooltips updated ("political influence of at least 30").
+4. **Colonise third-party seizure (LOW).** Colonise admits foreign land, but had no penalty for a
+   displaced owner. FIX: `bitter_over_occupation` applied once per distinct displaced owner (via
+   `every_country`) before the release, matching the annex path.
+
+Integrity: se_DIPLOMACY.txt 533/533 braces, EE_scripted_guis.txt 483/483, province_window.gui
+1943/1943, gui_templates.gui 1196/1196, imp19c_windows.gui 272/272 — all byte-conventions preserved.
+All new effects wired to se_LOG (LOG_enter/line/exit), honoring the error-logging standing rule.
+
+## Tier B (scan-and-implement pass) — WIRE DORMANT PLAYER PANELS (#108 / #120 / #109)
+
+Three panels were fully built in prior sessions but had NO open-button — the player literally could
+not open them. Added open-buttons to the Grand Council action strip in government_view.gui (CHI-only
+tab), reusing the proven icon_button_square + GetScriptedGui idiom already used by the war-council and
+court-a-power buttons in that same strip.
+
+WIRED:
+- #108 Great Game dashboard (qing_greatgame_panel) — button createwidgets the read-only panel.
+- #120 New World crop report (qing_crop_report_window) — button chains ScriptedGui.Execute (populates
+  the province variable-list) THEN createwidget (opens the window that reads the list via datamodel).
+- #109 province ethnic-tension report (qing_tension_report_window) — same Execute-then-createwidget chain.
+
+FIXES MADE WHILE WIRING (the panels shipped with latent defects the oracle pass caught):
+1. **Great Game panel would have HARD-CRASHED on open (HIGH).** It used `GetCountryByTag('GBR')` — not a
+   valid engine datafunction (zero occurrences in either oracle mod; the correct verb is `GetCountry('GBR')`,
+   proven new_element_test.gui:18 + Terra-Indomita chinese_unification.gui:44). FIX: all 6 sites converted.
+2. **Opinion read would have crashed (HIGH).** `GetOpinionOf(Player)` passes a player-handle where a country
+   scope is required. FIX: `GetOpinionOf(Player.GetCountry)` at all 3 sites (reference-proven: Terra-Indomita
+   outliner.gui:509, bloodlines.gui:1581/1589; repo game_concepts_l_english.yml:6).
+3. **Dead close button (MEDIUM).** The panel's close called qing_greatgame_close_panel.Execute — a scripted_gui
+   with an EMPTY effect, so the button did nothing. FIX: `[ExecuteConsoleCommand('GUI.ClearWidgets qing_greatgame_panel')]`
+   (proven imp19c_windows.gui:20). The two report windows already used the correct ClearWidgets close.
+
+VERIFICATION: oracle grep of Terra-Indomita + Invictus confirmed every idiom before wiring (createwidget
+open form, GetCountry, GetOpinionOf(Player.GetCountry), MakeScope.GetList datamodel, every_governorships
+iteration + trade_goods trigger in scripted_gui effects, FixedPointToFloat/Multiply_CFixedPoint progressbar
+scaling). Backing data all confirmed present (qing_prov_ethnic_tension, qing_gp_tension_*, qing_office_zongli_holder,
+maize/sweet_potato/potato trade goods, all loc keys). se_LOG (sys = QING) added to the two report open-effects.
+
+POST-IMPLEMENTATION REVIEW: dispatched, returned ZERO defects — boot-safe and crash-safe. Independently
+confirmed the two-onclick chain order (Execute before createwidget), no datamodel race (lists cleared then
+rebuilt each open; empty list renders zero rows, not a crash), the empty-effect gate scripted_gui is only
+used for IsShown/IsValid gating (never on the open path), all window names match createwidget targets, and
+all template blockoverrides (main_window_template / base_sub_window headers) resolve to real blocks.
+
+Integrity: qing_greatgame.gui 104/104, qing_province_reports.gui 64/64, government_view.gui 1608/1608 braces;
+both panel loc files 0 bad-quote lines; all files no-BOM/LF preserved; no lingering GetCountryByTag repo-wide.
+
+
+## Tier C #1 — diplomatic-play OPPOSE + CANCEL (2026-07-07)
+
+CONTEXT: first Tier-C depth item. The play data model + resolution (#58) + player Support button (#147)
+existed; the play display had a dead labeled target-side button and no way to withdraw your own play.
+Added both missing verbs, mirroring the proven Support button.
+
+CHANGES:
+- common/prices/00_diplomacy_prices.txt: `oppose_diplomatic_play_price = { political_influence = 10 }`
+  (symmetric to support_diplomatic_play_price).
+- common/scripted_guis/EE_scripted_guis.txt: `DIPLO_player_oppose_play` (pay price, DIPLOMACY_modify_play_success
+  amt=-10) and `DIPLO_player_cancel_play` (AI_remove_diplomatic_play teardown). Both scope=province,
+  ai_is_valid=no, se_LOG (sys=DIPLO) on effect.
+- localization/english/imp19c_interface_l_english.yml: play_oppose_button(_tt), play_cancel_button(_tt).
+- gui/shared/gui_templates.gui: in BOTH diplomatic_play_item and diplomatic_play_global_item — added Cancel
+  button (cancel_play_side) beside instigator Support, and rewired the dead target-side stub
+  (support_play_side -> support_target_play_side) to DIPLO_player_oppose_play.
+
+is_valid GATES:
+- OPPOSE: is_diplomatic_play present; player PI>=10; NOT instigator (that's Cancel's job); success>0.
+- CANCEL: is_diplomatic_play + manual_play present; var:play_instigator = scope:player (instigator of a
+  player-started play only; AI/automatic plays excluded).
+
+VERIFICATION: play_type=manual sets manual_play var (se_AI.txt:451); AI_remove_diplomatic_play is the proven
+clean teardown (de-index + strip all play_* vars); negative-amt branch of DIPLOMACY_modify_play_success
+divides by a multiplier floored at 0.25 (#79) so amt=-10 is at worst -40 then clamped to 0 — no underflow,
+no crash. GUI scope idiom reused verbatim from Support (root = play provobj + AddScope player).
+
+POST-IMPLEMENTATION REVIEW: dispatched (see below).
+
+Integrity: gui_templates.gui 1204/1204, EE_scripted_guis.txt 497/497, 00_diplomacy_prices.txt 4/4 braces;
+4 new loc keys quote-clean; all files byte-convention preserved.
