@@ -4,6 +4,12 @@ EDU_startup_effect = {
 	# Scope: Random country
 	# Function: Set up the education values needed at game start for all countries
 	every_country = {
+		# [edu-literacy] Set the 1815 historical literacy fractions BEFORE the starting
+		# fill below reads the caps (the caps now floor on these fractions). Breaks the
+		# school bootstrap deadlock: a modern EDU_school required tier-2 educated pops to
+		# build, but no educated pops existed without a school. Seeding a historically-
+		# sized literate base gives basic education at start so schools become buildable.
+		EDU_set_historical_literacy_fractions = yes
 		EDU_setup_education_numbers_all_governorships = yes
 		EDU_set_t2_national_bonus_from_universities = yes
 		EDU_set_starting_education_numbers_all_governorships = yes
@@ -13,6 +19,56 @@ EDU_startup_effect = {
 		EDU_set_education_available_from_trade = { tier = t2 }
 		EDU_set_t2_research_bonus = yes
 	}
+}
+
+EDU_set_historical_literacy_fractions = {
+	# Scope: Country
+	# [edu-literacy] Function: set this country's 1815 starting literacy fractions, used as
+	# the FLOOR on the tier-1 / tier-2 education caps (EDU_available_slots_t*_governorship).
+	# WHY: schools/universities gate on sufficient_education_slots={tier=t2}, but the caps
+	# were 0 without an existing school -> no educated pops could ever bootstrap (deadlock).
+	# Seeding a historically-sized literate base makes the first school buildable at start.
+	#
+	# Literacy is HISTORICALLY DETERMINED per country, not a flat global floor:
+	#  - Default: derived from the capital province's civilization_value (an already-authored
+	#    per-province development proxy: European core ~20, Qing core ~10, frontier ~0). This
+	#    covers every country on the map automatically.
+	#  - Qing (CHI) override: sourced 1815 figures — basic/functional literacy ~15-20% of the
+	#    population (Rawski consensus; taken as 0.17 t1), classical literacy ~1% (0.01 t2),
+	#    modern/Western education ~0 (begins with the 1862 Tongwen Guan). See SESSION_REPORT.
+	LOG_enter = { sys = EDU  fn = "EDU_set_historical_literacy_fractions" }
+	if = {
+		# --- Qing sourced override ---
+		limit = { tag = CHI }
+		set_variable = { name = EDU_hist_literacy_frac_t1  value = 0.17 }
+		set_variable = { name = EDU_hist_literacy_frac_t2  value = 0.01 }
+		LOG_line = { sys = EDU  msg = "literacy: CHI historical override t1=0.17 t2=0.01" }
+	}
+	else = {
+		# --- proxy default from capital development ---
+		# t1 = civ/50 (civ 20 -> 0.40 modern Europe, civ 10 -> 0.20, civ 0 -> floor 0.02),
+		# clamped to a plausible pre-modern band. t2 = a tenth of t1 (classical elite is a
+		# small fraction of the basic-literate) with a tiny floor so the t2 chain can start.
+		set_variable = {
+			name = EDU_hist_literacy_frac_t1
+			value = {
+				value = capital_scope.civilization_value
+				divide = 50
+				min = 0.02
+				max = 0.5
+			}
+		}
+		set_variable = {
+			name = EDU_hist_literacy_frac_t2
+			value = {
+				value = var:EDU_hist_literacy_frac_t1
+				multiply = 0.1
+				min = 0.005
+			}
+		}
+		LOG_line = { sys = EDU  msg = "literacy: [ROOT.GetTag] proxy default from capital civ (t1 var:EDU_hist_literacy_frac_t1)" }
+	}
+	LOG_exit = { sys = EDU  fn = "EDU_set_historical_literacy_fractions"  result = OK }
 }
 
 EDU_update_effect = {

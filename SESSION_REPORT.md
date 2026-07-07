@@ -933,3 +933,44 @@ block order across files is NOT guaranteed, computing here guarantees the cost v
 CHI-only (`tag = CHI` + `has_variable = INCOME_cost_administrator_wages_country`). se_LOG breadcrumbs
 (enter/line/exit + fail). Braces: se_QING_MECHANICS 240/240, oa_economy_setup 526/526. Files kept
 no-BOM/LF (se_QING_MECHANICS) / existing convention (oa_economy_setup).
+
+---
+
+## [edu-literacy] Historically-determined starting literacy + school bootstrap deadlock
+
+**Symptom (user report, history-confirmed):** the Qing population is very uneducated at game start, yet
+the player cannot build schools to fix it — schools themselves require educated pops.
+
+**Root cause (real deadlock):** `EDU_school` AND `EDU_university` both gate on
+`sufficient_education_slots = { tier = t2 }` → `EDU_available_t2_educated_governorship > 0`. But the
+tier-2 cap (`EDU_available_slots_t2_governorship`) is 0 unless an `EDU_university` already exists, and
+the tier-1 cap is 0 unless an `EDU_school` already exists. With the starting educated-pop fill at 90%
+of a zero cap, every non-capital governorship began with 0 t1 / 0 t2 pops and no building could ever be
+placed to change that. Only the capital had a floor (min 0.3 t1 / min 2 t2), so nothing could bootstrap
+elsewhere. Historically the model also erased the real 1815 literate stratum: Qing basic/functional
+literacy was ~15-20% of the population (Rawski consensus; male 30-40%, female 2-10%), classical/exam
+literacy ~1% (~0.2% degree-holders + candidates), modern/Western education ~0 (begins 1862, Tongwen
+Guan). Sources compiled by the literacy-research pass (Rawski 1979; shengyuan ~1/1000; jinshi ~0.001%).
+
+**Fix (user direction: literacy HISTORICALLY DETERMINED per country, hybrid proxy+override; global):**
+1. New `EDU_set_historical_literacy_fractions` (se_EDU.txt, country scope, run first in
+   `EDU_startup_effect`): sets per-country `EDU_hist_literacy_frac_t1` / `_t2`.
+   - CHI sourced override: t1 = 0.17, t2 = 0.01.
+   - Everyone else: proxy default from the capital province's `civilization_value` (an
+     already-authored per-province development proxy — European core ~20, Qing core ~10, frontier ~0):
+     t1 = civ/50 clamped [0.02, 0.5]; t2 = t1 × 0.1, min 0.005.
+2. Both education cap svalues (`EDU_available_slots_t1/t2_governorship`) gain a historical FLOOR
+   `min = frac × var:governorship_population`, guarded on the frac var existing. Reads the CACHED
+   `governorship_population` variable — NO province walk added to these hot svalues (respects the
+   perf backlog). The existing "start at 90% of cap" fill then seeds literate pops, so
+   `sufficient_education_slots={tier=t2}` is satisfied at 1815 and schools/universities become
+   buildable. t2 floor (0.01·pop) stays well under both final `max` clamps (t1-educated ≈0.9·0.17·pop),
+   so it never over-inflates t2.
+
+**Why no building-gate edit:** leaving `EDU_school`/`EDU_university` `allow` blocks untouched keeps the
+change behaviourally minimal and additive — it only supplies the educated-pop base the buildings always
+required, matching the pre-existing `# TODO: t1 and t2 education` marker at se_LAND.txt:541.
+
+se_LOG breadcrumbs (enter/line/exit) on the new effect. Braces: se_EDU 121/121, EDU_svalues 144/144.
+Files kept BOM+CRLF. `capital_scope.civilization_value` value-block idiom verified in-repo
+(DIPLOMACY_svalues.txt:514) and against TI/Invictus.
