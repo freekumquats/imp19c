@@ -1,0 +1,111 @@
+########################################################################
+# qing_province_reports.txt — scripted GUI definitions for two Qing
+# province-query panels: #120 New World crop distribution and #109
+# province ethnic-tension report. Built as an ALTERNATIVE to custom map
+# modes (which are not scriptable in Imperator 2.0.5, per oracle verdict
+# OVERNIGHT_DECISIONS.md). Each panel is a self-contained scripted_gui
+# that opens a window + iterates provinces via every_governorships ->
+# every_governorship_state, rendering a scrollable list.
+#
+# Pattern: PROVEN via common/scripted_guis/sell_provinces.txt.
+# Prefix: qing_report_
+########################################################################
+
+# ======================================================================
+# COUNTRY-SCOPE: open the New World Crop Distribution panel (#120).
+# Iterates all owned provinces, building a list of those producing New
+# World crops (maize, sweet_potato, potato — as trade_goods, per
+# se_QING_COLON.txt). The effect populates a variable list that the GUI
+# window reads via datamodel. READ-ONLY reporting; no new diffusion mechanic.
+# ======================================================================
+qing_report_open_crops = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		clear_variable_list = qing_crop_report_regions
+		clear_variable_list = qing_crop_report_provinces
+
+		every_governorships = {
+			root = {
+				add_to_variable_list = {
+					name = qing_crop_report_regions
+					target = prev
+				}
+			}
+			every_governorship_state = {
+				save_scope_as = this_state
+				prev = {
+					# only include provinces producing New World crops
+					if = {
+						limit = {
+							scope:this_state = {
+								OR = {
+									trade_goods = maize
+									trade_goods = sweet_potato
+									trade_goods = potato
+								}
+							}
+						}
+						root = {
+							add_to_variable_list = {
+								name = qing_crop_report_provinces
+								target = scope:this_state
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# ======================================================================
+# COUNTRY-SCOPE: open the Province Ethnic-Tension panel (#109).
+# Iterates all owned provinces, reading a per-province tension variable
+# (built by feature #107, running in parallel). The variable name is
+# qing_prov_ethnic_tension (a sensible default; must match #107's actual
+# name). Lists provinces with tension above a threshold (>= 30), sorted
+# by tension value. Degrades gracefully (empty list) if the variable is
+# never set.
+# ======================================================================
+qing_report_open_tension = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		clear_variable_list = qing_tension_report_regions
+		clear_variable_list = qing_tension_report_provinces
+
+		every_governorships = {
+			root = {
+				add_to_variable_list = {
+					name = qing_tension_report_regions
+					target = prev
+				}
+			}
+			every_governorship_state = {
+				save_scope_as = this_state
+				prev = {
+					# only include provinces with tension >= 30 (guard with has_variable)
+					if = {
+						limit = {
+							scope:this_state = {
+								has_variable = qing_prov_ethnic_tension
+								var:qing_prov_ethnic_tension >= 30
+							}
+						}
+						root = {
+							add_to_variable_list = {
+								name = qing_tension_report_provinces
+								target = scope:this_state
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
