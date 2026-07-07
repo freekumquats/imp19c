@@ -622,3 +622,50 @@ QING_open_global_diplomacy = {
 	}
 	LOG_exit = { sys = QING  fn = "QING_open_global_diplomacy"  result = OK }
 }
+
+# ======================================================================
+# [treasury-seed] SEED THE 1815 STARTING TREASURY
+# The Qing opened 1815 wealthy-but-strained: the imperial treasury still held on
+# the order of ~20M taels (down from the ~73.9M Qianlong peak), so a NEGATIVE
+# spendable treasury at game start reads wrong. No starting treasury was ever set
+# for CHI (setup/countries/e_asia/china.txt sets none), and INCOME_update_treasury_
+# country immediately applies the quarterly balance — which is a deficit — pushing
+# the stock negative on turn zero.
+#
+# Fix (user choice: "seed sized to one year's costs"): grant CHI a starting treasury
+# equal to ONE YEAR of its own expenditure, computed IN-SCRIPT from the cost vars
+# INCOME_update_treasury_country just cached, so the seed self-scales if balance
+# changes rather than rotting as a hardcoded number. The three cost vars are stored
+# NEGATIVE (quarterly); summing them and multiplying by -4 gives one positive year:
+#     admin wages + military wages + (mil supplies + navy supplies + welfare)
+# This is the flow (income) side left untouched — the deficit still bites over time,
+# it just no longer opens the game underwater. Must run AFTER the treasury update
+# (cost vars cached + quarterly deficit already applied). CHI-only, once at setup.
+QING_seed_starting_treasury = {
+	LOG_enter = { sys = QING  fn = "QING_seed_starting_treasury" }
+	if = {
+		limit = {
+			tag = CHI
+			# guard: only if the cost vars have actually been cached upstream, else
+			# the seed would compute off missing vars and grant nothing / garbage.
+			has_variable = INCOME_cost_administrator_wages_country
+			NOT = { has_variable = qing_treasury_seeded }
+		}
+		set_variable = {
+			name = qing_treasury_seed_1815
+			value = {
+				value = var:INCOME_cost_administrator_wages_country
+				add = var:INCOME_cost_military_wages_country
+				add = var:INCOME_cost_supplies_and_welfare_country
+				multiply = -4
+			}
+		}
+		add_treasury = var:qing_treasury_seed_1815
+		set_variable = qing_treasury_seeded
+		LOG_line = { sys = QING  msg = "seeded 1815 starting treasury with one year of costs for [ROOT.GetTag] (see var qing_treasury_seed_1815)" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_seed_starting_treasury"  reason = "not CHI, cost vars uncached, or already seeded" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_seed_starting_treasury"  result = OK }
+}

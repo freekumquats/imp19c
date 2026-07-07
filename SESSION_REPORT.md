@@ -905,3 +905,31 @@ now including the governor term — is frozen into `qing_ethnic_restive_base`, a
 historical start still sits at ~20 and ONLY later governor reshuffles (or conquest/integration/
 migration, as before) move tension. No existing counter's meaning changes; this only adds signed
 deltas to an already-summed intermediate. Braces 814/814; file kept no-BOM/LF.
+
+---
+
+## [treasury-seed] Qing 1815 starting treasury seed
+
+**Symptom (user report):** Qing opens 1815 with a NEGATIVE spendable treasury despite a large silver
+reserve. User clarified: negative income/flow is fine, but a negative treasury STOCK is wrong — the
+Qing were wealthy in 1815. Chosen fix scope: "seed sized to one year's costs."
+
+**Root cause:** `setup/countries/e_asia/china.txt` sets NO starting treasury (grep-confirmed zero
+hits for treasury/gold/silver/wealth). The 20,000 `silver_reserve_size` is currency metal backing (a
+variable), decoupled from the engine's spendable `treasury`. At setup `INCOME_update_treasury_country`
+does `add_treasury = var:INCOME_national_total_quarterly` — a deficit for CHI — so with a ~0 starting
+stock the treasury opens underwater.
+
+**Fix:** new `QING_seed_starting_treasury` (se_QING_MECHANICS.txt) computes ONE YEAR of CHI's own
+expenditure IN-SCRIPT from the cost vars `INCOME_update_treasury_country` just cached — admin wages +
+military wages + supplies_and_welfare, all stored NEGATIVE quarterly — via `multiply = -4` (negate + 4
+quarters), then `add_treasury`. Self-scaling (no hardcoded number to rot if balance changes) and leaves
+the flow/income side untouched, so the deficit still bites over time; it just no longer opens negative.
+Stored intermediate in `qing_treasury_seed_1815`; idempotent via `qing_treasury_seeded` guard.
+
+**Wiring / ordering:** called INSIDE the `every_country` loop in `oa_economy_setup.txt`
+(on_game_initialized), immediately after `INCOME_update_treasury_country` — because on_game_initialized
+block order across files is NOT guaranteed, computing here guarantees the cost vars exist. Self-gates
+CHI-only (`tag = CHI` + `has_variable = INCOME_cost_administrator_wages_country`). se_LOG breadcrumbs
+(enter/line/exit + fail). Braces: se_QING_MECHANICS 240/240, oa_economy_setup 526/526. Files kept
+no-BOM/LF (se_QING_MECHANICS) / existing convention (oa_economy_setup).
