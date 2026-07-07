@@ -846,3 +846,27 @@ Braces 229/229; file kept no-BOM/LF. Also kept: the `6573cc80` modifier cleanup 
 non-causal) `se_USA_ROSTER` refactor + TIB subject-chain change from the retracted [#93-fix crash].
 
 **Verification:** user confirmed the `fix-usa-roster-create-character` branch LOADS into a Qing start.
+
+---
+
+## [#90-fix crash follow-up] Two cosmetic bugs (event pictures + se_LOG breadcrumbs)
+
+Once the boot crash was fixed, the user asked for the two remaining cosmetic defects to be cleared.
+
+**(a) Blank event pictures.** `common/event_pictures/00_event_pictures.txt` is a FULL-REPLACEMENT of the
+vanilla file (redefines the standard vanilla pics), so any picture referenced by a mod event but NOT
+defined in this file renders blank. Three were missing: `senate` (14 uses across usa_section /
+japan_bakumatsu / mex_instability), `navy` (japan_bakumatsu.3), `greek_siege` (flavor_eve.8). Added a
+definition for each, aliased to the closest proven vanilla texture (Event_senate_debate.dds /
+Event_naval_battle.dds / Event_walled_city_under_siege.dds). Braces 152/152; kept BOM+CRLF.
+
+**(b) se_LOG breadcrumbs emitted the tag literally.** The macros wrote `debug_log = "[IMP19C][$sys$] ..."`
+and the output came out mangled (e.g. `[IMP19C]QING$]`) with `$sys$`/`$fn$`/etc. never substituting.
+Root cause: SQUARE BRACKETS inside a debug_log/loc string are parsed by the engine as data-function
+(`[GetX]`) syntax, so `[IMP19C][$sys$]` was consumed as a bracket expression. `$arg$` substitution into
+debug_log itself DOES work — PROVEN by `se_PURCHASE.txt` (`debug_log = "... $tradegood$ ..."`) and by the
+fact no reference mod (TI/Invictus) ever puts `[ ]` inside a debug_log string. Fix: dropped the brackets
+across all 7 LOG_ macros, switching to a bracket-free but still-greppable scheme `IMP19C <SYS>: <msg>`
+(failures: `IMP19C FAIL <SYS>:`). This changes ONLY the emitted string format — every one of the 505
+call sites keeps its identical `$sys$`/`$fn$`/`$reason$`/... signature, so it is behaviourally
+equivalent for callers. Header grep examples updated to the new delimiter. Braces 6/6; kept no-BOM/LF.

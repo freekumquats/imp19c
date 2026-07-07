@@ -12,11 +12,20 @@
 #            All lines below are silently dropped in a normal session, so this
 #            module is zero-cost in ordinary play.
 #
-# All lines share the "[IMP19C]" prefix so the whole trace can be extracted:
-#     grep "\[IMP19C\]" debug.log > imp19c_trace.log
-# Per-system lines add a second tag, e.g. "[IMP19C][SUBJ]", so a single
+# [#90-fix cosmetic] The tag WAS "[IMP19C][$sys$]". SQUARE BRACKETS inside a
+# debug_log / loc string are parsed by the engine as data-function ([GetX] )
+# syntax, so "[IMP19C][$sys$]" was mangled on output (e.g. "[IMP19C]QING$]")
+# and $sys$/$fn$/etc. never substituted. $arg$ substitution into debug_log DOES
+# work (proven: se_PURCHASE.txt "... $tradegood$ ...") — it was the brackets, not
+# the params. Delimiter is now bracket-free: "IMP19C <SYS>: <msg>".
+#
+# All lines share the "IMP19C " prefix so the whole trace can be extracted:
+#     grep "IMP19C " debug.log > imp19c_trace.log
+# Per-system lines add a second tag, e.g. "IMP19C SUBJ:", so a single
 # subsystem can be isolated:
-#     grep "\[IMP19C\]\[SUBJ\]" debug.log > subj_trace.log
+#     grep "IMP19C SUBJ:" debug.log > subj_trace.log
+# Failures carry a FAIL tag:
+#     grep "IMP19C FAIL " debug.log > fail_trace.log
 #
 # Prefix = LOG
 ########################################################################
@@ -27,7 +36,7 @@
 LOG_line = {
 	# Function: write a single tagged diagnostic line to logs/debug.log
 	# Scope:    any
-	debug_log = "[IMP19C][$sys$] $msg$"
+	debug_log = "IMP19C $sys$: $msg$"
 }
 
 # ---- Call tracing -----------------------------------------------------
@@ -35,14 +44,14 @@ LOG_line = {
 LOG_enter = {
 	# Function: trace that a code path began executing
 	# Scope:    any
-	debug_log = "[IMP19C][$sys$] ENTER $fn$"
+	debug_log = "IMP19C $sys$: ENTER $fn$"
 }
 
 # Mark exit, recording the outcome. $result$ = OK / FAIL / SKIP / <detail>.
 LOG_exit = {
 	# Function: trace that a code path finished, with its result
 	# Scope:    any
-	debug_log = "[IMP19C][$sys$] EXIT  $fn$ result=$result$"
+	debug_log = "IMP19C $sys$: EXIT $fn$ result=$result$"
 }
 
 # ---- Game-state capture ----------------------------------------------
@@ -52,18 +61,18 @@ LOG_exit = {
 LOG_state = {
 	# Function: header line + full scope-stack dump for game-state capture
 	# Scope:    any
-	debug_log = "[IMP19C][$sys$] STATE $note$ (scope dump follows)"
+	debug_log = "IMP19C $sys$: STATE $note$ (scope dump follows)"
 	debug_log_scopes = yes
 }
 
 # ---- Failure surfacing -----------------------------------------------
 # Loud, greppable failure line. $fn$ = where it failed, $reason$ = why.
 # Pairs a FAIL tag with a scope dump so a silent no-op becomes a diagnosable
-# event. Extract just failures with: grep "\[IMP19C\]\[FAIL\]" debug.log
+# event. Extract just failures with: grep "IMP19C FAIL " debug.log
 LOG_fail = {
 	# Function: surface a logical failure that would otherwise be a silent no-op
 	# Scope:    any
-	debug_log = "[IMP19C][FAIL][$sys$] $fn$ : $reason$"
+	debug_log = "IMP19C FAIL $sys$: $fn$ : $reason$"
 	debug_log_scopes = yes
 }
 
@@ -74,5 +83,5 @@ LOG_fail = {
 LOG_ok = {
 	# Function: record that a precondition/branch passed as expected
 	# Scope:    any
-	debug_log = "[IMP19C][$sys$] OK    $fn$ : $detail$"
+	debug_log = "IMP19C $sys$: OK $fn$ : $detail$"
 }
