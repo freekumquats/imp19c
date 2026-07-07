@@ -1039,3 +1039,70 @@ Cleared the backlog items instead of leaving them:
   header claim that every effect carries them.
 
 Braces: se_LOGISTICS 89/89 (was 91/91 — two effect definitions collapsed into one). No-BOM/LF preserved.
+
+## [#103-106] Grand Council rework — "the Council IS the office-holders" + accountability (2026-07-07)
+
+Fully-locked design build, shipped as ONE commit. Five interlocking pieces:
+
+**(a-c) Council-is-offices model.** Ripped out the old separate "councillor pool + chief +
+seats" abstraction. The Grand Council is now EXACTLY the set of filled great offices (11
+appointable: chancellor, personnel, revenue, rites, war, justice, works, censor, lifanyuan,
+amban, zongli). You join the council by being appointed to an office; `qing_council_members`
+is a DERIVED list rebuilt each quarter by `QING_council_recompute`, `qing_council_filled_count`
+(0-11) replaced seat_count/seat_cap. Backend rewritten in `se_QING_COUNCIL.txt`
+(QING_office_appoint / _vacate / _vacate_dispatch / _appoint_first_vacant). All ~14 events
+repointed (qing_office_events, qing_roster_events, qing_keju_events) from seat/make_chief verbs
+to the offices model. Both GUI files rebuilt: dropped the councillors grid + chief card +
+seat/make_chief/unseat buttons; added a single Grand Chancellor card + appoint-chancellor button
+(government_view.gui, characterwindow.gui). Office->governing-skill map: chancellor=all four,
+war=martial, personnel/revenue/works/censor=finesse, lifanyuan/amban/zongli=charisma,
+rites/justice=zeal.
+
+**(d-e) NEW accountability subsystem** (`se_QING_ACCOUNTABILITY.txt` + `qing_accountability_events.txt`).
+Each office owns a realm metric (justice=unrest, revenue=treasury, works=civilization,
+censor=corruption, rites=legitimacy, war=military, personnel=official-loyalty, lifanyuan=subject-
+loyalty, zongli=GP-tension, amban=ruler-popularity, chancellor=council-effectiveness). Quarterly
+`QING_accountability_pulse` (from QING_GOV_pulse, CHI player-only, self-gated ~90d) scores each
+filled office: a THRIVING domain (band 2) REWARDS the minister (standing + a closer bond if
+congenial); a FAILING domain (band 0) under a WEAK holder (loyalty<40 OR popularity<=0 OR
+corruption>=30 OR corrupt trait) summons the ablest UNASSIGNED rival who outranks him on
+combined_stats_council_svalue AND clashes with him (pair-friction>=45) to challenge him for the
+post — the reckoning event qing_accountability.1 (stand-by-incumbent / elevate-challenger /
+dismiss-both). At most ONE challenge/quarter (qing_acc_challenge_pending guard). Character
+dimension (numeric corruption, age disparity, relative popularity, friction) feeds via the
+QING_char_* / QING_pair_friction mutators (se_QING_AFFINITY.txt).
+
+**Verified engine idioms** (2nd oracle pass, INV+TI): legitimacy reads BARE at country scope
+(NOT nested in current_ruler); NO neighbour-country iterator exists (Zongli judged on the concrete
+qing_gp_tension_* counters instead); tokens has_subject_loyalty / has_monthly_income /
+has_war_exhaustion; `var:X = { save_scope_as }` and script_value comparison in a limit both PROVEN
+in-repo (qing_office_events.txt:662, :609).
+
+### [#103-fix] Code-review fixes (2026-07-07, review verdict: sound — no crash/reference/scope bugs)
+Post-implementation review (mandatory per standing rule) confirmed the rework correct — the
+delayed-event dedicated-scope handling (qing_acc_defender/challenger vs the reused
+qing_acc_holder/rival), the one-challenge-per-quarter guard, the .b re-appoint branch covering
+all 11 office keys, and all metric idioms all check out; reference-integrity sweeps found no
+dangling deleted constructs (qing_council_chief/seat_count/seat_cap/make_chief/unseat/is_councillor).
+Two low-severity hardening notes applied:
+- **QING_acc_score_office holder guard** strengthened to match QING_council_score_office
+  (se_QING_COUNCIL.txt:217): holder must be `is_alive = yes  employer = ROOT`, not merely
+  var-present, so the reward path can't mutate a dead/departed character via any employment-loss
+  path that skips QING_office_vacate_dispatch. Defense-in-depth.
+- **Overstated comment** corrected: the pulse is NOT "no character hot path" — two probes
+  (officials-loyalty metric + challenger search) do a court-wide character scan; quarterly +
+  player-only keeps it cheap, but the comment now says so accurately.
+
+### [amban-flavour] Reconciled the amban office display to its mechanic (user decision 2026-07-07)
+The `amban` office is modelled everywhere in MECHANICS as the 內務府 Grand Secretary of the
+Imperial Household (accountability judges it on current_ruler popularity; its officer-buff adds
+charisma to the ruler), and the loc keys already read "Grand Secretary of the Imperial Household
+(總管內務府大臣)". Cleared the remaining stale "Tibet Amban / 駐藏大臣 / province icon" display
+bits: characterwindow.gui + government_view.gui office card/button icons province.dds ->
+family_size.dds (household, unused by other office buttons); comments retitled; the
+QING_governance_actions.txt office-list comment amban tag 駐藏大臣 -> 內務府. Loc-only/cosmetic —
+the office KEY was consistent everywhere, so no logic changed.
+
+Braces (all touched files): government_view.gui 1476/1476, characterwindow.gui 429/429,
+QING_governance_actions.txt 170/170, se_QING_ACCOUNTABILITY.txt 184/184, qing_accountability_events.txt
+63/63. Byte conventions preserved (se_QING_*.txt no-BOM/LF/final-nl; loc .yml BOM/LF; .gui TAB indent).

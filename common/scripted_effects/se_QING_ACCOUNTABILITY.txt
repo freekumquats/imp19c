@@ -1,0 +1,377 @@
+########################################################################
+# se_QING_ACCOUNTABILITY.txt — the Grand Council ACCOUNTABILITY subsystem (#103).
+#
+# Each great office OWNS a realm metric — the domain its country modifier governs
+# (see qing_governance_modifiers.txt). Every quarter the governance pulse judges
+# each FILLED office on BOTH:
+#   (a) its realm metric — is that domain of state thriving or failing?
+#   (b) the holder's OWN character — his loyalty, popularity and venality.
+#
+# The judgement is BIDIRECTIONAL:
+#   • a THRIVING domain REWARDS the responsible minister (loyalty, standing, and —
+#     when he is already congenial — a closer personal bond to the throne);
+#   • a FAILING domain, when the holder is ALSO weak (disloyal OR unpopular OR
+#     corrupt), DISCREDITS him and summons an abler, hungrier rival to challenge
+#     him for the post (qing_accountability.1). A capable, loyal, popular minister
+#     weathers a bad year untouched.
+#
+# METRIC -> OFFICE (locked 2026-07-07):
+#   justice    刑部    global unrest              (many unrest-ridden provinces = bad)
+#   revenue    戶部    treasury + income          (empty coffers / deficit = bad)
+#   works      工部    civilization / development (a backward realm = bad)
+#   censor     都察院  corruption level           (a venal court = the censor failed)
+#   rites      禮部    legitimacy                 (a de-legitimised throne = bad)
+#   war        兵部    military performance       (war exhaustion / a shrunk host = bad)
+#   personnel  吏部    officialdom loyalty        (disloyal bureaucrats = bad)
+#   lifanyuan  理藩院  subject loyalty            (restless vassals = bad)
+#   zongli     總理衙門 great-power relations      (high GP tension = bad)
+#   amban      內務府  ruler popularity           (an unloved sovereign = bad)
+#   chancellor 領班    council effectiveness      (a dysfunctional council = bad;
+#                       he is ALSO the overmighty/Heshen locus in se_QING_COUNCIL.txt)
+#
+# All reads are VERIFIED country-scope idioms (oracle pass 2026-07-07, INV+TI):
+# unrest via any_owned_province{province_unrest count}; treasury/has_monthly_income;
+# civilization_value aggregate; var:qing_corruption_level; bare country legitimacy
+# (NOT nested in current_ruler); has_war_exhaustion/num_of_cohorts; official loyalty
+# via any_character{employer=ROOT loyalty}; any_subject{has_subject_loyalty};
+# GP-tension counters (there is NO neighbour-country iterator — the Zongli is judged
+# on the mod's concrete qing_gp_tension_* rivalry state instead); current_ruler
+# popularity. See [[imp19c-grand-council-office-redesign]] for the full verification.
+#
+# Character dimension reuses QING_char_affinity / QING_char_bind / the QING_char_*
+# mutators and the extended QING_pair_friction (se_QING_AFFINITY.txt). The rival
+# who challenges is picked by combined_stats_council_svalue (the ability sort key)
+# and must OUTRANK the incumbent AND clear the friction bar (a genuine antagonist).
+#
+# Called ONCE per quarter from QING_GOV_pulse (CHI player-only, self-gated). O(11)
+# metric probes + at most ONE challenge queued per quarter. Two probes do a court-wide
+# character scan (officials-loyalty metric + the challenger search), never a pop scan;
+# quarterly + player-only keeps the cost negligible beside the economy sim.
+#
+# se_LOG: sys = QING throughout (LOG_enter/exit/line) per the standing rule.
+########################################################################
+
+# ======================================================================
+# TOP-LEVEL QUARTERLY SWEEP. Country scope (ROOT = CHI). Walks all 11 offices;
+# each filled office scores its metric band into qing_acc_metric (0 = failing,
+# 1 = middling, 2 = thriving) and then applies reward / challenge. At most ONE
+# challenge is queued per quarter (qing_acc_challenge_pending guards it) so a
+# bad year does not spawn eleven simultaneous coups.
+# ======================================================================
+QING_accountability_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_accountability_pulse" }
+	# one challenge per quarter at most; cleared here, set when a challenge fires
+	set_variable = { name = qing_acc_challenge_pending  value = 0 }
+
+	# domain offices (chancellor scored last, as the summit)
+	QING_acc_score_office = { office = justice   metric = unrest }
+	QING_acc_score_office = { office = revenue   metric = treasury }
+	QING_acc_score_office = { office = works     metric = civilization }
+	QING_acc_score_office = { office = censor    metric = corruption }
+	QING_acc_score_office = { office = rites     metric = legitimacy }
+	QING_acc_score_office = { office = war        metric = military }
+	QING_acc_score_office = { office = personnel metric = officials }
+	QING_acc_score_office = { office = lifanyuan metric = subjects }
+	QING_acc_score_office = { office = zongli    metric = foreign }
+	QING_acc_score_office = { office = amban     metric = ruler }
+	QING_acc_score_office = { office = chancellor metric = council }
+
+	LOG_exit = { sys = QING  fn = "QING_accountability_pulse"  result = OK }
+}
+
+# ======================================================================
+# SCORE ONE OFFICE. $office$ = office key; $metric$ = which realm metric to probe.
+# Sets qing_acc_metric (0..2) from the metric band, saves the holder, then routes:
+#   metric = 2 (thriving)  -> QING_acc_reward   (always)
+#   metric = 0 (failing)   -> QING_acc_test_challenge (fires only if holder ALSO weak
+#                             AND no challenge queued yet this quarter)
+#   metric = 1 (middling)  -> nothing (the ordinary run of government)
+# No-op if the office is vacant (a vacancy is its own strain, applied elsewhere).
+# ======================================================================
+QING_acc_score_office = {
+	if = {
+		# [#103-fix] Guard as strongly as QING_council_score_office (se_QING_COUNCIL.txt:217):
+		# holder must be alive AND still in our employ, not merely var-present. Recompute
+		# runs earlier in this same pulse so this normally holds, but any employment-loss
+		# path that skips QING_office_vacate_dispatch would otherwise let the reward path
+		# mutate a dead/departed character. Defense-in-depth (code-review note 2026-07-07).
+		limit = {
+			has_variable = qing_office_$office$_holder
+			var:qing_office_$office$_holder = { is_alive = yes  employer = ROOT }
+		}
+		var:qing_office_$office$_holder = { save_scope_as = qing_acc_holder }
+		# --- probe the metric into qing_acc_metric (0 fail / 1 mid / 2 thrive) ---
+		QING_acc_metric_$metric$ = yes
+		LOG_line = { sys = QING  msg = "accountability: office $office$ ([scope:qing_acc_holder.GetName]) metric $metric$ band = [ROOT.MakeScope.GetVariable('qing_acc_metric').GetValue|0] for [ROOT.GetTag]" }
+
+		if = {
+			limit = { var:qing_acc_metric = 2 }
+			QING_acc_reward = { office = $office$ }
+		}
+		else_if = {
+			limit = {
+				var:qing_acc_metric = 0
+				var:qing_acc_challenge_pending = 0
+				# holder is ALSO weak: disloyal OR unpopular OR corrupt. A capable,
+				# loyal, popular minister weathers a bad year (locked trigger).
+				scope:qing_acc_holder = {
+					OR = {
+						loyalty < 40
+						popularity <= 0
+						corruption >= 30
+						has_trait = corrupt
+					}
+				}
+			}
+			QING_acc_test_challenge = { office = $office$ }
+		}
+	}
+}
+
+# ======================================================================
+# METRIC PROBES. Each sets ROOT.var:qing_acc_metric to 0 (failing), 1 (middling)
+# or 2 (thriving). All country-scope; all verified idioms. Called with the holder
+# already saved as scope:qing_acc_holder.
+# ======================================================================
+
+# JUSTICE 刑部 — global unrest. Thriving = almost no unrest anywhere; failing =
+# several provinces simmering. Aggregate over owned provinces (verified idiom).
+QING_acc_metric_unrest = {
+	if = {
+		limit = { any_owned_province = { count >= 4  province_unrest >= 4 } }
+		set_variable = { name = qing_acc_metric  value = 0 }
+	}
+	else_if = {
+		limit = { NOT = { any_owned_province = { count >= 1  province_unrest >= 2 } } }
+		set_variable = { name = qing_acc_metric  value = 2 }
+	}
+	else = { set_variable = { name = qing_acc_metric  value = 1 } }
+}
+
+# REVENUE 戶部 — treasury + income. Thriving = full coffers AND a surplus; failing =
+# empty AND bleeding.
+QING_acc_metric_treasury = {
+	if = {
+		limit = { treasury < 50  NOT = { has_monthly_income >= 0 } }
+		set_variable = { name = qing_acc_metric  value = 0 }
+	}
+	else_if = {
+		limit = { treasury >= 300  has_monthly_income >= 2 }
+		set_variable = { name = qing_acc_metric  value = 2 }
+	}
+	else = { set_variable = { name = qing_acc_metric  value = 1 } }
+}
+
+# WORKS 工部 — civilization / development. Thriving = many highly-developed
+# provinces; failing = almost none.
+QING_acc_metric_civilization = {
+	if = {
+		limit = { NOT = { any_owned_province = { count >= 3  civilization_value >= 40 } } }
+		set_variable = { name = qing_acc_metric  value = 0 }
+	}
+	else_if = {
+		limit = { any_owned_province = { count >= 8  civilization_value >= 60 } }
+		set_variable = { name = qing_acc_metric  value = 2 }
+	}
+	else = { set_variable = { name = qing_acc_metric  value = 1 } }
+}
+
+# CENSORATE 都察院 — corruption level (its whole raison d'être). Thriving = a clean
+# court; failing = venality rampant. Reads the decline counter (verified var).
+QING_acc_metric_corruption = {
+	if = {
+		limit = { has_variable = qing_corruption_level  var:qing_corruption_level >= 55 }
+		set_variable = { name = qing_acc_metric  value = 0 }
+	}
+	else_if = {
+		limit = { has_variable = qing_corruption_level  var:qing_corruption_level <= 25 }
+		set_variable = { name = qing_acc_metric  value = 2 }
+	}
+	else = { set_variable = { name = qing_acc_metric  value = 1 } }
+}
+
+# RITES 禮部 — legitimacy. Bare country-scope read (NOT nested in current_ruler,
+# per the oracle correction). Thriving = an unquestioned mandate; failing = a
+# de-legitimised throne.
+QING_acc_metric_legitimacy = {
+	if = {
+		limit = { legitimacy < 40 }
+		set_variable = { name = qing_acc_metric  value = 0 }
+	}
+	else_if = {
+		limit = { legitimacy >= 80 }
+		set_variable = { name = qing_acc_metric  value = 2 }
+	}
+	else = { set_variable = { name = qing_acc_metric  value = 1 } }
+}
+
+# WAR 兵部 — military performance. Failing = at war AND grinding down (heavy war
+# exhaustion); thriving = at peace with a standing host of respectable size.
+QING_acc_metric_military = {
+	if = {
+		limit = { is_at_war = yes  has_war_exhaustion >= 10 }
+		set_variable = { name = qing_acc_metric  value = 0 }
+	}
+	else_if = {
+		limit = { is_at_war = no  num_of_cohorts >= 20 }
+		set_variable = { name = qing_acc_metric  value = 2 }
+	}
+	else = { set_variable = { name = qing_acc_metric  value = 1 } }
+}
+
+# PERSONNEL 吏部 — officialdom loyalty (he grooms & controls the bureaucrats).
+# Failing = several disloyal officials in service; thriving = none.
+QING_acc_metric_officials = {
+	if = {
+		limit = { any_character = { count >= 3  employer = ROOT  is_ruler = no  loyalty < 33 } }
+		set_variable = { name = qing_acc_metric  value = 0 }
+	}
+	else_if = {
+		limit = { NOT = { any_character = { count >= 1  employer = ROOT  is_ruler = no  loyalty < 45 } } }
+		set_variable = { name = qing_acc_metric  value = 2 }
+	}
+	else = { set_variable = { name = qing_acc_metric  value = 1 } }
+}
+
+# LIFAN YUAN 理藩院 — subject loyalty (the Inner-Asian frontier & vassals). Failing =
+# a restless subject; thriving = all subjects content. Guards on having subjects.
+QING_acc_metric_subjects = {
+	if = {
+		limit = { any_subject = { count >= 1  has_subject_loyalty <= 33 } }
+		set_variable = { name = qing_acc_metric  value = 0 }
+	}
+	else_if = {
+		limit = {
+			any_subject = { count >= 1 }
+			NOT = { any_subject = { count >= 1  has_subject_loyalty <= 60 } }
+		}
+		set_variable = { name = qing_acc_metric  value = 2 }
+	}
+	else = { set_variable = { name = qing_acc_metric  value = 1 } }
+}
+
+# ZONGLI YAMEN 總理衙門 — great-power relations. There is NO neighbour-country
+# iterator (oracle); the Zongli manages the mod's concrete GP-rivalry counters, so
+# judge it on those: high tension with any great power = a foreign-policy failure;
+# all three held low = a diplomat's triumph.
+QING_acc_metric_foreign = {
+	if = {
+		limit = {
+			OR = {
+				AND = { has_variable = qing_gp_tension_britain  var:qing_gp_tension_britain >= 60 }
+				AND = { has_variable = qing_gp_tension_france   var:qing_gp_tension_france  >= 60 }
+				AND = { has_variable = qing_gp_tension_russia   var:qing_gp_tension_russia  >= 60 }
+			}
+		}
+		set_variable = { name = qing_acc_metric  value = 0 }
+	}
+	else_if = {
+		limit = {
+			NOT = { AND = { has_variable = qing_gp_tension_britain  var:qing_gp_tension_britain >= 30 } }
+			NOT = { AND = { has_variable = qing_gp_tension_france   var:qing_gp_tension_france  >= 30 } }
+			NOT = { AND = { has_variable = qing_gp_tension_russia   var:qing_gp_tension_russia  >= 30 } }
+		}
+		set_variable = { name = qing_acc_metric  value = 2 }
+	}
+	else = { set_variable = { name = qing_acc_metric  value = 1 } }
+}
+
+# GRAND SECRETARY 內務府 — ruler popularity (closest man to the throne; his charge
+# is the sovereign's own standing). current_ruler popularity is the proven
+# ruler-scoped read.
+QING_acc_metric_ruler = {
+	if = {
+		limit = { current_ruler = { popularity <= 0 } }
+		set_variable = { name = qing_acc_metric  value = 0 }
+	}
+	else_if = {
+		limit = { current_ruler = { popularity >= 40 } }
+		set_variable = { name = qing_acc_metric  value = 2 }
+	}
+	else = { set_variable = { name = qing_acc_metric  value = 1 } }
+}
+
+# GRAND CHANCELLOR 領班 — overall council effectiveness (he heads the council; it
+# is his charge). Reads the derived meter maintained by QING_council_recompute.
+QING_acc_metric_council = {
+	if = {
+		limit = { has_variable = qing_council_effectiveness  var:qing_council_effectiveness <= 33 }
+		set_variable = { name = qing_acc_metric  value = 0 }
+	}
+	else_if = {
+		limit = { has_variable = qing_council_effectiveness  var:qing_council_effectiveness >= 66 }
+		set_variable = { name = qing_acc_metric  value = 2 }
+	}
+	else = { set_variable = { name = qing_acc_metric  value = 1 } }
+}
+
+# ======================================================================
+# REWARD — a thriving domain lifts the responsible minister. Applied at country
+# scope; the holder is scope:qing_acc_holder. He gains standing (popularity +
+# prominence) always; if he is ALREADY congenial to the throne (affinity high) a
+# strong year also binds him closer (loyalty / friendship) via QING_char_bind.
+# $office$ = the office key (for the log). Symmetric with the challenge path:
+# praise and blame ride the SAME metric his modifier governs.
+# ======================================================================
+QING_acc_reward = {
+	LOG_enter = { sys = QING  fn = "QING_acc_reward" }
+	scope:qing_acc_holder = {
+		# public credit for a domain that flourished under his hand
+		QING_char_promote_standing = { pop = 5  prom = 4 }
+		# score his throne-compatibility; a congenial man is drawn closer still
+		QING_char_affinity = yes
+		if = {
+			limit = { var:qing_char_affinity >= 55 }
+			QING_char_bind = yes
+		}
+	}
+	LOG_line = { sys = QING  msg = "accountability REWARD: office $office$ minister [scope:qing_acc_holder.GetName] lauded for a thriving domain for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_acc_reward"  result = OK }
+}
+
+# ======================================================================
+# TEST + FIRE CHALLENGE — a failing domain under a weak minister invites an
+# upstart. Find the ablest UNASSIGNED courtier who (a) OUTRANKS the incumbent on
+# combined_stats_council_svalue (a genuinely abler man) and (b) clashes with him
+# (pair-friction high — a real antagonist, not a friend). If one exists, queue the
+# challenge event and mark the quarter's single challenge spent. $office$ = the key.
+# ======================================================================
+QING_acc_test_challenge = {
+	LOG_enter = { sys = QING  fn = "QING_acc_test_challenge" }
+	# ablest hungry outsider: no office, adult, alive, employed by us, and abler
+	# than the sitting minister. ordered_character honours order_by (unlike random_).
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_ruler = no
+			is_adult = yes
+			is_alive = yes
+			NOT = { has_variable = qing_office_held }
+			NOT = { has_variable = qing_rebel_foil }
+			combined_stats_council_svalue > scope:qing_acc_holder.combined_stats_council_svalue
+		}
+		order_by = combined_stats_council_svalue
+		check_range_bounds = no
+		max = 1
+		save_scope_as = qing_acc_rival
+	}
+	if = {
+		limit = { exists = scope:qing_acc_rival }
+		# do the two men actually clash? (transient friction, never stored per-pair)
+		QING_pair_friction = { a = scope:qing_acc_holder  b = scope:qing_acc_rival }
+		if = {
+			limit = { var:qing_pair_friction >= 45 }
+			# Pin the two combatants into DEDICATED scopes: the pulse keeps scoring the
+			# remaining offices (overwriting scope:qing_acc_holder / qing_acc_rival)
+			# before this delayed event fires, so the event must read these stable
+			# names instead. Only one challenge fires per quarter, so no collision.
+			scope:qing_acc_holder = { save_scope_as = qing_acc_defender }
+			scope:qing_acc_rival  = { save_scope_as = qing_acc_challenger }
+			set_variable = { name = qing_acc_challenge_office  value = flag:$office$ }
+			set_variable = { name = qing_acc_challenge_pending  value = 1 }
+			LOG_line = { sys = QING  msg = "accountability CHALLENGE: office $office$ — [scope:qing_acc_challenger.GetName] (svalue) rises against [scope:qing_acc_defender.GetName] (friction [ROOT.MakeScope.GetVariable('qing_pair_friction').GetValue|0]) for [ROOT.GetTag]" }
+			trigger_event = { id = qing_accountability.1  days = { 2 9 } }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_acc_test_challenge"  result = OK }
+}

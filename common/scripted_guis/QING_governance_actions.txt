@@ -6,8 +6,9 @@
 # Two shapes:
 #   * COUNTRY-scope verbs (convene / dissolve the council) — same pattern as
 #     QING_mechanics_actions.txt: scope = country, gated CHI + ai_is_valid no.
-#   * CHARACTER-scope verbs (seat / unseat a councillor, appoint / vacate an
-#     office) — invoked on a courtier from the character view; scope = character,
+#   * CHARACTER-scope verbs (appoint / vacate a great office — a Grand Council
+#     seat IS a great office under the council-is-offices model, #103) — invoked
+#     on a courtier from the character view; scope = character,
 #     with saved_scopes = { player } so is_shown/is_valid can gate on the country.
 #     The underlying effects in se_QING_COUNCIL.txt self-scope to the country via
 #     `employer`, so these GUIs call them directly in the character scope (this =
@@ -37,83 +38,30 @@ qing_gov_council_convene = {
 }
 
 # ======================================================================
-# CHARACTER-SCOPE: seat a courtier as a grand councillor (軍機大臣)
-# this = the courtier; the effect reaches CHI via `employer`.
+# CHARACTER-SCOPE: appoint this courtier as GRAND CHANCELLOR (領班軍機大臣).
+# Under the council-is-offices model (#103) the Grand Chancellor is simply
+# another great office; there is no separate "seat" or "name chief" step. This
+# mirrors the ten domain-office appoint verbs below (shared QING_office_appoint).
+# this = the appointee; the effect reaches CHI via `employer`. Appointing over a
+# sitting chancellor auto-vacates them (handled inside QING_office_appoint).
 # ======================================================================
-qing_gov_council_seat = {
+qing_gov_office_appoint_chancellor = {
 	scope = character
 	saved_scopes = { player }
 	ai_is_valid = { always = no }
-	is_shown = {
-		scope:player = { tag = CHI }
-		employer = scope:player
-	}
-	is_valid = {
-		# an adult, living courtier not already seated, and a free seat exists
-		custom_tooltip = {
-			text = qing_gov_council_seat_valid_tt
-			is_adult = yes
-			is_alive = yes
-			NOT = { has_variable = qing_is_councillor }
-			scope:player = { var:qing_council_seat_count < var:qing_council_seat_cap }
-		}
-		custom_tooltip = {
-			text = qing_gov_council_needs_pi_tt
-			scope:player = { political_influence >= 10 }
-		}
-	}
-	effect = {
-		scope:player = { add_political_influence = -10 }
-		# effect self-scopes to the country via `employer`; this = the courtier
-		QING_council_seat_character = yes
-	}
-}
-
-# ======================================================================
-# CHARACTER-SCOPE: make this councillor the chief (領班軍機大臣)
-# ======================================================================
-qing_gov_council_make_chief = {
-	scope = character
-	saved_scopes = { player }
-	ai_is_valid = { always = no }
-	is_shown = {
-		scope:player = { tag = CHI }
-		employer = scope:player
-	}
+	is_shown = { scope:player = { tag = CHI }  employer = scope:player }
 	is_valid = {
 		custom_tooltip = {
-			text = qing_gov_council_chief_valid_tt
+			text = qing_gov_office_valid_tt
 			is_adult = yes
 			is_alive = yes
-			NOT = { scope:player = { var:qing_council_chief = prev } }
+			NOT = { var:qing_office_held = flag:chancellor }
 		}
-		custom_tooltip = {
-			text = qing_gov_council_needs_pi_tt
-			scope:player = { political_influence >= 15 }
-		}
+		custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 20 } }
 	}
 	effect = {
-		scope:player = { add_political_influence = -15 }
-		# effect self-scopes to the country via `employer`; this = the courtier
-		QING_council_make_chief = yes
-	}
-}
-
-# ======================================================================
-# CHARACTER-SCOPE: unseat a councillor
-# ======================================================================
-qing_gov_council_unseat = {
-	scope = character
-	saved_scopes = { player }
-	ai_is_valid = { always = no }
-	is_shown = {
-		scope:player = { tag = CHI }
-		has_variable = qing_is_councillor
-	}
-	is_valid = { always = yes }
-	effect = {
-		# effect self-scopes to the country via `employer`; this = the courtier
-		QING_council_unseat_character = yes
+		scope:player = { add_political_influence = -20 }
+		QING_office_appoint = { office = chancellor }
 	}
 }
 
@@ -124,7 +72,7 @@ qing_gov_council_unseat = {
 # this = the appointee; the effect reaches CHI via `employer`. Appointing over a
 # sitting holder auto-vacates them (handled inside QING_office_appoint).
 # Offices: personnel 吏部 / revenue 戶部 / rites 禮部 / war 兵部 / justice 刑部
-#          works 工部 / censor 都察院 / lifanyuan 理藩院 / amban 駐藏大臣 / zongli 總理衙門
+#          works 工部 / censor 都察院 / lifanyuan 理藩院 / amban 內務府 / zongli 總理衙門
 # ======================================================================
 qing_gov_office_appoint_personnel = {
 	scope = character
@@ -361,5 +309,22 @@ qing_gov_advisor_dismiss = {
 	is_valid = { always = yes }
 	effect = {
 		QING_advisor_dismiss = yes
+	}
+}
+
+# ======================================================================
+# [grand-council-tab] COUNTRY-SCOPE: rebuild the Grand Council view's courtier
+# candidate cache on demand. The tab's category button calls this onclick so the
+# appoint/seat pickers show a current top-N of eligible courtiers the moment the
+# tab is opened (the quarterly QING_GOV_pulse also refreshes it). No cost / no
+# side effects beyond the cache; always valid so the click never no-ops.
+# ======================================================================
+qing_gov_council_refresh_candidates = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		QING_council_refresh_candidates = yes
 	}
 }

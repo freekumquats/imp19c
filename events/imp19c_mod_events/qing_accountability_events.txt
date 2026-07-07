@@ -1,0 +1,132 @@
+########################################################################
+# qing_accountability_events.txt — the Grand Council ACCOUNTABILITY drama (#103).
+#
+# The structural half lives in se_QING_ACCOUNTABILITY.txt: every quarter the
+# governance pulse judges each filled great office on the realm metric its own
+# modifier governs, AND on the holder's character. A thriving domain silently
+# rewards its minister; a FAILING domain under a WEAK minister (disloyal OR
+# unpopular OR corrupt) summons the ablest, most antagonistic outsider to
+# challenge him for the post — and queues THIS event.
+#
+# qing_accountability.1 is that reckoning. The scorer has already saved:
+#   scope:qing_acc_defender    — the sitting, discredited minister
+#   scope:qing_acc_challenger  — the abler rival who covets his office
+#   var:qing_acc_challenge_office (flag) — which office is contested
+# The emperor arbitrates: stand by his man, elevate the challenger (a clean
+# transfer of the office), or dismiss the whole affair (leaving the office vacant
+# and both men slighted).
+#
+#   ROOT / this = the Qing overlord (CHI, player)
+#
+# CHI-only, player-only (fired only for the player from the CHI-gated pulse).
+# All logged to sys = QING. Leans on VERIFIED effects only: QING_office_appoint /
+# QING_office_vacate_dispatch / QING_char_* mutators (se_QING_AFFINITY.txt).
+#
+# Namespace = qing_accountability
+#   .1  a minister is called to account (the upstart challenge)
+########################################################################
+
+namespace = qing_accountability
+
+########################################################################
+# .1  A MINISTER CALLED TO ACCOUNT
+# The contested domain has faltered and an abler rival has stepped forward. The
+# emperor must decide whether merit or loyalty rules his council.
+########################################################################
+qing_accountability.1 = {
+	type = country_event
+	title = "qing_accountability.1.t"
+	desc = "qing_accountability.1.desc"
+	picture = chinese_throne_room
+
+	left_portrait = scope:qing_acc_defender
+	right_portrait = scope:qing_acc_challenger
+
+	is_triggered_only = yes
+
+	# both combatants must still be alive, in our service and out-/in-office as set;
+	# the delay between queueing and firing could have unseated or killed either.
+	trigger = {
+		exists = scope:qing_acc_defender
+		exists = scope:qing_acc_challenger
+		scope:qing_acc_defender = { is_alive = yes  employer = ROOT  has_variable = qing_office_held }
+		scope:qing_acc_challenger = { is_alive = yes  employer = ROOT  NOT = { has_variable = qing_office_held } }
+	}
+
+	immediate = {
+		# gauge each man against the throne — colours which choice sits well
+		scope:qing_acc_defender = { QING_char_affinity = yes }
+		scope:qing_acc_challenger = { QING_char_affinity = yes }
+		LOG_line = { sys = QING  msg = "EVENT qing_accountability.1 ([scope:qing_acc_challenger.GetName] challenges [scope:qing_acc_defender.GetName]) [ROOT.GetTag]" }
+	}
+
+	# --- Stand by the incumbent (loyalty over merit) ---------------------
+	option = {
+		name = "qing_accountability.1.a"
+		custom_tooltip = "qing_accountability.1.a.tt"
+		# the emperor's confidence steadies the shaken minister and binds him closer;
+		# the passed-over rival is embittered.
+		scope:qing_acc_defender = {
+			add_loyalty = loyalty_qing_commended
+			QING_char_promote_standing = { pop = 4  prom = 6 }
+		}
+		scope:qing_acc_challenger = {
+			add_loyalty = loyalty_qing_estranged
+			add_popularity = -10
+		}
+		add_political_influence = -10
+	}
+
+	# --- Elevate the challenger (merit over loyalty) ---------------------
+	option = {
+		name = "qing_accountability.1.b"
+		custom_tooltip = "qing_accountability.1.b.tt"
+		# relieve the failed minister and hand his very office to the abler rival —
+		# a clean transfer of the contested post. QING_office_appoint vacates the
+		# previous holder of that office automatically before seating the new man.
+		scope:qing_acc_defender = {
+			QING_office_vacate_dispatch = yes
+			add_loyalty = loyalty_qing_disgraced
+			add_popularity = -15
+		}
+		# seat the challenger in the SAME office that was contested (branch on the
+		# stored office flag — mirrors QING_office_vacate_dispatch's dispatch table).
+		scope:qing_acc_challenger = {
+			if = { limit = { ROOT = { var:qing_acc_challenge_office = flag:chancellor } } QING_office_appoint = { office = chancellor } }
+			else_if = { limit = { ROOT = { var:qing_acc_challenge_office = flag:personnel } }  QING_office_appoint = { office = personnel } }
+			else_if = { limit = { ROOT = { var:qing_acc_challenge_office = flag:revenue } }   QING_office_appoint = { office = revenue } }
+			else_if = { limit = { ROOT = { var:qing_acc_challenge_office = flag:rites } }     QING_office_appoint = { office = rites } }
+			else_if = { limit = { ROOT = { var:qing_acc_challenge_office = flag:war } }       QING_office_appoint = { office = war } }
+			else_if = { limit = { ROOT = { var:qing_acc_challenge_office = flag:justice } }   QING_office_appoint = { office = justice } }
+			else_if = { limit = { ROOT = { var:qing_acc_challenge_office = flag:works } }     QING_office_appoint = { office = works } }
+			else_if = { limit = { ROOT = { var:qing_acc_challenge_office = flag:censor } }    QING_office_appoint = { office = censor } }
+			else_if = { limit = { ROOT = { var:qing_acc_challenge_office = flag:lifanyuan } } QING_office_appoint = { office = lifanyuan } }
+			else_if = { limit = { ROOT = { var:qing_acc_challenge_office = flag:amban } }     QING_office_appoint = { office = amban } }
+			else_if = { limit = { ROOT = { var:qing_acc_challenge_office = flag:zongli } }    QING_office_appoint = { office = zongli } }
+			add_loyalty = loyalty_qing_elevated
+			# elevation binds a congenial man to the throne or merely empowers an
+			# alien one (the affinity was scored in immediate).
+			QING_char_bind = yes
+		}
+		QING_council_recompute = yes
+		add_political_influence = -15
+	}
+
+	# --- Dismiss them both (a plague on both houses) ---------------------
+	option = {
+		name = "qing_accountability.1.c"
+		custom_tooltip = "qing_accountability.1.c.tt"
+		# purge the whole quarrel: the minister is relieved (the office falls vacant,
+		# a strain in that domain) and the presumptuous rival is slapped down.
+		scope:qing_acc_defender = {
+			QING_office_vacate_dispatch = yes
+			add_loyalty = loyalty_qing_estranged
+		}
+		scope:qing_acc_challenger = {
+			add_loyalty = loyalty_qing_estranged
+			add_popularity = -10
+		}
+		QING_council_recompute = yes
+		add_tyranny = 2
+	}
+}

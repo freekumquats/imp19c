@@ -1,232 +1,160 @@
 ########################################################################
 # se_QING_COUNCIL.txt — the Grand Council (軍機處) hub and the character-held
-# great offices (六部尚書 / 都察院 / 理藩院 / 總理衙門 / 駐藏大臣).
+# great offices (領班軍機大臣 / 六部尚書 / 都察院 / 理藩院 / 總理衙門 / 內務府).
 #
-# The Grand Council is the CENTRAL HUB the user asked for: the player seats
-# grand councillors (軍機大臣) into a small number of seats, names a chief
-# councillor (領班軍機大臣), and the balance of Manchu vs Han members and the
-# councillors' skills determine the council's EFFECTIVENESS. That effectiveness
-# feeds the abstracted bureaucracy in se_QING_GOVERNANCE.txt (QING_GOV_pulse
-# calls QING_council_recompute + QING_council_apply_band) and thereby the whole
-# decline/reform machine.
+# REDESIGN (council-is-offices model): the Grand Council is NOT a separate pool
+# of "grand councillors" seated into abstract chairs — historically the 軍機處
+# was staffed BY serving board presidents, grand secretaries and the like,
+# concurrently with their offices. So HERE the Grand Council IS EXACTLY the set
+# of filled great offices. You join the council by being APPOINTED TO AN OFFICE;
+# there is no seat action and no councillor population.
+#
+# The appointable offices (11):
+#   chancellor  領班軍機大臣  Grand Chancellor      (summit; all four skills)
+#   personnel   吏部          Grand Minister of Personnel   (finesse)
+#   revenue     戶部          Grand Minister of Revenue     (finesse)
+#   rites       禮部          Grand Minister of Rites       (zeal)
+#   war         兵部          Grand Minister of War         (martial)
+#   justice     刑部          Grand Minister of Justice     (zeal)
+#   works       工部          Grand Minister of Works       (finesse)
+#   censor      都察院        Grand Inspector of the Censorate (finesse)
+#   lifanyuan   理藩院        Grand Director of the Lifan Yuan (charisma)
+#   amban       內務府        Grand Secretary of the Imperial Household (charisma)
+#   zongli      總理衙門      Grand Director of the Zongli Yamen (charisma)
+# Plus the event-only 太上皇 Emperor Emeritus (emeritus) — a read-only overlay
+# card shown when Napoleon (#65) sits above the banners; not autofilled, not an
+# ordinary appointable seat, not counted toward vacancy.
+#
+# Effectiveness (0..100, in se_QING_GOVERNANCE) is derived from the office-
+# holders' OFFICE-RELEVANT skills (a war minister is judged on martial, a rites
+# minister on zeal, the Grand Chancellor on all four), plus a Manchu/Han balance
+# bonus and a per-vacant-office penalty. It feeds the abstracted bureaucracy in
+# se_QING_GOVERNANCE.txt (QING_GOV_pulse calls QING_council_recompute +
+# QING_council_apply_band) and thereby the whole decline/reform machine.
 #
 # State (all on CHI unless noted):
-#   qing_council_members        variable list of seated councillor characters
-#   qing_council_chief          the chief councillor character (領班)
+#   qing_office_<key>_holder    the character holding each office
 #   qing_council_effectiveness  0..100 derived meter (init in se_QING_GOVERNANCE)
-#   qing_council_seat_cap       max seats (default 5; princes admitted 1853+)
-#   qing_office_<key>_holder    the character holding each great office
+#   qing_council_members        DERIVED list of office-holders, rebuilt each
+#                               recompute (informational; drives the GUI roster)
+#   qing_council_manchu_count / qing_council_han_count   culture split of holders
+#   qing_council_filled_count   number of filled appointable offices
 # Character-scope marks:
-#   qing_is_councillor          set on a seated councillor
 #   qing_office_held            flag: which office a character holds
 #
 # Prefix = QING_council_ / QING_office_
 ########################################################################
 
 # ======================================================================
-# SEAT CAP + BOOTSTRAP
+# BOOTSTRAP — nothing to size any more (no seat cap); kept as an idempotent
+# stub so the many existing call sites (on_game_initialized, the pulse, the
+# GUI verbs) need not be re-plumbed. Effectiveness itself is seeded in
+# se_QING_GOVERNANCE.txt / QING_GOV_init.
 # ======================================================================
 QING_council_init = {
-	if = { limit = { NOT = { has_variable = qing_council_seat_cap } }  set_variable = { name = qing_council_seat_cap  value = 5 } }
-}
-
-# ---- Count seated councillors into a variable the effect maths can read.
-# Inline count (per get_variable_list_size in se_federation.txt); avoids the
-# unproven variable_list_size:<name> colon form.
-QING_council_refresh_count = {
-	set_variable = { name = qing_council_seat_count  value = 0 }
-	if = {
-		limit = { has_variable_list = qing_council_members }
-		every_in_list = {
-			variable = qing_council_members
-			limit = { is_alive = yes  employer = ROOT }
-			ROOT = { change_variable = { name = qing_council_seat_count  add = 1 } }
-		}
-	}
+	if = { limit = { NOT = { has_variable = qing_council_effectiveness } }  set_variable = { name = qing_council_effectiveness  value = 50 } }
 }
 
 # ======================================================================
-# SEAT A CHARACTER  (call inside the target character scope; this = councillor)
-# The country is reached via `employer` (always CHI for these courtiers), so the
-# effect is correct whether invoked from the country-scope autofill or from the
-# character-scope appointment GUI — unlike ROOT, which tracks the caller.
-# ======================================================================
-QING_council_seat_character = {
-	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
-	LOG_enter = { sys = QING  fn = "QING_council_seat_character" }
-	employer = { QING_council_init = yes }
-	if = {
-		limit = {
-			NOT = { employer = { is_target_in_variable_list = { name = qing_council_members  target = prev } } }
-		}
-		employer = { add_to_variable_list = { name = qing_council_members  target = prev } }
-		add_character_modifier = { name = qing_officeholder  duration = -1 }
-		set_variable = { name = qing_is_councillor  value = 1 }
-			# HOLDING OFFICE BUILDS A POWER BASE: a seat on the Grand Council brings
-			# the retinue, clients, and standing the engine models as power_base
-			# (holdings + loyal veterans). Grant loyal veterans directly so the seat
-			# itself lifts the man's power_base — unseating (below) strips it back out
-			# symmetrically. This is the tie the user asked for between the council /
-			# office positions and the character powerbase mechanic.
-			add_loyal_veterans = 3
-		# make sure the seated councillor has an identity band (reuses #8 helper)
-		QING_char_init_identity = yes
-		LOG_line = { sys = QING  msg = "council seat: [this.GetName] seated (+3 loyal veterans -> power base) for [this.GetEmployer.GetTag]" }
-	}
-	LOG_exit = { sys = QING  fn = "QING_council_seat_character"  result = OK }
-}
-
-QING_council_make_chief = {
-	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
-	LOG_enter = { sys = QING  fn = "QING_council_make_chief" }
-	# call inside the target character scope; seats first if needed
-	QING_council_seat_character = yes
-	employer = { set_variable = { name = qing_council_chief  value = prev } }
-	# the chief councillor (領班軍機大臣) stands at the summit — the standing of the
-	# office raises his power_base further still (the Heshen danger is precisely a
-	# chief whose personal base grows too great; QING_council_recompute watches it).
-	add_loyal_veterans = 2
-	LOG_line = { sys = QING  msg = "council chief (lingban) = [this.GetName] (+2 loyal veterans) for [this.GetEmployer.GetTag]" }
-	LOG_exit = { sys = QING  fn = "QING_council_make_chief"  result = OK }
-}
-
-# ======================================================================
-# UNSEAT A CHARACTER  (call inside the target character scope; this = councillor)
-# ======================================================================
-QING_council_unseat_character = {
-	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
-	LOG_enter = { sys = QING  fn = "QING_council_unseat_character" }
-	if = {
-		limit = { employer = { is_target_in_variable_list = { name = qing_council_members  target = prev } } }
-		employer = { remove_list_variable = { name = qing_council_members  target = prev } }
-		remove_character_modifier = qing_officeholder
-		remove_variable = qing_is_councillor
-		# losing the seat strips the power base it conferred (mirror of the +3 on
-		# seating) — his retinue and clients fall away with the office.
-		add_loyal_veterans = -3
-		# if this was the chief, clear the chief slot
-		if = {
-			limit = { employer = { var:qing_council_chief = prev } }
-			employer = { remove_variable = qing_council_chief }
-		}
-		LOG_line = { sys = QING  msg = "council unseat: [this.GetName] removed (-3 loyal veterans) for [this.GetEmployer.GetTag]" }
-	}
-	LOG_exit = { sys = QING  fn = "QING_council_unseat_character"  result = OK }
-}
-
-# ======================================================================
-# AUTOFILL — seat the most capable available courtiers up to the cap.
-# Used at game start and offered to the player as a "convene the council" verb.
-# Skips characters already seated; prefers high combined skill; keeps a
-# Manchu-Han mix by not caring about culture here (balance is scored, not forced).
+# AUTOFILL — staff every VACANT appointable office with the ablest unassigned
+# courtier. Used at game start and by the "convene the council" verb. Appoints
+# to each empty office in turn (chancellor first, then the six boards and the
+# frontier/foreign yamen); a courtier already holding an office is skipped.
 # ======================================================================
 QING_council_autofill = {
-	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
+	# [#103] se_LOG enter/exit wiring (council-is-offices rewrite)
 	LOG_enter = { sys = QING  fn = "QING_council_autofill" }
 	QING_council_init = yes
-	QING_council_refresh_count = yes
-	while = {
-		count = 12  # hard backstop; the limit below is the real terminator
-		limit = {
-			var:qing_council_seat_count < var:qing_council_seat_cap
-			any_character = {
-				employer = ROOT
-				is_adult = yes
-				is_alive = yes
-				# [#98-fix task #98] the list is COUNTRY-held; testing it in this
-				# character scope (target = this) always missed, so autofill stalled
-				# after one seat. Read it via employer (proven form, line 58).
-				NOT = { employer = { is_target_in_variable_list = { name = qing_council_members  target = prev } } }
-			}
-		}
+	QING_council_autofill_office = { office = chancellor }
+	QING_council_autofill_office = { office = personnel }
+	QING_council_autofill_office = { office = revenue }
+	QING_council_autofill_office = { office = rites }
+	QING_council_autofill_office = { office = war }
+	QING_council_autofill_office = { office = justice }
+	QING_council_autofill_office = { office = works }
+	QING_council_autofill_office = { office = censor }
+	QING_council_autofill_office = { office = lifanyuan }
+	QING_council_autofill_office = { office = amban }
+	QING_council_autofill_office = { office = zongli }
+	QING_council_recompute = yes
+	LOG_line = { sys = QING  msg = "council autofilled (offices staffed) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_council_autofill"  result = OK }
+}
+
+# Fill ONE office if vacant with the ablest unassigned courtier. Country scope.
+# $office$ = the office key. Reuses combined_stats_council_svalue as the ranking
+# (the same overall-worth measure the old pool used); the office's own governing
+# skill is what then MATTERS for effectiveness (QING_council_recompute), but a
+# well-rounded man is the sensible default pick when the throne fills a post.
+QING_council_autofill_office = {
+	if = {
+		limit = { NOT = { has_variable = qing_office_$office$_holder } }
 		ordered_character = {
 			limit = {
 				employer = ROOT
 				is_adult = yes
 				is_alive = yes
-				# [#98-fix task #98] same country-held-list scope fix as the while-limit above.
-				NOT = { employer = { is_target_in_variable_list = { name = qing_council_members  target = prev } } }
+				NOT = { has_variable = qing_office_held }
 			}
 			order_by = combined_stats_council_svalue
 			check_range_bounds = no
 			max = 1
-			QING_council_seat_character = yes
-		}
-		QING_council_refresh_count = yes
-	}
-	# name a chief if none: the highest-skill sitting member.
-	if = {
-		limit = {
-			NOT = { has_variable = qing_council_chief }
-			var:qing_council_seat_count > 0
-		}
-		ordered_in_list = {
-			variable = qing_council_members
-			order_by = combined_stats_council_svalue
-			check_range_bounds = no
-			max = 1
-			QING_council_make_chief = yes
+			QING_office_appoint = { office = $office$ }
 		}
 	}
-	LOG_line = { sys = QING  msg = "council autofilled to [ROOT.MakeScope.GetVariable('qing_council_seat_count').GetValue|0]/[ROOT.MakeScope.GetVariable('qing_council_seat_cap').GetValue|0] for [ROOT.GetTag]" }
-	LOG_exit = { sys = QING  fn = "QING_council_autofill"  result = OK }
 }
 
 # ======================================================================
 # RECOMPUTE EFFECTIVENESS
 # Effectiveness is a 0..100 blend of:
-#   - the average combined skill of seated councillors (main driver)
+#   - the average OFFICE-RELEVANT skill of the filled offices (main driver):
+#     each domain office contributes its ONE governing skill; the Grand
+#     Chancellor (a generalist at the summit) contributes the average of all
+#     four. "All skills don't matter for all offices" — a brilliant general is
+#     wasted at the Board of Rites.
 #   - a dyarchic-balance bonus when Manchu and Han are both represented
-#   - a vacancy penalty when seats sit empty
-#   - a chief-quality bonus
-# Also detects the "overmighty grandee" state (a Heshen-style chief) for the
-# band applier. All O(1)/O(seats) counter maths; no pop or province sweeps.
+#   - a vacancy penalty when appointable offices sit empty
+# Also detects the "overmighty grandee" state (a Heshen-style Grand Chancellor)
+# for the band applier. All O(offices) counter maths; no pop or province sweeps.
 # ======================================================================
 QING_council_recompute = {
-	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
+	# [#103] se_LOG enter/exit wiring (council-is-offices rewrite)
 	LOG_enter = { sys = QING  fn = "QING_council_recompute" }
 	QING_council_init = yes
-	QING_council_refresh_count = yes
 
-	# --- accumulate total combined skill + culture split over the seated list
+	# --- reset accumulators + rebuild the DERIVED office-holder roster
 	set_variable = { name = qing_council_skill_total  value = 0 }
+	set_variable = { name = qing_council_filled_count  value = 0 }
 	set_variable = { name = qing_council_manchu_count  value = 0 }
 	set_variable = { name = qing_council_han_count  value = 0 }
-	if = {
-		limit = { var:qing_council_seat_count > 0 }
-		every_in_list = {
-			variable = qing_council_members
-			# drop dead/unemployed members lazily as we pass over them
-			limit = { is_alive = yes  employer = ROOT }
-			# sum the four built-in skills of this member onto the total (reading
-			# scope-prefixed built-in skills is the proven idiom).
-			ROOT = {
-				change_variable = { name = qing_council_skill_total  add = prev.martial }
-				change_variable = { name = qing_council_skill_total  add = prev.finesse }
-				change_variable = { name = qing_council_skill_total  add = prev.charisma }
-				change_variable = { name = qing_council_skill_total  add = prev.zeal }
-			}
-			if = {
-				limit = { culture = ROOT.primary_culture }
-				ROOT = { change_variable = { name = qing_council_manchu_count  add = 1 } }
-			}
-			else = {
-				ROOT = { change_variable = { name = qing_council_han_count  add = 1 } }
-			}
-		}
-	}
+	clear_variable_list = qing_council_members
 
-	# --- base = average combined skill, scaled to ~0..100
-	# combined skill of a strong councillor ~ 30+; scale by *2, clamp later.
+	# --- score every filled office on its governing skill (rebuilds the roster,
+	# the culture split and the filled count as it goes)
+	QING_council_score_chancellor = yes
+	QING_council_score_office = { office = personnel  skill = finesse }
+	QING_council_score_office = { office = revenue    skill = finesse }
+	QING_council_score_office = { office = rites      skill = zeal }
+	QING_council_score_office = { office = war        skill = martial }
+	QING_council_score_office = { office = justice    skill = zeal }
+	QING_council_score_office = { office = works      skill = finesse }
+	QING_council_score_office = { office = censor      skill = finesse }
+	QING_council_score_office = { office = lifanyuan  skill = charisma }
+	QING_council_score_office = { office = amban      skill = charisma }
+	QING_council_score_office = { office = zongli     skill = charisma }
+
+	# --- base = average governing skill of the filled offices, scaled to ~0..100.
+	# A council of solid specialists (governing skill ~9) lands near the effective
+	# band; brilliant men clear it, mediocrities fall to dysfunction.
 	set_variable = { name = qing_council_eff_target  value = 0 }
 	if = {
-		limit = { var:qing_council_seat_count > 0 }
+		limit = { var:qing_council_filled_count > 0 }
 		set_variable = { name = qing_council_eff_target  value = var:qing_council_skill_total }
-		change_variable = { name = qing_council_eff_target  divide = var:qing_council_seat_count }
-		change_variable = { name = qing_council_eff_target  multiply = 2 }
+		change_variable = { name = qing_council_eff_target  divide = var:qing_council_filled_count }
+		change_variable = { name = qing_council_eff_target  multiply = 7 }
 	}
 
-	# --- dyarchic balance bonus: both blocs seated => +15
+	# --- dyarchic balance bonus: both blocs seated => +15 (滿漢並用)
 	if = {
 		limit = {
 			var:qing_council_manchu_count >= 1
@@ -235,12 +163,12 @@ QING_council_recompute = {
 		change_variable = { name = qing_council_eff_target  add = 15 }
 	}
 
-	# --- vacancy penalty: -8 per empty seat
-	set_variable = { name = qing_council_vacancy  value = var:qing_council_seat_cap }
-	change_variable = { name = qing_council_vacancy  subtract = var:qing_council_seat_count }
+	# --- vacancy penalty: 11 appointable offices; -3 per empty one.
+	set_variable = { name = qing_council_vacancy  value = 11 }
+	change_variable = { name = qing_council_vacancy  subtract = var:qing_council_filled_count }
 	if = { limit = { var:qing_council_vacancy < 0 }  set_variable = { name = qing_council_vacancy  value = 0 } }
 	set_variable = { name = qing_council_vacancy_pen  value = var:qing_council_vacancy }
-	change_variable = { name = qing_council_vacancy_pen  multiply = 8 }
+	change_variable = { name = qing_council_vacancy_pen  multiply = 3 }
 	change_variable = { name = qing_council_eff_target  subtract = var:qing_council_vacancy_pen }
 
 	# --- clamp target 0..100
@@ -257,17 +185,18 @@ QING_council_recompute = {
 		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -3 }
 	}
 
-	# --- overmighty-grandee detection: a corrupt realm + a chief who has amassed
-	# dangerous personal clout (the Heshen pattern). Clout is read from the engine's
-	# own character POWER BASE (holdings + loyal veterans) as well as court
-	# prominence — a chief with an independent power base is the real threat, not
-	# merely a popular one.
+	# --- overmighty-grandee detection: a corrupt realm + a Grand Chancellor who
+	# has amassed dangerous personal clout (the Heshen pattern). Clout is read
+	# from the engine's own character POWER BASE (holdings + loyal veterans) as
+	# well as court prominence — a chancellor with an independent power base is
+	# the real threat, not merely a popular one. Re-pointed from the old chief
+	# slot onto the Grand Chancellor office-holder.
 	set_variable = { name = qing_council_overmighty_flag  value = 0 }
 	if = {
 		limit = {
-			has_variable = qing_council_chief
+			has_variable = qing_office_chancellor_holder
 			var:qing_corruption_level >= 45
-			var:qing_council_chief = {
+			var:qing_office_chancellor_holder = {
 				OR = {
 					prominence >= 60
 					power_base >= 15
@@ -279,11 +208,73 @@ QING_council_recompute = {
 	LOG_exit = { sys = QING  fn = "QING_council_recompute"  result = OK }
 }
 
+# Score one DOMAIN office on its single governing skill. Country scope.
+# $office$ = office key, $skill$ = martial|finesse|charisma|zeal. Adds the
+# holder's governing skill to the running total, counts him toward the filled
+# count and the Manchu/Han split, and appends him to the derived roster list.
+QING_council_score_office = {
+	if = {
+		limit = {
+			has_variable = qing_office_$office$_holder
+			var:qing_office_$office$_holder = { is_alive = yes  employer = ROOT }
+		}
+		var:qing_office_$office$_holder = {
+			# add the governing skill onto the country total (prev = country here,
+			# the proven prev.<skill> value-read idiom from the old list recompute).
+			ROOT = {
+				change_variable = { name = qing_council_skill_total  add = prev.$skill$ }
+				change_variable = { name = qing_council_filled_count  add = 1 }
+				add_to_variable_list = { name = qing_council_members  target = prev }
+			}
+			# culture balance (滿漢): primary-culture holders count Manchu, others Han.
+			if = {
+				limit = { culture = ROOT.primary_culture }
+				ROOT = { change_variable = { name = qing_council_manchu_count  add = 1 } }
+			}
+			else = {
+				ROOT = { change_variable = { name = qing_council_han_count  add = 1 } }
+			}
+		}
+	}
+}
+
+# Score the Grand Chancellor (領班軍機大臣) — a summit generalist judged on ALL
+# FOUR skills, so his contribution is the average of the four (kept comparable
+# to a single-skill domain office: one seat, one averaged contribution).
+QING_council_score_chancellor = {
+	if = {
+		limit = {
+			has_variable = qing_office_chancellor_holder
+			var:qing_office_chancellor_holder = { is_alive = yes  employer = ROOT }
+		}
+		set_variable = { name = qing_council_tmp  value = 0 }
+		var:qing_office_chancellor_holder = {
+			ROOT = {
+				change_variable = { name = qing_council_tmp  add = prev.martial }
+				change_variable = { name = qing_council_tmp  add = prev.finesse }
+				change_variable = { name = qing_council_tmp  add = prev.charisma }
+				change_variable = { name = qing_council_tmp  add = prev.zeal }
+				add_to_variable_list = { name = qing_council_members  target = prev }
+			}
+			if = {
+				limit = { culture = ROOT.primary_culture }
+				ROOT = { change_variable = { name = qing_council_manchu_count  add = 1 } }
+			}
+			else = {
+				ROOT = { change_variable = { name = qing_council_han_count  add = 1 } }
+			}
+		}
+		change_variable = { name = qing_council_tmp  divide = 4 }
+		change_variable = { name = qing_council_skill_total  add = var:qing_council_tmp }
+		change_variable = { name = qing_council_filled_count  add = 1 }
+	}
+}
+
 # ======================================================================
 # BAND APPLICATION — effectiveness bands + the two "character" states.
 # ======================================================================
 QING_council_apply_band = {
-	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
+	# [#103] se_LOG enter/exit wiring (council-is-offices rewrite)
 	LOG_enter = { sys = QING  fn = "QING_council_apply_band" }
 	remove_country_modifier = qing_council_effective
 	remove_country_modifier = qing_council_dysfunctional
@@ -314,30 +305,31 @@ QING_council_apply_band = {
 		add_country_modifier = { name = qing_council_overmighty  duration = -1 }
 		# [#91 item F] CONCRETE FACE of the overmighty grandee. The counter/flag above
 		# stays the AI/summary layer; here we hang a REAL object off it. If the
-		# overmighty chief has ALSO turned disloyal he stops being a mere loyalty
-		# number and raises a personal army — a visible rebel-army seed whose cohorts
-		# answer to HIM, not the throne (the loyal-cohorts civil-war seed). The flip
-		# is guarded inside the effect so a merely-popular loyal chief never revolts.
-		if = { limit = { has_variable = qing_council_chief }  var:qing_council_chief = { QING_council_grandee_flip = yes } }
+		# overmighty Grand Chancellor has ALSO turned disloyal he stops being a mere
+		# loyalty number and raises a personal army — a visible rebel-army seed whose
+		# cohorts answer to HIM, not the throne (the loyal-cohorts civil-war seed).
+		# The flip is guarded inside the effect so a merely-popular loyal chancellor
+		# never revolts. Re-pointed from the old chief slot onto the Grand Chancellor.
+		if = { limit = { has_variable = qing_office_chancellor_holder }  var:qing_office_chancellor_holder = { QING_council_grandee_flip = yes } }
 	}
 	LOG_exit = { sys = QING  fn = "QING_council_apply_band"  result = OK }
 }
 
 # ======================================================================
 # [#91 item F] THE OVERMIGHTY GRANDEE TURNS — CONCRETE REBEL-ARMY SEED
-# Called inside the chief councillor's CHARACTER scope from QING_council_apply_band
-# (this = the 領班 chief; ROOT = CHI). The overmighty flag is the AI/summary layer;
-# this hangs the REAL object off it. If the overmighty chief has ALSO turned
-# disloyal (loyalty < 40, the AFFINITY "estranged" band), his personal power base
-# — the loyal veterans the seat/office conferred — becomes a REAL personal army:
+# Called inside the Grand Chancellor's CHARACTER scope from QING_council_apply_band
+# (this = the 領班 chancellor; ROOT = CHI). The overmighty flag is the AI/summary
+# layer; this hangs the REAL object off it. If the overmighty chancellor has ALSO
+# turned disloyal (loyalty < 40, the AFFINITY "estranged" band), his personal power
+# base — the loyal veterans the office conferred — becomes a REAL personal army:
 # a legion raised under him whose cohorts are set_personal_loyalty to HIM, not the
 # throne (the loyal-cohorts civil-war seed — the Heshen/warlord danger given a
 # military face). Idiom proven: raise_legion+create_unit+add_subunit and the
 # add_to_legion/set_as_commander commander attach (se_QING_SELFSTR.txt:320-342,
 # se_QING_NAPOLEON.txt:357-375); every_sub_unit + set_personal_loyalty on the raised
 # cohorts (common/unit_abilities/military_colonies.txt:57-69; TI warfare_events.txt:269-271).
-# Fires ONCE per chief (qing_grandee_rebelled marker). KEEPS all council counters:
-# effectiveness / overmighty flag / seat list are untouched here — we only convert
+# Fires ONCE per chancellor (qing_grandee_rebelled marker). KEEPS all council counters:
+# effectiveness / overmighty flag / roster are untouched here — we only convert
 # part of his abstract loyal-veteran pool into the concrete legion (mirror -N).
 # ======================================================================
 QING_council_grandee_flip = {
@@ -352,28 +344,28 @@ QING_council_grandee_flip = {
 		set_variable = { name = qing_grandee_rebelled  value = 1 }
 		save_scope_as = grandee_rebel_commander
 		# convert part of his abstract power base into the concrete legion: the loyal
-		# veterans the office/seat granted march off as his personal army (mirror of the
-		# +3 seat / +2 chief / +4 office grants). The 0..100 council counters are KEPT.
+		# veterans the office granted march off as his personal army (mirror of the
+		# +4 office grant). The 0..100 council counters are KEPT.
 		add_loyal_veterans = -5
 		# raise the real force under him. Prefer the capital; guarded so a landless Qing
 		# still gets the marker (and the log) without a scope error.
 		if = {
 			limit = { exists = ROOT.capital_scope }
 			ROOT.capital_scope = { state.governorship = { QING_council_raise_grandee_legion = yes } }
-			LOG_line = { sys = QING  msg = "grandee flip: overmighty chief [scope:grandee_rebel_commander.GetName] turned — personal army raised at capital (cohorts loyal to HIM) for [ROOT.GetTag]" }
+			LOG_line = { sys = QING  msg = "grandee flip: overmighty chancellor [scope:grandee_rebel_commander.GetName] turned — personal army raised at capital (cohorts loyal to HIM) for [ROOT.GetTag]" }
 		}
 		else = {
 			LOG_fail = { sys = QING  fn = "QING_council_grandee_flip"  reason = "no capital_scope; grandee marked rebel but no legion raised for [ROOT.GetTag]" }
 		}
 	}
 	else = {
-		LOG_fail = { sys = QING  fn = "QING_council_grandee_flip"  reason = "chief still loyal (loyalty>=40) or already flipped; no rebel army for [ROOT.GetTag]" }
+		LOG_fail = { sys = QING  fn = "QING_council_grandee_flip"  reason = "chancellor still loyal (loyalty>=40) or already flipped; no rebel army for [ROOT.GetTag]" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_council_grandee_flip"  result = OK }
 }
 
 # [#91 item F] Raise the grandee's personal legion. Called in governorship scope;
-# scope:grandee_rebel_commander = the flipped chief. Mirrors QING_selfstr_raise_evarmy_legion:
+# scope:grandee_rebel_commander = the flipped chancellor. Mirrors QING_selfstr_raise_evarmy_legion:
 # base sub_unit + add_subunit, commander attached via add_to_legion=PREV +
 # set_as_commander. The one addition is the loyal-cohorts bind: every raised sub_unit
 # is set_personal_loyalty to the grandee, so the cohorts answer to HIM — the concrete
@@ -415,12 +407,135 @@ QING_council_raise_grandee_legion = {
 }
 
 # ======================================================================
-# GREAT OFFICES  (六部尚書 / 都察院 / 理藩院 / 總理衙門 / 駐藏大臣)
+# [grand-council-tab] CANDIDATE CACHE for the Grand Council view's appoint
+# pickers. The government-view GUI has no engine courtier datamodel, and the
+# office system stores holders as character vars, so the tab needs a
+# GUI-iterable list of ELIGIBLE courtiers to populate its pickers. We cache it
+# on the country as qing_council_candidates and let the GUI walk it via
+# MakeScope.GetList('qing_council_candidates').
+#
+# COST: one every_character walk over the court, bounded to the top
+# QING_COUNCIL_CANDIDATE_CAP courtiers by combined_stats_council_svalue. Court is
+# dozens-to-low-hundreds of characters — trivial beside the economy sim's
+# province/pop sweeps. It is refreshed LAZILY: only when the player opens the tab
+# (QING_council_refresh_candidates called from the tab-open scripted_gui) and
+# once on the quarterly QING_GOV_pulse. NEVER on a monthly/per-character hot path.
+#
+# Eligibility: adult, alive, employed by ROOT, and NOT already holding a great
+# office (office-holders are shown in their own roster slots, not offered as
+# fresh candidates).
+# ======================================================================
+QING_council_refresh_candidates = {
+	# Scope: country (CHI).
+	LOG_enter = { sys = QING  fn = "QING_council_refresh_candidates" }
+	QING_council_init = yes
+	clear_variable_list = qing_council_candidates
+	# top-N by council skill; check_range_bounds=no so the ordered set is not
+	# silently pruned to a default window (matches QING_council_autofill_office).
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_adult = yes
+			is_alive = yes
+			# not already holding one of the great offices.
+			NOT = { has_variable = qing_office_held }
+		}
+		order_by = combined_stats_council_svalue
+		check_range_bounds = no
+		max = 12   # QING_COUNCIL_CANDIDATE_CAP — picker shows the ablest dozen
+		# the list is COUNTRY-held: add via ROOT with the courtier as prev (mirror of
+		# the appoint verb's `employer = { ... target = prev }`).
+		ROOT = { add_to_variable_list = { name = qing_council_candidates  target = prev } }
+	}
+	LOG_line = { sys = QING  msg = "council candidates refreshed for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_council_refresh_candidates"  result = OK }
+}
+
+# ======================================================================
+# OFFICER CHARACTER-BUFFS applied by the quarterly pulse (after recompute, so the
+# derived roster qing_council_members is fresh):
+#   • PERSONNEL 吏部 — the Grand Minister of Personnel grooms the officialdom.
+#     He lends FINESSE to his FELLOW office-holders, scaled by his OWN finesse
+#     (>=12 -> +2, >=6 -> +1, else none). Applied to every OTHER filled office.
+#   • GRAND SECRETARY 內務府 — the closest man to the throne sharpens the
+#     sovereign's own judgement, buffing ALL FOUR of the RULER's skills, scaled
+#     by the Grand Secretary's OWN charisma (>=12 -> +2, >=6 -> +1).
+# Both are re-derived from scratch each pulse: strip from all current holders /
+# the ruler, then re-apply. (Vacate + death also strip, so a dropped holder never
+# keeps a stale buff.)
+# ======================================================================
+QING_council_apply_officer_buffs = {
+	LOG_enter = { sys = QING  fn = "QING_council_apply_officer_buffs" }
+
+	# --- PERSONNEL finesse buff -------------------------------------------------
+	# strip from every current office-holder (clean slate)
+	if = {
+		limit = { has_variable_list = qing_council_members }
+		every_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes }
+			remove_character_modifier = qing_personnel_cultivated_minor
+			remove_character_modifier = qing_personnel_cultivated_major
+		}
+	}
+	# re-apply based on the Personnel holder's own finesse, to every OTHER holder
+	if = {
+		limit = {
+			has_variable = qing_office_personnel_holder
+			var:qing_office_personnel_holder = { is_alive = yes  employer = ROOT  finesse >= 12 }
+		}
+		every_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  NOT = { this = ROOT.var:qing_office_personnel_holder } }
+			add_character_modifier = { name = qing_personnel_cultivated_major  duration = -1 }
+		}
+	}
+	else_if = {
+		limit = {
+			has_variable = qing_office_personnel_holder
+			var:qing_office_personnel_holder = { is_alive = yes  employer = ROOT  finesse >= 6 }
+		}
+		every_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  NOT = { this = ROOT.var:qing_office_personnel_holder } }
+			add_character_modifier = { name = qing_personnel_cultivated_minor  duration = -1 }
+		}
+	}
+
+	# --- GRAND SECRETARY counsel buff on the RULER ------------------------------
+	if = {
+		limit = { exists = current_ruler }
+		current_ruler = {
+			remove_character_modifier = qing_grand_secretary_counsel_minor
+			remove_character_modifier = qing_grand_secretary_counsel_major
+		}
+	}
+	if = {
+		limit = {
+			exists = current_ruler
+			has_variable = qing_office_amban_holder
+			var:qing_office_amban_holder = { is_alive = yes  employer = ROOT  charisma >= 12 }
+		}
+		current_ruler = { add_character_modifier = { name = qing_grand_secretary_counsel_major  duration = -1 } }
+	}
+	else_if = {
+		limit = {
+			exists = current_ruler
+			has_variable = qing_office_amban_holder
+			var:qing_office_amban_holder = { is_alive = yes  employer = ROOT  charisma >= 6 }
+		}
+		current_ruler = { add_character_modifier = { name = qing_grand_secretary_counsel_minor  duration = -1 } }
+	}
+	LOG_exit = { sys = QING  fn = "QING_council_apply_officer_buffs"  result = OK }
+}
+
+# ======================================================================
+# GREAT OFFICES  (領班軍機大臣 / 六部尚書 / 都察院 / 理藩院 / 總理衙門 / 內務府)
 # Each office is a single character seat. Appointing a capable holder grants a
 # country modifier from qing_governance_modifiers.txt; a vacancy strains that
-# domain. $office$ = personnel|revenue|rites|war|justice|works|censor|lifanyuan|amban|zongli
+# domain. $office$ = chancellor|personnel|revenue|rites|war|justice|works|censor|lifanyuan|amban|zongli
 # Call QING_office_appoint inside the appointee's character scope; the country
-# is reached via `employer` so it is call-site-agnostic (like the seat verbs).
+# is reached via `employer` so it is call-site-agnostic.
 # QING_office_vacate is call-site-agnostic too: call it in EITHER the country
 # scope or the holder's character scope — it resolves the country via a helper.
 # ======================================================================
@@ -434,6 +549,10 @@ QING_office_appoint = {
 			limit = { has_variable = qing_office_$office$_holder }
 			var:qing_office_$office$_holder = {
 				remove_character_modifier = qing_officeholder
+				# [#103] strip the officer character-buffs the pulse may have hung on
+				# the displaced man, so he leaves office clean (no stale finesse/counsel).
+				remove_character_modifier = qing_personnel_cultivated_minor
+				remove_character_modifier = qing_personnel_cultivated_major
 				remove_variable = qing_office_held
 				# the displaced holder loses the power base the office gave him
 				# (mirror of the +4 the new appointee gains below).
@@ -454,6 +573,25 @@ QING_office_appoint = {
 	LOG_exit = { sys = QING  fn = "QING_office_appoint"  result = OK }
 }
 
+# Character-scope: appoint `this` to the first VACANT appointable office, in a
+# canonical order (the domain boards first, the summit chancellorship last).
+# Guarded per-office so it is a safe no-op if every office is already filled;
+# events that offer it gate on the accompanying vacancy count. this = the
+# appointee; employer = CHI (reached inside QING_office_appoint).
+QING_office_appoint_first_vacant = {
+	if =      { limit = { employer = { NOT = { has_variable = qing_office_personnel_holder } } } QING_office_appoint = { office = personnel } }
+	else_if = { limit = { employer = { NOT = { has_variable = qing_office_revenue_holder } } }   QING_office_appoint = { office = revenue } }
+	else_if = { limit = { employer = { NOT = { has_variable = qing_office_rites_holder } } }     QING_office_appoint = { office = rites } }
+	else_if = { limit = { employer = { NOT = { has_variable = qing_office_war_holder } } }       QING_office_appoint = { office = war } }
+	else_if = { limit = { employer = { NOT = { has_variable = qing_office_justice_holder } } }   QING_office_appoint = { office = justice } }
+	else_if = { limit = { employer = { NOT = { has_variable = qing_office_works_holder } } }     QING_office_appoint = { office = works } }
+	else_if = { limit = { employer = { NOT = { has_variable = qing_office_censor_holder } } }    QING_office_appoint = { office = censor } }
+	else_if = { limit = { employer = { NOT = { has_variable = qing_office_lifanyuan_holder } } } QING_office_appoint = { office = lifanyuan } }
+	else_if = { limit = { employer = { NOT = { has_variable = qing_office_amban_holder } } }     QING_office_appoint = { office = amban } }
+	else_if = { limit = { employer = { NOT = { has_variable = qing_office_zongli_holder } } }    QING_office_appoint = { office = zongli } }
+	else_if = { limit = { employer = { NOT = { has_variable = qing_office_chancellor_holder } } } QING_office_appoint = { office = chancellor } }
+}
+
 # Country-scope: vacate an office by key (used by events / the reform track).
 # $office$ = the office key. Removes the country bonus + adds vacancy strain.
 QING_office_vacate = {
@@ -463,6 +601,9 @@ QING_office_vacate = {
 		limit = { has_variable = qing_office_$office$_holder }
 		var:qing_office_$office$_holder = {
 			remove_character_modifier = qing_officeholder
+			# [#103] strip officer character-buffs so the relieved man leaves clean.
+			remove_character_modifier = qing_personnel_cultivated_minor
+			remove_character_modifier = qing_personnel_cultivated_major
 			remove_variable = qing_office_held
 			# relieved of the office, the man loses the power base it gave him
 			# (mirror of the +4 on appointment).
@@ -477,12 +618,13 @@ QING_office_vacate = {
 }
 
 # Character-scope dispatcher: vacate whatever office `this` holds. Lets a single
-# vacate GUI serve all ten offices — it branches on the holder's qing_office_held
+# vacate GUI serve all offices — it branches on the holder's qing_office_held
 # flag and calls the parameterised country-scope vacate with the right literal.
 QING_office_vacate_dispatch = {
 	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
 	LOG_enter = { sys = QING  fn = "QING_office_vacate_dispatch" }
-	if = { limit = { var:qing_office_held = flag:personnel }  employer = { QING_office_vacate = { office = personnel } } }
+	if = { limit = { var:qing_office_held = flag:chancellor } employer = { QING_office_vacate = { office = chancellor } } }
+	else_if = { limit = { var:qing_office_held = flag:personnel }  employer = { QING_office_vacate = { office = personnel } } }
 	else_if = { limit = { var:qing_office_held = flag:revenue }   employer = { QING_office_vacate = { office = revenue } } }
 	else_if = { limit = { var:qing_office_held = flag:rites }     employer = { QING_office_vacate = { office = rites } } }
 	else_if = { limit = { var:qing_office_held = flag:war }       employer = { QING_office_vacate = { office = war } } }

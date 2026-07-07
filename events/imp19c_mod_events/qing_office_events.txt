@@ -8,7 +8,7 @@
 # CHI-only, player-only. Fired from QING_frontier_flavour_roll
 # (se_QING_DECLINE.txt), each gated on the council/office state it dramatizes.
 # All logged to sys = QING. Options lean on VERIFIED effects only:
-#   QING_office_vacate / QING_council_unseat_character / QING_DECLINE_nudge /
+#   QING_office_vacate / QING_office_vacate_dispatch / QING_DECLINE_nudge /
 #   add_country_modifier (qing_governance_modifiers.txt) / stock country effects.
 #
 #   ROOT / this = the Qing overlord (CHI, player)
@@ -64,18 +64,18 @@ qing_office.1 = {
 
 	trigger = {
 		var:qing_council_overmighty_flag = 1
-		has_variable = qing_council_chief
+		has_variable = qing_office_chancellor_holder
 	}
 
 	immediate = {
-		var:qing_council_chief = {
+		var:qing_office_chancellor_holder = {
 			save_scope_as = grandee
 			# score the grandee against the throne — a congenial kinsman is a
 			# manageable overmighty subject; an estranged, wealthy, thickly-retained
 			# one is the true Heshen danger (his power base already docks his loyalty).
 			QING_char_affinity = yes
 		}
-		LOG_line = { sys = QING  msg = "EVENT qing_office.1 (overmighty grandee [ROOT.MakeScope.GetVariable('qing_council_chief').GetName]) [ROOT.GetTag]" }
+		LOG_line = { sys = QING  msg = "EVENT qing_office.1 (overmighty Grand Chancellor [ROOT.MakeScope.GetVariable('qing_office_chancellor_holder').GetName]) [ROOT.GetTag]" }
 	}
 
 	# --- Purge him and confiscate the fortune (the Jiaqing solution, 1799) -
@@ -85,7 +85,8 @@ qing_office.1 = {
 		# "Heshen fell, and Jiaqing ate his fill" — the confiscated hoard.
 		add_treasury = 150
 		scope:grandee = {
-			QING_council_unseat_character = yes
+			# relieved of the Grand Chancellorship (and any council office he holds)
+			QING_office_vacate_dispatch = yes
 			add_loyalty = loyalty_qing_disgraced
 			add_popularity = -40
 			# the confiscation shatters his personal power base directly — his
@@ -109,11 +110,9 @@ qing_office.1 = {
 	option = {
 		name = "qing_office.1.b"
 		custom_tooltip = "qing_office.1.b.tt"
-		# demote from chief but keep on the council (a measured rebuke)
-		if = {
-			limit = { var:qing_council_chief = scope:grandee }
-			remove_variable = qing_council_chief
-		}
+		# relieve him of the Grand Chancellorship — a measured rebuke that strips
+		# the summit office (and its power base) without confiscation or disgrace.
+		scope:grandee = { QING_office_vacate_dispatch = yes }
 		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -5 }
 		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -4 }
 	}
@@ -236,28 +235,27 @@ qing_office.4 = {
 			is_ruler = no
 			is_adult = yes
 			is_alive = yes
-			# [#98-fix task #98] qing_council_members is COUNTRY-held; testing it in this
-			# character scope (target = this) always missed, so the "already seated"
-			# exclusion never applied and a sitting councillor could resurface as a
-			# "rising statesman". Read the list via employer (proven form).
-			NOT = { employer = { is_target_in_variable_list = { name = qing_council_members  target = prev } } }
+			# [#103] council-is-offices: a man already holding a great office IS a
+			# grand councillor, so exclude any office-holder from surfacing as a
+			# "rising statesman" (the character-scope qing_office_held flag).
+			NOT = { has_variable = qing_office_held }
 			# never surface a rebel foil (e.g. Hong Xiuquan) as a "rising statesman"
 			NOT = { has_variable = qing_rebel_foil }
 		}
 	}
 
 	immediate = {
-		# [#98-fix task #98] two bugs: (1) order_by is IGNORED inside random_character,
-		# so the "rising statesman" was picked at random rather than by ability; (2) the
-		# country-held qing_council_members list was tested in character scope. Use
-		# ordered_character + max = 1 (honours order_by) and read the list via employer.
+		# [#98-fix task #98] order_by is IGNORED inside random_character, so the "rising
+		# statesman" was picked at random rather than by ability. Use ordered_character
+		# + max = 1 (honours order_by). [#103] "already seated" is now the office-held
+		# flag (a grand councillor IS an office-holder).
 		ordered_character = {
 			limit = {
 				employer = ROOT
 				is_ruler = no
 				is_adult = yes
 				is_alive = yes
-				NOT = { employer = { is_target_in_variable_list = { name = qing_council_members  target = prev } } }
+				NOT = { has_variable = qing_office_held }
 				NOT = { has_variable = qing_rebel_foil }
 			}
 			order_by = combined_stats_council_svalue
@@ -269,16 +267,18 @@ qing_office.4 = {
 			# or empowers a future rival.
 			QING_char_affinity = yes
 		}
-		LOG_line = { sys = QING  msg = "EVENT qing_office.4 (statesman [ROOT.MakeScope.GetVariable('qing_council_seat_count').GetValue|0] seats) [ROOT.GetTag]" }
+		LOG_line = { sys = QING  msg = "EVENT qing_office.4 (rising statesman [scope:statesman.GetName], filled=[ROOT.MakeScope.GetVariable('qing_council_filled_count').GetValue|0]/11) [ROOT.GetTag]" }
 	}
 
 	# --- Seat him on the Grand Council -----------------------------------
 	option = {
 		name = "qing_office.4.a"
 		custom_tooltip = "qing_office.4.a.tt"
-		trigger = { var:qing_council_seat_count < var:qing_council_seat_cap }
+		trigger = { var:qing_council_filled_count < 11 }
 		scope:statesman = {
-			QING_council_seat_character = yes
+			# appoint him to the first vacant great office — a Grand Council seat
+			# IS a great office now (council-is-offices model).
+			QING_office_appoint_first_vacant = yes
 			# elevation lands differently by compatibility: a congenial man is
 			# bound to the throne (befriended); an alien one is merely empowered.
 			QING_char_bind = yes
@@ -341,7 +341,7 @@ qing_office.5 = {
 	is_triggered_only = yes
 
 	trigger = {
-		var:qing_council_seat_count >= 2
+		var:qing_council_filled_count >= 2
 	}
 
 	immediate = {
@@ -560,11 +560,11 @@ qing_office.9 = {
 	is_triggered_only = yes
 
 	trigger = {
-		var:qing_council_seat_count >= 2
+		var:qing_council_filled_count >= 2
 	}
 
 	immediate = {
-		# first disputant: a prominent sitting member
+		# first disputant: a prominent office-holder
 		ordered_in_list = {
 			variable = qing_council_members
 			limit = { is_alive = yes  employer = ROOT }
@@ -608,14 +608,14 @@ qing_office.9 = {
 		if = {
 			limit = { scope:feud_a.combined_stats_council_svalue >= scope:feud_b.combined_stats_council_svalue }
 			scope:feud_b = {
-				QING_council_unseat_character = yes
+				QING_office_vacate_dispatch = yes
 				add_loyalty = loyalty_qing_estranged
 			}
 			scope:feud_a = { add_loyalty = loyalty_qing_elevated }
 		}
 		else = {
 			scope:feud_a = {
-				QING_council_unseat_character = yes
+				QING_office_vacate_dispatch = yes
 				add_loyalty = loyalty_qing_estranged
 			}
 			scope:feud_b = { add_loyalty = loyalty_qing_elevated }
@@ -654,12 +654,12 @@ qing_office.10 = {
 	is_triggered_only = yes
 
 	trigger = {
-		has_variable = qing_council_chief
-		var:qing_council_seat_count >= 3
+		has_variable = qing_office_chancellor_holder
+		var:qing_council_filled_count >= 3
 	}
 
 	immediate = {
-		var:qing_council_chief = { save_scope_as = clique_chief }
+		var:qing_office_chancellor_holder = { save_scope_as = clique_chief }
 		# the clique's ringleader: the member who clashes worst with the chief
 		random_in_list = {
 			variable = qing_council_members
@@ -684,7 +684,7 @@ qing_office.10 = {
 		add_political_influence = -15
 		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 4 }
 		scope:clique_head = {
-			QING_council_unseat_character = yes
+			QING_office_vacate_dispatch = yes
 			add_loyalty = loyalty_qing_estranged
 		}
 		QING_council_recompute = yes
@@ -695,12 +695,12 @@ qing_office.10 = {
 	option = {
 		name = "qing_office.10.b"
 		custom_tooltip = "qing_office.10.b.tt"
-		# strip the chiefship (the clique gets its way); the fallen chief embittered
-		if = {
-			limit = { var:qing_council_chief = scope:clique_chief }
-			remove_variable = qing_council_chief
+		# relieve the Grand Chancellor (the clique gets its way); he leaves embittered
+		scope:clique_chief = {
+			QING_office_vacate_dispatch = yes
+			add_loyalty = loyalty_qing_estranged
+			add_prominence = -15
 		}
-		scope:clique_chief = { add_loyalty = loyalty_qing_estranged  add_prominence = -15 }
 		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -4 }
 		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
 	}

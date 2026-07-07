@@ -16,6 +16,10 @@ base_window = {
 		start_sound = {
 			soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close"
 		}
+		# [grand-council-tab] the extra Grand Council tab is driven by the qing_gc_tab
+		# GUI var (the engine has no 4th native tab). Clear it on open so the view
+		# always lands on the vanilla Government tab, never straight into the Qing tab.
+		on_start = "[GetVariableSystem.Clear('qing_gc_tab')]"
 	}
 	state = {
 		name = _hide
@@ -60,14 +64,17 @@ base_window = {
 						tooltip = GOV_VIEW_GOV_TOOLTIP
 						blockoverride "MinSize" { size = { @mincategorybuttonwidth @mincategorybuttonheight } }
 						blockoverride "MaxSize" { size = { @maxcategorybuttonwidth @maxcategorybuttonheight } }
-						blockoverride "MinVisible" { visible = "[Not( GovernmentView.IsShowGovernment )]" }
-						blockoverride "MaxVisible" { visible = "[GovernmentView.IsShowGovernment]" }
+						# [grand-council-tab] show as unselected whenever the Qing tab is active,
+						# even though the engine still reports this vanilla tab as shown.
+						blockoverride "MinVisible" { visible = "[Or( Not( GovernmentView.IsShowGovernment ), GetVariableSystem.HasValue('qing_gc_tab', 'grand_council') )]" }
+						blockoverride "MaxVisible" { visible = "[And( GovernmentView.IsShowGovernment, Not( GetVariableSystem.HasValue('qing_gc_tab', 'grand_council') ) )]" }
 						######## Shared Overrides
 						blockoverride "Center_text" { text = "GOVERNMENT" }
 						######## Small Button Overrides
 						blockoverride "ClickFunction"
 						{
 							onclick = "[GovernmentView.ShowGovernment]"
+							onclick = "[GetVariableSystem.Clear('qing_gc_tab')]"
 						}
 					}   
 					category_tab = {
@@ -75,14 +82,16 @@ base_window = {
 						tooltip = GOV_VIEW_OFFICES_TOOLTIP
 						blockoverride "MinSize" { size = { @mincategorybuttonwidth @mincategorybuttonheight } }
 						blockoverride "MaxSize" { size = { @maxcategorybuttonwidth @maxcategorybuttonheight } }
-						blockoverride "MinVisible" { visible = "[Not( GovernmentView.IsShowOffices )]" }
-						blockoverride "MaxVisible" { visible = "[GovernmentView.IsShowOffices]" }
+						# [grand-council-tab] defer selected-highlight to the Qing tab var.
+						blockoverride "MinVisible" { visible = "[Or( Not( GovernmentView.IsShowOffices ), GetVariableSystem.HasValue('qing_gc_tab', 'grand_council') )]" }
+						blockoverride "MaxVisible" { visible = "[And( GovernmentView.IsShowOffices, Not( GetVariableSystem.HasValue('qing_gc_tab', 'grand_council') ) )]" }
 						######## Shared Overrides
 						blockoverride "Center_text" { text = "OFFICES" }
 						######## Small Button Overrides
 						blockoverride "ClickFunction"
 						{
 							onclick = "[GovernmentView.ShowOffices]"
+							onclick = "[GetVariableSystem.Clear('qing_gc_tab')]"
 						}
 					}
 					category_tab = {
@@ -90,14 +99,39 @@ base_window = {
 						tooltip = GOV_VIEW_LAWS_TOOLTIP
 						blockoverride "MinSize" { size = { @mincategorybuttonwidth @mincategorybuttonheight } }
 						blockoverride "MaxSize" { size = { @maxcategorybuttonwidth @maxcategorybuttonheight } }
-						blockoverride "MinVisible" { visible = "[Not( GovernmentView.IsShowLaws )]" }
-						blockoverride "MaxVisible" { visible = "[GovernmentView.IsShowLaws]" }
+						# [grand-council-tab] defer selected-highlight to the Qing tab var.
+						blockoverride "MinVisible" { visible = "[Or( Not( GovernmentView.IsShowLaws ), GetVariableSystem.HasValue('qing_gc_tab', 'grand_council') )]" }
+						blockoverride "MaxVisible" { visible = "[And( GovernmentView.IsShowLaws, Not( GetVariableSystem.HasValue('qing_gc_tab', 'grand_council') ) )]" }
 						######## Shared Overrides
 						blockoverride "Center_text" { text = "LAWS" }
 						######## Small Button Overrides
 						blockoverride "ClickFunction"
 						{
 							onclick = "[GovernmentView.ShowLaws]"
+							onclick = "[GetVariableSystem.Clear('qing_gc_tab')]"
+						}
+					}
+					# [grand-council-tab] 4th tab, Qing player only. The three vanilla
+					# tabs switch via GovernmentView.IsShow*/Show*; the engine has no 4th
+					# native tab, so this one is driven by a GUI variable (qing_gc_tab),
+					# the same idiom economy_view.gui uses for its sub-tabs. Selecting it
+					# also refreshes the councillor-candidate cache so the pickers are
+					# current on open.
+					category_tab = {
+						name = "grand_council_tab_button"
+						visible = "[EqualTo_string( Player.GetTag, 'CHI' )]"
+						tooltip = GOV_VIEW_GRAND_COUNCIL_TOOLTIP
+						blockoverride "MinSize" { size = { @mincategorybuttonwidth @mincategorybuttonheight } }
+						blockoverride "MaxSize" { size = { @maxcategorybuttonwidth @maxcategorybuttonheight } }
+						blockoverride "MinVisible" { visible = "[Not( GetVariableSystem.HasValue('qing_gc_tab', 'grand_council') )]" }
+						blockoverride "MaxVisible" { visible = "[GetVariableSystem.HasValue('qing_gc_tab', 'grand_council')]" }
+						######## Shared Overrides
+						blockoverride "Center_text" { text = "GRAND_COUNCIL" }
+						######## Small Button Overrides
+						blockoverride "ClickFunction"
+						{
+							onclick = "[GetVariableSystem.Set('qing_gc_tab', 'grand_council')]"
+							onclick = "[GetScriptedGui('qing_gov_council_refresh_candidates').Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
 						}
 					}
 				}
@@ -124,7 +158,8 @@ base_window = {
 			name = "Government Tab tab"
 			ignoreinvisible = yes
 			direction = vertical
-			visible = "[GovernmentView.IsShowGovernment]"
+			# [grand-council-tab] also hide when the Qing Grand Council tab is active.
+				visible = "[And( GovernmentView.IsShowGovernment, Not( GetVariableSystem.HasValue('qing_gc_tab', 'grand_council') ) )]"
 			widget = {
 				size = { @window_width 290 }
 				widget = {
@@ -1103,321 +1138,6 @@ base_window = {
 							}
 						}
 					}
-					# ============================================================
-					# QING STATECRAFT (player CHI only). Country-scope scripted-gui
-					# verbs from common/scripted_guis/QING_mechanics_actions.txt.
-					# Each button reads IsShown/IsValid/Execute on the player scope
-					# (SetRoot Player.MakeScope), matching the government-interaction
-					# buttons above. The whole section is gated to the Qing player.
-					# ============================================================
-					flowcontainer = {
-						direction = vertical
-						spacing = 5
-						visible = "[EqualTo_string( Player.GetTag, 'CHI' )]"
-						widget = { size = { 530 150 } }
-						sub_header = {
-							size = { 530 32 }
-							blockoverride "Title_text" { text = "QING_STATECRAFT_HEADER" }
-						}
-						flowcontainer = {
-							spacing = 5
-							ignoreinvisible = yes
-							# --- #1 stance: balanced dyarchy ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_stance_dyarchy')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_STANCE_DYARCHY_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/civic.dds" }
-							}
-							# --- #1 stance: favour the banners ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_stance_banner')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_STANCE_BANNER_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/military.dds" }
-							}
-							# --- #1 stance: favour the Han literati ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_stance_han')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_STANCE_HAN_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/oratory.dds" }
-							}
-							# --- D anti-corruption audit ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_audit')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_AUDIT_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/treasury.dds" }
-							}
-							# --- B sell offices ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_sell_offices')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_SELL_OFFICES_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/business_category.dds" }
-							}
-							# --- G suppress secret societies ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_suppress_sects')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_SUPPRESS_SECTS_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/faith.dds" }
-							}
-							# --- C banner reform drill ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_banner_drill')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_BANNER_DRILL_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/tactical.dds" }
-							}
-							# --- C2 green standard reform drill (task #88) ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_greenstandard_drill')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_GREENSTANDARD_DRILL_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/tactical.dds" }
-							}
-							# --- C3 sanction a regional army (勇營, task #88) ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_sanction_regional_army')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_SANCTION_REGIONAL_ARMY_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/tactical.dds" }
-							}
-							# --- C3 reassert central command (兵權收歸中央, task #88) ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_reassert_central_command')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_REASSERT_CENTRAL_COMMAND_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/tactical.dds" }
-							}
-							# --- commit to a modern national army (新軍, task #88) ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_fund_modern_army')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_FUND_MODERN_ARMY_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/tactical.dds" }
-							}
-							# --- F invest in ever-normal granaries ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_granary_invest')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_GRANARY_INVEST_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/pop_happy.dds" }
-							}
-							# --- I statecraft investment (schools + admin districts) ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_statecraft_invest')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_STATECRAFT_INVEST_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/edu1.dds" }
-							}
-						}
-						flowcontainer = {
-							spacing = 5
-							ignoreinvisible = yes
-							# --- A suppress the opium trade (Lin Zexu path) ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_suppress_opium')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_SUPPRESS_OPIUM_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/civilization.dds" }
-							}
-							# --- H open the Canton trade ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_canton_open')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_CANTON_OPEN_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/luxury_category.dds" }
-							}
-							# --- H close the Canton trade ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_canton_close')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_CANTON_CLOSE_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/change.dds" }
-							}
-							# --- GOVERNANCE: convene / refresh the Grand Council (軍機處) ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_gov_council_convene')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_GOV_COUNCIL_CONVENE_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/civic.dds" }
-							}
-							# --- DIPLOMACY: court a great power ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_court_britain')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_COURT_BRITAIN_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/diplomacy.dds" }
-							}
-							# --- DIPLOMACY: court a great power ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_court_france')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_COURT_FRANCE_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/diplomacy.dds" }
-							}
-							# --- DIPLOMACY: court a great power ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_court_russia')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_COURT_RUSSIA_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/diplomacy.dds" }
-							}
-						}
-						flowcontainer = {
-							spacing = 5
-							ignoreinvisible = yes
-							# --- JAPAN: warm the pan-Asian accord (同文同種) ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_japan_accord')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_JAPAN_ACCORD_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/diplomacy.dds" }
-							}
-							# --- JAPAN: sharpen the rivalry (海防) ---
-							icon_button_square = {
-								datacontext = "[GetScriptedGui('qing_action_japan_rivalry')]"
-								visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								blockoverride "On_click"
-								{
-									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-								}
-								tooltip = "QING_ACTION_JAPAN_RIVALRY_TT"
-								blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
-								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/tactical.dds" }
-							}
-						}
-					}
 					flowcontainer = {
 						direction = vertical
 						spacing = 5
@@ -2053,7 +1773,8 @@ base_window = {
 		flowcontainer = {
 			name = "Offices tab"
 			margin = { 10 0 }
-			visible = "[GovernmentView.IsShowOffices]"
+			# [grand-council-tab] also hide when the Qing Grand Council tab is active.
+				visible = "[And( GovernmentView.IsShowOffices, Not( GetVariableSystem.HasValue('qing_gc_tab', 'grand_council') ) )]"
 
 			scrollarea = {
 				size = { 970 780 }
@@ -2238,7 +1959,8 @@ base_window = {
 			name = "Laws tab"
 			margin = { 10 0 }
 			direction = vertical
-			visible = "[GovernmentView.IsShowLaws]"
+			# [grand-council-tab] also hide when the Qing Grand Council tab is active.
+				visible = "[And( GovernmentView.IsShowLaws, Not( GetVariableSystem.HasValue('qing_gc_tab', 'grand_council') ) )]"
 			
 			margin_widget = {
 				size = { 500 32 }
@@ -2488,6 +2210,1257 @@ base_window = {
 							direction = vertical
 							ignoreinvisible = yes
 							margin = { 5 10 }
+						}
+					}
+				}
+			}
+		}
+		flowcontainer = {
+			name = "Grand Council tab"
+			margin = { 10 0 }
+			direction = vertical
+			# [grand-council-tab] Qing-only 4th tab. Driven by the qing_gc_tab GUI var
+			# (no 4th native GovernmentView tab exists); mirrors economy_view.gui's
+			# sub-tab idiom. Rosters read country-held vars/lists cached by
+			# se_QING_COUNCIL.txt; interactive appoint/seat verbs live in
+			# QING_governance_actions.txt. The moved "Grand Council Edicts" strip
+			# (formerly "Statecraft of the Great Qing") sits at the bottom.
+			visible = "[GetVariableSystem.HasValue('qing_gc_tab', 'grand_council')]"
+			scrollarea = {
+				size = { 970 790 }
+				scrollbarpolicy_horizontal = always_off
+				scrollbar_vertical = { using = VerticalScrollBar }
+				scrollwidget = {
+					flowcontainer = {
+						direction = vertical
+						spacing = 6
+						margin = { 8 6 }
+						sub_header = {
+							size = { 950 32 }
+							blockoverride "Title_text" { text = "QING_GC_HEADER_ROSTER" }
+						}
+						widget = {
+							size = { 950 44 }
+							using = background_widget
+							blockoverride "Margin" { margin = { 2 2 } }
+							flowcontainer = {
+								spacing = 26
+								margin = { 12 6 }
+								icon_and_text = {
+									size = { 150 30 }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/senate_seat.dds" }
+									blockoverride "Text" { text = "[GovernmentView.GetPlayer.MakeScope.Var('qing_council_filled_count').GetValue|0] / 11" }
+									tooltip = "QING_GC_SEATS_TT"
+								}
+								icon_and_text = {
+									size = { 150 30 }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/civic.dds" }
+									blockoverride "Text" { text = "[GovernmentView.GetPlayer.MakeScope.Var('qing_council_effectiveness').GetValue|0]" }
+									tooltip = "QING_GC_EFFECTIVENESS_TT"
+								}
+								icon_and_text = {
+									size = { 190 30 }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/diplomacy.dds" }
+									blockoverride "Text" { text = "[GovernmentView.GetPlayer.MakeScope.Var('qing_council_manchu_count').GetValue|0] / [GovernmentView.GetPlayer.MakeScope.Var('qing_council_han_count').GetValue|0]" }
+									tooltip = "QING_GC_BALANCE_TT"
+								}
+							}
+						}
+												sub_header = {
+							size = { 950 30 }
+							blockoverride "Title_text" { text = "QING_GC_CHANCELLOR" }
+						}
+						# [#103] council-is-offices: the Grand Chancellor (領班軍機大臣) is his own
+						# office (qing_office_chancellor_holder), head of the Grand Council. Appointed
+						# from the candidate roster below; relieved with the vacate button. No separate
+						# "councillor pool" — the office grid IS the council.
+						widget = {
+							size = { 470 120 }
+							datacontext = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_chancellor_holder').GetCharacter]"
+							using = background_widget
+							blockoverride "Margin" { margin = { 2 2 } }
+							flowcontainer = {
+								visible = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_chancellor_holder').IsSet]"
+								spacing = 8
+								margin = { 8 6 }
+								cpt_button = { size = { 60 90 } }
+								flowcontainer = {
+									direction = vertical
+									spacing = 4
+									tag = { text = "[Character.GetName]"  maximumsize = { 300 28 }  using = BaseFontM  using = Default_FontColor }
+									icon_and_text = {
+										size = { 100 30 }
+										blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/loyalty.dds" }
+										blockoverride "Text" { text = "[Character.GetLoyalty|0]" }
+										tooltipwidget = { using = character_loyalty_tooltip }
+									}
+									icon_button_square = {
+										datacontext = "[GetScriptedGui('qing_gov_office_vacate')]"
+										visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+										tooltip = "QING_GOV_OFFICE_VACATE_BTN_TT"
+										blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+										blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/interfere_in_scheme.dds"  size = { 30 30 } }
+									}
+								}
+							}
+							textbox = {
+								visible = "[Not( GovernmentView.GetPlayer.MakeScope.Var('qing_office_chancellor_holder').IsSet )]"
+								using = BaseFontM
+								using = Default_FontColor
+								size = { 440 100 }
+								alpha = 0.6
+								multi_line = yes
+								text = "QING_GC_CHANCELLOR_VACANT"
+							}
+						}
+						sub_header = {
+							size = { 950 30 }
+							blockoverride "Title_text" { text = "QING_GC_HEADER_OFFICES" }
+						}
+						widget = {
+							size = { 950 -1 }
+							flowcontainer = {
+								minimumsize = { 950 -1 }
+								maximumsize = { 950 -1 }
+								spacing = 0
+								widget = {
+									size = { 232 128 }
+									margin = { 3 3 }
+									datacontext = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_personnel_holder').GetCharacter]"
+									using = background_widget
+									blockoverride "Margin" { margin = { 2 2 } }
+									flowcontainer = {
+										direction = vertical
+										margin = { 5 4 }
+										spacing = 3
+										flowcontainer = {
+											spacing = 4
+											ignoreinvisible = yes
+											icon = { texture = "gfx/interface/icons/shared_icons/civic.dds"  size = { 26 26 } }
+											textbox = {
+												using = BaseFontS
+												using = Default_FontColor
+												size = { 190 34 }
+												autoresize = no
+												elide = right
+												fontsize_min = 11
+												text = "QING_GC_OFFICE_PERSONNEL"
+											}
+										}
+										flowcontainer = {
+											spacing = 6
+											visible = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_personnel_holder').IsSet]"
+											cpt_button = { size = { 46 70 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = {
+													text = "[Character.GetName]"
+													maximumsize = { 130 26 }
+													using = BaseFontS
+													using = Default_FontColor
+												}
+												icon_and_text = {
+													size = { 100 30 }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/loyalty.dds" }
+													blockoverride "Text" { text = "[Character.GetLoyalty|0]" }
+													tooltipwidget = { using = character_loyalty_tooltip }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_vacate')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_VACATE_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/interfere_in_scheme.dds"  size = { 30 30 } }
+												}
+											}
+										}
+										textbox = {
+											visible = "[Not( GovernmentView.GetPlayer.MakeScope.Var('qing_office_personnel_holder').IsSet )]"
+											using = BaseFontS
+											using = Default_FontColor
+											size = { 200 60 }
+											alpha = 0.6
+											multi_line = yes
+											fontsize_min = 11
+											text = "QING_GC_VACANT"
+										}
+									}
+								}
+								widget = {
+									size = { 232 128 }
+									margin = { 3 3 }
+									datacontext = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_revenue_holder').GetCharacter]"
+									using = background_widget
+									blockoverride "Margin" { margin = { 2 2 } }
+									flowcontainer = {
+										direction = vertical
+										margin = { 5 4 }
+										spacing = 3
+										flowcontainer = {
+											spacing = 4
+											ignoreinvisible = yes
+											icon = { texture = "gfx/interface/icons/shared_icons/treasury.dds"  size = { 26 26 } }
+											textbox = {
+												using = BaseFontS
+												using = Default_FontColor
+												size = { 190 34 }
+												autoresize = no
+												elide = right
+												fontsize_min = 11
+												text = "QING_GC_OFFICE_REVENUE"
+											}
+										}
+										flowcontainer = {
+											spacing = 6
+											visible = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_revenue_holder').IsSet]"
+											cpt_button = { size = { 46 70 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = {
+													text = "[Character.GetName]"
+													maximumsize = { 130 26 }
+													using = BaseFontS
+													using = Default_FontColor
+												}
+												icon_and_text = {
+													size = { 100 30 }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/loyalty.dds" }
+													blockoverride "Text" { text = "[Character.GetLoyalty|0]" }
+													tooltipwidget = { using = character_loyalty_tooltip }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_vacate')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_VACATE_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/interfere_in_scheme.dds"  size = { 30 30 } }
+												}
+											}
+										}
+										textbox = {
+											visible = "[Not( GovernmentView.GetPlayer.MakeScope.Var('qing_office_revenue_holder').IsSet )]"
+											using = BaseFontS
+											using = Default_FontColor
+											size = { 200 60 }
+											alpha = 0.6
+											multi_line = yes
+											fontsize_min = 11
+											text = "QING_GC_VACANT"
+										}
+									}
+								}
+								widget = {
+									size = { 232 128 }
+									margin = { 3 3 }
+									datacontext = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_rites_holder').GetCharacter]"
+									using = background_widget
+									blockoverride "Margin" { margin = { 2 2 } }
+									flowcontainer = {
+										direction = vertical
+										margin = { 5 4 }
+										spacing = 3
+										flowcontainer = {
+											spacing = 4
+											ignoreinvisible = yes
+											icon = { texture = "gfx/interface/icons/shared_icons/faith.dds"  size = { 26 26 } }
+											textbox = {
+												using = BaseFontS
+												using = Default_FontColor
+												size = { 190 34 }
+												autoresize = no
+												elide = right
+												fontsize_min = 11
+												text = "QING_GC_OFFICE_RITES"
+											}
+										}
+										flowcontainer = {
+											spacing = 6
+											visible = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_rites_holder').IsSet]"
+											cpt_button = { size = { 46 70 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = {
+													text = "[Character.GetName]"
+													maximumsize = { 130 26 }
+													using = BaseFontS
+													using = Default_FontColor
+												}
+												icon_and_text = {
+													size = { 100 30 }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/loyalty.dds" }
+													blockoverride "Text" { text = "[Character.GetLoyalty|0]" }
+													tooltipwidget = { using = character_loyalty_tooltip }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_vacate')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_VACATE_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/interfere_in_scheme.dds"  size = { 30 30 } }
+												}
+											}
+										}
+										textbox = {
+											visible = "[Not( GovernmentView.GetPlayer.MakeScope.Var('qing_office_rites_holder').IsSet )]"
+											using = BaseFontS
+											using = Default_FontColor
+											size = { 200 60 }
+											alpha = 0.6
+											multi_line = yes
+											fontsize_min = 11
+											text = "QING_GC_VACANT"
+										}
+									}
+								}
+								widget = {
+									size = { 232 128 }
+									margin = { 3 3 }
+									datacontext = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_war_holder').GetCharacter]"
+									using = background_widget
+									blockoverride "Margin" { margin = { 2 2 } }
+									flowcontainer = {
+										direction = vertical
+										margin = { 5 4 }
+										spacing = 3
+										flowcontainer = {
+											spacing = 4
+											ignoreinvisible = yes
+											icon = { texture = "gfx/interface/icons/shared_icons/military.dds"  size = { 26 26 } }
+											textbox = {
+												using = BaseFontS
+												using = Default_FontColor
+												size = { 190 34 }
+												autoresize = no
+												elide = right
+												fontsize_min = 11
+												text = "QING_GC_OFFICE_WAR"
+											}
+										}
+										flowcontainer = {
+											spacing = 6
+											visible = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_war_holder').IsSet]"
+											cpt_button = { size = { 46 70 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = {
+													text = "[Character.GetName]"
+													maximumsize = { 130 26 }
+													using = BaseFontS
+													using = Default_FontColor
+												}
+												icon_and_text = {
+													size = { 100 30 }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/loyalty.dds" }
+													blockoverride "Text" { text = "[Character.GetLoyalty|0]" }
+													tooltipwidget = { using = character_loyalty_tooltip }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_vacate')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_VACATE_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/interfere_in_scheme.dds"  size = { 30 30 } }
+												}
+											}
+										}
+										textbox = {
+											visible = "[Not( GovernmentView.GetPlayer.MakeScope.Var('qing_office_war_holder').IsSet )]"
+											using = BaseFontS
+											using = Default_FontColor
+											size = { 200 60 }
+											alpha = 0.6
+											multi_line = yes
+											fontsize_min = 11
+											text = "QING_GC_VACANT"
+										}
+									}
+								}
+								widget = {
+									size = { 232 128 }
+									margin = { 3 3 }
+									datacontext = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_justice_holder').GetCharacter]"
+									using = background_widget
+									blockoverride "Margin" { margin = { 2 2 } }
+									flowcontainer = {
+										direction = vertical
+										margin = { 5 4 }
+										spacing = 3
+										flowcontainer = {
+											spacing = 4
+											ignoreinvisible = yes
+											icon = { texture = "gfx/interface/icons/shared_icons/tactical.dds"  size = { 26 26 } }
+											textbox = {
+												using = BaseFontS
+												using = Default_FontColor
+												size = { 190 34 }
+												autoresize = no
+												elide = right
+												fontsize_min = 11
+												text = "QING_GC_OFFICE_JUSTICE"
+											}
+										}
+										flowcontainer = {
+											spacing = 6
+											visible = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_justice_holder').IsSet]"
+											cpt_button = { size = { 46 70 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = {
+													text = "[Character.GetName]"
+													maximumsize = { 130 26 }
+													using = BaseFontS
+													using = Default_FontColor
+												}
+												icon_and_text = {
+													size = { 100 30 }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/loyalty.dds" }
+													blockoverride "Text" { text = "[Character.GetLoyalty|0]" }
+													tooltipwidget = { using = character_loyalty_tooltip }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_vacate')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_VACATE_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/interfere_in_scheme.dds"  size = { 30 30 } }
+												}
+											}
+										}
+										textbox = {
+											visible = "[Not( GovernmentView.GetPlayer.MakeScope.Var('qing_office_justice_holder').IsSet )]"
+											using = BaseFontS
+											using = Default_FontColor
+											size = { 200 60 }
+											alpha = 0.6
+											multi_line = yes
+											fontsize_min = 11
+											text = "QING_GC_VACANT"
+										}
+									}
+								}
+								widget = {
+									size = { 232 128 }
+									margin = { 3 3 }
+									datacontext = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_works_holder').GetCharacter]"
+									using = background_widget
+									blockoverride "Margin" { margin = { 2 2 } }
+									flowcontainer = {
+										direction = vertical
+										margin = { 5 4 }
+										spacing = 3
+										flowcontainer = {
+											spacing = 4
+											ignoreinvisible = yes
+											icon = { texture = "gfx/interface/icons/shared_icons/business_category.dds"  size = { 26 26 } }
+											textbox = {
+												using = BaseFontS
+												using = Default_FontColor
+												size = { 190 34 }
+												autoresize = no
+												elide = right
+												fontsize_min = 11
+												text = "QING_GC_OFFICE_WORKS"
+											}
+										}
+										flowcontainer = {
+											spacing = 6
+											visible = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_works_holder').IsSet]"
+											cpt_button = { size = { 46 70 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = {
+													text = "[Character.GetName]"
+													maximumsize = { 130 26 }
+													using = BaseFontS
+													using = Default_FontColor
+												}
+												icon_and_text = {
+													size = { 100 30 }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/loyalty.dds" }
+													blockoverride "Text" { text = "[Character.GetLoyalty|0]" }
+													tooltipwidget = { using = character_loyalty_tooltip }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_vacate')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_VACATE_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/interfere_in_scheme.dds"  size = { 30 30 } }
+												}
+											}
+										}
+										textbox = {
+											visible = "[Not( GovernmentView.GetPlayer.MakeScope.Var('qing_office_works_holder').IsSet )]"
+											using = BaseFontS
+											using = Default_FontColor
+											size = { 200 60 }
+											alpha = 0.6
+											multi_line = yes
+											fontsize_min = 11
+											text = "QING_GC_VACANT"
+										}
+									}
+								}
+								widget = {
+									size = { 232 128 }
+									margin = { 3 3 }
+									datacontext = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_censor_holder').GetCharacter]"
+									using = background_widget
+									blockoverride "Margin" { margin = { 2 2 } }
+									flowcontainer = {
+										direction = vertical
+										margin = { 5 4 }
+										spacing = 3
+										flowcontainer = {
+											spacing = 4
+											ignoreinvisible = yes
+											icon = { texture = "gfx/interface/icons/shared_icons/oratory.dds"  size = { 26 26 } }
+											textbox = {
+												using = BaseFontS
+												using = Default_FontColor
+												size = { 190 34 }
+												autoresize = no
+												elide = right
+												fontsize_min = 11
+												text = "QING_GC_OFFICE_CENSOR"
+											}
+										}
+										flowcontainer = {
+											spacing = 6
+											visible = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_censor_holder').IsSet]"
+											cpt_button = { size = { 46 70 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = {
+													text = "[Character.GetName]"
+													maximumsize = { 130 26 }
+													using = BaseFontS
+													using = Default_FontColor
+												}
+												icon_and_text = {
+													size = { 100 30 }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/loyalty.dds" }
+													blockoverride "Text" { text = "[Character.GetLoyalty|0]" }
+													tooltipwidget = { using = character_loyalty_tooltip }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_vacate')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_VACATE_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/interfere_in_scheme.dds"  size = { 30 30 } }
+												}
+											}
+										}
+										textbox = {
+											visible = "[Not( GovernmentView.GetPlayer.MakeScope.Var('qing_office_censor_holder').IsSet )]"
+											using = BaseFontS
+											using = Default_FontColor
+											size = { 200 60 }
+											alpha = 0.6
+											multi_line = yes
+											fontsize_min = 11
+											text = "QING_GC_VACANT"
+										}
+									}
+								}
+								widget = {
+									size = { 232 128 }
+									margin = { 3 3 }
+									datacontext = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_lifanyuan_holder').GetCharacter]"
+									using = background_widget
+									blockoverride "Margin" { margin = { 2 2 } }
+									flowcontainer = {
+										direction = vertical
+										margin = { 5 4 }
+										spacing = 3
+										flowcontainer = {
+											spacing = 4
+											ignoreinvisible = yes
+											icon = { texture = "gfx/interface/icons/shared_icons/diplomacy.dds"  size = { 26 26 } }
+											textbox = {
+												using = BaseFontS
+												using = Default_FontColor
+												size = { 190 34 }
+												autoresize = no
+												elide = right
+												fontsize_min = 11
+												text = "QING_GC_OFFICE_LIFANYUAN"
+											}
+										}
+										flowcontainer = {
+											spacing = 6
+											visible = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_lifanyuan_holder').IsSet]"
+											cpt_button = { size = { 46 70 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = {
+													text = "[Character.GetName]"
+													maximumsize = { 130 26 }
+													using = BaseFontS
+													using = Default_FontColor
+												}
+												icon_and_text = {
+													size = { 100 30 }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/loyalty.dds" }
+													blockoverride "Text" { text = "[Character.GetLoyalty|0]" }
+													tooltipwidget = { using = character_loyalty_tooltip }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_vacate')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_VACATE_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/interfere_in_scheme.dds"  size = { 30 30 } }
+												}
+											}
+										}
+										textbox = {
+											visible = "[Not( GovernmentView.GetPlayer.MakeScope.Var('qing_office_lifanyuan_holder').IsSet )]"
+											using = BaseFontS
+											using = Default_FontColor
+											size = { 200 60 }
+											alpha = 0.6
+											multi_line = yes
+											fontsize_min = 11
+											text = "QING_GC_VACANT"
+										}
+									}
+								}
+								widget = {
+									size = { 232 128 }
+									margin = { 3 3 }
+									datacontext = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_amban_holder').GetCharacter]"
+									using = background_widget
+									blockoverride "Margin" { margin = { 2 2 } }
+									flowcontainer = {
+										direction = vertical
+										margin = { 5 4 }
+										spacing = 3
+										flowcontainer = {
+											spacing = 4
+											ignoreinvisible = yes
+											icon = { texture = "gfx/interface/icons/shared_icons/family_size.dds"  size = { 26 26 } }
+											textbox = {
+												using = BaseFontS
+												using = Default_FontColor
+												size = { 190 34 }
+												autoresize = no
+												elide = right
+												fontsize_min = 11
+												text = "QING_GC_OFFICE_AMBAN"
+											}
+										}
+										flowcontainer = {
+											spacing = 6
+											visible = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_amban_holder').IsSet]"
+											cpt_button = { size = { 46 70 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = {
+													text = "[Character.GetName]"
+													maximumsize = { 130 26 }
+													using = BaseFontS
+													using = Default_FontColor
+												}
+												icon_and_text = {
+													size = { 100 30 }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/loyalty.dds" }
+													blockoverride "Text" { text = "[Character.GetLoyalty|0]" }
+													tooltipwidget = { using = character_loyalty_tooltip }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_vacate')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_VACATE_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/interfere_in_scheme.dds"  size = { 30 30 } }
+												}
+											}
+										}
+										textbox = {
+											visible = "[Not( GovernmentView.GetPlayer.MakeScope.Var('qing_office_amban_holder').IsSet )]"
+											using = BaseFontS
+											using = Default_FontColor
+											size = { 200 60 }
+											alpha = 0.6
+											multi_line = yes
+											fontsize_min = 11
+											text = "QING_GC_VACANT"
+										}
+									}
+								}
+								widget = {
+									size = { 232 128 }
+									margin = { 3 3 }
+									datacontext = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_zongli_holder').GetCharacter]"
+									using = background_widget
+									blockoverride "Margin" { margin = { 2 2 } }
+									flowcontainer = {
+										direction = vertical
+										margin = { 5 4 }
+										spacing = 3
+										flowcontainer = {
+											spacing = 4
+											ignoreinvisible = yes
+											icon = { texture = "gfx/interface/icons/shared_icons/change.dds"  size = { 26 26 } }
+											textbox = {
+												using = BaseFontS
+												using = Default_FontColor
+												size = { 190 34 }
+												autoresize = no
+												elide = right
+												fontsize_min = 11
+												text = "QING_GC_OFFICE_ZONGLI"
+											}
+										}
+										flowcontainer = {
+											spacing = 6
+											visible = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_zongli_holder').IsSet]"
+											cpt_button = { size = { 46 70 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = {
+													text = "[Character.GetName]"
+													maximumsize = { 130 26 }
+													using = BaseFontS
+													using = Default_FontColor
+												}
+												icon_and_text = {
+													size = { 100 30 }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/loyalty.dds" }
+													blockoverride "Text" { text = "[Character.GetLoyalty|0]" }
+													tooltipwidget = { using = character_loyalty_tooltip }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_vacate')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_VACATE_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/interfere_in_scheme.dds"  size = { 30 30 } }
+												}
+											}
+										}
+										textbox = {
+											visible = "[Not( GovernmentView.GetPlayer.MakeScope.Var('qing_office_zongli_holder').IsSet )]"
+											using = BaseFontS
+											using = Default_FontColor
+											size = { 200 60 }
+											alpha = 0.6
+											multi_line = yes
+											fontsize_min = 11
+											text = "QING_GC_VACANT"
+										}
+									}
+								}
+							}
+						}
+						widget = {
+							size = { 470 120 }
+							visible = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_emeritus_holder').IsSet]"
+							datacontext = "[GovernmentView.GetPlayer.MakeScope.Var('qing_office_emeritus_holder').GetCharacter]"
+							using = background_widget
+							blockoverride "Margin" { margin = { 2 2 } }
+							flowcontainer = {
+								direction = vertical
+								margin = { 8 6 }
+								spacing = 3
+								sub_header = { size = { 440 28 }  blockoverride "Title_text" { text = "QING_GC_EMERITUS" } }
+								flowcontainer = {
+									spacing = 8
+									cpt_button = { size = { 60 90 } }
+									tag = { text = "[Character.GetName]"  maximumsize = { 300 28 }  parentanchor = vcenter  using = BaseFontM  using = Default_FontColor }
+								}
+							}
+						}
+						sub_header = {
+							size = { 950 30 }
+							blockoverride "Title_text" { text = "QING_GC_HEADER_CANDIDATES" }
+						}
+						textbox = {
+							visible = "[IsDataModelEmpty( GovernmentView.GetPlayer.MakeScope.GetList('qing_council_candidates') )]"
+							using = BaseFontS
+							using = Default_FontColor
+							size = { 940 26 }
+							alpha = 0.6
+							text = "QING_GC_NO_CANDIDATES"
+						}
+						dynamicgridbox = {
+							datamodel = "[GovernmentView.GetPlayer.MakeScope.GetList('qing_council_candidates')]"
+							datamodel_wrap = 1
+							item = {
+								widget = {
+									size = { 946 128 }
+									margin = { 2 3 }
+									datacontext = "[Scope.GetCharacter]"
+									using = background_widget
+									blockoverride "Margin" { margin = { 2 2 } }
+									flowcontainer = {
+										spacing = 8
+										margin = { 8 6 }
+										cpt_button = { size = { 56 84 } }
+										flowcontainer = {
+											direction = vertical
+											spacing = 3
+											tag = { text = "[Character.GetName]"  maximumsize = { 220 26 }  using = BaseFontM  using = Default_FontColor }
+											icon_and_text = {
+												size = { 120 28 }
+												blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/loyalty.dds" }
+												blockoverride "Text" { text = "[Character.GetLoyalty|0]" }
+												tooltipwidget = { using = character_loyalty_tooltip }
+											}
+										}
+										flowcontainer = {
+											direction = vertical
+											spacing = 3
+											flowcontainer = {
+												spacing = 3
+												ignoreinvisible = yes
+												# [#103] council-is-offices: the only summit action from the candidate list is
+												# raising a man to the Grand Chancellorship. Domain offices are appointed via
+												# the office buttons below; there is no separate "seat on council" step.
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_appoint_chancellor')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_CHANCELLOR_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/leader.dds"  size = { 30 30 } }
+												}
+											}
+											flowcontainer = {
+												spacing = 3
+												ignoreinvisible = yes
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_appoint_personnel')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_PERSONNEL_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/civic.dds"  size = { 30 30 } }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_appoint_revenue')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_REVENUE_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/treasury.dds"  size = { 30 30 } }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_appoint_rites')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_RITES_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/faith.dds"  size = { 30 30 } }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_appoint_war')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_WAR_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/military.dds"  size = { 30 30 } }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_appoint_justice')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_JUSTICE_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/tactical.dds"  size = { 30 30 } }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_appoint_works')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_WORKS_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/business_category.dds"  size = { 30 30 } }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_appoint_censor')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_CENSOR_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/oratory.dds"  size = { 30 30 } }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_appoint_lifanyuan')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_LIFANYUAN_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/diplomacy.dds"  size = { 30 30 } }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_appoint_amban')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_AMBAN_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/family_size.dds"  size = { 30 30 } }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_appoint_zongli')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_ZONGLI_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/change.dds"  size = { 30 30 } }
+												}
+												icon_button_square = {
+													datacontext = "[GetScriptedGui('qing_gov_office_vacate')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													tooltip = "QING_GOV_OFFICE_VACATE_BTN_TT"
+													blockoverride "On_click" { onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]" }
+													blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/interfere_in_scheme.dds"  size = { 30 30 } }
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+						widget = { size = { 950 8 } }
+						# ============================================================
+						# QING STATECRAFT (player CHI only). Country-scope scripted-gui
+						# verbs from common/scripted_guis/QING_mechanics_actions.txt.
+						# Each button reads IsShown/IsValid/Execute on the player scope
+						# (SetRoot Player.MakeScope), matching the government-interaction
+						# buttons above. The whole section is gated to the Qing player.
+						# ============================================================
+						flowcontainer = {
+							direction = vertical
+							spacing = 5
+							visible = "[EqualTo_string( Player.GetTag, 'CHI' )]"
+							widget = { size = { 530 150 } }
+							sub_header = {
+								size = { 530 32 }
+								blockoverride "Title_text" { text = "QING_STATECRAFT_HEADER" }
+							}
+							flowcontainer = {
+								spacing = 5
+								ignoreinvisible = yes
+								# --- #1 stance: balanced dyarchy ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_stance_dyarchy')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_STANCE_DYARCHY_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/civic.dds" }
+								}
+								# --- #1 stance: favour the banners ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_stance_banner')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_STANCE_BANNER_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/military.dds" }
+								}
+								# --- #1 stance: favour the Han literati ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_stance_han')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_STANCE_HAN_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/oratory.dds" }
+								}
+								# --- D anti-corruption audit ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_audit')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_AUDIT_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/treasury.dds" }
+								}
+								# --- B sell offices ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_sell_offices')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_SELL_OFFICES_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/business_category.dds" }
+								}
+								# --- G suppress secret societies ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_suppress_sects')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_SUPPRESS_SECTS_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/faith.dds" }
+								}
+								# --- C banner reform drill ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_banner_drill')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_BANNER_DRILL_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/tactical.dds" }
+								}
+								# --- C2 green standard reform drill (task #88) ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_greenstandard_drill')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_GREENSTANDARD_DRILL_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/tactical.dds" }
+								}
+								# --- C3 sanction a regional army (勇營, task #88) ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_sanction_regional_army')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_SANCTION_REGIONAL_ARMY_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/tactical.dds" }
+								}
+								# --- C3 reassert central command (兵權收歸中央, task #88) ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_reassert_central_command')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_REASSERT_CENTRAL_COMMAND_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/tactical.dds" }
+								}
+								# --- commit to a modern national army (新軍, task #88) ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_fund_modern_army')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_FUND_MODERN_ARMY_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/tactical.dds" }
+								}
+								# --- F invest in ever-normal granaries ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_granary_invest')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_GRANARY_INVEST_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/pop_happy.dds" }
+								}
+								# --- I statecraft investment (schools + admin districts) ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_statecraft_invest')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_STATECRAFT_INVEST_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/edu1.dds" }
+								}
+							}
+							flowcontainer = {
+								spacing = 5
+								ignoreinvisible = yes
+								# --- A suppress the opium trade (Lin Zexu path) ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_suppress_opium')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_SUPPRESS_OPIUM_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/civilization.dds" }
+								}
+								# --- H open the Canton trade ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_canton_open')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_CANTON_OPEN_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/luxury_category.dds" }
+								}
+								# --- H close the Canton trade ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_canton_close')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_CANTON_CLOSE_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/change.dds" }
+								}
+								# --- GOVERNANCE: convene / refresh the Grand Council (軍機處) ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_gov_council_convene')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_GOV_COUNCIL_CONVENE_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/civic.dds" }
+								}
+								# --- DIPLOMACY: court a great power ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_court_britain')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_COURT_BRITAIN_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/diplomacy.dds" }
+								}
+								# --- DIPLOMACY: court a great power ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_court_france')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_COURT_FRANCE_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/diplomacy.dds" }
+								}
+								# --- DIPLOMACY: court a great power ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_court_russia')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_COURT_RUSSIA_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/diplomacy.dds" }
+								}
+							}
+							flowcontainer = {
+								spacing = 5
+								ignoreinvisible = yes
+								# --- JAPAN: warm the pan-Asian accord (同文同種) ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_japan_accord')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_JAPAN_ACCORD_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/diplomacy.dds" }
+								}
+								# --- JAPAN: sharpen the rivalry (海防) ---
+								icon_button_square = {
+									datacontext = "[GetScriptedGui('qing_action_japan_rivalry')]"
+									visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									blockoverride "On_click"
+									{
+										enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									}
+									tooltip = "QING_ACTION_JAPAN_RIVALRY_TT"
+									blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_goverment_interactions" }
+									blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/tactical.dds" }
+								}
+							}
 						}
 					}
 				}
