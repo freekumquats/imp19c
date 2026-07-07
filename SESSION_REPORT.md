@@ -1236,3 +1236,36 @@ inversions; tracked for a follow-up pass.
 Consolidated re-check after fixes: all 16 edited files byte/brace-clean (0 problems); confirmed
 zero remaining `local_pop_happyness`, `character_prominence`, `value = current_date.year`, or
 `trireme` refs (bar one explanatory comment).
+
+
+### Deferred review findings — all 6 addressed (oracle-verified)
+
+Cleared the deferred backlog from the adversarial review. Three unproven tokens were consulted
+against Terra-Indomita + Invictus FIRST (oracle-consultation rule); all three were absent from
+both oracles and replaced with proven idioms.
+
+- #1 se_QING_ETHNIC_TENSION: `governorship.average_loyalty` (unproven pair, silently no-op —
+  under-counted tension in low-loyalty provinces) -> direct province-scope `state_loyalty < 40`
+  (proven: Invictus judaism_decisions.txt:524 `p:687 = { state_loyalty >= 60 }`).
+- #2 amban lifecycle: qing_amban.2/.3/.4 were fully authored but NEVER dispatched (dead content;
+  only .1 fired). Wired a mutually-exclusive dispatch (turnover > gone-native > able) into
+  QING_amban_evaluate's per-subject loop. Fixed two invalid tokens the events used: `time_in_office`
+  (not a valid char token) -> an auto-expiring qing_amban_tenure_pending timer (proven expiring-var
+  idiom, set at post, days=2920, cleared on recall); `add_province_unrest = -3` (NO such effect
+  exists — unrest is only ever a modifier key) -> add_province_modifier qing_justice_appeal_vindicated.
+- #3 se_QING_PERSONNEL: qing_personnel.3 was queued ONLY from CASE B (office VACANT) but its trigger
+  requires a FILLED office + finesse>=9 minister — mutually exclusive, so it could never pass its
+  trigger. Moved the queue to CASE A (able-minister + high-affinity governor), the state that
+  actually satisfies the trigger; removed the CASE B queue.
+- #4 QING_office_vacate_dispatch (on_character_death): added the missing `flag:regent` branch —
+  a regent dying of natural causes stranded qing_office_regent_holder + qing_regency_active until
+  the next quarterly evaluate noticed (self-healing but up to a quarter late). Now clears immediately
+  via QING_seat_regent_clear (its is_alive guard makes the dead-holder path safe).
+- #5 pilgrimage modifiers: qing_pilgrim_patron_of_faith / _devotion_to_rival were defined but NEVER
+  applied, AND patron_of_faith carried the invalid country key monthly_character_prestige. Fixed the
+  key -> monthly_prestige (proven qing_household_modifiers.txt:9) and APPLIED both as country
+  modifiers (patron on the .3 grand-recognition path, 1825d; devotion-to-rival in
+  QING_pilgrim_rival_overture, 1095d).
+
+All 8 edited files byte/brace-clean (0 problems); zero invalid tokens remain in code (only in
+explanatory comments). Task-tagged [deferred-fix #N] comments + se_LOG on every dispatch.

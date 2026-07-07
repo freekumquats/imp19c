@@ -87,6 +87,15 @@ QING_amban_post = {
 	# dependency was never re-staffed.
 	scope:qing_amban_new = {
 		set_variable = { name = qing_amban_marker  value = 1 }
+		# [deferred-fix #2] TENURE TIMER. qing_amban.2 (gone native) originally gated on
+		# `time_in_office >= 2920` — an UNPROVEN character token (absent from Terra-Indomita,
+		# Invictus, and the rest of the repo; it silently failed the trigger so .2 could
+		# never fire even once dispatched). Replaced with the PROVEN expiring-variable idiom
+		# already used in this feature (qing_amban.3's qing_amban_unrest_suppressed_recently
+		# value=1 days=730): stamp an 8-year (2920-day) timer at post time. While the var
+		# EXISTS the resident is short-tenured; once the engine auto-expires it he has served
+		# >= 8 years, so qing_amban.2 fires on `NOT = { has_variable = qing_amban_tenure_pending }`.
+		set_variable = { name = qing_amban_tenure_pending  value = 1  days = 2920 }
 	}
 	LOG_line = { sys = QING  msg = "amban: posted [scope:qing_amban_new.GetName] to [$subject$.GetTag] for [ROOT.GetTag]" }
 	LOG_exit = { sys = QING  fn = "QING_amban_post"  result = OK }
@@ -114,6 +123,9 @@ QING_amban_recall = {
 			# pool and is no longer a resident (so a later death does not run the amban
 			# death-cleanup for a subject he no longer serves).
 			if = { limit = { has_variable = qing_amban_marker }  remove_variable = qing_amban_marker }
+			# [deferred-fix #2] drop the tenure timer too: a recalled man who is later
+			# re-posted (or posted elsewhere) gets a fresh 8-year clock, not a stale one.
+			if = { limit = { has_variable = qing_amban_tenure_pending }  remove_variable = qing_amban_tenure_pending }
 			# recall: move back to CHI (he rejoins the court pool)
 			move_country = ROOT
 			save_scope_as = qing_amban_recalled
@@ -255,6 +267,60 @@ QING_amban_evaluate = {
 					add_opinion = { modifier = qing_amban_capable_opinion  target = ROOT }
 				}
 				LOG_line = { sys = QING  msg = "amban: [scope:qing_amban_current.GetName] in [scope:qing_amban_subject.GetTag] loyal+capable (affinity [scope:qing_amban_current.MakeScope.GetVariable('qing_char_affinity').GetValue|0]), dependency firm for [ROOT.GetTag]" }
+			}
+			# [deferred-fix #2] DISPATCH THE LIFECYCLE EVENTS. qing_amban.2 (gone native),
+			# .3 (able resident), and .4 (turnover) were fully authored but had ZERO
+			# trigger_event callers anywhere — dead content; only .1 (clash) ever fired.
+			# Each carries its own defensive trigger + random_subject re-pick, so this
+			# dispatch only needs to nudge them; we roll a low per-quarter chance gated on
+			# the same conditions each event validates. Mutually exclusive priority
+			# (turnover > gone-native > able) so at most one fires per resident per quarter.
+			# .4 TURNOVER: the resident is old/unhealthy (a replacement crisis).
+			if = {
+				limit = {
+					scope:qing_amban_current = {
+						OR = { age >= 65  health < 0.4 }
+					}
+				}
+				random = {
+					chance = 15
+					ROOT = {
+						trigger_event = { id = qing_amban.4  days = { 10 40 } }
+						LOG_line = { sys = QING  msg = "amban: turnover event queued (resident [scope:qing_amban_current.GetName] old/unwell) in [scope:qing_amban_subject.GetTag] for [ROOT.GetTag]" }
+					}
+				}
+			}
+			# .2 GONE NATIVE: long-tenured (tenure timer expired) + estranged (affinity < 40).
+			else_if = {
+				limit = {
+					scope:qing_amban_current = {
+						NOT = { has_variable = qing_amban_tenure_pending }
+						var:qing_char_affinity < 40
+					}
+				}
+				random = {
+					chance = 15
+					ROOT = {
+						trigger_event = { id = qing_amban.2  days = { 10 40 } }
+						LOG_line = { sys = QING  msg = "amban: gone-native event queued (resident [scope:qing_amban_current.GetName] long-tenured + estranged) in [scope:qing_amban_subject.GetTag] for [ROOT.GetTag]" }
+					}
+				}
+			}
+			# .3 ABLE RESIDENT: loyal+capable (affinity >= 70) and the dependency has unrest to quell.
+			else_if = {
+				limit = {
+					scope:qing_amban_current = { var:qing_char_affinity >= 70 }
+					scope:qing_amban_subject = {
+						any_owned_province = { count >= 1  province_unrest >= 2 }
+					}
+				}
+				random = {
+					chance = 20
+					ROOT = {
+						trigger_event = { id = qing_amban.3  days = { 10 40 } }
+						LOG_line = { sys = QING  msg = "amban: able-resident event queued (resident [scope:qing_amban_current.GetName] quells unrest) in [scope:qing_amban_subject.GetTag] for [ROOT.GetTag]" }
+					}
+				}
 			}
 		}
 	}
