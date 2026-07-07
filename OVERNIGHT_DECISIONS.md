@@ -57,11 +57,19 @@ with the *why*. Companion to SESSION_REPORT.md (which gets the per-feature detai
   → auto-clear via a HIDDEN MTTH triggered event (Invictus ip_monarchy.52 pattern). Heir =
   `primary_heir` scope + `has_primary_heir` gate (monarchy-only). Mother = `current_ruler.mother`
   scope (guard exists+is_alive; `is_female` confirms) — Invictus regency literally saves it as regent.
-- **Map modes (#109/#120):** Imperator map modes are engine-enumerated via SelectMapModesView, NOT
-  freely CK3-style script-registered. FEASIBILITY must be confirmed at build; if a true custom map
-  mode is unsupported, fall back to a province map-icon/highlight overlay or leverage the existing
-  trade-good map mode, and LOG the limitation (no silent scope-cut). #109 and #120 SHARE this
-  scaffolding decision — resolve once.
+- **Map modes (#109/#120) — RESOLVED by oracle 2026-07-07 (ad983280c6f671ecc):** VERDICT = NO. True
+  custom, selectable map modes with new `color_mode` values are NOT scriptable in Imperator 2.0.5 —
+  map modes are engine-enumerated via `SelectMapModesView.GetMapModes` (gui/select_map_modes.gui:57)
+  and the 32 `color_mode` values in gfx/map/map_modes/map_modes.txt are C++-hardcoded; there is no
+  `common/map_modes/` registration dir. Neither Terra-Indomita nor Invictus adds a custom map mode
+  (TI's "performance_mm" just reuses color_mode=political). **DECISION: build a scripted-GUI province
+  query panel instead** — PROVEN via common/scripted_guis/sell_provinces.txt (iterate
+  every_governorships → every_governorship_state, filter on script conditions, render a scrollable
+  list with per-province tooltips). This is more data-rich than a colour overlay anyway (categorical
+  crop types / tension breakdown + backing powers). #109 ethnic-tension report and #120 crop-distribution
+  report SHARE this scaffolding. Optional visual aid = a temporary civ-value modifier pulse to dim/
+  highlight provinces in an existing map mode, but the LIST is primary. No silent scope-cut — the
+  panel replaces the map-mode ask and the limitation is logged here.
 
 ## Existing-state reuse decisions
 - New World crops (#120) already modelled as trade goods (maize/sweet_potato/potato) with province
@@ -118,3 +126,112 @@ with the *why*. Companion to SESSION_REPORT.md (which gets the per-feature detai
   jockeying → disputed accession (legitimacy-10 + strife modifier). Sealed flag consumed each reign.
 - Dispatcher: added weight-7 qing_succession.1 entry to QING_frontier_flavour_roll (se_QING_DECLINE.txt),
   self-guarded on the trigger. on_ruler_change hook added to qing_mechanics_on_actions.txt (CHI, AI+player).
+
+## Parallel content-agent wave — orchestration + splice-scrutiny decisions (2026-07-07)
+Each office-coupling / content feature (#107,#108,#111/#112,#113,#114,#117,#118,#121,#122,#123,#124,
+#125,#126,#109/#120) was built by a background agent AGAINST BUILD_BRIEF_OVERNIGHT.md, writing ONLY new
+files (se_/event/modifier/loc/scripted_gui/.gui) and RETURNING splices. I (orchestrator) own the trunk +
+all shared-file edits (the flavour-roll dispatcher se_QING_DECLINE.txt, the quarterly QING_GOV_pulse in
+se_QING_GOVERNANCE.txt, on_actions, government/diplomatic .gui open-buttons) — spliced in ONE consolidated
+pass to avoid write-collisions. Insertion points confirmed: dispatcher random_list = se_QING_DECLINE.txt
+after line ~997 (inside the `chance = 30` random_list, weights kept 5–12); pulse calls appended in
+QING_GOV_pulse before LOG_exit (line 433).
+
+**Splice bugs found in returned payloads — to CORRECT at integration, not paste verbatim:**
+- **#117 Personnel** triennial-guard splice put EFFECTS (`subtract_variable`/`check_variable`) INSIDE a
+  `trigger = { }` block — invalid (a trigger evaluates conditions, cannot mutate). CORRECTION: drop the
+  in-trigger mutation; gate the 大計 purely on a stored `qing_personnel_daji_last_year` compared with a
+  read-only condition, and do the year-stamp in the EVENT's immediate/option, not the roll trigger.
+  Also its `QING_personnel_evaluate_governors` pulse call must land in QING_GOV_pulse.
+- **#118 War** references a `qing_military_strain` counter that does NOT exist in QING_DECLINE_init.
+  CORRECTION: redirect that nudge to an existing counter (`qing_greenstandard_decay` — the closest fit
+  for warlordism/regional-army strain) rather than adding an unseeded var. Also flagged: commander
+  iteration uses an `every_character martial>=8 power_base>=1` proxy (no direct commander iterator in
+  Imperator) — ACCEPTED as the loyal-cohorts proxy already used in se_QING_COUNCIL. Naval sub_unit
+  `trireme` kept (matches se_QING_SELFSTR fleets). Pulse call `QING_war_review_commanders` → QING_GOV_pulse.
+- **#122 Rites** dispatcher entries use `trigger = { always = yes }` on weights 8/6/6 — these would
+  over-fire (every roll, no state gate) and spam. CORRECTION: gate .1/.3/.4 on `has_variable =
+  qing_office_rites_holder` (parallel to the other office entries) so they only roll when the office is
+  live; keep .2 gated on `any_subject`. Events self-re-check, but the dispatcher gate prevents dead rolls.
+- **#123 Censorate** returned a `QING_censorate_pulse` (nudges corruption from the Censor's stats) PLUS
+  four dispatcher entries. RISK: the pulse must NOT double-count the accountability metric (Censor already
+  judged on qing_corruption_level). DECISION: keep the pulse (it MOVES corruption, accountability GRADES
+  the office on it — distinct), but verify at review it only nudges, never re-grades. Dispatcher entries
+  accepted (all properly gated on censor holder + corruption bands).
+- **#124 Revenue / #126 Household / #123 / #108** all add quarterly pulse calls
+  (`QING_revenue_pulse`, `QING_household_pulse`, `QING_censorate_pulse`, `QING_greatgame_pulse`). All land
+  in QING_GOV_pulse before LOG_exit, EACH self-guarded/O(1). #126 adds ONE new counter `qing_privy_purse`
+  (內帑, init 50) — justified (a private imperial treasury distinct from the state 戶部 treasury; no existing
+  counter fits) — its `QING_household_init` goes in the on_game_initialized block.
+- **#125 Justice** dispatcher entries gate on `is_ai = no` — ACCEPTED (justice ceremonies are a
+  player-facing flavour layer; AI need not be prompted). Seasonal 秋審 gate on current_month 8–10 kept.
+- **Map modes (#109/#120)** built as scripted-GUI province-query PANELS per the oracle verdict above (NO
+  custom map mode). #107 OWNS the province var `qing_prov_ethnic_tension`; #109's panel READS it — name
+  locked so the two agents agree. Open-buttons into shared .gui returned as splices, wired centrally.
+- **#113 Amban — UNPROVEN idiom found & MUST FIX at integration.** se_QING_AMBAN.txt:76 stores residents
+  via `set_variable = { name = "qing_amban_$subject$.GetTag" … }` — constructing a variable NAME from a
+  dynamic tag interpolation. Grep confirms NOTHING else in the repo does this (the `$nick$` cases are
+  `add_nickname` on a value, a different mechanism); it is NOT a proven Imperator capability and may
+  silently no-op or fail. CORRECTION: rewrite the amban storage to the PROVEN `variable_list` idiom
+  (add_to_variable_list / every_in_list / remove_list_variable — used in se_QING_COUNCIL.txt) holding
+  resident CHARACTER references on CHI, and iterate with every_in_list in QING_amban_evaluate/recall.
+  The resident character already carries the `qing_amban_resident` duration=-1 modifier (applied outside
+  create_character per #90), so the subject link can also be read from the character's location. Agent
+  self-flagged this as its open question #2 — resolved DECISION: variable_list, not tag-interpolated names.
+  Also: #113 posting is event-driven; the optional init-seeding of residents to Tibet/Mongol subjects is
+  DEFERRED (guard on subjects actually existing at 1815; not wired this pass to avoid a bad deref).
+- **#109/#120 province-query panels — GUI-idiom scrutiny (lowest-confidence deliverable of the batch).**
+  Agent flagged 3 open GUI questions; dispositions:
+  (1) window-open via `gui.CreateWidget` — RESOLVED: mechanism proven (console.gui:214, wars_overview.gui:12,
+      imp19c_windows.gui:1) BUT the agent's splice used the WRONG syntax `gui.CreateWidget <window>` (missing
+      file path). CORRECT form is `gui.createwidget gui/qing_province_reports.gui <window>` — FIX the two
+      onclick lines in the open-button splice before wiring.
+  (2) province-scope `Var('qing_prov_ethnic_tension')` read inside a GUI datamodel item — UNVERIFIED (not
+      exercised by sell_provinces, which only reads list membership). RISK: a bad datamodel deref.
+  (3) `trade_goods = maize` province filter inside a scripted_gui limit — UNVERIFIED in a scripted_gui context.
+  DECISION: the panels are net-new auto-loaded files (zero risk while UNREFERENCED). The ONLY shared-file
+  touch is the government_view.gui open-button. To honour the "don't ship unproven capability that can crash"
+  rule while still delivering: wire the open-button ONLY after (2)+(3) are confirmed by the adversarial review
+  or a quick oracle; if unconfirmed at commit time, COMMIT THE PANEL FILES (dormant, no open-button) and leave
+  the button splice as a documented TODO in SESSION_REPORT rather than risk a GUI hard-crash. The fix to (1)
+  is applied regardless.
+- **#114 Pilgrimage — dispatcher trigger fix.** Culture keys VERIFIED (mongolian/oirat/buryat/dagur all real
+  in common/cultures/00_mongolic.txt; group = mongolic). BUT the any_subject branch uses
+  `dominant_province_culture_group = mongolic`, and only `dominant_province_culture` (not the _group form)
+  is proven in-repo (governor_policies/00_default.txt, on_action). CORRECTION: at integration, replace that
+  branch with a proven check — subject's ruler `culture_group = mongolic` — or keep the well-proven
+  any_character mongol-culture gate as the sole trigger (a Mongol courtier is the pilgrim anyway).
+- **#118 War — counter redirect VERIFIED.** `qing_greenstandard_decay` IS seeded in QING_DECLINE_init
+  (se_QING_DECLINE.txt:53, init value 15), so redirecting the phantom `qing_military_strain` nudge onto it
+  is safe and semantically apt (Green Standard/regional-army warlordism).
+- **#111/#112 Integration capstone — timing DECISION = SOLUTION A.** VERIFIED the capstone binds to the REAL
+  existing meter `SUBJ_integration_progress` (se_SUBJECT_QING.txt), not a fork — good. Agent flagged that
+  `SUBJ_QING_advance_integration` auto-absorbs at progress>=5, which would pre-empt the qing_integ.30
+  capstone CHOICE. DECISION: SOLUTION A — at integration, edit the shared se_SUBJECT_QING.txt so that on
+  reaching the threshold it fires qing_integ.30 (the manner-of-改土歸流 choice: solemn/bureaucratic/coercive)
+  INSTEAD of silently calling SUBJ_QING_absorb_subject; each capstone option then calls absorb itself. This
+  makes the capstone the absorption MOMENT (concrete, player-chosen manner) rather than a hollow
+  post-hoc ceremony (Solution B). Decree (.40) hook = pulse splice in 00_monthly_country.txt after
+  SUBJ_QING_integration_pulse; resistance (.41) fired by .40 (no separate hook). All player-only (is_ai=no),
+  matching the existing integration subsystem.
+- **#107 Ethnic tension — TWO fixes required at integration.** (1) The agent's `QING_ethnic_tension_init`
+  effect was NEVER written into se_QING_ETHNIC_TENSION.txt (only the pulse is in the file); it was
+  returned as splice-text prose. I must AUTHOR it. (2) Its frontier-seed region names are WRONG: it used
+  invented lowercase keys `tarim_region / dzungaria_region / tibet_region / inner_mongolia_region /
+  outer_mongolia_region`, but the real region keys in map_data/regions.txt are CAPITALIZED and different:
+  `Turkestan` (Xinjiang), `Tibet`, `Mongolia`, `Qinghai`, `Sichuan_Kham`, `Gansu`. CORRECTION: author
+  QING_ethnic_tension_init using the REAL keys (Turkestan=20, Tibet=15, Mongolia=10, Qinghai/Sichuan_Kham=10)
+  and verify province-scope `region = <Key>` is the right trigger form (regions are groups-of-areas here;
+  if `region =` doesn't match on province scope, fall back to iterating and gating on culture instead).
+  Province var name `qing_prov_ethnic_tension` CONFIRMED matching #109's panel read. Pulse hook =
+  qing_mechanics_pulse_on_action in 00_monthly_country.txt; province-scope idioms (every_owned_province,
+  set_variable on province, dominant_province_culture, province_unrest, every_neighbor_province) all
+  VERIFIED by the agent against in-repo occurrences.
+- **#108 Great Game — pulse+events clean, GUI button HELD (same class as #109/#120).** Pulse splice
+  (QING_greatgame_pulse after QING_accountability_pulse in QING_GOV_pulse) and the 3 flavour-roll event
+  entries are well-gated (Zongli holder + GP-tension thresholds; reuse qing_gp_tension_* seeded by
+  QING_gp_init) — INTEGRATE. But the diplomatic-view open-button relies on UNVERIFIED `ToggleGameViewWindow`
+  + `GetCountryByTag` GUI datafunctions (agent's open Qs #1/#2). SAME DECISION as #109/#120: commit the
+  panel + scripted_gui + .gui files (dormant, harmless unreferenced) and the pulse/events LIVE; HOLD the
+  diplomatic-view button splice until the GUI idioms are confirmed, else a blank-window/crash risk. Note:
+  #108 event splice uses `calc_true_if` — verify that's a valid trigger in this engine version at review.
