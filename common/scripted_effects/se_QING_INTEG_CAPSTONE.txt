@@ -1,0 +1,146 @@
+########################################################################
+# se_QING_INTEG_CAPSTONE.txt — helper effects for the integration
+# capstone and resistance mechanics (qing_integration_capstone_events.txt).
+#
+# These extend the SUBJ_QING_* effect family (se_SUBJECT_QING.txt) with
+# effects specific to the completion (.30) and incorporation-decree (.40/.41)
+# features. All effects are se_LOG-instrumented and reuse the existing
+# integration variables (SUBJ_integration_progress, etc.) — no forks.
+#
+# Convention for these effects:
+#   ROOT / this  = the overlord (player, Qing)
+#   scope:target = the single subject being acted upon
+#
+# Prefix = QING_integ_capstone
+########################################################################
+
+########################################################################
+# CHECK COMPLETION READINESS
+# Returns (via a flag variable) whether scope:target is ready for the
+# capstone event (.30): progress >= 5, is an autonomous_governorship,
+# and is a subject of ROOT. This is the gate logic for the capstone
+# event's trigger, exposed as a reusable effect so the flavour roll
+# and any other caller can use it without duplicating the checks.
+#
+# Sets qing_integ_capstone_ready = 1 on ROOT if true, else removes it.
+########################################################################
+QING_integ_capstone_check_ready = {
+	LOG_enter = { sys = SUBJ  fn = "QING_integ_capstone_check_ready" }
+
+	if = {
+		limit = {
+			exists = scope:target
+			scope:target = { is_subject_of = ROOT }
+			scope:target = { is_subject_type = autonomous_governorship }
+			scope:target = {
+				has_variable = SUBJ_integration_progress
+				var:SUBJ_integration_progress >= 5
+			}
+			# Also require the subject to have provinces (so the capstone
+			# does not fire on a zombie post-absorb tag)
+			scope:target = { any_owned_province = { count >= 1 } }
+		}
+		set_variable = { name = qing_integ_capstone_ready  value = 1 }
+		LOG_line = { sys = SUBJ  msg = "capstone READY subject=[scope:target.GetTag] progress=[scope:target.MakeScope.GetVariable('SUBJ_integration_progress').GetValue|0]/5" }
+	}
+	else = {
+		if = { limit = { has_variable = qing_integ_capstone_ready }  remove_variable = qing_integ_capstone_ready }
+		LOG_line = { sys = SUBJ  msg = "capstone NOT READY (target missing, wrong type, or progress < 5)" }
+	}
+
+	LOG_exit = { sys = SUBJ  fn = "QING_integ_capstone_check_ready"  result = OK }
+}
+
+########################################################################
+# CHECK DECREE ELIGIBILITY
+# Returns (via a flag variable) whether scope:target is eligible for the
+# incorporation decree (.40): progress >= 3 but < 5, is an autonomous_
+# governorship, and is a subject of ROOT. Used by the flavour roll.
+#
+# Sets qing_integ_decree_eligible = 1 on ROOT if true, else removes it.
+########################################################################
+QING_integ_capstone_check_decree = {
+	LOG_enter = { sys = SUBJ  fn = "QING_integ_capstone_check_decree" }
+
+	if = {
+		limit = {
+			exists = scope:target
+			scope:target = { is_subject_of = ROOT }
+			scope:target = { is_subject_type = autonomous_governorship }
+			scope:target = {
+				has_variable = SUBJ_integration_progress
+				var:SUBJ_integration_progress >= 3
+				var:SUBJ_integration_progress < 5
+			}
+			scope:target = { any_owned_province = { count >= 1 } }
+			# Also check that the player can afford the decree (so the event
+			# does not fire with no viable option)
+			treasury >= 100
+			legitimacy >= 20
+		}
+		set_variable = { name = qing_integ_decree_eligible  value = 1 }
+		LOG_line = { sys = SUBJ  msg = "decree ELIGIBLE subject=[scope:target.GetTag] progress=[scope:target.MakeScope.GetVariable('SUBJ_integration_progress').GetValue|0]/5" }
+	}
+	else = {
+		if = { limit = { has_variable = qing_integ_decree_eligible }  remove_variable = qing_integ_decree_eligible }
+		LOG_line = { sys = SUBJ  msg = "decree NOT ELIGIBLE (target missing, wrong type, progress out of range, or player cannot afford)" }
+	}
+
+	LOG_exit = { sys = SUBJ  fn = "QING_integ_capstone_check_decree"  result = OK }
+}
+
+########################################################################
+# AMBIENT PULSE: CAPSTONE + DECREE ROLL
+# For the Qing player, every subject with an active, unsuspended
+# integration at or near the threshold has a chance of a capstone or
+# decree event. This EXTENDS the existing SUBJ_QING_integration_pulse
+# (se_SUBJECT_QING.txt) with the new events; it does NOT replace it.
+#
+# Scope: country (CHI, human). Call this in parallel with or after the
+# existing pulse. The existing pulse handles the reaction events (.10-.21);
+# this handles the capstone (.30) and decree (.40).
+########################################################################
+QING_integ_capstone_pulse = {
+	LOG_enter = { sys = SUBJ  fn = "QING_integ_capstone_pulse" }
+
+	every_subject = {
+		limit = {
+			has_variable = SUBJ_integration_active
+			NOT = { has_variable = SUBJ_integration_suspended }
+			is_subject_type = autonomous_governorship
+			any_owned_province = { count >= 1 }
+		}
+		save_scope_as = target
+
+		# Check for capstone readiness (progress >= 5)
+		root = { QING_integ_capstone_check_ready = yes }
+		if = {
+			limit = { root = { has_variable = qing_integ_capstone_ready } }
+			# Fire the capstone event (.30) with high probability
+			root = {
+				random = {
+					chance = 80
+					LOG_line = { sys = SUBJ  msg = "pulse CAPSTONE firing for [scope:target.GetTag]" }
+					trigger_event = { id = qing_integ.30  days = { 3 10 } }
+				}
+			}
+		}
+		else = {
+			# Not at threshold; check for decree eligibility (progress 3-4)
+			root = { QING_integ_capstone_check_decree = yes }
+			if = {
+				limit = { root = { has_variable = qing_integ_decree_eligible } }
+				# Fire the decree event (.40) with moderate probability
+				root = {
+					random = {
+						chance = 30
+						LOG_line = { sys = SUBJ  msg = "pulse DECREE firing for [scope:target.GetTag]" }
+						trigger_event = { id = qing_integ.40  days = { 3 10 } }
+					}
+				}
+			}
+		}
+	}
+
+	LOG_exit = { sys = SUBJ  fn = "QING_integ_capstone_pulse"  result = OK }
+}

@@ -1,0 +1,359 @@
+########################################################################
+# qing_integration_capstone_events.txt — completion and resistance
+# events for the Qing subject integration process.
+#
+# These extend the qing_integ namespace (see qing_subject_integration.txt)
+# with two new mechanics:
+#   1. COMPLETION CAPSTONE (.30): when a subject reaches the integration
+#      threshold (progress >= 5), this fires BEFORE absorption to let the
+#      player choose how to formally enact gaitu guiliu (改土歸流).
+#   2. INCORPORATION DECREE + RESISTANCE (.40, .41): the player can force
+#      the pace of integration (at cost/risk) when well-advanced, and proud
+#      dependencies may resist.
+#
+# ROOT / this  = the overlord (player, Qing / CHI)
+# scope:target = the subject governorship being integrated
+#
+# Namespace = qing_integ (continued from .21)
+#   .30  CAPSTONE — integration completion / absorption ceremony
+#   .40  INCORPORATION DECREE — force the pace of integration
+#   .41  PROTECTORATE RESISTANCE — dependency resists coercion
+########################################################################
+
+namespace = qing_integ
+
+########################################################################
+# .30  INTEGRATION COMPLETION CAPSTONE
+# Anchor: gaitu guiliu (改土歸流, "substitute chieftains with officials")
+# — the Qing policy that converted native chieftaincies (土司 tusi) into
+# directly-administered circuits under regular magistrates (流官 liuguan).
+# The early waves (Kangxi-Yongzheng: Guizhou, Yunnan, Guangxi, Sichuan)
+# were gradualist; the late push (Zhao Erfeng's 1904-11 Kham incorporation)
+# was coercive and provoked revolt. This event fires when a subject has
+# reached the integration threshold (progress >= 5) and offers the player
+# a choice of absorption styles: ceremonial / bureaucratic / coercive.
+# All paths absorb the subject, but with different consequences.
+########################################################################
+qing_integ.30 = {
+	type = country_event
+	title = "qing_integ.30.t"
+	desc = "qing_integ.30.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:target.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		exists = scope:target
+		scope:target = { is_subject_of = ROOT }
+		scope:target = { is_subject_type = autonomous_governorship }
+		scope:target = {
+			has_variable = SUBJ_integration_progress
+			var:SUBJ_integration_progress >= 5
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.30 (capstone) overlord=[ROOT.GetTag] subject=[scope:target.GetTag] progress=[scope:target.MakeScope.GetVariable('SUBJ_integration_progress').GetValue|0]/5" }
+	}
+
+	# --- Grand ceremony: hold a full investiture festival ----------------
+	# A triumphal procession, a solemn ritual, and a feast. Prestige and
+	# legitimacy gain, but the cost in gold and time is high.
+	option = {
+		name = "qing_integ.30.a"
+		custom_tooltip = "qing_integ.30.a.tt"
+		trigger = { treasury >= 120 }
+		add_treasury = -120
+		add_prestige = 40
+		add_legitimacy = 10
+		add_stability = 5
+		# Bureau capacity is taxed by the administrative overhead of the
+		# newly incorporated provinces, but the ceremonial legitimacy offsets it.
+		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = -5 }
+		# The absorption itself
+		SUBJ_QING_absorb_subject = yes
+		# Apply a "newly incorporated circuit" modifier to CHI
+		add_country_modifier = {
+			name = qing_integ_new_circuit_solemn
+			duration = 1825
+		}
+	}
+
+	# --- Bureaucratic integration: dispatch officials and surveyors -------
+	# The pragmatic path: a census, a tax roll, and a circuit magistrate.
+	# Less glory, less gold, faster. Strains the bureaucracy.
+	option = {
+		name = "qing_integ.30.b"
+		custom_tooltip = "qing_integ.30.b.tt"
+		trigger = { treasury >= 60 }
+		add_treasury = -60
+		add_legitimacy = 5
+		# The administrative load is heavier on this path.
+		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = -10 }
+		SUBJ_QING_absorb_subject = yes
+		add_country_modifier = {
+			name = qing_integ_new_circuit_bureaucratic
+			duration = 1460
+		}
+	}
+
+	# --- Coercive absorption: send in the Green Standard Army -------------
+	# The Zhao Erfeng model: garrison first, administrate second. Cheap and
+	# fast, but provokes unrest and tyranny. The frontier remembers force.
+	option = {
+		name = "qing_integ.30.c"
+		custom_tooltip = "qing_integ.30.c.tt"
+		add_tyranny = 8
+		add_aggressive_expansion = 8
+		add_stability = -5
+		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = -8 }
+		SUBJ_QING_absorb_subject = yes
+		add_country_modifier = {
+			name = qing_integ_new_circuit_coercive
+			duration = 1825
+		}
+		# A coercive push can seed a delayed resistance event (the chieftain's
+		# kinsmen remember, and may rise later). Set a flag for the pulse.
+		set_variable = { name = qing_integ_coercive_absorption_flag  days = 730  value = 1 }
+	}
+}
+
+########################################################################
+# .40  INCORPORATION DECREE
+# The throne's active decision to force the pace of integration before it
+# is fully complete: a push decree that spends legitimacy and bureau
+# capacity to accelerate absorption, at the risk of provoking resistance
+# (.41). Historical anchor: Zhao Erfeng's川邊改土歸流 (Chuanbian gaitu guiliu,
+# 1904-11), where the Sichuan governor-general forcibly incorporated Kham
+# and eastern Tibet, triggering the 1905 Batang Uprising and laying the
+# groundwork for the post-1911 Tibetan independence movement.
+#
+# This event is triggered by the flavour roll when integration is well-
+# advanced (progress >= 3 but < 5) and the player has the resources to
+# force it. It offers a choice: spend now to finish fast, or wait.
+########################################################################
+qing_integ.40 = {
+	type = country_event
+	title = "qing_integ.40.t"
+	desc = "qing_integ.40.desc"
+	picture = senate_debate
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:target.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		exists = scope:target
+		scope:target = { is_subject_of = ROOT }
+		scope:target = { is_subject_type = autonomous_governorship }
+		scope:target = {
+			has_variable = SUBJ_integration_progress
+			var:SUBJ_integration_progress >= 3
+			var:SUBJ_integration_progress < 5
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.40 (decree) overlord=[ROOT.GetTag] subject=[scope:target.GetTag] progress=[scope:target.MakeScope.GetVariable('SUBJ_integration_progress').GetValue|0]/5" }
+	}
+
+	# --- Issue the incorporation decree: force the pace ------------------
+	# Spend legitimacy, bureau capacity, and gold to skip the remaining
+	# steps and jump straight to the threshold (progress = 5). Risky:
+	# a proud or culturally alien dependency may resist (.41).
+	option = {
+		name = "qing_integ.40.a"
+		custom_tooltip = "qing_integ.40.a.tt"
+		trigger = {
+			treasury >= 100
+			legitimacy >= 20
+		}
+		add_treasury = -100
+		add_legitimacy = -20
+		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = -15 }
+		# Jump to the threshold
+		scope:target = {
+			set_variable = { name = SUBJ_integration_progress  value = 5 }
+		}
+		# Roll for resistance: proud dependencies, culturally alien ones, or
+		# those with high total_population are likelier to resist.
+		random_list = {
+			40 = {
+				# Resistance event fires
+				modifier = {
+					factor = 2
+					scope:target = { NOT = { primary_culture = ROOT.primary_culture } }
+				}
+				modifier = {
+					factor = 1.5
+					scope:target = { any_owned_province = { total_population >= 30 } }
+				}
+				LOG_line = { sys = SUBJ  msg = "decree RESISTANCE subject=[scope:target.GetTag]" }
+				trigger_event = { id = qing_integ.41  days = { 10 30 } }
+			}
+			60 = {
+				# No resistance: the decree lands without incident
+				LOG_line = { sys = SUBJ  msg = "decree ACCEPTED subject=[scope:target.GetTag]" }
+				# Since we're at threshold, the absorption capstone (.30) should
+				# fire next (via the normal integrate button flow or the pulse).
+			}
+		}
+	}
+
+	# --- Wait: let the process mature naturally ---------------------------
+	# The patient path: no cost, no risk, but no acceleration.
+	option = {
+		name = "qing_integ.40.b"
+		custom_tooltip = "qing_integ.40.b.tt"
+		add_stability = 2
+		LOG_line = { sys = SUBJ  msg = "decree DECLINED (patient path) subject=[scope:target.GetTag]" }
+	}
+}
+
+########################################################################
+# .41  PROTECTORATE RESISTANCE
+# The backlash: when the throne pushes incorporation too hard (via .40's
+# aggressive option), or when a proud/martial dependency chafes under
+# tightening control, the native chieftain (土司 tusi) defies the throne.
+# Historical anchors: the 1905 Batang Uprising (巴塘起義, triggered by Zhao
+# Erfeng's coercive incorporation), the Jinchuan Wars (金川之戰, 1747-49 &
+# 1771-76, where Gyalrong chieftains resisted Qing encroachment for decades),
+# and the Revolt of the Three Feudatories (三藩之亂, 1673-81, the southern
+# warlords' refusal to be absorbed).
+#
+# This event offers the throne real choices: conciliate (roll back some
+# integration progress, restore autonomy), crush (military + tyranny cost),
+# or co-opt the chieftain (via the affinity spine).
+########################################################################
+qing_integ.41 = {
+	type = country_event
+	title = "qing_integ.41.t"
+	desc = "qing_integ.41.desc"
+	picture = looting
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:target.current_ruler
+
+	goto_location = scope:resistance_province
+
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.41 (resistance) overlord=[ROOT.GetTag] subject=[scope:target.GetTag]" }
+		# Anchor the event on the subject's most populous province.
+		if = {
+			limit = { scope:target = { any_owned_province = { count >= 1 } } }
+			scope:target = {
+				ordered_owned_province = {
+					order_by = total_population
+					max = 1
+					save_scope_as = resistance_province
+				}
+			}
+		}
+	}
+
+	# --- Conciliate: roll back the decree and restore autonomy -----------
+	# The Kangxi model after the Three Feudatories: when Wu Sangui's grandson
+	# surrendered (1681), the court granted him a lesser title and left him
+	# in Yunnan rather than executing him outright. Restore face, slow the
+	# process, keep the peace.
+	option = {
+		name = "qing_integ.41.a"
+		custom_tooltip = "qing_integ.41.a.tt"
+		# Roll back integration progress by 2 steps
+		SUBJ_QING_reduce_integration = { steps = 2 }
+		add_stability = 3
+		add_prestige = -10
+		# Grant the subject a temporary autonomy boost
+		add_country_modifier = {
+			name = qing_integ_conciliation_granted
+			duration = 1095
+		}
+		# The subject's ruler gains loyalty and prominence
+		if = {
+			limit = { exists = scope:target.current_ruler }
+			scope:target.current_ruler = {
+				add_loyalty = 15
+				add_prominence = 10
+			}
+		}
+	}
+
+	# --- Crush: send in the Green Standard Army to suppress the rising ---
+	# The Qianlong model in the second Jinchuan War (1771-76): a massive
+	# expedition (60,000 troops, 70M taels) that crushed the Gyalrong
+	# chieftains but left the treasury drained. Military + tyranny cost.
+	option = {
+		name = "qing_integ.41.b"
+		custom_tooltip = "qing_integ.41.b.tt"
+		trigger = { treasury >= 150 }
+		add_treasury = -150
+		add_tyranny = 10
+		add_aggressive_expansion = 10
+		add_war_exhaustion = 3
+		add_stability = -5
+		# The subject resents the brutal hand
+		add_country_modifier = {
+			name = qing_integ_frontier_resentment
+			duration = 1825
+		}
+		# Local unrest
+		if = {
+			limit = { exists = scope:resistance_province }
+			scope:resistance_province = {
+				add_province_modifier = {
+					name = local_unrest_harsh
+					duration = 1095
+				}
+			}
+		}
+		# But the process continues (no setback)
+		LOG_line = { sys = SUBJ  msg = "resistance CRUSHED subject=[scope:target.GetTag]" }
+	}
+
+	# --- Co-opt: bribe the chieftain, marry into his family, grant titles -
+	# The Yongzheng rou yuan (柔遠, "soothe the distant") model: instead of
+	# force, co-opt the native elite via the affinity spine. This option
+	# requires a viable courtier (the subject's ruler) and the gold to endow
+	# him. If he is already loyal, this cements the bond; if disloyal, it
+	# may turn him.
+	option = {
+		name = "qing_integ.41.c"
+		custom_tooltip = "qing_integ.41.c.tt"
+		trigger = {
+			treasury >= 100
+			exists = scope:target.current_ruler
+			scope:target.current_ruler = { is_alive = yes }
+		}
+		add_treasury = -100
+		# Cultivate the chieftain via the affinity spine: endow with gold,
+		# honour his family with prestige, and (if he is not already loyal)
+		# nudge his loyalty. The existing QING_char_* mutators are for
+		# CHI courtiers; the subject ruler is not a CHI courtier, so we
+		# apply the effects directly here.
+		scope:target.current_ruler = {
+			add_loyalty = 20
+			add_prominence = 15
+			add_gold = 50
+			# Give him a character modifier
+			add_character_modifier = {
+				name = qing_integ_coopted_chieftain
+				duration = 1825
+			}
+		}
+		# The subject itself gains a relationship buff
+		add_country_modifier = {
+			name = qing_integ_imperial_favor
+			duration = 1460
+		}
+		# Integration proceeds smoothly (no setback)
+		LOG_line = { sys = SUBJ  msg = "resistance CO-OPTED subject=[scope:target.GetTag] chieftain=[scope:target.current_ruler.GetName]" }
+	}
+}
