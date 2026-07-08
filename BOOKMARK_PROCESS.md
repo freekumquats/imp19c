@@ -210,6 +210,74 @@ bookmark entry drives gameplay.)
 
 ---
 
+## 10. FULL-WORLD RE-TARGET (added 2026-07-08, from the 1763 run)
+
+The peak-Qing run (§1–§9) was *Qing-focused* — it left the rest of the world at its 1815 config as a
+documented anachronism. When the user escalates to **rulers + full political map** (re-authoring EVERY
+country's ruler and borders for the year), the following extra discipline applies. Learned building the
+1763 (post-Seven-Years'-War) bookmark.
+
+### 10.1 Feasibility scout BEFORE any map surgery (gate, don't guess)
+Run a read-only recon of the setup infrastructure first and get a per-region feasibility matrix. What to
+confirm:
+- **Tag inventory & gaps.** `setup/countries/countries.txt` is a STATIC list (~647 tags). Grep it for the
+  tags the target year needs. The 1815 map MERGED historical states, so pre-1815 polities are often
+  missing: e.g. for 1763 — **Lithuania/PLC** (POL exists but is the rump 1815 Congress Poland),
+  **Venice (VEN)**, **Genoa (GEN)**, Milan (folded into 1815 "Lombardy-Venetia"), ecclesiastical
+  electorates (and watch tag COLLISIONS — TRI = Tripoli, not Trier).
+- **Tag creation reality.** `create_country` (province-anchored runtime spawn) is PROVEN in-repo
+  (`events/flavour_middle_east.txt` spawns 5 Arabian tags). `change_country_tag` exists but is
+  commented-out everywhere → **do not rely on it**. Mass `create_country` at scale is UNPROVEN →
+  **oracle-consult (Terra-Indomita/Invictus) BEFORE building** (STANDING RULE). No formable-nation system.
+- **Regression surface.** Grep `tag = XXX` across `common/missions/` + `events/`. In this repo it's
+  MINIMAL and clusters in ~9 Qing mission files (CHI/RUS/GBR/FRA); Latin-American & pre-unification Italian
+  tags have ZERO mission/event deps → safe to reassign. Border-conditional mission triggers are the risk —
+  prefer `any_owned_province` over hardcoded province sets.
+- **De-jure is culture-driven** (`map_data/area_designator.py` → `de_jure_output.txt`), so it survives
+  political reassignment; regenerate only if the year's CULTURE distribution differs.
+
+### 10.2 Political-map surgery mechanics
+- Ownership/control/core all move together via `own_control_core` (§3). Restoring a colonial empire (e.g.
+  undo Latin-American independence) = converting each independent 1815 tag to a `dependency` of its
+  overlord OR merging its provinces — build an explicit **"1815-independent-tag → target-year-overlord"
+  mapping table** from research first (the Americas research file has one).
+- Subjects via `dependency = { first=OVERLORD second=SUBJECT subject_type=… }` in
+  `setup/main/00_default.txt` (16 subject types incl. `royal_union` for composite monarchies like
+  Poland-Lithuania — untested, verify).
+- **Recommended sequencing:** Phase-1 proof-of-concept on the 2–3 HARDEST regions (missing-tag / composite
+  monarchy), boot-test, THEN full surgery. Don't author 200 province moves before proving the tag mechanic.
+
+### 10.3 Research fan-out method (native-language, by region)
+Dispatch ONE research agent per world region, each covering **rulers + political-map-delta-vs-1815 +
+economy** together (merging the ruler and economy workstreams per region is more coherent than splitting
+them). Regions used: W Europe / C Europe-HRE / E Europe / Ottoman-MENA-Persia / S Asia / E+SE Asia /
+Africa / Americas / Italy (Italy split out because of the Venice/Genoa tag gap). Each agent WRITES ITS OWN
+FILE (`research/<year>_WORLD_<region>.md`) to avoid write-collisions; require incremental/early file
+writes so an API timeout leaves partial progress on disk (several agents DID time out — the survivors that
+wrote early lost nothing). Insist on native-language academic sources + a rulers table + a 1763→1815 delta
+section + economy-by-area with province-level LOCATIONS (so goods/buildings can be assigned).
+
+### 10.4 Pick the DATE to minimise ongoing conflict
+A start year sitting inside a big war (1759 = height of the Seven Years' War) opens the game mid-conflict.
+The user's fix: snap to the **day after the peace**. For the Seven Years' War that's **16 Feb 1763** —
+after BOTH the Treaty of Paris (10 Feb, colonial/western war) AND the Treaty of Hubertusburg (15 Feb,
+Prussia-Austria-Saxony). Bonus: a post-war date also captures the **peace settlement's map** (1763 Peace
+of Paris redrew North America: France→GB Canada+east-Mississippi, France→Spain Louisiana, Spain→GB
+Florida) and advances rulers to their real incumbents (Britain George III not George II; Russia Catherine
+II not Elizabeth). A 4-year shift barely moves slow-changing subjects (the Qing were essentially identical
+1759↔1763; the only deltas were *gains* — Canton System formalized, Ili General office now correct).
+
+### 10.5 Offset re-base arithmetic — get the day-count CONVENTION right
+When re-basing `days = { A B }` arcs (§2), the delta is `OLD_START − NEW_START` in days, and you MUST use
+the SAME calendar model the existing offsets used. Here the in-repo offsets were the **real-Gregorian**
+day count (leap years included): 1759.9.1→1815.7.1 = 20391 (not the 20378 a 365-day no-leap model gives).
+So the 1763.2.16 base = 1763.2.16→1815.7.1 = **19127**, and every arc shifted **−1264** from its 1759
+value. ALWAYS: (a) compute both the leap and no-leap counts and see which the existing numbers match; (b)
+after editing, convert a few marquee values back to real dates and check they land on history (Perry →
+May 1853, Amherst → Aug 1816). A silent off-by-13 from the wrong calendar model misfires every arc.
+
+---
+
 ## Quick checklist (copy per run)
 
 - [ ] `START_DATE` in `00_defines.txt`
@@ -225,3 +293,11 @@ bookmark entry drives gameplay.)
 - [ ] Brace + BOM + residual-date verify
 - [ ] Adversarial review passed
 - [ ] Committed as freekumquats + SESSION_REPORT + decisions doc
+
+**Full-world escalation (§10) — extra items:**
+- [ ] Feasibility scout run; per-region matrix + tag gaps + regression surface documented
+- [ ] Oracle-consult done before any mass `create_country` (missing tags: PLC/Venice/Genoa/…)
+- [ ] Native-language research file written per region (`research/<year>_WORLD_<region>.md`)
+- [ ] "1815-independent-tag → target-year-overlord" mapping table built before province moves
+- [ ] Offset re-base used the correct calendar convention; marquee dates spot-checked to history
+- [ ] Date chosen to minimise ongoing conflict (day-after-peace where applicable)
