@@ -1342,19 +1342,50 @@ DIPLO_begin_or_end_play = {
             }
 
             else = { # Otherwise, begin a diplomatic play
+                # TODO: Make the price of beginning a diplomatic play sensitive to your diplomatic influence in an area
+                # TODO: Make it impossible to begin a diplomatic play if PI would go negative
+                # [#210] Begin the goal the player SELECTED with the type buttons (var:pending_play_goal),
+                # defaulting to get_territory if none chosen. play_instigator = scope:player is the
+                # player COUNTRY — correct. (The old goal-button path began plays via
+                # DIPLOMACY_player_begin_play, whose `play_instigator = this` resolved to the province
+                # inside AI_begin's random_province block, so plays displayed as "Nobody"; that path is
+                # now unused by the buttons.) Colonise passes target = instigator, which AI_begin
+                # normalises to c:BAR (its unclaimed-land convention).
                 scope:player = {
-                    # TODO: Make the price of beginning a diplomatic play sensitive to your diplomatic influence in an area
-                    # TODO: Make it impossible to begin a diplomatic play if PI would go negative
                     pay_price = begin_diplomatic_play_price
-                    AI_begin_diplomatic_play = {
-                        play_instigator = scope:player
-                        play_target_area = scope:player.var:selected_province
-                        play_target_country = scope:player.var:selected_province.owner
-                        play_goal = flag:get_territory
-                        play_type = manual
+                    if = {
+                        limit = { has_variable = pending_play_goal }
+                        if = {
+                            limit = { var:pending_play_goal = flag:colonise_area }
+                            AI_begin_diplomatic_play = {
+                                play_instigator = scope:player
+                                play_target_area = scope:player.var:selected_province
+                                play_target_country = scope:player
+                                play_goal = scope:player.var:pending_play_goal
+                                play_type = manual
+                            }
+                        }
+                        else = {
+                            AI_begin_diplomatic_play = {
+                                play_instigator = scope:player
+                                play_target_area = scope:player.var:selected_province
+                                play_target_country = scope:player.var:selected_province.owner
+                                play_goal = scope:player.var:pending_play_goal
+                                play_type = manual
+                            }
+                        }
+                    }
+                    else = {
+                        AI_begin_diplomatic_play = {
+                            play_instigator = scope:player
+                            play_target_area = scope:player.var:selected_province
+                            play_target_country = scope:player.var:selected_province.owner
+                            play_goal = flag:get_territory
+                            play_type = manual
+                        }
                     }
                     # TODO: Trigger an AI attitude assessment immediately
-                }   
+                }
             }
         }
 
@@ -1388,10 +1419,13 @@ DIPLO_begin_play_get_territory = {
         # (DIPLOMACY_player_begin_play removes the prior play and re-begins free).
     }
     effect = {
-        scope:player = {
-            var:selected_province = { save_scope_as = target_province }
-            DIPLOMACY_player_begin_play = { goal = flag:get_territory }
-        }
+        # [#210] Type buttons now only RECORD the pending play goal; the play is begun
+        # by the "Start diplomatic play" button (DIPLO_begin_or_end_play), which reads
+        # this variable and supplies the correct scope:player instigator. Previously each
+        # button began a play immediately via DIPLOMACY_player_begin_play's buggy `this`
+        # path (evaluated inside AI_begin's random_province → instigator resolved to the
+        # province, not the country → the play displayed as "Nobody").
+        scope:player = { set_variable = { name = pending_play_goal  value = flag:get_territory } }
     }
 }
 
@@ -1408,10 +1442,8 @@ DIPLO_begin_play_annex_state = {
         # (DIPLOMACY_player_begin_play removes the prior play and re-begins free).
     }
     effect = {
-        scope:player = {
-            var:selected_province = { save_scope_as = target_province }
-            DIPLOMACY_player_begin_play = { goal = flag:annex_state }
-        }
+        # [#210] Record pending goal only; Start button begins the play. See get_territory.
+        scope:player = { set_variable = { name = pending_play_goal  value = flag:annex_state } }
     }
 }
 
@@ -1428,10 +1460,8 @@ DIPLO_begin_play_purchase_state = {
         # player can switch play type in place (see DIPLOMACY_player_begin_play).
     }
     effect = {
-        scope:player = {
-            var:selected_province = { save_scope_as = target_province }
-            DIPLOMACY_player_begin_play = { goal = flag:purchase_state }
-        }
+        # [#210] Record pending goal only; Start button begins the play. See get_territory.
+        scope:player = { set_variable = { name = pending_play_goal  value = flag:purchase_state } }
     }
 }
 
@@ -1453,10 +1483,8 @@ DIPLO_begin_play_subjugate = {
         # buttons stay enabled so the player can switch play type in place.
     }
     effect = {
-        scope:player = {
-            var:selected_province = { save_scope_as = target_province }
-            DIPLOMACY_player_begin_play = { goal = flag:subjugate_nation }
-        }
+        # [#210] Record pending goal only; Start button begins the play. See get_territory.
+        scope:player = { set_variable = { name = pending_play_goal  value = flag:subjugate_nation } }
     }
 }
 
@@ -1480,10 +1508,8 @@ DIPLO_begin_play_liberate = {
         # (DIPLOMACY_player_begin_play removes the prior play and re-begins free).
     }
     effect = {
-        scope:player = {
-            var:selected_province = { save_scope_as = target_province }
-            DIPLOMACY_player_begin_play = { goal = flag:liberate_state }
-        }
+        # [#210] Record pending goal only; Start button begins the play. See get_territory.
+        scope:player = { set_variable = { name = pending_play_goal  value = flag:liberate_state } }
     }
 }
 
@@ -1500,10 +1526,8 @@ DIPLO_begin_play_colonise = {
         # (DIPLOMACY_player_begin_play removes the prior play and re-begins free).
     }
     effect = {
-        scope:player = {
-            var:selected_province = { save_scope_as = target_province }
-            DIPLOMACY_player_begin_play = { goal = flag:colonise_area }
-        }
+        # [#210] Record pending goal only; Start button begins the play. See get_territory.
+        scope:player = { set_variable = { name = pending_play_goal  value = flag:colonise_area } }
     }
 }
 

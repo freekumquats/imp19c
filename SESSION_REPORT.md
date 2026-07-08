@@ -2428,3 +2428,40 @@ NEW vacant-office decay branch that did not exist before (the roll never modelle
 preserved (se_* = no BOM). No live `qing_works.*` trigger_event remains in the decline roll.
 Task-tagged `[task #209]` in all three files. Reviewed before commit. Pushed to develop for
 in-game verification (branch policy — not promoted to master).
+
+## [#210] Diplo play type buttons started an immediate "Nobody" play instead of previewing a selection
+
+**Symptom (develop boot test, as CHI).** Clicking a diplomatic-play TYPE button (Press claim /
+Annex / Purchase / Subjugate / Liberate / Colonise) in the province diplomacy tab immediately
+STARTED a play — and the started play's instigator displayed as "Nobody" rather than Great Qing.
+Clicking different types stacked multiple "Nobody-vs-target" plays. Intended behaviour: a type
+button only SELECTS which play will start; the "Start diplomatic play" button begins it.
+
+**Root cause (two independent defects).**
+1. *"Nobody" instigator.* `DIPLOMACY_player_begin_play` (se_DIPLOMACY.txt:1493) passed
+   `play_instigator = this` into `AI_begin_diplomatic_play`. That macro pastes its body INSIDE a
+   `random_province = { ... }` block (se_AI.txt:443-462), so at the substitution site `this` is the
+   PROVINCE, not the player country. `province.GetCountry` is null → the play rendered as "Nobody".
+   The proven older path `DIPLO_begin_or_end_play` (EE_scripted_guis.txt) correctly used
+   `scope:player`.
+2. *Type buttons started plays.* Each type button's onclick executed `DIPLO_begin_play_X.Execute`,
+   whose effect called `DIPLOMACY_player_begin_play` — i.e. began a play on the spot.
+
+**Fix (behavioural change to an existing feature — scrutinised).**
+- The six `DIPLO_begin_play_*` scripted GUIs (EE_scripted_guis.txt) no longer begin a play; each now
+  only records the choice: `scope:player = { set_variable = { name = pending_play_goal value = flag:<goal> } }`.
+  Their `is_valid` (enable) logic is unchanged, so per-goal eligibility gating is preserved.
+- `DIPLO_begin_or_end_play`'s begin branch (the "Start diplomatic play" button) now begins the
+  SELECTED goal: reads `var:pending_play_goal` (falls back to get_territory if unset), keeps
+  `play_instigator = scope:player` (the COUNTRY — the correct-instigator path), and branches
+  colonise → target = self (AI_begin normalises to c:BAR). The buggy `this` path is now unused by
+  any button.
+- Start-button label previews the selection: `DIPLO_toggle_start_diplomatic_play_button` custom loc
+  (000_TRADE_loc.txt) gains one text-variant per goal keyed on `var:pending_play_goal`, plus a bare
+  fallback; six new loc keys `START_DIPLOMATIC_PLAY_BUTTON_*` (imp19c_interface_l_english.yml). The
+  STOP variant (end an active play) is unchanged, moved first for clarity.
+
+**Verify.** Braces balanced (EE_scripted_guis 481/481, 000_TRADE_loc 97/97); BOM preserved
+(EE_scripted_guis no-BOM, 000_TRADE_loc + interface yml BOM — all original). No `DIPLOMACY_player_begin_play`
+call remains from any button (grep: only comments). Task-tagged `[#210]`. Reviewed before commit.
+Pushed to develop for in-game verification (branch policy — not promoted to master).
