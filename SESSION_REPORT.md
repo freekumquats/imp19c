@@ -2111,3 +2111,120 @@ UNCHANGED (deliberate, documented): GBR/FRA/SAX/POL explicit values; USA/Japan/
 Austria/Prussia keep the population-proportional default (2nd Bank $35M was
 authorised capital not specie; bakufu 御金蔵 3.00M ryo 1770 -> 0.82M 1789 and
 declining; Austria's 1811 Staatsbankrott). se_CURRENCY braces 516/516.
+
+────────────────────────────────────────────────────────────────────────
+#175 Grand Council: eligibility + one-office-per-man exclusivity + list refresh + window overlap
+────────────────────────────────────────────────────────────────────────
+Bug cluster reported in-game: (a) a courtier appointed to an office stayed in the
+Eligible Courtiers list; (b) one man could be appointed to MANY offices at once;
+(c) candidates "popped up one at a time"; (d) the Eligible Courtier window covered
+the Grand Minister office boxes.
+
+se_QING_COUNCIL.txt (braces 384/384):
+  • QING_office_appoint — added a ONE-OFFICE-PER-MAN auto-vacate at the top: if the
+    appointee already holds a DIFFERENT great office, QING_office_vacate_dispatch is
+    called FIRST (guarded to a different office so re-appointing the same seat is a
+    no-op). Prevents the silent "holds two offices" state (old qing_office_<key>_holder
+    var kept pointing at him while his qing_office_held flag was overwritten). Runs in
+    character scope reading his own flag; no recursion (dispatch→vacate only).
+  • QING_office_appoint + QING_office_vacate — added QING_council_recompute +
+    QING_council_refresh_candidates at the END of both, via employer{} in appoint. The
+    just-appointed man now drops out of the Eligible list immediately (its filter is
+    NOT has_variable=qing_office_held) and a relieved man reappears at once — no waiting
+    for the quarterly pulse / tab reopen. This is the "popping up one at a time" fix.
+
+QING_governance_actions.txt (braces 181/181):
+  • Each of the 11 appoint verbs' is_valid gained NOT = { has_variable = qing_office_held }
+    (reject an already-employed courtier from being offered ANY other office), the GUI-side
+    half of the exclusivity guard, alongside the existing per-office flag check.
+
+gui/government_view.gui + gui/imp19c_windows.gui:
+  • Eligible Courtiers moved OUT of the Grand Council tab (where its grid overlapped the
+    office boxes) into a SEPARATE MOVABLE window (qing_eligible_courtiers_window in
+    imp19c_windows.gui). The tab now shows an "Open Eligible Courtiers" button that
+    refreshes the candidate cache and GUI.createwidget-opens the window; the player can
+    drag it aside. Inside the window GovernmentView.GetPlayer -> Player. New loc keys
+    QING_GC_OPEN_CANDIDATES(_TT).
+
+────────────────────────────────────────────────────────────────────────
+#166 Grand Council only one eligible courtier at start (root cause: autofill drained a tiny court)
+────────────────────────────────────────────────────────────────────────
+Root cause: QING_council_autofill staffs all 11 offices at game start from the same
+employer=ROOT / adult / alive / NOT-officed pool the candidate list draws from. The
+1815 living-adult Qing court in setup was ~12 men, so autofill left ~1 on the bench.
+Fix (per user decision): seed a real court bench.
+  setup/characters/00_Qing.txt (braces 226/226) — 9 sourced Jiaqing/early-Daoguang
+  officials (ids 700, 702, 703, 706, 707, 708, 709, 711, 712): Tuojin, Dong Gao,
+  Changling (Sartuk clan), Jiang Youxian, Wang Ding, Pan Shi'en, Yinghe, Muzhang'a,
+  Saishang'a. All verified alive+adult c.1815 (birth<1797, death>1815), ethnicity via
+  culture (manchu/xiajiang/mongolian), specialty biased by traits (engine rolls raw
+  attributes). Autofill now leaves a genuine Eligible-Courtiers bench of appointable men.
+
+  POST-REVIEW CORRECTIONS (code-review agent ab99143 caught two critical defects in the
+  first draft, both fixed before commit):
+  1. PLACEMENT BUG (critical): the whole 700-715 block was appended after the "KOR"={
+     (Korea) block, i.e. NESTED INSIDE KOR — those officials would have been created
+     with country="KOR", so CHI's bench stayed empty and #166 was NOT fixed. Cut the
+     block out of KOR (KOR now byte-identical to HEAD) and reinserted it inside "CHI"={
+     just before its closing brace, dedented one tab to CHI's level.
+  2. DUPLICATE FIGURES: 6 of the 15 were already in the roster under other ids —
+     704 Nayancheng == existing CHI 358; 710 Songyun == existing ILI ruler 323;
+     701 Cao Zhenyong == CHI 245; 705 Ruan Yuan == CHI 321; 713 He Changling == CHI 311;
+     714 Qishan == CHI 236; 715 Lin Zexu == CHI 246. All 6 dropped (the existing entries
+     are richer — banners, offices, jinshi). Verified NO remaining first+family-name
+     collision. Net-new bench = 9, still comfortably above the 11-office autofill need
+     given the pre-existing living court.
+
+────────────────────────────────────────────────────────────────────────
+#176 subject-interaction window unusable — moved into a "Subject Actions" dropdown
+────────────────────────────────────────────────────────────────────────
+Reported: clicking a subject's flag opens the (correct) diplomatic view but NO Qing
+subject-interaction controls appeared there; clicking the name did nothing. The #168
+inline block (a top-level sibling of the whole actions area) never rendered for the
+player. Per user direction, relocated the per-subject verbs (promote/incorporate/
+demote/integrate/resume + 4 amban buttons) into a collapsible "Subject Actions"
+dropdown placed directly BELOW the Trade Actions dropdown in the diplomatic actions
+column (gui/diplomatic_view.gui, braces 1304/1304). Uses a subject_actions_open GUI
+var mirroring trade_actions_open; gated CHI + target IsSubject of player. Old inline
+block removed. New loc key QING_SUBJECT_ACTIONS_HEADER.
+
+────────────────────────────────────────────────────────────────────────
+Diplomatic-play goal-button overflow (province_window.gui)
+────────────────────────────────────────────────────────────────────────
+Six 150px goal buttons (get_territory/annex/purchase/subjugate/liberate/colonise) in
+one non-wrapping horizontal row (~930px) overflowed the 500px diplomacy container's
+right edge. Split into TWO rows of three (~462px each) so all are visible. Braces
+1944/1944.
+
+POST-REVIEW CORRECTION (code-review agent ab99143, MEDIUM): the first-draft "split" had
+NOT actually been applied — an earlier Edit had silently failed and left only the
+comment, so all six buttons were still in ONE flowcontainer and the overflow persisted
+(a fix-traceability violation: comment described code that didn't exist). Now genuinely
+split: first flowcontainer closes after purchase_state (3 buttons), a second identical
+horizontal flowcontainer holds subjugate/liberate/colonise (3 buttons).
+
+────────────────────────────────────────────────────────────────────────
+#175 code-review LOW findings (accepted as-is)
+────────────────────────────────────────────────────────────────────────
+LOW 3 — office-SWAP path runs QING_council_recompute + refresh_candidates twice (once
+in the auto-vacate's QING_office_vacate, once at QING_office_appoint's end). Idempotent;
+no correctness impact, just redundant work on the rare swap path. Left as-is.
+LOW 4 — qing_office_vacancy_strain bookkeeping on the swap path: auto-vacating seat X
+adds the (single, non-per-office) vacancy-strain modifier, then filling seat Y removes
+one, so X's genuine "seat empty" signal is lost. Pre-existing design limitation of the
+single-strain modelling; the new auto-vacate makes it reachable but swaps only occur on
+event/autofill paths (the GUI never offers appoint to an employed man). Left as-is; a
+per-office strain model would be the proper fix if this ever matters in play.
+
+────────────────────────────────────────────────────────────────────────
+#163 SPHERE Phase-0 probe REMOVED (was never validly run) — verdict retracted
+────────────────────────────────────────────────────────────────────────
+The Phase-0 probe (SPHERE_probe_debug.txt on_action + se_SPHERE_probe.txt) was written
+WITHOUT a UTF-8 BOM, while its sibling on_action files carry one; the engine rejected it
+at load, so the probe effect NEVER RAN. The error.log lines mentioning it were an
+encoding-rejection error (+ an unused-variable warning from the dead file), NOT the
+probe's PUSH-fallback verdict. An earlier note claiming "debug.log is broken in this
+build" was WRONG and is retracted — debug.log is fine; the absence of SPHERE lines is
+fully explained by the load rejection. Both probe files DELETED (they errored every CHI
+game). #163 (four-power sphere-of-influence) is UNSETTLED again — the PULL-vs-PUSH
+question must be re-approached without a probe.

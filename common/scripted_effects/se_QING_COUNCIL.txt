@@ -673,6 +673,24 @@ QING_office_appoint = {
 	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
 	LOG_enter = { sys = QING  fn = "QING_office_appoint" }
 	# $office$ = the office key.  this = the appointee.
+	# [#175 fix] ONE-OFFICE-PER-MAN. If the appointee ALREADY holds a different great
+	# office, relieve him of it FIRST — otherwise the old office's
+	# qing_office_<old>_holder country var keeps pointing at him while his
+	# qing_office_held flag is overwritten to the new office, so he silently "holds"
+	# both (only the newest is vacatable). QING_office_vacate_dispatch reads his
+	# current qing_office_held flag and cleanly tears down whichever office that is
+	# (clears the country holder var, strips his officeholder modifier + the +4 power
+	# base, adds vacancy strain). Guarded to a DIFFERENT office so re-appointing to
+	# the same seat (a no-op refresh) doesn't needlessly churn. The primary guard is
+	# the GUI is_valid gate (a man holding any office is not offered elsewhere), so
+	# this is the belt-and-suspenders for event / autofill call paths.
+	if = {
+		limit = {
+			has_variable = qing_office_held
+			NOT = { var:qing_office_held = flag:$office$ }
+		}
+		QING_office_vacate_dispatch = yes
+	}
 	employer = {
 		# vacate the previous holder of this office if any
 		if = {
@@ -700,6 +718,14 @@ QING_office_appoint = {
 	# here; QING_office_vacate strips it symmetrically when he is relieved.
 	add_loyal_veterans = 4
 	LOG_line = { sys = QING  msg = "office $office$ -> [this.GetName] (+4 loyal veterans -> power base) for [this.GetEmployer.GetTag]" }
+	# [#175 fix] rebuild the derived roster AND the eligible-candidate cache right away
+	# so the GUI updates immediately: the just-appointed man drops out of the Eligible
+	# Courtiers list (its filter is NOT has_variable=qing_office_held, now set on him)
+	# and appears in his office slot, without waiting for the next tab-open / pulse.
+	employer = {
+		QING_council_recompute = yes
+		QING_council_refresh_candidates = yes
+	}
 	LOG_exit = { sys = QING  fn = "QING_office_appoint"  result = OK }
 }
 
@@ -744,6 +770,11 @@ QING_office_vacate = {
 	remove_country_modifier = qing_office_$office$_active
 	add_country_modifier = { name = qing_office_vacancy_strain  duration = 3650 }
 	LOG_line = { sys = QING  msg = "office $office$ vacated (-4 loyal veterans from former holder) for [ROOT.GetTag]" }
+	# [#175 fix] rebuild roster + eligible-candidate cache so the relieved man
+	# reappears in the Eligible Courtiers list immediately (his qing_office_held was
+	# just removed above) rather than only after the next tab-open / quarterly pulse.
+	QING_council_recompute = yes
+	QING_council_refresh_candidates = yes
 	LOG_exit = { sys = QING  fn = "QING_office_vacate"  result = OK }
 }
 
