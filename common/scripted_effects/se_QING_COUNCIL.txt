@@ -130,6 +130,19 @@ QING_council_recompute = {
 	set_variable = { name = qing_council_han_count  value = 0 }
 	clear_variable_list = qing_council_members
 
+	# [#157 fix] MANCHU REFERENCE for the 滿漢 split. The score functions compare a
+	# holder's culture against the dynasty's own — but `culture = ROOT.primary_culture`
+	# is invalid on a character scope (primary_culture is a country TRIGGER, not a
+	# navigable culture link), so it PostValidated false and every holder fell to the
+	# Han branch (manchu_count stuck at 0 => the +15 滿漢並用 bonus and the
+	# qing_council_dyarchic_balance modifier could never fire, and the GUI split read
+	# 0/N). The ruler IS the Manchu reference; save him so the proven
+	# `culture = scope:X.culture` idiom (00_ambitions.txt:1606) can be used instead.
+	if = {
+		limit = { exists = current_ruler }
+		current_ruler = { save_scope_as = qing_council_manchu_ref }
+	}
+
 	# --- score every filled office on its governing skill (rebuilds the roster,
 	# the culture split and the filled count as it goes)
 	QING_council_score_chancellor = yes
@@ -296,9 +309,14 @@ QING_council_score_office = {
 				change_variable = { name = qing_council_filled_count  add = 1 }
 				add_to_variable_list = { name = qing_council_members  target = prev }
 			}
-			# culture balance (滿漢): primary-culture holders count Manchu, others Han.
+			# culture balance (滿漢): dynasty-culture holders count Manchu, others Han.
+			# [#157 fix] compare against the saved ruler's culture via the proven
+			# `culture = scope:X.culture` link idiom (ROOT.primary_culture is invalid here).
 			if = {
-				limit = { culture = ROOT.primary_culture }
+				limit = {
+					exists = scope:qing_council_manchu_ref
+					culture = scope:qing_council_manchu_ref.culture
+				}
 				ROOT = { change_variable = { name = qing_council_manchu_count  add = 1 } }
 			}
 			else = {
@@ -326,8 +344,12 @@ QING_council_score_chancellor = {
 				change_variable = { name = qing_council_tmp  add = prev.zeal }
 				add_to_variable_list = { name = qing_council_members  target = prev }
 			}
+			# [#157 fix] see QING_council_score_office: scope-link culture compare.
 			if = {
-				limit = { culture = ROOT.primary_culture }
+				limit = {
+					exists = scope:qing_council_manchu_ref
+					culture = scope:qing_council_manchu_ref.culture
+				}
 				ROOT = { change_variable = { name = qing_council_manchu_count  add = 1 } }
 			}
 			else = {

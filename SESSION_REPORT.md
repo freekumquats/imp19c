@@ -1874,3 +1874,29 @@ will transfer them to the country which initiated the subjugate play)."
   * `culture_group = mongolic/bodish` on character scope (SUB_QING_amban, se_QING_AMBAN) — NOT
     flagged anywhere in error.log; engine accepts it. (Corrected a stale note that claimed it throws.)
 - TODO: in-game verify New Game now instantiates without access violation.
+
+### #157 follow-up — two SILENT functionality breaks (not crashes, but wrong)
+User pushback: "just because it doesn't crash doesn't make it correct." Correct — traced both:
+
+- **AMBAN minor-character (BROKEN, now fixed).** `minor_character = yes` inside create_character
+  (se_QING_AMBAN.txt:57) is an INVALID key — error.log: "Unknown effect minor_character" at every
+  QING_amban_post call site. Engine discarded it, so every amban resident spawned as a FULL major
+  character (office/succession-eligible, character-list clutter) instead of a minor courtier. FIX:
+  removed the bad key; added `set_as_minor_character = THIS` in the post-create character scope
+  (proven idiom, events/annexation.txt:21). Pre-existing on master but genuinely wrong there too.
+- **COUNCIL 滿漢 tally (BROKEN, now fixed).** `culture = ROOT.primary_culture` as a CHARACTER
+  trigger (se_QING_COUNCIL.txt score_office:301 / score_chancellor:330) is invalid —
+  primary_culture is a country TRIGGER, not a navigable culture link, so the RHS won't parse
+  ("Badly read script value" + "Illegal use of operator ="; PostValidate returned FALSE). Effect:
+  the `if` was ALWAYS false => every holder fell to the `else`/Han branch => qing_council_manchu_count
+  stuck at 0. Downstream, all silently dead: the +15 滿漢並用 dyarchic bonus (needs manchu_count>=1),
+  the qing_council_dyarchic_balance country modifier, and government_view.gui:2264 (always showed 0/N).
+  FIX: save current_ruler (the definitional Manchu reference) as scope:qing_council_manchu_ref at the
+  top of QING_council_recompute, compare each holder via the proven `culture = scope:X.culture` link
+  idiom (00_ambitions.txt:1606), guarded by `exists = scope:qing_council_manchu_ref`.
+  WHY it works at se_QING_DECLINE:1074 but not here: there it's inside an any_character/random_character
+  iterator over a saved culture SCOPE; the council used a bare country-trigger nav as the RHS.
+- Both were pre-existing on master (not develop regressions) — fixed under "fix the things that will
+  break" because they silently break intended behaviour even though they never fault.
+- Braces: se_QING_COUNCIL 380/380, se_QING_AMBAN 131/131. no-BOM/LF. TODO: in-game verify the Manchu/Han
+  split populates (>0 Manchu with the 1815 Manchu ruler) and residents show as minor characters.
