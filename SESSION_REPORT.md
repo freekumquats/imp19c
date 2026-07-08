@@ -1923,3 +1923,49 @@ VERIFIED country_culture_group has zero load errors (used validly at 00_culture_
 has_culture_group is proven (characters_view_scripts:15-17). Braces: SUB 60/60, AMBAN 131/131,
 DECLINE 974/974, offices 18/18. 00_offices BOM+LF preserved.
 LESSON: to check whether a trigger is valid, grep the error log for the VALUE too, not just the keyword.
+
+────────────────────────────────────────────────────────────────────────
+#165/#166 boot-block ROOT CAUSE — the ENTIRE Qing on_game_initialized block never ran
+────────────────────────────────────────────────────────────────────────
+Reported in-game after a successful Qing start: the Emperor / Crown Prince / Empress
+Dowager / Grand Chancellor figurehead boxes were all EMPTY, and the Grand Council had
+only ONE eligible courtier (never staffed). Traced to a single misplaced trigger.
+
+DIAGNOSIS (debug.log, -debug_mode run):
+- The economy on_game_initialized block RAN (QING_seed_starting_treasury logged 3593×,
+  per-country).
+- The CHI-gated on_game_initialized block (qing_mechanics_on_actions.txt:9) emitted
+  ZERO log lines. Decisive: QING_DECLINE_init — the FIRST call in the block, which opens
+  with LOG_enter — had 0 hits at ANY timestamp. So the block never STARTED (not aborted
+  mid-run). Every init in the chain (GOV/council/autofill/seat_refresh/dynasty/faction/
+  ...) likewise 0 hits. The QING_council_refresh_candidates lines at 20:12+ are the PLAYER
+  manually opening the council panel (QING_governance_actions.txt), not the boot chain.
+
+ROOT CAUSE (error.log 20:04:08, load-time):
+  pdx_persistent_reader.cpp:229: "Unknown trigger type: QING_seat_regency_warranted,
+  near line: 3" in qing_mechanics_on_actions.txt line 32 (QING_seat_refresh_all → 
+  QING_seat_evaluate_regency line 105 `limit = { QING_seat_regency_warranted = yes }`).
+QING_seat_regency_warranted was DEFINED in a scripted_EFFECTS file (se_QING_SEATS.txt:164)
+but is only ever USED in a limit. The engine registers a scripted_effects definition as an
+EFFECT, so the limit reference fails to resolve — and unlike the harmless jomini_trigger
+"Illegal use of operator" VALIDATION warnings, this is a hard pdx_persistent_reader PARSE
+error that POISONS compilation of the whole compiled block it appears in. QING_seat_refresh_all
+is called from the CHI on_game_initialized block, so the ENTIRE block was dropped → no init ran
+→ figurehead vars (qing_office_emperor_holder/_crownprince_holder) never seeded (empty boxes,
+#165) and QING_council_autofill never ran (unstaffed council, #166).
+
+This is the SAME bug class as the #157 boot-crash fix (QING_dynasty_has_dowager/_crownprince,
+also condition-only helpers wrongly in scripted_effects). PRE-EXISTING on BOTH master and
+develop (git show master:se_QING_SEATS.txt confirms the misplacement) — NOT a develop regression.
+
+FIX (pure relocation, behaviourally identical):
+- common/scripted_triggers/qing_dynasty_triggers.txt — ADDED QING_seat_regency_warranted
+  (same body: exists current_ruler + OR{is_adult=no / has_trait=incapable / age>=70}).
+- common/scripted_effects/se_QING_SEATS.txt:164 — removed the def, left a pointer comment.
+Braces: triggers 13/13, SEATS 108/108. scripted_triggers byte-conv no-BOM/LF verified.
+Defined exactly once (triggers), used exactly once (SEATS:105 limit). se_LOG chain in the
+boot block will now emit QING_DECLINE_init ENTER on next new game — the verification signal.
+
+Scanned error.log for other "Unknown trigger type: QING_*" reachable from the boot chain:
+QING_DECLINE_nudge (7×) is an EFFECT ({var= amount=}) used in mission trigger blocks, NOT in
+the boot chain — separate pre-existing issue, out of scope. No other boot-chain poison found.
