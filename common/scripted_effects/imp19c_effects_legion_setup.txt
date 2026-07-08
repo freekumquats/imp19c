@@ -56,7 +56,16 @@
 # ----------------------------------------------------------------------
 SE_qing_raise_garrison = {
 	if = {
-		limit = { exists = $prov$  $prov$ = { owner = c:CHI } }
+		# [#190-fix task #190] Accept BOTH CHI-owned land AND land held by a CHI
+		# SUBJECT. The 1815 frontier banner garrisons (Ili 伊犁, Ürümqi 烏魯木齊,
+		# Mukden 盛京, Heilongjiang 黑龍江, Kashgar 喀什噶爾) sit in provinces owned by
+		# CHI's autonomous-governorship subjects (ILI/MKD/HLJ, XNG under ILI), not by
+		# CHI directly — historically these WERE Qing frontier commands. The old guard
+		# (owner = c:CHI only) silently dropped exactly these 5 garrisons via LOG_fail.
+		# is_subject_of is a proven trigger (common/military_traditions/00_indian.txt;
+		# Invictus parthia_interactions.txt). The legion is still RAISED from
+		# c:CHI.capital_scope.governorship, so it belongs to Qing regardless.
+		limit = { exists = $prov$  $prov$ = { OR = { owner = c:CHI  owner = { is_subject_of = c:CHI } } } }
 		c:CHI.capital_scope.governorship = {
 			raise_legion = {
 				create_unit = {
@@ -83,7 +92,10 @@ SE_qing_raise_garrison = {
 # ----------------------------------------------------------------------
 SE_qing_raise_garrison_cmd = {
 	if = {
-		limit = { exists = $prov$  $prov$ = { owner = c:CHI }  exists = $cmd$ }
+		# [#190-fix task #190] Same subject-land acceptance as SE_qing_raise_garrison
+		# above (Ili banner garrison under commander Changling char:244 is precisely
+		# one of the frontier cases this restores). See that helper for the rationale.
+		limit = { exists = $prov$  $prov$ = { OR = { owner = c:CHI  owner = { is_subject_of = c:CHI } } }  exists = $cmd$ }
 		c:CHI.capital_scope.governorship = {
 			raise_legion = {
 				create_unit = {
@@ -167,6 +179,135 @@ SE_qing_armies = {
 		LOG_fail = { sys = QING  fn = "SE_qing_armies"  reason = "c:CHI absent or has no capital_scope; no Qing army raised" }
 	}
 	LOG_exit = { sys = QING  fn = "SE_qing_armies"  result = OK }
+}
+
+########################################################################
+# [#190-fix task #190] QING 1815 COASTAL WATER-FORCES (水師).
+#
+# THE BUG: the engine auto-generates every country's starting navy from
+# STARTING_SHIPS_PER_PORT_POPULATION = 0.06 (common/defines/00_defines.txt:39).
+# For China's huge coastal population that yields two ~85-ship modern fleets —
+# grossly ahistorical: in 1815 the Qing had NO ocean-going battle-fleet, only
+# provincial water-forces (水師) of shallow-draught war-junks for coastal defence,
+# river/canal patrol and anti-piracy (the great pirate confederations had only
+# just been suppressed, 1810). A blue-water steam/frigate navy did not arrive
+# until the Self-Strengthening fleets (se_QING_SELFSTR.txt), which this mod
+# already gates behind that mission tree.
+#
+# THE FIX: on game start, DISBAND every auto-generated CHI navy (destroy_unit,
+# proven in Invictus 01_carthaginian_missions_08_naval.txt:152-157), then raise
+# a modest historically-scaled junk squadron at the two principal maritime
+# provincial commands — 廣東水師 (Guangdong, Canton estuary / anti-pirate) and
+# 福建水師 (Fujian, Taiwan Strait). Modelled with `brig`, the only period-
+# appropriate light warship key in this TC (screw_frigate/medium_steamer are the
+# later modern hulls; the galley hulls are empty stubs — see qing_war_events.txt).
+# Guarded on coastal ownership; each raise logs. Called once from
+# oa_economy_setup.txt right after SE_qing_armies.
+########################################################################
+SE_qing_navy = {
+	LOG_enter = { sys = QING  fn = "SE_qing_navy" }
+	# Global sentinel: destroy_unit is DESTRUCTIVE, so — unlike the purely-additive
+	# SE_qing_armies — this must never run twice (which would sink a navy the player
+	# has since built). Guard so it fires exactly once at the true game start.
+	if = {
+		limit = {
+			exists = c:CHI
+			NOT = { has_global_variable = qing_navy_setup_done }
+		}
+		set_global_variable = qing_navy_setup_done
+		c:CHI = {
+			# 1) Disband the ahistorical auto-generated fleets. Every hull the engine
+			#    seeded from the port-population define is removed; the water-forces
+			#    below are then the ONLY navy the 1815 Qing fields.
+			if = {
+				limit = { any_navy = { always = yes } }
+				every_navy = {
+					destroy_unit = yes
+				}
+				LOG_line = { sys = QING  msg = "auto-generated Qing fleets disbanded (ahistorical 1815 blue-water navy removed)" }
+			}
+
+			# 2) 廣東水師 Guangdong Water-Force — Canton estuary, the empire's busiest
+			#    maritime frontier (Canton System trade + Pearl River anti-piracy).
+			#    p:9298 is Guangzhou (also the Liangguang garrison seat).
+			if = {
+				limit = { exists = p:9298  p:9298 = { owner = c:CHI  is_coastal = yes } }
+				create_unit = {
+					navy = yes
+					name = "Guangdong Water-Force 廣東水師"
+					location = p:9298
+					sub_unit = brig
+					while = { count = 5  add_subunit = brig }
+				}
+				LOG_line = { sys = QING  msg = "Guangdong Water-Force raised at Canton (p:9298), 6x war-junk" }
+			}
+			else = {
+				LOG_fail = { sys = QING  fn = "SE_qing_navy"  reason = "p:9298 Canton not held/coastal; Guangdong Water-Force not raised" }
+			}
+
+			# 3) 福建水師 Fujian Water-Force — Taiwan Strait command (Fuzhou + Straits
+			#    marine, the Green Standard marine squadrons). p:3651 is Fuzhou.
+			if = {
+				limit = { exists = p:3651  p:3651 = { owner = c:CHI  is_coastal = yes } }
+				create_unit = {
+					navy = yes
+					name = "Fujian Water-Force 福建水師"
+					location = p:3651
+					sub_unit = brig
+					while = { count = 3  add_subunit = brig }
+				}
+				LOG_line = { sys = QING  msg = "Fujian Water-Force raised at Fuzhou (p:3651), 4x war-junk" }
+			}
+			else = {
+				# Fuzhou may be non-coastal in this map's province graph; fall back to
+				# the largest coastal province owned, so Fujian still gets a squadron.
+				if = {
+					limit = { any_owned_province = { is_coastal = yes } }
+					ordered_owned_province = {
+						limit = { is_coastal = yes }
+						order_by = total_population
+						max = 1
+						save_scope_as = qing_navy_fallback_port
+					}
+					create_unit = {
+						navy = yes
+						name = "Fujian Water-Force 福建水師"
+						location = scope:qing_navy_fallback_port
+						sub_unit = brig
+						while = { count = 3  add_subunit = brig }
+					}
+					LOG_line = { sys = QING  msg = "Fujian Water-Force raised at fallback coastal port (Fuzhou not coastal), 4x war-junk" }
+				}
+				else = {
+					LOG_fail = { sys = QING  fn = "SE_qing_navy"  reason = "no coastal province owned; Fujian Water-Force not raised" }
+				}
+			}
+
+			# 4) [#191 task #191] 浙江水師 Zhejiang Water-Force — the Ningbo / Zhenhai
+			#    (鎮海) command guarding the Zhejiang coast and the Yangzi approaches,
+			#    the third principal provincial water-force (清史稿·兵志). Smallest of the
+			#    three and, like them, a coastal-defence junk squadron outclassed by a
+			#    single European steam frigate. p:2893 is Ningbo.
+			if = {
+				limit = { exists = p:2893  p:2893 = { owner = c:CHI  is_coastal = yes } }
+				create_unit = {
+					navy = yes
+					name = "Zhejiang Water-Force 浙江水師"
+					location = p:2893
+					sub_unit = brig
+					while = { count = 2  add_subunit = brig }
+				}
+				LOG_line = { sys = QING  msg = "Zhejiang Water-Force raised at Ningbo (p:2893), 3x war-junk" }
+			}
+			else = {
+				LOG_fail = { sys = QING  fn = "SE_qing_navy"  reason = "p:2893 Ningbo not held/coastal; Zhejiang Water-Force not raised" }
+			}
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "SE_qing_navy"  reason = "c:CHI absent or navy setup already done (sentinel set); no Qing water-force raised" }
+	}
+	LOG_exit = { sys = QING  fn = "SE_qing_navy"  result = OK }
 }
 
 SE_occupation_of_france = {

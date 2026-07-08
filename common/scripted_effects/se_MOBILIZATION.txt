@@ -1,0 +1,128 @@
+########################################################################
+# se_MOBILIZATION.txt — 19th-century mobilization / break-in system  (#192,
+# overnight_decisions2.md §14b).  sys = MOBIL
+#
+# A newly-raised legion starts UNREADY and becomes battle-ready over ~2–6 months as
+# staggered, self-expiring readiness debuffs (mobilization_modifiers.txt) lapse.
+# This EXPANDS the existing military-logistics layer (se_LOGISTICS.txt, the country-
+# scope equipment-shortage half); this is the per-unit break-in half.
+#
+# THE MODEL (sourced: Showalter *Railroads and Rifles*; van Creveld *Supplying War*;
+# Lynn *Bayonets of the Republic*; Wawro):
+#   • MULTI-AXIS, each maturing at its own rate —
+#       drill/discipline  FAST   (raw ~1–2.5mo)   cohesion/morale MEDIUM (raw ~2–5mo)
+#       supply/logistics  SLOW   (raw ~3–6mo, + irregular residual floor)
+#   • FRONT-LOADED: each axis = a heavy RAW layer (expires first) + a lighter SETTLING
+#     layer (expires later), so the penalty steps down in a decay-like curve.
+#   • RAISE-TIME SEVERITY BY TYPE: professional regulars break in fast; levies/militia
+#     (conscripts) start far worse and keep a supply floor.
+#   • ACCELERATORS shorten the raw layers / skip the floor:
+#       - a general attached (drilled under command),
+#       - raised in FRIENDLY, SUPPLIED home territory (owner-owned AND -controlled),
+#       - and — USER REQUIREMENT — BUILDINGS & INDUSTRY: a RAILWAY (tech_steam_locomotive
+#         or a local INF_railway_upgrade) and a SUPPLY DEPOT (military_depot_building /
+#         INF_depot / arsenal in the raise province) sharply cut the supply penalty and
+#         lift the irregular floor (the concrete van-Creveld depot hook + the Prussian
+#         railway-mobilization theme). Ties the new §2–§4 buildings + `rifles` §13 to readiness.
+#
+# ENGINE IDIOM (all verified vs. Invictus + Terra-Indomita oracles). Scope hierarchy:
+#   legion  --every_legion_unit-->  legion_unit  --any_sub_unit-->  sub_unit
+#   • legion scope    : any_legion_commander, any_legion_unit, owner       (on_legion_raised)
+#   • legion_unit     : add_unit_modifier { duration }, any_sub_unit       (ip_republic.20 PROVEN)
+#   • sub_unit        : sub_unit_type, unit_location                       (Albion/veneto PROVEN)
+#   Self-expiring, staggered unit modifiers are the mod's proven pattern
+#   (se_QING_MECHANICS.txt qing_unit_banner_rot). NO per-tick variable decay loop and NO
+#   legion-scope variables (both unproven). The readiness PROFILE is decided ONCE at legion
+#   scope, then applied to every_legion_unit. Game-START standing armies are EXEMPT (guarded
+#   on current_date in on_legion_raised) — they are the peacetime establishment.
+#
+# NO BOM (se_*.txt convention).  Prefix = MOBIL
+########################################################################
+
+# ======================================================================
+# MOBIL_stamp_all — apply one readiness profile to every legion_unit of the legion.
+# Called from MOBIL_stamp_legion inside a decided branch. Legion scope.
+#   $green_d$/$green_c$/$green_s$    = raw layer durations (drill/cohesion/supply)
+#   $settle_d$/$settle_c$/$settle_s$ = lighter settling-layer durations
+#   $floor$ = yes/no — apply the long irregular supply floor (levies w/o depot/rail)
+# ======================================================================
+MOBIL_stamp_all = {
+	# scope: legion
+	every_legion_unit = {
+		add_unit_modifier = { name = mobil_drill_raw         duration = $green_d$ }
+		add_unit_modifier = { name = mobil_drill_settling    duration = $settle_d$ }
+		add_unit_modifier = { name = mobil_cohesion_raw      duration = $green_c$ }
+		add_unit_modifier = { name = mobil_cohesion_settling duration = $settle_c$ }
+		add_unit_modifier = { name = mobil_supply_raw        duration = $green_s$ }
+		add_unit_modifier = { name = mobil_supply_settling   duration = $settle_s$ }
+		if = {
+			limit = { "$floor$" = yes }
+			add_unit_modifier = { name = mobil_supply_floor_irregular  duration = 730 }
+		}
+	}
+}
+
+# ======================================================================
+# MOBIL_stamp_legion — on_legion_raised entry point. Legion scope (ROOT/this = the
+# freshly-raised legion). Reads type + accelerators ONCE, picks a profile, stamps.
+# ======================================================================
+MOBIL_stamp_legion = {
+	# scope: legion
+	LOG_enter = { sys = MOBIL  fn = "MOBIL_stamp_legion" }
+	owner = { save_scope_as = mobil_owner }
+
+	if = {
+		# ==================== LEVY / MILITIA (conscripts) ====================
+		# A legion counts as a levy host if ANY of its units is conscript-type.
+		limit = { any_legion_unit = { any_sub_unit = { sub_unit_type = conscripts } } }
+		if = {
+			# depot/arsenal at the muster OR owner has a rail network:
+			# faster supply, NO residual floor (the concrete buildings/industry hook).
+			limit = {
+				OR = {
+					any_legion_unit = { any_sub_unit = { unit_location = { OR = {
+						has_building = military_depot_building
+						has_building = INF_depot
+						has_building = arsenal_building
+					} } } }
+					scope:mobil_owner = { OR = {
+						invention = tech_steam_locomotive
+						any_owned_province = { has_building = INF_railway_upgrade }
+					} }
+				}
+			}
+			MOBIL_stamp_all = { green_d = 60  green_c = 120  green_s = 150  settle_d = 150  settle_c = 210  settle_s = 300  floor = no }
+			LOG_line = { sys = MOBIL  msg = "mobilization: levy host raised WITH depot/rail support for [scope:mobil_owner.GetTag] (reduced break-in, no supply floor)" }
+		}
+		else = {
+			# hasty levy in the open: the full ~6-month break-in + lingering supply floor
+			MOBIL_stamp_all = { green_d = 75  green_c = 150  green_s = 180  settle_d = 180  settle_c = 270  settle_s = 365  floor = yes }
+			LOG_line = { sys = MOBIL  msg = "mobilization: raw levy host raised UNSUPPORTED for [scope:mobil_owner.GetTag] (full break-in + supply floor)" }
+		}
+	}
+	else = {
+		# ==================== REGULARS ====================
+		if = {
+			# best case: a general is attached AND the legion musters in supplied home soil
+			limit = {
+				any_legion_commander = { is_alive = yes }
+				any_legion_unit = { any_sub_unit = { unit_location = { owner = scope:mobil_owner  controller = scope:mobil_owner } } }
+			}
+			MOBIL_stamp_all = { green_d = 30  green_c = 60  green_s = 90  settle_d = 75  settle_c = 120  settle_s = 150  floor = no }
+			LOG_line = { sys = MOBIL  msg = "mobilization: regular legion raised under command in home territory for [scope:mobil_owner.GetTag] (fast break-in)" }
+		}
+		else_if = {
+			# regulars in supplied home soil, no general
+			limit = { any_legion_unit = { any_sub_unit = { unit_location = { owner = scope:mobil_owner  controller = scope:mobil_owner } } } }
+			MOBIL_stamp_all = { green_d = 45  green_c = 90  green_s = 120  settle_d = 90  settle_c = 150  settle_s = 180  floor = no }
+			LOG_line = { sys = MOBIL  msg = "mobilization: regular legion raised in home territory for [scope:mobil_owner.GetTag] (standard break-in)" }
+		}
+		else = {
+			# regulars mustered on campaign / in contested territory: slower supply track
+			MOBIL_stamp_all = { green_d = 60  green_c = 120  green_s = 150  settle_d = 120  settle_c = 180  settle_s = 240  floor = no }
+			LOG_line = { sys = MOBIL  msg = "mobilization: regular legion raised in contested/foreign territory for [scope:mobil_owner.GetTag] (slow supply track)" }
+		}
+	}
+
+	LOG_exit = { sys = MOBIL  fn = "MOBIL_stamp_legion"  result = OK }
+}

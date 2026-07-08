@@ -2250,3 +2250,90 @@ actually loads it. Two files:
     exactly once. Coexists with the other on_game_initialized files (engine merges).
 Both files are THROWAWAY — delete once the PULL-vs-PUSH verdict is read from debug.log.
 NOTE: not committed with the #175 batch; goes to develop as its own testable step.
+
+────────────────────────────────────────────────────────────────────────
+#184-192 OVERNIGHT BUILD (2026-07-08) — economy (buildings/goods/production) + Qing OOB + mobilization
+────────────────────────────────────────────────────────────────────────
+Single overnight job. All major design decisions live in overnight_decisions2.md
+(§1-§14). Every feature se_LOG-instrumented; every edit carries a [#NNN task #NNN]
+traceability comment. Nothing here overrides the standing rules.
+
+#180/#189 TRADE GOODS — new producible goods.
+  Added `porcelain` (Jingdezhen imperial-kiln specialty, blue-and-white 青花) and
+  `rifles` (a tradeable military-logistics manufactured good) to common/trade_goods/
+  00_imp19c.txt. DECISION (user): cannons are NOT a trade good — artillery is already
+  modelled as a unit type; only small-arms/rifles become a commodity. Localised in
+  imp19c_tradegoods_l_english.yml (name + DESC each).
+
+#183/#184/#185 BUILDINGS — five concrete on-map production buildings + 1815 seed.
+  common/buildings/qing_production_buildings.txt (BOM): qing_silk_filature_building
+  (織造局), qing_porcelain_kiln_building (御窯廠), qing_tea_workshop_building (茶廠),
+  qing_cotton_workshop_building (棉紡織坊), qing_salt_yard_building (鹽場/鹽井). Each
+  MULTIPLIES its province raw-good output (base_resources) + boosts the strata whose
+  labour the craft used; schema follows arsenal_building / IND_resource_gathering_operation.
+  Placement, NOT the build menu: se_QING_BUILDINGS.txt (NO BOM) SE_qing_starting_buildings
+  seeds 12 buildings into their historical provinces at game start via QING_seed_building
+  ($P$/$B$/$G$ macro) — silk: Suzhou 2588 / Jiangning 6659 / Hangzhou 8120; porcelain:
+  Jingdezhen 7397; tea: Wuyishan 3317 / Huangshan 4441; cotton: Wuxi 366 / Changshu 455;
+  salt: Yangzhou 3208 / Tianjin 3783 / Chongqing 3008. Guarded by global sentinel
+  chi_starting_buildings_done; each seed re-checks owner=c:CHI + trade_goods match +
+  NOT has_building, logs SEED or SKIP. add_building_level BYPASSES the allow tech-gate
+  (proven se_QING_MECHANICS.txt:539), so 1815 seeding works regardless of tech. Wired at
+  oa_economy_setup.txt:2188. Localised in qing_mechanics_l_english.yml.
+
+#188 INTEGRATION — tie the new buildings/goods into existing content.
+  • Board of Works (user's explicit example — "the Grand Minister of Works would be
+    directly affected"): se_QING_WORKS.txt QING_works_build_specialty ($building$/$good$/
+    $cheap$) builds a specialty works in the most-populous owned province producing $good$
+    that lacks it; finesse-gated, treasury cost 75 (capable) / 95 (mediocre + corruption),
+    mirroring QING_works_build_dike/canal/wall. Surfaced by NEW event qing_works.6
+    "A Memorial to Expand State Industry (興辦官局)" (5 build options + decline), wired into
+    QING_frontier_flavour_roll (se_QING_DECLINE.txt, weight-6 entry gated on treasury>=90 +
+    a living, employed Works holder). Localised (14 keys) in qing_works_l_english.yml.
+  • Self-Strengthening (se_QING_SELFSTR.txt): after the Jiangnan arsenal is built,
+    QING_selfstr_found_jiangnan retargets the arsenal province to set_trade_goods = rifles
+    (guarded has_building=arsenal_building + NOT trade_goods=rifles) — the concrete
+    goods<->content tie linking the `rifles` good to the arsenal that makes them.
+
+#190/#191 QING 1815 ARMY/NAVY OOB — reworked from sourced research (§14a).
+  Replaced the placeholder (one 12k army + two 85-ship navies). imp19c_effects_legion_setup.txt:
+  SE_qing_armies raises ~26 named Banner + Green Standard provincial garrisons (dispersed,
+  not one doomstack); SE_qing_navy DISBANDS the auto-generated fleets and raises the three
+  historical provincial coastal water-forces as weak war-junk squadrons —
+  廣東水師 Guangdong (Canton p:9298, 6x brig), 福建水師 Fujian (Fuzhou p:3651, 4x brig,
+  largest-coastal-province fallback), and NEW #191 浙江水師 Zhejiang (Ningbo p:2893, 3x brig).
+  Each guarded on exists + owner=c:CHI + is_coastal, with LOG_fail on miss. Research point:
+  three coastal junk squadrons individually outclassed by a single European steam frigate —
+  historically accurate weakness, not a bug.
+
+#192 19th-CENTURY MOBILIZATION / BREAK-IN SYSTEM — new; expands the logistics layer (§14b).
+  A newly-RAISED legion starts UNREADY and becomes battle-ready over ~2-6 months as
+  staggered, self-expiring readiness debuffs lapse. Model (Showalter, van Creveld, Lynn,
+  Wawro): MULTI-AXIS, each maturing at its own rate — drill/discipline FAST, cohesion/morale
+  MEDIUM, supply/logistics SLOW (+ irregular residual floor); FRONT-LOADED as a heavy RAW
+  layer (expires first) + a lighter SETTLING layer (expires later) per axis, so the penalty
+  steps down like an exp-decay curve. NO per-tick variable decay loop, NO legion-scope
+  variables (both unproven — oracle-checked). Files:
+  • common/modifiers/mobilization_modifiers.txt (NO BOM): 7 UNIT-scope modifiers
+    (mobil_drill_raw/settling on `discipline`; mobil_cohesion_raw/settling on
+    `land_morale_modifier`; mobil_supply_raw/settling on `land_unit_attrition`+`siege_ability`;
+    mobil_supply_floor_irregular). Keys verified at unit scope (same as qing_unit_banner_rot).
+  • common/scripted_effects/se_MOBILIZATION.txt (NO BOM, sys=MOBIL): MOBIL_stamp_legion
+    (legion scope, on_legion_raised entry) decides ONE profile — LEVY (any conscript sub_unit)
+    vs REGULAR, then by accelerators — and calls MOBIL_stamp_all, which stamps the six layers
+    (+ floor for unsupported levies) on every_legion_unit. ACCELERATORS shorten the raw layers /
+    skip the floor: a general attached (any_legion_commander alive), raised in supplied home
+    soil (unit_location owner+controller = owner), and — USER REQUIREMENT — BUILDINGS & INDUSTRY:
+    a supply depot (military_depot_building / INF_depot / arsenal_building at the muster) or a
+    RAILWAY (tech_steam_locomotive or a local INF_railway_upgrade) sharply cut the supply penalty
+    and lift the irregular floor. Ties the new §2-§4 buildings + `rifles` to readiness.
+  • common/on_action/00_specific_from_code.txt (BOM): populated on_legion_raised with
+    MOBIL_stamp_legion, GUARDED NOT current_date=1815.7.1 so the game-start standing armies
+    (the peacetime establishment) are EXEMPT — only genuinely fresh musters break in.
+  Localised (14 keys) in modifiers_l_english.yml. Scope hierarchy oracle-verified against
+  Invictus (ip_republic.20) + Terra-Indomita; design iterated 3x to eliminate every unproven
+  construct before writing.
+
+ALL new/edited script files brace-balanced 0; byte conventions honoured (se_*.txt + modifiers
+NO BOM; on_action + trade_goods + loc BOM). Awaiting the deep adversarial-review workflow +
+in-game verification before any promotion to master.

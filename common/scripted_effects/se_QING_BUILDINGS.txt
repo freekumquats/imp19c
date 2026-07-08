@@ -1,0 +1,82 @@
+########################################################################
+# se_QING_BUILDINGS.txt — 1815 STARTING PRODUCTION BUILDINGS (task #184,
+# overnight_decisions2.md §2/§3/§10).
+#
+# Seeds the five concrete specialty-production buildings (defined in
+# common/buildings/qing_production_buildings.txt) into their historical Qing
+# provinces at game start, one time, guarded by a global sentinel. These are
+# state/handicraft works that already existed in 1815 — the Jiangnan Imperial
+# Silk Manufactories (江南三織造), the Imperial Kilns of Jingdezhen (御窯廠),
+# the Wuyi/Huangshan export-tea works, the Songjiang cotton handicraft belt,
+# and the Lianghuai/Changlu/Sichuan salt yards — so we place them directly
+# rather than making the player re-build the empire's existing industry.
+#
+# add_building_level does NOT enforce the building `allow` gate (se_QING_MECHANICS
+# .txt:539), so these seed regardless of the tech requirement that only governs
+# the player build menu. Each site is guarded by exists + owner = c:CHI + a
+# trade_goods match so a changed province setup can never mis-seed. Idempotent
+# via the chi_starting_buildings_done global sentinel.
+#
+# Concrete-over-abstract per standing rule. All steps logged (sys = QING).
+# Called once from oa_economy_setup.txt right after SE_qing_navy.
+#
+# NO BOM (se_*.txt convention; 232323 = ### header).
+########################################################################
+
+SE_qing_starting_buildings = {
+	# [#184 task #184] seed 1815 Qing specialty-production buildings. Guarded, idempotent.
+	LOG_enter = { sys = QING  fn = "SE_qing_starting_buildings" }
+	if = {
+		limit = { NOT = { has_global_variable = chi_starting_buildings_done } }
+
+		# --- 江南三織造: Imperial Silk Manufactories — Suzhou 蘇州, Jiangning 江寧
+		# --- (Nanjing), Hangzhou 杭州. The three state silk works of the Jiangnan. ---
+		QING_seed_building = { P = 2588  B = qing_silk_filature_building    G = silk       NAME = "Suzhou 蘇州 silk manufactory" }
+		QING_seed_building = { P = 6659  B = qing_silk_filature_building    G = silk       NAME = "Jiangning 江寧 silk manufactory" }
+		QING_seed_building = { P = 8120  B = qing_silk_filature_building    G = silk       NAME = "Hangzhou 杭州 silk manufactory" }
+
+		# --- 御窯廠: the Imperial Kilns of Jingdezhen 景德鎮, porcelain capital. ---
+		QING_seed_building = { P = 7397  B = qing_porcelain_kiln_building   G = porcelain  NAME = "Jingdezhen 景德鎮 imperial kilns" }
+
+		# --- Export-tea works: Wuyi 武夷 (Bohea), Huangshan 黃山 (Keemun district). ---
+		QING_seed_building = { P = 3317  B = qing_tea_workshop_building     G = tea        NAME = "Wuyishan 武夷山 tea works" }
+		QING_seed_building = { P = 4441  B = qing_tea_workshop_building     G = tea        NAME = "Huangshan 黃山 tea works" }
+
+		# --- Songjiang 松江 cotton handicraft belt — Wuxi 無錫, Changshu 常熟. ---
+		QING_seed_building = { P = 366   B = qing_cotton_workshop_building  G = textile_fibres  NAME = "Wuxi 無錫 cotton works" }
+		QING_seed_building = { P = 455   B = qing_cotton_workshop_building  G = textile_fibres  NAME = "Changshu 常熟 cotton works" }
+
+		# --- Salt yards: Lianghuai 兩淮 (Yangzhou), Changlu 長蘆 (Tianjin), the
+		# --- Sichuan 四川 brine wells (Chongqing 重慶 / 自貢). ---
+		QING_seed_building = { P = 3208  B = qing_salt_yard_building        G = salt       NAME = "Lianghuai 兩淮 salt yard (Yangzhou)" }
+		QING_seed_building = { P = 3783  B = qing_salt_yard_building        G = salt       NAME = "Changlu 長蘆 salt yard (Tianjin)" }
+		QING_seed_building = { P = 3008  B = qing_salt_yard_building        G = salt       NAME = "Sichuan 四川 salt wells (Chongqing)" }
+
+		set_global_variable = chi_starting_buildings_done
+		LOG_line = { sys = QING  msg = "starting buildings: 1815 specialty-production seed complete" }
+	}
+	LOG_exit = { sys = QING  fn = "SE_qing_starting_buildings"  result = OK }
+}
+
+# Seed ONE production building at province $P$ (building $B$), guarded by
+# ownership + a $G$ trade-good match so a re-mapped province can never mis-seed.
+# Skips silently (logged) if the site fails its guard or already has the building.
+QING_seed_building = {
+	if = {
+		limit = {
+			exists = p:$P$
+			p:$P$ = {
+				owner = c:CHI
+				trade_goods = $G$
+				NOT = { has_building = $B$ }
+			}
+		}
+		p:$P$ = {
+			add_building_level = $B$
+			LOG_line = { sys = QING  msg = "starting buildings: $B$ seeded at $NAME$ (p:$P$)" }
+		}
+	}
+	else = {
+		LOG_line = { sys = QING  msg = "starting buildings: SKIP $B$ at $NAME$ (p:$P$) — guard failed or already present" }
+	}
+}

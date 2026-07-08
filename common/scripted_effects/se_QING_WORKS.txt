@@ -226,3 +226,67 @@ QING_works_graft_scandal = {
 	}
 	LOG_exit = { sys = QING  fn = "QING_works_graft_scandal"  result = OK }
 }
+
+# ======================================================================
+# [#188 task #188] COMMISSION A SPECIALTY-PRODUCTION WORKS — ties the Board of
+# Works (工部) to the new 1815 specialty buildings (qing_production_buildings.txt).
+# The user's integration example: "the Grand Minister of Works would be directly
+# affected by these changes." The Works minister can raise an Imperial Silk
+# Manufactory / porcelain kiln / tea works / cotton works / salt yard in a
+# province that PRODUCES the matching raw good but lacks the works — extending
+# the empire's state industry. Finesse-gated cost, same idiom as dike/canal/wall.
+#   $building$ = a qing_production_buildings key
+#   $good$     = the trade good the works requires (guards site selection)
+#   $cheap$    = yes/no (cheap route skips finesse gate, drives corruption)
+# ======================================================================
+QING_works_build_specialty = {
+	LOG_enter = { sys = QING  fn = "QING_works_build_specialty" }
+	if = {
+		limit = { has_variable = qing_office_works_holder }
+		var:qing_office_works_holder = { save_scope_as = works_minister }
+	}
+	if = {
+		limit = {
+			OR = {
+				"$cheap$" = yes
+				AND = {
+					has_variable = qing_office_works_holder
+					var:qing_office_works_holder = { is_alive = yes  employer = ROOT  finesse >= 7 }
+				}
+			}
+			any_owned_province = { trade_goods = $good$  NOT = { has_building = $building$ } }
+		}
+		# raise the works in the most-populous matching-good province that lacks it
+		ordered_owned_province = {
+			limit = { trade_goods = $good$  NOT = { has_building = $building$ } }
+			order_by = total_population
+			max = 1
+			add_building_level = $building$
+			save_scope_as = specialty_province
+		}
+		if = {
+			limit = {
+				has_variable = qing_office_works_holder
+				var:qing_office_works_holder = { is_alive = yes  finesse >= 9 }
+			}
+			add_treasury = -75
+			LOG_line = { sys = QING  msg = "works: built $building$ (capable minister, cost 75) at [scope:specialty_province.GetName] for [ROOT.GetTag]" }
+		}
+		else = {
+			add_treasury = -95
+			if = {
+				limit = { "$cheap$" = yes }
+				QING_DECLINE_nudge = { var = qing_corruption_level  amount = 8 }
+				LOG_line = { sys = QING  msg = "works: built $building$ CHEAPLY (corruption +8, cost 95) at [scope:specialty_province.GetName] for [ROOT.GetTag]" }
+			}
+			else = {
+				QING_DECLINE_nudge = { var = qing_corruption_level  amount = 4 }
+				LOG_line = { sys = QING  msg = "works: built $building$ (mediocre minister, corruption +4, cost 95) at [scope:specialty_province.GetName] for [ROOT.GetTag]" }
+			}
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_works_build_specialty"  reason = "no Works holder or no $good$ province lacking $building$ for [ROOT.GetTag]" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_works_build_specialty"  result = OK }
+}
