@@ -2385,3 +2385,46 @@ issues FIXED this pass (task-tagged [#193-fix]):
 All touched files brace-balanced 0; byte conventions preserved. Fixes remain on develop for
 in-game verification; the #1 guard fix should be confirmed with se_LOG (MOBIL_stamp_legion
 entries) at 1815 load before any promotion to master.
+
+
+## [#209] Works pulse — QING_works_pulse (工部 office-coupling) NEW (develop, 2026-07-08)
+
+**What.** Gave the Grand Minister of Works (工部) domain its own throttled quarterly pulse,
+mirroring `QING_revenue_pulse`. Previously the Works content (`qing_works.1/.2/.3/.4/.6`) was
+driven only by weighted entries in the generic `QING_DECLINE.txt` flavour roll, with NO
+dedicated office pulse — the only late office family without one.
+
+**Files.**
+- `common/scripted_effects/se_QING_WORKS.txt` — NEW `QING_works_pulse` effect (top of file,
+  above `QING_works_build_dike`). Two mutually-exclusive branches:
+  - VACANT office → hydraulic works decay: unconditional `qing_corruption_level +1` graft
+    drift (unsupervised 河工 budget), plus a cooldown-gated 30% roll offering the two perennial
+    DECAY crises (dike breach `.1`, canal silt `.2`) — each already carries a "no minister /
+    can't afford" option path, so they fire correctly with no holder.
+  - FILLED office (holder alive + `employer = ROOT` + off cooldown) → 40% roll over the full
+    menu: dike `.1`, canal `.2`, Great Wall `.3` (treasury>=120 stability>=40), specialty
+    manufactory `.6` (#188; gated finesse>=7 + a specialty province lacking its works), and —
+    in a corrupt court (corruption>=50) — the embezzlement scandal `.4`.
+  - Cooldown var `qing_works_event_cooldown` (270 days ≈ 3 quarters), matching the revenue
+    precedent; verified unique to this file. se_LOG: LOG_enter/LOG_exit + per-branch LOG_line.
+- `common/scripted_effects/se_QING_GOVERNANCE.txt` — registered `QING_works_pulse = yes` inside
+  `QING_GOV_pulse` at #16b (right after `QING_revenue_pulse`), so it inherits the pulse's
+  CHI-only + player-only (`is_ai = no`) + quarterly (90-day) gating from 00_monthly_country.txt:85.
+- `common/scripted_effects/se_QING_DECLINE.txt` — MIGRATED the five works entries OUT of the
+  flavour roll (replaced with a pointer comment), exactly as the revenue events were migrated
+  out. The roll's own family comment states pulse-owned events are NOT re-listed here; leaving
+  them would have DOUBLE-FIRED works crises. `qing_works.5` stays is_triggered_only (chained
+  from `.1.b`), untouched.
+
+**Why this shape (design decision).** The revenue events were fully migrated out of the decline
+roll into their pulse; the other office pulses (personnel/censorate/household) COEXIST with the
+roll because their roll-entries are *distinct* events from what the pulse fires. Works had NO
+pulse and its events lived only in the roll, so the faithful "mirror QING_revenue_pulse" is the
+migrate-out pattern — one home, no double-fire. Behaviour vs. before: the same events, same
+triggers, now on a cooldown-throttled roll instead of the every-quarter decline roll, plus a
+NEW vacant-office decay branch that did not exist before (the roll never modelled a vacant 工部).
+
+**Verify.** Braces balanced (WORKS 193/193, GOVERNANCE 210/210, DECLINE 957/957); BOM conventions
+preserved (se_* = no BOM). No live `qing_works.*` trigger_event remains in the decline roll.
+Task-tagged `[task #209]` in all three files. Reviewed before commit. Pushed to develop for
+in-game verification (branch policy — not promoted to master).
