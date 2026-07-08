@@ -1969,3 +1969,44 @@ boot block will now emit QING_DECLINE_init ENTER on next new game — the verifi
 Scanned error.log for other "Unknown trigger type: QING_*" reachable from the boot chain:
 QING_DECLINE_nudge (7×) is an EFFECT ({var= amount=}) used in mission trigger blocks, NOT in
 the boot chain — separate pre-existing issue, out of scope. No other boot-chain poison found.
+
+────────────────────────────────────────────────────────────────────────
+#164 Grand Council OFFICES cards clipped by right border
+────────────────────────────────────────────────────────────────────────
+Reported: "the grand ministers are cut off with only three or four showing."
+CAUSE: gui/government_view.gui OFFICES section packed all 10 office cards
+(each 232px + margin ≈ 238px) into a SINGLE flowcontainer capped at width 950.
+A plain flowcontainer does NOT wrap, so only ~4 cards (4×238=952) rendered before
+the right border clipped the rest. The DYNASTY/HEALTH sections above already avoid
+this by using manually-sized fixed rows; the OFFICES section didn't.
+FIX: converted the single flowcontainer into `direction = vertical` stacking THREE
+horizontal row-flowcontainers of 4 + 4 + 2 cards (personnel/revenue/rites/war |
+justice/works/censor/lifanyuan | grand_secretary/zongli). Vanilla's own office grid
+uses datamodel_wrap = 4, confirming 4-per-row fits 950px. Pure GUI restructure,
+no logic change. Braces 1615/1615. Needs in-game visual confirm.
+
+────────────────────────────────────────────────────────────────────────
+#167 diplomatic-play type cannot be changed after selection
+────────────────────────────────────────────────────────────────────────
+Reported: "once the type is selected the player is forced to start it or leave
+because there is no way to switch type of play after selecting one."
+CAUSE: the six province-window goal buttons (#147, gui/province_window.gui:4605+)
+each call DIPLO_begin_play_<goal>, which IMMEDIATELY begins the play (pays 30
+influence via DIPLOMACY_player_begin_play). Every one of the six shared an is_valid
+clause `NOT = { any_in_global_list ... play_instigator = scope:player ... same area }`.
+So the instant you clicked one goal, a play existed in that area and ALL SIX buttons
+disabled — leaving only the toggle Start/End button. No way to pick a different type.
+FIX (two parts, se_DIPLOMACY.txt + EE_scripted_guis.txt):
+1. DIPLOMACY_player_begin_play now SWITCHES IN PLACE: if the player already runs a
+   play in scope:target_province's area, it removes that play (random_in_global_list
+   + AI_remove_diplomatic_play, the proven DIPLO_begin_or_end_play shape) and SKIPS
+   the begin price (a switch, not a new play); a genuinely fresh play still pays.
+2. Removed the blocking `NOT = { any_in_global_list ... }` guard from all six begin
+   guis (get_territory/annex_state/purchase_state/subjugate/liberate/colonise) so the
+   buttons stay ENABLED while a play runs — clicking a different goal now switches.
+   Kept every other per-goal gate (political_influence>=30, stability, treasury,
+   DIPLOMACY_power, is_subject_of, culture-mismatch). The toggle Start/End button
+   (DIPLO_begin_or_end_play) is independent and unchanged — still the End control.
+Global list stores play-PROVINCE objects (se_AI.txt:621), so random_in_global_list
+iterates with THIS=play, exactly what AI_remove_diplomatic_play expects. se_LOG line
+on switch. Braces: se_DIPLOMACY 550/550, EE_scripted_guis 479/479.

@@ -1492,7 +1492,38 @@ DIPLOMACY_resolve_colonise = {
 # ======================================================================
 DIPLOMACY_player_begin_play = {
 	LOG_enter = { sys = DIPLO  fn = "DIPLOMACY_player_begin_play" }
-	pay_price = begin_diplomatic_play_price
+	# [#167] SWITCH-IN-PLACE. The province-window goal buttons each begin a play
+	# immediately, and their shared is_valid blocked beginning once ANY player play
+	# existed in the area — so after one click all six buttons disabled and the type
+	# could never be changed (only ended or abandoned). Now the buttons stay enabled:
+	# if the player already runs a play in this area, treat the click as a GOAL SWITCH —
+	# remove the existing play and SKIP the begin price (they already paid to open one).
+	# Only a genuinely fresh play (no existing player play here) pays. `this` = the
+	# player country (called inside scope:player = { ... }). Removal reuses the proven
+	# random_in_list + AI_remove_diplomatic_play shape from DIPLO_begin_or_end_play; the
+	# guard kept at most one player play per area, so exactly one is removed.
+	save_scope_as = diplo_begin_instigator
+	if = {
+		limit = {
+			any_in_global_list = {
+				variable = global_all_diplomatic_plays
+				var:play_instigator = scope:diplo_begin_instigator
+				var:play_target_area = { area = scope:target_province.area }
+			}
+		}
+		random_in_global_list = {
+			variable = global_all_diplomatic_plays
+			limit = {
+				var:play_instigator = scope:diplo_begin_instigator
+				var:play_target_area = { area = scope:target_province.area }
+			}
+			AI_remove_diplomatic_play = yes
+		}
+		LOG_line = { sys = DIPLO  msg = "player [scope:diplo_begin_instigator.GetTag] switched play goal in area of [scope:target_province.GetName] (free switch, prior play removed)" }
+	}
+	else = {
+		pay_price = begin_diplomatic_play_price
+	}
 	if = {
 		# colonise: no target country — set target = instigator so the begin effect
 		# normalises play_target_country to c:BAR (its unclaimed-land convention).
