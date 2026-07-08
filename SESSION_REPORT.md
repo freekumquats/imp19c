@@ -1836,3 +1836,41 @@ will transfer them to the country which initiated the subjugate play)."
   on_game_initialized). Swapped ROOT.MakeScope/GetTag -> This.* (proven idiom, se_JAPAN_BAKUMATSU.txt).
 - Divide-by-zero guard, window shift, scope, macro use, GUI layout: reviewer VERIFIED correct, no change.
 - Braces 56/56. Re-verified: no inverted clamps remain. Ready for in-game verify.
+
+## #157 — New-Game boot CRASH fix (misplaced dynastic-house triggers)
+
+- SYMPTOM: game booted fine but EXCEPTION_ACCESS_VIOLATION on New Game instantiation
+  (crash at 18:25:48 = the on_game_initialized country-setup pass). debug_mode on, yet
+  ZERO IMP19C log lines — died before the first setup LOG_enter flushed. Functions stripped
+  from the stack, so diagnosed from error.log (Downloads copy).
+- ROOT CAUSE: QING_dynasty_has_dowager + QING_dynasty_has_crownprince were authored in
+  se_QING_DYNASTY.txt, a scripted_EFFECTS file. The engine registers a def in a
+  scripted_effects file as an EFFECT, so every `limit = { QING_dynasty_has_* = yes }` was
+  rejected at load ("Unknown trigger type", ~100+ occurrences across qing_keju_events,
+  qing_napoleon_events, qing_office_events, se_QING_COUNCIL, se_QING_FACTION, etc.) and the
+  guarding limit COLLAPSED. With the dowager guard gone, QING_council_recompute:160-162 (fired
+  at boot via QING_council_autofill -> QING_council_recompute -> QING_faction_recompute) ran
+  `QING_council_score_figurehead = { who = current_ruler.mother }` UNGUARDED. The 1815 Jiaqing
+  Emperor has no living mother (Empress Xiaoyichun d. 1797), so current_ruler.mother is an
+  invalid scope => access violation.
+- WHY MASTER TOLERATES ITS OWN MISPLACED TRIGGER: master ships QING_seat_regency_warranted
+  (also a condition-block in a scripted_effects file, used as a trigger) and boots fine —
+  because that collapsed guard's body does no invalid deref. "Unknown trigger type" alone is
+  survivable; only the resulting unguarded scope deref faults.
+- FIX: relocated BOTH condition-blocks VERBATIM to NEW common/scripted_triggers/
+  qing_dynasty_triggers.txt (no-BOM/LF, braces 8/8) so the engine registers them as triggers.
+  All ~100+ "Unknown trigger type" errors and the crash resolve at once — the trigger is now
+  globally registered for every call site. se_QING_DYNASTY.txt: removed the two defs, left a
+  pointer comment (braces 183/183). Pure relocation, behaviourally identical once recognised
+  as triggers. [#157 crash-fix]-tagged header documents the whole chain.
+- SCOPE DISCIPLINE (deliberately NOT changed — verified pre-existing on master, non-fatal,
+  not a develop regression, so out of "fix the things that will break"):
+  * `minor_character = yes` in se_QING_AMBAN.txt:57 (QING_amban_post) — "Unknown effect", a
+    no-op the engine skips; on master since the amban feature landed. Surfaced through the new
+    #163 panel call site but pre-existing (should be is_minor_character; left for a feature pass).
+  * `culture = ROOT.primary_culture` in se_QING_COUNCIL.txt score_office/score_chancellor —
+    "Illegal use of operator =" guard-collapse, but the if-body only does change_variable (no
+    scope deref), so master boots through it. On master at lines 231/260.
+  * `culture_group = mongolic/bodish` on character scope (SUB_QING_amban, se_QING_AMBAN) — NOT
+    flagged anywhere in error.log; engine accepts it. (Corrected a stale note that claimed it throws.)
+- TODO: in-game verify New Game now instantiates without access violation.
