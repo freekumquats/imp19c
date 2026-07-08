@@ -1900,3 +1900,26 @@ User pushback: "just because it doesn't crash doesn't make it correct." Correct 
   break" because they silently break intended behaviour even though they never fault.
 - Braces: se_QING_COUNCIL 380/380, se_QING_AMBAN 131/131. no-BOM/LF. TODO: in-game verify the Manchu/Han
   split populates (>0 Manchu with the 1815 Manchu ruler) and residents show as minor characters.
+
+### #157 follow-up 2 — culture_group = X is INVALID (I was wrong earlier)
+User asked directly: "is culture_group = mongolic/bodish valid or not." I had previously said
+"not flagged, engine accepts it." WRONG — that was a grep artefact: the error names the VALUE
+(mongolic/bodish/chinese_group), not the keyword, so `grep culture_group error.log` returned
+nothing. It IS invalid. error.log: "Badly read script value mongolic/bodish/chinese_group" +
+"Illegal use of operator =" — same class as the culture=ROOT bug. Bare `culture_group = X` is
+not a trigger in ANY scope; the scope-correct triggers are `has_culture_group` (character) and
+`country_culture_group` (country). When used in a limit the OR PostValidates false => the gate
+fails SHUT (that branch never fires).
+Fixed all FIVE erroring sites (logic was fine, keyword wrong):
+- common/scripted_guis/SUB_QING_amban.txt:55-56,147-148 (#163 panel, develop-new) — current_ruler
+  is a CHARACTER scope => has_culture_group = mongolic/bodish. (Broke the panel's is_shown/enable gate.)
+- common/scripted_effects/se_QING_AMBAN.txt:177-178 (auto-sweep, master) — current_ruler CHARACTER
+  => has_culture_group. (Auto-staffing of Mongol/Tibetan dependencies never fired.)
+- common/scripted_effects/se_QING_DECLINE.txt:1058,1061 (QING_frontier_flavour_roll #7 Golden Urn,
+  master) — any_subject/random_subject is a COUNTRY scope => country_culture_group = bodish.
+- common/customizable_localization/00_offices.txt:9,27,45 (master) — type = country => 
+  country_culture_group = chinese_group. (Chinese office-name loc branch never resolved.)
+VERIFIED country_culture_group has zero load errors (used validly at 00_culture_supergroups:158);
+has_culture_group is proven (characters_view_scripts:15-17). Braces: SUB 60/60, AMBAN 131/131,
+DECLINE 974/974, offices 18/18. 00_offices BOM+LF preserved.
+LESSON: to check whether a trigger is valid, grep the error log for the VALUE too, not just the keyword.
