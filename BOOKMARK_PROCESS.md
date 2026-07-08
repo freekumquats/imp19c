@@ -71,6 +71,22 @@ historical event* (First Opium War, Boshin War), decide per-year whether that ev
 still in the future (keep its real date) or now in the past (cut the arc or re-scope it).
 Log the call in the decisions doc.
 
+> **CRITICAL — `on_game_initialized` day-offset arcs.** The US/Japan/Mexico/Qing arcs
+> (`*_on_actions.txt`) fire beats via `trigger_event = { id=… days = { A B } }`, where the
+> offset A is baked so the beat lands on its **real historical date measured from the OLD
+> START_DATE**. If you move the start, these offsets DO NOT auto-shift — a beat calibrated to
+> "day 13835 from 1815" fires 13835 days after the *new* start, i.e. ~25 yrs too early if you
+> moved back to 1790. **For every real-event beat, add the start delta:
+> `new_offset = old_offset + (OLD_START − NEW_START in days)`.** Drop beats whose real date now
+> precedes the new start. Grep `days = {` in each `*_on_actions.txt`.
+
+> **CRITICAL — `START_DATE` is GLOBAL.** Moving it also invalidates every *other* country's
+> ruler and border for that year. Check with a script: how many `set_as_ruler=char:N`
+> characters have `birth_date` after the new start (unborn/infant → no valid ruler at boot).
+> Decide scope up front: a **Qing-focused** bookmark leaves the rest of the world at its old
+> config (documented anachronism, patch only load-breaking rulers); a **full-world** re-target
+> is a much larger effort (every country's ruler + borders for the year). Record which.
+
 ---
 
 ## 3. BORDERS — `own_control_core`

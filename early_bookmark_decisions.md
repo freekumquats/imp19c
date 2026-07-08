@@ -94,6 +94,58 @@ maximal Qianlong-era directly-controlled + tributary configuration essentially i
   These are HYBRID additions (add a `dependency` line) IF research confirms they belong and
   IF those tags exist on the map. **HOLD until research confirms tag existence + status.**
 
+### D-SCOPE — 2026-07-08 — **KEY DECISION: Qing-focused re-target, not a full-world 1790 conversion** ⚠️
+`START_DATE` is GLOBAL. Moving it back ~25 years (1815 → ~1790) has world-wide consequences
+far beyond the Qing:
+- **15 of 90 `set_as_ruler` characters across all country files are born after 1780** — i.e.
+  unborn or infants at a ~1790 start (verified by script): rulers in North America(451,b1781),
+  Rio de la Plata(5,b1787), Colombia(6/38,b1783), Ottoman(45,b1785), Italy(136,b1791;154,b1782),
+  India(522/523/525/527), Spain(22,b1784), and Qing's own 1815 heirs (327 b1813, 331 b1792,
+  335 KOR-king b1790). At start the engine would find no valid ruler and auto-generate one
+  (or the assignment silently fails) — messy, not necessarily a crash.
+- **World political geography is 1815, not 1790:** independent Latin American republics
+  (Colombia, Rio de la Plata, Chile, Brazil-as-independent) did not exist in 1790; the
+  Napoleonic reorganisation of Europe/Italy hadn't happened; the Ottoman/India maps differ.
+  Correcting all of that is effectively authoring a *different game*, not "the height of the
+  Qing dynasty."
+
+**Decision (default, taken because the user is away + asked for continuous progress + framed
+the task Qing-centrically — "the height of the Qing dynasty … changing the starting Qing
+characters and borders and buildings"):**
+- **Scope = QING-FOCUSED peak bookmark.** Re-target `START_DATE` to the peak-Qing year and
+  fully, correctly rework the **Qing**: reigning emperor, court bench, treasury, subjects,
+  buildings, OOB, laws — everything the task enumerates for CHI.
+- **The rest of the world is left at its existing 1815 configuration** and treated as an
+  ACCEPTED, DOCUMENTED anachronism/limitation of this bookmark, EXCEPT where a specific
+  world ruler being unborn causes an outright load failure — in which case that single ruler
+  gets a minimal patch (assign the era-correct historical ruler, or a fallback). No wholesale
+  world re-authoring.
+- **Rationale:** matches the user's explicit framing; keeps the deliverable achievable and
+  reviewable; the reusable process still documents the global-implications for future runs.
+- **Flag for user review:** if the user actually wants a full-world 1790 conversion, that is
+  a much larger, separate effort — this decision is the natural place to redirect. Called out
+  here and in SESSION_REPORT so it's the first thing seen on return.
+
+### D-ARC — 2026-07-08 — **KEY: dated arc offsets must be shifted, or they fire ~25 yrs early** ⚠️
+The US/Japan/Mexico/Qing arcs fire from `on_game_initialized` via
+`trigger_event = { id = … days = { A B } }`, where the day-offset is calibrated from the
+**1815.7.1** START_DATE to land each beat on its **real historical date** (e.g.
+`japan_bakumatsu.0 days≈13835` ≈ 1853 = Perry's arrival; `usa_section` beats → 1820 Missouri
+Compromise, 1861 Civil War, etc.). These offsets are baked to 1815.
+- **Problem:** move START_DATE back to ~1790 (≈9130 days earlier) and every offset now fires
+  ~25 years too early — Perry arrives in ~1828, the US Civil War in ~1836. Historically broken.
+- **Decision:** for each dated beat that represents a REAL historical event, **add the
+  start-shift delta (`Δdays = 1815.7.1 − ${START}`) to its offset** so the beat still lands on
+  its true date. Beats whose real date now falls *before* the new (earlier) start are dropped
+  (the event already happened) — but with a ~1790 start, all these 19th-C beats are still in
+  the future, so the rule is simply `new_offset = old_offset + Δdays` for all of them.
+- **Affected files (offset re-base):** `japan_bakumatsu_on_actions.txt`,
+  `mex_instability_on_actions.txt`, `usa_section_on_actions.txt`, and any
+  `qing_*`/`se_MEXICO`/`se_QING_DIPLO` dated one-shots. Δdays computed once the exact
+  ${START} is set (≈9131 days for 1790.7.1; will compute precisely).
+- **Alternative considered & rejected:** leaving offsets as-is (arcs fire 25 yrs early). Rejected
+  — it silently corrupts the historical timeline the arcs were built (#93/#94/#96) to reproduce.
+
 ### D3 — PENDING — Chosen year + justification
 _To be filled from the research agent on completion, before any historical-content edit._
 
