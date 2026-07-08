@@ -2465,3 +2465,146 @@ button only SELECTS which play will start; the "Start diplomatic play" button be
 (EE_scripted_guis no-BOM, 000_TRADE_loc + interface yml BOM — all original). No `DIPLOMACY_player_begin_play`
 call remains from any button (grep: only comments). Task-tagged `[#210]`. Reviewed before commit.
 Pushed to develop for in-game verification (branch policy — not promoted to master).
+
+## [#211] Qing starting army all stacked in Beijing instead of dispersed
+
+**Symptom (develop boot test, CHI).** The ~12,000-man banner army (correctly many 500-man cohorts —
+COHORT_SIZE=500, intended) appeared as a single pile in Beijing, not dispersed across China and its
+subjects.
+
+**Root cause.** Both raise helpers (`SE_qing_raise_garrison[_cmd]`, imp19c_effects_legion_setup.txt)
+raised every garrison from `c:CHI.capital_scope.governorship`. A legion raised from a governorship
+musters within that governorship's territory; a `location` in another governorship's provinces is
+not honoured and clamps to the raising governorship's seat (Beijing). So all 26 garrisons stacked at
+the capital despite each passing a distinct `prov`.
+
+**Fix.** Raise each garrison from the GARRISON PROVINCE'S OWN governorship
+(`$prov$ = { state.governorship = { raise_legion ... location = $prov$ } }`) — the proven dispersal
+idiom (se_QING_ILI.txt:400 raises the Chu Army at Ürümqi p:2930, one of our exact frontier provinces;
+se_QING_SELFSTR.txt:327). A capital-governorship `else` fallback (guarded on
+`exists = state.governorship`) prevents a scope error on any state lacking a governorship. Frontier
+provinces owned by CHI subjects (Ili/Mukden/Heilongjiang/Ürümqi/Kashgar) now raise under the
+subject's governorship — the intended "dispersed across China AND its subjects." Commander attach is
+gated `$cmd$ = { is_ruler = no employer = $prov$.owner }` so a CHI commander is only attached when the
+raising country matches (a subject-owned frontier legion just gets no scripted commander; the player
+assigns one). Behavioural change to an existing feature — scrutinised; unit counts/sizes unchanged.
+
+## [#212] Only one Qing navy at start; rename primitive water-forces to "[place] Coastal Patrol"
+
+**Symptom (develop boot test, CHI).** Only ONE navy existed, "Fujian Water Force". User wants all
+primitive starting navies renamed "[place] Coastal Patrol".
+
+**Root cause of the single navy.** `SE_qing_navy` raises three provincial water-forces (Guangdong
+p:9298, Fujian p:3651, Zhejiang p:2893). Only Fujian carried a fallback for the case where its named
+port fails the `owner=c:CHI is_coastal=yes` guard; Guangdong and Zhejiang had a bare `LOG_fail` else.
+So when the primary per-port guard evaluated false, only Fujian recovered via its fallback → exactly
+one navy survived.
+
+**Fix.**
+- Renamed all four name literals (both Fujian spawns) + their log lines to "[place] Coastal Patrol":
+  Guangdong / Fujian / Zhejiang. These are raw `create_unit name=` literals (no loc keys), so no .yml
+  change was needed.
+- Gave Guangdong a fallback mirroring Fujian's (largest owned coastal province, excluding 3651/2893 so
+  squadrons never stack), so a non-coastal-reading Canton no longer silently drops the squadron.
+  (Zhejiang, smallest, retains its bare else by design — but the Guangdong fix removes the primary
+  single-navy cause.)
+
+**Verify (both).** imp19c_effects_legion_setup.txt braces 234/234; no BOM (correct for se_*); no
+"Water-Force" remains except historical-gloss comments (水師). Task-tagged `[#211-fix]`/`[#212-fix]`.
+
+## [#214] Grand Council: Eligible Courtiers overlapped office row 2; Edicts misplaced
+
+**Symptom (develop boot test, CHI).** The Eligible Courtiers block painted over the second office row
+(Justice/Works/Censorate/Lifan Yuan, with Imperial Household/Zongli Yamen). Desired order: offices →
+Eligible Courtiers (below Imperial Household/Zongli) → Grand Council Edicts.
+
+**Root cause.** The office-grid container (government_view.gui:2542) is a plain `widget` with
+`size = { 950 -1 }`. A plain `widget` does NOT derive its height from flow children (only
+flowcontainer/vbox/hbox do), so it reported a near-zero height to the parent vertical flow, and the
+next sibling (Eligible Courtiers) was placed at the offices' y-origin — overlapping rows 2 & 3.
+
+**Fix.** Set the office widget to its real height `size = { 950 400 }` (three 128px card rows + 2×4px
+spacing = 392, +margin). The inline Eligible Courtiers header/button and the Statecraft ("Grand
+Council Edicts") strip that follow in source order now stack cleanly below the offices — matching the
+requested order without moving any blocks. Braces 1547/1547.
+
+## [#216] Subject Actions dropdown rendered at the bottom of the diplomatic-actions list
+
+**Symptom (develop boot test, CHI).** The "Subject Actions" category appeared at the very bottom of
+the diplomatic-actions list instead of directly below "Trade Actions".
+
+**Root cause.** An empty `vbox = { layoutpolicy_vertical = expanding }` spacer sat between the Trade
+Actions block and the Subject Actions block (diplomatic_view.gui, formerly ~1476-1478). An expanding
+vbox absorbs all slack vertical space, pushing every following sibling — the whole Subject Actions
+category — to the bottom of the column.
+
+**Fix.** Relocated that expanding spacer to the LAST position (after the Subject Actions content vbox),
+so the action categories stay top-aligned and Subject Actions renders directly under Trade Actions.
+Task-tagged `[#216 fix]`. Braces balanced.
+
+## [#217] Subject-action options rendered as icons, not red text buttons
+
+**Symptom (develop boot test, CHI).** The per-subject verbs (Tighten Control, Post an Amban, …) drew
+as bare `icon_button_square` icons rather than the red text buttons (name left, cost right) used by
+Relation/Trade Actions.
+
+**Root cause.** The 9 subject/amban buttons used `icon_button_square` (icon-only) with a blockoverride
+"Icon" texture, instead of the shared `diplomacy_action_button` template (Left_text/Right_text, red
+brighten background) that every other diplomatic action uses.
+
+**Fix.**
+- Converted all 9 buttons (qing_subject_promote/incorporate/demote/integrate/resume_integration,
+  qing_amban_manage_post/recall/replace/return_auto) to `diplomacy_action_button` mirroring the Trade
+  Actions template: same datacontext/visible/enabled ScriptedGui expressions and On_click blockoverride,
+  now with `Left_text` = action NAME and `Right_text` = cost. Tooltips (QING_*_TT) preserved verbatim.
+- Added NAME + COST loc keys to imp19c_interface_l_english.yml (QING_SUBJECT_*_NAME/_COST,
+  QING_AMBAN_MANAGE_*_NAME/_COST); costs mirror the figures already stated in each *_TT tooltip
+  (75/100/50/50/– PI for subject verbs; 25/–/25/– PI for amban verbs). Task-tagged `[#217 fix]`.
+- Braces 1312/1312.
+
+## [#213]/[#215] Grand Council entirely unpopulated + throne boxes (Emperor/Crown Prince) blank
+
+**Symptom (develop boot test, CHI).** No Grand Chancellor / no Grand Ministers; Emperor + Crown Prince
+figurehead boxes blank (Grand Regent blank is correct at start).
+
+**Diagnosis (read-only, deep verification — agent ae01912e7b8145995).** Both symptoms share a SINGLE
+root cause: the entire CHI `on_game_initialized` boot block (qing_mechanics_on_actions.txt:9 →
+QING_council_autofill @:29, QING_seat_refresh_all @:33) fails to compile, so none of the office/seat
+holder vars are ever set. Mechanism = the documented #165/#166 "poisoned boot block": trigger
+`QING_seat_regency_warranted` was DEFINED as a scripted_EFFECT but USED in a `limit`
+(QING_seat_evaluate_regency), a hard `pdx_persistent_reader` parse error that drops the whole compiled
+block. A runtime error could not blank a sibling unconditional `set_variable qing_office_emperor_holder`
+— only a load-time block-drop explains ALL boxes going blank at once.
+
+**Resolution status.** ALREADY FIXED on develop in commit `9819431d` ("Fix Qing game-start block:
+relocate QING_seat_regency_warranted to scripted_triggers"): the trigger now lives in
+scripted_triggers/qing_dynasty_triggers.txt:65 (identical body), removed from se_QING_SEATS.txt.
+Develop source verified fully internally consistent: GUI reads (government_view.gui Emperor:2285 /
+Crown Prince:2329 / Regent:2373 + 11 office cards) match the effect writes exactly; wiring is CHI-gated
+and correct; the 1815 bench characters (Jiaqing char 224 + bench 700/702/703/706/707/708/709/711/712)
+all exist, alive+adult, no ID collisions. An exhaustive brace-matched mod-wide scan found ZERO other
+effect-used-as-trigger poisons on develop. **No new develop change required for #213/#215** — the
+symptom reproduces only in a build compiled WITHOUT 9819431d (the poison still lives on master;
+per branch policy master is left untouched until asked). The user's test build must include 9819431d.
+
+## [#163] Sphere probe rewrite — genuine script-level cross-state read
+
+**Symptom.** error.log warned `sphere_probe_score is set but never used`, and no probe verdict appeared
+in debug.log.
+
+**Root cause (the "fundamentally flawed" probe logic).** The old probe only ever "read" its variables
+inside `debug_log` message strings — `[scope:….GetVariable('…').GetValue|-999]`. A `.GetValue` inside a
+log string is a GUI DATA-FUNCTION read evaluated by the interface layer, NOT a script read. So (a) no
+script trigger/effect ever consumed the variable → the analyzer correctly flagged it "set but never
+used"; and (b) the data-function path resolves identically whether or not the *script* engine can do a
+cross-state numeric read, so the probe could never have produced a real PULL-vs-PUSH verdict — it would
+always "pass". It therefore never tested the one capability the sphere design rides on.
+
+**Fix (rewrite).** The probe now CONSUMES the neighbour's variable in genuine SCRIPT context:
+(a) a TRIGGER read — `var:sphere_nbr_val >= 10` inside a `limit` against the neighbour's own scope; and
+(b) an EFFECT read — `change_variable = { add = scope:sphere_cur_nbr.var:sphere_nbr_val }` accumulating
+into the source state. The verdict is decided by a SCRIPT trigger on the accumulated sum
+(`if = { limit = { var:sphere_pull_sum > 0 } }`), not by reading a log line: sum>0 ⇒ PULL supported
+(expect 10×count), sum still 0 ⇒ fall back to PUSH. All sentinels are removed at the end so nothing is
+left "set but never used". Extract verdict with `grep "IMP19C SPHERE" logs/debug.log` under -debug_mode.
+File retains no-BOM (correct for se_*); its on_action hook keeps its UTF-8 BOM. Braces 40/40.
