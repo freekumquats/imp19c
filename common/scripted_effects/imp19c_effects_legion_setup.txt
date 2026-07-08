@@ -119,7 +119,12 @@ SE_qing_raise_garrison_cmd = {
 SE_qing_armies = {
 	LOG_enter = { sys = QING  fn = "SE_qing_armies" }
 	if = {
+		# [#193-fix task #193] Idempotency sentinel: on_game_initialized re-fires on every
+		# save-load, and raise_legion is ADDITIVE (not a no-op), so without a guard the whole
+		# ~26-garrison OOB would be re-raised — doubling the Qing army each reload. Matches the
+		# SE_qing_navy / SE_qing_starting_buildings sentinel idiom (adversarial-review finding).
 		limit = {
+			NOT = { has_global_variable = qing_armies_setup_done }
 			exists = c:CHI
 			c:CHI = { exists = capital_scope }
 		}
@@ -173,6 +178,7 @@ SE_qing_armies = {
 		SE_qing_raise_garrison     = { prov = p:6781  name = "Taiwan Green Standard 臺灣綠營"        size = 4 }   # Tainan garrison
 		SE_qing_raise_garrison_cmd = { prov = p:5786  name = "Yunnan-Guizhou Green Standard 雲貴綠營"  size = 5  cmd = char:241 } # SW tribal frontier; Yang Fang, White Lotus veteran
 
+		set_global_variable = qing_armies_setup_done
 		LOG_line = { sys = QING  msg = "Qing dual standing army raised: Eight Banners (metropolitan + provincial mancheng) + dispersed Green Standard" }
 	}
 	else = {
@@ -264,7 +270,9 @@ SE_qing_navy = {
 				if = {
 					limit = { any_owned_province = { is_coastal = yes } }
 					ordered_owned_province = {
-						limit = { is_coastal = yes }
+						# [#193-fix task #193] exclude Canton (9298) and Ningbo (2893) so the Fujian
+						# fallback never stacks a second squadron on the Guangdong/Zhejiang port.
+						limit = { is_coastal = yes  NOT = { province_id = 9298 }  NOT = { province_id = 2893 } }
 						order_by = total_population
 						max = 1
 						save_scope_as = qing_navy_fallback_port

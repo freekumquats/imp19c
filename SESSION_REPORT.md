@@ -2337,3 +2337,51 @@ traceability comment. Nothing here overrides the standing rules.
 ALL new/edited script files brace-balanced 0; byte conventions honoured (se_*.txt + modifiers
 NO BOM; on_action + trade_goods + loc BOM). Awaiting the deep adversarial-review workflow +
 in-game verification before any promotion to master.
+
+────────────────────────────────────────────────────────────────────────
+#193 POST-BUILD ADVERSARIAL REVIEW + FIXES (2026-07-08) — commit fdc207b3
+────────────────────────────────────────────────────────────────────────
+Ran the deep adversarial-review workflow (6 dimensions → per-finding refutation pass →
+synthesis; 19 agents). VERDICT: no critical or load-rejection defects — BOM conventions,
+brace balance, scope hierarchy, and idioms all clean; safe on develop. 10 findings survived
+verification (2 refuted: the navy `sub_unit = brig` "idiom deviation" and a `max_level`
+concern — max_level is not a valid Imperator building property). All 7 distinct surviving
+issues FIXED this pass (task-tagged [#193-fix]):
+
+1. [HIGH → fixed] Mobilization game-start exemption used exact-date equality
+   `NOT = { current_date = 1815.7.1 }`, but on_legion_raised fires "the day AFTER" a raise
+   (stock engine comment), so setup armies raised on START_DATE 1815.7.1 trigger it on
+   1815.7.2 — when the guard is TRUE and the WHOLE peacetime establishment would be debuffed.
+   Fix: startup-window guard `current_date > 1815.7.2` (proven idiom), exempting the first
+   two days regardless of the exact firing day. (common/on_action/00_specific_from_code.txt)
+2. [MEDIUM → fixed] SE_qing_armies had NO idempotency sentinel (unlike SE_qing_navy /
+   SE_qing_starting_buildings), so on every save-load — when on_game_initialized re-fires —
+   the ~26-garrison OOB was re-raised, doubling the Qing army. Fix: wrapped in the
+   NOT has_global_variable = qing_armies_setup_done guard + set at success, matching the
+   sibling idiom. (imp19c_effects_legion_setup.txt)
+3. [MEDIUM → fixed] qing_works.6 build options were silent no-ops for a Works minister with
+   finesse < 7 (the event/option triggers had no finesse gate but QING_works_build_specialty
+   requires finesse>=7). Fix: added finesse>=7 to the event trigger AND to each of the 5
+   build-option triggers, so a sub-7 minister is neither shown the event nor a dead option.
+   (qing_works_events.txt)
+4. [MEDIUM → fixed] The 5 specialty works had only an allow{} tech gate, no `potential`, so
+   any teched nation could build e.g. the Jingdezhen Imperial Kiln in a Yorkshire coal
+   province, applying its output multipliers to unrelated goods. Fix: added
+   `potential = { owner = { country_culture_group = chinese_group }  trade_goods = <match> }`
+   to all 5. add_building_level bypasses potential, so the 1815 seed / Board-of-Works /
+   Self-Strengthening spawns are UNAFFECTED. (qing_production_buildings.txt)
+5. [LOW → fixed] porcelain/rifles referenced 8 trade-UI loc keys (internal_trade_scope_* +
+   tracker_price_*) that no .yml defined, so their trade tooltips rendered raw key strings.
+   Fix: cloned the maize entries for both goods into economic_enchancement_l_english.yml.
+6. [LOW → fixed] SE_qing_navy's Fujian fallback (used only if Fuzhou is non-coastal) picked
+   the most-populous coastal province without excluding Canton (9298) / Ningbo (2893), so it
+   could stack a second squadron on an already-used port. Fix: added NOT province_id guards.
+   (imp19c_effects_legion_setup.txt)
+7. [LOW → fixed] mobil_supply_raw(0.30)+settling(0.12)=0.42 attrition during the raw window
+   EXCEEDED the mod's own supply-collapse ceiling (0.30) — a fresh unit bled harder than a
+   fully cut-off army. Fix: capped raw→0.20, settling→0.08 (=0.28, below collapse, with
+   headroom for the qing_unit_*_rot stack). (mobilization_modifiers.txt)
+
+All touched files brace-balanced 0; byte conventions preserved. Fixes remain on develop for
+in-game verification; the #1 guard fix should be confirmed with se_LOG (MOBIL_stamp_legion
+entries) at 1815 load before any promotion to master.
