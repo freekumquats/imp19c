@@ -465,6 +465,16 @@ SUBJ_QING_absorb_subject = {
 
 		LOG_state = { sys = SUBJ  note = "before absorbing [scope:target.GetTag]" }
 
+		# [#170 follow-up] SUB-SUBJECT RE-PARENTING. If the subject being absorbed
+		# itself holds subjects (e.g. Tibet -> LTG/BTG), those sub-subjects must NOT be
+		# orphaned or freed when their overlord vanishes: the integrating power inherits
+		# them as its OWN direct subjects, preserving each one's current type. Run this
+		# BEFORE the province transfer, while scope:target still exists as their overlord.
+		# Uses the proven release-then-make_subject idiom (se_DIPLOMACY.txt:1066-1092,
+		# se_FUNC.txt:349-352): a sub-subject bound to a soon-to-be-landless intermediary
+		# would otherwise leave a stale double-overlord bond, so the release must run first.
+		SUBJ_QING_reparent_sub_subjects = yes
+
 		# Build the list of the subject's provinces, then transfer them to us.
 		scope:target = {
 			every_owned_province = {
@@ -495,5 +505,104 @@ SUBJ_QING_absorb_subject = {
 	}
 	else = {
 		LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_absorb_subject"  reason = "target missing or has no provinces to absorb" }
+	}
+}
+
+# ======================================================================
+# RE-PARENT SUB-SUBJECTS — when absorbing scope:target, transfer any subjects
+# scope:target itself holds up to ROOT (the integrating overlord) as ROOT's own
+# direct subjects, preserving each sub-subject's current type. Scope: country
+# (ROOT = overlord). scope:target = the subject being absorbed.
+#
+# Order matters:
+#   1. Snapshot scope:target's subjects into a list (iterating + mutating the live
+#      subject list in one loop is unsafe).
+#   2. For each, record its CURRENT type as a flag BEFORE any mutation — once it is
+#      released it is independent and is_subject_type no longer applies.
+#   3. Release it from scope:target (its overlord), then FUNC_make_subject it to ROOT
+#      with the recorded type. The release-first order is the proven idiom
+#      (se_DIPLOMACY.txt:1066-1092): make_subject on an already-subordinate country
+#      leaves a stale double-overlord bond, so the old bond must be dropped first.
+# ======================================================================
+SUBJ_QING_reparent_sub_subjects = {
+	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_reparent_sub_subjects" }
+	if = {
+		limit = {
+			exists = scope:target
+			scope:target = { any_subject = { count >= 1 } }
+		}
+		# 1. snapshot the intermediary's subjects
+		scope:target = {
+			every_subject = { add_to_list = SUBJ_sub_subjects_to_reparent }
+		}
+		# 2/3. record type, release from the vanishing overlord, rebind to ROOT
+		every_in_list = {
+			list = SUBJ_sub_subjects_to_reparent
+			save_scope_as = SUBJ_reparent_child
+			# record current type as a flag while still a subject of scope:target
+			if = { limit = { is_subject_type = tributary }                    set_variable = { name = SUBJ_reparent_type  value = flag:tributary } }
+			else_if = { limit = { is_subject_type = nominal_vassal }           set_variable = { name = SUBJ_reparent_type  value = flag:nominal_vassal } }
+			else_if = { limit = { is_subject_type = feudatory }               set_variable = { name = SUBJ_reparent_type  value = flag:feudatory } }
+			else_if = { limit = { is_subject_type = semi_autonomous_governorship } set_variable = { name = SUBJ_reparent_type  value = flag:semi_autonomous_governorship } }
+			else_if = { limit = { is_subject_type = autonomous_governorship }  set_variable = { name = SUBJ_reparent_type  value = flag:autonomous_governorship } }
+			else_if = { limit = { is_subject_type = client_state }            set_variable = { name = SUBJ_reparent_type  value = flag:client_state } }
+			else_if = { limit = { is_subject_type = sinosphere_tributary }     set_variable = { name = SUBJ_reparent_type  value = flag:sinosphere_tributary } }
+			else_if = { limit = { is_subject_type = protectorate }            set_variable = { name = SUBJ_reparent_type  value = flag:protectorate } }
+			# fallback: any remaining / off-ladder subject type re-binds as feudatory (the
+			# closest Qing-ladder fit for an Inner-Asian dependency); logged so an
+			# unexpected type is visible. The Qing-relevant types above (incl.
+			# sinosphere_tributary, the canonical 朝貢 tie, and protectorate) are
+			# preserved exactly; only truly off-ladder types (colony/territory/etc.) fall here.
+			else = {
+				set_variable = { name = SUBJ_reparent_type  value = flag:feudatory }
+				LOG_line = { sys = SUBJ  msg = "reparent: [this.GetTag] had an off-ladder type; rebinding as feudatory under [ROOT.GetTag]" }
+			}
+			# free from the vanishing intermediary
+			overlord = { release_subject = scope:SUBJ_reparent_child }
+			# rebind to ROOT, preserving the recorded type
+			if = {
+				limit = { var:SUBJ_reparent_type = flag:tributary }
+				FUNC_make_subject = { overlord = ROOT  target = scope:SUBJ_reparent_child  type = tributary }
+			}
+			else_if = {
+				limit = { var:SUBJ_reparent_type = flag:nominal_vassal }
+				FUNC_make_subject = { overlord = ROOT  target = scope:SUBJ_reparent_child  type = nominal_vassal }
+			}
+			else_if = {
+				limit = { var:SUBJ_reparent_type = flag:semi_autonomous_governorship }
+				FUNC_make_subject = { overlord = ROOT  target = scope:SUBJ_reparent_child  type = semi_autonomous_governorship }
+			}
+			else_if = {
+				limit = { var:SUBJ_reparent_type = flag:autonomous_governorship }
+				FUNC_make_subject = { overlord = ROOT  target = scope:SUBJ_reparent_child  type = autonomous_governorship }
+			}
+			else_if = {
+				limit = { var:SUBJ_reparent_type = flag:client_state }
+				FUNC_make_subject = { overlord = ROOT  target = scope:SUBJ_reparent_child  type = client_state }
+			}
+			else_if = {
+				limit = { var:SUBJ_reparent_type = flag:sinosphere_tributary }
+				FUNC_make_subject = { overlord = ROOT  target = scope:SUBJ_reparent_child  type = sinosphere_tributary }
+			}
+			else_if = {
+				limit = { var:SUBJ_reparent_type = flag:protectorate }
+				FUNC_make_subject = { overlord = ROOT  target = scope:SUBJ_reparent_child  type = protectorate }
+			}
+			else = {
+				FUNC_make_subject = { overlord = ROOT  target = scope:SUBJ_reparent_child  type = feudatory }
+			}
+			remove_variable = SUBJ_reparent_type
+			LOG_line = { sys = SUBJ  msg = "reparent: [scope:SUBJ_reparent_child.GetTag] transferred from absorbed [scope:target.GetTag] to overlord [ROOT.GetTag]" }
+		}
+		# clean up the working list
+		every_in_list = {
+			list = SUBJ_sub_subjects_to_reparent
+			remove_from_list = SUBJ_sub_subjects_to_reparent
+		}
+		LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_reparent_sub_subjects"  result = OK }
+	}
+	else = {
+		# no sub-subjects to inherit — the common case; trace and no-op
+		LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_reparent_sub_subjects"  result = "NONE (subject held no sub-subjects)" }
 	}
 }

@@ -2010,3 +2010,104 @@ FIX (two parts, se_DIPLOMACY.txt + EE_scripted_guis.txt):
 Global list stores play-PROVINCE objects (se_AI.txt:621), so random_in_global_list
 iterates with THIS=play, exactly what AI_remove_diplomatic_play expects. se_LOG line
 on switch. Braces: se_DIPLOMACY 550/550, EE_scripted_guis 479/479.
+
+────────────────────────────────────────────────────────────────────────
+#168 Qing per-subject interactions not visible in the diplomacy window
+────────────────────────────────────────────────────────────────────────
+Reported: subject-interaction buttons (promote/incorporate/demote/integrate/
+resume/amban post-recall-replace-return) never appeared anywhere usable.
+CAUSE: the buttons had been placed in the Subjects TAB, whose right pane only
+renders while viewing the PLAYER's own country. Each button gates on
+scope:target = { is_subject_of = ROOT }, which can never pass in that context,
+so the buttons were permanently hidden.
+FIX: moved the whole interaction strip into the DIPLOMATIC tab, shown when the
+viewed target IS one of the player's own subjects (visible gated on Player.GetTag
+== CHI AND DiplomaticView.GetTargetCountry.IsSubject AND its overlord == Player).
+Each button uses the proven ScriptedGui IsShown/IsValid/Execute idiom with
+GuiScope root=Player + AddScope('target', target). Added a subject-type label +
+integration-progress bar (SUBJ_integration_progress /5). The Subjects tab list is
+now pure NAVIGATION: clicking a subject OpenDiplomacy(that subject) opens its
+diplomatic view where the buttons live (restored the commented-out onclick).
+Loc: QING_SUBJECT_INTERACTIONS_HEADER. gui braces balanced.
+
+────────────────────────────────────────────────────────────────────────
+#169 Great Powers not visible in the diplomacy window
+────────────────────────────────────────────────────────────────────────
+Reported: no way to see the four-power Great Game rivalry state from diplomacy.
+FIX (gui/diplomatic_view.gui, Qing-only): (1) an inline Great Game strip that
+surfaces tension (qing_gp_tension_britain/_france/_russia) + standing (opinion)
+when the Qing player views GBR/FRA/RUS; (2) a combined 'Great Game' diplomatic-view
+tab (category_tab toggling diplomatic_tabs='greatgame') showing all three powers'
+tension+standing at once, each section gated on qing_greatgame_<power>_exists.
+Informational only — no player-clickable GP verbs (provoke effects fire from
+colonization/frontier events, not GUIs). Reads engine accessors (GetOpinionOf uses
+Player.GetCountry; GetCountry('TAG')), so non-CHI just hides, no error. Loc:
+QING_GREAT_GAME_INLINE_HEADER/_TAB_TITLE/_TAB_BUTTON/_SELF_TITLE. gui braces balanced.
+
+────────────────────────────────────────────────────────────────────────
+#170 Tibet lost its subjects and is no longer a protectorate
+────────────────────────────────────────────────────────────────────────
+Reported: Tibet had stopped being a Qing protectorate and had lost LTG/BTG.
+CAUSE: commit 69d1178a had flipped CHI->TIB from protectorate to
+autonomous_governorship on the false premise that a protectorate cannot hold
+sub-subjects. autonomous_governorship is the one rung the Qing absorb/integrate
+mechanic acts on, so the integration path was detaching Tibet's own LTG/BTG.
+FIX (two parts):
+1. setup/main/00_default.txt: reverted CHI->TIB to protectorate. A protectorate CAN
+   hold sub-subjects (this file already ships POR->BRZ/ANG/MOZ/PGI and BJR->four
+   tributaries), so TIB->LTG/BTG feudatory holds. Restores historical status +
+   subject retention. (Both protectorate and autonomous_governorship are actually
+   can_be_integrated=no; the #168 buttons gate on the mod's own scripted-GUI
+   is_shown triggers, not the engine flag, so the incorporate->integrate flow still
+   works: incorporate converts protectorate->autonomous_governorship first.)
+2. se_SUBJECT_QING.txt: NEW SUBJ_QING_reparent_sub_subjects, called from
+   SUBJ_QING_absorb_subject BEFORE the province transfer (while scope:target still
+   exists as overlord). When absorbing a subject that itself holds sub-subjects, it
+   snapshots them into a list, records each one's CURRENT type as a flag, releases
+   it from the vanishing intermediary (release_subject), then FUNC_make_subject re-
+   binds it to ROOT preserving that type. Release-first is the proven idiom
+   (se_DIPLOMACY.txt); FUNC_make_subject passes $type$ straight to make_subject (no
+   whitelist). Type coverage: tributary/nominal_vassal/feudatory/semi_+autonomous_
+   governorship/client_state/sinosphere_tributary/protectorate preserved exactly;
+   only truly off-ladder types (colony/territory) fall back to feudatory (logged).
+   [review-fix: sinosphere_tributary (the canonical 朝貢 tie) + protectorate were
+   added after code review flagged them silently degrading to feudatory.]
+   se_SUBJECT_QING braces 255/255.
+
+────────────────────────────────────────────────────────────────────────
+#171 broken placeholder buttons in the Qing diplomatic Subjects tab
+────────────────────────────────────────────────────────────────────────
+FIX (gui/diplomatic_view.gui): (1) the #pop icon_and_text showed a hardcoded 'Egg'
+placeholder — now reads DiplomaticView.GetTargetCountry.GetTotalPopulation with the
+real population tooltip. (2) the dead 'Change Overseer' placeholder button (onclick
+commented out) was repurposed into the amban-replace action, wired to the same
+qing_amban_manage_replace_button scripted GUI as the #168 strip.
+
+────────────────────────────────────────────────────────────────────────
+#172 Qing 1815 starting treasury too thin + Board of Revenue silver reserve
+────────────────────────────────────────────────────────────────────────
+CAUSE: QING_seed_starting_treasury seeded the treasury at only ~4 months of
+expenditure (multiply = -4).
+FIX: se_QING_MECHANICS.txt multiply -4 -> -12 (~a full year's expenditure on hand).
+Also se_CURRENCY.txt: set CHI silver_reserve_size to 46140 (the 戶部銀庫 Board of
+Revenue hoard, ~46.14M taels, mid-Jiaqing c.1815 — distinct from the spendable
+treasury). UNIT proven from engine consumption math to be hundreds of troy-lb
+(1 unit = 100 troy-lb ≈ 1,000 kuping taels), so the original 20000 decoded to
+~20M taels/746t. SOURCE: Shi Zhihong (2016) archival series; Kaske (2012, HJAS).
+
+────────────────────────────────────────────────────────────────────────
+#174 recalibrate national precious-metal reserves from sourced 1815-25 research
+────────────────────────────────────────────────────────────────────────
+se_CURRENCY.txt CURRENCY_setup_all_reserves — corrected historically-indefensible
+values downward, each with an academic-source comment:
+  SPA 12180 Au/0 Ag -> 15 Au/135 Ag (Fontana 1971, La quiebra de la monarquia
+      absoluta 1814-1820 — Fernando VII bankruptcy, empty Hacienda).
+  TUR 10600 Ag -> 1070 Ag (Pamuk 2000, A Monetary History of the Ottoman Empire —
+      chronic pre-Tanzimat kuruş debasement precludes a standing bullion hoard).
+  RUS 2000 Au/5000 Ag -> 135 Au/400 Ag (no convertible reserve before Kankrin's
+      1839-43 silver-standard reform; inconvertible assignat at ~3.5:1).
+  CHI: number kept (46140), attribution corrected to mid-Jiaqing c.1815.
+UNCHANGED (deliberate, documented): GBR/FRA/SAX/POL explicit values; USA/Japan/
+Austria/Prussia keep the population-proportional default (2nd Bank $35M was
+authorised capital not specie; bakufu 御金蔵 3.00M ryo 1770 -> 0.82M 1789 and
+declining; Austria's 1811 Staatsbankrott). se_CURRENCY braces 516/516.

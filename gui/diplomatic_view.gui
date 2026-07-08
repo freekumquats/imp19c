@@ -298,6 +298,13 @@ base_window = {
 						blockoverride "Max_text_width" { max_width = 230 }
 					}
 				}
+					# [#169] Great Game tab title (Qing only)
+					sub_header = {
+						position = { 0 3 }
+						visible = "[GetVariableSystem.HasValue('diplomatic_tabs', 'greatgame')]"
+						blockoverride "Title_text" { text = "QING_GREAT_GAME_TAB_TITLE" }
+						blockoverride "Max_text_width" { max_width = 230 }
+					}
 				category_tab = {
 					blockoverride "MinSize" { size = { @mincategorybuttonwidth @mincategorybuttonheight } }
 					blockoverride "MaxSize" { size = { @maxcategorybuttonwidth @maxcategorybuttonheight } }
@@ -328,6 +335,22 @@ base_window = {
 					{
 						onclick = "[GetVariableSystem.Set('diplomatic_tabs', 'subjects')]"
 						onclick = "[GetScriptedGui('show_player_subjects_button').Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+					}
+				}
+
+				# [#169] GREAT GAME tab button — Qing only; opens a combined view of the
+				# four-power rivalry (Qing vs Britain/France/Russia).
+				category_tab = {
+					blockoverride "Enabled" { enabled = "[EqualTo_string( Player.GetTag, 'CHI' )]" }
+					blockoverride "MinSize" { size = { @mincategorybuttonwidth @mincategorybuttonheight } }
+					blockoverride "MaxSize" { size = { @maxcategorybuttonwidth @maxcategorybuttonheight } }
+					blockoverride "MinVisible" { visible = "[And( EqualTo_string( Player.GetTag, 'CHI' ), Not( GetVariableSystem.HasValue('diplomatic_tabs', 'greatgame')) )]" }
+					blockoverride "MaxVisible" { visible = "[And( EqualTo_string( Player.GetTag, 'CHI' ), GetVariableSystem.HasValue('diplomatic_tabs', 'greatgame') )]" }
+					blockoverride "Center_text" { text = "QING_GREAT_GAME_TAB_BUTTON" }
+					blockoverride "Icon" { visible = no }
+					blockoverride "ClickFunction"
+					{
+						onclick = "[GetVariableSystem.Set('diplomatic_tabs', 'greatgame')]"
 					}
 				}
 			}
@@ -1459,7 +1482,639 @@ base_window = {
 						}
 					}
 				}
+				################################################################
+				# [#168 fix] QING per-subject interactions, surfaced in the DIPLOMATIC
+				# tab (not the Subjects tab). Shown when the viewed target is one of the
+				# player's OWN subjects, so GetTargetCountry is that subject and each
+				# button's is_shown (scope:target = { is_subject_of = ROOT }) resolves
+				# correctly. The Subjects tab lists subjects as NAVIGATION (click a row to
+				# open its diplomatic view); the action buttons could never work there
+				# because that tab only renders while viewing the player's own country.
+				################################################################
+				flowcontainer = {
+					direction = vertical
+					margin = { 10 6 }
+					spacing = 6
+					ignoreinvisible = yes
+					visible = "[And( EqualTo_string( Player.GetTag, 'CHI' ), And( DiplomaticView.GetTargetCountry.IsSubject, EqualTo_int32( DiplomaticView.GetTargetCountry.GetOverlord.GetId, Player.GetId ) ) )]"
+					textbox = {
+						autoresize = yes
+						using = BaseFontM
+						using = Default_FontColor
+						text = "QING_SUBJECT_INTERACTIONS_HEADER"
+					}
+					only_text = {
+						size = { 300 28 }
+						blockoverride "Text" { text = "[SelectLocalization( GetScriptedGui('qing_subject_type_is_tributary').IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End ), 'QING_SUBJECT_TYPE_TRIBUTARY', SelectLocalization( GetScriptedGui('qing_subject_type_is_nominal_vassal').IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End ), 'QING_SUBJECT_TYPE_NOMINAL_VASSAL', SelectLocalization( GetScriptedGui('qing_subject_type_is_feudatory').IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End ), 'QING_SUBJECT_TYPE_FEUDATORY', SelectLocalization( GetScriptedGui('qing_subject_type_is_protectorate').IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End ), 'QING_SUBJECT_TYPE_PROTECTORATE', 'QING_SUBJECT_TYPE_AUTONOMOUS_GOVERNORSHIP' ) ) ) )]" }
+						tooltip = "[SelectLocalization( GetScriptedGui('qing_subject_type_is_tributary').IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End ), 'QING_SUBJECT_TYPE_TRIBUTARY', SelectLocalization( GetScriptedGui('qing_subject_type_is_nominal_vassal').IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End ), 'QING_SUBJECT_TYPE_NOMINAL_VASSAL', SelectLocalization( GetScriptedGui('qing_subject_type_is_feudatory').IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End ), 'QING_SUBJECT_TYPE_FEUDATORY', SelectLocalization( GetScriptedGui('qing_subject_type_is_protectorate').IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End ), 'QING_SUBJECT_TYPE_PROTECTORATE', 'QING_SUBJECT_TYPE_AUTONOMOUS_GOVERNORSHIP' ) ) ) )]"
+					}
+					widget = {
+						size = { 300 40 }
+						visible = "[DiplomaticView.GetTargetCountry.MakeScope.Var('SUBJ_integration_progress').IsSet]"
+						textbox = {
+							using = BaseFontM
+							using = Default_FontColor
+							block "progress_text" { text = "[DiplomaticView.GetTargetCountry.MakeScope.GetVariable('SUBJ_integration_progress').GetValue|0] / 5" }
+						}
+						widget = {
+							position = { 0 22 }
+							size = { 290 8 }
+							progressbar = {
+								using = progressbar_flat_green
+								size = { 290 8 }
+								block "progress_value"
+								{
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( DiplomaticView.GetTargetCountry.MakeScope.GetVariable('SUBJ_integration_progress').GetValue, '(CFixedPoint)0.2' ) )]"
+								}
+							}
+						}
+					}
+					flowcontainer = {
+						spacing = 8
+						ignoreinvisible = yes
+						icon_button_square = {
+							size = { 40 40 }
+							datacontext = "[GetScriptedGui('qing_subject_promote_button')]"
+							visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+							blockoverride "On_click"
+							{
+								enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								clicksound = "event:/SFX/UI/Generic/sfx_ui_generic_sub_tab"
+								oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
+								inherit_visual_state = no
+							}
+							blockoverride "Icon"
+							{
+								texture = "gfx/interface/icons/shared_icons/relations.dds"
+								size = { 34 34 }
+							}
+							tooltip = "QING_SUBJECT_PROMOTE_TT"
+						}
+						icon_button_square = {
+							size = { 40 40 }
+							datacontext = "[GetScriptedGui('qing_subject_incorporate_button')]"
+							visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+							blockoverride "On_click"
+							{
+								enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								clicksound = "event:/SFX/UI/Generic/sfx_ui_generic_sub_tab"
+								oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
+								inherit_visual_state = no
+							}
+							blockoverride "Icon"
+							{
+								texture = "gfx/interface/icons/governor_policies/cultural_assimilation.dds"
+								size = { 34 34 }
+							}
+							tooltip = "QING_SUBJECT_INCORPORATE_TT"
+						}
+						icon_button_square = {
+							size = { 40 40 }
+							datacontext = "[GetScriptedGui('qing_subject_demote_button')]"
+							visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+							blockoverride "On_click"
+							{
+								enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								clicksound = "event:/SFX/UI/Generic/sfx_ui_generic_sub_tab"
+								oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
+								inherit_visual_state = no
+							}
+							blockoverride "Icon"
+							{
+								texture = "gfx/interface/icons/modifiers/war_on_subject_cost_modifier.dds"
+								size = { 34 34 }
+							}
+							tooltip = "QING_SUBJECT_DEMOTE_TT"
+						}
+						icon_button_square = {
+							size = { 40 40 }
+							datacontext = "[GetScriptedGui('qing_subject_integrate_button')]"
+							visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+							blockoverride "On_click"
+							{
+								enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								clicksound = "event:/SFX/UI/Generic/sfx_ui_generic_sub_tab"
+								oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
+								inherit_visual_state = no
+							}
+							blockoverride "Icon"
+							{
+								texture = "gfx/interface/icons/shared_icons/change.dds"
+								size = { 34 34 }
+							}
+							tooltip = "QING_SUBJECT_INTEGRATE_TT"
+						}
+						icon_button_square = {
+							size = { 40 40 }
+							datacontext = "[GetScriptedGui('qing_subject_resume_integration_button')]"
+							visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+							blockoverride "On_click"
+							{
+								enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								clicksound = "event:/SFX/UI/Generic/sfx_ui_generic_sub_tab"
+								oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
+								inherit_visual_state = no
+							}
+							blockoverride "Icon"
+							{
+								texture = "gfx/interface/icons/shared_icons/change.dds"
+								size = { 34 34 }
+							}
+							tooltip = "QING_SUBJECT_RESUME_TT"
+						}
+						icon_button_square = {
+							size = { 40 40 }
+							datacontext = "[GetScriptedGui('qing_amban_manage_post_button')]"
+							visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+							blockoverride "On_click"
+							{
+								enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								clicksound = "event:/SFX/UI/Generic/sfx_ui_generic_sub_tab"
+								oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
+								inherit_visual_state = no
+							}
+							blockoverride "Icon"
+							{
+								texture = "gfx/interface/icons/shared_icons/oratory.dds"
+								size = { 34 34 }
+							}
+							tooltip = "QING_AMBAN_MANAGE_POST_TT"
+						}
+						icon_button_square = {
+							size = { 40 40 }
+							datacontext = "[GetScriptedGui('qing_amban_manage_recall_button')]"
+							visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+							blockoverride "On_click"
+							{
+								enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								clicksound = "event:/SFX/UI/Generic/sfx_ui_generic_sub_tab"
+								oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
+								inherit_visual_state = no
+							}
+							blockoverride "Icon"
+							{
+								texture = "gfx/interface/icons/shared_icons/tactical.dds"
+								size = { 34 34 }
+							}
+							tooltip = "QING_AMBAN_MANAGE_RECALL_TT"
+						}
+						icon_button_square = {
+							size = { 40 40 }
+							datacontext = "[GetScriptedGui('qing_amban_manage_replace_button')]"
+							visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+							blockoverride "On_click"
+							{
+								enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								clicksound = "event:/SFX/UI/Generic/sfx_ui_generic_sub_tab"
+								oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
+								inherit_visual_state = no
+							}
+							blockoverride "Icon"
+							{
+								texture = "gfx/interface/icons/shared_icons/change.dds"
+								size = { 34 34 }
+							}
+							tooltip = "QING_AMBAN_MANAGE_REPLACE_TT"
+						}
+						icon_button_square = {
+							size = { 40 40 }
+							datacontext = "[GetScriptedGui('qing_amban_manage_return_auto_button')]"
+							visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+							blockoverride "On_click"
+							{
+								enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+								clicksound = "event:/SFX/UI/Generic/sfx_ui_generic_sub_tab"
+								oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
+								inherit_visual_state = no
+							}
+							blockoverride "Icon"
+							{
+								texture = "gfx/interface/icons/shared_icons/time.dds"
+								size = { 34 34 }
+							}
+							tooltip = "QING_AMBAN_MANAGE_RETURN_AUTO_TT"
+						}
+					}
+				}
+				################################################################
+				# [#169 fix] Inline GREAT GAME strip. When the Qing player views a
+				# Great Power (GBR/FRA/RUS) the diplomatic-range modifier surfaces,
+				# show that power's rivalry TENSION + diplomatic STANDING inline in
+				# the Diplomatic tab. Mirrors gui/qing_greatgame.gui's per-power
+				# sections but reads DiplomaticView.GetTargetCountry for gating so it
+				# is target-generic. Tension vars are a fixed per-power set
+				# (qing_gp_tension_britain/_france/_russia), hence three tag-gated
+				# sub-blocks. No player-clickable GP verbs exist (the provoke effects
+				# fire from colonization/frontier events, not scripted GUIs), so the
+				# strip is informational: tension + standing only.
+				################################################################
+				flowcontainer = {
+					direction = vertical
+					margin = { 10 6 }
+					spacing = 6
+					ignoreinvisible = yes
+					visible = "[And( EqualTo_string( Player.GetTag, 'CHI' ), Or( EqualTo_string( DiplomaticView.GetTargetCountry.GetTag, 'GBR' ), Or( EqualTo_string( DiplomaticView.GetTargetCountry.GetTag, 'FRA' ), EqualTo_string( DiplomaticView.GetTargetCountry.GetTag, 'RUS' ) ) ) )]"
+					using = background_widget
+					textbox = {
+						autoresize = yes
+						using = BaseFontM
+						using = Default_FontColor
+						text = "QING_GREAT_GAME_INLINE_HEADER"
+					}
+					# --- GBR ---
+					flowcontainer = {
+						visible = "[EqualTo_string( DiplomaticView.GetTargetCountry.GetTag, 'GBR' )]"
+						direction = vertical
+						spacing = 4
+						layoutpolicy_horizontal = expanding
+						# Tension bar
+						flowcontainer = {
+							spacing = 8
+							textbox = {
+								size = { 80 20 }
+								using = BaseFontS
+								using = Default_FontColor
+								text = "GREAT_GAME_TENSION_LABEL"
+								tooltip = "GREAT_GAME_TENSION_TT"
+							}
+							progressbar = {
+								using = progressbar_flat_green
+								size = { 240 12 }
+								value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_gp_tension_britain').GetValue, '(CFixedPoint)0.01' ) )]"
+							}
+							textbox = {
+								size = { 40 20 }
+								using = BaseFontS
+								using = Default_FontColor
+								text = "[Player.MakeScope.GetVariable('qing_gp_tension_britain').GetValue|0]"
+							}
+						}
+						# Standing (opinion)
+						flowcontainer = {
+							spacing = 8
+							textbox = {
+								size = { 80 20 }
+								using = BaseFontS
+								using = Default_FontColor
+								text = "GREAT_GAME_STANDING_LABEL"
+								tooltip = "GREAT_GAME_STANDING_TT"
+							}
+							textbox = {
+								size = { 240 20 }
+								using = BaseFontS
+								using = Default_FontColor
+								text = "[DiplomaticView.GetTargetCountry.GetOpinionOf(Player.GetCountry)|+=]"
+							}
+						}
+					}
+					# --- FRA ---
+					flowcontainer = {
+						visible = "[EqualTo_string( DiplomaticView.GetTargetCountry.GetTag, 'FRA' )]"
+						direction = vertical
+						spacing = 4
+						layoutpolicy_horizontal = expanding
+						# Tension bar
+						flowcontainer = {
+							spacing = 8
+							textbox = {
+								size = { 80 20 }
+								using = BaseFontS
+								using = Default_FontColor
+								text = "GREAT_GAME_TENSION_LABEL"
+								tooltip = "GREAT_GAME_TENSION_TT"
+							}
+							progressbar = {
+								using = progressbar_flat_green
+								size = { 240 12 }
+								value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_gp_tension_france').GetValue, '(CFixedPoint)0.01' ) )]"
+							}
+							textbox = {
+								size = { 40 20 }
+								using = BaseFontS
+								using = Default_FontColor
+								text = "[Player.MakeScope.GetVariable('qing_gp_tension_france').GetValue|0]"
+							}
+						}
+						# Standing (opinion)
+						flowcontainer = {
+							spacing = 8
+							textbox = {
+								size = { 80 20 }
+								using = BaseFontS
+								using = Default_FontColor
+								text = "GREAT_GAME_STANDING_LABEL"
+								tooltip = "GREAT_GAME_STANDING_TT"
+							}
+							textbox = {
+								size = { 240 20 }
+								using = BaseFontS
+								using = Default_FontColor
+								text = "[DiplomaticView.GetTargetCountry.GetOpinionOf(Player.GetCountry)|+=]"
+							}
+						}
+					}
+					# --- RUS ---
+					flowcontainer = {
+						visible = "[EqualTo_string( DiplomaticView.GetTargetCountry.GetTag, 'RUS' )]"
+						direction = vertical
+						spacing = 4
+						layoutpolicy_horizontal = expanding
+						# Tension bar
+						flowcontainer = {
+							spacing = 8
+							textbox = {
+								size = { 80 20 }
+								using = BaseFontS
+								using = Default_FontColor
+								text = "GREAT_GAME_TENSION_LABEL"
+								tooltip = "GREAT_GAME_TENSION_TT"
+							}
+							progressbar = {
+								using = progressbar_flat_green
+								size = { 240 12 }
+								value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_gp_tension_russia').GetValue, '(CFixedPoint)0.01' ) )]"
+							}
+							textbox = {
+								size = { 40 20 }
+								using = BaseFontS
+								using = Default_FontColor
+								text = "[Player.MakeScope.GetVariable('qing_gp_tension_russia').GetValue|0]"
+							}
+						}
+						# Standing (opinion)
+						flowcontainer = {
+							spacing = 8
+							textbox = {
+								size = { 80 20 }
+								using = BaseFontS
+								using = Default_FontColor
+								text = "GREAT_GAME_STANDING_LABEL"
+								tooltip = "GREAT_GAME_STANDING_TT"
+							}
+							textbox = {
+								size = { 240 20 }
+								using = BaseFontS
+								using = Default_FontColor
+								text = "[DiplomaticView.GetTargetCountry.GetOpinionOf(Player.GetCountry)|+=]"
+							}
+						}
+					}
+				}
 			}
+				################################################################
+				# [#169] GREAT GAME view — combined four-power rivalry board.
+				# Qing (player) vs Britain / France / Russia, all at once. Mirrors
+				# gui/qing_greatgame.gui's per-power sections (tension + standing)
+				# but lives inline as a diplomatic-view tab so it opens without a
+				# separate window. Gated to the Qing player + the 'greatgame' tab.
+				################################################################
+				flowcontainer = {
+					direction = vertical
+					margin = { 10 10 }
+					spacing = 10
+					ignoreinvisible = yes
+					visible = "[And( EqualTo_string( Player.GetTag, 'CHI' ), GetVariableSystem.HasValue( 'diplomatic_tabs', 'greatgame' ) )]"
+					# Intro
+					textbox = {
+						size = { 460 40 }
+						multiline = yes
+						autoresize = yes
+						using = BaseFontM
+						using = Default_FontColor
+						text = "GREAT_GAME_PANEL_DESC"
+					}
+					# QING (self) header
+					flowcontainer = {
+						spacing = 8
+						using = background_widget
+						margin = { 8 8 }
+						new_country_flag = {
+							datacontext = "[Player.GetCountry]"
+							blockoverride "Size" { size = { 40 40 } }
+							blockoverride "Flag" {
+								texture = "[Country.AccessCoatOfArms.GetTexture('(int32)56','(int32)56')]"
+								frame = "[Country.AccessCoatOfArms.GetFrame('(int32)56','(int32)56')]"
+								framesize = { 56 56 }
+							}
+						}
+						textbox = {
+							size = { 340 28 }
+							using = BaseFontM
+							using = Default_FontColor
+							text = "QING_GREAT_GAME_SELF_TITLE"
+						}
+					}
+						# GBR SECTION
+						flowcontainer = {
+							visible = "[GetScriptedGui('qing_greatgame_britain_exists').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+							direction = vertical
+							spacing = 4
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+							# title + flag
+							flowcontainer = {
+								spacing = 8
+								new_country_flag = {
+									datacontext = "[GetCountry('GBR')]"
+									blockoverride "Size" { size = { 40 40 } }
+									blockoverride "Flag" {
+										texture = "[Country.AccessCoatOfArms.GetTexture('(int32)56','(int32)56')]"
+										frame = "[Country.AccessCoatOfArms.GetFrame('(int32)56','(int32)56')]"
+										framesize = { 56 56 }
+									}
+								}
+								textbox = {
+									size = { 300 28 }
+									using = BaseFontM
+									using = Default_FontColor
+									text = "GREAT_GAME_BRITAIN_TITLE"
+								}
+							}
+							# Tension bar
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "GREAT_GAME_TENSION_LABEL"
+									tooltip = "GREAT_GAME_TENSION_TT"
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 240 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_gp_tension_britain').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
+								textbox = {
+									size = { 40 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_gp_tension_britain').GetValue|0]"
+								}
+							}
+							# Standing (opinion)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "GREAT_GAME_STANDING_LABEL"
+									tooltip = "GREAT_GAME_STANDING_TT"
+								}
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[GetCountry('GBR').GetOpinionOf(Player.GetCountry)|+=]"
+								}
+							}
+						}
+						# FRA SECTION
+						flowcontainer = {
+							visible = "[GetScriptedGui('qing_greatgame_france_exists').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+							direction = vertical
+							spacing = 4
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+							# title + flag
+							flowcontainer = {
+								spacing = 8
+								new_country_flag = {
+									datacontext = "[GetCountry('FRA')]"
+									blockoverride "Size" { size = { 40 40 } }
+									blockoverride "Flag" {
+										texture = "[Country.AccessCoatOfArms.GetTexture('(int32)56','(int32)56')]"
+										frame = "[Country.AccessCoatOfArms.GetFrame('(int32)56','(int32)56')]"
+										framesize = { 56 56 }
+									}
+								}
+								textbox = {
+									size = { 300 28 }
+									using = BaseFontM
+									using = Default_FontColor
+									text = "GREAT_GAME_FRANCE_TITLE"
+								}
+							}
+							# Tension bar
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "GREAT_GAME_TENSION_LABEL"
+									tooltip = "GREAT_GAME_TENSION_TT"
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 240 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_gp_tension_france').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
+								textbox = {
+									size = { 40 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_gp_tension_france').GetValue|0]"
+								}
+							}
+							# Standing (opinion)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "GREAT_GAME_STANDING_LABEL"
+									tooltip = "GREAT_GAME_STANDING_TT"
+								}
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[GetCountry('FRA').GetOpinionOf(Player.GetCountry)|+=]"
+								}
+							}
+						}
+						# RUS SECTION
+						flowcontainer = {
+							visible = "[GetScriptedGui('qing_greatgame_russia_exists').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+							direction = vertical
+							spacing = 4
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+							# title + flag
+							flowcontainer = {
+								spacing = 8
+								new_country_flag = {
+									datacontext = "[GetCountry('RUS')]"
+									blockoverride "Size" { size = { 40 40 } }
+									blockoverride "Flag" {
+										texture = "[Country.AccessCoatOfArms.GetTexture('(int32)56','(int32)56')]"
+										frame = "[Country.AccessCoatOfArms.GetFrame('(int32)56','(int32)56')]"
+										framesize = { 56 56 }
+									}
+								}
+								textbox = {
+									size = { 300 28 }
+									using = BaseFontM
+									using = Default_FontColor
+									text = "GREAT_GAME_RUSSIA_TITLE"
+								}
+							}
+							# Tension bar
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "GREAT_GAME_TENSION_LABEL"
+									tooltip = "GREAT_GAME_TENSION_TT"
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 240 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_gp_tension_russia').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
+								textbox = {
+									size = { 40 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_gp_tension_russia').GetValue|0]"
+								}
+							}
+							# Standing (opinion)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "GREAT_GAME_STANDING_LABEL"
+									tooltip = "GREAT_GAME_STANDING_TT"
+								}
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[GetCountry('RUS').GetOpinionOf(Player.GetCountry)|+=]"
+								}
+							}
+						}
+				}
 			################################################################
 			########Subjects view#########################################
 			################################################################
@@ -1510,15 +2165,23 @@ base_window = {
 											}
 											blockoverride "On_click"
 											{
-												#onclick = "[OpenDiplomacy(Country.GetCountry)]" #change this
+												# [#168 fix] The Subjects-tab list is NAVIGATION: clicking a
+												# subject opens ITS diplomatic view (target = that subject),
+												# where the per-subject interaction buttons live (see the
+												# subject-interactions panel added to the Diplomatic tab). The
+												# subjects-tab right pane cannot host the action buttons — it is
+												# only shown while viewing the PLAYER's own country, so a button
+												# gated on scope:target = { is_subject_of = ROOT } can never pass
+												# there. Was commented out upstream, leaving the list inert.
+												onclick = "[OpenDiplomacy(Country.GetCountry)]"
 											}
-										}	
+										}
 										tag_dark = {
 											text = "FOREIGN_INFLUENCE_TT"
 											tooltip = "[Country.GetDescriptiveName]"
 											max_width = 135
 											elide = right
-										}											
+										}
 									}
 								}
 							}
@@ -1662,7 +2325,8 @@ base_window = {
 							icon_and_text = { #pop
 								size = { 120 32 }
 								blockoverride "Icon" { texture = "gfx/interface/icons/shared_icons/pop_type.dds" }
-								blockoverride "Text" { text = "Egg" }
+									# [#171] was hardcoded "Egg" placeholder
+									blockoverride "Text" { text = "[DiplomaticView.GetTargetCountry.GetTotalPopulation]" }
 								tooltip = "[DiplomaticView.GetTargetCountry.BuildTotalPopulationToolTip]"
 							}
 							icon_and_text = { #stability
@@ -1730,23 +2394,28 @@ base_window = {
 							}
 							flowcontainer = { 
 								margin_top = 10
-								icon_button_square = {
-									size = { 40 40 }
-									blockoverride "On_click"
-									{
-										#onclick = ""
-										clicksound = "event:/SFX/UI/Generic/sfx_ui_generic_sub_tab"
-										oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
-										inherit_visual_state = no
+									# [#171] repurposed the dead "Change Overseer" placeholder into the
+									# amban-swap action (replace the resident amban). Wired to the same
+									# qing_amban_manage_replace scripted GUI used by the #168 button strip.
+									icon_button_square = {
+										size = { 40 40 }
+										datacontext = "[GetScriptedGui('qing_amban_manage_replace_button')]"
+										visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+										blockoverride "On_click"
+										{
+											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+											clicksound = "event:/SFX/UI/Generic/sfx_ui_generic_sub_tab"
+											oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
+											inherit_visual_state = no
+										}
+										blockoverride "Icon"
+										{
+											texture = "gfx/interface/icons/shared_icons/change.dds"
+											size = { 34 34 }
+										}
+										tooltip = "QING_AMBAN_MANAGE_REPLACE_TT"
 									}
-									blockoverride "Icon"
-									{
-										texture = "gfx/interface/icons/shared_icons/change.dds"
-										size = { 34 34 }
-									}
-									
-									tooltip = "Change Overseer"
-								} 
 								widget = {
 									size = { 120 40 }
 									icon = {
@@ -1859,28 +2528,14 @@ base_window = {
 							widget = { size = { 0 6 } }
 							only_text = {
 								size = { 220 32 }
-								blockoverride "Text" { text = "Autonomy: number" }
-								tooltip = "Autonomy: number"
+								# [#171] was "Autonomy: number" placeholder — bind to live subject loyalty.
+								blockoverride "Text" { text = "[DiplomaticView.GetTargetCountry.GetSubjectLoyaltyInfo]" }
+								tooltip = "[DiplomaticView.GetTargetCountry.GetSubjectLoyaltyInfo]"
 							}
 						} 
 						widget = {
 							size = { 60 35 }	
 						}
-						icon_button_square = {
-							size = { 40 40 }
-							blockoverride "On_click"
-							{
-								clicksound = "event:/SFX/UI/Generic/sfx_ui_generic_sub_tab"
-								oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
-								inherit_visual_state = no
-							}
-							blockoverride "Icon"
-							{
-								texture = "gfx/interface/icons/shared_icons/change.dds"
-								size = { 34 34 }
-							}
-							tooltip = "Change?"
-						} 
 					}
 					# Per-subject interactions (Qing). ROOT = player/overlord,
 					# scope:target = the subject shown in this view.
@@ -2080,7 +2735,7 @@ base_window = {
 								textbox = {
 									using = BaseFontM
 									using = Default_FontColor
-									block "progress_text" { text = "Status: Desloyal" }
+									block "progress_text" { text = "[DiplomaticView.GetTargetCountry.GetSubjectLoyaltyInfo]" } # [#171] was "Status: Desloyal"
 								}
 							}
 							widget = {
@@ -2110,7 +2765,7 @@ base_window = {
 
 											block "progress_value"
 											{
-												value = "35"
+												value = "[FixedPointToFloat( Multiply_CFixedPoint( DiplomaticView.GetTargetCountry.GetSubjectLoyalty, '(CFixedPoint)0.01' ) )]" # [#171] was hardcoded 35
 											}
 										}
 									}
@@ -2126,29 +2781,13 @@ base_window = {
 								textbox = {
 									using = BaseFontM
 									using = Default_FontColor
-									block "progress_text" { text = "Relation: -55" }
+									block "progress_text" { text = "[DiplomaticView.GetTargetCountry.GetOpinionOf(Player.GetCountry)|+=]" } # [#171] was "Relation: -55"
 								}
 							}
 						} 
 						widget = {
 							size = { 20 0 }	
 						}
-						icon_button_square = {
-							size = { 50 50 }
-							blockoverride "On_click"
-							{
-								#onclick = ""
-								clicksound = "event:/SFX/UI/Generic/sfx_ui_generic_sub_tab"
-								oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
-								inherit_visual_state = no
-							}
-							blockoverride "Icon"
-							{
-								texture = "gfx/interface/icons/_default.dds"
-								size = { 34 34 }
-							}
-							tooltip = "Change?"
-						} 
 					}
 					flowcontainer = {
 						widget = {
@@ -2183,7 +2822,7 @@ base_window = {
 							parentanchor = hcenter
 							size = { 230 28 }
 							blockoverride "On_click" {
-								#onclick = ""
+								onclick = "[GetVariableSystem.Set( 'diplomatic_windows', 'show_national_interactions' )]" # [#171] was dead; opens National Interactions panel
 							}
 							blockoverride "Center_text"
 							{
