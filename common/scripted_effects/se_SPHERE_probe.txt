@@ -1,0 +1,75 @@
+########################################################################
+# se_SPHERE_probe.txt — PHASE 0 PROBE for the four-power sphere-of-influence
+# rework (#165). TEMPORARY / REMOVABLE.
+#
+# WHY THIS EXISTS: the oracle pass (Terra-Indomita + Invictus) confirmed that
+# reading a NUMERIC scripted var off a *neighbour* scope DURING iteration is an
+# idiom neither reference mod demonstrates — only boolean has_variable neighbour
+# reads are proven. The engine almost certainly supports the numeric read, but
+# per the oracle-consultation rule we do NOT build the sphere BLEED on an
+# unverified idiom. This probe settles it empirically: load a CHI game once,
+# then read logs/debug.log for the "IMP19C SPHERE:" lines.
+#
+# It also confirms the neighbour traversal shape the oracle prescribed, since
+# any_neighbor_state does NOT exist: state's province -> area -> every_neighbor_area
+# -> every_area_state.
+#
+# DECISION RULE:
+#   • PHASE0 direct-read sum == 10 x neighbour-state-count  -> pull model works,
+#     build bleed as designed.
+#   • sum == 0 while count > 0, or an error in error.log     -> fall back to the
+#     PUSH model (strong holder pushes score to neighbour states; proven idiom).
+#
+# Fired once at game init for CHI by common/on_action/SPHERE_probe_debug.txt.
+# DELETE both files (this + the on_action) once the verdict is recorded.
+########################################################################
+
+SPHERE_phase0_probe = {
+	# Scope: country (ROOT = CHI)
+	LOG_enter = { sys = SPHERE  fn = "SPHERE_phase0_probe" }
+
+	# 1. Seed a numeric var on EVERY state in the world so neighbour reads have
+	#    data to find regardless of who owns the neighbouring land.
+	every_country = {
+		every_country_state = {
+			set_variable = { name = sphere_probe_val  value = 10 }
+		}
+	}
+
+	# 2. Neighbour-COUNT sanity check (proven idiom: iterate + count). Establishes
+	#    that the state->area->neighbour-area->state traversal reaches ANY states.
+	set_variable = { name = sphere_probe_count  value = 0 }
+	capital_scope = {
+		area = {
+			every_neighbor_area = {
+				every_area_state = {
+					root = { change_variable = { name = sphere_probe_count  add = 1 } }
+				}
+			}
+		}
+	}
+	LOG_line = { sys = SPHERE  msg = "PHASE0 neighbour-state COUNT (traversal reachable?) = [ROOT.MakeScope.GetVariable('sphere_probe_count').GetValue|-999]" }
+
+	# 3. THE DECISIVE TEST — the UNSEEN idiom: a direct in-loop numeric var: read,
+	#    accumulated in a script_value. If this returns 10 x count, the pull model
+	#    is verified. Guarded with has_variable so an unseeded neighbour can't fault.
+	set_variable = {
+		name = sphere_probe_direct_sum
+		value = {
+			value = 0
+			capital_scope.area = {
+				every_neighbor_area = {
+					every_area_state = {
+						if = {
+							limit = { has_variable = sphere_probe_val }
+							add = var:sphere_probe_val
+						}
+					}
+				}
+			}
+		}
+	}
+	LOG_line = { sys = SPHERE  msg = "PHASE0 DECISIVE direct in-loop var: read SUM = [ROOT.MakeScope.GetVariable('sphere_probe_direct_sum').GetValue|-999] (expect 10 x count => pull model WORKS; 0 with count>0 => use PUSH fallback)" }
+
+	LOG_exit = { sys = SPHERE  fn = "SPHERE_phase0_probe"  result = OK }
+}

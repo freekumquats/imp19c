@@ -1,0 +1,233 @@
+########################################################################
+# qing_faction_events.txt — CONSERVATIVE vs REFORMIST politics of the Grand
+# Council (#158). The faction layer (se_QING_FACTION.txt) scores every seated
+# office-holder AND the three dynastic figureheads (Emperor / Crown Prince /
+# Empress Dowager) on a reform stance; these events dramatise the resulting
+# split. They deliberately BRIDGE the two existing event families:
+#   • they pick councillors by their computed qing_char_stance (the same members
+#     the qing_office.* council events act on), and
+#   • they turn on the dynastic figureheads' stance/affinity (the qing_dynasty.*
+#     family events), because those three SIT on the council.
+#
+# Fired from QING_faction_flavour_roll (on the quarterly Qing pulse). Each event
+# re-checks its own trigger, so a stale pick is a harmless no-op. Every option
+# moves the shared meters — qing_council_effectiveness, qing_reform_faction_balance
+# (the #14 reform end-state trajectory), qing_dynastic_harmony — and acts on the
+# CONCRETE characters (loyalty / prestige / stance-shaping traits). All logged QING.
+########################################################################
+
+namespace = qing_faction
+
+# ======================================================================
+# qing_faction.1 — THE REFORM MEMORIAL (變法奏摺)
+# A reform-minded councillor lays a modernizing memorial before the throne; a
+# conservative colleague rises to oppose it. The two are picked BY STANCE from the
+# seated council. The throne backs reform (balance up, the conservative estranged),
+# holds to the old ways (balance down, the reformer estranged), or seeks a middle
+# course (a small harmony gain, nobody satisfied). Fires on a council that has BOTH
+# a clear reformist and a clear conservative seated — i.e. a real argument to have.
+# ======================================================================
+qing_faction.1 = {
+	type = country_event
+	title = "qing_faction.1.t"
+	desc = "qing_faction.1.desc"
+	picture = council_country
+	left_portrait = scope:reformer
+	right_portrait = scope:conservative
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable_list = qing_council_members
+		# a reformist AND a conservative both sit (their stance was scored this
+		# quarter by QING_faction_recompute during the council recompute).
+		any_in_list = { variable = qing_council_members  is_alive = yes  employer = ROOT  has_variable = qing_char_stance  var:qing_char_stance >= 20 }
+		any_in_list = { variable = qing_council_members  is_alive = yes  employer = ROOT  has_variable = qing_char_stance  var:qing_char_stance <= -20 }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_faction.1 (reform memorial) [ROOT.GetTag]" }
+		# the sharpest reformist voice
+		ordered_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT  has_variable = qing_char_stance }
+			order_by = var:qing_char_stance
+			check_range_bounds = no
+			max = 1
+			save_scope_as = reformer
+		}
+		# the sharpest conservative voice (lowest stance = first in ascending order)
+		# a conservative voice: order_by picks the HIGHEST stance, so there is no
+		# proven "lowest" pick — take a clearly-conservative member the same way
+		# qing_office.9 picks its second disputant (random_in_list on the bloc).
+		random_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT  has_variable = qing_char_stance  var:qing_char_stance <= -20  NOT = { this = scope:reformer } }
+			save_scope_as = conservative
+		}
+	}
+
+	# --- Back the reform memorial ------------------------------------------------
+	option = {
+		name = "qing_faction.1.a"
+		custom_tooltip = "qing_faction.1.a.tt"
+		change_variable = { name = qing_reform_faction_balance  add = 6 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -4 }
+		scope:reformer = { add_loyalty = loyalty_qing_commended }
+		scope:conservative = { add_loyalty = loyalty_qing_estranged }
+		add_political_influence = -10
+	}
+
+	# --- Hold to the ancestral ways ----------------------------------------------
+	option = {
+		name = "qing_faction.1.b"
+		custom_tooltip = "qing_faction.1.b.tt"
+		change_variable = { name = qing_reform_faction_balance  subtract = 6 }
+		add_stability = 1
+		scope:conservative = { add_loyalty = loyalty_qing_commended }
+		scope:reformer = { add_loyalty = loyalty_qing_estranged }
+	}
+
+	# --- Seek a middle course (self-strengthening without upheaval) --------------
+	option = {
+		name = "qing_faction.1.c"
+		custom_tooltip = "qing_faction.1.c.tt"
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 2 }
+		# neither faction is satisfied, but the council holds together
+		scope:reformer = { add_loyalty = -4 }
+		scope:conservative = { add_loyalty = -4 }
+	}
+}
+
+# ======================================================================
+# qing_faction.2 — BEHIND THE SCREEN, AGAINST THE TIDE (慈禧阻變)
+# The canonical Guangxu-vs-Cixi showdown: the council has swung REFORMIST, but a
+# CONSERVATIVE Empress Dowager moves to smother the reforms from behind the screen.
+# Fires only when the council leans reformist AND a living dowager is herself a
+# conservative (her stance was scored by QING_dynasty_assess / the faction tally).
+# The throne can defer to her (the 1898 coup — reform balance crashes, harmony
+# "kept" by submission), or defy her (reform advances, but the house is riven).
+# ======================================================================
+qing_faction.2 = {
+	type = country_event
+	title = "qing_faction.2.t"
+	desc = "qing_faction.2.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+	right_portrait = scope:dowager
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		QING_dynasty_has_dowager = yes
+		var:qing_council_reform_lean >= 15
+		current_ruler.mother = { has_variable = qing_char_stance  var:qing_char_stance <= -20 }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_faction.2 (dowager blocks reform, lean=[ROOT.MakeScope.GetVariable('qing_council_reform_lean').GetValue|0]) [ROOT.GetTag]" }
+		current_ruler.mother = { save_scope_as = dowager }
+	}
+
+	# --- Defer to the Empress Dowager (the coup — reform is rolled back) ---------
+	option = {
+		name = "qing_faction.2.a"
+		custom_tooltip = "qing_faction.2.a.tt"
+		change_variable = { name = qing_reform_faction_balance  subtract = 12 }
+		QING_dynasty_harmony_nudge = { amount = 6 }
+		scope:dowager = { add_prestige = 30 }
+		# the dowager's grip on the agenda drags the council rightward
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -3 }
+	}
+
+	# --- Defy her and press the reforms (a house divided) ------------------------
+	option = {
+		name = "qing_faction.2.b"
+		custom_tooltip = "qing_faction.2.b.tt"
+		change_variable = { name = qing_reform_faction_balance  add = 10 }
+		QING_dynasty_harmony_nudge = { amount = -14 }
+		current_ruler = { add_prestige = 15 }
+		add_political_influence = -15
+	}
+}
+
+# ======================================================================
+# qing_faction.3 — A COUNCIL AT DEADLOCK (朝議紛爭)
+# The reformist and conservative blocs are at parity and every question splits the
+# chamber (high qing_council_polarization). Nothing moves. The throne can force a
+# resolution by PURGING the smaller bloc's loudest voice (effectiveness recovers,
+# tyranny + estrangement), spend heavily to broker a working consensus (a real
+# effectiveness gain), or let the paralysis run (effectiveness bleeds further).
+# ======================================================================
+qing_faction.3 = {
+	type = country_event
+	title = "qing_faction.3.t"
+	desc = "qing_faction.3.desc"
+	picture = council_country
+	left_portrait = scope:reformer
+	right_portrait = scope:conservative
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable_list = qing_council_members
+		var:qing_council_polarization >= 2
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_faction.3 (deadlock, polar=[ROOT.MakeScope.GetVariable('qing_council_polarization').GetValue|0]) [ROOT.GetTag]" }
+		ordered_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT  has_variable = qing_char_stance }
+			order_by = var:qing_char_stance
+			check_range_bounds = no
+			max = 1
+			save_scope_as = reformer
+		}
+		# a conservative voice: order_by picks the HIGHEST stance, so there is no
+		# proven "lowest" pick — take a clearly-conservative member the same way
+		# qing_office.9 picks its second disputant (random_in_list on the bloc).
+		random_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT  has_variable = qing_char_stance  var:qing_char_stance <= -20  NOT = { this = scope:reformer } }
+			save_scope_as = conservative
+		}
+	}
+
+	# --- Force a resolution: purge whichever bloc is the SMALLER (the throne breaks
+	# the tie by weight of numbers). Effectiveness recovers; the purged man is
+	# estranged and tyranny rises.
+	option = {
+		name = "qing_faction.3.a"
+		custom_tooltip = "qing_faction.3.a.tt"
+		if = {
+			limit = { var:qing_faction_ref_count <= var:qing_faction_con_count }
+			scope:reformer = { QING_office_vacate_dispatch = yes  add_loyalty = loyalty_qing_estranged }
+			change_variable = { name = qing_reform_faction_balance  subtract = 4 }
+		}
+		else = {
+			scope:conservative = { QING_office_vacate_dispatch = yes  add_loyalty = loyalty_qing_estranged }
+			change_variable = { name = qing_reform_faction_balance  add = 4 }
+		}
+		QING_council_recompute = yes
+		add_tyranny = 2
+	}
+
+	# --- Broker a working consensus (spend influence to bridge the blocs) --------
+	option = {
+		name = "qing_faction.3.b"
+		custom_tooltip = "qing_faction.3.b.tt"
+		add_political_influence = -20
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 5 }
+		scope:reformer = { add_loyalty = loyalty_qing_commended }
+		scope:conservative = { add_loyalty = loyalty_qing_commended }
+	}
+
+	# --- Let the paralysis run (the chamber tears at itself) ---------------------
+	option = {
+		name = "qing_faction.3.c"
+		custom_tooltip = "qing_faction.3.c.tt"
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -6 }
+		scope:reformer = { add_rival = scope:conservative }
+	}
+}

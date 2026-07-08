@@ -159,6 +159,12 @@ QING_amban_post_sweep = {
 		random_subject = {
 			limit = {
 				NOT = { has_variable = qing_amban_here }
+				# [#163] MANUAL OVERRIDE: skip any dependency the player is managing by hand
+				# (qing_amban_manual flag, set from the amban panel in the subject's diplomatic
+				# view). The auto-sweep never staffs, replaces, or fills a vacancy the player has
+				# claimed — the manual layer owns those posts. Subjects the player never touches
+				# keep the gradual auto-staffing exactly as before.
+				NOT = { has_variable = qing_amban_manual }
 				any_owned_province = { count >= 1 }
 				exists = current_ruler
 				current_ruler = {
@@ -268,57 +274,66 @@ QING_amban_evaluate = {
 				}
 				LOG_line = { sys = QING  msg = "amban: [scope:qing_amban_current.GetName] in [scope:qing_amban_subject.GetTag] loyal+capable (affinity [scope:qing_amban_current.MakeScope.GetVariable('qing_char_affinity').GetValue|0]), dependency firm for [ROOT.GetTag]" }
 			}
-			# [deferred-fix #2] DISPATCH THE LIFECYCLE EVENTS. qing_amban.2 (gone native),
-			# .3 (able resident), and .4 (turnover) were fully authored but had ZERO
-			# trigger_event callers anywhere — dead content; only .1 (clash) ever fired.
-			# Each carries its own defensive trigger + random_subject re-pick, so this
-			# dispatch only needs to nudge them; we roll a low per-quarter chance gated on
-			# the same conditions each event validates. Mutually exclusive priority
-			# (turnover > gone-native > able) so at most one fires per resident per quarter.
-			# .4 TURNOVER: the resident is old/unhealthy (a replacement crisis).
+			# [#163] MANUAL-OVERRIDE GATE: for a dependency the player is managing by hand
+			# (qing_amban_manual on the subject, set from the amban panel in its diplomatic
+			# view), suppress the AUTOMATIC lifecycle-event dispatch below (turnover / gone-
+			# native / recall) — the player owns posting and recall for this post. The
+			# friction/affinity SCORING and opinion effects ABOVE still run, so a poorly
+			# chosen resident keeps its quarterly consequences; only auto-turnover is frozen.
 			if = {
-				limit = {
-					scope:qing_amban_current = {
-						OR = { age >= 65  health < 0.4 }
+				limit = { NOT = { scope:qing_amban_subject = { has_variable = qing_amban_manual } } }
+				# [deferred-fix #2] DISPATCH THE LIFECYCLE EVENTS. qing_amban.2 (gone native),
+				# .3 (able resident), and .4 (turnover) were fully authored but had ZERO
+				# trigger_event callers anywhere — dead content; only .1 (clash) ever fired.
+				# Each carries its own defensive trigger + random_subject re-pick, so this
+				# dispatch only needs to nudge them; we roll a low per-quarter chance gated on
+				# the same conditions each event validates. Mutually exclusive priority
+				# (turnover > gone-native > able) so at most one fires per resident per quarter.
+				# .4 TURNOVER: the resident is old/unhealthy (a replacement crisis).
+				if = {
+					limit = {
+						scope:qing_amban_current = {
+							OR = { age >= 65  health < 0.4 }
+						}
+					}
+					random = {
+						chance = 15
+						ROOT = {
+							trigger_event = { id = qing_amban.4  days = { 10 40 } }
+							LOG_line = { sys = QING  msg = "amban: turnover event queued (resident [scope:qing_amban_current.GetName] old/unwell) in [scope:qing_amban_subject.GetTag] for [ROOT.GetTag]" }
+						}
 					}
 				}
-				random = {
-					chance = 15
-					ROOT = {
-						trigger_event = { id = qing_amban.4  days = { 10 40 } }
-						LOG_line = { sys = QING  msg = "amban: turnover event queued (resident [scope:qing_amban_current.GetName] old/unwell) in [scope:qing_amban_subject.GetTag] for [ROOT.GetTag]" }
+				# .2 GONE NATIVE: long-tenured (tenure timer expired) + estranged (affinity < 40).
+				else_if = {
+					limit = {
+						scope:qing_amban_current = {
+							NOT = { has_variable = qing_amban_tenure_pending }
+							var:qing_char_affinity < 40
+						}
+					}
+					random = {
+						chance = 15
+						ROOT = {
+							trigger_event = { id = qing_amban.2  days = { 10 40 } }
+							LOG_line = { sys = QING  msg = "amban: gone-native event queued (resident [scope:qing_amban_current.GetName] long-tenured + estranged) in [scope:qing_amban_subject.GetTag] for [ROOT.GetTag]" }
+						}
 					}
 				}
-			}
-			# .2 GONE NATIVE: long-tenured (tenure timer expired) + estranged (affinity < 40).
-			else_if = {
-				limit = {
-					scope:qing_amban_current = {
-						NOT = { has_variable = qing_amban_tenure_pending }
-						var:qing_char_affinity < 40
+				# .3 ABLE RESIDENT: loyal+capable (affinity >= 70) and the dependency has unrest to quell.
+				else_if = {
+					limit = {
+						scope:qing_amban_current = { var:qing_char_affinity >= 70 }
+						scope:qing_amban_subject = {
+							any_owned_province = { count >= 1  province_unrest >= 2 }
+						}
 					}
-				}
-				random = {
-					chance = 15
-					ROOT = {
-						trigger_event = { id = qing_amban.2  days = { 10 40 } }
-						LOG_line = { sys = QING  msg = "amban: gone-native event queued (resident [scope:qing_amban_current.GetName] long-tenured + estranged) in [scope:qing_amban_subject.GetTag] for [ROOT.GetTag]" }
-					}
-				}
-			}
-			# .3 ABLE RESIDENT: loyal+capable (affinity >= 70) and the dependency has unrest to quell.
-			else_if = {
-				limit = {
-					scope:qing_amban_current = { var:qing_char_affinity >= 70 }
-					scope:qing_amban_subject = {
-						any_owned_province = { count >= 1  province_unrest >= 2 }
-					}
-				}
-				random = {
-					chance = 20
-					ROOT = {
-						trigger_event = { id = qing_amban.3  days = { 10 40 } }
-						LOG_line = { sys = QING  msg = "amban: able-resident event queued (resident [scope:qing_amban_current.GetName] quells unrest) in [scope:qing_amban_subject.GetTag] for [ROOT.GetTag]" }
+					random = {
+						chance = 20
+						ROOT = {
+							trigger_event = { id = qing_amban.3  days = { 10 40 } }
+							LOG_line = { sys = QING  msg = "amban: able-resident event queued (resident [scope:qing_amban_current.GetName] quells unrest) in [scope:qing_amban_subject.GetTag] for [ROOT.GetTag]" }
+						}
 					}
 				}
 			}

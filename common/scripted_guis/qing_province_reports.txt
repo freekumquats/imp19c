@@ -1,11 +1,12 @@
 ########################################################################
-# qing_province_reports.txt — scripted GUI definitions for two Qing
-# province-query panels: #120 New World crop distribution and #109
-# province ethnic-tension report. Built as an ALTERNATIVE to custom map
-# modes (which are not scriptable in Imperator 2.0.5, per oracle verdict
-# OVERNIGHT_DECISIONS.md). Each panel is a self-contained scripted_gui
-# that opens a window + iterates provinces via every_governorships ->
-# every_governorship_state, rendering a scrollable list.
+# qing_province_reports.txt — scripted GUI definitions for three Qing
+# province-query panels: #120 New World crop distribution, #109 province
+# ethnic-tension report, and #160 national migration / demographic-pressure
+# report. Built as an ALTERNATIVE to custom map modes (which are not
+# scriptable in Imperator 2.0.5, per oracle verdict OVERNIGHT_DECISIONS.md).
+# Each panel is a self-contained scripted_gui that opens a window + iterates
+# provinces via every_governorships -> every_governorship_state ->
+# every_state_province, rendering a scrollable list.
 #
 # Pattern: PROVEN via common/scripted_guis/sell_provinces.txt.
 # Prefix: qing_report_
@@ -26,23 +27,21 @@ qing_report_open_crops = {
 	effect = {
 		# [scan Tier-B #120] wired to a button in the Grand Council action strip.
 		LOG_line = { sys = QING  msg = "crop report opened by [ROOT.GetTag]" }
-		clear_variable_list = qing_crop_report_regions
 		clear_variable_list = qing_crop_report_provinces
 
+		# [#120 review-fix] Descend state -> PROVINCE. trade_goods is a per-PROVINCE
+		# property in this engine (a governorship_state is only a container), so the
+		# old scope:this_state read of trade_goods matched nothing and the list came
+		# up permanently empty. The mod's own production code always reads trade_goods
+		# on any_state_province (se_GOODS.txt:975), never on the state — match it here.
 		every_governorships = {
-			root = {
-				add_to_variable_list = {
-					name = qing_crop_report_regions
-					target = prev
-				}
-			}
 			every_governorship_state = {
-				save_scope_as = this_state
-				prev = {
+				every_state_province = {
+					save_scope_as = this_prov
 					# only include provinces producing New World crops
 					if = {
 						limit = {
-							scope:this_state = {
+							scope:this_prov = {
 								OR = {
 									trade_goods = maize
 									trade_goods = sweet_potato
@@ -53,7 +52,7 @@ qing_report_open_crops = {
 						root = {
 							add_to_variable_list = {
 								name = qing_crop_report_provinces
-								target = scope:this_state
+								target = scope:this_prov
 							}
 						}
 					}
@@ -80,23 +79,22 @@ qing_report_open_tension = {
 	effect = {
 		# [scan Tier-B #109] wired to a button in the Grand Council action strip.
 		LOG_line = { sys = QING  msg = "tension report opened by [ROOT.GetTag]" }
-		clear_variable_list = qing_tension_report_regions
 		clear_variable_list = qing_tension_report_provinces
 
+		# [#109 review-fix] Descend state -> PROVINCE. Feature #107 seeds
+		# qing_prov_ethnic_tension on PROVINCES (its pulse runs every_owned_province,
+		# this = the province — se_QING_ETHNIC_TENSION.txt:50). The old scope:this_state
+		# read of that var matched nothing (states never carry it), so the list came up
+		# permanently empty — exactly the failure this fix removes. The has_variable
+		# guard still lets it degrade gracefully to an empty list if #107 never ran.
 		every_governorships = {
-			root = {
-				add_to_variable_list = {
-					name = qing_tension_report_regions
-					target = prev
-				}
-			}
 			every_governorship_state = {
-				save_scope_as = this_state
-				prev = {
+				every_state_province = {
+					save_scope_as = this_prov
 					# only include provinces with tension >= 30 (guard with has_variable)
 					if = {
 						limit = {
-							scope:this_state = {
+							scope:this_prov = {
 								has_variable = qing_prov_ethnic_tension
 								var:qing_prov_ethnic_tension >= 30
 							}
@@ -104,7 +102,67 @@ qing_report_open_tension = {
 						root = {
 							add_to_variable_list = {
 								name = qing_tension_report_provinces
-								target = scope:this_state
+								target = scope:this_prov
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# ======================================================================
+# COUNTRY-SCOPE: open the National Migration / Demographic-Pressure panel (#160).
+#
+# WHY AN AGGREGATE, NOT A LIVE MIGRANT TICKER: the engine's live migration data
+# (per-pop migrant progress, GetActivitySpeed('migrant')) is exposed ONLY as C++
+# datafunctions on the hardcoded vanilla pops window (view_pops_list.gui,
+# ViewPopsWindow.GetMigrants) — it is NOT readable from script, so a scripted_gui
+# cannot rebuild that list. What script CAN read on a province is its population,
+# capacity, and the concrete migration/boom PROVINCE MODIFIERS the frontier-migration
+# mechanic stamps (se_QING_COLON.txt / qing_frontier_migration_events.txt). So this
+# panel surfaces the demographic pressure + in-migration hotspots that the mechanic
+# actually creates, per the concrete-over-abstract house rule.
+#
+# A province is listed when EITHER:
+#   • it carries an in-migration / boom modifier — qing_migr_hongkong_boom (the
+#     Hong Kong harbour district) or qing_nwcrop_abundance (a New World crop province,
+#     the population-boom driver); OR
+#   • it is under demographic PRESSURE — total_population >= 20 (a crowded province,
+#     the source side of internal migration as pops seek room on the frontier).
+# Degrades gracefully to an empty list (has_province_modifier / total_population are
+# always-safe reads; no variable deref).
+# ======================================================================
+qing_report_open_migration = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		# [#160] wired to a button in the Grand Council action strip.
+		LOG_line = { sys = QING  msg = "migration report opened by [ROOT.GetTag]" }
+		clear_variable_list = qing_migration_report_provinces
+
+		every_governorships = {
+			every_governorship_state = {
+				every_state_province = {
+					save_scope_as = this_prov
+					# include in-migration / boom hotspots OR crowded (pressure) provinces
+					if = {
+						limit = {
+							scope:this_prov = {
+								OR = {
+									has_province_modifier = qing_migr_hongkong_boom
+									has_province_modifier = qing_nwcrop_abundance
+									total_population >= 20
+								}
+							}
+						}
+						root = {
+							add_to_variable_list = {
+								name = qing_migration_report_provinces
+								target = scope:this_prov
 							}
 						}
 					}

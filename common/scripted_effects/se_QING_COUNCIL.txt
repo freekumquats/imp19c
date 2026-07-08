@@ -125,6 +125,7 @@ QING_council_recompute = {
 	# --- reset accumulators + rebuild the DERIVED office-holder roster
 	set_variable = { name = qing_council_skill_total  value = 0 }
 	set_variable = { name = qing_council_filled_count  value = 0 }
+	set_variable = { name = qing_council_figurehead_count  value = 0 }
 	set_variable = { name = qing_council_manchu_count  value = 0 }
 	set_variable = { name = qing_council_han_count  value = 0 }
 	clear_variable_list = qing_council_members
@@ -143,14 +144,55 @@ QING_council_recompute = {
 	QING_council_score_office = { office = grand_secretary      skill = charisma }
 	QING_council_score_office = { office = zongli     skill = charisma }
 
-	# --- base = average governing skill of the filled offices, scaled to ~0..100.
-	# A council of solid specialists (governing skill ~9) lands near the effective
-	# band; brilliant men clear it, mediocrities fall to dysfunction.
+	# --- [#158b] fold the DYNASTIC FIGUREHEADS into the effectiveness base (user
+	# request): the Emperor 皇帝, Empress Dowager 皇太后, Crown Prince 皇太子 and
+	# Grand Regent 攝政 all shape whether the council can govern, each judged on ALL
+	# FOUR skills averaged (like the summit Grand Chancellor). The Emperor carries
+	# extra weight (the throne sets the tone above every office); when a minority /
+	# incapacity has installed a Grand Regent, the regent — who actually wields the
+	# throne's authority — carries that same extra weight. The Dowager and Crown
+	# Prince weigh one seat each. Each guarded for presence exactly as the SEATS /
+	# DYNASTY code guards them, so an absent figurehead is a clean no-op.
+	if = {
+		limit = { exists = current_ruler }
+		QING_council_score_figurehead = { who = current_ruler  weight = 3 }
+	}
+	if = {
+		limit = { QING_dynasty_has_dowager = yes }
+		QING_council_score_figurehead = { who = current_ruler.mother  weight = 1 }
+	}
+	if = {
+		limit = { QING_dynasty_has_crownprince = yes }
+		QING_council_score_figurehead = { who = var:qing_office_crownprince_holder  weight = 1 }
+	}
+	if = {
+		limit = {
+			has_variable = qing_office_regent_holder
+			var:qing_office_regent_holder = { is_alive = yes  employer = ROOT }
+		}
+		QING_council_score_figurehead = { who = var:qing_office_regent_holder  weight = 3 }
+	}
+
+	# --- [#158] recompute the conservative-vs-reformist faction meters over the
+	# freshly-rebuilt roster + the three dynastic figureheads (se_QING_FACTION.txt).
+	# Must run AFTER the score passes above (which rebuild qing_council_members) and
+	# BEFORE the eff_target math below, which reads the deadlock penalty it derives.
+	QING_faction_recompute = yes
+
+	# --- base = weighted-average governing skill of the filled offices AND the
+	# dynastic figureheads, scaled to ~0..100. A council of solid specialists
+	# (governing skill ~9) lands near the effective band; brilliant men clear it,
+	# mediocrities fall to dysfunction. [#158b] the divisor is the office count PLUS
+	# the figurehead seat-weights (Emperor 3 + Regent 3 + Dowager 1 + Prince 1),
+	# since QING_council_score_figurehead added their weighted skill to the total —
+	# so the throne's own ability moves the average, heavily for the Emperor/Regent.
+	set_variable = { name = qing_council_eff_denom  value = var:qing_council_filled_count }
+	change_variable = { name = qing_council_eff_denom  add = var:qing_council_figurehead_count }
 	set_variable = { name = qing_council_eff_target  value = 0 }
 	if = {
-		limit = { var:qing_council_filled_count > 0 }
+		limit = { var:qing_council_eff_denom > 0 }
 		set_variable = { name = qing_council_eff_target  value = var:qing_council_skill_total }
-		change_variable = { name = qing_council_eff_target  divide = var:qing_council_filled_count }
+		change_variable = { name = qing_council_eff_target  divide = var:qing_council_eff_denom }
 		change_variable = { name = qing_council_eff_target  multiply = 7 }
 	}
 
@@ -170,6 +212,34 @@ QING_council_recompute = {
 	set_variable = { name = qing_council_vacancy_pen  value = var:qing_council_vacancy }
 	change_variable = { name = qing_council_vacancy_pen  multiply = 3 }
 	change_variable = { name = qing_council_eff_target  subtract = var:qing_council_vacancy_pen }
+
+	# --- [#157] dynastic-harmony coupling: the family dynamics of the imperial
+	# house (emperor / crown prince / empress dowager) bleed into whether the
+	# offices can actually govern. Read qing_dynastic_harmony (0..100, midpoint
+	# 50, seeded + moved by se_QING_DYNASTY.txt + the qing_dynasty events) and
+	# fold its deviation from the midpoint into the target: a united house (>50)
+	# lifts council effectiveness, a court split between the heir's faction and
+	# the dowager's clique drags it down. Scaled by /5 so the full 0..100 swing
+	# is a +/-10 band — meaningful but never dominant over skill/vacancy.
+	if = {
+		limit = { has_variable = qing_dynastic_harmony }
+		set_variable = { name = qing_council_harmony_mod  value = var:qing_dynastic_harmony }
+		change_variable = { name = qing_council_harmony_mod  subtract = 50 }
+		change_variable = { name = qing_council_harmony_mod  divide = 5 }
+		change_variable = { name = qing_council_eff_target  add = var:qing_council_harmony_mod }
+	}
+
+	# --- [#158] faction-deadlock penalty: a Grand Council split hard between a
+	# reformist bloc and a conservative bloc governs worse — the gridlock of the
+	# 1898-style court where every edict is fought over. qing_council_polar_pen is
+	# 0 for a UNITED council (whether solidly reformist OR solidly conservative) and
+	# rises (capped at 20) only as the two blocs approach parity. Sits beside the
+	# dynastic-harmony coupling: the two "court politics" levers together. Computed
+	# in QING_faction_recompute (called above, after the roster rebuild).
+	if = {
+		limit = { has_variable = qing_council_polar_pen }
+		change_variable = { name = qing_council_eff_target  subtract = var:qing_council_polar_pen }
+	}
 
 	# --- clamp target 0..100
 	if = { limit = { var:qing_council_eff_target < 0 }   set_variable = { name = qing_council_eff_target  value = 0 } }
@@ -268,6 +338,44 @@ QING_council_score_chancellor = {
 		change_variable = { name = qing_council_skill_total  add = var:qing_council_tmp }
 		change_variable = { name = qing_council_filled_count  add = 1 }
 	}
+}
+
+# ======================================================================
+# [#158b] SCORE A DYNASTIC FIGUREHEAD onto the council's effectiveness base.
+# The Emperor (皇帝), Empress Dowager (皇太后), Crown Prince (皇太子) and Grand
+# Regent (攝政) all sit above the Grand Council and shape whether it can govern —
+# so each PRESENT figurehead contributes their ability to the effectiveness
+# TARGET, judged (like the summit Grand Chancellor) on ALL FOUR skills averaged.
+# Country scope; $who$ = a character scope expression (current_ruler /
+# current_ruler.mother / var:qing_office_*_holder), $weight$ = seat-equivalents
+# (a positive integer). Adds his 4-skill average, MULTIPLIED by $weight$, to
+# qing_council_skill_total and counts $weight$ toward the separate
+# qing_council_figurehead_count — so a heavier figurehead pulls the base average
+# harder in BOTH numerator and denominator (a wise Emperor lifts the council more,
+# a foolish one drags it more). The Emperor (皇帝) and, when the post is filled,
+# the Grand Regent (攝政) carry extra weight — the throne (or whoever wields it in
+# a minority) sets the tone above all the great offices; the Dowager and Crown
+# Prince weigh one seat each. Deliberately does NOT touch qing_council_filled_count
+# (which drives the office-vacancy penalty) nor the Manchu/Han office split —
+# figureheads are not appointable offices. Mirrors the prev.<skill> value-read
+# idiom of QING_council_score_chancellor exactly.
+# ======================================================================
+QING_council_score_figurehead = {
+	set_variable = { name = qing_council_tmp  value = 0 }
+	$who$ = {
+		ROOT = {
+			change_variable = { name = qing_council_tmp  add = prev.martial }
+			change_variable = { name = qing_council_tmp  add = prev.finesse }
+			change_variable = { name = qing_council_tmp  add = prev.charisma }
+			change_variable = { name = qing_council_tmp  add = prev.zeal }
+		}
+	}
+	change_variable = { name = qing_council_tmp  divide = 4 }
+	# apply the seat-weight (both to the skill total and the count, so the average
+	# is a true weighted mean over offices + figureheads).
+	change_variable = { name = qing_council_tmp  multiply = $weight$ }
+	change_variable = { name = qing_council_skill_total  add = var:qing_council_tmp }
+	change_variable = { name = qing_council_figurehead_count  add = $weight$ }
 }
 
 # ======================================================================

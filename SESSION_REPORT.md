@@ -1524,3 +1524,285 @@ POST-IMPLEMENTATION REVIEW: dispatched (see below).
 
 Integrity: gui_templates.gui 1204/1204, EE_scripted_guis.txt 497/497, 00_diplomacy_prices.txt 4/4 braces;
 4 new loc keys quote-clean; all files byte-convention preserved.
+
+
+## Imperial family dynamics events (#157) — 2026-07-07 (develop)
+
+USER REQUEST: positive + negative events for family dynamics between Emperor / Crown Prince / Empress
+Dowager affecting Grand Council operations.
+
+NEW:
+- common/scripted_effects/se_QING_DYNASTY.txt: qing_dynastic_harmony meter (0..100, init 50);
+  QING_dynasty_init / _harmony_nudge / _has_dowager / _has_crownprince / _flavour_roll + 8 concrete-character
+  effect helpers (dowager_counsel, dowager_overrule, prince_shines, prince_restrain, prince_indulge,
+  faction_mediate, faction_war, regency_screen).
+- events/imp19c_mod_events/qing_dynasty_events.txt (namespace qing_dynasty): qing_dynasty.1-.5, 2 positive
+  + 3 negative, each acting on current_ruler / current_ruler.mother / var:qing_office_crownprince_holder.
+- localization/english/qing_dynasty_l_english.yml (BOM+LF): loc for all 5 events.
+
+CHANGED:
+- common/scripted_effects/se_QING_COUNCIL.txt: QING_council_recompute now folds (qing_dynastic_harmony-50)/5
+  into qing_council_eff_target before the 0..100 clamp — family harmony couples into Grand Council effectiveness
+  (+/-10 band). Behaviour-equivalent when the meter sits at 50 (midpoint => +0), so existing saves are unchanged
+  at the neutral start.
+- common/on_action/qing_mechanics_on_actions.txt: QING_dynasty_init seeded in on_game_initialized (CHI).
+- common/on_action/00_monthly_country.txt: 25%-chance QING_dynasty_flavour_roll added to the quarterly Qing pulse.
+
+COUPLING RATIONALE: reused the existing effectiveness lever rather than a parallel modifier — the meter is a
+thermometer + coupling term; the concrete payload is character prestige/loyalty.
+
+SELF-FOUND FIXES (pre-review): removed bogus add_loyalty_to_regime verb; switched add_loyalty { value = N } to
+the proven bare add_loyalty = N form.
+
+VERIFICATION: all 13 scripted effects/triggers confirmed defined; every event loc key present; brace balances
+clean (DYNASTY 84/84, COUNCIL 346/346, events 36/36); loc 0 bad-quote lines; byte conventions preserved.
+POST-IMPLEMENTATION REVIEW: CLEAN — no hard-crash / boot-throw risk found; zero findings to fix.
+Confirmed: all 13 helpers/triggers defined; scopes correct (character effects only inside character scopes,
+harmony/set_variable at country scope); null-scope window triple-guarded (event trigger re-eval at fire time +
+QING_dynasty_has_* gate + per-option limit wrap); recompute injection uses fresh set_variable scratch (no
+cross-pulse accumulation) with the 0..100 clamp still bounding after the add; all 30 loc keys present. Two
+LOW/non-blocking notes (harmony can peg under sustained one-sided choices = intended; empty dowager+heir pool
+makes the roll a silent no-op = harmless), no action taken.
+
+## #158 — Council conservative-vs-reformist faction layer + skill/trait-driven family events + family↔council cross-linking (develop)
+
+Three stacked enhancements to #157 (family dynamics), plus a tab flavour-text request.
+
+NEW:
+- common/scripted_effects/se_QING_FACTION.txt (no-BOM/LF, 176/176): the faction backbone.
+  - QING_char_stance (character scope): reform position -100..+100 from the WHOLE-character model
+    (reformer/traditionalist traits ±45, zeal, finesse, age, culture 滿漢, corruption, integrity) —
+    the sister scorer to QING_char_affinity.
+  - QING_faction_tally / QING_faction_recompute: aggregate stance over qing_council_members (weight 1)
+    + the three dynastic figureheads (Emperor w3, Dowager w2, Crown Prince w2) into
+    qing_council_reform_lean (weighted-avg -100..100) and qing_council_polarization (smaller opposing
+    bloc). Derives qing_council_polar_pen (deadlock penalty, 5×polarization capped 20).
+  - QING_faction_feed_reform_balance: quarterly ±1..2 nudge of the EXISTING qing_reform_faction_balance
+    toward the council lean (complements, never swamps, the +5..+10 mission-task nudges).
+  - QING_faction_flavour_roll: quarterly dispatcher for the 3 faction events.
+- events/imp19c_mod_events/qing_faction_events.txt (no-BOM/LF, 63/63): qing_faction.1 Reform Memorial
+  (reformist vs conservative councillor, picked by stance), .2 Behind the Screen 慈禧阻變 (conservative
+  dowager smothers a reformist council — the 1898 showdown), .3 Council at Deadlock (blocs at parity).
+- localization/english/qing_faction_l_english.yml (BOM+LF, 0 bad-quote lines): all 3 events' keys.
+
+CHANGED (behavioural-equivalence scrutiny per the fix-traceability rule):
+- se_QING_COUNCIL.txt: QING_council_recompute now (a) calls QING_faction_recompute after the roster
+  rebuild, and (b) subtracts qing_council_polar_pen from qing_council_eff_target beside the harmony
+  coupling. Behaviour-equivalent at start: a fresh council with no reformer/traditionalist traits scores
+  stance ≈0, polarization 0 → polar_pen 0 → no change to eff_target.
+- se_QING_GOVERNANCE.txt: QING_GOV_pulse calls QING_faction_feed_reform_balance after apply_band.
+- se_QING_DYNASTY.txt (163/163): (1) QING_dynasty_assess scores the figureheads via QING_char_affinity
+  + QING_char_stance in each event immediate; (2) every effect helper now SCALES its harmony/prestige/
+  loyalty deltas by the figurehead's ACTUAL skills + affinity (ask #1); (3) helpers CROSS-LINK into the
+  council — moving qing_council_effectiveness and, via QING_dynasty_reform_echo, qing_reform_faction_balance
+  in the direction of the figurehead who gained sway (asks #2/#3). Original flat deltas softened where a
+  scaled bonus was layered on so worst-case magnitude is unchanged.
+- qing_dynasty_events.txt (36/36): QING_dynasty_assess = yes added to all 5 immediates.
+- common/on_action/00_monthly_country.txt: 25%-chance QING_faction_flavour_roll added to the quarterly pulse.
+- common/on_action/qing_mechanics_on_actions.txt: QING_faction_init seeded in on_game_initialized (CHI).
+- localization/english/interface_l_english.yml: GOV_VIEW_GRAND_COUNCIL_TOOLTIP expanded from a one-line
+  placeholder into flavour text (vanilla offices declined to ceremonial husks; real power drained to the
+  Grand Council) per the user's tab-hover request.
+
+DESIGN DECISIONS (locked with the user, 2026-07-07): faction lean FEEDS qing_reform_faction_balance
+(council make-up drives the realm's reform fate); polarization applies a DEADLOCK penalty (a hung court
+governs worse regardless of which side leads; a united council — reformist OR conservative — functions).
+
+SELF-FOUND FIXES (pre-review): loyalty_qing_minor_slight (undefined) → bare add_loyalty = -4; the
+unproven ordered_in_list position=0 "lowest-stance" pick → the proven random_in_list-on-bloc idiom
+(as qing_office.9 picks its second disputant); @[scope:X.GetName]! icon-wrap → plain [scope:X.GetName].
+
+VERIFICATION: all new effects/triggers defined; loyalty values / traits / list idioms confirmed against
+the repo (order_by var:, any_in_list element-conditions, prev.var: value reads, has_trait reformer/
+traditionalist); brace balances clean on all 8 touched files; loc BOM+LF 0 bad-quote lines.
+POST-IMPLEMENTATION REVIEW: pending (dispatched).
+
+
+## [#158b] Grand Council effectiveness — imperial figureheads now weighted (behavioural change, 2026-07-07)
+User ask: "the emperor, empress dowager, and crown prince (and Grand Regent) should all affect the
+existing effectiveness mechanics for the Grand Council, using all four of their skills" + refinement
+"the Emperor's impact should have extra weight compared to other offices (and the Grand Regent, if the
+post is filled)".
+
+CHANGE to a SHIPPED mechanic (qing_council_effectiveness) — behavioural-equivalence note required:
+- se_QING_COUNCIL.txt: QING_council_recompute now scores four dynastic figureheads into the effectiveness
+  base-average via the new QING_council_score_figurehead helper (4-skill mean, like the Grand Chancellor):
+  Emperor weight 3, Grand Regent weight 3 (guarded has_variable + is_alive + employer=ROOT), Empress
+  Dowager weight 1, Crown Prince weight 1 (guarded). Figureheads accumulate into a SEPARATE
+  qing_council_figurehead_count and the base average now divides by qing_council_eff_denom =
+  filled_count + figurehead_count (gated > 0). Figureheads are kept OUT of filled_count so the
+  vacant-office penalty and the Manchu/Han balance term are unchanged.
+- BEHAVIOURAL DELTA (intended, not equivalent): a filled council's effectiveness target now also reflects
+  the imperial house's competence, weighted toward the Emperor/Regent. A capable emperor lifts the ceiling;
+  a feeble one drags it. This is the requested change, so it is NOT byte-equivalent — but it cannot throw
+  (denom gated > 0; all figurehead reads guarded) and it degrades to the old behaviour only if literally
+  no figurehead exists (impossible while current_ruler exists).
+- NOTE: the figurehead effectiveness weights (Emperor 3 / Regent 3 / Dowager 1 / Crown Prince 1) are
+  deliberately DIFFERENT from the #158 faction-figurehead weights (Emperor 3 / Dowager 2 / Crown Prince 2)
+  — two distinct aggregations (competence vs. political bloc).
+
+## [#109/#120] Province-query panels — state->province scope fix (behavioural change, 2026-07-07)
+Investigating the user's flag ("the tension panel reads qing_prov_ethnic_tension, but #107 seeds it on the
+province"), confirmed BOTH report panels were reading province-level properties on the wrong scope:
+- ROOT CAUSE: qing_report_open_crops/_open_tension iterated every_governorship_state and tested
+  trade_goods / qing_prov_ethnic_tension on scope:this_state. In this engine a governorship_state is only
+  a CONTAINER; trade_goods and per-province variables live on the PROVINCE. The mod's own production code
+  always descends every_governorship_state -> every_state_province (se_GOODS.txt:975, se_EDU.txt:181,
+  se_COTTAGEIND.txt:59) and reads those properties on the province. #107 writes qing_prov_ethnic_tension
+  via every_owned_province (this = province, se_QING_ETHNIC_TENSION.txt:50). So BOTH lists were always
+  empty — the tension list AND the crop list. The has_variable/trade_goods filters degraded gracefully
+  (empty, no crash), which is exactly why it was silent.
+- FIX (common/scripted_guis/qing_province_reports.txt): both effects now descend
+  every_governorship_state -> every_state_province, save_scope_as this_prov, filter on scope:this_prov,
+  and store PROVINCE scopes in the variable lists.
+- FIX (gui/qing_province_reports.gui): both windows now render province scopes — Scope.GetProvince.GetName,
+  .GetTradeGoods.GetTooltip, .MakeScope.Var('qing_prov_ethnic_tension'), OnClickOnProvince(Scope.GetProvince),
+  SetHighlightProvince(Scope.GetProvince.GetId) — replacing the Scope.GetState.* accessors. All confirmed
+  against proven usage (province_window.gui SelectProvinceItem rows; economy_view.gui:1531; imp19c_windows
+  migrating-pop rows). Braces balanced 33/33 (.txt) and 64/64 (.gui); no-BOM/LF preserved.
+
+## [#160] National Migration / Demographic-Pressure panel — NEW (2026-07-07)
+Third Grand Council province-report panel, built on the same proven scripted_gui + .gui pattern as
+#109/#120. User-approved after the feasibility answer.
+- WHY AGGREGATE, NOT LIVE TICKER: the engine's live migrant data (per-pop migrant progress,
+  GetActivitySpeed('migrant'), ViewPopsWindow.GetMigrants) is C++/hardcoded-GUI only and NOT script-readable,
+  so a scripted_gui cannot rebuild that list. Script CAN read a province's population, capacity, and the
+  concrete migration/boom PROVINCE MODIFIERS the frontier-migration mechanic stamps. Panel surfaces those.
+- LOGIC (common/scripted_guis/qing_province_reports.txt qing_report_open_migration): country scope,
+  is_shown tag=CHI, ai_is_valid always=no. Descends every_governorships -> every_governorship_state ->
+  every_state_province (PROVINCE scope, matching the #109/#120 fix). Lists a province when it carries
+  qing_migr_hongkong_boom OR qing_nwcrop_abundance OR total_population >= 20. clear_variable_list at top;
+  degrades gracefully to empty (has_province_modifier / total_population are always-safe reads).
+- GUI (gui/qing_province_reports.gui qing_migration_report_window): datamodel
+  [Player.MakeScope.GetList('qing_migration_report_provinces')]; name col [Scope.GetProvince.GetName],
+  value col [Scope.GetProvince.GetPopulation('total')]/[Scope.GetProvince.GetPopulationCapacityValue];
+  goto_button OnClickOnProvince/SetHighlightProvince; footer qing_migration_report_count.
+- BUTTON (gui/government_view.gui): icon_button_square in the Grand Council action strip after the tension
+  button; icon gfx/interface/icons/shared_icons/population.dds (confirmed exists). ScriptedGui.Execute then
+  gui.createwidget gui/qing_province_reports.gui qing_migration_report_window.
+- LOC (localization/english/qing_province_reports_l_english.yml): qing_migration_report_title/_count/
+  _tooltip/_value_tooltip + qing_report_open_migration_button.
+- se_LOG: LOG_line on open. Braces balanced (.txt 50/50, .gui 98/98, government_view 1612/1612); no-BOM/LF.
+- REVIEW: code-review agent dispatched for all three panels (crops/tension/migration) — result pending.
+
+## [#161] Secret-succession events wired into affinity / Grand Council / reform-faction (behavioural change, 2026-07-07)
+Answers the user's question "are the secret succession events tied into the affinity and Grand Council
+mechanics?" — previously they were NOT; this wires them in. User-approved ("yes link the secret succession
+events").
+- NEW HELPERS (common/scripted_effects/se_QING_DYNASTY.txt), country scope:
+  * QING_dynasty_accession_core — shared: exists=current_ruler guard, QING_dynasty_assess, scores the new
+    sovereign (current_ruler={QING_char_stance}), tilts realm reform (QING_dynasty_reform_echo who=current_ruler
+    scale=2), re-binds him to the throne (current_ruler={QING_char_bind}).
+  * QING_dynasty_accession_smooth — harmony +8, council_effectiveness +3, then _core.
+  * QING_dynasty_accession_disputed — harmony -12, council_effectiveness -5, then _core.
+  * QING_dynasty_succession_strife = { severity = N } — harmony -6, council -3; writes severity to scratch var
+    qing_succession_strife_sev, and if var:qing_succession_strife_sev >= 2 applies an extra harmony -4/council -2.
+  DESIGN NOTE: deliberately AVOIDS comparing a passed param in a limit (limit={$smooth$=yes} is an unproven,
+  likely-tautologizing idiom in this engine — same bug class as the invented CHECK_VALUE). Split into two
+  parameterless smooth/disputed wrappers instead; severity uses the proven scratch-var workaround.
+- WIRED (events/imp19c_mod_events/qing_regency_events.txt):
+  * qing_succession.1 option .b (name openly): QING_dynasty_succession_strife = { severity = 2 }.
+  * qing_succession.1 option .c (let them contend): QING_dynasty_succession_strife = { severity = 1 }.
+  * qing_succession.2 immediate smooth branch (sealed tablet): QING_dynasty_accession_smooth.
+  * qing_succession.2 immediate disputed branch (no sealed heir amid jockeying): QING_dynasty_accession_disputed.
+- BEHAVIOURAL DELTA (intended): a sealed/smooth accession now lifts dynastic harmony + council effectiveness
+  and lets the new emperor's stance move the reform-faction balance; a disputed one drags them down. Open
+  designation / aloofness during jockeying now also costs harmony + council effectiveness (layered on top of
+  the existing qing_succession_faction_strife modifier — independent, not double-counting the same meter path).
+- SAFETY (code-review agent CONFIRMED, no crash-class defects): all referenced effects exist; QING_char_stance
+  (se_QING_FACTION.txt:72) / QING_char_bind (se_QING_AFFINITY.txt:180) are char-scope and invoked inside
+  current_ruler={...}; QING_dynasty_reform_echo takes who as a scope-prefix (who=current_ruler valid);
+  on_ruler_change roots on country after the new ruler installs, exists=current_ruler guards interregnum;
+  QING_DECLINE_nudge self-inits+clamps 0..100; both qing_dynastic_harmony and qing_council_effectiveness are
+  seeded to 50 at init (se_QING_GOVERNANCE.txt:36, se_QING_COUNCIL.txt:55) so first-event deltas measure from
+  the intended baseline; no recursion / re-trigger loop; scratch-var write-then-read within one block is valid.
+- se_LOG: LOG_enter/LOG_exit on the accession helpers, LOG_line on smooth/disputed/strife. Braces balanced
+  (se_QING_DYNASTY 188/188, regency_events 64/64); no-BOM/LF.
+
+## [#109/#120/#160] Three-panel code review — CLEAN + regions trim (2026-07-07)
+Fired the mandatory post-implementation code review (code-review agent) on all three province-report panels.
+VERDICT: no crashes, no empty-list bugs, no dead branches, no missing loc/textures. Independently confirmed:
+(a) #107 writes qing_prov_ethnic_tension on PROVINCE scope inside every_owned_province
+(se_QING_ETHNIC_TENSION.txt:118/246/250/317), matching the #109 read; (b) both #160 migration modifier keys
+are defined AND applied — qing_migr_hongkong_boom (qing_migration_modifiers.txt:82, applied
+qing_frontier_migration_events.txt:383) and qing_nwcrop_abundance (qing_migration_modifiers.txt:70, applied
+se_QING_COLON.txt:308); (c) all datamodel list names, window names, datacontext names, icon textures, and loc
+keys match. Succession-wiring review (#161) also CLEAN (see above).
+- TRIM (non-blocking review observation): removed the vestigial qing_*_report_regions variable lists (three
+  effects) — governorship scopes populated but never read by the GUI, copied from the sell_provinces template.
+  Removed the three clear_variable_list lines and the three root={ add_to_variable_list=regions } blocks. Panels
+  now populate only the _provinces lists the windows actually consume. Braces 44/44; no-BOM/LF preserved.
+
+## [#163] Amban manual-management panel — DESIGN LOCKED (2026-07-07)
+User questioned whether Option A swaps ambans quarterly (it does NOT — clarified: post_sweep only fills
+VACANCIES one/quarter, evaluate only SCORES; actual turnover is rare gated events: age>=65/health<0.4 @15%,
+gone-native after 8yr tenure timer + affinity<40 @15%, clash-recall @friction>=65; role modifier duration=-1
+permanent, so residents serve years-to-decades). LOCKED refinements to Option A:
+- MANUAL FLAG (qing_amban_manual on the subject): skips post_sweep auto-staffing AND guards OFF the
+  turnover/gone-native/recall event DISPATCH in QING_amban_evaluate — BUT the friction/affinity SCORING +
+  opinion effects STILL RUN (a bad hand-picked amban keeps its quarterly consequences; player stays informed).
+- FREE RECALL/REPOST anytime, no cooldown (panel = the manual override; max player control).
+- Panel actions: post / recall / replace on any eligible subject + a "return to automatic" button clearing
+  the flag. Eligibility = existing sweep gate (subject ruler culture_group mongolic|bodish, any_owned_province).
+
+## [#163] Amban panel — auto-layer guards DONE + placement decision (2026-07-07)
+Placement (user): the amban panel button lives in the SUBJECT country's DIPLOMATIC VIEW (diplomacy_view.gui,
+per-subject), NOT the Grand Council action strip. (Contrast the three province-report panels, which are
+Grand Council strip buttons.)
+- GUARD 1 (se_QING_AMBAN.txt QING_amban_post_sweep): added NOT = { has_variable = qing_amban_manual } to the
+  random_subject limit — auto-sweep never staffs/fills a vacancy on a player-managed dependency.
+- GUARD 2 (se_QING_AMBAN.txt QING_amban_evaluate): wrapped the three-way lifecycle-event DISPATCH chain
+  (.4 turnover / .2 gone-native / .3 able) in if = { limit = { NOT = { scope:qing_amban_subject = {
+  has_variable = qing_amban_manual } } } }. The friction/affinity SCORING + opinion effects ABOVE the gate
+  still run for manual subjects (locked design: keep scoring, freeze only auto-turnover). Clash-recall crisis
+  (.1) is dispatched from the scoring section — NOTE it currently still fires for manual subjects; TODO decide
+  whether the clash crisis should also be gated. RESOLVED: qing_amban.1 is a player-CHOICE popup (option .a
+  recall / .b back the resident), NOT an automatic recall — so it stays UNGATED for manual subjects (it is a
+  decision driven by the preserved scoring, consistent with 'keep scoring'). No gate on .1.
+- Braces 131/131, no-BOM/LF. Behavioural change to existing code — the guards are pure additive skips; a
+  subject WITHOUT the flag behaves exactly as before.
+- TODO: panel scripted_gui (post/recall/replace/return-to-auto) + .gui window + diplomatic-view button + loc.
+
+## [#163] Amban manual-management — panel BUILT (2026-07-07)
+Built the manual amban panel per the locked Option A design, placed in the SUBJECT's diplomatic view.
+- EFFECTS (common/scripted_guis/SUB_QING_amban.txt, NEW): four player-only (ai_is_valid always=no) scripted
+  GUIs, scope=country, saved_scopes={target}, ROOT=CHI overlord, scope:target=subject (passed from GUI via
+  AddScope('target', DiplomaticView.GetTargetCountry.MakeScope) — the PROVEN pattern from
+  SUB_QING_subject_interactions.txt promote/demote/integrate buttons):
+  * qing_amban_manage_post_button — shown when eligible (subject of ROOT, mongolic|bodish ruler culture_group,
+    owns land) and NO amban here; gated Lifan Yuan filled + 25 influence; sets qing_amban_manual then
+    QING_amban_post={subject=scope:target}.
+  * qing_amban_manage_recall_button — shown when amban posted here; sets qing_amban_manual (so the vacancy
+    isn't auto-refilled) then QING_amban_recall.
+  * qing_amban_manage_replace_button — shown when posted + eligible; gated Lifan+influence; recall THEN post
+    (order matters — posting over a live resident would strand the old man).
+  * qing_amban_manage_return_auto_button — shown when qing_amban_manual set; removes the flag, re-enrolling
+    the post in the auto-sweep/turnover.
+- GUI (gui/diplomatic_view.gui): four icon_button_square widgets inserted after the RESUME button in the Qing
+  subject-interaction strip (cloned the exact promote/demote widget pattern). Icons chosen from REPO-CONFIRMED
+  shared_icons (oratory/tactical/change/time.dds) — NOTE the existing strip's icons (relations.dds,
+  cultural_assimilation.dds) are base-game textures NOT present in the repo, so repo-file verification is the
+  only safe check; used only confirmed-present files. Braces 1094/1094.
+- LOC (localization/english/qing_amban_manage_l_english.yml, NEW, BOM+LF): 4 button tooltips + 3 red-reason
+  custom_tooltip lines. Quote-balanced.
+- se_LOG: LOG_line on every effect. SUB_QING_amban.txt braces 60/60, no-BOM/LF.
+- Auto-layer guards (done earlier this session) skip manual subjects in post_sweep + freeze the turnover event
+  dispatch in evaluate while preserving scoring; clash-recall (.1) stays ungated (it's a player-choice popup).
+- TODO: code review of the whole amban feature (new panel + the two auto-layer guards).
+
+## [#164] Subjugate diplomatic play — transfer a rival's subject (2026-07-07)
+User: "the subjugate diplomatic play should be applicable to subjects of another country (in which case it
+will transfer them to the country which initiated the subjugate play)."
+- Begin-play gate (DIPLO_begin_play_subjugate, EE_scripted_guis.txt:1451) already permits the target: it only
+  excludes the player's OWN subjects (NOT is_subject_of=scope:player), so a THIRD power's subject was always a
+  legal target and the play could already be STARTED against one. No gate change needed.
+- FIX (DIPLOMACY_resolve_subjugate, se_DIPLOMACY.txt): before FUNC_make_subject binds the target to the
+  instigator, added — if scope:play_target_country = { is_subject = yes } — a release from its CURRENT overlord
+  via scope:play_target_country.overlord = { release_subject = scope:play_target_country } (the proven idiom at
+  se_FUNC.txt:349-352). Without this, make_subject on an already-subordinate country would leave a stale/double
+  overlord bond. This makes a subjugation play against a rival's vassal actually TRANSFER the vassal to the
+  play initiator (decisive=client_state, partial=tributary, same as before). se_LOG TRANSFER line added.
+  Braces 540/540; no-BOM/LF.
+- BEHAVIOURAL CHANGE to existing resolve effect — scrutiny: the new release is gated on is_subject=yes so a
+  non-subject target path is byte-identical to before; the released-then-rebound path is the requested new
+  behaviour. TODO: code review.

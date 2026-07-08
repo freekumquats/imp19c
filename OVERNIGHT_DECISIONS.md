@@ -453,3 +453,84 @@ button and no way to withdraw your own play. Added both missing verbs, mirroring
 - Integrity: gui_templates.gui 1204/1204, EE_scripted_guis.txt 497/497, 00_diplomacy_prices.txt 4/4 braces;
   4 new loc keys quote-clean (exactly 2 quotes each); all files byte-convention preserved
   (gui/scripted_gui/prices no-BOM/LF, loc BOM+LF). Post-implementation code review dispatched.
+
+
+### Imperial family dynamics → Grand Council (#157, decision, 2026-07-07)
+User request: positive AND negative events for the family dynamics between the Emperor, Crown Prince,
+and Empress Dowager that affect Grand Council operations. Built on `develop` (unverified branch).
+
+- **Coupling via an EXISTING lever, not a parallel system.** The events move ONE meter,
+  `qing_dynastic_harmony` (0..100, init 50), which is folded into the EXISTING
+  `qing_council_eff_target` inside QING_council_recompute (se_QING_COUNCIL.txt): (harmony-50)/5,
+  a +/-10 effectiveness band. A united house lifts council effectiveness; a court split between
+  the heir's faction and the dowager's clique drags it down. This is additive conversion of an
+  existing counter (concrete-over-abstract house rule), NOT a new bookkeeping layer — the harmony
+  meter is just the shared thermometer + the coupling term. Scaled /5 so it never dominates the
+  skill base or the dyarchy +15 bonus.
+- **Events act on CONCRETE characters.** Emperor = current_ruler; Crown Prince =
+  var:qing_office_crownprince_holder (the SEATS seat var, refreshed each quarter); Empress Dowager
+  = current_ruler.mother (guarded is_alive + is_female, the se_QING_SEATS.txt:244 precedent). Every
+  option grants real add_prestige / add_loyalty to the character involved, per the house rule — the
+  harmony meter is a side effect, not the payload.
+- **Five events, 2 positive / 3 negative** (qing_dynasty.1-.5): .1 Dowager's Counsel (heed=+8/overrule=-6),
+  .2 Crown Prince Proves Himself (+8/+3), .3 The House Divided (mediate=+10/let-burn=-12), .4 Behind the
+  Screen 垂簾聽政 (yield=-10/send-back=-6), .5 The Wayward Heir (indulge=-5/rein-in=+3). Each re-checks
+  its own trigger (dowager/crownprince presence) so a stale flavour-roll pick is a harmless no-op.
+- **Dispatch:** a low-chance (25%) QING_dynasty_flavour_roll added to the quarterly Qing pulse
+  (qing_mechanics_pulse_on_action, CHI-only + is_ai=no + 90-day cooldown) AFTER the governance pulse,
+  so the harmony it moves is read fresh next quarter. Kept OUT of the already-huge frontier flavour_roll
+  to avoid bloating that random_list.
+- **Scoping decision:** QING_dynasty_has_dowager / _has_crownprince written as trigger-body blocks used
+  with `= yes` — the proven QING_seat_regency_warranted pattern from the sibling SEATS file (a scripted
+  trigger living in a scripted_effects file, resolved by the engine regardless of directory).
+- se_LOG (sys=QING) on every effect + event immediate. Task-tagged [#157] comments throughout.
+- Integrity: se_QING_DYNASTY.txt 84/84, se_QING_COUNCIL.txt 346/346, qing_dynasty_events.txt 36/36,
+  on_action files balanced; loc BOM+LF, 0 bad-quote lines; all refs defined. Post-implementation review dispatched.
+- Fixed one self-introduced bug pre-review: dropped a bogus `add_loyalty_to_regime` verb (zero repo
+  occurrences) and the unproven `add_loyalty = { value = N }` form → bare `add_loyalty = N` (the proven idiom).
+
+## #158 — Grand Council faction layer + character-driven family events (three linked enhancements to #157)
+
+User's three requests (2026-07-07), built as one coherent Guangxu-vs-Cixi system:
+1. "the events should tie into the actual character skills and traits, just like the existing affinity chart"
+2. "the existing council events and the new family dynamics events should be interrelated and reference each other"
+3. "add a conservative faction vs reformist faction layer covering everyone on the grand council"
+
+- **Two LOCKED design decisions (AskUserQuestion, 2026-07-07):**
+  - Faction lean **FEEDS** the existing country-level `qing_reform_faction_balance` (the #14 reform
+    end-state meter): QING_faction_feed_reform_balance nudges it ±1..2/quarter toward the council lean.
+    Chosen over a standalone meter so WHO sits on the council drives the realm's reform trajectory.
+    Kept small so it complements — never clobbers — the mission-tree nudges (+5..+10 per reform task).
+  - Polarization = a **DEADLOCK penalty** (not a conservative-drag): a court split 50/50 governs worse
+    regardless of side; a united council (reformist OR conservative) functions. polar_pen = 5×(smaller
+    bloc), capped 20, docked from qing_council_eff_target beside the #157 harmony coupling.
+- **Per-character stance (QING_char_stance, -100..+100):** modelled as the sister of QING_char_affinity —
+  reformer/traditionalist traits (±45, the primary poles), zeal (orthodoxy), finesse (reform-minded
+  administrator), age (young reform / aged grandee), culture (Han reformist-leaning vs Manchu anchor),
+  corruption (status-quo interest), integrity. Scored on every seated office-holder + the 3 figureheads.
+- **Figureheads ARE the faction anchors:** Emperor weight 3, Dowager 2, Crown Prince 2 — they sit on the
+  council, so their stance dominates the lean (the 光緒-reformer / 慈禧-conservative dynamic given teeth).
+- **Ask #1 — family events read real characters:** QING_dynasty_assess runs QING_char_affinity +
+  QING_char_stance on the figureheads in each event immediate; every dynasty effect helper now scales its
+  deltas by the figurehead's actual skills (finesse/charisma/martial) and affinity with the throne.
+- **Ask #2 — cross-linking both ways:** dynasty helpers now move qing_council_effectiveness (a house at
+  war paralyses the council; an able heir given a role strengthens it) and, via QING_dynasty_reform_echo,
+  tilt qing_reform_faction_balance toward whoever gained sway (dowager-behind-the-screen = the strongest
+  echo, scale 3 — the canonical Cixi reform-block). The 3 new faction events pick councillors BY the same
+  qing_char_stance the family layer reads, and turn on the figureheads — bridging the two families.
+- **Ask #3 — the faction layer itself:** 3 events (Reform Memorial / Behind the Screen / Deadlock) let the
+  player adjudicate the split; each moves reform balance + effectiveness + harmony and acts on concrete
+  characters (loyalty/prestige, office-vacate purge).
+- **Concrete-over-abstract:** the meters are thermometers; every payload is real character prestige/
+  loyalty/office changes and the existing effectiveness/reform counters (additive conversion, no new
+  parallel bookkeeping layer). Feeds the EXISTING reform meter rather than inventing a second one.
+- **Oracle rule N/A:** every idiom used (prev.var: value reads, order_by var:, any_in_list element
+  conditions, has_trait reformer/traditionalist, QING_char_affinity) is already proven in-repo; no
+  unproven engine capability introduced.
+- se_LOG (sys=QING) on every new effect + event immediate; task-tagged [#158] comments throughout.
+
+## Grand Council tab flavour text (user request, 2026-07-07)
+- Expanded GOV_VIEW_GRAND_COUNCIL_TOOLTIP (interface_l_english.yml) from a one-line placeholder into
+  hover flavour: the vanilla Six Boards / Grand Secretariat / ministries (the Government + Offices tabs)
+  have hardened into ceremonial husks that keep the forms but govern nothing, while real power has drained
+  inward to the Grand Council — the true centre of political gravity. Header + #TF click-hint formatting.

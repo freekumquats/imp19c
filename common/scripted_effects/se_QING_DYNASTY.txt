@@ -1,0 +1,422 @@
+########################################################################
+# se_QING_DYNASTY.txt — FAMILY DYNAMICS of the imperial house and how they
+# bleed into the Grand Council (#157, user request).
+#
+# The Qing court was never a pure meritocracy of offices: the harmony (or
+# poison) between the reigning Emperor (皇帝, current_ruler), the Crown Prince
+# (皇太子, qing_office_crownprince_holder — the throne-in-waiting), and the
+# Empress Dowager (皇太后, current_ruler.mother — the senior matriarch who so
+# often ruled from behind the screen, 垂簾聽政) shaped whether the council
+# could actually govern. A united house lets the great offices work; a court
+# split between an heir's faction and the dowager's clique paralyses it.
+#
+# This models that as ONE meter that feeds the EXISTING council-effectiveness
+# machinery (additive conversion of qing_council_eff_target in
+# QING_council_recompute — NOT a parallel bookkeeping layer):
+#
+#   qing_dynastic_harmony   0..100  (init 50). >50 = a united house that
+#                           lubricates the council; <50 = a divided one that
+#                           gums it up. Nudged by the events in
+#                           qing_dynasty_events.txt (namespace qing_dynasty).
+#
+# The events themselves act on CONCRETE on-map characters — the emperor, the
+# crown prince, the dowager — granting real prestige / loyalty / traits, per
+# the concrete-over-abstract house rule. The harmony meter is only the shared
+# thermometer + the council coupling.
+#
+# All logged sys = QING. CHI-only. Init from on_game_initialized. Prefix
+# = QING_dynasty_. Related: se_QING_SEATS.txt (the seats themselves),
+# se_QING_COUNCIL.txt (the effectiveness lever this feeds).
+########################################################################
+
+# ======================================================================
+# INIT — seed the harmony meter once at game start. Idempotent.
+# ======================================================================
+QING_dynasty_init = {
+	LOG_enter = { sys = QING  fn = "QING_dynasty_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_dynastic_harmony } }
+		set_variable = { name = qing_dynastic_harmony  value = 50 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_dynasty_init"  result = OK }
+}
+
+# ======================================================================
+# HARMONY NUDGE — the single clamped mutator for the meter (0..100). Thin
+# wrapper over QING_DECLINE_nudge so every change is logged and bounded, and
+# so callers never touch the raw variable. Country scope (ROOT = CHI).
+#   amount = signed integer delta
+# ======================================================================
+QING_dynasty_harmony_nudge = {
+	QING_DECLINE_nudge = { var = qing_dynastic_harmony  amount = $amount$ }
+}
+
+# ======================================================================
+# DOWAGER PRESENT? — reusable gate: a living Empress Dowager (皇太后) exists.
+# current_ruler.mother, guarded is_alive + is_female (the SEATS idiom). Used
+# by the dowager-centric events so they never fire on an orphaned sovereign.
+# ======================================================================
+QING_dynasty_has_dowager = {
+	exists = current_ruler
+	current_ruler = {
+		exists = mother
+		mother = { is_alive = yes  is_female = yes }
+	}
+}
+
+# ======================================================================
+# CROWN PRINCE PRESENT? — reusable gate: a living, designated heir sits the
+# crown-prince seat (the seat var is refreshed each quarter by SEATS). Read
+# as a character scope via the proven var:<...>_holder = { } idiom.
+# ======================================================================
+QING_dynasty_has_crownprince = {
+	has_variable = qing_office_crownprince_holder
+	var:qing_office_crownprince_holder = { is_alive = yes }
+}
+
+# ======================================================================
+# DYNASTY FLAVOUR ROLL — offered from the governance flavour dispatcher. Low
+# chance; each branch re-checks its own trigger in the fired event, so a stale
+# pick is a harmless no-op. Weighted so the everyday harmony beats are common
+# and the sharper crises are rarer. Country scope (ROOT = CHI).
+# ======================================================================
+QING_dynasty_flavour_roll = {
+	LOG_enter = { sys = QING  fn = "QING_dynasty_flavour_roll" }
+	random_list = {
+		# --- POSITIVE: the dowager's counsel steadies the court (needs a dowager)
+		10 = {
+			trigger = { QING_dynasty_has_dowager = yes }
+			trigger_event = { id = qing_dynasty.1  days = { 3 12 } }
+		}
+		# --- POSITIVE: the crown prince proves himself in the offices (needs an heir)
+		10 = {
+			trigger = { QING_dynasty_has_crownprince = yes }
+			trigger_event = { id = qing_dynasty.2  days = { 3 12 } }
+		}
+		# --- NEGATIVE: heir's faction vs the dowager's clique — needs BOTH poles
+		9 = {
+			trigger = {
+				QING_dynasty_has_dowager = yes
+				QING_dynasty_has_crownprince = yes
+			}
+			trigger_event = { id = qing_dynasty.3  days = { 3 12 } }
+		}
+		# --- NEGATIVE: the dowager reaches for the screen (垂簾聽政) — needs a dowager
+		8 = {
+			trigger = { QING_dynasty_has_dowager = yes }
+			trigger_event = { id = qing_dynasty.4  days = { 3 12 } }
+		}
+		# --- NEGATIVE: a dissolute or over-eager heir estranges the throne
+		8 = {
+			trigger = { QING_dynasty_has_crownprince = yes }
+			trigger_event = { id = qing_dynasty.5  days = { 3 12 } }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_dynasty_flavour_roll"  result = OK }
+}
+
+# ======================================================================
+# [#158] ASSESS THE FIGUREHEADS — read the imperial house's actual characters
+# with the SAME whole-character model the affinity chart uses, so the family
+# events are shaped by real skills/traits, not flat numbers (user ask #1). Called
+# in an event's immediate (country scope, ROOT = CHI) after the figurehead scopes
+# are saved. For each present figurehead it:
+#   • runs QING_char_affinity  -> qing_char_affinity (0..100) on the character:
+#     how well the heir / dowager gets on with the reigning emperor.
+#   • runs QING_char_stance     -> qing_char_stance (-100..+100) on the character:
+#     where they stand on reform (the Guangxu-reformer / Cixi-conservative poles).
+# The emperor is scored too (his own stance sets the house's baseline). These are
+# pure reads; the event options then branch on them and the effect helpers scale
+# their deltas by them. Guarded exactly as the events guard each figurehead.
+# ======================================================================
+QING_dynasty_assess = {
+	LOG_enter = { sys = QING  fn = "QING_dynasty_assess" }
+	if = {
+		limit = { exists = current_ruler }
+		current_ruler = { QING_char_stance = yes }
+	}
+	if = {
+		limit = { QING_dynasty_has_dowager = yes }
+		current_ruler.mother = {
+			QING_char_affinity = yes
+			QING_char_stance = yes
+		}
+	}
+	if = {
+		limit = { QING_dynasty_has_crownprince = yes }
+		var:qing_office_crownprince_holder = {
+			QING_char_affinity = yes
+			QING_char_stance = yes
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_dynasty_assess"  result = OK }
+}
+
+# ======================================================================
+# [#158] REFORM ECHO — a family power-shift also shifts the realm's reform
+# trajectory, in the DIRECTION of the character who gained sway (user asks #2/#3:
+# the family events reference the council/reform layer, and the Cixi-vs-Guangxu
+# split drives reform). Country scope; $who$ = a saved character scope whose
+# qing_char_stance was computed by QING_dynasty_assess; $scale$ = magnitude (1..3).
+# A conservative matriarch behind the screen drags the reform balance DOWN (慈禧
+# blocking the 1898 reforms); a reform-minded one, or a modernizing heir given his
+# head, nudges it UP. Small, like QING_faction_feed_reform_balance — a family beat
+# tilts the trajectory, it does not decide it.
+# ======================================================================
+QING_dynasty_reform_echo = {
+	if = { limit = { NOT = { has_variable = qing_reform_faction_balance } }  set_variable = { name = qing_reform_faction_balance  value = 0 } }
+	if = {
+		limit = { $who$ = { var:qing_char_stance >= 20 } }
+		change_variable = { name = qing_reform_faction_balance  add = $scale$ }
+		LOG_line = { sys = QING  msg = "dynasty reform echo: [$who$.GetName] (reformist) tilts balance +$scale$ -> [ROOT.MakeScope.GetVariable('qing_reform_faction_balance').GetValue|0] for [ROOT.GetTag]" }
+	}
+	else_if = {
+		limit = { $who$ = { var:qing_char_stance <= -20 } }
+		change_variable = { name = qing_reform_faction_balance  subtract = $scale$ }
+		LOG_line = { sys = QING  msg = "dynasty reform echo: [$who$.GetName] (conservative) tilts balance -$scale$ -> [ROOT.MakeScope.GetVariable('qing_reform_faction_balance').GetValue|0] for [ROOT.GetTag]" }
+	}
+	if = { limit = { var:qing_reform_faction_balance > 100 }  set_variable = { name = qing_reform_faction_balance  value = 100 } }
+	if = { limit = { var:qing_reform_faction_balance < -100 } set_variable = { name = qing_reform_faction_balance  value = -100 } }
+}
+
+# ======================================================================
+# EFFECT HELPERS — each acts on a CONCRETE character and moves the harmony
+# meter. Called from the event options. Country scope (ROOT = CHI) unless noted.
+#
+# [#158] SKILL/TRAIT-SCALED (user ask #1): the size of each beat scales with the
+# figurehead's ACTUAL abilities and their affinity with the throne — a wise, well-
+# liked dowager gives counsel worth heeding; a capable heir shines the brighter;
+# indulging an ABLE prince strengthens the council, indulging a fool weakens it.
+# CROSS-LINKED (user ask #2/#3): the beats also move qing_council_effectiveness
+# and, via QING_dynasty_reform_echo, the reform balance — because the emperor,
+# heir and dowager SIT on the council; their private quarrels are its politics.
+# ======================================================================
+
+# The dowager's steadying counsel: she gains prestige, the house draws together.
+# SCALED: a wise dowager (high finesse/charisma) steadies the court more, and one
+# who gets on with the emperor (high affinity) is heeded more warmly. CROSS-LINK:
+# sage counsel also settles the council (a small effectiveness lift), and tilts the
+# reform balance the way her convictions run (QING_dynasty_reform_echo).
+QING_dynasty_dowager_counsel = {
+	LOG_line = { sys = QING  msg = "dynasty: dowager counsel heeded, harmony up for [ROOT.GetTag]" }
+	QING_dynasty_harmony_nudge = { amount = 6 }
+	if = {
+		limit = { QING_dynasty_has_dowager = yes }
+		current_ruler.mother = { add_prestige = 25 }
+		# a capable matriarch's counsel is worth the more
+		if = {
+			limit = { current_ruler.mother = { OR = { finesse >= 10  charisma >= 10 } } }
+			QING_dynasty_harmony_nudge = { amount = 3 }
+			QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 2 }
+		}
+		# and a dowager close to the throne (high affinity) is heeded warmly
+		if = {
+			limit = { current_ruler.mother = { has_variable = qing_char_affinity  var:qing_char_affinity >= 60 } }
+			QING_dynasty_harmony_nudge = { amount = 3 }
+		}
+		# her convictions colour the counsel — the realm drifts her way (慈禧/reform)
+		QING_dynasty_reform_echo = { who = current_ruler.mother  scale = 1 }
+	}
+	# the sovereign, secure in his mother's backing, gains a little standing too.
+	current_ruler = { add_prestige = 10 }
+}
+
+# Overrule the dowager: the emperor asserts himself — his prestige rises, but
+# the slighted matriarch sulks and the house frays a little.
+# SCALED: a forceful emperor (high charisma/martial) carries it off with less
+# damage; overruling a dowager he is CLOSE to (high affinity) wounds the house more.
+QING_dynasty_dowager_overrule = {
+	LOG_line = { sys = QING  msg = "dynasty: dowager overruled, emperor asserts himself for [ROOT.GetTag]" }
+	QING_dynasty_harmony_nudge = { amount = -6 }
+	current_ruler = { add_prestige = 20 }
+	# a commanding sovereign softens the blow to the house
+	if = {
+		limit = { current_ruler = { OR = { charisma >= 10  martial >= 10 } } }
+		QING_dynasty_harmony_nudge = { amount = 3 }
+	}
+	# but overruling a dowager he was close to cuts deeper
+	if = {
+		limit = { QING_dynasty_has_dowager = yes  current_ruler.mother = { has_variable = qing_char_affinity  var:qing_char_affinity >= 60 } }
+		QING_dynasty_harmony_nudge = { amount = -3 }
+	}
+}
+
+# The crown prince distinguishes himself: he gains prestige and the succession
+# looks secure — harmony up. SCALED: a genuinely able heir (high finesse/martial)
+# shines the brighter (more harmony, more prestige). CROSS-LINK: an heir who
+# proves himself in the offices lifts council effectiveness, and his convictions
+# tilt the reform balance (a reforming prince advances the cause).
+QING_dynasty_prince_shines = {
+	LOG_line = { sys = QING  msg = "dynasty: crown prince distinguishes himself, harmony up for [ROOT.GetTag]" }
+	QING_dynasty_harmony_nudge = { amount = 8 }
+	if = {
+		limit = { QING_dynasty_has_crownprince = yes }
+		var:qing_office_crownprince_holder = { add_prestige = 20 }
+		if = {
+			limit = { var:qing_office_crownprince_holder = { OR = { finesse >= 10  martial >= 10 } } }
+			var:qing_office_crownprince_holder = { add_prestige = 10 }
+			QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 2 }
+		}
+		QING_dynasty_reform_echo = { who = var:qing_office_crownprince_holder  scale = 1 }
+	}
+}
+
+# Rein the prince in: keep him from the offices. Order preserved (small harmony
+# gain) but the heir resents it (a touch of his loyalty lost).
+# SCALED: an AMBITIOUS/able heir chafes harder at the leash (loses more loyalty).
+QING_dynasty_prince_restrain = {
+	LOG_line = { sys = QING  msg = "dynasty: crown prince reined in for [ROOT.GetTag]" }
+	QING_dynasty_harmony_nudge = { amount = 3 }
+	if = {
+		limit = { QING_dynasty_has_crownprince = yes }
+		var:qing_office_crownprince_holder = { add_loyalty = -10 }
+		if = {
+			limit = { var:qing_office_crownprince_holder = { OR = { finesse >= 10  martial >= 10  charisma >= 10 } } }
+			var:qing_office_crownprince_holder = { add_loyalty = -5 }
+		}
+	}
+}
+
+# Indulge the prince's ambition: give him a real hand in the council. He is
+# delighted (loyalty up) but the old grandees bristle — harmony slips.
+# CROSS-LINK (user ask #2): a real council role means the council FEELS it — an
+# ABLE heir's hand strengthens it, an incompetent one's weakens it (the effect on
+# qing_council_effectiveness swings on his actual competence), and his convictions
+# tilt the reform balance.
+QING_dynasty_prince_indulge = {
+	LOG_line = { sys = QING  msg = "dynasty: crown prince indulged with council role for [ROOT.GetTag]" }
+	QING_dynasty_harmony_nudge = { amount = -5 }
+	if = {
+		limit = { QING_dynasty_has_crownprince = yes }
+		var:qing_office_crownprince_holder = {
+			add_loyalty = 15
+			add_prestige = 10
+		}
+		if = {
+			limit = { var:qing_office_crownprince_holder = { OR = { finesse >= 9  martial >= 9 } } }
+			QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 3 }
+		}
+		else = {
+			QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -3 }
+		}
+		QING_dynasty_reform_echo = { who = var:qing_office_crownprince_holder  scale = 2 }
+	}
+}
+
+# A house openly at war: the factional split hardens. Sharp harmony hit; the
+# emperor's own standing suffers for failing to master his own kin.
+# CROSS-LINK (user ask #2): a house at war with itself paralyses the council its
+# members sit on — a direct effectiveness hit ON TOP of the harmony coupling.
+QING_dynasty_faction_war = {
+	LOG_line = { sys = QING  msg = "dynasty: open factional split in the imperial house for [ROOT.GetTag]" }
+	QING_dynasty_harmony_nudge = { amount = -12 }
+	current_ruler = { add_prestige = -20 }
+	QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -5 }
+}
+
+# The emperor mediates the split: he spends prestige to broker peace between
+# heir and dowager. Costs him standing now, but the house is knit back together.
+# SCALED: a charismatic/finesseful emperor brokers a better peace (more harmony,
+# less prestige spent). CROSS-LINK: a settled house steadies the council too.
+QING_dynasty_faction_mediate = {
+	LOG_line = { sys = QING  msg = "dynasty: emperor mediates the family split for [ROOT.GetTag]" }
+	QING_dynasty_harmony_nudge = { amount = 10 }
+	current_ruler = { add_prestige = -15 }
+	if = {
+		limit = { current_ruler = { OR = { charisma >= 10  finesse >= 10 } } }
+		QING_dynasty_harmony_nudge = { amount = 3 }
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 2 }
+	}
+}
+
+# The dowager rules from behind the screen (垂簾聽政): she seizes real sway.
+# She gains prestige, but a court with two suns is a divided one — harmony falls.
+# CROSS-LINK (user asks #2/#3): a dowager ruling from behind the screen SEIZES the
+# council's agenda — the reform balance lurches HARD toward her convictions (the
+# canonical 慈禧-blocks-reform / a reforming regent-empress advances it), the
+# strongest reform echo in the family layer.
+QING_dynasty_regency_screen = {
+	LOG_line = { sys = QING  msg = "dynasty: dowager rules from behind the screen for [ROOT.GetTag]" }
+	QING_dynasty_harmony_nudge = { amount = -10 }
+	if = {
+		limit = { QING_dynasty_has_dowager = yes }
+		current_ruler.mother = { add_prestige = 30 }
+		QING_dynasty_reform_echo = { who = current_ruler.mother  scale = 3 }
+	}
+}
+
+# ======================================================================
+# [#161] SUCCESSION → the affinity / council / faction layer.
+#
+# The secret-succession arc (#119, events/qing_regency_events.txt namespace
+# qing_succession) previously moved only country-level levers (legitimacy,
+# qing_reform_pressure, the strife modifier). But the Emperor, Crown Prince and
+# Empress Dowager SIT on the Grand Council (se_QING_SEATS.txt) and ANCHOR the
+# reform factions (se_QING_FACTION.txt) — so a change of sovereign, or a
+# succession crisis, is COUNCIL politics. These two helpers wire the arc into the
+# #157 dynastic-harmony meter, the #158 effectiveness lever, and the reform
+# trajectory, using ONLY the existing guarded scorers/nudges. Country scope (ROOT
+# = CHI). Called from qing_succession.1/.2.
+# ======================================================================
+
+# THE PRINCES JOCKEY (九子奪嫡) — an unresolved succession poisons the court the
+# figureheads sit in. A house whose heir is contested is a divided house
+# (harmony down) and a distracted council (a small effectiveness dock). $severity$
+# scales it: 1 = the argument simmers (open designation / do-nothing), 2 = it is
+# left wholly unresolved. No reform echo — jockeying is about WHO, not WHICH WAY.
+QING_dynasty_succession_strife = {
+	LOG_line = { sys = QING  msg = "dynasty: succession jockeying strains the court (severity $severity$) for [ROOT.GetTag]" }
+	QING_dynasty_harmony_nudge = { amount = -6 }
+	QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -3 }
+	# stash the severity in a scratch var so it can be compared (a passed $param$ is
+	# usable as a change_variable operand but not, in this engine, as a bare limit
+	# operand — the proven form is to write it to a variable and read that back).
+	set_variable = { name = qing_succession_strife_sev  value = $severity$ }
+	if = {
+		limit = { var:qing_succession_strife_sev >= 2 }
+		QING_dynasty_harmony_nudge = { amount = -4 }
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -2 }
+	}
+}
+
+# THE SEAL IS OPENED (秘密立儲) — the NEW sovereign's convictions now set the tone,
+# smooth accession or disputed. This SHARED core scores the new emperor's reform
+# stance, tilts the realm's reform trajectory his way (a reformer on the throne is
+# the Guangxu moment; a reactionary the reverse — reform echo scale 2, between a
+# family beat and the regency-screen lurch), and re-binds him to the throne he now
+# holds (QING_char_bind refreshes his affinity-driven loyalty/relations). The
+# harmony/effectiveness swing (which DIFFERS between smooth and disputed) is applied
+# by the two thin wrappers below, so no boolean parameter is compared in a limit
+# (an unproven idiom in this engine). Country scope (ROOT = CHI).
+QING_dynasty_accession_core = {
+	LOG_enter = { sys = QING  fn = "QING_dynasty_accession_core" }
+	if = {
+		limit = { exists = current_ruler }
+		# refresh the assessment of the whole house for the new reign, then score
+		# the new sovereign's stance and let his convictions set the realm's course.
+		QING_dynasty_assess = yes
+		current_ruler = { QING_char_stance = yes }
+		QING_dynasty_reform_echo = { who = current_ruler  scale = 2 }
+		# and he is re-bound to the throne he now holds (affinity-driven loyalty/relations)
+		current_ruler = { QING_char_bind = yes }
+	}
+	LOG_exit = { sys = QING  fn = "QING_dynasty_accession_core"  result = OK }
+}
+
+# SMOOTH accession — the whole point of 秘密立儲: the new reign begins with a settled
+# house (harmony up) and a council not distracted by a contest (effectiveness up).
+QING_dynasty_accession_smooth = {
+	LOG_line = { sys = QING  msg = "dynasty: smooth accession settles the house for [ROOT.GetTag]" }
+	QING_dynasty_harmony_nudge = { amount = 8 }
+	QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 3 }
+	QING_dynasty_accession_core = yes
+}
+
+# DISPUTED accession — no sealed heir amid active jockeying: a court split behind
+# rival princes (harmony down hard, a real effectiveness hit).
+QING_dynasty_accession_disputed = {
+	LOG_line = { sys = QING  msg = "dynasty: disputed accession splits the court for [ROOT.GetTag]" }
+	QING_dynasty_harmony_nudge = { amount = -12 }
+	QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -5 }
+	QING_dynasty_accession_core = yes
+}

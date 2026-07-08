@@ -1,0 +1,203 @@
+########################################################################
+# SUB_QING_amban.txt — manual AMBAN management (#163), per-subject.
+#
+# These are the gated entry points the DIPLOMATIC-VIEW buttons call to manage
+# the amban (駐紮大臣, resident commissioner) posted to an Inner Asian dependency
+# BY HAND, overriding the automatic lifecycle in se_QING_AMBAN.txt. Each is
+# scoped to the player (ROOT = overlord CHI) and reads scope:target as the
+# subject currently shown in the diplomacy view, passed from the GUI via:
+#     .AddScope('target', DiplomaticView.GetTargetCountry.MakeScope )
+# — the SAME proven pattern the qing_subject_promote/demote/integrate buttons
+# use (SUB_QING_subject_interactions.txt).
+#
+# COEXISTENCE WITH THE AUTO-LAYER (locked design, Option A):
+#   • Posting/recalling/replacing an amban by hand sets qing_amban_manual on the
+#     SUBJECT. While that flag is present the quarterly auto-sweep
+#     (QING_amban_post_sweep) skips the dependency and the auto turnover/gone-
+#     native/recall event DISPATCH in QING_amban_evaluate is frozen for it — but
+#     the friction/affinity SCORING and opinion effects still run, so a poorly
+#     chosen resident keeps its quarterly consequences (see the guards in
+#     se_QING_AMBAN.txt tagged [#163]).
+#   • "Return to automatic" clears the flag and hands the post back to the pulse.
+#   • Free recall / repost, no cooldown (this panel IS the manual override).
+#
+# AI is disabled on every interaction (ai_is_valid = { always = no }) — CHI-only,
+# player-only, exactly like the subject-interaction set.
+#
+# Prefix = qing_amban_manage_
+########################################################################
+
+# ======================================================================
+# ELIGIBILITY (shared, read as an is_shown block below): scope:target is a
+# subject of ROOT (CHI) whose ruler is of an Inner Asian culture group
+# (mongolic / bodish) — the Lhasa / Urga / Kashgar march the Lifan Yuan
+# governs. Mirrors the auto-sweep's random_subject limit so the manual and
+# automatic layers agree on which dependencies take a resident.
+# ======================================================================
+
+# ---- POST: dispatch a resident to this dependency by hand -------------
+# Shown only when the dependency is eligible and currently has NO amban. Gated
+# on the Lifan Yuan office being filled (a vacant 理藩院 has no man to send — the
+# same precondition the auto-sweep enforces) plus a modest influence cost.
+qing_amban_manage_post_button = {
+	scope = country
+	saved_scopes = { target }
+
+	is_shown = {
+		tag = CHI
+		exists = scope:target
+		scope:target = {
+			is_subject_of = ROOT
+			any_owned_province = { count >= 1 }
+			exists = current_ruler
+			current_ruler = {
+				OR = {
+					culture_group = mongolic
+					culture_group = bodish
+				}
+			}
+			# no resident currently posted here
+			NOT = { has_variable = qing_amban_here }
+		}
+	}
+
+	ai_is_valid = { always = no }
+
+	is_valid = {
+		# the Lifan Yuan supervisor must be in place to dispatch a resident
+		custom_tooltip = {
+			text = qing_amban_needs_lifanyuan_tt
+			has_variable = qing_office_lifanyuan_holder
+			var:qing_office_lifanyuan_holder = { is_alive = yes  employer = ROOT }
+		}
+		custom_tooltip = {
+			text = qing_amban_needs_influence_25_tt
+			political_influence >= 25
+		}
+	}
+
+	effect = {
+		LOG_line = { sys = QING  msg = "amban: MANUAL post to [scope:target.GetTag] by [ROOT.GetTag]" }
+		add_political_influence = -25
+		# claim the post for the player: the auto-sweep will not touch it, and the
+		# auto turnover/gone-native/recall events are frozen for it.
+		scope:target = { set_variable = { name = qing_amban_manual  value = 1 } }
+		# dispatch the resident (ROOT = CHI is already the overlord scope)
+		QING_amban_post = { subject = scope:target }
+	}
+}
+
+# ---- RECALL: withdraw the resident and leave the post vacant ----------
+# Shown when a resident is posted here. Recalling claims the post (sets
+# qing_amban_manual) so the auto-sweep does not simply re-staff it next quarter —
+# the player has chosen to leave the march unattended until they act again (or
+# press "return to automatic"). Free of influence cost (recalling your own man
+# is the throne's prerogative).
+qing_amban_manage_recall_button = {
+	scope = country
+	saved_scopes = { target }
+
+	is_shown = {
+		tag = CHI
+		exists = scope:target
+		scope:target = {
+			is_subject_of = ROOT
+			has_variable = qing_amban_here
+		}
+	}
+
+	ai_is_valid = { always = no }
+
+	is_valid = {
+		# the stored resident must still be alive and in this subject's employ
+		custom_tooltip = {
+			text = qing_amban_recall_valid_tt
+			scope:target = {
+				var:qing_amban_here = { is_alive = yes  employer = scope:target }
+			}
+		}
+	}
+
+	effect = {
+		LOG_line = { sys = QING  msg = "amban: MANUAL recall from [scope:target.GetTag] by [ROOT.GetTag]" }
+		# claim the post so the auto-sweep leaves the vacancy alone
+		scope:target = { set_variable = { name = qing_amban_manual  value = 1 } }
+		QING_amban_recall = { subject = scope:target  reason = "manual-recall" }
+	}
+}
+
+# ---- REPLACE: recall the sitting resident and dispatch a fresh one ----
+# One-click recall + post (posting over a live resident would strand the old man,
+# so the recall MUST run first). Shown when a resident is posted here; gated like
+# the post button (Lifan Yuan filled + influence). Claims the post.
+qing_amban_manage_replace_button = {
+	scope = country
+	saved_scopes = { target }
+
+	is_shown = {
+		tag = CHI
+		exists = scope:target
+		scope:target = {
+			is_subject_of = ROOT
+			has_variable = qing_amban_here
+			any_owned_province = { count >= 1 }
+			exists = current_ruler
+			current_ruler = {
+				OR = {
+					culture_group = mongolic
+					culture_group = bodish
+				}
+			}
+		}
+	}
+
+	ai_is_valid = { always = no }
+
+	is_valid = {
+		custom_tooltip = {
+			text = qing_amban_needs_lifanyuan_tt
+			has_variable = qing_office_lifanyuan_holder
+			var:qing_office_lifanyuan_holder = { is_alive = yes  employer = ROOT }
+		}
+		custom_tooltip = {
+			text = qing_amban_needs_influence_25_tt
+			political_influence >= 25
+		}
+	}
+
+	effect = {
+		LOG_line = { sys = QING  msg = "amban: MANUAL replace at [scope:target.GetTag] by [ROOT.GetTag]" }
+		add_political_influence = -25
+		scope:target = { set_variable = { name = qing_amban_manual  value = 1 } }
+		# recall the old man FIRST (clears qing_amban_here), then dispatch the new one
+		QING_amban_recall = { subject = scope:target  reason = "manual-replace" }
+		QING_amban_post = { subject = scope:target }
+	}
+}
+
+# ---- RETURN TO AUTOMATIC: hand the post back to the quarterly pulse ----
+# Shown when the player has claimed this dependency (qing_amban_manual set).
+# Clearing the flag re-enrols it in the auto-sweep and auto-turnover: if the post
+# is vacant the pulse will staff it; if occupied, the lifecycle events resume.
+qing_amban_manage_return_auto_button = {
+	scope = country
+	saved_scopes = { target }
+
+	is_shown = {
+		tag = CHI
+		exists = scope:target
+		scope:target = {
+			is_subject_of = ROOT
+			has_variable = qing_amban_manual
+		}
+	}
+
+	ai_is_valid = { always = no }
+
+	is_valid = { always = yes }
+
+	effect = {
+		LOG_line = { sys = QING  msg = "amban: [scope:target.GetTag] returned to AUTOMATIC management by [ROOT.GetTag]" }
+		scope:target = { remove_variable = qing_amban_manual }
+	}
+}

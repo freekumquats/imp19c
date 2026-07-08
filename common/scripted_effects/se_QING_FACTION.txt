@@ -1,0 +1,301 @@
+########################################################################
+# se_QING_FACTION.txt — CONSERVATIVE vs REFORMIST factions of the Grand Council
+# (#158, user request). A layer OVER the whole council: every seated office-
+# holder AND the three dynastic figureheads (Emperor 皇帝, Crown Prince 皇太子,
+# Empress Dowager 皇太后) carries a personal REFORM STANCE, scored from the same
+# WHOLE-character model the affinity chart uses (traits, zeal, finesse, age,
+# culture, venality — see se_QING_AFFINITY.txt). Those stances aggregate into two
+# derived council meters:
+#
+#   qing_council_reform_lean   -100..+100  weighted-average stance of the council
+#                              + the figureheads. <0 conservative, >0 reformist.
+#                              The Emperor/Dowager/Prince are weighted heavily —
+#                              they ARE the faction anchors (the Guangxu-vs-Cixi
+#                              dynamic, 光緒 vs 慈禧, given teeth).
+#   qing_council_polarization  headcount of the SMALLER opposing bloc: high only
+#                              when reformists AND conservatives are BOTH well
+#                              represented — i.e. a court split down the middle.
+#   qing_council_polar_pen     the gridlock penalty derived from polarization,
+#                              docked from council effectiveness in
+#                              QING_council_recompute (a deadlocked court governs
+#                              worse REGARDLESS of which side is winning — a united
+#                              council, reformist OR conservative, functions).
+#
+# INTEGRATION (per the user's locked design decisions, 2026-07-07):
+#   • DEADLOCK PENALTY: polar_pen is subtracted from qing_council_eff_target in
+#     QING_council_recompute (se_QING_COUNCIL.txt), right beside the dynastic-
+#     harmony coupling — the two "court politics" levers sit together.
+#   • FEEDS THE REFORM METER: once per quarter QING_faction_feed_reform_balance
+#     nudges the EXISTING country-level qing_reform_faction_balance (the #14 reform
+#     end-state trajectory, pushed by qing_reform_missions.txt) toward the council's
+#     lean — so WHO SITS ON THE COUNCIL actually drives the realm's reform fate.
+#     Deliberately small (+/-1..2 per quarter) so it COMPLEMENTS, never clobbers,
+#     the mission nudges (+5..+10 per reform task).
+#
+# All logged sys = QING. CHI-only. Prefix = QING_faction_ / QING_char_stance.
+# Related: se_QING_AFFINITY.txt (the sister scorer — compatibility w/ throne),
+# se_QING_COUNCIL.txt (the effectiveness lever this docks), se_QING_REFORM.txt
+# (the reform end-states this feeds), se_QING_DYNASTY.txt (family beats that shove
+# the figureheads' stance), events/qing_faction_events.txt (the showdown event).
+########################################################################
+
+# ======================================================================
+# INIT — seed the derived meters for a clean GUI/log read before the first
+# recompute. Idempotent. Country scope (ROOT = CHI). qing_reform_faction_balance
+# is NOT seeded here (it is owned + seeded by the reform track).
+# ======================================================================
+QING_faction_init = {
+	LOG_enter = { sys = QING  fn = "QING_faction_init" }
+	if = { limit = { NOT = { has_variable = qing_council_reform_lean } }  set_variable = { name = qing_council_reform_lean  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_council_polarization } } set_variable = { name = qing_council_polarization  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_council_polar_pen } }    set_variable = { name = qing_council_polar_pen  value = 0 } }
+	LOG_exit = { sys = QING  fn = "QING_faction_init"  result = OK }
+}
+
+# ======================================================================
+# PER-CHARACTER STANCE — call inside a character scope (this = the courtier /
+# figurehead). Scores a REFORM POSITION into qing_char_stance (-100..+100;
+# negative = conservative, positive = reformist), from the same whole-character
+# model the affinity chart weighs. A pure read — no side effects on the character.
+#   • reformer / traditionalist TRAITS are the primary poles (the engine's own
+#     status traits, common/traits/00_imp19c.txt).
+#   • ZEAL: fervour is the temper of the old orthodoxy — a zealot resists change,
+#     a worldly man is readier for it.
+#   • FINESSE: the administrator's gift; a capable statesman sees the case for
+#     reform of the apparatus he runs.
+#   • AGE: the young press for change, the aged grandees defend the ancestral forms.
+#   • CULTURE: the Han literati carried much of the self-strengthening/reform
+#     impulse; the Manchu conquest elite were the conservative anchor (滿漢, again).
+#   • VENALITY: a corrupt official has a vested interest in the status quo.
+#   • INTEGRITY: an honest/just man leans (mildly) to principled reform.
+# ======================================================================
+QING_char_stance = {
+	LOG_enter = { sys = QING  fn = "QING_char_stance" }
+	set_variable = { name = qing_char_stance  value = 0 }
+
+	# --- TRAITS: the explicit poles ---------------------------------------------
+	if = { limit = { has_trait = reformer }        change_variable = { name = qing_char_stance  add = 45 } }
+	if = { limit = { has_trait = traditionalist }  change_variable = { name = qing_char_stance  subtract = 45 } }
+
+	# --- ZEAL: fervent orthodoxy vs worldly pragmatism --------------------------
+	if = { limit = { zeal >= 12 }      change_variable = { name = qing_char_stance  subtract = 12 } }
+	else_if = { limit = { zeal >= 8 }  change_variable = { name = qing_char_stance  subtract = 6 } }
+	else_if = { limit = { zeal <= 2 }  change_variable = { name = qing_char_stance  add = 6 } }
+
+	# --- FINESSE: the reform-minded administrator -------------------------------
+	if = { limit = { finesse >= 12 }     change_variable = { name = qing_char_stance  add = 8 } }
+	else_if = { limit = { finesse >= 8 } change_variable = { name = qing_char_stance  add = 4 } }
+
+	# --- AGE: young reformers vs aged grandees ----------------------------------
+	if = { limit = { age <= 35 }       change_variable = { name = qing_char_stance  add = 12 } }
+	else_if = { limit = { age >= 65 }  change_variable = { name = qing_char_stance  subtract = 12 } }
+	else_if = { limit = { age >= 55 }  change_variable = { name = qing_char_stance  subtract = 6 } }
+
+	# --- CULTURE: Han literati reformist-leaning, Manchu elite conservative ------
+	if = {
+		limit = { culture = root.current_ruler.culture }
+		change_variable = { name = qing_char_stance  subtract = 5 }
+	}
+	else = {
+		change_variable = { name = qing_char_stance  add = 8 }
+	}
+
+	# --- VENALITY: the corrupt defend the trough they feed at -------------------
+	if = { limit = { has_trait = corrupt } change_variable = { name = qing_char_stance  subtract = 10 } }
+	if = { limit = { corruption >= 40 }      change_variable = { name = qing_char_stance  subtract = 8 } }
+	else_if = { limit = { corruption >= 20 } change_variable = { name = qing_char_stance  subtract = 4 } }
+
+	# --- INTEGRITY: principled reform -------------------------------------------
+	if = { limit = { OR = { has_trait = honest  has_trait = just } } change_variable = { name = qing_char_stance  add = 5 } }
+
+	# --- clamp -100..100
+	if = { limit = { var:qing_char_stance > 100 }  set_variable = { name = qing_char_stance  value = 100 } }
+	if = { limit = { var:qing_char_stance < -100 } set_variable = { name = qing_char_stance  value = -100 } }
+
+	LOG_line = { sys = QING  msg = "char stance: [this.GetName] = [this.MakeScope.GetVariable('qing_char_stance').GetValue|0] (>0 reformist) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_char_stance"  result = OK }
+}
+
+# ======================================================================
+# TALLY ONE CHARACTER into the country accumulators. Call inside a character
+# scope (this = the member/figurehead); ROOT = CHI. $weight$ = the integer weight
+# (1 for an ordinary office-holder, more for the dynastic figureheads who anchor
+# the factions). (Re)computes qing_char_stance fresh so a trait/skill change since
+# last quarter is reflected, then folds it into the running totals via the proven
+# prev.var: value-read idiom (prev = this character inside the ROOT block).
+# ======================================================================
+QING_faction_tally = {
+	QING_char_stance = yes
+	# weighted stance -> a character-scope scratch, then read into the country total
+	set_variable = { name = qing_char_stance_wtd  value = var:qing_char_stance }
+	change_variable = { name = qing_char_stance_wtd  multiply = $weight$ }
+	ROOT = {
+		change_variable = { name = qing_faction_stance_total  add = prev.var:qing_char_stance_wtd }
+		change_variable = { name = qing_faction_weight_sum  add = $weight$ }
+		change_variable = { name = qing_faction_head_count  add = 1 }
+	}
+	# bloc headcount (unweighted): a member counts to the reformist or conservative
+	# bloc when he leans clearly one way; the lukewarm middle counts to neither.
+	if = {
+		limit = { var:qing_char_stance >= 20 }
+		ROOT = { change_variable = { name = qing_faction_ref_count  add = 1 } }
+	}
+	else_if = {
+		limit = { var:qing_char_stance <= -20 }
+		ROOT = { change_variable = { name = qing_faction_con_count  add = 1 } }
+	}
+}
+
+# ======================================================================
+# RECOMPUTE the council's faction meters. Country scope (ROOT = CHI). Call AFTER
+# qing_council_members has been rebuilt (i.e. from within QING_council_recompute,
+# after the office-scoring pass). O(offices + 3) — trivial.
+# ======================================================================
+QING_faction_recompute = {
+	LOG_enter = { sys = QING  fn = "QING_faction_recompute" }
+	QING_faction_init = yes
+
+	# --- reset accumulators
+	set_variable = { name = qing_faction_stance_total  value = 0 }
+	set_variable = { name = qing_faction_weight_sum  value = 0 }
+	set_variable = { name = qing_faction_head_count  value = 0 }
+	set_variable = { name = qing_faction_ref_count  value = 0 }
+	set_variable = { name = qing_faction_con_count  value = 0 }
+
+	# --- seated office-holders (the Grand Council proper), weight 1 each
+	if = {
+		limit = { has_variable_list = qing_council_members }
+		every_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT }
+			QING_faction_tally = { weight = 1 }
+		}
+	}
+
+	# --- the three dynastic figureheads, who sit above the council and ANCHOR the
+	# factions (heavier weights). Guarded the same way se_QING_DYNASTY.txt guards
+	# them. The Emperor weighs most (the throne sets the tone), then the Dowager
+	# and the Crown Prince (the two rival poles of the Guangxu/Cixi split).
+	if = {
+		limit = { exists = current_ruler }
+		current_ruler = { QING_faction_tally = { weight = 3 } }
+	}
+	if = {
+		limit = { QING_dynasty_has_dowager = yes }
+		current_ruler.mother = { QING_faction_tally = { weight = 2 } }
+	}
+	if = {
+		limit = { QING_dynasty_has_crownprince = yes }
+		var:qing_office_crownprince_holder = { QING_faction_tally = { weight = 2 } }
+	}
+
+	# --- reform lean = weighted-average stance (-100..100)
+	set_variable = { name = qing_council_reform_lean  value = 0 }
+	if = {
+		limit = { var:qing_faction_weight_sum > 0 }
+		set_variable = { name = qing_council_reform_lean  value = var:qing_faction_stance_total }
+		change_variable = { name = qing_council_reform_lean  divide = var:qing_faction_weight_sum }
+	}
+
+	# --- polarization = the SMALLER of the two opposing blocs (gridlock only when
+	# BOTH sides are well represented; a lopsided council is united, not deadlocked)
+	set_variable = { name = qing_council_polarization  value = var:qing_faction_ref_count }
+	if = {
+		limit = { var:qing_faction_con_count < var:qing_faction_ref_count }
+		set_variable = { name = qing_council_polarization  value = var:qing_faction_con_count }
+	}
+
+	# --- gridlock penalty: each fully-opposed pair costs ~5 effectiveness, capped
+	# at 20 so a hung court is a serious drag but never the whole story.
+	set_variable = { name = qing_council_polar_pen  value = var:qing_council_polarization }
+	change_variable = { name = qing_council_polar_pen  multiply = 5 }
+	if = { limit = { var:qing_council_polar_pen > 20 } set_variable = { name = qing_council_polar_pen  value = 20 } }
+
+	LOG_line = { sys = QING  msg = "faction: lean=[ROOT.MakeScope.GetVariable('qing_council_reform_lean').GetValue|0] polar=[ROOT.MakeScope.GetVariable('qing_council_polarization').GetValue|0] (ref=[ROOT.MakeScope.GetVariable('qing_faction_ref_count').GetValue|0] con=[ROOT.MakeScope.GetVariable('qing_faction_con_count').GetValue|0]) pen=[ROOT.MakeScope.GetVariable('qing_council_polar_pen').GetValue|0] for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_faction_recompute"  result = OK }
+}
+
+# ======================================================================
+# FEED THE REFORM TRAJECTORY — once per quarter (from QING_GOV_pulse, AFTER the
+# recompute), nudge the EXISTING country-level qing_reform_faction_balance toward
+# the council's lean. Small by design: the mission tasks move it +5..+10 apiece,
+# so this +/-1..2 quarterly drift lets a durably reformist (or reactionary) council
+# bend the realm's trajectory over years WITHOUT swamping the scripted reform arc.
+# Country scope (ROOT = CHI).
+# ======================================================================
+QING_faction_feed_reform_balance = {
+	LOG_enter = { sys = QING  fn = "QING_faction_feed_reform_balance" }
+	# self-seed the reform meter if the reform track has not yet touched it, so this
+	# never reads an undefined variable (matches qing_reform_missions.txt's guard).
+	if = {
+		limit = { NOT = { has_variable = qing_reform_faction_balance } }
+		set_variable = { name = qing_reform_faction_balance  value = 0 }
+	}
+	if = {
+		limit = { has_variable = qing_council_reform_lean }
+		if = {
+			limit = { var:qing_council_reform_lean >= 30 }
+			change_variable = { name = qing_reform_faction_balance  add = 2 }
+		}
+		else_if = {
+			limit = { var:qing_council_reform_lean >= 15 }
+			change_variable = { name = qing_reform_faction_balance  add = 1 }
+		}
+		else_if = {
+			limit = { var:qing_council_reform_lean <= -30 }
+			change_variable = { name = qing_reform_faction_balance  subtract = 2 }
+		}
+		else_if = {
+			limit = { var:qing_council_reform_lean <= -15 }
+			change_variable = { name = qing_reform_faction_balance  subtract = 1 }
+		}
+	}
+	# keep it bounded (the mission capstone gates the constitutional end-state on
+	# >= 20; the reactionary floor mirrors it).
+	if = { limit = { var:qing_reform_faction_balance > 100 }  set_variable = { name = qing_reform_faction_balance  value = 100 } }
+	if = { limit = { var:qing_reform_faction_balance < -100 } set_variable = { name = qing_reform_faction_balance  value = -100 } }
+	LOG_line = { sys = QING  msg = "faction feed: reform_balance now [ROOT.MakeScope.GetVariable('qing_reform_faction_balance').GetValue|0] (council lean [ROOT.MakeScope.GetVariable('qing_council_reform_lean').GetValue|0]) for [ROOT.GetTag]" }
+	LOG_exit = { sys = QING  fn = "QING_faction_feed_reform_balance"  result = OK }
+}
+
+# ======================================================================
+# FACTION FLAVOUR ROLL — offered from the governance flavour dispatcher (quarterly
+# Qing pulse). Low chance; each branch re-checks its own trigger in the fired
+# event, so a stale pick is a harmless no-op. Country scope (ROOT = CHI).
+#   .1 reform memorial (needs a reformist AND a conservative seated)
+#   .2 dowager blocks a reformist council (the 慈禧/1898 showdown)
+#   .3 a council at deadlock (blocs at parity)
+# ======================================================================
+QING_faction_flavour_roll = {
+	LOG_enter = { sys = QING  fn = "QING_faction_flavour_roll" }
+	random_list = {
+		# the everyday reform argument — commonest beat
+		10 = {
+			trigger = {
+				has_variable_list = qing_council_members
+				any_in_list = { variable = qing_council_members  is_alive = yes  employer = ROOT  has_variable = qing_char_stance  var:qing_char_stance >= 20 }
+				any_in_list = { variable = qing_council_members  is_alive = yes  employer = ROOT  has_variable = qing_char_stance  var:qing_char_stance <= -20 }
+			}
+			trigger_event = { id = qing_faction.1  days = { 3 12 } }
+		}
+		# the dowager's veto — needs a reformist council + a conservative dowager
+		7 = {
+			trigger = {
+				QING_dynasty_has_dowager = yes
+				has_variable = qing_council_reform_lean
+				var:qing_council_reform_lean >= 15
+				current_ruler.mother = { has_variable = qing_char_stance  var:qing_char_stance <= -20 }
+			}
+			trigger_event = { id = qing_faction.2  days = { 3 12 } }
+		}
+		# the deadlock crisis — needs the blocs near parity
+		7 = {
+			trigger = {
+				has_variable = qing_council_polarization
+				var:qing_council_polarization >= 2
+			}
+			trigger_event = { id = qing_faction.3  days = { 3 12 } }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_faction_flavour_roll"  result = OK }
+}
