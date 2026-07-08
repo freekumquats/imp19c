@@ -1,0 +1,91 @@
+### [#163 SPHERE PROBE] Phase-0 capability probe for the four-power dynamic
+### sphere-of-influence build. Purpose: settle the ONE unproven engine capability
+### the design rides on — can a STATE read a NUMERIC variable off a NEIGHBOURING
+### state during iteration (the PULL model), or must we fall back to PUSH?
+###
+### This file has NO BOM to match its sibling scripted_effects (se_*.txt all start
+### with ASCII). Its on_action hook (common/on_action/SPHERE_probe_debug.txt) DOES
+### carry a UTF-8 BOM, which every on_action file in this build requires — the
+### earlier probe attempt died precisely because that on_action lacked the BOM and
+### the engine rejected it at load, so the probe never ran. See memory
+### imp19c-sphere-idioms-oracle.
+###
+### Runs once at game start (guarded by a global flag) only when CHI is in the
+### game. Reads are logged with [IMP19C][SPHERE] tags; extract with:
+###   grep "IMP19C SPHERE" logs/debug.log
+### Requires -debug_mode. This whole file + its on_action are throwaway; delete
+### both once the PULL-vs-PUSH verdict is recorded.
+
+SPHERE_probe_run = {
+	# Scope: CHI (country). Set up a source state, stamp a known numeric var on it,
+	# then from a neighbouring state attempt to read that number back.
+	LOG_line = { sys = SPHERE  msg = "PROBE START (CHI) ============================" }
+
+	# --- Pick a deterministic source state: CHI's capital state. ---
+	capital_scope = {
+		state = {
+			save_scope_as = sphere_src_state
+			# Stamp a known sentinel value on the SOURCE state.
+			set_variable = { name = sphere_probe_score  value = 42 }
+			LOG_line = { sys = SPHERE  msg = "source state = [this.GetName], stamped sphere_probe_score = [this.MakeScope.GetVariable('sphere_probe_score').GetValue|-1]" }
+		}
+	}
+
+	# --- From the source state, reach adjacent states via the PROVEN traversal
+	#     state -> every_state_province -> every_neighbor_province -> state.
+	#     (This deliberately avoids the also-unproven area/every_neighbor_area hop;
+	#      if this province-level reach works we have a viable neighbour walk.) ---
+	scope:sphere_src_state = {
+		every_state_province = {
+			every_neighbor_province = {
+				# Only states we can meaningfully talk about: land, populated.
+				limit = {
+					is_sea = no
+					total_population > 0
+				}
+				state = {
+					# Skip the source itself.
+					if = {
+						limit = { NOT = { this = scope:sphere_src_state } }
+						save_scope_as = sphere_nbr_state
+						LOG_line = { sys = SPHERE  msg = "reached NEIGHBOUR state = [this.GetName] (owner [this.GetOwner.GetTag])" }
+
+						# ===== THE ACTUAL TEST (PULL) =====
+						# Can this neighbour state READ the numeric var that lives on
+						# the SOURCE state (a DIFFERENT saved state scope)? If the
+						# engine supports cross-scope numeric var reads mid-iteration,
+						# the logged value is 42; if not, the fallback |-999 shows.
+						LOG_line = { sys = SPHERE  msg = "PULL-READ of source's score from neighbour scope = [scope:sphere_src_state.MakeScope.GetVariable('sphere_probe_score').GetValue|-999]" }
+
+						# Also test the reverse: write a var HERE and confirm the
+						# source can read it back (round-trip), to distinguish a
+						# read-limitation from a scope-staleness issue.
+						set_variable = { name = sphere_probe_nbr_marker  value = 7 }
+					}
+				}
+			}
+		}
+	}
+
+	# --- Back in the source state: try to read a neighbour's marker. This is the
+	#     symmetric PULL (source reads neighbour), the exact operation the contest
+	#     step would need. We re-walk to one neighbour and read its marker. ---
+	scope:sphere_src_state = {
+		every_state_province = {
+			every_neighbor_province = {
+				limit = { is_sea = no  total_population > 0 }
+				state = {
+					if = {
+						limit = {
+							NOT = { this = scope:sphere_src_state }
+							has_variable = sphere_probe_nbr_marker
+						}
+						LOG_line = { sys = SPHERE  msg = "SOURCE reading neighbour [this.GetName] marker (has_variable path) = [this.MakeScope.GetVariable('sphere_probe_nbr_marker').GetValue|-999]" }
+					}
+				}
+			}
+		}
+	}
+
+	LOG_line = { sys = SPHERE  msg = "PROBE END ====================================" }
+}

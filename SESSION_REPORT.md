@@ -2228,3 +2228,25 @@ build" was WRONG and is retracted — debug.log is fine; the absence of SPHERE l
 fully explained by the load rejection. Both probe files DELETED (they errored every CHI
 game). #163 (four-power sphere-of-influence) is UNSETTLED again — the PULL-vs-PUSH
 question must be re-approached without a probe.
+
+────────────────────────────────────────────────────────────────────────
+#163 SPHERE Phase-0 probe RE-CREATED (correctly BOM'd this time) — awaiting in-game read
+────────────────────────────────────────────────────────────────────────
+Per user direction ("re-probe PULL first"), the throwaway capability probe is rebuilt,
+this time with the on_action carrying the mandatory UTF-8 BOM (efbbbf) so the engine
+actually loads it. Two files:
+  common/scripted_effects/se_SPHERE_probe.txt  (NO BOM, matching sibling se_*.txt;
+    braces 27/27) — SPHERE_probe_run: on CHI, stamps sphere_probe_score=42 on the
+    capital state, walks to neighbour states via the PROVEN traversal
+    state -> every_state_province -> every_neighbor_province -> state (deliberately
+    avoids the also-unproven area/every_neighbor_area hop), and logs (a) whether the
+    neighbour reach works at all, (b) THE TEST: can a neighbour state read the numeric
+    var living on a DIFFERENT saved state scope (scope:sphere_src_state) mid-iteration
+    — logs 42 if PULL works, -999 if not, and (c) the symmetric source-reads-neighbour
+    marker read. All lines tagged "IMP19C SPHERE"; extract with
+    grep "IMP19C SPHERE" logs/debug.log (needs -debug_mode).
+  common/on_action/SPHERE_probe_debug.txt  (UTF-8 BOM, braces 6/6) — on_game_initialized
+    effect, guarded by global var sphere_probe_done + exists = c:CHI, fires SPHERE_probe_run
+    exactly once. Coexists with the other on_game_initialized files (engine merges).
+Both files are THROWAWAY — delete once the PULL-vs-PUSH verdict is read from debug.log.
+NOTE: not committed with the #175 batch; goes to develop as its own testable step.
