@@ -1806,3 +1806,33 @@ will transfer them to the country which initiated the subjugate play)."
 - BEHAVIOURAL CHANGE to existing resolve effect — scrutiny: the new release is gated on is_subject=yes so a
   non-subject target path is byte-identical to before; the released-then-rebound path is the requested new
   behaviour. TODO: code review.
+
+## #162 — Balance-history panel (quarterly net-balance histogram)
+- NEW common/scripted_effects/se_BALANCE_HISTORY.txt (braces 56/56, no-BOM/LF): BALHIST_record_quarter
+  shifts an 8-quarter rolling window of INCOME_national_total_quarterly (q0=newest), computes max|value|
+  floored at 1, and pre-normalises each slot to 0..1 pos/neg bar heights (BALHIST_normalise_slot). se_LOG
+  ENTER/EXIT + q0/scale line. Idempotent BALHIST_init seeds the window (new-country / first-quarter safe).
+- WIRE: se_INCOME.txt INCOME_update_treasury_country calls BALHIST_record_quarter right after
+  INCOME_national_total_quarterly is set (line ~63). Runs quarterly + at game init (both existing callers of
+  the treasury update), for every country. [#162]-tagged comment. Braces 175/175.
+- GUI: gui/economy_view.gui balance_history flowcontainer — replaced the single WiP placeholder column
+  (hardcoded value="100") with 8 columns (left=q7 oldest .. right=q0 newest), each a green positive bar
+  (top half, rises from centre-line for a surplus) + red negative bar (bottom half, deficit), bound to
+  balance_hist_pos_q$N$ / _neg_q$N$ via FixedPointToFloat(Player.MakeScope.GetVariable(...).GetValue) — the
+  idiom the file's own commented example uses. visible flipped no->yes. Braces 574/574.
+- LOC: imp19c_interface_l_english.yml += BALANCE_HIST_Q_TT (BOM+LF preserved, 0 odd-quote lines).
+- Was committed inert in 94f6c729, removed in 659c8f52 (user: don't commit unfinished), now COMPLETE.
+- TODO: code review; then in-game verify (histogram populates after the first quarterly pulse).
+
+### #162 code-review fixes (CONFIRMED, applied)
+- ROOT CAUSE: I had PDX svalue clamp semantics backwards. VERIFIED against codebase
+  (00_event_values.txt:603-604 clamps a probability with min=0/max=100; :56-57 min=100/max=1000):
+  min = FLOOR (raise up to), max = CEILING (cap down to) — the intuitive reading.
+- FIX 1 (CRITICAL, BALHIST_fold_abs): |x|=max(x,-x) needs the FLOOR operator; was `max = {..-1}`
+  (=min, yielding -|x|, so max_abs stuck at floor 1 forever). Changed to `min = {..-1}`. Now grows correctly.
+- FIX 2 (CRITICAL, BALHIST_normalise_slot x2 blocks): clamp to [0,1] was `max = 0  min = 1` (forced every
+  bar to constant 1 => solid green-over-red block). Swapped to `min = 0  max = 1`.
+- FIX 3 (MEDIUM, LOG_line): ROOT is not the iterated country inside every_country (and undefined at
+  on_game_initialized). Swapped ROOT.MakeScope/GetTag -> This.* (proven idiom, se_JAPAN_BAKUMATSU.txt).
+- Divide-by-zero guard, window shift, scope, macro use, GUI layout: reviewer VERIFIED correct, no change.
+- Braces 56/56. Re-verified: no inverted clamps remain. Ready for in-game verify.
