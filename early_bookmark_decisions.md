@@ -126,6 +126,18 @@ characters and borders and buildings"):**
   a much larger, separate effort — this decision is the natural place to redirect. Called out
   here and in SESSION_REPORT so it's the first thing seen on return.
 
+### D-DATES-DONE — 2026-07-08 — dated-content re-base APPLIED ✅
+Δdays(1815.7.1 → 1759.9.1) = **20391**. Applied:
+- **START_DATE** → `1759.9.1` (`00_defines.txt:3`). END_DATE 1936 kept.
+- **Arc day-offsets +20391** (28 beats): japan_bakumatsu (7), mex_instability (10), usa_section (11)
+  — so Perry/Civil-War/Mexican beats still land on their TRUE dates. Header notes added.
+- **Amherst one-shot** (`qing_mechanics_on_actions.txt`) `days={410 430}`→`{20801 20821}` (keeps 1816 arrival).
+- **Mobilization guard** (`00_specific_from_code.txt`) `current_date > 1815.7.2`→`1759.9.2`.
+- **LEFT UNCHANGED (real historical thresholds, reachable at true dates from 1759 start,
+  game runs to 1936):** `unique_chi.1` Amherst gate `>1815.10.15`; Napoleon window `<1821.5.5`;
+  GP grip grace `1826.1.1`/`1852.1.1`; Mexico `1830.1.1`. These are absolute real-world dates, not
+  start-relative offsets, so they remain correct — they simply become eligible at their true dates.
+
 ### D-ARC — 2026-07-08 — **KEY: dated arc offsets must be shifted, or they fire ~25 yrs early** ⚠️
 The US/Japan/Mexico/Qing arcs fire from `on_game_initialized` via
 `trigger_event = { id = … days = { A B } }`, where the day-offset is calibrated from the
@@ -146,8 +158,82 @@ Compromise, 1861 Civil War, etc.). These offsets are baked to 1815.
 - **Alternative considered & rejected:** leaving offsets as-is (arcs fire 25 yrs early). Rejected
   — it silently corrupts the historical timeline the arcs were built (#93/#94/#96) to reproduce.
 
-### D3 — PENDING — Chosen year + justification
-_To be filled from the research agent on completion, before any historical-content edit._
+### D3 — 2026-07-08 — **CHOSEN YEAR: 1759 (乾隆二十四年)** ✅
+Research complete (full report: `research/QING_APOGEE_RESEARCH.md`; roster:
+`research/QIANLONG_ROSTER_RESEARCH.md`). **Year = 1759**, the research's primary recommendation:
+the completion of the Xinjiang conquest (Khoja brothers run down in Badakhshan, 1 Sep 1759) —
+the Qing's maximal effective territorial extent, militarily unchallenged, Qianlong (age 47) at
+peak vigour, treasury deep and rising, nothing yet foreshadowing decline. Crest of the High Qing
+(康雍乾盛世).
+- **START_DATE = "1759.9.1"** (the 1 Sep 1759 anchor event; keeps the calendar on the decisive date).
+- **Δdays from 1815.7.1 back to 1759.9.1** = to be computed precisely for arc-offset shifting (D-ARC).
+- **1790 alternative** deliberately NOT taken (it foregrounds decadence/Heshen/pre-decline; 1759 is
+  the cleaner, decisive apogee anchor). Recorded as a possible future second bookmark.
+
+### D4 — 2026-07-08 — Border scope: **NO net territorial change** ✅
+Research confirms (high confidence) the Qing land empire of 1815 is essentially the same as
+1759's — no cessions occurred 1759→1815 (first losses are the 1850s–60s Amur/Ili treaties);
+White Lotus (1796) was internal. Xinjiang, Tibet, Mongolia, Manchuria all held in both.
+- **Decision:** leave CHI's `own_control_core` UNCHANGED. The apogee-vs-1815 contrast is
+  INTERNAL (treasury depth, army quality, court vigour, prestige, silver inflow), not territorial.
+  This is faithful to the sources AND the low-risk path (no province-list surgery, no dangling cores).
+- **Subjects:** keep the existing ring. Do NOT add Burma or Kokand (research: contested/not genuine
+  tributaries). Nepal is correctly NOT a peak-1759 tributary either (post-1792) — but NEP is already
+  a tributary in the 1815 setup; leaving it is a minor, acceptable anachronism (removing it risks
+  breaking the subject/economy bookkeeping for marginal gain). **Decision: leave subject ring as-is.**
+
+### D5 — 2026-07-08 — Reigning monarch: Jiaqing(char:224) → **Qianlong(char:214)** ✅
+`char:214` (Qianlong) already exists with correct dates (b.1711.09.25, d.1799.02.07, alive in 1759)
+and `add_trait=chinese_emperor`. Move the `c:CHI={ set_as_ruler=char:… }` ruler assignment from
+char:224 (Jiaqing, currently the 1815 ruler) to char:214, and give char:214 the era-start effects
+the Jiaqing block has (add_gold, add_popularity, era traits). Jiaqing (char:224, b.1760) is UNBORN
+on 1759.9.1 — his birth_date is after start; he must NOT be referenced as a live character/heir at
+start. **Action:** verify no start-time logic requires char:224 alive; if the engine needs an heir,
+use a Qianlong-era prince alive in 1759 (e.g. an elder son) or leave heir unset.
+
+### D5b — 2026-07-08 — char:224 residual references AUDITED, safe ✅
+Two non-setup refs to char:224 (Jiaqing) remain and are intentionally LEFT:
+- `00_custom_on_actions.txt:299` — inside `on_reign_ending_successor` (fires on emperor
+  *death/succession*, ~1799 in-game, NOT at start); hardcodes Jiaqing as `previous_emperor`.
+  Historically Jiaqing DID succeed Qianlong, so this stays plausible. Not start-critical.
+- `000_GOVERNMENT_custom_loc.txt:461/656` — a cosmetic display-name loc trigger keyed to
+  char:224. Cosmetic only; no start effect.
+Both are pre-existing hardcodings unrelated to who rules at game start. No change needed.
+
+### D6 — 2026-07-08 — Court bench: re-point Jiaqing-era → Qianlong-era ✅
+The #166/#177 bench (chars 700–712) is Jiaqing/early-Daoguang (many born 1780s → unborn in 1759).
+**Action:** add a 1759 Qianlong-era bench as new CHI-block characters (auto-employed as CHI courtiers
+— verified no explicit employ logic needed): Liu Tongxun, Yu Minzhong, Agui, Zhaohui, Yin Jishan,
+Ji Yun, Dai Zhen, Qian Daxin, Zhao Yi, Yuan Mei (Fuheng char:213 & Fuk'anggan char:218 already exist).
+Guard the 1780s-born bench (700–712) so it does not seed live courtiers before their birth dates —
+simplest: give each a `birth_date` the engine already respects (a character with birth_date after
+START simply doesn't exist yet, so 700–712 are harmlessly absent in 1759; CONFIRM engine treats
+future-born chars as non-existent rather than erroring).
+
+### D7 — 2026-07-08 — Treasury: raise the derived multiplier ✅
+`QING_seed_starting_treasury` (`se_QING_MECHANICS.txt:662`) seeds treasury = `-12 × monthly costs`
+(one year, for strained 1815). For 1759's large-and-rising surplus (trajectory toward the ~73.9M
+mid-1770s peak, well above the ~34M of 1735), raise the multiplier. **Decision:** the effect is
+1815-specific (var named `qing_treasury_seed_1815`, sentinel `qing_treasury_seeded`). Rather than
+mutate the 1815 tuning in place (a CHANGE to existing behaviour → extra scrutiny), gate it on
+START_DATE: keep -12 baseline but multiply up for the earlier bookmark. Simplest faithful choice:
+change the multiplier to represent ~2–3 years of costs (-24 to -36) for the surplus era. Final:
+**-30** (≈2.5 yr of costs) as a defensible "deep surplus, not infinite" figure; logged as an
+estimate (exact 1759 tael balance is not pinned in sources). Comment + LOG updated; behaviour-change
+scrutiny per the fix-traceability rule.
+
+### D8 — 2026-07-08 — Buildings/OOB/laws ✅
+- **Buildings** (`SE_qing_starting_buildings`): the specialty-production works (silk/porcelain/tea/
+  cotton/salt) existed in 1759 as much as 1815 (Jiaqing-era economy inherited them) — **keep as-is**.
+- **Army/navy OOB** (`SE_qing_armies`/`SE_qing_navy`): research says the Banners were at PEAK quality
+  in 1759 (vs decayed by 1815). The OOB *composition* (which forces/where) is essentially the same
+  garrisons; the difference is quality/morale, which the mobilization/rot modifiers model, not the OOB
+  counts. **Decision:** keep the OOB structure; OPTIONALLY grant a "peak banners" quality modifier at
+  1759 start (concrete, low-risk) instead of altering counts. Deferred as a nice-to-have; core build
+  first.
+- **Laws:** the CHI 1815 law list (bureaucratic judiciary, regional militias, etc.) is broadly the
+  same Qing institutional setup as 1759. **Keep as-is** — no sourced reason to change; the Grand
+  Council/banner distinction is modelled elsewhere. Logged as reviewed-no-change.
 
 ---
 
@@ -182,6 +268,102 @@ Notation: `${YEAR}` = chosen start year; `${START}` = `${YEAR}.M.D`; `${STARTP1}
 9. **Laws/government** — review the CHI law list vs the era (D7, pending research).
 10. **Verify** (brace + BOM + residual-date grep) → **adversarial review** → **commit as
     freekumquats** + SESSION_REPORT + this doc's final decisions.
+
+---
+
+## EXECUTION STATUS — 2026-07-08 (edits applied)
+
+### D-FUTUREBORN — RESOLVED via oracle `a6b4f4f3c24ae67cf` ✅ (the load-bearing question)
+The open item in D6 ("CONFIRM engine treats future-born chars as non-existent rather than
+erroring") is now answered. Oracle finding (HIGH confidence):
+- **Setup characters with `birth_date` > START_DATE are silently non-existent until their
+  birth date arrives — they do NOT crash the load.** This is standard Imperator engine
+  behaviour (a character simply hasn't been born yet).
+- **The one real hazard is `set_as_ruler` (or a required office-holder) pointing at an
+  unborn character** — the engine then auto-generates a fallback ruler or the assignment
+  silently fails. Family (`father`/`mother`) links to unborn chars are safe.
+- **Consequences for this bookmark, all consistent with D-SCOPE (Qing-focused):**
+  - CHI ruler = char:214 Qianlong (b.1711) — born long before 1759, safe. ✅
+  - The Jiaqing-era bench (700–712, born 1760s–1780s) is harmlessly absent at 1759 — no
+    action needed beyond adding the Qianlong bench (done). ✅
+  - char:224 Jiaqing (b.1760) ruler-assignment is commented out (D5) so no unborn char is
+    set as ruler. ✅
+  - **World-wide:** the "~15" figure originally cited here was WRONG — it was the count for the
+    abandoned >1780 threshold (D-SCOPE line ~100), never recomputed for the actual 1759.9.1 start.
+    ⚠️ **CORRECTED (adversarial review, 2026-07-08, script-verified):** at the true 1759.9.1
+    threshold, **59 of 91 uncommented `set_as_ruler`/`set_as_co_ruler` targets are unborn**
+    (63–64 counting co_ruler + the commented Jiaqing line). All get engine-generated fallback
+    rulers — no crash, still a playable world — but this is a ~4× larger anachronism than the
+    doc first stated. Accepted under D-SCOPE (Qing-FOCUSED bookmark, rest of world left at 1815).
+
+### D-FUTUREBORN-QING — 2026-07-08 — CHI subject ring & governors ALSO have unborn assignees ⚠️
+The review found — correctly — that the "clean Qing scope" claim above was FALSE. Inside
+`setup/characters/00_Qing.txt`, several assignments on CHI's OWN subject ring and provinces point
+at post-1759 births (script-verified):
+- **6 subject-ring `set_as_ruler` targets unborn at 1759:** char:335 KOR (b.1790; real 1759 king
+  was Yeongjo r.1724–76), char:327 MGA/Jebtsundamba (b.1813), char:329 ULS (b.1771), char:330 LAF
+  (b.1770), char:331 SBG (b.1792), char:99 ADG (b.1765, a "made-up" placeholder ruler).
+- **7 CHI `set_as_governor` targets unborn at 1759:** char:320 (Anhui/768, b.1770), 325 (b.1771),
+  326 (b.1779), 336 (b.1765), 351 (b.1766), 352 (b.1779), 353 (b.1765).
+- **Engine behaviour:** `set_as_ruler` on an unborn char → engine auto-generates a random
+  fallback monarch (the subject tag is STILL a Qing subject — the dependency lines in
+  00_default.txt are unaffected). `set_as_governor` on an unborn char → silently no-ops, the
+  governorship simply opens without a named governor. **Neither crashes; the game is playable.**
+- **DECISION (deliberate, documented — NOT silently ignored):** for THIS commit these are
+  **accepted anachronisms**, consistent with D-SCOPE. Authoring 13 period-correct 1759 rulers/
+  governors (e.g. Yeongjo for Korea, the era's real Mongol/frontier khans, mid-Qianlong provincial
+  governors) is a substantial character-authoring task with its own bug-risk, and the fallbacks are
+  functional. **Flagged as the top follow-up item** if the user wants full 1759 fidelity on the
+  subject ring — the two highest-value fixes are Korea (char:335 → a Yeongjo character) and the
+  Anhui governor. Recorded here so the gap is visible, not hidden.
+- **Caveat on the oracle's method:** it partly reasoned from the repo *already* containing
+  `START_DATE=1759.9.1` (my own uncommitted edit) and inferred "the mod loads." That specific
+  inference is circular (not yet test-loaded), but the underlying engine-behaviour claim is
+  independently sound and matches documented Imperator behaviour. Final proof = the user's
+  in-game load test on the `early_bookmark` branch.
+
+### Edits applied this session (all on branch `early_bookmark`, uncommitted)
+1. **START_DATE** → `"1759.9.1"` (`00_defines.txt:3`). ✅ (D3)
+2. **Arc offset +20391** — japan_bakumatsu (7), mex_instability (10), usa_section (11). ✅ (D-ARC)
+3. **Amherst one-shot** → `days={20801 20821}` (`qing_mechanics_on_actions.txt`). ✅
+4. **Mobilization guard** → `current_date > 1759.9.2` (`00_specific_from_code.txt`). ✅
+5. **Qianlong set as ruler** — char:214 gets `c:CHI={set_as_ruler=char:214}` + add_gold/add_popularity;
+   char:224 Jiaqing ruler block + grants commented out (unborn 1759). ✅ (D5)
+6. **Qianlong court bench** — new CHI-block chars **720–729** (Liu Tongxun, Yu Minzhong, Agui,
+   Zhaohui, Yin Jishan, Ji Yun, Dai Zhen, Qian Daxin, Zhao Yi, Yuan Mei) inserted before the
+   CHI-block close. All born < 1759 (safe). IDs verified collision-free; traits/cultures/religion
+   keys verified valid; braces balanced (238/238); BOM preserved. ✅ (D6)
+7. **Treasury multiplier** → `-24` at `se_QING_MECHANICS.txt` (see D7-CORRECTED below). ✅ (D7)
+
+### D7-CORRECTED — 2026-07-08 — treasury multiplier -30 → -24 (quarterly-cadence fix) ⚠️
+The adversarial review CONFIRMED that the three `INCOME_cost_*` vars are **quarterly**, not
+monthly (the file's own header line 638-639: summing them ×-4 = one year). So my first "-30 ≈
+2.5 years" comment was wrong by 3× — -30 actually delivers ~7.5 years of costs, and even the
+pre-existing #172 baseline of -12 is ~3 years (not the "~1 year" its comment implied).
+- **Fix:** set the apogee seed to **-24 = 2× the accepted #172 baseline (-12)** → ≈6 years of
+  costs on hand. Deep, defensible war-chest for the flush Qianlong surplus era WITHOUT the
+  ~7.5-year economy distortion the review flagged. The user-verified -12 master baseline is
+  LEFT UNCHANGED; only its comment phrasing is corrected. Framing the apogee seed as a multiple
+  of the baseline sidesteps the monthly/quarterly confusion entirely.
+
+### D10 — 2026-07-08 — regnal-year seed 19 → 24 (Qianlong era, cosmetic) ✅
+Review found `oa_economy_setup.txt:2194` unconditionally seeds `regnal_year_var = 19` (Jiaqing's
+regnal year at the old 1815 start), which the `chinese_era_description` loc renders as the ruler's
+era year. With the emperor swapped to Qianlong (乾隆, acceded 1735/元年 1736), 1759 = 乾隆二十四年.
+Changed to **24**. Cosmetic only (script-verified: `regnal_year_var` is read solely by the display
+loc, no trigger/gate consumes it) — no crash, but it's stale start-state the retarget should fix.
+
+### D9 — 2026-07-08 — Buildings are flat province-ID data, NOT date-gated ✅ (validates D8)
+Investigated the `1759 = {…}`, `1815 = {…}` etc. blocks in `setup/main/00_default.txt`'s
+`provinces = {}` section (line 1062+). These are **province IDs** (Derby=5014, Boston=3838, …
+and provinces that happen to have IDs like 1815), a flat sibling list of starting-building
+assignments applied at ANY start date — there is NO `date=`/`history` construct nesting them.
+Therefore the date shift does NOT strip any buildings. Buildings/OOB/laws stay as-is (D8 holds).
+
+### Remaining before commit
+- [ ] #196 deep adversarial-review workflow of the whole diff.
+- [ ] #197 commit as freekumquats + SESSION_REPORT entry.
+- [ ] (owed to user) in-game load test on `early_bookmark` — the definitive future-born proof.
 
 <!-- Subsequent decisions (chosen year, exact border moves, character cuts/adds, treasury
      figure, law changes, arc-date handling) appended below as they are made. -->
