@@ -2494,3 +2494,70 @@ NEW vacant-office decay branch that did not exist before (the roll never modelle
 preserved (se_* = no BOM). No live `qing_works.*` trigger_event remains in the decline roll.
 Task-tagged `[task #209]` in all three files. Reviewed before commit. Pushed to develop for
 in-game verification (branch policy — not promoted to master).
+
+---
+
+## [#218] LIT detached-provinces bug (1763_bookmark)
+
+**Symptom (user, boot-test as LIT).** Playing Lithuania, LIT was a scatter of detached
+provinces surrounded by Russia — "you only gave LIT ownership of certain provinces instead
+of the entire states."
+
+**Root cause.** LIT's `own_control_core` in `setup/main/00_default.txt` held only 8 provinces
+`{ 9020 4051 9 75 506 2836 8553 2669 }` — one or two picked from each of six different areas
+(Vilno, Grodno, Minsk, Mogilev, Vitebsk, Kiev). The other 88 provinces of those areas were RUS,
+so LIT rendered as specks embedded in Russia.
+
+**Fix.** Rewrote LIT to hold the five COMPLETE core Grand Duchy of Lithuania areas — Vilno,
+Grodno, Minsk, Mogilev, Vitebsk (95 provinces total) — and removed those 88 from RUS's
+`own_control_core`. The stray Kiev-area province (2669) was NOT given to LIT: by 1763 Kiev city
+and left-bank Ukraine were Russian (Andrusovo 1667 / Eternal Peace 1686) and Right-bank Ukraine
+was the Polish Crown, never the Grand Duchy — so 2669 was moved into RUS, consolidating the
+otherwise-all-RUS Kiev area. Historical extent per research/1763_rulers_poland_lithuania.md.
+
+**Verify.** File braces balanced (10854/10854). Programmatic ownership sweep confirms all 95
+wanted provinces now LIT, 2669 now RUS, and zero double-listed provinces across all
+`own_control_core` blocks. Task-tagged `[#218]` comment in the LIT block. On 1763_bookmark
+branch (not develop/master) per the 1763 bookmark workstream.
+
+---
+
+## [#208] Phase-1 Latin-American reversion leg — Mexico → Spanish colony
+
+**Goal.** Complete the third leg of the 1763 Phase-1 proof-of-concept (after PLC and Venice):
+demonstrate the Spanish-America reversion approach on one tag before the full map surgery.
+
+**Change (setup/main/00_default.txt).**
+- Added `dependency = { first = SPA second = MEX subject_type = client_colony }` (line 771),
+  directly under the existing Spanish-colony dependency block (SPA → NSP/QTO/PR1/SFB/CPV).
+  1815-independent Mexico reverts to the Viceroyalty of New Spain under Bourbon rule (to 1821).
+- Changed MEX `government = revolutionary_republic → viceroyalty` (line 34772). The
+  revolutionary republic is the 1821-independence government; a colonial viceroyalty matches the
+  other Spanish colonies (NSP/QTO/PR1 all `viceroyalty`).
+- Provinces and primary_culture left untouched — this is a pure subject-relationship + government
+  reversion, fully reversible, reusing the proven `dependency` mechanic (same as PLC #208).
+
+**Why this leg.** MEX has ZERO mission/event tag dependencies (per #198 feasibility scout), so it
+is the safest Latin-American tag to prove the reversion pattern. It validates the method the full
+surgery will repeat for the ~10 remaining independent Spanish-American tags per the
+research/1763_WORLD_Americas.md § C mapping table.
+
+**Verify.** File braces balanced (10855/10855). MEX confirmed independent in the 1815 baseline
+before the edit (no prior `second = MEX` line). Task-tagged `[bookmark-1763 #208]` on both lines.
+On 1763_bookmark branch only.
+
+**Adversarial review (2026-07-08) — outcome: no load-breaking defects.** Province conservation
+verified (RUS 1703→1616, LIT 8→95, 2669 LIT→RUS; zero orphans/double-owns; total unique 9089
+unchanged). Caucasus trailing comments intact. `viceroyalty` confirmed a valid government
+(common/governments/00_albert.txt:47). Review items folded in:
+- Incidental fix: the RUS list re-flow corrected a pre-existing malformed 5-digit token
+  `77453 → 7453` (Sorochinsk). Confirmed `77453` was in HEAD and would previously have failed to
+  assign; documented with a `[#218]` note in the RUS `own_control_core` header so it is not
+  "restored" as a typo later.
+- MEX #96 instability arc verified safe under colony status: `on_game_initialized` seeding and
+  `mex_instability.1` (First Empire/Iturbide) gate only on `tag = MEX` + a not-fired variable, no
+  sovereignty requirement — the arc plays on the subject and its dated beats still land on true
+  dates. Whether MEX should auto-release from Spain ~1821 is a full-map-surgery design item, not a
+  PoC blocker.
+- Removed two stray subagent scratch files (analyze_provinces.py, province_analysis_output.txt)
+  before commit.

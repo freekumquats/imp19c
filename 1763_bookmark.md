@@ -190,9 +190,28 @@ resolve, BOMs correct, braces balance) and surfaced ONE real finding, now resolv
     `set_as_ruler` pointer moved off char:14 (Józef Zajączek, b.1752 — an 11-yr-old child in
     1763, a Napoleonic-era figure; retained as a defined char but no longer the game-start ruler).
 
+**Post-Phase-1 boot-test fixes (2026-07-08, task #218 + Latin-American leg):**
+- **#218 — LIT detached-provinces bug.** The user's boot test as LIT showed Lithuania as a
+  scatter of isolated provinces embedded in Russia. Root cause: LIT's initial `own_control_core`
+  held only 8 provinces cherry-picked from 6 different areas, leaving the rest RUS. FIXED by
+  giving LIT the FIVE COMPLETE core Grand Duchy of Lithuania areas — **Vilno, Grodno, Minsk,
+  Mogilev, Vitebsk (95 provinces)** — and removing those 88 from RUS. The stray Kiev-area
+  province (2669) was NOT given to LIT and instead consolidated into RUS: by 1763 Kiev city +
+  left-bank Ukraine were Russian (Andrusovo 1667 / Eternal Peace 1686) and Right-bank Ukraine
+  was the Polish Crown, never the Grand Duchy. Historical extent per
+  `research/1763_rulers_poland_lithuania.md`. Verified: braces balanced, all 95 now LIT, 2669 now
+  RUS, zero double-listed provinces. (Supersedes the original "8 prov ex-RUS" figure above.)
+- **Latin-American reversion leg (Mexico).** The chosen minimal PoC leg reuses the `dependency`
+  mechanic (no province surgery): 1815-independent **MEX** is bound to **SPA** as a
+  `client_colony` (`00_default.txt:771`), matching the existing Spanish colonial pattern
+  (SPA → NSP/QTO/PR1 client_colonies already in the 1815 baseline). MEX's `government` changed
+  `revolutionary_republic → viceroyalty` (the 1821-independence republic is wrong for 1763; a
+  Bourbon viceroyalty matches NSP/QTO/PR1). Provinces/culture untouched — reversible, low-risk.
+  This validates the Spanish-America reversion approach that the full map surgery will apply to
+  the remaining ~10 independent Latin-American tags per the B-section mapping tables.
+
 Still OWED before Phase-1 is "done": in-game boot test on `1763_bookmark` (the definitive
-future-born-character + nested-subject proof), and — if we proceed — the Latin-American reversion
-leg of the Phase-1 PoC. Nothing promoted off `1763_bookmark`.
+future-born-character + nested-subject proof). Nothing promoted off `1763_bookmark`.
 
 *(Per-region implementation decisions B3, … appended as the full map-surgery phase begins.)*
 
