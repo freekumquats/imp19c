@@ -16,6 +16,118 @@
 ########################################################################
 
 # ======================================================================
+# QUARTERLY WORKS PULSE — called from QING_GOV_pulse (quarterly cadence).
+# [task #209] Mirrors QING_revenue_pulse: gives the Grand Minister of Works
+# (工部) domain its own throttled home instead of riding the generic decline
+# roll. Because this pulse now OWNS the works events, they are REMOVED from the
+# se_QING_DECLINE.txt flavour roll (qing_works.1/.2/.3/.4/.6) — exactly as the
+# revenue events were migrated out — so nothing double-fires. The follow-up
+# qing_works.5 stays is_triggered_only (chained only from qing_works.1.b).
+#
+# Two branches, mutually exclusive:
+#   VACANT office → the hydraulic works decay. The perennial DECAY crises
+#     (dike breach .1, canal silt .2 — each of which already carries a
+#     "no Works minister / can't afford it" option path) can still strike,
+#     and unsupervised 河工 graft drifts corruption up. The constructive
+#     projects (.3 Great Wall, .6 specialty manufactory) and the minister-
+#     specific graft scandal (.4) do NOT fire with no holder.
+#   FILLED office (holder alive + employer = ROOT + off cooldown) → the full
+#     menu on a throttled roll: the two decay crises the minister can address
+#     well, the Great Wall prestige project, a new specialty state manufactory,
+#     and — in a corrupt court — a river-works embezzlement scandal.
+# Cooldown: qing_works_event_cooldown (270 days ≈ 3 quarters), matching
+# qing_revenue_event_cooldown. The vacant corruption drift is unconditional
+# (mirrors the revenue vacant drift), only the event offer is cooldown-gated.
+# ======================================================================
+QING_works_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_works_pulse" }
+
+	# --- VACANT office: the works decay ----------------------------------
+	if = {
+		limit = { NOT = { has_variable = qing_office_works_holder } }
+		# unsupervised hydraulic-works budget (河工) breeds graft (+corruption)
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 1 }
+		LOG_line = { sys = QING  msg = "works: office vacant -> hydraulic-works oversight lapses (+corruption) for [ROOT.GetTag]" }
+		# the perennial infrastructure crises can still strike (each event's
+		# own options carry the "no minister" path). Throttled by the cooldown.
+		if = {
+			limit = { NOT = { has_variable = qing_works_event_cooldown } }
+			set_variable = { name = qing_works_event_cooldown  days = 270 }  # ~3 quarters
+			random = {
+				chance = 30
+				random_list = {
+					# Yellow River dike breach (黃河河堤)
+					20 = {
+						trigger = { treasury >= 100 }
+						trigger_event = { id = qing_works.1  days = { 5 20 } }
+					}
+					# the Grand Canal silts up (大運河 漕運)
+					20 = {
+						trigger = { treasury >= 80 }
+						trigger_event = { id = qing_works.2  days = { 5 20 } }
+					}
+				}
+			}
+		}
+	}
+	# --- FILLED office: offer the domain events on a throttled roll -------
+	else_if = {
+		limit = {
+			has_variable = qing_office_works_holder
+			var:qing_office_works_holder = { is_alive = yes  employer = ROOT }
+			NOT = { has_variable = qing_works_event_cooldown }
+		}
+		set_variable = { name = qing_works_event_cooldown  days = 270 }  # ~3 quarters
+		random = {
+			chance = 40
+			random_list = {
+				# Yellow River dike breach (黃河河堤): repair well / cheap / ignore
+				16 = {
+					trigger = { treasury >= 100 }
+					trigger_event = { id = qing_works.1  days = { 5 20 } }
+				}
+				# the Grand Canal silts up (大運河 漕運): dredge / cheap / abandon
+				16 = {
+					trigger = { treasury >= 80 }
+					trigger_event = { id = qing_works.2  days = { 5 20 } }
+				}
+				# rebuild a section of the Great Wall (長城): a prestige project
+				12 = {
+					trigger = { treasury >= 120  stability >= 40 }
+					trigger_event = { id = qing_works.3  days = { 5 20 } }
+				}
+				# [#188] a memorial to raise a new specialty state manufactory
+				#   (織造局/御窯廠/茶廠/棉紡織坊/鹽場). Gate on the same finesse >= 7
+				#   the build effect requires + a specialty province lacking its works.
+				12 = {
+					trigger = {
+						treasury >= 90
+						var:qing_office_works_holder = { finesse >= 7 }
+						OR = {
+							any_owned_province = { trade_goods = silk           NOT = { has_building = qing_silk_filature_building } }
+							any_owned_province = { trade_goods = porcelain      NOT = { has_building = qing_porcelain_kiln_building } }
+							any_owned_province = { trade_goods = tea            NOT = { has_building = qing_tea_workshop_building } }
+							any_owned_province = { trade_goods = textile_fibres NOT = { has_building = qing_cotton_workshop_building } }
+							any_owned_province = { trade_goods = salt           NOT = { has_building = qing_salt_yard_building } }
+						}
+					}
+					trigger_event = { id = qing_works.6  days = { 5 20 } }
+				}
+				# river-works embezzlement scandal (河工貪腐): only in a corrupt court
+				12 = {
+					trigger = {
+						has_variable = qing_corruption_level
+						var:qing_corruption_level >= 50
+					}
+					trigger_event = { id = qing_works.4  days = { 5 20 } }
+				}
+			}
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_works_pulse"  result = OK }
+}
+
+# ======================================================================
 # COMMISSION A RIVER DIKE / LEVEE (河堤) in a high-population province.
 # The Yellow River flood-control system. Built in country scope; picks the
 # most populous province that doesn't already have one (mirrors the yamen/shuyuan
