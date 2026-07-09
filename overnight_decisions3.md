@@ -410,3 +410,30 @@ boot-validated by the user, staying byte-faithful to a proven panel is the safes
 
 All files brace-balanced. In-game boot test owed to the user (GUI crash-safety can only be confirmed live).
 Committed + pushed to develop as freekumquats.
+
+---
+
+## #260 — Statesmanship: figurehead 4-skill bars on the throne boxes — DONE (scoped to spec)
+
+**Scope decision.** #260's subject line said "accrual while in office", but its DETAILED description
+overrides that: *"Statesmanship bar surfaces the EXISTING competence data, NOT a new experience system…
+Summit offices AND figureheads (Chancellor/Regent/Crown Prince/Emperor): 4-skill… Emperor/Crown
+Prince/Grand Regent throne boxes also get a Statesmanship bar."* Per the fix-traceability rule (description
+is the authoritative spec), #260 is a GUI-surfacing refinement, NOT a new accrual mechanic. The office
+CARDS already carry the statesmanship bar (#222/#269); the gap was the three THRONE boxes
+(Emperor/Crown Prince/Regent), which showed only portrait + loyalty.
+
+**As built.** Added a compact 4-attribute row (martial/finesse/charisma/zeal, the figurehead "judged on all
+competences" reading) to each of the Emperor, Crown Prince, and Regent throne boxes in
+gui/government_view.gui, inside each box's existing IsSet-gated `Character`-datacontext flowcontainer
+(so the read is scope-valid and only renders when the seat is filled). Mirrors the proven summit-card
+4-attribute row (chancellor card). Read-only, existing character data — no new variable, no accrual code,
+no pulse hook. Braces balanced 1868/1868.
+
+**NOT done (deliberately out of scope / deferred):** a genuine accrual-while-in-office experience mechanic
+and wiring the se_QING_ACCOUNTABILITY threshold events INTO the GC panel — the description explicitly
+disclaims the former ("not a new experience system"), and the accountability events already fire via
+QING_accountability_pulse (they surface as normal event popups, not an embedded GUI list). If the user
+wants the embedded-event-list or a real accrual meter later, that is a separate follow-up.
+
+GUI boot test owed to the user. Committed + pushed to develop as freekumquats.
