@@ -92,6 +92,19 @@ LOGISTICS_scan_worst_shortages = {
 				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_land  value = prev.var:shortage_phys_late_artillery } }
 			}
 		}
+		# [#281] rifles: infantry small-arms. Demand is army/arsenal-driven and tech-gated
+		# (DEMAND_rifles, DEMAND_luxury_svalues.txt); supply is arsenal/industry + the 15
+		# gun-town provinces (trade_goods="rifles"), so supply and demand scale together on
+		# the same DEMAND_military_from_armies driver as munitions -- no phantom shortage for
+		# a country whose arsenals match its army. A genuine rifle deficit now feeds the same
+		# land attrition/morale/movement penalty as munitions (max over the land goods).
+		if = {
+			limit = { has_variable = shortage_phys_rifles }
+			if = {
+				limit = { var:shortage_phys_rifles > scope:logistics_country.var:LOGISTICS_tmp_worst_land }
+				scope:logistics_country = { set_variable = { name = LOGISTICS_tmp_worst_land  value = prev.var:shortage_phys_rifles } }
+			}
+		}
 		# --- naval goods (consumed only by steam-hull owners; gated at the penalty) ---
 		if = {
 			limit = { has_variable = shortage_phys_coal }
@@ -144,15 +157,15 @@ LOGISTICS_apply_munitions_shortage_penalty = {
 	if = {
 		limit = { var:LOGISTICS_tmp_worst_land >= 0.50 }
 		add_country_modifier = { name = country_munitions_shortage_severe  duration = 100 }
-		LOG_line = { sys = LOGISTICS  msg = "[MUNI] [scope:logistics_country.GetTag] SEVERE worst_land=[ROOT.MakeScope.GetVariable('LOGISTICS_tmp_log').GetValue|2]" }
+		LOG_line = { sys = LOGISTICS  msg = " SEVERE worst_land=" }
 	}
 	else_if = {
 		limit = { var:LOGISTICS_tmp_worst_land >= 0.15 }
 		add_country_modifier = { name = country_munitions_shortage_minor  duration = 100 }
-		LOG_line = { sys = LOGISTICS  msg = "[MUNI] [scope:logistics_country.GetTag] MINOR worst_land=[ROOT.MakeScope.GetVariable('LOGISTICS_tmp_log').GetValue|2]" }
+		LOG_line = { sys = LOGISTICS  msg = " MINOR worst_land=" }
 	}
 	else = {
-		LOG_line = { sys = LOGISTICS  msg = "[MUNI] [scope:logistics_country.GetTag] OK worst_land=[ROOT.MakeScope.GetVariable('LOGISTICS_tmp_log').GetValue|2]" }
+		LOG_line = { sys = LOGISTICS  msg = " OK worst_land=" }
 	}
 	root = { remove_variable = LOGISTICS_tmp_log }
 	LOG_exit = { sys = LOGISTICS  fn = "LOGISTICS_apply_munitions_shortage_penalty"  result = OK }
@@ -193,10 +206,10 @@ LOGISTICS_apply_coal_shortage_penalty = {
 		if = {
 			limit = { var:LOGISTICS_tmp_worst_naval >= 0.15 }
 			add_country_modifier = { name = country_coal_shortage  duration = 100 }
-			LOG_line = { sys = LOGISTICS  msg = "[COAL] [scope:logistics_country.GetTag] SHORTAGE worst_naval=[ROOT.MakeScope.GetVariable('LOGISTICS_tmp_log').GetValue|2]" }
+			LOG_line = { sys = LOGISTICS  msg = " SHORTAGE worst_naval=" }
 		}
 		else = {
-			LOG_line = { sys = LOGISTICS  msg = "[COAL] [scope:logistics_country.GetTag] OK worst_naval=[ROOT.MakeScope.GetVariable('LOGISTICS_tmp_log').GetValue|2]" }
+			LOG_line = { sys = LOGISTICS  msg = " OK worst_naval=" }
 		}
 		root = { remove_variable = LOGISTICS_tmp_log }
 	}
@@ -206,7 +219,7 @@ LOGISTICS_apply_coal_shortage_penalty = {
 			limit = { has_country_modifier = country_coal_shortage }
 			remove_country_modifier = country_coal_shortage
 		}
-		LOG_line = { sys = LOGISTICS  msg = "[COAL] [scope:logistics_country.GetTag] SKIP no steam hulls" }
+		LOG_line = { sys = LOGISTICS  msg = " SKIP no steam hulls" }
 	}
 	LOG_exit = { sys = LOGISTICS  fn = "LOGISTICS_apply_coal_shortage_penalty"  result = OK }
 }
