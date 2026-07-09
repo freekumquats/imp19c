@@ -2777,3 +2777,35 @@ unborn set_as_ruler/coruler/heir anywhere in setup/characters/** — the #240 bo
 world-wide. Phase-2 total across regions #232–#237: **49 unborn-ruler wrappers removed** (44 + the 5
 review-caught stragglers); all six `research/1763_DELTA_*` territorial redistributions deferred under the
 #230 oracle mass-spawn gate. Nothing promoted off the branch; in-game boot test owed.
+
+## [#278] World economy: placeholder-cloth trade-good realism pass (1763_bookmark, Phase 3)
+
+**Problem.** `map_data/province_setup.csv` had **9601/10067 goods-bearing provinces = placeholder `cloth`** —
+the whole world's raw output was one finished textile good. Economically nonsensical + geographically flat.
+
+**Fix.** Region-keyed trade-good realism pass. Built province→area→region join through `areas.txt` (area→
+province-IDs) + `regions.txt` (region→areas) — NOT the CSV `AREA` col, which holds `state_NNN` placeholder
+junk. Authored a 239-region `REGION_GOODS` table from `research/1763_WORLD_*` + economic history, every good
+validated against `common/trade_goods/` (0 undefined). Applied ONLY to `cloth` provinces via deterministic
+index-rotation within region (no RNG → idempotent, reproducible). Hand-assigned goods preserved byte-for-byte.
+
+**JOIN-FIX (adversarial review caught it).** First apply's area/region parser regex `[A-Za-z_][A-Za-z0-9_]*`
+silently skipped 39 hyphen/apostrophe/non-ASCII area+region headers (Khanty-Mansi, Sankt-Petersburg, Xi'an,
+Småland, Emilia-Romagna…), bucketing their provinces into the previous area's region → wrong goods. Review
+CONFIRMED Khanty-Mansi (Siberia)→mediterranean_fruit and Sankt-Petersburg→cotton (climatically impossible).
+Reverted CSV, rewrote parser to tokenise the whole `= {` header (`^(\S.*?)\s*=\s*\{$` at col 0), added 9
+newly-reachable hyphen regions to REGION_GOODS, re-applied. All 874 areas now map; Khanty-Mansi→fur/wood,
+Sankt-Petersburg→grain/hemp/fish/wood. CRLF in the quoted PROV1 example field preserved byte-identical
+(13283 CRLF both sides, 0 lone LF). Lesson: Paradox map names contain -, ', diacritics — never parse them
+with a [A-Za-z_]+ word class.
+
+**Verification.** Column-diff proof (post-fix): **9390 lines changed, ALL in col 4 (trade good) ONLY, zero
+other-column changes, identical line count (13284)**. ~9390 cloth→realistic goods; only spare_state (dummy)
+stays all-cloth, ~211 legit cloth remain (Southern England, Saxony, Venetia…). Spot-checks: Jiangxi→porcelain
+(Jingdezhen), Sweden→iron/copper (Falun), Fujian→tea/sugar, Arabia→incense/coffee/camel, Maluku→spices,
+Coastal W.Africa→palm/gold/elephants, Indo-Gangetic→grain/cotton/opium/silk. Boot-validity review: 0 findings
+(every good defined in common/trade_goods/, CSV structurally intact).
+
+**Scope.** Covers the trade-good dimension (the dominant defect). Per-province buildings/industry/production
+seeding worldwide remains a follow-on; INDUSTRIALISATION col untouched (baseline 0/39/40 retained). Mapping
+script /tmp/region_goods_1763.py. Adversarial review run before commit (see below). Not promoted; boot test owed.

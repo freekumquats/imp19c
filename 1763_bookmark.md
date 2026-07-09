@@ -573,3 +573,62 @@ These are date-invariant 1759↔1763 (grain, furs, Falun copper, Baltic naval st
   #207 Ottoman/MENA economy synthesis.
 - PENDING: #202 update BOOKMARK_PROCESS.md; #204 finish rename tidy-ups; #205 Qing delta doc (done above);
   then map-surgery edit phase → adversarial review → commit as freekumquats.
+
+---
+
+## [#278] World economy pass — placeholder-cloth trade-good realism (Phase 3)
+
+**Problem.** `map_data/province_setup.csv` shipped with **9601 of 10067 goods-bearing provinces set to the
+placeholder `cloth`** — i.e. the entire world's raw output defaulted to a single manufactured textile good,
+which is both economically nonsensical (raw provinces producing finished cloth) and geographically flat
+(no regional character). Only ~466 provinces carried a hand-assigned good.
+
+**Why a region-keyed pass, not per-country hand-editing.** Populating 9.6k provinces by hand or by tag is
+infeasible and error-prone, and country-by-country editing can't see the map's own geographic taxonomy. The
+map already ships a clean **province → area → region** hierarchy (`areas.txt` maps area→province-IDs;
+`regions.txt` maps region→areas; 234 regions carry cloth placeholders). Regions are geographically coherent
+units (Fujian, Siberia, Sweden, Arabia, Coastal_West_Africa…), so a **region → weighted trade-good rotation**
+is the natural, auditable unit of assignment. The CSV's own `AREA` column (col 16) is unusable — it holds
+`state_NNN`/`spare_state` placeholder tokens, NOT real area names — so the join is built through the
+province-ID membership lists in `areas.txt` instead.
+
+**Method (deterministic, non-destructive).**
+- Built a `REGION_GOODS` table (239 regions) grounded in 1763 economic geography from the `research/1763_WORLD_*`
+  docs and standard economic history: e.g. Siberia→fur/wood, Sweden→iron/copper/wood (Falun),
+  Jiangxi→porcelain/tea/grain (Jingdezhen), Fujian→tea/sugar, Arabia→incense/coffee/camel,
+  Coastal_West_Africa→palm/gold/elephants, Cuba→sugar/tobacco/coffee, Maluku→spices,
+  Southern_England→wool/cloth/coal/tin, Bengal→cotton/grain/silk.
+- **Every good used is validated against `common/trade_goods/`** (57 defined goods; zero undefined references).
+- Applied ONLY to provinces whose good was the placeholder `cloth`. **Hand-assigned goods are preserved
+  byte-for-byte** (Argentina livestock, Peru silver, Colombia coffee, New England whales, etc. all untouched).
+- Within each region, goods are assigned by **deterministic rotation on the province's running index in the
+  region** (`goods[idx % len(goods)]`) — no RNG (RNG is unavailable in this toolchain and would break
+  reproducibility), giving realistic intra-region variety while keeping the pass idempotent and reviewable.
+- `cloth` legitimately remains in a handful of rotations where it is the correct raw/finished good (e.g.
+  Southern England, Saxony, Venetia, Low Countries) → ~224 cloth provinces remain (down from 9601).
+
+**Result.** **9390 CSV lines changed, ALL in column 4 (trade good) ONLY** — verified by a column-diff that
+confirmed zero changes to any other column and identical line count (13284→13284). ~9390 placeholder-cloth
+provinces converted to realistic goods; distribution now led by grain (1397), livestock (1078), wood (827),
+fur (652), fish (533), wool (449), cotton (428), silk (330), hardwood (304), iron (284)… Only `spare_state`
+(the dummy region) remains all-cloth; ~211 legitimate cloth provinces remain (Southern England, Saxony…).
+
+**JOIN-FIX (caught by the adversarial review).** The first apply used an area/region parser whose name regex
+`[A-Za-z_][A-Za-z0-9_]*` silently skipped **39 hyphen/apostrophe/non-ASCII area headers**
+(`Khanty-Mansi`, `Sankt-Petersburg`, `Xi'an`, `Småland`, `Emilia-Romagna`, `Nord-Pas-de-Calais`, …) and the
+matching region headers — so those provinces were bucketed into the *previous* area's region and got wrong
+goods. The review flagged the two visible symptoms (**Khanty-Mansi**, subarctic Ob taiga, got
+mediterranean_fruit; **Sankt-Petersburg** got cotton — both climatically impossible). Root-caused to the
+parser, reverted the CSV, rewrote the parser to capture the FULL area-name token (`^(\S.*?)\s*=\s*\{$` at
+col 0, honouring indentation to tell headers from province-ID lines), added 9 newly-reachable hyphen regions
+to `REGION_GOODS` (Sankt-Petersburg, Mid-Atlantic(+_South), Leon-Castille, Catalonia-Aragon,
+Indo-Gangetic_Plain, Auvergne-Rhone-Alpes, Baden-Wurttemberg, Nouvelle-Caledonie), and re-applied. Post-fix:
+all 874 areas map to a region, Khanty-Mansi→fur/wood, Sankt-Petersburg→grain/hemp/fish/wood. **Lesson:**
+Paradox area/region names legitimately contain `-`, `'`, and Latin-1 diacritics — any map-taxonomy parser
+must tokenise on the whole `= {` header, never a `[A-Za-z_]+` word class.
+
+**Scope note / deferred.** This pass covers the **trade-good** dimension of #278, which is the dominant
+economic-realism defect. Per-province **buildings/industry/production** seeding for all countries is a much
+larger content effort (parallel to the Qing #180–#188 work) and remains a follow-on; the `INDUSTRIALISATION`
+column was left untouched (it already carries sensible baseline values 0/39/40). The transform script is
+`/tmp/region_goods_1763.py` (mapping table) — recorded here so the pass is reproducible.
