@@ -2608,3 +2608,53 @@ into the source state. The verdict is decided by a SCRIPT trigger on the accumul
 (expect 10×count), sum still 0 ⇒ fall back to PUSH. All sentinels are removed at the end so nothing is
 left "set but never used". Extract verdict with `grep "IMP19C SPHERE" logs/debug.log` under -debug_mode.
 File retains no-BOM (correct for se_*); its on_action hook keeps its UTF-8 BOM. Braces 40/40.
+
+## [#219/#223/#224/#225/#226/#227/#228] Grand Council + diplomacy fix cluster (develop)
+
+**#219 empty Grand Council at boot.** Root cause = parse poison: `birth_date=1782.09.56`
+(September has no day 56) inside the top-level `"CHI"={}` setup block failed the WHOLE
+block's parse, silently dropping every CHI character (emperor + bench courtiers) → empty
+council. Fixed to `1782.09.16` (Daoguang Emperor b. 1782-09-16). setup/characters/00_Qing.txt:610.
+
+**#223 navy / #224 army — shared root cause = on_game_initialized is too early.** Army
+`SE_qing_raise_garrison[_cmd]` raises hit the capital fallback (per-province `state.governorship`
+not yet resolved at that tick → every garrison mustered in Beijing). Navy: 3 sequential
+`create_unit navy=yes` in one scope on one tick collide → only Fujian survived. Fix = defer +
+stagger both off on_game_initialized, mirroring the proven ILI Chu Army + Self-Strengthening-fleet
+patterns. Monolithic SE_qing_navy split into SE_qing_navy_disband/_guangdong/_fujian/_zhejiang
+(imp19c_effects_legion_setup.txt). New hidden is_triggered_only events qing_force_setup.1/.10/.11/.12/.13
+(events/imp19c_mod_events/qing_force_setup_events.txt), ROOT=c:CHI, LOG_line on each. Scheduled once
+from oa_economy_setup.txt (guard `NOT has_global_variable qing_force_setup_scheduled`) at days
+2/3/4/5/6 — disband(.10) precedes the three raises so it can't wipe them. Idempotency: SE_qing_armies
+self-guards on qing_armies_setup_done, disband on qing_navy_setup_done; raises intentionally ungated.
+
+**#225 Edicts icons → text buttons.** 26 icon_button_square → text_button_square_highlighted
+showing the action name (same idiom as "Open Eligible Courtiers"), inner statecraft flowcontainers
+set direction=vertical. 26 `*_BTN` loc keys added (qing_governance_l_english.yml).
+
+**#226 Dynastic Health icons → text labels.** 8 icon_and_text → hoverable textbox with
+`text = "QING_HEALTH_*_FMT"` (embeds the live value) + `tooltip = "QING_HEALTH_*_TT"` (preserves the
+hover popup). "Corruption" renamed "Court Corruption". government_view.gui + loc.
+
+**#227 Subject Actions bar spacing/width.** Added a visible-gated spacer widget (size {0 10})
+between the Trade and Subject bars and `margin_right = 22` on the Subject inner vbox to match the
+Trade bar's right edge. diplomatic_view.gui ~1483. Cosmetic only; main-view target bar still uses
+DiplomaticView.GetTargetCountry (distinct from the #228 Subjects-tab pane).
+
+**#228 Subjects-tab right panel showed the overlord, not the selected subject.** The pane was
+hardwired to DiplomaticView.GetTargetCountry, which on the player's own Subjects tab = Qing itself.
+Fix: (a) new scripted GUI qing_subjects_tab_select_button (SUB_QING_select_subject.txt) stores the
+clicked subject in player var SUBJ_tab_selected (`set_variable value = scope:target`); (b) a background
+list_button overlay on each list row calls it (row-click = select; flag-click still opens diplomacy,
+unchanged); (c) the whole right-pane flowcontainer now reads a datacontext of
+`Player.MakeScope.GetVariable('SUBJ_tab_selected').GetCountry` (65 GetTargetCountry refs → bare Country);
+(d) show_player_subjects_button seeds a default (highest-loyalty subject via ordered_subject) so the
+var is set on tab open, remove_player_subjects_variables_button clears it. Post-review hardening: the
+pane and the row `down` state gate on `.IsSet` so Country.* never evaluates against an unset variable
+(zero-subject Qing / clear→reseed transient).
+
+**Review.** code-review subagent: no blocking defects; brace balance clean in all edited/new files;
+#223/#224 event ordering + guards correct; #228 datacontext inheritance verified. Two robustness items
+raised and BOTH resolved: unset SUBJ_tab_selected .GetCountry chain (added .IsSet gates);
+`order_by = has_subject_loyalty` confirmed a valid value export (vanilla mission_seleukid uses it).
+Stale comment in se_QING_BUILDINGS.txt:21 (referenced the removed inline SE_qing_navy) corrected.
