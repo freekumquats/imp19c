@@ -729,3 +729,45 @@ gain", the Maratha holdings are LEFT AS-IS. Documented, not built.
 
 **#282 territorial redistributions status: MENA (Crimea), Africa (Cape+Sokoto), Asia (Vietnam) DONE.
 Remaining: C.Europe/HRE #237 (ecclesiastical states — the largest plan), + India ruler-accuracy char pass.**
+
+### #286 (#282f) — C.Europe/HRE ecclesiastical + city fragmentation — DONE
+
+The largest deferred piece. In 1763 the Holy Roman Empire comprised ~1,800 territories; the 1815 baseline
+consolidated them (post-Reichsdeputationshauptschluss 1803 + mediatisation). Per the user's ruling ("not
+more than 40 or so tags, messy borders OK, HRE is a messy exception"), restored **23** of the most
+significant Reichsstände that were absent from the 1815 map, as static bookmark tags:
+
+- **3 Ecclesiastical Electors:** Mainz (MNZ, ex-HSD prov 1223), Cologne (KLN, ex-PRU 9436), Trier (TRR, ex-PRU 1824).
+- **11 prince-bishoprics / abbeys:** Salzburg (SZB, ex-AUS 2136), Würzburg (WBG, ex-BAV 514), Bamberg
+  (BMB, ex-SXM 8487), Münster (MUE, ex-PRU 1481), Paderborn (PDB, ex-PRU 4673), Osnabrück (OSN, ex-HAN 3622),
+  Fulda (FUL, ex-SWM 9221), Passau (PAS, ex-BAV 1442), Konstanz (CNZ, ex-BAD 829), Eichstätt (EIS, ex-BAV 1332),
+  Freising (FRS, ex-BAV 3285).
+- **8 free imperial cities:** Augsburg (AUG, ex-BAV 3297), Nuremberg (NUR, ex-BAV 1872), Ulm (ULM, ex-WUR 3242),
+  Regensburg (REG, ex-BAV 2041), Aachen (AAC, ex-PRU 9682), Rothenburg (ROT, ex-BAV 1884), Memmingen
+  (MEM, ex-BAV 2096), Kempten (KMP, ex-BAV 1550).
+- **1 secular Electorate:** the Electoral Palatinate / Kurpfalz (PLZ, Wittelsbach; ex-BAV 2518 Speyer +
+  3125 Saarbrücken + 3665 Kaiserslautern).
+
+**Government choices:** ecclesiastical states = `elective_theocracy` (type=republic, no religion gate; catholic,
+matching the catholic-dominant pops verified in every see province); free cities = `constitutional_republic`
+(matching the existing HRE free cities FRK/HAM/BRE/LBK); Palatinate = `absolute_principality`. All keys verified
+defined. No ruler characters authored (engine generates period/culture-appropriate prince-bishops/electors,
+per the DNA-less ruling).
+
+**Donor capital repoints:** two donors lost their capital province to a new see and were repointed to a
+province they still own — SXM (Saxe-Meiningen) Bamberg 8487 → Meiningen 5353 (its actual seat); SWM
+(Saxe-Weimar) Fulda 9221 → Ilmenau 4495 (Thuringian, adjacent to Weimar). Both verified capital-owned.
+
+**Province geography:** whole-province approximation (no sub-province border drawing), as the user permitted
+for the messy HRE. 25 provinces moved total, each removed from exactly one donor `own_control_core` and placed
+in exactly one new tag block.
+
+**Validation:** brace balance 0 (10967/10967); all 25 HRE provinces single-owned; whole-map double-ownership
+count unchanged (33 pre-existing, all in China/Sokoto tributary chains — NONE introduced by this edit,
+diffed against HEAD); both repointed donors keep a valid owned capital; all 23 country files written
+(setup/countries/c_europe/); 23 countries.txt registrations inserted after CRO (BOM+CRLF preserved); 00_default
+byte convention (no-BOM/LF) preserved. Boot test owed to the user.
+
+**#282 C.Europe/HRE (#237) COMPLETE.** #282 territorial redistributions now: MENA(Crimea), Africa(Cape+Sokoto),
+Asia(Vietnam), C.Europe/HRE(23 tags) all DONE. Remaining under the 1763 umbrella: #287 India ruler-accuracy
+char swaps (next), then #283/#284/#285 (event chains + pop distribution, research-first).
