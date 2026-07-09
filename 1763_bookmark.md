@@ -848,3 +848,43 @@ seed count; all picture keys defined in common/event_pictures; all trait keys de
 in-repo (change_government targets defined governments; the fragile set_diplomatic_stance was REMOVED after
 finding no proven effect form — replaced with add_aggressive_expansion); loc keys conform to ' key:0 "text"';
 namespaces unique. Adversarial review pending. Boot test owed to the user.
+
+### #284 (merged #284+#285) — 1763 world population distribution — CHINA sub-phase DONE
+
+Research-first (research/1763_POPS_China.md: Cao Shuji/Ho Ping-ti/Perdue). User rulings: (1) do the world as
+ONE coherent picture — China total and rest-of-world total must make sense together; (2) rest-of-world is the
+ANCHOR and mostly stays put with broad abstractions; CHINA gets the substantive granular corrections from
+deeper academic sources; (3) check FOUR axes (amount / class / culture / religion), not just count.
+
+**Calibration.** The shipped baseline is 1815-calibrated (~222 amount-units per million): China's 80,992 units
+= ~365M = 36% of the world total (222,351 units) — correct for 1815, too high for a 1763 start. In 1763 China
+proper was ~210M ≈ 27% of world ~770M (India ~19%). With ROW fixed as the anchor, rescaled China proper to 27%.
+
+**AMOUNT (China, granular per-province-file).** Scaled each of the 19 core-China files to its research
+provincial-table share (Jiangsu ~30M … Guizhou ~4.5M), overall China → 27% of world. Uniform within-file scale
+preserves each province's class/culture/religion structure. **Sichuan special-cased:** the 25 Han-basin
+provinces (shangjiang/beihua etc.) cut ×0.30 — the 湖廣填四川 "Huguang fills Sichuan" migration was only ~1/3
+complete in 1763 (~6.5M vs the ~22M it reached by 1815) — while the 12 Kham/Tibetan-frontier provinces
+(khams/gyarlong/amdo/miao) were left untouched (they weren't part of the Han in-migration). Result: China
+80,992 → 52,803 units = 27.2% of world (target 27%). No pop zeroed (min amount=1). Zhili 5415→3289, Anhui
+7730→3578, Sichuan 4973→1813 (frontier retained), Qinghai 94→207 (was under-weighted).
+
+**CLASS.** China class split is ~91% lower_strata / 3.5% middle / 1.7% upper / 1.2% proletariat + small
+tribesmen/slaves/indentured — historically appropriate for an agrarian empire; left intact (uniform scaling
+preserves ratios).
+
+**CULTURE / RELIGION.** Already regionally correct in the baseline (verified): beihua-dominant Han core with
+Confucian–Mahayana–Daoist/pure_land syncretism; Hui/Sunni pockets in the NW (Gansu); Miao/Yi + animist SW
+(Guizhou/Yunnan/Guangxi); Manchu + Han + shamanism/Tibetan-Buddhism in Manchuria; Uyghur/Sunni in Tarim;
+Tibetan/Tibetan-Buddhism in Tibet; Mongol/Tibetan-Buddhism in Mongolia. No culture/religion churn needed.
+
+**Dzungaria/Ili** (ILI/KML tags in Turkestan file): already sparse in the baseline (~631 units across 123
+provinces), consistent with the 1755–58 Zunghar depopulation — no anachronistic dense settled pop to remove.
+
+**Rest-of-world sub-phase (ex-#285).** ROW is the anchor China was fitted to, so the big picture is now
+coherent (China 27% / India ~19% / Japan/Korea/Java/Europe) with no seam. Ran a world-wide
+class/culture/religion sanity scan: the only flags were `evangelical` (the mod's American-Protestant key —
+period-appropriate for 1763 colonial America, First Great Awakening) and `mahdavia` (a real 15th-c. Indian
+Sufi movement) — both established mod vocabulary and broadly plausible, so ROW left as-is per the "broad
+abstraction, need not match sources exactly" ruling. Byte convention (BOM/LF) preserved on all 19 edited
+files; brace balance 0; no amount=0. Boot test owed to the user.
