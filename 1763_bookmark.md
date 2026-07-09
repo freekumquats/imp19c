@@ -802,3 +802,49 @@ Boot test owed to the user.
 **All #282 territorial + ruler work COMPLETE:** MENA(Crimea), Africa(Cape+Sokoto), Asia(Vietnam + India rulers),
 C.Europe/HRE(23 tags). Remaining under the 1763 umbrella: #283 (AI event chains) + #284/#285 (pop distribution),
 all research-first.
+
+### #283 — AI 1763->1815 historical event chains (6 major powers) — BUILD
+
+Research-first (workflow wjj3q8efa: FRA/GBR/PRU/AUS/RUS/SPA trajectories → research/1815PATH_raw.json;
+infra recon confirmed the seed+event+loc pattern). Built 6 AI-autonomous dated arcs on the proven #93
+usa_section template: each arc = events/imp19c_mod_events/<ns>_events.txt (namespace, country_events,
+is_triggered_only, per-beat trigger { tag=X, NOT has_variable=flag }, immediate { set_variable + nudges +
+LOG_line }, ai_chance options) + common/on_action/<ns>_on_actions.txt (on_game_initialized seeds with
+day-offsets from START_DATE 1763.2.16) + localization/english/<ns>_l_english.yml. All BOM/LF.
+
+- **fra_revolution / FRA** (6 beats) — the richest: the load-bearing GOVERNMENT transitions the engine
+  cannot do unprompted: 1774 Louis XVI accession → 1789 Bastille → 1792 change_government=revolutionary_republic
+  → 1799 18 Brumaire (create_character Napoleon, personalist_dictatorship, set_as_ruler) → 1804
+  change_government=imperial_monarchy (change_country_name "French Empire") → 1814 change_government=
+  absolute_kingdom + restore Louis XVIII (char:411). Napoleon spawn uses the documented ENGINE REALITY
+  (no name arg in create_character, no set_first_name — identity via add_nickname NICKNAME_FRA_NAPOLEON +
+  event text), per se_QING_ROSTER/se_USA_ROSTER.
+- **gbr_empire / GBR** (6): Stamp Act 1765, American War 1775, Loss of America 1783, Act of Union 1801,
+  Trafalgar 1805, Waterloo 1815.
+- **pru_ascendancy / PRU** (6): 1st Partition 1772, Fürstenbund 1785, Fall of Poland 1795, Jena 1806,
+  Prussian Reforms 1810, Leipzig 1813.
+- **aus_habsburg / AUS** (5): Partition 1772, Joseph II reforms 1780, Austrian Empire 1804, Austerlitz 1805,
+  Metternich/Coalition 1813. (AUS is already imperial_monarchy at setup — no govt change needed.)
+- **rus_expansion / RUS** (6): Poniatowski 1764, Crimea annexation 1783, Fall of Poland 1795, death of
+  Catherine 1796, murder of Paul 1801, Patriotic War 1812.
+- **spa_bourbon / SPA** (6): Jesuit expulsion 1767, war with Britain 1779, Charles IV 1788, French alliance
+  1796, Dos de Mayo 1808, Ferdinand VII restoration 1814.
+
+**Scope decisions (documented, not gaps):**
+- **No scripted great-power wars or hard territory cessions.** Fixed-date GP-vs-GP declare_war and cessions
+  across a fully AI-driven 50-year timeline are fragile (border/subject state unpredictable) and are left to
+  engine war resolution, NUDGED by the aggressive_expansion/prestige/stability shifts each beat applies. Only
+  the engine-impossible transformations (govt changes, ruler installs) are hard-scripted (FRA). This keeps the
+  whole set boot-safe. The three Partitions of Poland appear as PRU/AUS/RUS prestige+expansion beats rather
+  than coordinated cross-tag province transfers.
+- **The "+US" dimension:** USA already exists as a province-owning tag at the 1763 bookmark start (pre-existing
+  map state) and already has the #93 usa_section Civil-War arc. A full American-Revolution release mechanic
+  would conflict with that working setup, so the US independence beat is represented from the British side
+  (gbr_empire .2 American War, .3 Loss of America), not as a new USA arc — per the "reasonably accurate, don't
+  over-engineer / don't disrupt a working setup" discipline.
+
+**Validation:** all 18 files BOM/LF; brace balance 0 in all 6 event + 6 on_action files; per-arc event count ==
+seed count; all picture keys defined in common/event_pictures; all trait keys defined; all effect verbs proven
+in-repo (change_government targets defined governments; the fragile set_diplomatic_stance was REMOVED after
+finding no proven effect form — replaced with add_aggressive_expansion); loc keys conform to ' key:0 "text"';
+namespaces unique. Adversarial review pending. Boot test owed to the user.

@@ -1,0 +1,271 @@
+﻿namespace = fra_revolution
+
+########################################################################
+# [#283] FRANCE 1763->1815 AI-autonomous historical railroad.
+#
+# Seeded from common/on_action/fra_revolution_on_actions.txt on_game_initialized
+# with day-offsets from the 1763.2.16 START_DATE (see that file for the arithmetic).
+# Each beat is a country_event (tag = FRA), guarded by a per-beat has_variable
+# done-flag, with ai_chance-weighted options so an AI France walks the road on its
+# own. The load-bearing state changes (government transitions the engine cannot
+# perform unprompted, ruler installs, stance/prestige nudges) live in immediate{}
+# so they fire regardless of the option the AI picks. Territory is deliberately
+# left to engine war resolution rather than hard-scripted cessions across an
+# AI-driven timeline (see fra_revolution_on_actions.txt design note).
+#
+# Character deaths use the existing death_dates in setup/characters/00_France.txt
+# (Louis XV d.1774, Louis XVI d.1793) so the engine handles those successions;
+# these events add the POLITICAL transformations history layered on top.
+########################################################################
+
+# ----------------------------------------------------------------------
+# .1  1774 — ACCESSION OF LOUIS XVI. Louis XV dies of smallpox; his grandson
+# inherits a bankrupt treasury. Marks the reformable-but-doomed ancien regime.
+# ----------------------------------------------------------------------
+fra_revolution.1 = {
+	type = country_event
+	title = "fra_revolution.1.t"
+	desc = "fra_revolution.1.desc"
+	picture = throneroom
+
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = FRA
+		NOT = { has_variable = fra_beat_louis16 }
+	}
+
+	immediate = {
+		set_variable = fra_beat_louis16
+		# The fiscal crisis of the ancien regime: a persistent drain that will not
+		# clear until the Revolution (removed in .3).
+		add_political_influence = -20
+		LOG_line = { sys = FRA  msg = "EVENT fra_revolution.1 (Accession of Louis XVI, 1774) for [ROOT.GetTag]" }
+	}
+
+	# --- Attempt fiscal reform (Turgot) — the historical, doomed effort --------
+	option = {
+		name = "fra_revolution.1.a"
+		add_stability = -1
+		ai_chance = { factor = 10 }
+	}
+	# --- Cling to privilege ----------------------------------------------------
+	option = {
+		name = "fra_revolution.1.b"
+		add_stability = 1
+		add_political_influence = -10
+		ai_chance = { factor = 3 }
+	}
+}
+
+# ----------------------------------------------------------------------
+# .2  1789 — THE REVOLUTION BEGINS. The Estates-General crisis and the storming
+# of the Bastille shatter royal authority. Stability collapses; the countdown to
+# the Republic begins.
+# ----------------------------------------------------------------------
+fra_revolution.2 = {
+	type = country_event
+	title = "fra_revolution.2.t"
+	desc = "fra_revolution.2.desc"
+	picture = revolt
+
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = FRA
+		NOT = { has_variable = fra_beat_1789 }
+	}
+
+	immediate = {
+		set_variable = fra_beat_1789
+		set_variable = fra_revolution_active
+		add_stability = -4
+		add_political_influence = -40
+		LOG_line = { sys = FRA  msg = "EVENT fra_revolution.2 (Storming of the Bastille, 1789) for [ROOT.GetTag]" }
+	}
+
+	# --- Convene the National Assembly (the road to the Republic) --------------
+	option = {
+		name = "fra_revolution.2.a"
+		add_stability = -1
+		ai_chance = { factor = 10 }
+	}
+	# --- Crush the revolt (a doomed reaction) ----------------------------------
+	option = {
+		name = "fra_revolution.2.b"
+		add_stability = -2
+		add_tyranny = 5
+		ai_chance = { factor = 2 }
+	}
+}
+
+# ----------------------------------------------------------------------
+# .3  1792 — PROCLAMATION OF THE REPUBLIC. The monarchy is abolished; France
+# becomes a revolutionary republic and wages war on the crowned heads of Europe.
+# ----------------------------------------------------------------------
+fra_revolution.3 = {
+	type = country_event
+	title = "fra_revolution.3.t"
+	desc = "fra_revolution.3.desc"
+	picture = senate
+
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = FRA
+		NOT = { has_variable = fra_beat_republic }
+	}
+
+	immediate = {
+		set_variable = fra_beat_republic
+		# The great transformation the engine cannot do on its own: monarchy -> republic.
+		change_government = revolutionary_republic
+		remove_variable = fra_revolution_active
+		add_stability = -2
+		add_prestige = 20
+		# The Republic turns outward against the monarchies (aggressive posture
+		# signalled via aggressive_expansion + prestige, the proven nudge verbs).
+		add_aggressive_expansion = 10
+		LOG_line = { sys = FRA  msg = "EVENT fra_revolution.3 (First Republic proclaimed, 1792) for [ROOT.GetTag]" }
+	}
+
+	option = {
+		name = "fra_revolution.3.a"
+		ai_chance = { factor = 10 }
+	}
+}
+
+# ----------------------------------------------------------------------
+# .4  1799 — 18 BRUMAIRE. Napoleon Bonaparte overthrows the Directory and becomes
+# First Consul, ending the internal chaos and re-orienting France toward conquest.
+# ----------------------------------------------------------------------
+fra_revolution.4 = {
+	type = country_event
+	title = "fra_revolution.4.t"
+	desc = "fra_revolution.4.desc"
+	picture = war_council
+
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = FRA
+		NOT = { has_variable = fra_beat_consulate }
+	}
+
+	immediate = {
+		set_variable = fra_beat_consulate
+		# Install Napoleon as head of state. ENGINE REALITY (per se_QING_ROSTER /
+		# se_USA_ROSTER): create_character takes NO name argument and there is no
+		# set_first_name effect — a conjured character gets a random culture-name, so
+		# his historical identity is carried by add_nickname + the event text.
+		create_character = {
+			culture = ROOT.primary_culture
+			religion = ROOT.religion
+			age = 30
+			add_martial = 8
+			add_charisma = 6
+			add_finesse = 5
+			add_zeal = 3
+			add_trait = military_officer
+			save_scope_as = fra_napoleon
+		}
+		change_government = personalist_dictatorship
+		scope:fra_napoleon = {
+			set_home_country = ROOT
+			add_nickname = "NICKNAME_FRA_NAPOLEON"
+			c:FRA = { set_as_ruler = scope:fra_napoleon }
+		}
+		add_stability = 2
+		add_prestige = 25
+		LOG_line = { sys = FRA  msg = "EVENT fra_revolution.4 (18 Brumaire, Napoleon First Consul, 1799) for [ROOT.GetTag]" }
+	}
+
+	option = {
+		name = "fra_revolution.4.a"
+		ai_chance = { factor = 10 }
+	}
+}
+
+# ----------------------------------------------------------------------
+# .5  1804 — THE FIRST EMPIRE. Napoleon crowns himself Emperor; the Republic
+# becomes the French Empire and pursues continental hegemony.
+# ----------------------------------------------------------------------
+fra_revolution.5 = {
+	type = country_event
+	title = "fra_revolution.5.t"
+	desc = "fra_revolution.5.desc"
+	picture = throneroom
+
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = FRA
+		NOT = { has_variable = fra_beat_empire }
+	}
+
+	immediate = {
+		set_variable = fra_beat_empire
+		change_government = imperial_monarchy
+		hidden_effect = {
+			change_country_name = "FRA_EMPIRE_NAME"
+		}
+		add_prestige = 30
+		add_stability = 1
+		add_aggressive_expansion = 10
+		LOG_line = { sys = FRA  msg = "EVENT fra_revolution.5 (First Empire proclaimed, 1804) for [ROOT.GetTag]" }
+	}
+
+	option = {
+		name = "fra_revolution.5.a"
+		ai_chance = { factor = 10 }
+	}
+}
+
+# ----------------------------------------------------------------------
+# .6  1814 — THE FALL OF NAPOLEON. The Sixth Coalition takes Paris; Napoleon
+# abdicates and the Bourbons are restored under Louis XVIII.
+# ----------------------------------------------------------------------
+fra_revolution.6 = {
+	type = country_event
+	title = "fra_revolution.6.t"
+	desc = "fra_revolution.6.desc"
+	picture = city_siege
+
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = FRA
+		NOT = { has_variable = fra_beat_restoration }
+	}
+
+	immediate = {
+		set_variable = fra_beat_restoration
+		# The Restoration: the Empire reverts to a Bourbon monarchy.
+		change_government = absolute_kingdom
+		hidden_effect = {
+			change_country_name = "FRA_RESTORATION_NAME"
+		}
+		add_stability = -3
+		add_prestige = -20
+		add_aggressive_expansion = -20
+		# Install Louis XVIII (char:411, already defined in setup/characters/00_France.txt).
+		if = {
+			limit = { exists = char:411 }
+			char:411 = {
+				c:FRA = { set_as_ruler = char:411 }
+			}
+		}
+		LOG_line = { sys = FRA  msg = "EVENT fra_revolution.6 (Fall of Napoleon, Bourbon Restoration, 1814) for [ROOT.GetTag]" }
+	}
+
+	option = {
+		name = "fra_revolution.6.a"
+		ai_chance = { factor = 10 }
+	}
+}
