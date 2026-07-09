@@ -2658,3 +2658,51 @@ pane and the row `down` state gate on `.IsSet` so Country.* never evaluates agai
 raised and BOTH resolved: unset SUBJ_tab_selected .GetCountry chain (added .IsSet gates);
 `order_by = has_subject_loyalty` confirmed a valid value export (vanilla mission_seleukid uses it).
 Stale comment in se_QING_BUILDINGS.txt:21 (referenced the removed inline SE_qing_navy) corrected.
+
+## [#220/#221/#222] Grand Council office pickers reworked to the vanilla office-card idiom (develop)
+
+**Ask.** Replace the single standalone "Eligible Courtiers" panel with per-office Appoint/Replace
+buttons; each office card should look like a vanilla Office card (portrait, loyalty, statesmanship
+bar, the office's modifier bonus, a replace control); the per-office candidate list should be
+sorted best-first for THAT office's governing skill.
+
+**#220 — per-office pickers replace the shared courtier panel.** The old `qing_eligible_courtiers_window`
+(11 appoint icons on every row) is gone; `gui/imp19c_windows.gui` now defines `qing_office_picker_window`,
+a single movable roster shared by all eleven great offices. Each office card in the Grand Council tab
+carries a small Appoint (vacant) / Replace (filled) button whose onclick chain (a) records the office
+in the `qing_gc_picker_office` GUI var, (b) fires the per-skill candidate refresh, then (c) opens the
+picker. Every picker row is one eligible courtier; the single appoint button shown per row is keyed on
+`qing_gc_picker_office` so a name-click appoints to the remembered office and closes the window. Engine
+rationale: scripted GUIs take no runtime params and Qing offices are country vars (not native engine
+offices with a built-in ChangeHolder chooser), so the two-step office-button → picker → name-click flow
+is unavoidable — vanilla's small single-button ChangeHolder pattern cannot be reused directly.
+
+**#221 — per-office sorting.** New `QING_council_refresh_candidates_by = { sortval = X }`
+(se_QING_COUNCIL.txt) is a faithful parameterization of the proven `QING_council_refresh_candidates`
+(only `order_by` differs). Four single-skill ranking svalues `council_sort_martial/finesse/charisma/zeal`
+(QING_governance_svalues.txt) plus the existing sum-of-four `combined_stats_council_svalue` for the
+summit Grand Chancellor. Five country-scope refresh verbs `qing_gov_refresh_candidates_*`
+(QING_governance_actions.txt); each office's button fires the one matching its governing skill
+(personnel/revenue/works/censor=finesse; war=martial; rites/justice=zeal;
+lifanyuan/grand_secretary/zongli=charisma; chancellor=sum-of-four). Bare skill tokens are not
+demonstrated as `order_by` exports in this codebase, hence the explicit-svalue wrappers.
+
+**#222 — cards mirror the vanilla Office card.** Chancellor card + the 10-office grid (3 rows 4+4+2)
+regenerated: officeholder portrait, loyalty (with vanilla loyalty tooltip), a statesmanship bar
+(`icon_and_text_progress_S`, Value = `FixedPointToFloat(Character.GetExperience)`, skill text via the
+office's `Character.Get<Skill>` getter + skill icon), the office's modifier bonus rendered as static
+loc-text `QING_GC_MOD_<OFFICE>` (no proven GUI datafunction fetches a named static country-modifier
+object — oracle rule respected), and an Appoint/Replace button + vacate control. Statesmanship is NEW
+to Grand Council offices. Removed the old "Open Eligible Courtiers" sub-header/button.
+
+**Review (this session).** Cross-file verification: all 11 office keys align 1:1 across
+government_view.gui ↔ imp19c_windows.gui; refresh-verb counts = 2 per office (Filled+Vacant branches)
+mapped to the correct skill; all 11 `QING_GOV_OFFICE_*_BTN_TT` + all new `QING_GC_*` / 11× `QING_GC_MOD_*`
+loc keys resolve; `enabled`/`onclick` inside `blockoverride "On_click"` confirmed the proven vanilla
+character-scope idiom (government_view.gui:1219); `QING_council_refresh_candidates_by` behaviorally
+equivalent to the working base refresh (order_by-only delta). All 5 edited files brace-balanced
+(government_view.gui 1730/1730, imp19c_windows.gui 371/371, QING_governance_actions.txt 211/211,
+se_QING_COUNCIL.txt 393/393, QING_governance_svalues.txt 5/5). No dangling refs to the removed
+window / `QING_GC_OPEN_CANDIDATES` / `QING_GC_HEADER_CANDIDATES`. No bugs found. se_LOG: backend
+`QING_council_refresh_candidates_by` has LOG_enter/line/exit (sys=QING). Files preserve original BOM
+state (government_view.gui + imp19c_windows.gui no-BOM; loc .yml BOM).
