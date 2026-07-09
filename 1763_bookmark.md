@@ -666,3 +666,15 @@ STILL TO BUILD under #282: S/E/SE Asia (divided Vietnam Trinh/Nguyen, Maratha ho
 Sikh misls), Africa (Dutch Cape reversion, 6 Hausa city-states, delete anachronistic Sokoto), C.Europe/HRE
 (ecclesiastical electorates + imperial cities, Prussia pre-Silesia, Saxony-Poland). Each = same static
 pattern; region by region with per-region review + commit.
+
+### #282b — Africa: Cape reverted to Dutch VOC — DONE
+The cleanest Africa territorial delta. In 1763 the Cape was the Dutch East India Company's colony
+(Governor Ryk Tulbagh); Britain seized it only 1806 (formalised 1814). Rather than a risky province
+transfer, reflavoured the existing CPC tag (the 1815 British Cape) to Dutch: primary_culture
+anglo_african->dutch, religion lutheran->evangelical (matching the NED metropole + the DAF Dutch colony),
+and flipped its colonial overlord dependency GBR->NED. CPC keeps its 17 provinces intact; no double-subject.
+Keys verified defined, braces balanced, review clean. Boot test owed to the user.
+
+STILL TODO under #282: Africa Hausa city-states (delete SOK caliphate + its 5 emirate deps + create 6
+Hausa tags from SOK's 13-province pool); Asia (divided Vietnam, Maratha houses, Mysore/Hyder Ali, Sikhs);
+C.Europe/HRE (ecclesiastical electorates, Prussia pre-Silesia, Saxony-Poland). Each = same static pattern.
