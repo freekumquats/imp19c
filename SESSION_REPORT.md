@@ -2561,3 +2561,21 @@ unchanged). Caucasus trailing comments intact. `viceroyalty` confirmed a valid g
   PoC blocker.
 - Removed two stray subagent scratch files (analyze_provinces.py, province_analysis_output.txt)
   before commit.
+
+## [#229] 1763 PLC border voivodeships: Volhyn/Brzesc/Bialystok un-Russified (1763_bookmark)
+
+**Bug.** After the #218 LIT core fix, three Polish-Lithuanian *border* areas were still owned by
+**RUS** — leftovers from the 1815 post-partition baseline: Volhyn (24 prov), Brzesc (3), Bialystok
+(5). At the Feb 1763 start the Commonwealth is fully sovereign and intact (first partition 1772), so
+none may be Russian (research/1763_rulers_poland_lithuania.md).
+
+**Fix (setup/main/00_default.txt).** All 32 provinces removed from RUS `own_control_core` and reassigned:
+- **Bialystok (5) → POL** — Podlachia, Crown land since the 1569 Union of Lublin; contiguous with the
+  already-POL Podlaskie area.
+- **Volhyn (24) + Brzesc (3) → LIT** — user decision (2026-07-08): assign Volhyn to LIT for contiguity
+  (regions.txt groups it in the Minsk region with LIT's core), rather than strict-1569 Crown; the two
+  Volhynian Brzesc provinces + Brześć Litewski follow to LIT. Documented as a deliberate simplification.
+
+Net: RUS −32, LIT +27, POL +5. Verified: 32/32 placed exactly once, zero double-ownership, RUS retains
+all its other IDs, braces 10916/10916 balanced, no BOM (correct for this file). Decision recorded in
+1763_bookmark.md Part B. Still OWED: in-game boot test on 1763_bookmark. Nothing promoted off the branch.

@@ -210,6 +210,27 @@ resolve, BOMs correct, braces balance) and surfaced ONE real finding, now resolv
   This validates the Spanish-America reversion approach that the full map surgery will apply to
   the remaining ~10 independent Latin-American tags per the B-section mapping tables.
 
+**Post-Phase-1 border completion (2026-07-08, task #229): PLC border voivodeships.**
+The #218 fix restored LIT's five *core* Grand Duchy areas but left three PLC *border* areas
+still Russian from the 1815 post-partition baseline — Volhyn (24 prov), Brzesc (3), Bialystok
+(5) all owned by **RUS**. At Feb 1763 the Commonwealth is fully sovereign and intact (first
+partition 1772), so none of these may be Russian. FIXED in `00_default.txt` — all 32 removed
+from the RUS `own_control_core` and reassigned (verified: 32/32 placed exactly once, no
+double-ownership, braces 10916/10916):
+- **Bialystok (5: Sokółka/Białystok/Drohiczyn/Bielsk) → POL (Crown).** Podlachia was transferred
+  from the Grand Duchy to the Polish Crown at the 1569 Union of Lublin; contiguous with the
+  already-POL Podlaskie area (which was correct in the baseline).
+- **Volhyn (24) + Brzesc (3: Brześć Litewski + Volhynian Vladimir-Volynsk/Luboml) → LIT.**
+  Strict 1569 history assigns Volhynia to the Crown, but **user decision (2026-07-08): assign
+  Volhyn to LIT for contiguity** — the mod's `regions.txt` groups the Volhyn area in the *Minsk
+  region* alongside LIT's core (Grodno/Minsk/Mogilev/Vitebsk), so LIT stays contiguous. The
+  three Brzesc provinces follow Volhyn to LIT (Brześć Litewski is Grand Duchy; the two Volhynian
+  provinces ride along for contiguity). Documented as a deliberate contiguity-over-strict-1569
+  simplification, not an oversight.
+
+Net border delta: RUS −32, LIT +27, POL +5. The resulting RUS → POL(protectorate) → LIT(royal_union)
+nested chain and rulers are unchanged from B2.
+
 Still OWED before Phase-1 is "done": in-game boot test on `1763_bookmark` (the definitive
 future-born-character + nested-subject proof). Nothing promoted off `1763_bookmark`.
 
