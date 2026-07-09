@@ -632,3 +632,37 @@ economic-realism defect. Per-province **buildings/industry/production** seeding 
 larger content effort (parallel to the Qing #180–#188 work) and remains a follow-on; the `INDUSTRIALISATION`
 column was left untouched (it already carries sensible baseline values 0/39/40). The transform script is
 `/tmp/region_goods_1763.py` (mapping table) — recorded here so the pass is reproducible.
+
+---
+
+## [#282] Deferred territorial redistributions — BUILD (reversing the deferral)
+
+Per the user's directive ("no no no go back and finish this") the deferred Phase-2 territorial
+redistributions are now being BUILT. KEY CORRECTION to B0/#230: mass `create_country` is NOT required —
+1763 is a bookmark/game-start conversion, so new nations are added via STATIC setup (countries.txt line +
+country file + own_control_core in 00_default.txt + optional dependency), exactly as Phase-1 proved for
+VEN/GEN/MIL/LIT. The #230 "oracle gate on mass create_country" was aimed at the wrong verb and does NOT
+block this work. Residual constraints resolved by user ruling: (1) approximate province geography to whole
+areas, don't defer; (2) omit character DNA (engine generates portraits) and author only sourced facts.
+
+Recon (2026-07-09) found what actually shipped vs. deferred: **Americas (#232) and Italy (#233) territorial
+map surgery WAS built** (24 tagged edits in 00_default.txt — Latin-American reversions, VEN Stato da Màr,
+GEN Liguria+Corsica, Milan). **MENA (#234), S/E/SE Asia (#235), Africa (#236), C.Europe/HRE (#237) had ZERO
+map surgery** — only unborn-ruler char sweeps. Those four are #282's real scope, built region by region.
+
+### #282a — MENA: Crimean Khanate (CRM) — DONE
+The one clean MENA territorial gap (MENA is otherwise 1763↔1815 continuity). Created CRM as a new
+bookmark-start tag: setup/countries/e_europe/crimea.txt (country file), countries.txt registration
+(`CRM = ...`, Caucasus section), a CRM country block in 00_default.txt (government despotic_monarchy,
+primary_culture crimean [east_turkic, a DEFINED key — NOT crimean_tatar, which is undefined], religion
+sunni, capital 3348) with own_control_core = the 22 Taurida provinces carved out of RUS, and a
+`dependency = { first = TUR second = CRM subject_type = feudatory }` (Giray-dynasty privileged vassal,
+annexed by Russia only in 1783). No character file — the engine generates a period/culture-appropriate
+khan (same as the Barbary regencies ALG/TUN), matching the DNA-less ruling; historical 1763 khan was
+Qırım Giray. Verified: 22 provinces removed from RUS, no double-ownership, braces balanced, all keys
+defined. Adversarial review clean. Boot test owed to the user.
+
+STILL TO BUILD under #282: S/E/SE Asia (divided Vietnam Trinh/Nguyen, Maratha houses, Mysore/Hyder Ali,
+Sikh misls), Africa (Dutch Cape reversion, 6 Hausa city-states, delete anachronistic Sokoto), C.Europe/HRE
+(ecclesiastical electorates + imperial cities, Prussia pre-Silesia, Saxony-Poland). Each = same static
+pattern; region by region with per-region review + commit.
