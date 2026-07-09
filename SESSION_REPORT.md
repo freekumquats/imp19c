@@ -2702,3 +2702,29 @@ portrait lines (`left_portrait`/`right_portrait`) — chars still exist, referen
 dependency (identical to the Italy pattern). No other MENA tag sets an explicit ruler (grep 0 hits).
 Adversarial-review workflow run before commit. Still OWED: in-game boot test (user's machine). Nothing
 promoted off the branch.
+
+## [#235/#240] S / E / SE Asia 1763 delta (1763_bookmark)
+
+**Scope.** Fourth Phase-2 region. `research/1763_DELTA_Asia.md` (872 lines) is a *massive* territorial
+redistribution — EIC province-stripping (200+ history edits), Maratha sub-house tags (GWA/INR/BRD/NAG),
+Bengal-Nawab tag, Vietnam Trịnh/Nguyễn split, Sikh misls, Siam capital move, insular-sultanate ruler
+swaps. **Nearly all of it is gated by the #230 oracle mass-spawn rule** (new tags need province
+assignments / `create_country` churn) → **deferred redistribution limitation, not built.** Applied the
+per-region discipline: only the clearly-correct + crash-avoiding delta.
+
+**Unborn-ruler sweep (#240 crash class) — the applied delta.** Global scan → the only Asian char files
+with `set_as_ruler` wrappers targeting a char born after 1763.2.16 are `00_AFG.txt`, `00_India.txt`,
+`00_Qing.txt`. E/SE-Asian files (`00_Japan.txt`, `00_TKG.txt`, insular sultanates) had **zero** — no edit.
+Removed **17 wrappers** (char defs KEPT → portraits/lineage/later spawn intact):
+AFG 512 Mahmud Shah (1769); India MRT/155 Baji Rao II (1775), KHL/156 Ranjit Singh (1780), SND/522 (1785),
+MYS/523 (1794), NAG/524 (1770), INR/525 (1806), HYD/526 (1768), NEP/527 (1797), AWA/534 (1780),
+BNR/535 (1770); Qing MGA/327 (1813), ULS/329 (1771), LAF/330 (1770), SBG/331 (1792), ADG/99 (1765),
+KOR/335 (1790). **KEPT** (born ≤1763): India EIC/93 (1754), MUG/97 (1760), BWP/529, PGI/530, FRI/532,
+CYL/533; Qing CHI/214 Qianlong (1711), ILI/323 (1752). Historical ruler-*identity* swaps for the kept tags
+(1763 EIC governor, Shah Alam II, etc.) are unsourced/gated → deferred (same policy as B5 Zand).
+
+**Verification.** Line-endings preserved (India = CRLF+BOM; AFG/Qing = LF+BOM). Brace delta 0 in all three
+files. All remaining `set_as_ruler` targets born ≤1763. Regression grep: no stray `set_as_ruler` to removed
+chars anywhere in setup/+events/; `father="char:156/527/512"` and `right_portrait=char:155/156/335` refs
+still resolve (chars retained). Adversarial-review workflow run before commit. Still OWED: in-game boot
+test (user's machine). Nothing promoted off the branch.

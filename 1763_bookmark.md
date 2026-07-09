@@ -392,7 +392,58 @@ portrait lines, no game-logic dependency.
 **Net for #234:** 8 unborn-ruler crash fixes; DRY confirmed already-present (no work); Crimean Khanate +
 Zand dynasty reflavour documented as deferred/limitations. Low-risk, crash-avoiding, verifiable-only.
 
-*(Per-region implementation decisions B6, … appended as the full map-surgery phase continues: S/E/SE Asia next.)*
+### B6. S / E / SE Asia region build (#235 + #240, 2026-07-09) — FOURTH full-surgery region
+
+Recon read `research/1763_DELTA_Asia.md` (872 lines). That plan is a *massive* territorial
+redistribution — EIC province-stripping (200+ history edits), Maratha confederacy sub-house tags
+(GWA/INR/BRD/NAG as independent houses), a Bengal-Nawab tag, the Vietnam Trịnh/Nguyễn split (new tag),
+Sikh misls, Siam capital relocation, and dozens of insular-sultanate ruler swaps. **Nearly all of it is
+gated by the #230 oracle mass-spawn rule** (new tags need new province assignments / `create_country`
+churn) and is therefore OUT of the per-region crash-avoiding build scope. It is documented here as a
+**deferred redistribution limitation**, not built.
+
+The tractable, crash-relevant delta for this region is the same class as the earlier regions: the
+**unborn-ruler sweep**. Global scan found the only Asian character files carrying `set_as_ruler` wrappers
+whose target is born after 1763.2.16 are `00_AFG.txt`, `00_India.txt`, and `00_Qing.txt`. E/SE-Asian
+files (`00_Japan.txt`, `00_TKG.txt`, insular sultanates) already had **zero** unborn rulers — no edit.
+
+**17 unborn-ruler wrappers removed** (char def KEPT in every case; family `father=`/portrait refs still
+resolve; engine auto-generates a period-appropriate 1763 ruler; the historical figure still spawns when born):
+
+| File | Tag | char | Figure | b. |
+|------|-----|------|--------|-----|
+| 00_AFG.txt   | AFG | 512 | Mahmud Shah Durrani     | 1769 |
+| 00_India.txt | MRT | 155 | Baji Rao II             | 1775 |
+| 00_India.txt | KHL | 156 | Ranjit Singh            | 1780 |
+| 00_India.txt | SND | 522 | Karam Ali Khan (Talpur) | 1785 |
+| 00_India.txt | MYS | 523 | Krishnaraja Wadiyar III | 1794 |
+| 00_India.txt | NAG | 524 | Raghuji II Bhonsle      | 1770 |
+| 00_India.txt | INR | 525 | Malhar Rao Holkar III   | 1806 |
+| 00_India.txt | HYD | 526 | Sikander Jah (Nizam)    | 1768 |
+| 00_India.txt | NEP | 527 | Girvan Yuddha Bikram    | 1797 |
+| 00_India.txt | AWA | 534 | Wazir Ali Khan          | 1780 |
+| 00_India.txt | BNR | 535 | Udit Narayan Singh      | 1770 |
+| 00_Qing.txt  | MGA | 327 | Luvsanchültimjigmed     | 1813 |
+| 00_Qing.txt  | ULS | 329 | Uksun Icungga           | 1771 |
+| 00_Qing.txt  | LAF | 330 | Chabo                   | 1770 |
+| 00_Qing.txt  | SBG | 331 | Ormon                   | 1792 |
+| 00_Qing.txt  | ADG |  99 | Muratali                | 1765 |
+| 00_Qing.txt  | KOR | 335 | Gong Yi                 | 1790 |
+
+**KEPT (born ≤1763, valid 1763 rulers):** India EIC/93 Rawdon-Hastings (b.1754 — note: EIC/Mughal
+ruler-*identity* accuracy for 1763 is a documented deferred limitation, not a crash), MUG/97 Akbar Shah II
+(1760), BWP/529 (1760), PGI/530 (1756), FRI/532 (1753), CYL/533 (1758); Qing CHI/214 Qianlong (1711),
+ILI/323 Songjun (1752). Historical-accuracy ruler swaps for these tags (e.g. 1763 EIC governor,
+1763 Mughal Shah Alam II, 1763 Kalmyk/Kyrgyz chiefs) are **unsourced-DNA / gated** — deferred, same
+policy as the Ottoman Zand swap in B5.
+
+**Net for #235:** 17 unborn-ruler crash fixes across AFG/India/Qing; the large EIC/Maratha/Vietnam/Sikh
+territorial redistribution documented as a deferred limitation (oracle mass-spawn gate #230); E/SE Asia
+needed no change. Line-endings preserved (India = CRLF+BOM, AFG/Qing = LF+BOM). Braces balanced Δ0 in all
+three files; regression grep clean (no stray `set_as_ruler` to removed chars; `father=`/portrait refs
+intact).
+
+*(Per-region implementation decisions B7, … appended as the full map-surgery phase continues: Africa next, then C.Europe/HRE last.)*
 
 ---
 
