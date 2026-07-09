@@ -771,3 +771,34 @@ byte convention (no-BOM/LF) preserved. Boot test owed to the user.
 **#282 C.Europe/HRE (#237) COMPLETE.** #282 territorial redistributions now: MENA(Crimea), Africa(Cape+Sokoto),
 Asia(Vietnam), C.Europe/HRE(23 tags) all DONE. Remaining under the 1763 umbrella: #287 India ruler-accuracy
 char swaps (next), then #283/#284/#285 (event chains + pop distribution, research-first).
+
+### #287 (#282g) — India ruler-accuracy character pass — DONE
+
+The four major Indian tags shipped with their game-start rulers STRIPPED for 1763 (each carried a
+`# [bookmark-1763 #240/#235] ... UNBORN at the 1763.2.16 start — removed as set ruler` comment and NO
+`set_as_ruler`), so the engine was auto-generating placeholder rulers. Installed the historically-correct
+1763 rulers using the canonical Poland precedent (00_Poland.txt char:730 Augustus III): add a NEW character
+with `set_as_ruler=char:<id>` inside the tag's block; the existing later-born prince stays defined and still
+spawns when born. No removal needed (no prior assignment existed). DNA-less (engine generates portraits),
+sourced facts only, per the user's ruling.
+
+- **MRT (Marathas):** char:731 Madhavrao I, Peshwa (Bhat/Rao family), b.1745.2.16, marathi/hindu — the able
+  young Peshwa who rebuilt Maratha power after Panipat (r.1761-72).
+- **HYD (Hyderabad):** char:732 Nizam Ali Khan / Asaf Jah II (Asaf Jahi family), b.1734.3.7, south_gurkani/
+  sunni — took power 1762, ruled to 1803.
+- **MYS (Mysore):** char:733 Hyder Ali, b.1720, kannada/sunni, family_name="Ali" (self-made, no dynasty) —
+  the military commander who held effective control of Mysore from 1761 (Wadiyar rajas reduced to figureheads).
+- **AWA (Awadh/Oudh):** char:734 Shuja-ud-Daula (Nishapuri family), b.1732.1.19, north_gurkani/shiite — Nawab
+  from 1754, fought the British at Buxar 1764.
+
+Cultures/religions/families reuse the mod's existing per-tag values (verified defined: marathi, south_gurkani,
+kannada, north_gurkani cultures; Rao/Asaf Jahi/Nishapuri families owned by the right tags). Char IDs 731-734
+verified free/unique across all setup/characters/*.txt. Traits `just`/`military_officer` verified defined.
+
+**Validation:** brace balance 0 (56/56); exactly one `set_as_ruler` and one unique new char id per tag;
+family references resolve; birth dates all pre-1763.2.16 (alive at start); byte convention (BOM/CRLF) preserved.
+Boot test owed to the user.
+
+**All #282 territorial + ruler work COMPLETE:** MENA(Crimea), Africa(Cape+Sokoto), Asia(Vietnam + India rulers),
+C.Europe/HRE(23 tags). Remaining under the 1763 umbrella: #283 (AI event chains) + #284/#285 (pop distribution),
+all research-first.
