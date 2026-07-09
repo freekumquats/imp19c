@@ -255,3 +255,44 @@ preserved; adversarial review clean.
 STILL PENDING (boot-test-gated, per the blocker's own sequencing): after the user confirms no phantom
 shortage_rifles on a supplied country in-game, re-add the reverted se_LOGISTICS shortage_phys_rifles scan +
 the army-linked DEMAND_rifles term (imp19c-rifles-logistics-blocker). Recruitment gate optional later.
+
+---
+
+## D6. #281/#290 rifles → military logistics + elite riflemen unit (2026-07-09)
+
+Wired rifles into the military-logistics framework so supply and demand scale together, and made consumption
+CONCRETE via a new unit (per the concrete-over-abstract rule). Also corrected the CSV-inert bug and the
+musket-era anachronism. Files:
+
+- **setup/provinces/*.txt (14 files):** the ORIGINAL #281 CSV edit (map_data/province_setup.csv) was INERT —
+  the engine loads trade_goods from setup/provinces/*.txt, NOT the CSV (proven: Jingdezhen loads porcelain from
+  the province file while the CSV says cloth). Set trade_goods="rifles" in the 15 loaded gun-town province
+  blocks + **Beijing (8363)** as a semi-plausible Qing site (imperial armory / 火器營; later Self-Strengthening
+  arsenal home). CSV kept in sync for regen.
+- **DEMAND_luxury_svalues.txt:** replaced the universal-luxury DEMAND_rifles with a MILITARY DEMAND_rifles_base
+  (army/arsenal/military-jobs driver, mirrors DEMAND_early_munitions). Gated on owner invention=**tech_rifles**
+  (NOT tech_firearms — 18thC line infantry used muskets; rifles were rare skirmisher arms, general-issue only
+  ~1850s with Minie/percussion) AND num_of_unit_type={type=riflemen value>=1} (PROVEN trigger form; value-read
+  is unproven). So a country demands rifles only once it has rifling tech AND actually fields riflemen.
+- **DEMAND_svalues.txt:** added DEMAND_army_ratio_rifles = 1.
+- **GOODS_svalues.txt:** GOODS_governorship_rifles_produced gains an arsenal-infra term (reusing the munitions
+  arsenal output, gated tech_rifles) so a large-army country with arsenals but no rifle province (e.g. the Qing)
+  still produces rifles — supply tracks demand through the same buildings.
+- **se_DEMAND.txt:** removed the 2 rifles pop-luxury set-calls.
+- **se_LOGISTICS.txt:** added shortage_phys_rifles to the land-goods scan (same attrition/morale/movement
+  penalty as munitions).
+- **common/units/army_riflemen.txt (NEW):** elite skirmisher unit; allow={ invention=tech_rifles +
+  trade_good_surplus rifles>0 }; strong vs infantry; ai_max_percentage=15 (minority elite, not line
+  replacement). Loc "Riflemen" added. Bootstrap verified no deadlock (supply independent of riflemen → surplus
+  accrues at tech_rifles → first riflemen buildable → self-regulating).
+- **gfx/models/units/*.asset (5 files):** ENGINE REALITY (checked, not assumed) — unit models are entities
+  named <graphical_culture>_<unit_type>; only regular_infantry/conscripts/supply_train have them, so
+  artillery+riflemen had NO model (systemic gap; naval units have separate ship models and are fine). Added
+  FALLBACK entities <gc>_riflemen and <gc>_artillery for the 7 modeled cultures, cloning the culture's generic
+  levy_supply_train (a deliberate placeholder look, NOT regular_infantry — per "fallback, not first option").
+  The 5 cultures with no infantry model at all (african/native/north_indian/south_indian/south_east_asian) are
+  a PRE-EXISTING gap, not touched.
+
+**Deferred follow-ons (#290, boot-test-gated):** bespoke riflemen art; confirm the levy_supply_train fallback
+actually renders (vs missing-entity error) at recruit time — the whole feature is boot-test-owed and the
+unmodeled-culture gap remains. Both #281 review passes + the #290 unit/econ review came back CLEAN.

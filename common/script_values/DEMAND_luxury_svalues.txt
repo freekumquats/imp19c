@@ -383,45 +383,55 @@ DEMAND_porcelain = { # Total
 	min = 0
 	
 }
-DEMAND_rifles = { # Total
+# [#281] rifles DEMAND is MILITARY, not a population luxury. Re-based off the same
+# army/arsenal/fortress driver as munitions (mirrors DEMAND_early_munitions_base in
+# DEMAND_svalues.txt) and tech-gated on tech_firearms, so demand scales with the
+# military that also produces the supply (arsenals/fortresses) rather than with pop
+# wealth. A country with no army and no arsenals demands ~0 rifles -> no phantom
+# shortage. Rifles are infantry small-arms, so the army term is the dominant driver.
+# (Formerly a universal DEMAND_set_demand_from_luxury good, which gave every populated
+# governorship rifle demand regardless of whether it fielded troops.)
+DEMAND_rifles_base = {
+	value = 0
 	if = {
+		# [#281/#290] rifles are consumed by the CONCRETE elite `riflemen` unit (army_riflemen.txt),
+		# not by all cohorts. In the 18thC (incl. the 1763 start) line infantry carried smoothbore
+		# MUSKETS — rifles were rare, slow-loading arms for skirmishers/jaeger only, and did not
+		# become general infantry issue until rifling was industrialised (Minie ball / percussion,
+		# ~1850s). Gate demand on ACTUALLY FIELDING riflemen: the riflemen unit itself requires
+		# invention=tech_rifles + a rifles surplus to raise (see its allow block), so a country
+		# with no riflemen demands ~0 rifles, and at the 1763 musket-era start (no tech_rifles,
+		# no riflemen) global rifle demand is ~0 -> no early phantom shortage.
+		#
+		# NOTE: num_of_unit_type is PROVEN only as a TRIGGER (value >= N; se_LOGISTICS steamer
+		# check), NOT as a value-read (the artillery DEMAND TODO flags the value form as absent).
+		# So we gate on "fields >=1 riflemen" and scale by army size as the demand proxy, rather
+		# than reading the exact riflemen count. When a value-read of num_of_unit_type is proven,
+		# swap the DEMAND_military_from_armies term for the literal riflemen count (see #290).
 		limit = {
-			has_global_variable = first_time_luxury_demand_updated
+			owner = { invention = tech_rifles }
+			num_of_unit_type = { type = riflemen  value >= 1 }
 		}
-		value = var:DEMAND_luxury_rifles
+		add = DEMAND_military_from_armies
+		every_governorship_state = {
+			every_state_province = {
+				add = num_of_arsenal_building
+			}
+		}
+		add = {
+			value = JOBS_military_governorship
+			min = 1
+		}
+		multiply = DEMAND_army_ratio_rifles
 	}
-	else = {
-		value = DEMAND_luxury_base_total
-	}
+	multiply = owner.MODIFIER_military_supply_consumption
+}
 
-	if = { # Increase demand if there is more wealth in the governorship
-		limit = {
-			owner = {
-				has_variable = country_unit_price_rifles
-			}
-			trigger_if = {
-				limit = {
-					owner = {
-						has_variable = country_unit_price_rifles
-					}
-				}
-			}
-		}
-		multiply = {
-			value = WEALTH_governorship_per_capita
-			multiply = DEMAND_luxury_elasticity_wealth_modifier
-			divide = {
-				value = owner.var:country_unit_price_rifles
-				min = 0.001
-			}
-			max = 1.1
-		}
-	}
-
+DEMAND_rifles = { # Total
+	value = DEMAND_rifles_base
+	multiply = DEMAND_military_supplies_modifier
 	multiply = DEMAND_elasticity_impact
-	
 	min = 0
-	
 }
 
 DEMAND_sweet_potato = { # Total
