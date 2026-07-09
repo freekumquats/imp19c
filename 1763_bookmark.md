@@ -692,3 +692,18 @@ without guessing province IDs, so per the whole-area approximation ruling they a
 No double-ownership; all 13 provinces single-owned; braces balanced; review clean. Boot test owed to user.
 
 **#282 Africa region (#236) COMPLETE**: Cape reversion (#282b) + Sokoto dissolution (#282c).
+
+### #282d — Asia: divided Vietnam (Trinh north / Nguyen south) — DONE
+In 1763 Vietnam was de facto partitioned: the Trinh lords (Dang Ngoai) ruled the north (Tonkin) and the
+Nguyen lords (Dang Trong) the south, both under a nominal Le emperor; reunified only under the Nguyen in
+1802 (hence a single VIE tag in 1815). Created a new tag TRH (Trinh) holding the 25 Tonkin-area provinces
+carved from VIE; VIE keeps the Nguyen south (Annam + Laos march, capital Hue 2593). Split cleanly on the
+Tonkin/Annam AREA boundary (no province-by-province river guessing — the delta had flagged that as a risk;
+the area boundary resolves it). TRH: government imperial_monarchy, primary_culture vietnamese, religion
+confucianism, capital 3133; no char file (engine-generated ruler; the 1763 lord was Trinh Doanh/Trinh Sam).
+No double-ownership (25 provinces single-owned in TRH; VIE retains 31 south incl. capital); braces balanced;
+keys verified; review clean. Boot test owed to user.
+
+STILL TODO under #282: Asia remainder (Maratha houses GWA/INR/BRD/NAG carved from MRT, Mysore/Hyder Ali
+ruler, Sikh misls — higher-risk province allocation); C.Europe/HRE #237 (ecclesiastical electorates +
+imperial cities, Prussia pre-Silesia, Saxony-Poland). Same static pattern, region by region.
