@@ -2183,8 +2183,28 @@
 		}
 		ECON_distribute_starting_holdings = yes
 		SE_occupation_of_france = yes # Re-enabled: create_unit syntax corrected to verified engine idiom (#49)
-		SE_qing_armies = yes # Re-enabled: create_unit syntax corrected to verified engine idiom (#49)
-		SE_qing_navy = yes # [#190-fix task #190] disband ahistorical auto-gen fleets + raise 1815 coastal water-forces (水師 war-junks)
+		# [#223/#224-fix task #223 #224] The Qing land + naval OOB were raised INLINE here
+		# at on_game_initialized, which produced two boot bugs: (#224) all ~27 garrisons
+		# stacked in Beijing because per-province state.governorships aren't resolved this
+		# early, so every raise took the capital fallback; and (#223) only one navy survived
+		# because three create_unit navy=yes calls collided on one tick. FIX: defer + stagger
+		# force setup across distinct ticks via hidden events (qing_force_setup.*), mirroring
+		# the only proven-working multi-unit setups in this mod (ILI Chu Army, Self-Strengthening
+		# fleets — each raised on its own mid-game tick). Scheduled once (guard var below);
+		# the individual effects keep their own idempotency sentinels. See
+		# events/imp19c_mod_events/qing_force_setup_events.txt.
+		if = {
+			limit = {
+				exists = c:CHI
+				NOT = { has_global_variable = qing_force_setup_scheduled }
+			}
+			set_global_variable = qing_force_setup_scheduled
+			c:CHI = {
+				trigger_event = { id = qing_force_setup.1   days = 2 }  # land OOB (dispersed, country-scope create_unit [#241])
+				trigger_event = { id = qing_force_setup.10  days = 3 }  # disband auto-gen fleets
+				trigger_event = { id = qing_force_setup.11  days = 4 }  # [#242-fix] all three water-forces, one tick
+			}
+		}
 		SE_qing_starting_buildings = yes # [#184 task #184] seed 1815 specialty-production buildings (silk/porcelain/tea/cotton/salt) into their historical provinces
 		c:CHI = {
 			if = {

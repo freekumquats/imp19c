@@ -7,6 +7,8 @@
 #
 #   emperor        皇帝    the reigning sovereign — always current_ruler
 #   crownprince    皇太子  the primary heir — the throne-in-waiting
+#   empress        皇后    the reigning sovereign's consort (#272); display +
+#                          figurehead-only; vacant when the emperor is unwed/widowed
 #   regent         攝政    a Grand Regent, seated ONLY while the emperor is a
 #                          child or incapacitated (#116); vacated when he can rule
 #
@@ -44,6 +46,7 @@ QING_seat_refresh_all = {
 	LOG_enter = { sys = QING  fn = "QING_seat_refresh_all" }
 	QING_seat_refresh_emperor = yes
 	QING_seat_refresh_crownprince = yes
+	QING_seat_refresh_empress = yes
 	QING_seat_evaluate_regency = yes
 	LOG_exit = { sys = QING  fn = "QING_seat_refresh_all"  result = OK }
 }
@@ -87,6 +90,28 @@ QING_seat_refresh_crownprince = {
 }
 
 # ======================================================================
+# EMPRESS 皇后 (#272 develop) — the reigning sovereign's consort. Mirrors
+# current_ruler.spouse onto the seat var so the throne row can render her beside
+# the emperor with the shared card idiom. Display + figurehead-only (she scores as
+# a figurehead in QING_council_recompute, weight 1); she NEVER enters an appointable
+# loop. spouse is the PROVEN ruler scope-link (exists = spouse at 00_ambitions.txt:1230).
+# Vacant when the emperor is unwed / widowed.
+# ======================================================================
+QING_seat_refresh_empress = {
+	if = {
+		limit = {
+			exists = current_ruler
+			exists = current_ruler.spouse
+			current_ruler.spouse = { is_alive = yes }
+		}
+		set_variable = { name = qing_office_empress_holder  value = current_ruler.spouse }
+	}
+	else = {
+		if = { limit = { has_variable = qing_office_empress_holder }  remove_variable = qing_office_empress_holder }
+	}
+}
+
+# ======================================================================
 # REGENCY EVALUATION 攝政 (#116) — seat or vacate the Grand Regent seat.
 # A regency is WARRANTED when the emperor cannot personally rule:
 #   • MINORITY   current_ruler = { is_adult = no }   (a child on the throne)
@@ -113,7 +138,7 @@ QING_seat_evaluate_regency = {
 				NOT = { has_variable = qing_office_regent_holder }
 				NOT = { has_variable = qing_regency_council_rule }
 			}
-			LOG_line = { sys = QING  msg = "regency WARRANTED and seat empty — summoning regent selection for [ROOT.GetTag]" }
+			LOG_line = { sys = QING  msg = "regency WARRANTED and seat empty — summoning regent selection for" }
 			trigger_event = { id = qing_regency.1  days = { 1 5 } }
 		}
 		else = {
@@ -124,7 +149,7 @@ QING_seat_evaluate_regency = {
 					NOT = { var:qing_office_regent_holder = { is_alive = yes  employer = ROOT } }
 				}
 				QING_seat_regent_clear = yes
-				LOG_line = { sys = QING  msg = "seated regent gone (dead/departed) — regency seat cleared for [ROOT.GetTag]" }
+				LOG_line = { sys = QING  msg = "seated regent gone (dead/departed) — regency seat cleared for" }
 			}
 		}
 	}
@@ -141,7 +166,7 @@ QING_seat_evaluate_regency = {
 				NOT = { var:qing_office_regent_holder = { is_alive = yes  employer = ROOT } }
 			}
 			QING_seat_regent_clear = yes
-			LOG_line = { sys = QING  msg = "usurping regent gone (dead/departed) — regency seat cleared for [ROOT.GetTag]" }
+			LOG_line = { sys = QING  msg = "usurping regent gone (dead/departed) — regency seat cleared for" }
 		}
 		# If a live regent is still seated, the emperor can now rule — dissolve it
 		# (coming-of-age / recovery), firing the hand-back event ONCE. [#116 review-fix]
@@ -154,7 +179,7 @@ QING_seat_evaluate_regency = {
 				has_variable = qing_office_regent_holder
 				NOT = { has_variable = qing_regency_usurped }
 			}
-			LOG_line = { sys = QING  msg = "regency no longer warranted — emperor resumes personal rule for [ROOT.GetTag]" }
+			LOG_line = { sys = QING  msg = "regency no longer warranted — emperor resumes personal rule for" }
 			trigger_event = { id = qing_regency.3  days = { 1 5 } }
 		}
 	}
@@ -187,10 +212,10 @@ QING_seat_regent_install = {
 			add_loyal_veterans = 4
 		}
 		add_country_modifier = { name = qing_regency_active  duration = -1 }
-		LOG_line = { sys = QING  msg = "regency installed: [scope:qing_regent_pick.GetName] made Grand Regent 攝政王 for [ROOT.GetTag]" }
+		LOG_line = { sys = QING  msg = "regency installed: made Grand Regent 攝政王 for" }
 	}
 	else = {
-		LOG_fail = { sys = QING  fn = "QING_seat_regent_install"  reason = "no qing_regent_pick scope for [ROOT.GetTag]" }
+		LOG_fail = { sys = QING  fn = "QING_seat_regent_install"  reason = "no qing_regent_pick scope for" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_seat_regent_install"  result = OK }
 }
@@ -243,7 +268,7 @@ QING_seat_pick_regent = {
 		}
 		current_ruler.mother = { save_scope_as = qing_regent_pick }
 		set_variable = { name = qing_regent_pick_kind  value = flag:dowager }
-		LOG_line = { sys = QING  msg = "regent pick: Empress Dowager 皇太后 [scope:qing_regent_pick.GetName] (mother-first) for [ROOT.GetTag]" }
+		LOG_line = { sys = QING  msg = "regent pick: Empress Dowager 皇太后 (mother-first) for" }
 	}
 	# 2. an adult imperial prince (close relative of the ruler, not the ruler/heir)
 	else_if = {
@@ -271,7 +296,7 @@ QING_seat_pick_regent = {
 			save_scope_as = qing_regent_pick
 		}
 		set_variable = { name = qing_regent_pick_kind  value = flag:prince }
-		LOG_line = { sys = QING  msg = "regent pick: Imperial Prince 親王 [scope:qing_regent_pick.GetName] for [ROOT.GetTag]" }
+		LOG_line = { sys = QING  msg = "regent pick: Imperial Prince 親王 for" }
 	}
 	# 3. the ablest serving grand councillor (any great-office holder)
 	else_if = {
@@ -297,10 +322,10 @@ QING_seat_pick_regent = {
 			save_scope_as = qing_regent_pick
 		}
 		set_variable = { name = qing_regent_pick_kind  value = flag:councillor }
-		LOG_line = { sys = QING  msg = "regent pick: Grand Councillor [scope:qing_regent_pick.GetName] (no dowager/prince) for [ROOT.GetTag]" }
+		LOG_line = { sys = QING  msg = "regent pick: Grand Councillor (no dowager/prince) for" }
 	}
 	else = {
-		LOG_fail = { sys = QING  fn = "QING_seat_pick_regent"  reason = "no eligible regent (no mother/prince/councillor) for [ROOT.GetTag]" }
+		LOG_fail = { sys = QING  fn = "QING_seat_pick_regent"  reason = "no eligible regent (no mother/prince/councillor) for" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_seat_pick_regent"  result = OK }
 }

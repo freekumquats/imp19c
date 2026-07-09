@@ -19,7 +19,7 @@
 #   works       工部          Grand Minister of Works       (finesse)
 #   censor      都察院        Grand Inspector of the Censorate (finesse)
 #   lifanyuan   理藩院        Grand Director of the Lifan Yuan (charisma)
-#   grand_secretary 內務府    Grand Secretary of the Imperial Household (charisma)
+#   chamberlain 內務府    Grand Secretary of the Imperial Household (charisma)
 #   zongli      總理衙門      Grand Director of the Zongli Yamen (charisma)
 # Plus the event-only 太上皇 Emperor Emeritus (emeritus) — a read-only overlay
 # card shown when Napoleon (#65) sits above the banners; not autofilled, not an
@@ -74,10 +74,12 @@ QING_council_autofill = {
 	QING_council_autofill_office = { office = works }
 	QING_council_autofill_office = { office = censor }
 	QING_council_autofill_office = { office = lifanyuan }
-	QING_council_autofill_office = { office = grand_secretary }
+	QING_council_autofill_office = { office = chamberlain }
 	QING_council_autofill_office = { office = zongli }
+	QING_council_autofill_office = { office = grand_secretariat } # [#273]
+	QING_council_autofill_office = { office = guard_commandant }  # [#273]
 	QING_council_recompute = yes
-	LOG_line = { sys = QING  msg = "council autofilled (offices staffed) for [ROOT.GetTag]" }
+	LOG_line = { sys = QING  msg = "council autofilled (offices staffed) for" }
 	LOG_exit = { sys = QING  fn = "QING_council_autofill"  result = OK }
 }
 
@@ -154,8 +156,12 @@ QING_council_recompute = {
 	QING_council_score_office = { office = works      skill = finesse }
 	QING_council_score_office = { office = censor      skill = finesse }
 	QING_council_score_office = { office = lifanyuan  skill = charisma }
-	QING_council_score_office = { office = grand_secretary      skill = charisma }
+	QING_council_score_office = { office = chamberlain      skill = charisma }
 	QING_council_score_office = { office = zongli     skill = charisma }
+	# [#273 develop] two new great offices. Grand Secretary of the Central Secretariat
+	# (內閣大學士, charisma) and Grand Commandant of the Imperial Guard (領侍衛內大臣, martial).
+	QING_council_score_office = { office = grand_secretariat  skill = charisma }
+	QING_council_score_office = { office = guard_commandant   skill = martial }
 
 	# --- [#158b] fold the DYNASTIC FIGUREHEADS into the effectiveness base (user
 	# request): the Emperor 皇帝, Empress Dowager 皇太后, Crown Prince 皇太子 and
@@ -184,6 +190,66 @@ QING_council_recompute = {
 			var:qing_office_regent_holder = { is_alive = yes  employer = ROOT }
 		}
 		QING_council_score_figurehead = { who = var:qing_office_regent_holder  weight = 3 }
+	}
+	# [#272 develop] EMPRESS 皇后 (current_ruler.spouse) — the consort sits on the
+	# throne row and shapes the court, judged on all four skills averaged at weight 1
+	# (same as the Crown Prince). Guarded on the spouse existing + alive exactly as the
+	# SEATS code guards her; an unmarried or widowed emperor is a clean no-op.
+	if = {
+		limit = {
+			exists = current_ruler
+			exists = current_ruler.spouse
+			current_ruler.spouse = { is_alive = yes }
+		}
+		QING_council_score_figurehead = { who = current_ruler.spouse  weight = 1 }
+	}
+
+	# --- [#270/#271 develop] KEEP EACH SEATED MEMBER'S IMPERIAL-FAVOUR SCORE LIVE.
+	# se_QING_AFFINITY.txt's qing_char_affinity (0..100, 50 = neutral) is otherwise only
+	# computed inside events on demand, so a minister who has never been through an event
+	# has no score for the Grand Council title-row favour square (#270) to read. Re-score
+	# every member of the freshly-rebuilt roster here, on the same pulse that recomputes
+	# effectiveness, so the square is always current. QING_char_affinity is a PURE READ
+	# (no loyalty/relation side effects — that is QING_char_bind, which we deliberately do
+	# NOT call here), so this only refreshes the stored variable. Guarded on ruler
+	# presence since affinity is scored against root.current_ruler.
+	if = {
+		limit = { exists = current_ruler }
+		every_in_list = {
+			variable = qing_council_members
+			QING_char_affinity = yes
+		}
+		# [#270 develop] The dynastic figureheads shown on the throne row (Crown Prince,
+		# Regent) are NOT in qing_council_members — they are scored for effectiveness via
+		# QING_council_score_figurehead but never appended to the roster list. Their favour
+		# squares (#270) still read qing_char_affinity, so re-score them here too, guarded on
+		# each being present + alive + still employed. The Emperor is deliberately excluded:
+		# affinity is scored against current_ruler, so the reigning Emperor's favour with
+		# himself is undefined — his throne card carries no favour square.
+		if = {
+			limit = {
+				has_variable = qing_office_crownprince_holder
+				var:qing_office_crownprince_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_crownprince_holder = { QING_char_affinity = yes }
+		}
+		if = {
+			limit = {
+				has_variable = qing_office_regent_holder
+				var:qing_office_regent_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_regent_holder = { QING_char_affinity = yes }
+		}
+		# [#272 develop] EMPRESS 皇后 is a FIGUREHEAD (not in qing_council_members) — like the
+		# Crown Prince / Regent she needs an explicit affinity re-score for her throne-row favour
+		# square. Scored against current_ruler; guarded on the spouse existing + alive.
+		if = {
+			limit = {
+				exists = current_ruler.spouse
+				current_ruler.spouse = { is_alive = yes }
+			}
+			current_ruler.spouse = { QING_char_affinity = yes }
+		}
 	}
 
 	# --- [#158] recompute the conservative-vs-reformist faction meters over the
@@ -218,8 +284,9 @@ QING_council_recompute = {
 		change_variable = { name = qing_council_eff_target  add = 15 }
 	}
 
-	# --- vacancy penalty: 11 appointable offices; -3 per empty one.
-	set_variable = { name = qing_council_vacancy  value = 11 }
+	# --- vacancy penalty: 13 appointable offices (12 domain boards + chancellor,
+	# [#273] up from 11); -3 per empty one.
+	set_variable = { name = qing_council_vacancy  value = 13 }
 	change_variable = { name = qing_council_vacancy  subtract = var:qing_council_filled_count }
 	if = { limit = { var:qing_council_vacancy < 0 }  set_variable = { name = qing_council_vacancy  value = 0 } }
 	set_variable = { name = qing_council_vacancy_pen  value = var:qing_council_vacancy }
@@ -266,6 +333,45 @@ QING_council_recompute = {
 	else_if = {
 		limit = { var:qing_council_effectiveness > var:qing_council_eff_target }
 		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -3 }
+	}
+
+	# --- [#273 develop] GUARD COMMANDANT -> EMPEROR POWER BASE (idempotent reconcile).
+	# The 領侍衛內大臣 puts the palace guard corps behind the throne, so a seated
+	# commandant lifts the EMPEROR's own power base (defensive clout — loyalist civil-war
+	# weight + coup deterrent; the ruler can't rebel against himself, so no downside).
+	# Modelled with add_loyal_veterans, which is ADDITIVE and would stack if placed in the
+	# pulse — so we reconcile it here ONCE PER STATE TRANSITION via a stored recipient-ruler
+	# ref (qing_guard_emperor_pb_ruler). STRIP first (office emptied OR the recipient ruler
+	# died/changed), then GRANT (office filled + no grant outstanding) so a same-pulse
+	# ruler-change re-homes the +4 to the new sovereign in one pass. Recompute runs at the
+	# tail of every appoint/vacate, so this behaves as an appoint/vacate grant + self-heals.
+	if = {
+		limit = {
+			has_variable = qing_guard_emperor_pb_ruler
+			OR = {
+				NOT = { has_variable = qing_office_guard_commandant_holder }
+				NOT = { var:qing_office_guard_commandant_holder = { is_alive = yes  employer = ROOT } }
+				NOT = { exists = current_ruler }
+				NOT = { current_ruler = { this = ROOT.var:qing_guard_emperor_pb_ruler } }
+			}
+		}
+		# only mirror the -4 off the ORIGINAL recipient if he is still alive (a dead man
+		# needs no strip); then clear the grant marker so a fresh grant can follow.
+		if = {
+			limit = { var:qing_guard_emperor_pb_ruler = { is_alive = yes } }
+			var:qing_guard_emperor_pb_ruler = { add_loyal_veterans = -4 }
+		}
+		remove_variable = qing_guard_emperor_pb_ruler
+	}
+	if = {
+		limit = {
+			has_variable = qing_office_guard_commandant_holder
+			var:qing_office_guard_commandant_holder = { is_alive = yes  employer = ROOT }
+			exists = current_ruler
+			NOT = { has_variable = qing_guard_emperor_pb_ruler }
+		}
+		current_ruler = { add_loyal_veterans = 4 }
+		set_variable = { name = qing_guard_emperor_pb_ruler  value = current_ruler }
 	}
 
 	# --- overmighty-grandee detection: a corrupt realm + a Grand Chancellor who
@@ -414,12 +520,12 @@ QING_council_apply_band = {
 	if = {
 		limit = { var:qing_council_effectiveness >= 66 }
 		add_country_modifier = { name = qing_council_effective  duration = -1 }
-		LOG_line = { sys = QING  msg = "band council = effective for [ROOT.GetTag] (effectiveness=[ROOT.MakeScope.GetVariable('qing_council_effectiveness').GetValue|0])" }
+		LOG_line = { sys = QING  msg = "band council = effective for (effectiveness=)" }
 	}
 	else_if = {
 		limit = { var:qing_council_effectiveness <= 33 }
 		add_country_modifier = { name = qing_council_dysfunctional  duration = -1 }
-		LOG_line = { sys = QING  msg = "band council = dysfunctional for [ROOT.GetTag] (effectiveness=[ROOT.MakeScope.GetVariable('qing_council_effectiveness').GetValue|0])" }
+		LOG_line = { sys = QING  msg = "band council = dysfunctional for (effectiveness=)" }
 	}
 
 	# balance + overmighty are independent overlays on the effectiveness band
@@ -482,14 +588,14 @@ QING_council_grandee_flip = {
 		if = {
 			limit = { exists = ROOT.capital_scope }
 			ROOT.capital_scope = { state.governorship = { QING_council_raise_grandee_legion = yes } }
-			LOG_line = { sys = QING  msg = "grandee flip: overmighty chancellor [scope:grandee_rebel_commander.GetName] turned — personal army raised at capital (cohorts loyal to HIM) for [ROOT.GetTag]" }
+			LOG_line = { sys = QING  msg = "grandee flip: overmighty chancellor turned — personal army raised at capital (cohorts loyal to HIM) for" }
 		}
 		else = {
-			LOG_fail = { sys = QING  fn = "QING_council_grandee_flip"  reason = "no capital_scope; grandee marked rebel but no legion raised for [ROOT.GetTag]" }
+			LOG_fail = { sys = QING  fn = "QING_council_grandee_flip"  reason = "no capital_scope; grandee marked rebel but no legion raised for" }
 		}
 	}
 	else = {
-		LOG_fail = { sys = QING  fn = "QING_council_grandee_flip"  reason = "chancellor still loyal (loyalty>=40) or already flipped; no rebel army for [ROOT.GetTag]" }
+		LOG_fail = { sys = QING  fn = "QING_council_grandee_flip"  reason = "chancellor still loyal (loyalty>=40) or already flipped; no rebel army for" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_council_grandee_flip"  result = OK }
 }
@@ -577,8 +683,40 @@ QING_council_refresh_candidates = {
 		# the appoint verb's `employer = { ... target = prev }`).
 		ROOT = { add_to_variable_list = { name = qing_council_candidates  target = prev } }
 	}
-	LOG_line = { sys = QING  msg = "council candidates refreshed for [ROOT.GetTag]" }
+	LOG_line = { sys = QING  msg = "council candidates refreshed for" }
 	LOG_exit = { sys = QING  fn = "QING_council_refresh_candidates"  result = OK }
+}
+
+# ======================================================================
+# [#221] PER-OFFICE candidate cache. Same bench + eligibility as
+# QING_council_refresh_candidates, but ranked DESCENDING by $sortval$ — the ONE
+# governing skill of the office whose picker is being opened (or the sum-of-four
+# svalue for the summit Grand Chancellor). Called from the per-skill
+# qing_gov_refresh_candidates_* scripted GUIs the moment the player clicks an
+# office's Appoint/Replace button, so the ablest man FOR THAT POST heads the list.
+# Rebuilds the SAME qing_council_candidates list the picker window walks, so the
+# GUI needs no per-office datamodel. $sortval$ = a character script value name
+# (council_sort_martial|finesse|charisma|zeal or combined_stats_council_svalue).
+# ======================================================================
+QING_council_refresh_candidates_by = {
+	# Scope: country (CHI).
+	LOG_enter = { sys = QING  fn = "QING_council_refresh_candidates_by" }
+	QING_council_init = yes
+	clear_variable_list = qing_council_candidates
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_adult = yes
+			is_alive = yes
+			NOT = { has_variable = qing_office_held }
+		}
+		order_by = $sortval$
+		check_range_bounds = no
+		max = 12   # QING_COUNCIL_CANDIDATE_CAP — picker shows the ablest dozen
+		ROOT = { add_to_variable_list = { name = qing_council_candidates  target = prev } }
+	}
+	LOG_line = { sys = QING  msg = "council candidates refreshed (ordered by $sortval$) for" }
+	LOG_exit = { sys = QING  fn = "QING_council_refresh_candidates_by"  result = OK }
 }
 
 # ======================================================================
@@ -643,18 +781,88 @@ QING_council_apply_officer_buffs = {
 	if = {
 		limit = {
 			exists = current_ruler
-			has_variable = qing_office_grand_secretary_holder
-			var:qing_office_grand_secretary_holder = { is_alive = yes  employer = ROOT  charisma >= 12 }
+			has_variable = qing_office_chamberlain_holder
+			var:qing_office_chamberlain_holder = { is_alive = yes  employer = ROOT  charisma >= 12 }
 		}
 		current_ruler = { add_character_modifier = { name = qing_grand_secretary_counsel_major  duration = -1 } }
 	}
 	else_if = {
 		limit = {
 			exists = current_ruler
-			has_variable = qing_office_grand_secretary_holder
-			var:qing_office_grand_secretary_holder = { is_alive = yes  employer = ROOT  charisma >= 6 }
+			has_variable = qing_office_chamberlain_holder
+			var:qing_office_chamberlain_holder = { is_alive = yes  employer = ROOT  charisma >= 6 }
 		}
 		current_ruler = { add_character_modifier = { name = qing_grand_secretary_counsel_minor  duration = -1 } }
+	}
+
+	# --- [#273 develop] CENSORATE oversight buff -------------------------------
+	# The Grand Inspector 都察院 steadies his FELLOW council members' personal
+	# loyalty (monthly_character_loyalty) — the character-scope replacement for the
+	# state-loyalty grant his office modifier used to carry. Mirrors the Personnel
+	# finesse buff EXACTLY: strip both tiers from every current member, then re-apply
+	# one tier to every OTHER member, scaled by the censor's own finesse (>=12 major,
+	# >=6 minor). Runs on the same fresh qing_council_members roster.
+	if = {
+		limit = { has_variable_list = qing_council_members }
+		every_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes }
+			remove_character_modifier = qing_censorate_oversight_minor
+			remove_character_modifier = qing_censorate_oversight_major
+		}
+	}
+	if = {
+		limit = {
+			has_variable = qing_office_censor_holder
+			var:qing_office_censor_holder = { is_alive = yes  employer = ROOT  finesse >= 12 }
+		}
+		every_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  NOT = { this = ROOT.var:qing_office_censor_holder } }
+			add_character_modifier = { name = qing_censorate_oversight_major  duration = -1 }
+		}
+	}
+	else_if = {
+		limit = {
+			has_variable = qing_office_censor_holder
+			var:qing_office_censor_holder = { is_alive = yes  employer = ROOT  finesse >= 6 }
+		}
+		every_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  NOT = { this = ROOT.var:qing_office_censor_holder } }
+			add_character_modifier = { name = qing_censorate_oversight_minor  duration = -1 }
+		}
+	}
+
+	# --- [#273 develop] IMPERIAL GUARD sovereign-vitality buff on the RULER -----
+	# The Grand Commandant 領侍衛內大臣 keeps the emperor's person safe and well — a
+	# small pulse-managed health boost on current_ruler, scaled by the commandant's
+	# own martial (>=12 major, >=6 minor). Strip-then-reapply like the counsel buff so
+	# a dropped/weakened commandant never leaves a stale grant. (His OTHER contribution
+	# — the emperor's POWER BASE — is a one-time add_loyal_veterans grant on appoint /
+	# strip on vacate, NOT here: add_loyal_veterans is additive and would stack every pulse.)
+	if = {
+		limit = { exists = current_ruler }
+		current_ruler = {
+			remove_character_modifier = qing_guard_vitality_minor
+			remove_character_modifier = qing_guard_vitality_major
+		}
+	}
+	if = {
+		limit = {
+			exists = current_ruler
+			has_variable = qing_office_guard_commandant_holder
+			var:qing_office_guard_commandant_holder = { is_alive = yes  employer = ROOT  martial >= 12 }
+		}
+		current_ruler = { add_character_modifier = { name = qing_guard_vitality_major  duration = -1 } }
+	}
+	else_if = {
+		limit = {
+			exists = current_ruler
+			has_variable = qing_office_guard_commandant_holder
+			var:qing_office_guard_commandant_holder = { is_alive = yes  employer = ROOT  martial >= 6 }
+		}
+		current_ruler = { add_character_modifier = { name = qing_guard_vitality_minor  duration = -1 } }
 	}
 	LOG_exit = { sys = QING  fn = "QING_council_apply_officer_buffs"  result = OK }
 }
@@ -663,7 +871,7 @@ QING_council_apply_officer_buffs = {
 # GREAT OFFICES  (領班軍機大臣 / 六部尚書 / 都察院 / 理藩院 / 總理衙門 / 內務府)
 # Each office is a single character seat. Appointing a capable holder grants a
 # country modifier from qing_governance_modifiers.txt; a vacancy strains that
-# domain. $office$ = chancellor|personnel|revenue|rites|war|justice|works|censor|lifanyuan|grand_secretary|zongli
+# domain. $office$ = chancellor|personnel|revenue|rites|war|justice|works|censor|lifanyuan|chamberlain|zongli
 # Call QING_office_appoint inside the appointee's character scope; the country
 # is reached via `employer` so it is call-site-agnostic.
 # QING_office_vacate is call-site-agnostic too: call it in EITHER the country
@@ -701,6 +909,10 @@ QING_office_appoint = {
 				# the displaced man, so he leaves office clean (no stale finesse/counsel).
 				remove_character_modifier = qing_personnel_cultivated_minor
 				remove_character_modifier = qing_personnel_cultivated_major
+				# [#273 develop] also strip the Censorate oversight loyalty buff, so a
+				# displaced holder keeps no stale personal-loyalty grant.
+				remove_character_modifier = qing_censorate_oversight_minor
+				remove_character_modifier = qing_censorate_oversight_major
 				remove_variable = qing_office_held
 				# the displaced holder loses the power base the office gave him
 				# (mirror of the +4 the new appointee gains below).
@@ -717,7 +929,7 @@ QING_office_appoint = {
 	# the board or yamen brings a staff, clients, and clout (power_base). Grant it
 	# here; QING_office_vacate strips it symmetrically when he is relieved.
 	add_loyal_veterans = 4
-	LOG_line = { sys = QING  msg = "office $office$ -> [this.GetName] (+4 loyal veterans -> power base) for [this.GetEmployer.GetTag]" }
+	LOG_line = { sys = QING  msg = "office $office$ -> (+4 loyal veterans -> power base) for" }
 	# [#175 fix] rebuild the derived roster AND the eligible-candidate cache right away
 	# so the GUI updates immediately: the just-appointed man drops out of the Eligible
 	# Courtiers list (its filter is NOT has_variable=qing_office_held, now set on him)
@@ -743,8 +955,10 @@ QING_office_appoint_first_vacant = {
 	else_if = { limit = { employer = { NOT = { has_variable = qing_office_works_holder } } }     QING_office_appoint = { office = works } }
 	else_if = { limit = { employer = { NOT = { has_variable = qing_office_censor_holder } } }    QING_office_appoint = { office = censor } }
 	else_if = { limit = { employer = { NOT = { has_variable = qing_office_lifanyuan_holder } } } QING_office_appoint = { office = lifanyuan } }
-	else_if = { limit = { employer = { NOT = { has_variable = qing_office_grand_secretary_holder } } }     QING_office_appoint = { office = grand_secretary } }
+	else_if = { limit = { employer = { NOT = { has_variable = qing_office_chamberlain_holder } } }     QING_office_appoint = { office = chamberlain } }
 	else_if = { limit = { employer = { NOT = { has_variable = qing_office_zongli_holder } } }    QING_office_appoint = { office = zongli } }
+	else_if = { limit = { employer = { NOT = { has_variable = qing_office_grand_secretariat_holder } } } QING_office_appoint = { office = grand_secretariat } } # [#273]
+	else_if = { limit = { employer = { NOT = { has_variable = qing_office_guard_commandant_holder } } }  QING_office_appoint = { office = guard_commandant } }  # [#273]
 	else_if = { limit = { employer = { NOT = { has_variable = qing_office_chancellor_holder } } } QING_office_appoint = { office = chancellor } }
 }
 
@@ -760,6 +974,9 @@ QING_office_vacate = {
 			# [#103] strip officer character-buffs so the relieved man leaves clean.
 			remove_character_modifier = qing_personnel_cultivated_minor
 			remove_character_modifier = qing_personnel_cultivated_major
+			# [#273 develop] also strip the Censorate oversight loyalty buff.
+			remove_character_modifier = qing_censorate_oversight_minor
+			remove_character_modifier = qing_censorate_oversight_major
 			remove_variable = qing_office_held
 			# relieved of the office, the man loses the power base it gave him
 			# (mirror of the +4 on appointment).
@@ -769,7 +986,7 @@ QING_office_vacate = {
 	}
 	remove_country_modifier = qing_office_$office$_active
 	add_country_modifier = { name = qing_office_vacancy_strain  duration = 3650 }
-	LOG_line = { sys = QING  msg = "office $office$ vacated (-4 loyal veterans from former holder) for [ROOT.GetTag]" }
+	LOG_line = { sys = QING  msg = "office $office$ vacated (-4 loyal veterans from former holder) for" }
 	# [#175 fix] rebuild roster + eligible-candidate cache so the relieved man
 	# reappears in the Eligible Courtiers list immediately (his qing_office_held was
 	# just removed above) rather than only after the next tab-open / quarterly pulse.
@@ -793,8 +1010,10 @@ QING_office_vacate_dispatch = {
 	else_if = { limit = { var:qing_office_held = flag:works }     employer = { QING_office_vacate = { office = works } } }
 	else_if = { limit = { var:qing_office_held = flag:censor }    employer = { QING_office_vacate = { office = censor } } }
 	else_if = { limit = { var:qing_office_held = flag:lifanyuan } employer = { QING_office_vacate = { office = lifanyuan } } }
-	else_if = { limit = { var:qing_office_held = flag:grand_secretary }     employer = { QING_office_vacate = { office = grand_secretary } } }
+	else_if = { limit = { var:qing_office_held = flag:chamberlain }     employer = { QING_office_vacate = { office = chamberlain } } }
 	else_if = { limit = { var:qing_office_held = flag:zongli }    employer = { QING_office_vacate = { office = zongli } } }
+	else_if = { limit = { var:qing_office_held = flag:grand_secretariat } employer = { QING_office_vacate = { office = grand_secretariat } } } # [#273]
+	else_if = { limit = { var:qing_office_held = flag:guard_commandant }  employer = { QING_office_vacate = { office = guard_commandant } } }  # [#273]
 	# #65 the Emperor Emeritus (太上皇): when Napoleon vacates the seat (death or
 	# removal) strip the office bonus AND lift the conservative backlash that only
 	# rode while the divisive foreigner sat above the banners.

@@ -1,0 +1,90 @@
+########################################################################
+# qing_force_setup_events.txt — [#223/#224-fix] STAGGERED 1815 FORCE SETUP.
+#
+# WHY THIS FILE EXISTS: the Qing starting army + navy were both set up INLINE at
+# on_game_initialized (oa_economy_setup.txt). That single tick is too early and too
+# crowded, producing two boot-test bugs the user reported:
+#
+#   #224 ARMY: all ~27 garrisons mustered in Beijing instead of dispersing. At
+#     on_game_initialized the per-province state.governorships are not yet resolved,
+#     so every SE_qing_raise_garrison[_cmd] call fell through its
+#     `$prov$ = { exists = state.governorship }` guard to the c:CHI.capital_scope
+#     fallback — i.e. Beijing — stacking the entire order of battle in one province.
+#     (The garrison provinces span 8 distinct regions — Zhili/Shaanxi/Gansu/Liaoning/
+#     Jiangsu/Sichuan/Guangdong/Fujian — so they are NOT one shared governorship;
+#     the all-Beijing result can only be the fallback path firing every time.)
+#
+#   #223 NAVY: only the Fujian squadron survived. Three create_unit navy=yes calls
+#     issued sequentially in ONE scope on ONE tick collide; only one persists.
+#
+# THE FIX (both): defer force setup off the on_game_initialized tick and STAGGER it
+# across distinct days, mirroring the only PROVEN-WORKING multi-unit setups in this
+# mod (the ILI Chu Army and the four Self-Strengthening fleets, each raised on its
+# own mid-game tick). By the time these fire, governorships are resolved (army
+# disperses) and each navy create lands on its own tick (all three fleets survive).
+#
+# All events: country_event, hidden, is_triggered_only, ROOT = c:CHI. Scheduling is
+# guarded once by qing_force_setup_scheduled at the call site (oa_economy_setup.txt);
+# scheduled events persist across save/reload, so they are queued exactly once.
+# Individual effects keep their own idempotency: SE_qing_armies self-guards on
+# qing_armies_setup_done, SE_qing_navy_disband on qing_navy_setup_done.
+#
+#   Namespace = qing_force_setup
+#     .1   raise the dispersed land order of battle  (SE_qing_armies)
+#     .10  disband the ahistorical auto-generated fleets  (SE_qing_navy_disband)
+#     .11  raise all three 水師 squadrons (Guangdong/Fujian/Zhejiang) on ONE tick [#242-fix]
+########################################################################
+
+namespace = qing_force_setup
+
+########################################################################
+# .1  LAND ORDER OF BATTLE — raised on a settled tick so each garrison musters at
+# its own province's governorship (dispersed) rather than the capital fallback.
+########################################################################
+qing_force_setup.1 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_force_setup.1 (deferred land OOB)" }
+		SE_qing_armies = yes
+	}
+}
+
+########################################################################
+# .10  DISBAND the engine's auto-generated blue-water fleets (own tick, before the
+# squadron raises). Self-guarded (destroy_unit is destructive) via qing_navy_setup_done.
+########################################################################
+qing_force_setup.10 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_force_setup.10 (disband auto-gen fleets)" }
+		SE_qing_navy_disband = yes
+	}
+}
+
+########################################################################
+# .11  RAISE all three 水師 squadrons on ONE tick.
+#
+# [#242-fix develop] The previous design raised each squadron on its OWN staggered
+# tick (.11/.12/.13 on days 4/5/6) on the theory that same-tick create_unit navy=yes
+# calls collide. The debug.log DISPROVED that: create_unit ran for all three, yet only
+# Fujian survived in-game. Oracle consult (2026-07-08) identified the real culprit as
+# the day-3 disband's `every_navy = { destroy_unit }` interacting with the staggered
+# raises, and found the PROVEN multi-navy idiom to be several create_unit navy=yes
+# blocks in ONE event on ONE tick (Invictus events/flavor_gaul.txt:590-632). So all
+# three squadrons now raise together here, AFTER the .10 disband. ROOT = c:CHI.
+########################################################################
+qing_force_setup.11 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_force_setup.11 (all three water-forces, one tick)" }
+		SE_qing_navy_guangdong = yes
+		SE_qing_navy_fujian = yes
+		SE_qing_navy_zhejiang = yes
+	}
+}

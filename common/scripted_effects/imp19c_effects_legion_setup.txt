@@ -3,9 +3,19 @@
 #
 # create_unit / raise_legion follow the engine idiom verified against the
 # feasibility oracles (Invictus, Terra-Indomita): every create_unit declares a
-# base `sub_unit = <type>`, adds strength with `add_subunit = <type>`, and the
-# commander is attached INSIDE the raise_legion block via
-#   char:X = { add_to_legion = PREV } + random_legion_unit = { set_as_commander = char:X }
+# base `sub_unit = <type>`, adds strength with `add_subunit = <type>`.
+#
+# TWO commander idioms are used in this file, deliberately:
+#   1. The QING GARRISON helpers (SE_qing_raise_garrison[_cmd]) create the unit at
+#      COUNTRY scope with an inline `commander = <char>` field — the proven
+#      free-placement idiom (Invictus galatian_invasion.txt:715; 00_event_effects_
+#      inv_1_0.txt:4281). This is REQUIRED because raise_legion musters at the
+#      governorship seat and ignores `location`, which stacked the whole OOB at
+#      Beijing (#241-fix, oracle-confirmed 2026-07-08).
+#   2. The 1815 European coalition legions below (SE_occupation_of_france etc.) still
+#      use raise_legion + `char:X = { add_to_legion = PREV }` + random_legion_unit =
+#      { set_as_commander = char:X }, since they are deliberately raised from ONE
+#      capital governorship and located across France (dispersal not required there).
 # (An earlier version used add_loyal_subunit / set_personal_loyalty / a pre-add
 #  every_sub_unit loop / an external add_commander on a saved scope — none of
 #  those are valid here; that is why these effects were disabled "due to errors".)
@@ -63,21 +73,31 @@ SE_qing_raise_garrison = {
 		# CHI directly — historically these WERE Qing frontier commands. The old guard
 		# (owner = c:CHI only) silently dropped exactly these 5 garrisons via LOG_fail.
 		# is_subject_of is a proven trigger (common/military_traditions/00_indian.txt;
-		# Invictus parthia_interactions.txt). The legion is still RAISED from
-		# c:CHI.capital_scope.governorship, so it belongs to Qing regardless.
+		# Invictus parthia_interactions.txt). The unit is created by $prov$'s OWNER, so
+		# a subject-held frontier province raises under THAT subject (the intended
+		# "dispersed across China AND its subjects" behaviour).
 		limit = { exists = $prov$  $prov$ = { OR = { owner = c:CHI  owner = { is_subject_of = c:CHI } } } }
-		c:CHI.capital_scope.governorship = {
-			raise_legion = {
-				create_unit = {
-					name = $name$
-					location = $prov$
-					sub_unit = regular_infantry
-					save_scope_as = qing_garrison_legion
-					while = { count = $size$  add_subunit = regular_infantry }
-				}
+		# [#241-fix develop] ROOT CAUSE of the all-Beijing stack: the old idiom wrapped
+		# create_unit in `$prov$.state.governorship = { raise_legion = { ... } }`. Oracle
+		# consult (Invictus/Terra-Indomita, 2026-07-08) confirmed raise_legion is a
+		# MOBILISATION wrapper: the legion musters at the GOVERNORSHIP SEAT and the nested
+		# create_unit `location` is IGNORED. Every garrison therefore mustered at its
+		# governorship's state capital (in practice Beijing), not at $prov$ — the stack.
+		# FIX: drop raise_legion entirely and create the unit directly at COUNTRY scope
+		# ($prov$'s owner) with `location = $prov$`. This is the proven free-placement
+		# idiom (Invictus events/flavor_maurya.txt:1037 `owner = { create_unit { navy=no
+		# location=<prov> } }`; galatian_invasion.txt:715). `location` is respected here,
+		# so each garrison spawns AT its own province — dispersed as intended.
+		$prov$ = { owner = {
+			create_unit = {
+				navy = no
+				name = $name$
+				location = $prov$
+				sub_unit = regular_infantry
+				while = { count = $size$  add_subunit = regular_infantry }
 			}
-		}
-		LOG_line = { sys = QING  msg = "Qing garrison raised: $name$ at $prov$ (+$size$ coy)" }
+		} }
+		LOG_line = { sys = QING  msg = "[#241] Qing garrison raised: $name$ at $prov$ (+$size$ coy) via country-scope create_unit" }
 	}
 	else = {
 		LOG_fail = { sys = QING  fn = "SE_qing_raise_garrison"  reason = "$prov$ not held by Qing; $name$ not raised" }
@@ -96,20 +116,43 @@ SE_qing_raise_garrison_cmd = {
 		# above (Ili banner garrison under commander Changling char:244 is precisely
 		# one of the frontier cases this restores). See that helper for the rationale.
 		limit = { exists = $prov$  $prov$ = { OR = { owner = c:CHI  owner = { is_subject_of = c:CHI } } }  exists = $cmd$ }
-		c:CHI.capital_scope.governorship = {
-			raise_legion = {
+		# [#241-fix develop] Same root-cause fix as SE_qing_raise_garrison above: drop the
+		# raise_legion/governorship wrapper (which clamped every legion to its governorship
+		# seat, ignoring `location`) and create the unit at COUNTRY scope ($prov$'s owner)
+		# with `location = $prov$` so it disperses to its own province. create_unit accepts
+		# an inline `commander = <char>` field (Invictus events/galatian_invasion.txt:715-718
+		# `create_unit { navy=no location=pX commander=scope:... }`; common/scripted_effects/
+		# 00_event_effects_inv_1_0.txt:4281 `commander = char:13`) — this replaces the old
+		# add_to_legion + random_legion_unit.set_as_commander dance. The commander is
+		# attached only when he is a non-ruler employed by $prov$'s owner (a CHI commander
+		# cannot lead a subject-owned frontier legion — e.g. Ili raises under the ILI
+		# subject); otherwise the garrison still musters and the player assigns a commander.
+		if = {
+			limit = { $cmd$ = { is_ruler = no  employer = $prov$.owner } }
+			$prov$ = { owner = {
 				create_unit = {
+					navy = no
+					name = $name$
+					location = $prov$
+					commander = $cmd$
+					sub_unit = regular_infantry
+					while = { count = $size$  add_subunit = regular_infantry }
+				}
+			} }
+			LOG_line = { sys = QING  msg = "[#241] Qing garrison raised: $name$ at $prov$ (+$size$ coy) under commander $cmd$" }
+		}
+		else = {
+			$prov$ = { owner = {
+				create_unit = {
+					navy = no
 					name = $name$
 					location = $prov$
 					sub_unit = regular_infantry
-					save_scope_as = qing_garrison_legion
 					while = { count = $size$  add_subunit = regular_infantry }
 				}
-				$cmd$ = { add_to_legion = PREV }
-				random_legion_unit = { set_as_commander = $cmd$ }
-			}
+			} }
+			LOG_line = { sys = QING  msg = "[#241] Qing garrison raised: $name$ at $prov$ (+$size$ coy); $cmd$ not eligible to command (player assigns)" }
 		}
-		LOG_line = { sys = QING  msg = "Qing garrison raised: $name$ at $prov$ (+$size$ coy) under commander $cmd$" }
 	}
 	else = {
 		LOG_fail = { sys = QING  fn = "SE_qing_raise_garrison_cmd"  reason = "$prov$ unheld or $cmd$ absent; $name$ not raised" }
@@ -210,11 +253,33 @@ SE_qing_armies = {
 # Guarded on coastal ownership; each raise logs. Called once from
 # oa_economy_setup.txt right after SE_qing_armies.
 ########################################################################
-SE_qing_navy = {
-	LOG_enter = { sys = QING  fn = "SE_qing_navy" }
-	# Global sentinel: destroy_unit is DESTRUCTIVE, so — unlike the purely-additive
-	# SE_qing_armies — this must never run twice (which would sink a navy the player
-	# has since built). Guard so it fires exactly once at the true game start.
+# ----------------------------------------------------------------------
+# [#223-fix task #223] NAVY SPAWN — WHY ONLY ONE FLEET APPEARED, AND THE FIX.
+#
+# THE BUG (user boot-test): only the Fujian squadron ever spawned. Root cause
+# (oracle-confirmed): multiple `create_unit navy=yes` calls issued SEQUENTIALLY in
+# a single scope on the SAME on_game_initialized tick collide — only one navy
+# survives. Every PROVEN-WORKING multi-fleet setup in this mod raises each fleet on
+# a DISTINCT tick: the four Self-Strengthening fleets (se_QING_SELFSTR.txt) each
+# spawn from a different mission's on_completion, never in one batch. is_coastal is
+# NOT the culprit here — p:9298/p:3651/p:2893 all carry map_data/ports.csv entries,
+# so they read coastal fine.
+#
+# THE FIX: split the old monolithic SE_qing_navy into (a) a disband-only step that
+# clears the ahistorical auto-generated fleets, and (b) THREE independent
+# per-squadron effects, each raising ONE fleet. The call site (oa_economy_setup.txt)
+# now fires these on staggered days via hidden events (qing_navy_setup.1/.2/.3), so
+# each create_unit lands on its own tick and all three survive. Behaviour of each
+# squadron's raise/fallback logic is UNCHANGED from the pre-fix code — only the
+# TIMING (one-per-tick instead of three-in-one-tick) changed.
+# ----------------------------------------------------------------------
+
+# Disband the engine's ahistorical auto-generated blue-water fleets (seeded from
+# STARTING_SHIPS_PER_PORT_POPULATION). destroy_unit is DESTRUCTIVE, so the global
+# sentinel guarantees this runs exactly once. Called first, on its own tick, BEFORE
+# the three squadron raises — so the water-forces below are the only 1815 Qing navy.
+SE_qing_navy_disband = {
+	LOG_enter = { sys = QING  fn = "SE_qing_navy_disband" }
 	if = {
 		limit = {
 			exists = c:CHI
@@ -222,100 +287,148 @@ SE_qing_navy = {
 		}
 		set_global_variable = qing_navy_setup_done
 		c:CHI = {
-			# 1) Disband the ahistorical auto-generated fleets. Every hull the engine
-			#    seeded from the port-population define is removed; the water-forces
-			#    below are then the ONLY navy the 1815 Qing fields.
 			if = {
 				limit = { any_navy = { always = yes } }
-				every_navy = {
-					destroy_unit = yes
-				}
+				every_navy = { destroy_unit = yes }
 				LOG_line = { sys = QING  msg = "auto-generated Qing fleets disbanded (ahistorical 1815 blue-water navy removed)" }
-			}
-
-			# 2) 廣東水師 Guangdong Water-Force — Canton estuary, the empire's busiest
-			#    maritime frontier (Canton System trade + Pearl River anti-piracy).
-			#    p:9298 is Guangzhou (also the Liangguang garrison seat).
-			if = {
-				limit = { exists = p:9298  p:9298 = { owner = c:CHI  is_coastal = yes } }
-				create_unit = {
-					navy = yes
-					name = "Guangdong Water-Force 廣東水師"
-					location = p:9298
-					sub_unit = brig
-					while = { count = 5  add_subunit = brig }
-				}
-				LOG_line = { sys = QING  msg = "Guangdong Water-Force raised at Canton (p:9298), 6x war-junk" }
-			}
-			else = {
-				LOG_fail = { sys = QING  fn = "SE_qing_navy"  reason = "p:9298 Canton not held/coastal; Guangdong Water-Force not raised" }
-			}
-
-			# 3) 福建水師 Fujian Water-Force — Taiwan Strait command (Fuzhou + Straits
-			#    marine, the Green Standard marine squadrons). p:3651 is Fuzhou.
-			if = {
-				limit = { exists = p:3651  p:3651 = { owner = c:CHI  is_coastal = yes } }
-				create_unit = {
-					navy = yes
-					name = "Fujian Water-Force 福建水師"
-					location = p:3651
-					sub_unit = brig
-					while = { count = 3  add_subunit = brig }
-				}
-				LOG_line = { sys = QING  msg = "Fujian Water-Force raised at Fuzhou (p:3651), 4x war-junk" }
-			}
-			else = {
-				# Fuzhou may be non-coastal in this map's province graph; fall back to
-				# the largest coastal province owned, so Fujian still gets a squadron.
-				if = {
-					limit = { any_owned_province = { is_coastal = yes } }
-					ordered_owned_province = {
-						# [#193-fix task #193] exclude Canton (9298) and Ningbo (2893) so the Fujian
-						# fallback never stacks a second squadron on the Guangdong/Zhejiang port.
-						limit = { is_coastal = yes  NOT = { province_id = 9298 }  NOT = { province_id = 2893 } }
-						order_by = total_population
-						max = 1
-						save_scope_as = qing_navy_fallback_port
-					}
-					create_unit = {
-						navy = yes
-						name = "Fujian Water-Force 福建水師"
-						location = scope:qing_navy_fallback_port
-						sub_unit = brig
-						while = { count = 3  add_subunit = brig }
-					}
-					LOG_line = { sys = QING  msg = "Fujian Water-Force raised at fallback coastal port (Fuzhou not coastal), 4x war-junk" }
-				}
-				else = {
-					LOG_fail = { sys = QING  fn = "SE_qing_navy"  reason = "no coastal province owned; Fujian Water-Force not raised" }
-				}
-			}
-
-			# 4) [#191 task #191] 浙江水師 Zhejiang Water-Force — the Ningbo / Zhenhai
-			#    (鎮海) command guarding the Zhejiang coast and the Yangzi approaches,
-			#    the third principal provincial water-force (清史稿·兵志). Smallest of the
-			#    three and, like them, a coastal-defence junk squadron outclassed by a
-			#    single European steam frigate. p:2893 is Ningbo.
-			if = {
-				limit = { exists = p:2893  p:2893 = { owner = c:CHI  is_coastal = yes } }
-				create_unit = {
-					navy = yes
-					name = "Zhejiang Water-Force 浙江水師"
-					location = p:2893
-					sub_unit = brig
-					while = { count = 2  add_subunit = brig }
-				}
-				LOG_line = { sys = QING  msg = "Zhejiang Water-Force raised at Ningbo (p:2893), 3x war-junk" }
-			}
-			else = {
-				LOG_fail = { sys = QING  fn = "SE_qing_navy"  reason = "p:2893 Ningbo not held/coastal; Zhejiang Water-Force not raised" }
 			}
 		}
 	}
 	else = {
-		LOG_fail = { sys = QING  fn = "SE_qing_navy"  reason = "c:CHI absent or navy setup already done (sentinel set); no Qing water-force raised" }
+		LOG_fail = { sys = QING  fn = "SE_qing_navy_disband"  reason = "c:CHI absent or navy setup already done (sentinel set)" }
 	}
-	LOG_exit = { sys = QING  fn = "SE_qing_navy"  result = OK }
+	LOG_exit = { sys = QING  fn = "SE_qing_navy_disband"  result = OK }
+}
+
+# 廣東水師 Guangdong Water-Force — Canton estuary, the empire's busiest maritime
+# frontier (Canton System trade + Pearl River anti-piracy). p:9298 is Guangzhou.
+# Raised on its OWN tick (see #223-fix note above). Raise/fallback logic verbatim
+# from the pre-fix code. Called in country scope (ROOT = c:CHI).
+SE_qing_navy_guangdong = {
+	LOG_enter = { sys = QING  fn = "SE_qing_navy_guangdong" }
+	if = {
+		limit = { exists = p:9298  p:9298 = { owner = c:CHI  is_coastal = yes } }
+		create_unit = {
+			navy = yes
+			name = "Guangdong Coastal Patrol 廣東水師"
+			location = p:9298
+			sub_unit = brig
+			while = { count = 5  add_subunit = brig }
+		}
+		LOG_line = { sys = QING  msg = "Guangdong Coastal Patrol raised at Canton (p:9298), 6x war-junk" }
+	}
+	else = {
+		# [#212-fix] fallback: raise at the largest owned coastal province, excluding
+		# the other two water-forces' home ports (3651/2893).
+		if = {
+			limit = { any_owned_province = { is_coastal = yes  NOT = { province_id = 3651 }  NOT = { province_id = 2893 } } }
+			ordered_owned_province = {
+				limit = { is_coastal = yes  NOT = { province_id = 3651 }  NOT = { province_id = 2893 } }
+				order_by = total_population
+				max = 1
+				save_scope_as = qing_gd_fallback_port
+			}
+			create_unit = {
+				navy = yes
+				name = "Guangdong Coastal Patrol 廣東水師"
+				location = scope:qing_gd_fallback_port
+				sub_unit = brig
+				while = { count = 5  add_subunit = brig }
+			}
+			LOG_line = { sys = QING  msg = "Guangdong Coastal Patrol raised at fallback coastal port (Canton p:9298 not coastal), 6x war-junk" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "SE_qing_navy_guangdong"  reason = "p:9298 Canton not held/coastal and no fallback port; Guangdong Coastal Patrol not raised" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "SE_qing_navy_guangdong"  result = OK }
+}
+
+# 福建水師 Fujian Water-Force — Taiwan Strait command (Fuzhou + Straits marine).
+# p:3651 is Fuzhou. Raised on its OWN tick. Logic verbatim from the pre-fix code.
+SE_qing_navy_fujian = {
+	LOG_enter = { sys = QING  fn = "SE_qing_navy_fujian" }
+	if = {
+		limit = { exists = p:3651  p:3651 = { owner = c:CHI  is_coastal = yes } }
+		create_unit = {
+			navy = yes
+			name = "Fujian Coastal Patrol 福建水師"
+			location = p:3651
+			sub_unit = brig
+			while = { count = 3  add_subunit = brig }
+		}
+		LOG_line = { sys = QING  msg = "Fujian Coastal Patrol raised at Fuzhou (p:3651), 4x war-junk" }
+	}
+	else = {
+		if = {
+			limit = { any_owned_province = { is_coastal = yes } }
+			ordered_owned_province = {
+				# [#193-fix task #193] exclude Canton (9298) and Ningbo (2893) so the Fujian
+				# fallback never stacks a second squadron on the Guangdong/Zhejiang port.
+				limit = { is_coastal = yes  NOT = { province_id = 9298 }  NOT = { province_id = 2893 } }
+				order_by = total_population
+				max = 1
+				save_scope_as = qing_navy_fallback_port
+			}
+			create_unit = {
+				navy = yes
+				name = "Fujian Coastal Patrol 福建水師"
+				location = scope:qing_navy_fallback_port
+				sub_unit = brig
+				while = { count = 3  add_subunit = brig }
+			}
+			LOG_line = { sys = QING  msg = "Fujian Coastal Patrol raised at fallback coastal port (Fuzhou not coastal), 4x war-junk" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "SE_qing_navy_fujian"  reason = "no coastal province owned; Fujian Coastal Patrol not raised" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "SE_qing_navy_fujian"  result = OK }
+}
+
+# [#191 task #191] 浙江水師 Zhejiang Water-Force — the Ningbo / Zhenhai (鎮海) command
+# guarding the Zhejiang coast and the Yangzi approaches, the third principal
+# provincial water-force (清史稿·兵志). p:2893 is Ningbo. Raised on its OWN tick.
+# [#223-fix] added a coastal fallback (previously NONE — a second silent-drop path).
+SE_qing_navy_zhejiang = {
+	LOG_enter = { sys = QING  fn = "SE_qing_navy_zhejiang" }
+	if = {
+		limit = { exists = p:2893  p:2893 = { owner = c:CHI  is_coastal = yes } }
+		create_unit = {
+			navy = yes
+			name = "Zhejiang Coastal Patrol 浙江水師"
+			location = p:2893
+			sub_unit = brig
+			while = { count = 2  add_subunit = brig }
+		}
+		LOG_line = { sys = QING  msg = "Zhejiang Coastal Patrol raised at Ningbo (p:2893), 3x war-junk" }
+	}
+	else = {
+		# [#223-fix] fallback: largest owned coastal province excluding the other two
+		# home ports (9298/3651), so Zhejiang still gets a squadron if Ningbo is not
+		# held/coastal — matching the Guangdong/Fujian fallback idiom.
+		if = {
+			limit = { any_owned_province = { is_coastal = yes  NOT = { province_id = 9298 }  NOT = { province_id = 3651 } } }
+			ordered_owned_province = {
+				limit = { is_coastal = yes  NOT = { province_id = 9298 }  NOT = { province_id = 3651 } }
+				order_by = total_population
+				max = 1
+				save_scope_as = qing_zj_fallback_port
+			}
+			create_unit = {
+				navy = yes
+				name = "Zhejiang Coastal Patrol 浙江水師"
+				location = scope:qing_zj_fallback_port
+				sub_unit = brig
+				while = { count = 2  add_subunit = brig }
+			}
+			LOG_line = { sys = QING  msg = "Zhejiang Coastal Patrol raised at fallback coastal port (Ningbo p:2893 not coastal), 3x war-junk" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "SE_qing_navy_zhejiang"  reason = "p:2893 Ningbo not held/coastal and no fallback port; Zhejiang Coastal Patrol not raised" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "SE_qing_navy_zhejiang"  result = OK }
 }
 
 SE_occupation_of_france = {

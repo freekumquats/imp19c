@@ -1,0 +1,337 @@
+########################################################################
+# se_MARRIAGE.txt — [#276] DYNASTIC MARRIAGE DIPLOMACY.
+#
+# Royal marriage as a DIPLOMATIC instrument for the European / dynastic AI powers
+# (and any player running such a realm). A marriage between two ruling houses binds
+# the realms (a standing goodwill opinion, sometimes a formal alliance) and — where
+# a junior house is left without a male heir — opens the road to DYNASTIC UNION and
+# eventual inheritance, modelled on the existing royal_union subject type.
+#
+# SCOPE (DESIGN_MARRIAGE_DIPLOMACY.md §6, conservative default — user away, build
+# ordered): this is a WESTERN-MONARCHY AI feature. It self-gates on
+# basic_western_group_country_trigger + narrow_monarchy_trigger and is AI-autonomous
+# (drives itself while the player runs the Qing, exactly like the USA #93 / Japan #94
+# / Mexico #96 arcs). The Qing do NOT participate in unions or inheritance — they
+# integrate their subjects, they are not inherited — so CHI is excluded here (a
+# foreign-princess Empress for CHI is left to the separate Empress-seat flavour).
+#
+# ORACLE GATE (all four §3 hooks cleared 2026-07-09, Terra-Indomita + Invictus):
+#   [U-3] cross-court marry_character — PROVEN: c:TAG = { <child iterator> = {
+#         save_scope_as = X } } then char = { marry_character = scope:X } (Invictus
+#         me_bithynia.txt:173-229; ordered_child is the standard child iterator).
+#   [U-2] royal_union FROM a marriage — PROVEN verb: FUNC_make_subject { type =
+#         royal_union } (se_FUNC.txt:412; royal_union def 00_default.txt:914). The
+#         LOGIC (junior house = the heirless one) is ours.
+#   [U-1] auto-inheritance on shared-ruler death — engine auto-merge is UNPROVEN, so
+#         NOT relied on. Modelled OURSELVES on on_character_death (is_ruler=yes),
+#         transferring the junior realm's land with the PROVEN LAND_transfer_provinces
+#         idiom (se_LAND.txt:348 — the only sanctioned land-transfer path). annex_country
+#         is ABSENT from both oracles + the mod, so it is NOT used.
+#   [U-4] AI willingness / diplomatic action — a marriage diplomatic-action payload
+#         is UNPROVEN, so NOT used. AI-autonomous PULSE drives it (proven arc idiom).
+#
+# Per-partner bookkeeping uses the PROVEN variable_list idiom (add_to_variable_list /
+# is_target_in_variable_list — exactly as #165 se_QING_SPHERE tracks its ring), NOT a
+# dynamic name@scope var (that suffix syntax has zero precedent in this codebase).
+#
+# Storage
+#   COUNTRY : qing_marriage_initialized (seed guard); marriage_bond_count (live bonds);
+#             list marriage_partners (the realms we are wedded to); throttle
+#             marriage_pulse_cooldown.
+#   STATE/COUNTRY var marriage_union_junior : marks a royal_union WE created by marriage
+#             (so L3 inheritance only fires on our own unions, not pre-existing ones).
+#   Opinion : royal_marriage_opmod (standing goodwill between wedded houses).
+#
+# Cadence: MARRIAGE_pulse from yearly_country_pulse, self-throttled ~5 years, one
+# partner attempt per pulse (a bounded random_country pick, NOT an O(n^2) scan).
+# All logged sys = MARRIAGE, STATIC msgs only (#253). Prefix = MARRIAGE_.
+#
+# Sources (feasibility only, no content copied): standard 19thC dynastic-diplomacy
+# history (the Coburg marriages, the "grandmother of Europe"); engine idioms above.
+########################################################################
+
+# ======================================================================
+# MARRIAGE_init — seed the bond counter once. Scope: COUNTRY. Idempotent.
+# ======================================================================
+MARRIAGE_init = {
+	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_marriage_initialized } }
+		set_variable = { name = qing_marriage_initialized  value = 1 }
+		set_variable = { name = marriage_bond_count  value = 0 }
+	}
+	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_init"  result = OK }
+}
+
+# ======================================================================
+# MARRIAGE_pulse — AI-autonomous driver. Scope: COUNTRY (a Western monarchy AI).
+# Self-throttled ~5 years. Finds ONE partner realm not already wedded to us and
+# forms a marriage pact; then, if a standing bond leaves a junior house heirless,
+# escalates that bond to a dynastic royal_union. Bounded: a single random_country
+# pick per pulse, so cost stays O(1) amortised even across many monarchies.
+# ======================================================================
+MARRIAGE_pulse = {
+	if = {
+		limit = { NOT = { has_variable = marriage_pulse_cooldown } }
+		LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_pulse" }
+		set_variable = { name = marriage_pulse_cooldown  days = 1825 }
+		MARRIAGE_init = yes
+		save_scope_as = marriage_home
+		# --- L1: seek a fresh dynastic marriage, but only while we are not already
+		# over-wed (a realm holds at most 3 standing dynastic bonds — beyond that the
+		# houses are saturated and further weddings add nothing) AND our own house
+		# still fields a marriageable child.
+		if = {
+			limit = {
+				var:marriage_bond_count < 3
+				current_ruler = { MARRIAGE_has_marriageable_child_trigger = yes }
+			}
+			random_country = {
+				limit = {
+					NOT = { this = scope:marriage_home }
+					MARRIAGE_eligible_realm_trigger = yes
+					in_diplomatic_range = scope:marriage_home
+					# not already wedded to us (proven variable_list membership test)
+					NOT = {
+						scope:marriage_home = {
+							is_target_in_variable_list = { name = marriage_partners  target = prev }
+						}
+					}
+					# the partner house must also field a marriageable child to wed
+					current_ruler = { MARRIAGE_has_marriageable_child_trigger = yes }
+				}
+				save_scope_as = marriage_partner_realm
+			}
+			if = {
+				limit = { exists = scope:marriage_partner_realm }
+				MARRIAGE_form_pact = { partner = scope:marriage_partner_realm }
+			}
+		}
+		# --- L2: escalate any standing bond whose junior house is now heirless.
+		MARRIAGE_check_unions = yes
+		LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_pulse"  result = OK }
+	}
+}
+
+# ======================================================================
+# MARRIAGE_form_pact — wed a child of our house to a child of the partner house.
+# Scope: COUNTRY (the senior/proposing house). $partner$ = the partner COUNTRY.
+# Cross-court marriage is PROVEN (oracle U-3): save a marriageable child of the
+# partner's ruler, then marry our ruler's marriageable child to it. Applies the
+# standing goodwill opinion BOTH ways and, for a strong match, a formal alliance.
+# ======================================================================
+MARRIAGE_form_pact = {
+	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_form_pact" }
+	save_scope_as = pact_senior
+	$partner$ = { save_scope_as = pact_junior }
+	# 1. a marriageable FEMALE child of the PARTNER house (the foreign court). ordered_child
+	#    with order_by = age, max = 1 = the eldest eligible — the standard idiom. The
+	#    engine requires an OPPOSITE-SEX pair to wed, so we pick a bride here and a groom
+	#    below (a symmetric same-sex fallback is not worth the branch for AI flavour).
+	scope:pact_junior = {
+		current_ruler = {
+			ordered_child = {
+				limit = {
+					is_alive = yes
+					is_adult = yes
+					is_married = no
+					prisoner = no
+					is_female = yes
+				}
+				order_by = age
+				max = 1
+				save_scope_as = marriage_bride
+			}
+		}
+	}
+	# 2. a marriageable MALE child of OUR house, married to the foreign bride. Guard the
+	#    whole wedding on the partner child being found (a house can run dry between
+	#    the pulse's trigger check and here).
+	if = {
+		limit = { exists = scope:marriage_bride }
+		current_ruler = {
+			ordered_child = {
+				limit = {
+					is_alive = yes
+					is_adult = yes
+					is_married = no
+					prisoner = no
+					is_male = yes
+					NOT = { this = scope:marriage_bride }
+				}
+				order_by = age
+				max = 1
+				marry_character = scope:marriage_bride
+				save_scope_as = marriage_groom
+			}
+		}
+	}
+	# 3. record the bond (both directions) and apply the diplomatic payload, but only
+	#    if the wedding actually happened (both scopes exist).
+	if = {
+		limit = {
+			exists = scope:marriage_bride
+			exists = scope:marriage_groom
+		}
+		# per-partner bond via the proven variable_list idiom, both directions, so
+		# the pair never double-weds.
+		scope:pact_senior = {
+			add_to_variable_list = { name = marriage_partners  target = scope:pact_junior }
+			change_variable = { name = marriage_bond_count  add = 1 }
+			add_opinion = { modifier = royal_marriage_opmod  target = scope:pact_junior }
+		}
+		scope:pact_junior = {
+			MARRIAGE_init = yes
+			add_to_variable_list = { name = marriage_partners  target = scope:pact_senior }
+			change_variable = { name = marriage_bond_count  add = 1 }
+			add_opinion = { modifier = royal_marriage_opmod  target = scope:pact_senior }
+		}
+		# a strong dynastic match (not already allied to us, both at peace) seals a
+		# formal alliance — the Coburg pattern. add_alliance is symmetric.
+		if = {
+			limit = {
+				NOT = { scope:pact_senior = { alliance_with = scope:pact_junior } }
+				scope:pact_senior = { NOT = { at_war = yes } }
+				scope:pact_junior = { NOT = { at_war = yes } }
+			}
+			scope:pact_senior = { add_alliance = scope:pact_junior }
+			LOG_line = { sys = MARRIAGE  msg = "pact sealed with a formal alliance" }
+		}
+		LOG_line = { sys = MARRIAGE  msg = "royal marriage concluded between two houses" }
+	}
+	else = {
+		LOG_fail = { sys = MARRIAGE  fn = "MARRIAGE_form_pact"  reason = "no marriageable pair found at wedding time" }
+	}
+	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_form_pact"  result = OK }
+}
+
+# ======================================================================
+# MARRIAGE_check_unions — L2. Scope: COUNTRY (senior house). For each realm we are
+# wedded to, if THAT junior house is now heirless (its ruler has no living child to
+# inherit) and it is a valid subordinate, bind it to us as a royal_union. Bounded to
+# a single escalation per pulse (random_country over our wedded partners).
+# ======================================================================
+MARRIAGE_check_unions = {
+	if = {
+		limit = { var:marriage_bond_count > 0 }
+		save_scope_as = union_senior
+		random_country = {
+			limit = {
+				NOT = { this = scope:union_senior }
+				# wedded to us (proven variable_list membership on the senior)
+				scope:union_senior = {
+					is_target_in_variable_list = { name = marriage_partners  target = prev }
+				}
+				# still an independent realm (not already someone's subject)
+				is_subject = no
+				exists = current_ruler
+				# the junior house has failed — no living child to inherit at all.
+				NOT = { current_ruler = { any_child = { is_alive = yes } } }
+				# [#276 review-fix] the JUNIOR must not be larger than the senior. Without this
+				# guard a small wedded realm could absorb a far more powerful heirless partner as
+				# ITS royal_union (the crown passes to the bigger dynastic claim historically, not
+				# the smaller) — a perverse minnow-swallows-whale union. num_of_cities is the
+				# cheap available size proxy.
+				num_of_cities <= scope:union_senior.num_of_cities
+				# both still at peace with each other (a union is a settlement, not a conquest)
+				NOT = { at_war = yes }
+			}
+			save_scope_as = union_junior
+		}
+		if = {
+			limit = { exists = scope:union_junior }
+			# form the personal union (proven verb; logic ours). The junior keeps its
+			# own ruler until that ruler dies — inheritance is handled at death (L3).
+			FUNC_make_subject = {
+				overlord = scope:union_senior
+				target = scope:union_junior
+				type = royal_union
+			}
+			scope:union_junior = { set_variable = { name = marriage_union_junior  value = 1 } }
+			LOG_line = { sys = MARRIAGE  msg = "heirless wedded house bound as a royal union" }
+		}
+	}
+}
+
+# ======================================================================
+# MARRIAGE_on_ruler_death_union — L3. Scope: CHARACTER (a ruler who just died).
+# Called from on_character_death. If the dead ruler headed a royal_union junior we
+# created by marriage (marriage_union_junior) AND that junior is now truly extinct
+# (no living heir), the union INHERITS: the overlord takes the junior's land via the
+# PROVEN LAND_transfer_provinces idiom (se_LAND.txt), NOT an unproven annex verb.
+# Self-guards throughout.
+# ======================================================================
+MARRIAGE_on_ruler_death_union = {
+	# only rulers of a marriage-made royal_union matter here.
+	if = {
+		limit = {
+			is_ruler = yes
+			exists = employer
+			employer = {
+				has_variable = marriage_union_junior
+				is_subject = yes
+				is_subject_type = royal_union
+			}
+		}
+		employer = {
+			save_scope_as = union_dying_realm
+			# if the house is now truly extinct (no living heir), the union inherits.
+			if = {
+				limit = {
+					NOT = { current_ruler = { any_child = { is_alive = yes } } }
+					exists = overlord
+				}
+				overlord = { save_scope_as = union_inheritor }
+				LOG_line = { sys = MARRIAGE  msg = "royal-union junior house extinct -> inheritance" }
+				# gather the whole junior realm's land into a NAMED list (the idiom
+				# LAND_transfer_provinces expects — target_provinces takes a plain list
+				# built with add_to_list, cf. play_cede_candidates in se_DIPLOMACY), then
+				# hand it to the overlord in one sanctioned transfer. LAND_transfer_provinces
+				# is the ONLY correct path (se_LAND.txt): it re-homes the governorship vars
+				# a raw engine ownership swap would strand.
+				scope:union_dying_realm = {
+					every_owned_province = {
+						limit = { is_sea = no }
+						add_to_list = marriage_inherit_provs
+					}
+				}
+				if = {
+					limit = { any_in_list = { list = marriage_inherit_provs  count >= 1 } }
+					scope:union_inheritor = {
+						LAND_transfer_provinces = {
+							target_provinces = marriage_inherit_provs
+							grantee = scope:union_inheritor
+						}
+						LOG_line = { sys = MARRIAGE  msg = "royal-union realm inherited by overlord" }
+					}
+				}
+				# [#276 review] defensive clear of the temp transfer list, matching the peer
+				# idiom (se_DIPLOMACY.txt:1003 play_cede_candidates). on_character_death runs this
+				# as a fresh effect so the list is empty per-invocation, but the explicit teardown
+				# removes any doubt about stale carry-over.
+				every_in_list = { list = marriage_inherit_provs  remove_from_list = marriage_inherit_provs }
+				# the inherited house is gone: drop the standing bond from EVERY realm wedded
+				# to it — not only the inheriting overlord. [#276 review-fix] the extinct junior
+				# could have wed several houses (bond cap is 3); pruning only the overlord left
+				# any THIRD-party partner with a phantom marriage_partners entry + inflated
+				# marriage_bond_count forever (a dead realm blocking a live match slot). Iterate
+				# the dying realm's OWN partner list (holds every realm wedded to it, overlord
+				# included) and prune the reciprocal bond on each. The dying realm's list is torn
+				# down with the realm, so it needs no self-cleanup.
+				scope:union_dying_realm = {
+					every_in_list = {
+						variable = marriage_partners
+						save_scope_as = union_ex_partner
+						scope:union_ex_partner = {
+							if = {
+								limit = { is_target_in_variable_list = { name = marriage_partners  target = scope:union_dying_realm } }
+								remove_list_variable = { name = marriage_partners  target = scope:union_dying_realm }
+								change_variable = { name = marriage_bond_count  subtract = 1 }
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
