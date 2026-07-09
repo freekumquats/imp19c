@@ -2815,3 +2815,66 @@ I checked both against the user's actual debug.log before acting:
   Both diagnostics are throwaway; they get deleted with the eventual OOB fix once the boot verdict is
   recorded. NO speculative OOB fix shipped — evidence contradicts the navy theory and can't confirm
   the army theory.
+
+## #245/#246/#247/#248/#249/#253 (develop, 2026-07-08) — six-bug UI/log batch (single boot test)
+
+Fixed six develop bugs as one batch (user: "fix all of them" / "I will test everything at once, not
+bit by bit"). Each root-caused, not blind-fixed. Post-implementation code review CLEAN.
+
+**#253 se_LOG error-flood (16.9k ERROR lines) — CHANGE to existing logging (behavioural-equivalence).**
+ROOT CAUSE: `debug_log` (the sink in se_LOG.txt) does NOT resolve bracketed `[data-functions]`
+(`[ROOT.GetTag]`, `[scope:x.GetTag]`, category tags `[SNAP]`/`[MUNI]`/`[CURR]`, and nested
+`[$var$.GetTag]`) — each emits an `ERROR:[...]` line, flooding error.log. `$arg$` substitution and
+static text DO resolve. FIX: Python regex transform stripped bracketed content out of the quoted
+VALUE of LOG params (`msg`/`note`/`reason`/`detail`/`result`/`fn`/`from`) across 77 files under
+common/scripted_effects, common/missions, common/on_action, common/scripted_guis (723 param strings).
+BEHAVIOURAL EQUIVALENCE: the log CALLS and their `$arg$` params are untouched — only the never-rendered
+bracket text was removed, so the effect/trigger bodies that consume those args are byte-identical.
+se_LOG.txt template UNCHANGED. Verified: no `from = X` in real effect/event syntax touched (grep
+confirmed zero non-log `from =`); all 77 files brace-balanced; `$arg$` tokens preserved in spot-checks.
+ACCEPTED TRADE-OFF (flagged by review): nested `[$var$.GetTag]` stripped too, so ~650 log strings now
+read with dangling prepositions and no tag/province/value context — diagnostics degraded, but that is
+inherent (debug_log can't resolve ANY bracketed data-function). Future logging should pass such data
+via `$arg$` params, never brackets.
+
+**#246 stale "roster below" loc — CHANGE.** QING_GC_VACANT / QING_GC_CHANCELLOR_VACANT referenced a
+"roster below" panel that was replaced by per-office Appoint buttons (#220). Reworded both to point at
+the Appoint button. localization/english/qing_governance_l_english.yml:244-245, BOM preserved, keys
+unchanged.
+
+**#247 Subjects-tab text overlap — CHANGE (regression from commit 2cc43112).** In the diplomacy
+Subjects-tab list, a row's `tag_dark` label was set to `text = "FOREIGN_INFLUENCE_TT"` — a loc key that
+resolves to a long sentence ("X has influence in Y of Z%") overflowing the 135px cell and overlapping
+the flag. FIX: `text = "[Country.GetName]"` (resolves against the row's `[Scope.GetCountry]` datacontext,
+matching sibling `[Country.GetDescriptiveName]` tooltip which is retained). gui/diplomatic_view.gui,
+BOM preserved, braces 1327/1327.
+
+**#248 remove Grand Council appoint-icon section from character window — removal.** The character window
+carried a 141-line "QING GOVERNANCE — Grand Council + great-office verbs" flowcontainer (sub_header + 12
+icon_button_square appoint buttons). Office appointment now lives solely in the Grand Council view's
+per-office Appoint pickers (#220), so the section was dead/duplicate UI. Removed the whole flowcontainer,
+left one marker comment. gui/characterwindow.gui, no-BOM, braces 374/374 (clean boundaries — preceding
+heir block and following family widget intact).
+
+**#245 Edict buttons single tall column → two columns — layout.** The CHI-only "Edicts" strip
+(size 530×150) stacked 4 button sub-columns (13/7/2/4) in one tall vertical column, overrunning the strip
+height. FIX: wrapped the 4 sub-columns in a new `direction = horizontal` flowcontainer, then grouped
+sub-columns 2+3+4 in a nested `direction = vertical` wrapper — rendering as two side-by-side columns
+(left=13, right=7+2+4=13). 2×260 + 8px spacing = 528px fits 530px. gui/government_view.gui, no-BOM,
+braces 1732/1732.
+
+**#249 diplomatic-play LIST icon opens nothing — CHANGE (null-datacontext failure).** ROOT CAUSE: the
+`type supranational` window had a window-ROOT `datacontext =
+"[Player.MakeScope.GetVariable('member_of_federation').GetProvince]"`. For a non-federation player
+(e.g. Qing) that variable is unset → null datacontext on the window root → the ENTIRE widget subtree
+fails to build → the LIST icon opens an empty window. FIX: removed the datacontext from the window root
+and re-added it on the federation-TAB flowcontainer (gated `visible = HasValue('supranational_tabs',
+'federation')`, only built when the player is in a federation). Verified: the always-shown
+diplomatic_plays tab uses only `Player` + `GetGlobalList('global_all_diplomatic_plays')`; every bare
+`Province.`/`Scope.` ref lives inside the federation-tab subtree that now carries the moved datacontext;
+the federation-header title outside the tab uses the full absolute `Player.MakeScope...` chain (safe).
+gui/imp19c_windows.gui, no-BOM, braces 371/371.
+
+Verification: `git diff --stat` = 82 files, brace-balance ALL BALANCED, BOM unchanged HEAD-vs-now on
+all edited files, no non-log `from =` touched. Shipped for the user's single boot test alongside the
+still-pending #241/#242 diagnostics and the #238/#239/#243/#244/#254 batch (ab925f1b).
