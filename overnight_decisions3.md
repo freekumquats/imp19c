@@ -375,3 +375,38 @@ handed to an independent adversarial verifier prompted to REFUTE it. 6 raw findi
   `every_in_list … remove_from_list` teardown anyway to match the peer idiom (se_DIPLOMACY.txt:1003).
 
 All post-fix files brace-balanced (delta 0). Committed + pushed to develop as freekumquats.
+
+---
+
+## #268 — Qing Religion panel (信仰與亂 "Faith & Sedition") — DONE
+
+The religion *mechanics* (#275: missionary/anti-Christian sentiment, sect pressure, Taiping) shipped
+without a player-facing surface — the vanilla `gui/religion_view.gui` just ended in a `work_in_progress`
+placeholder. #268 adds the missing tab so the player can READ and track those systems.
+
+**Design decision — read-only dashboard, not a new mechanic.** The systems already run; the tab surfaces
+them. Cloned the PROVEN `QING_greatgame_panel` idiom exactly (scripted_gui `is_shown` gates + a `gui/*.gui`
+window + a button splice), per memory `imp19c-gui-panel-open-idiom` — because GUI work can only be
+boot-validated by the user, staying byte-faithful to a proven panel is the safest path.
+
+**As built:**
+- `common/scripted_guis/QING_religion_panel.txt` — open/close + is_shown gates (band fever/simmering/calm,
+  agitator-present, taiping-active), all `scope = country`, `ai_is_valid = no`, gated `tag = CHI`.
+- `gui/qing_religion.gui` — window `qing_religion_panel`: four meter bars (anti-Christian sentiment 仇教情緒,
+  sect pressure, missionary reach, reform pressure) using the proven 0..100→0..1 `FixedPointToFloat(
+  Multiply_CFixedPoint(..GetValue,'(CFixedPoint)0.01'))` progressbar form; a live band-status line; the
+  anti-Christian agitator's portrait+name (conditional); and Taiping progress (conditional).
+- `gui/religion_view.gui` — replaced the `work_in_progress` placeholder with a CHI-gated open button.
+- `localization/english/qing_religion_panel_l_english.yml` — 21 keys.
+
+**Adversarial review (3 passes) fixed 3 confirmed defects before commit:**
+- BLOCKER dropped brace in religion_view.gui (the old placeholder carried two closing braces; the button
+  supplied one) → appended one `}`, file rebalanced 85/85, depth 0.
+- BLOCKER/agitator var: GUI read `Var('qing_antichr_agitator')` but the spawn effect only `save_scope_as`
+  (transient, non-persistent) → added `set_variable = { name = qing_antichr_agitator value =
+  scope:qing_antichr_agitator }` in `se_QING_MISSIONARY.txt` (mirrors the office-holder idiom).
+- MAJOR stale-dead-man: the agitator `is_shown` gate checked only the spawn flag → added
+  `var:qing_antichr_agitator = { is_alive = yes }` (mirrors `qing_greatgame_zongli_filled`).
+
+All files brace-balanced. In-game boot test owed to the user (GUI crash-safety can only be confirmed live).
+Committed + pushed to develop as freekumquats.
