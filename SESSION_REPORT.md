@@ -2579,3 +2579,54 @@ none may be Russian (research/1763_rulers_poland_lithuania.md).
 Net: RUS −32, LIT +27, POL +5. Verified: 32/32 placed exactly once, zero double-ownership, RUS retains
 all its other IDs, braces 10916/10916 balanced, no BOM (correct for this file). Decision recorded in
 1763_bookmark.md Part B. Still OWED: in-game boot test on 1763_bookmark. Nothing promoted off the branch.
+
+## [#232/#240] Americas 1763 map-surgery delta (1763_bookmark)
+
+**Scope.** First region of the Phase-2 full-map surgery (build order: Americas → Italy → Ottoman/Asia/
+Africa → HRE last). Reverts 1810s-independence-era Latin American / Caribbean tags to their Feb-1763
+colonial status, and sweeps the Americas-region unborn-ruler boot bug (#240).
+
+**Subject / government reversions (setup/main/00_default.txt).**
+- **QTO** → direct **SPA client_colony**, gov `viceroyalty`. (Initially placed under PR1; the adversarial
+  review correctly flagged that the Audiencia de Quito answered to the *Viceroyalty of New Granada* from
+  its permanent 1739 re-establishment, NOT Peru. NGR is modeled here as an independent confederacy, so the
+  accurate fallback is a direct Spanish colony.)
+- **FLO** → **GBR client_colony** — Spain ceded Florida to Britain in the Treaty of Paris (10 Feb 1763);
+  East & West Florida were British 1763–1783.
+- **VNZ / AR1 / LFP / PRG** → Spanish colonies, gov `viceroyalty`. AR1/LFP/PRG placed under **PR1**
+  (Viceroyalty of Peru governed the Río de la Plata until the 1776 RdlP split). VNZ wired directly to SPA
+  as a pragmatic simplification (its nominal New Granada overlord is independent here; the autonomous
+  Captaincy-General of Venezuela was not created until 1777). VNZ keeps nested sub-provinces TNJ/CAU/ANQ.
+- **HTI / HTK / GAS** → French **Saint-Domingue** colonies (**FRA client_colony**, gov `viceroyalty`).
+  Independent Haiti did not exist until 1804; in 1763 all six provinces (Port-au-Prince, Jacmel, Les Cayes,
+  Cap-Français, Port-de-Paix, Gonaïves, Jérémie) were France's richest sugar colony. Reverts HTI from the
+  post-1804 mulatto republic, HTK from Christophe's post-1806 kingdom, GAS (Grand'Anse) from a republic.
+
+**Unborn-ruler crash sweep (#240).** `set_as_ruler`/`set_as_coruler = char:N` where char N is born after
+START_DATE (1763.2.16) crashes/errors at load. Removed the offending ruler blocks (keeping the character
+DEFINITIONS so portraits and later spawns survive) for: MEX (replaced with a real 1763 viceroy, Joaquín de
+Montserrat char:9232 — see #240 batch), ASK/MSG/CHT native rulers, VNZ char:6, SFB char:38, CPV char:83,
+VLL char:4, CRT char:8+124, CHL char:9 (San Martín), AR1 char:5+7, LFP char:10+11+46, PRG char:100,
+SCZ char:142+143, and Haiti HTI char:54 (Pétion) + char:55 (Boyer) + HTK char:60 (Christophe). The engine
+auto-generates period-appropriate rulers for these colonies. **40 non-Americas unborn-ruler tags remain,
+deferred to their own region builds.**
+
+**Documented limitations (deferred, NOT bugs).** (a) USA reverting to British colonial control and the
+Louisiana FRA/SPA split are deferred — they require guessed province geography beyond the verifiable
+delta; the recon agent confirmed Louisiana is entirely USA-owned and Canada is already British colonial
+tags (1763-correct). (b) HAI = *Haida* (Pacific NW indigenous), NOT Haiti — the delta plan's item #5 was
+based on a tag misidentification and is void. (c) NGR inactive; New Granada land held by SFB + colombian
+tags.
+
+**Verification.** Per-region regression grep for all changed tags (QTO/FLO/VNZ/AR1/LFP/PRG/MEX/HTI/HTK/GAS)
+across events/ and missions/ → **zero references** (no trigger regression surface). No duplicate
+`second = X` overlord (double-overlord) conflict involving any Americas tag. `viceroyalty` government,
+`client_colony` + `autonomous_governorship` subject_types all confirmed defined in common/. All 7 touched
+files brace-balanced (delta 0); all 117 character files uniform with UTF-8 BOM (a stray BOM strip on
+00_Haiti.txt + 00_North America.txt from utf-8-sig read/utf-8 write was caught by review and restored).
+
+**Adversarial review.** Two workflow passes (first run's boot-crash + historical dimensions API-failed
+mid-response and were re-run). Boot-crash dimension: **no crash defects**. Confirmed findings resolved:
+(1) QTO-under-Peru corrected to direct SPA colony; (2) VNZ comment inconsistency softened; (3) untagged
+BOM strip reverted. Still OWED: in-game boot test on 1763_bookmark (user's machine). Nothing promoted off
+the branch.

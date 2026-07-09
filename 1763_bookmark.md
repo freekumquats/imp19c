@@ -234,7 +234,67 @@ nested chain and rulers are unchanged from B2.
 Still OWED before Phase-1 is "done": in-game boot test on `1763_bookmark` (the definitive
 future-born-character + nested-subject proof). Nothing promoted off `1763_bookmark`.
 
-*(Per-region implementation decisions B3, … appended as the full map-surgery phase begins.)*
+### B3. Americas region build (#232 + #240, 2026-07-09) — FIRST full-surgery region
+
+The Phase-2 build order is **Americas → Italy → Ottoman/MENA/S+E+SE Asia/Africa → C.Europe/HRE (last)**.
+Americas is the first region and extends the B2 Mexico PoC pattern (dependency-based reversion, minimal
+province surgery) to the rest of the independence-era Latin-American / Caribbean tag set. Method per the
+locked per-region loop: build → per-region regression grep → adversarial-review workflow → commit as
+freekumquats. In-game boot test remains the user's.
+
+**Subject/government reversions (`setup/main/00_default.txt`).**
+- **QTO → direct SPA `client_colony`** (gov `viceroyalty`). *Initially placed under PR1; the adversarial
+  review corrected this* — the Audiencia de Quito answered to the **Viceroyalty of New Granada** from its
+  permanent 1739 re-establishment through the end of the colonial period, **not Peru** (Peru held it only
+  to 1717 and during the 1723–39 NGR-suppression gap). NGR is modeled here as an independent confederacy
+  (its SPA dependency is commented out), so the accurate fallback is a direct Spanish colony, not Lima.
+- **FLO → GBR `client_colony`** — the Treaty of Paris (10 Feb 1763, six days before START_DATE) ceded
+  Florida from Spain to Britain; East & West Florida were British 1763–1783.
+- **AR1 / LFP / PRG → PR1 (Peru) subjects**, gov `viceroyalty` — the Viceroyalty of Peru governed the Río
+  de la Plata (Buenos Aires / Banda Oriental / Paraguay) until the **1776 RdlP viceroyalty split**. Revert
+  from their 1810s independent republics/federation.
+- **VNZ → direct SPA `client_colony`**, gov `viceroyalty` — the Province of Venezuela was *nominally*
+  subordinate to New Granada in 1763 (autonomous Captaincy-General not created until 1777), but with NGR
+  independent here there is no Spanish-subject overlord tag to nest under, so VNZ is wired directly to SPA
+  as a **pragmatic simplification** (comment reconciled per review). Keeps nested sub-provinces TNJ/CAU/ANQ
+  (nested subjects confirmed viable, see memory `imp19c-nested-subjects-viable`).
+- **HTI / HTK / GAS → FRA `client_colony`** (French **Saint-Domingue**), gov `viceroyalty`. Independent
+  Haiti did not exist until 1804; in 1763 all six provinces (Port-au-Prince, Jacmel, Les Cayes,
+  Cap-Français, Port-de-Paix, Gonaïves, Jérémie) were France's richest sugar colony. Reverts HTI from the
+  post-1804 mulatto republic, HTK from Christophe's post-1806 kingdom, GAS (Grand'Anse/Jérémie) from a
+  republic.
+
+**Unborn-ruler crash sweep (#240).** `set_as_ruler`/`set_as_coruler = char:N` where char N has
+`birth_date` after START_DATE (1763.2.16) crashes/errors at load. Removed the offending ruler *wrappers*
+(the char DEFINITIONS are KEPT so portraits + later on-birth spawns survive) across the Americas character
+files: MEX (replaced with a real 1763 viceroy — **Joaquín de Montserrat, Marqués de Cruillas, char:9232**),
+ASK/MSG/CHT native rulers, VNZ char:6, SFB char:38, CPV char:83, VLL char:4, CRT char:8+124, CHL char:9
+(San Martín), AR1 char:5+7, LFP char:10+11+46, PRG char:100, SCZ char:142+143, HTI char:54 (Pétion) +
+char:55 (Boyer), HTK char:60 (Christophe). The engine auto-generates period-appropriate colonial rulers.
+**40 non-Americas unborn-ruler tags remain and are deferred to their own region builds.**
+
+**Documented limitations (deliberate deferrals, NOT bugs).**
+- **USA → British colonial control and the Louisiana FRA/SPA split are deferred.** A recon pass confirmed
+  Louisiana is entirely USA-owned on the current map (no clean FRA/SPA province partition available) and
+  Canada already uses British colonial tags (1763-correct). Reverting the Thirteen Colonies + Louisiana
+  needs guessed province geography beyond the safe, verifiable dependency/government delta; left for a
+  later dedicated pass.
+- **HAI = Haida** (Pacific-NW indigenous), **not Haiti** — the `1763_DELTA_Americas.md` plan's item #5 was
+  a tag misidentification and is **void**. The real Haiti tags are HTI/HTK (handled above).
+- **NGR inactive**; New Granada land is held by SFB + the colombian tags, which is why QTO/VNZ fall back to
+  direct SPA rather than nesting under a New-Granada viceroyalty.
+
+**Verification.** Per-region regression grep of all changed tags (QTO/FLO/VNZ/AR1/LFP/PRG/MEX/HTI/HTK/GAS)
+across `events/` + `missions/` → **zero references** (no trigger regression surface, matching B0's "Latin
+tags have zero mission/event dependencies"). No double-overlord (`second = X` twice) conflict involving any
+Americas tag. `viceroyalty` gov + `client_colony`/`autonomous_governorship` subject_types confirmed defined
+in `common/`. All 7 touched files brace-balanced (Δ0); all 117 character files uniform with UTF-8 BOM (a
+stray BOM strip on 00_Haiti.txt + 00_North America.txt — an artifact of Python `utf-8-sig` read → `utf-8`
+write — was caught by the review and restored). Two adversarial-review workflow passes (the first run's
+boot-crash + historical dimensions API-failed mid-response and were re-run): **boot-crash → no crash
+defects**; the QTO-overlord and VNZ-comment findings above were the confirmed results and are resolved.
+
+*(Per-region implementation decisions B4, … appended as the full map-surgery phase continues: Italy next.)*
 
 ---
 
