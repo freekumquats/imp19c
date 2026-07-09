@@ -437,3 +437,29 @@ QING_accountability_pulse (they surface as normal event popups, not an embedded 
 wants the embedded-event-list or a real accrual meter later, that is a separate follow-up.
 
 GUI boot test owed to the user. Committed + pushed to develop as freekumquats.
+
+---
+
+## #280 — #165 sphere: nested-subject coverage + dead _prev write — DONE
+
+From the #277 adversarial review of se_QING_SPHERE.txt. Three fixes:
+
+- **F1a (MEDIUM) build-ring recursion.** QING_sphere_build_ring's tributary-march walk was
+  `every_subject { every_country_state }` — NON-recursive, so the nested chains the 1815 baseline ships
+  (CHI→ILI→XNG, CHI→TIB→LTG/BTG, ILI→KML) left the sub-subjects' states out of the contested ring entirely.
+  Added a second nested `every_subject` level; factored the add into a new dedup helper
+  `QING_sphere_add_ring_state` (shared by both levels; is_target_in_variable_list guard prevents
+  double-listing a state reached by two paths). Two levels cover every chain that ships.
+- **F1b (MEDIUM) is_home chain test.** In BOTH QING_sphere_seed_state and QING_sphere_tick_state the
+  is_home OR tested only `owner = scope:sphere_owner` / `owner = { is_subject_of = scope:sphere_owner }`
+  (direct overlord only), so a sub-subject's soil was mis-scored as a frontier march — capped at 55 and
+  flippable to a rival, the opposite of the intended uncapped home hold. Added a third alt
+  `owner = { overlord = { is_subject_of = scope:sphere_owner } }` (proven idiom, 000_GOVERNMENT_custom_loc).
+  Direct subjects still match via the 2nd alt (no regression); only sub-subjects newly qualify as home.
+- **F2 (LOW) dead _prev write.** QING_sphere_seed_state's "prime qing_sphere_dominant_prev" line was dead:
+  QING_sphere_tick_state unconditionally re-sets _prev at its top every pulse, before the only reader (the
+  flip check), so the seed prime never survived. Removed; _prev is still initialised in
+  QING_sphere_ensure_vars (guards the first tick's compare).
+
+All in se_QING_SPHERE.txt (LF/no-BOM preserved), braces 242/242. Adversarial review (correctness + syntax/perf)
+clean, 0 findings. Committed + pushed to develop as freekumquats.

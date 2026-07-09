@@ -120,31 +120,52 @@ QING_sphere_build_ring = {
 		}
 	}
 	# Tributary marches: every state a Qing subject holds is contested China-side.
+	# [#280 review-fix] every_subject is NON-recursive (DIRECT subjects only), so the nested
+	# chains the 1815 baseline ships (CHI->ILI->XNG, CHI->TIB->LTG/BTG, ILI->KML) left the
+	# sub-subjects' states OUT of the contested ring. Add a second every_subject level so a
+	# subject's OWN subjects' states seed too. QING_sphere_add_ring_state dedups, so a state
+	# reachable by two paths is added once. Two levels cover every chain that ships.
 	every_subject = {
 		every_country_state = {
 			limit = { total_population > 0 }
-			if = {
-				limit = {
-					NOT = {
-						scope:sphere_owner = {
-							is_target_in_variable_list = {
-								name = qing_sphere_states
-								target = prev
-							}
-						}
-					}
-				}
-				save_scope_as = subj_state
-				scope:sphere_owner = {
-					add_to_variable_list = {
-						name = qing_sphere_states
-						target = scope:subj_state
-					}
-				}
+			QING_sphere_add_ring_state = yes
+		}
+		every_subject = {
+			every_country_state = {
+				limit = { total_population > 0 }
+				QING_sphere_add_ring_state = yes
 			}
 		}
 	}
 	LOG_line = { sys = QING  msg = "sphere: contested ring rebuilt" }
+}
+
+# ======================================================================
+# QING_sphere_add_ring_state — [#280] dedup add helper: add THIS state (prev)
+# to the contested ring unless the owner already listed it. Shared by the direct-
+# subject and sub-subject walks so a state on two subject paths is never double-listed.
+# Scope: STATE.
+# ======================================================================
+QING_sphere_add_ring_state = {
+	if = {
+		limit = {
+			NOT = {
+				scope:sphere_owner = {
+					is_target_in_variable_list = {
+						name = qing_sphere_states
+						target = prev
+					}
+				}
+			}
+		}
+		save_scope_as = ring_add_state
+		scope:sphere_owner = {
+			add_to_variable_list = {
+				name = qing_sphere_states
+				target = scope:ring_add_state
+			}
+		}
+	}
 }
 
 # ======================================================================
@@ -187,6 +208,12 @@ QING_sphere_seed_state = {
 			OR = {
 				owner = scope:sphere_owner
 				owner = { is_subject_of = scope:sphere_owner }
+				# [#280 review-fix] nested subject soil is ALSO home: a sub-subject (XNG under ILI under
+				# CHI, KML under ILI) is not a DIRECT is_subject_of the Qing, so without this its home
+				# marches were mis-scored as frontier (capped 55, flippable). Walk one overlord link up:
+				# if the owner's overlord is our subject, the land is inside the Qing subject tree.
+				# overlord{is_subject_of} is a proven idiom (000_GOVERNMENT_custom_loc.txt).
+				owner = { overlord = { is_subject_of = scope:sphere_owner } }
 			}
 		}
 		set_variable = { name = china_influence  value = 60 }
@@ -209,8 +236,11 @@ QING_sphere_seed_state = {
 	}
 	QING_sphere_clamp_state = yes
 	QING_sphere_recompute_dominant = yes
-	# Prime the "previous" holder so the first live pulse does not read a flip.
-	set_variable = { name = qing_sphere_dominant_prev  value = var:qing_sphere_dominant }
+	# [#280 review-fix] The former "prime qing_sphere_dominant_prev" line here was DEAD:
+	# QING_sphere_tick_state unconditionally re-sets qing_sphere_dominant_prev at its top
+	# (before the only reader, the flip check) every pulse, so the seed-time prime never
+	# survived to be read. Removed. qing_sphere_dominant_prev is still initialised in
+	# QING_sphere_ensure_vars (guards the very first tick's flip compare).
 }
 
 # ======================================================================
@@ -307,6 +337,12 @@ QING_sphere_tick_state = {
 			OR = {
 				owner = scope:sphere_owner
 				owner = { is_subject_of = scope:sphere_owner }
+				# [#280 review-fix] nested subject soil is ALSO home: a sub-subject (XNG under ILI under
+				# CHI, KML under ILI) is not a DIRECT is_subject_of the Qing, so without this its home
+				# marches were mis-scored as frontier (capped 55, flippable). Walk one overlord link up:
+				# if the owner's overlord is our subject, the land is inside the Qing subject tree.
+				# overlord{is_subject_of} is a proven idiom (000_GOVERNMENT_custom_loc.txt).
+				owner = { overlord = { is_subject_of = scope:sphere_owner } }
 			}
 		}
 		set_local_variable = { name = is_home  value = 1 }
