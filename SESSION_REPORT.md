@@ -2630,3 +2630,44 @@ mid-response and were re-run). Boot-crash dimension: **no crash defects**. Confi
 (1) QTO-under-Peru corrected to direct SPA colony; (2) VNZ comment inconsistency softened; (3) untagged
 BOM strip reverted. Still OWED: in-game boot test on 1763_bookmark (user's machine). Nothing promoted off
 the branch.
+
+## [#233/#240] Italy 1763 map-surgery delta (1763_bookmark)
+
+**Scope.** Second Phase-2 region. Restores the 1763 Italian political map: a sovereign Republic of Genoa,
+independent central-Italian duchies, and the full Venetian Stato da Màr; plus the Italy-region unborn-ruler
+sweep (#240). All in `setup/main/00_default.txt` (LF/no-BOM) and `setup/characters/00_Italy.txt` (CRLF+BOM).
+
+**New / changed tags & provinces (00_default.txt).**
+- **GEN created** (Repubblica di Genova): `oligarchic_republic`, north_italian, catholic, capital 5494.
+  own_control_core = Liguria (5494 Genoa / 6103 Savona / 6416 Imperia, **moved from SAR**) + Corsica
+  (357 Bastia / 2910 Ajaccio / 4636 Sartène / 9042 Corte, **moved from FRA** — France annexed Corsica only
+  in 1768). **LIMITATION:** the Corsican Republic (Paoli, 1755–69) held the interior; with no Corsican tag,
+  Corsica is modeled de jure Genoese (documented in-block).
+- **Sovereign duchies restored:** removed `AUS→MOD`, `AUS→LUC`, `AUS→PRM`, `AUS→MSS` client_state deps
+  (Este Modena / Bourbon Parma / Cybo-Malaspina Massa / Republic of Lucca were all independent in 1763).
+  **KEPT** `AUS→TUS` (Habsburg-Lorraine Grand Duchy under Francis Stephen, also HRE Emperor) and `AUS→LBV`
+  royal_union (Austrian Duchy of Milan). **LUC** gov `absolute_duchy`→`oligarchic_republic`.
+- **Venetian Stato da Màr:** moved **9 provinces AUS→VEN** — 6214 Zara, 8236 Spalato, 4921 Knin, 8375
+  Makarska, 10714 Primošten, 1608 Curzola, 10538 Korčula, 181 Kotor/Cattaro, 6685 Pola. VEN now 22 provinces
+  (13 terraferma + 9 maritime). **Kept Habsburg (correctly AUS):** 10105 Trieste, 8561 Gorizia, 8687 Postojna
+  (Austrian Littoral / Inner Carniola). **LIMITATION:** 1596 Ragusa (sovereign Republic, Ottoman tributary)
+  has no tag → left under AUS with an in-block comment rather than orphaned; flagged for a future tag.
+
+**Unborn-ruler sweep (#240, 00_Italy.txt).** Removed `set_as_ruler` wrappers (char defs KEPT) for 4
+Napoleonic-era rulers unborn at 1763.2.16: PRM 136 Maria Louisa (b.1791), MOD 139 Francesco IV (b.1779),
+LUC 154 Maria Luisa (b.1782), TUS 157 Ferdinand III (b.1769). Period-appropriate rulers 18/110/134/158
+(born ≤1763) untouched.
+
+**Process gotchas caught pre-commit.** (a) 00_Italy.txt is **CRLF**+BOM (unlike LF Americas char files); a
+first edit pass silently matched nothing until the search blocks used `\r\n` — bytes rewritten with BOM+CRLF
+preserved. (b) An early inline-Corsica removal via `re.sub(count=1)` matched a `357 = {` province-*history*
+block instead of the FRA core list, corrupting 4 province defs — reverted via `git checkout` and redone with
+exact whole-line string targeting. Both verified fixed.
+
+**Verification.** Regression grep for GEN/VEN/MIL/LBV/ION/MOD/LUC/PRM/MSS/TUS/SAR/FRA/AUS + all 16 moved/new
+province IDs across events/ + missions/: only `introduction_events.txt` references LUC/PRM/MOD/MSS/LBV, all
+pure player-intro flavor gated on `tag = X` with no overlord/subject assumption → no regression. Programmatic
+double-ownership audit across all country own_control_core lists: **each moved/new province in exactly one
+owner** (no duplicates, no orphans). Both files brace-balanced (Δ0); BOM+CRLF preserved on 00_Italy.txt.
+Adversarial-review workflow (boot-crash / historical / regression dimensions, each finding independently
+verified) run before commit. Still OWED: in-game boot test (user's machine). Nothing promoted off the branch.
