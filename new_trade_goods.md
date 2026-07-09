@@ -236,3 +236,22 @@ gate now has a sibling `else = { remove_variable = DEMAND_food_<crop> }`, cleari
 square-bracket tags as data-function syntax in -debug output); the task tag stays in code comments instead.
 
 Post-fix: braces 225=225, BOM+CRLF preserved on all 4 files; a second review pass re-run after these fixes.
+
+---
+
+## D5. #281 rifles blocker — REAL FIX: sited rifle production (user direction 2026-07-09)
+
+The adversarial review had found #281 blocked: rifles carried pop+army demand but NO baseline production
+anywhere, so it ran a false global SEVERE-shortage penalty. The user directed the correct fix — rifles is a
+NEW good, so ADD production rather than remove demand. Dispatched academic research (EN + FR/DE/RU native-
+language agents, run wk1kglemi; province lookup wf_f16d7f78) on early-19thC small-arms manufacturing centres,
+then assigned trade_goods = rifles to the 15 real gun-making provinces (see RIFLE_PRODUCTION_1815.md):
+Birmingham(GBR), Liege(NED), Saint-Etienne+Tulle(FRA), Tula+Izhevsk+St Petersburg(RUS), Springfield+Harpers
+Ferry(USA), Steyr/Linz+Ferlach+Vienna(AUS), Suhl(SWM), Spandau/Berlin(PRU), Eskilstuna(SWE). Sited sparsely,
+>=1 per great power, like munitions/artillery. All 15 were placeholder-'cloth' provinces (from #278), so
+nothing valuable was clobbered. map_data/province_setup.csv col-4-only edit; line count unchanged; CRLF
+preserved; adversarial review clean.
+
+STILL PENDING (boot-test-gated, per the blocker's own sequencing): after the user confirms no phantom
+shortage_rifles on a supplied country in-game, re-add the reverted se_LOGISTICS shortage_phys_rifles scan +
+the army-linked DEMAND_rifles term (imp19c-rifles-logistics-blocker). Recruitment gate optional later.
