@@ -888,3 +888,30 @@ period-appropriate for 1763 colonial America, First Great Awakening) and `mahdav
 Sufi movement) — both established mod vocabulary and broadly plausible, so ROW left as-is per the "broad
 abstraction, need not match sources exactly" ruling. Byte convention (BOM/LF) preserved on all 19 edited
 files; brace balance 0; no amount=0. Boot test owed to the user.
+
+### #288 — Per-province industry/production seeding — CHINA sub-phase DONE
+
+The #278 world-economy follow-on. KEY FINDING: the runtime industrialisation/industry knob at the
+province-history level is `civilization_value=` in setup/provinces/*.txt (the province_setup.csv
+INDUSTRIALISATION column is only a BUILD-TIME input to buildings_generator.py, NOT loaded at runtime; there
+are no explicit building placements in setup — buildings are runtime-derived from civilization_value via
+governorship_average_industrialisation / industrialisation_as_modifier in ECON_svalues.txt). So
+civilization_value is the correct lever for economic-base realism.
+
+BASELINE PROBLEM: China's civilization_value was a near-flat 10 (or 0) across all 592 provinces — no economic
+gradient, despite 1763 China containing both the most commercialised region on earth (Jiangnan) and vast
+agrarian/frontier zones. Per the user ruling (China granular from academic sources, ROW broad), applied a
+source-grounded regional gradient (ECON scale 0-100; world ranges 0-45):
+- Great commercial cities (override): Suzhou 38, Beijing/Canton/Guangzhou 34, Hangzhou 32, Nanjing 30,
+  Yangzhou 28, Wuchang 26, Foshan/Ningbo 24, Jingdezhen/Xiamen/Fuzhou 22, Chengdu 16.
+- Regional base: Jiangnan (Jiangsu/Zhejiang) 18, Lingnan (Guangdong) 16, metropolitan Zhili 13, mid/lower
+  Yangzi (Anhui/Jiangxi/Hubei) 13, Hunan 12, N.China plain (Shandong/Henan) 12, Fujian 12, Shanxi 11,
+  Shaanxi 9, Sichuan/Gansu 7 (recovering/arid), Guangxi/Yunnan 6, Guizhou 5, Qinghai 3.
+- Non-Han frontier provinces inside a Han region capped at <=5 (pastoral/tribal, low commercialisation).
+China civ_value: was flat (mean 7.1, median 10) -> now graded (mean 11.0, median 12, range 3-38).
+
+ONLY civilization_value= changed (587/587 line diff; amount/culture/religion/terrain/trade_goods untouched);
+BOM/LF preserved; braces 0. REST OF WORLD left as the broad anchor (Europe already differentiated ~France 20/
+Low Countries 24; Asia flat 10 like China was — acceptable broad abstraction per the ruling). Boot test owed.
+The larger "explicit building objects + INDUSTRIALISATION-csv regen" effort remains a further follow-on if the
+runtime civ_value proxy proves insufficient in the boot test.
