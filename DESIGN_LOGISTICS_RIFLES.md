@@ -1,6 +1,38 @@
-# P4 — `rifles` trade good + infantry gating (DRAFT, not yet applied)
+# P4 — `rifles` trade good + infantry gating
 
 *Companion to RESEARCH_MILITARY_LOGISTICS.md proposal #4. Military-logistics suite: `sys = LOGISTICS`.*
+
+## ✅ STATUS UPDATE (#281, 2026-07-09, REVISED) — no blocker; production sited; logistics wiring is optional net-new work
+
+**RETRACTION.** An earlier version of this doc claimed a "blocker": that universal rifle demand with near-zero
+production would fire a false global `country_munitions_shortage_severe` penalty from turn 1. **That was wrong**,
+established by tracing the code end-to-end (including upstream/master):
+
+- Yes, `se_CONSUME.txt` sets `shortage_phys_<good>` generically for any good whose stockpile goes negative, so a
+  universal-demand/low-production good *does* register a physical shortage variable. That part is real.
+- **But nothing consumes a rifle shortage.** `se_LOGISTICS.txt` (on master too) reads only six equipment goods:
+  `shortage_phys_{early_munitions, late_munitions, early_artillery, late_artillery, coal, naval_supplies}` — NOT
+  rifles, NOT any luxury. The only other refs to `shortage_rifles` are `DEMAND_shortage_country_rifles` (and
+  `_porcelain`) in `DEMAND_svalues.txt`, which are **defined but called nowhere** — dead code, zero effect.
+- **Upstream proof:** `tea`, `salt`, `gems`, `tobacco`, `coffee` are all defined on master with the SAME
+  universal `DEMAND_set_demand_from_luxury` demand. `tea` ships on master with universal demand and ZERO
+  producing provinces — a worse supply/demand mismatch than rifles — and fires no penalty, precisely because no
+  consumer reads a luxury-good shortage. So universal-demand-with-sparse-production is an established, harmless
+  upstream pattern, not a rifles-specific bug.
+
+**Shipped (#281, commit `1823c923`):** rifle production sited at 15 historic gun-making towns
+(`map_data/province_setup.csv`, col 4). Correct first step regardless — gives rifles a real supply base.
+
+**Remaining work is OPTIONAL and NET-NEW, not a bug fix.** To make rifle shortages matter militarily, ADD
+`shortage_phys_rifles` to the six-good list `LOGISTICS_scan_worst_shortages` reads (Edit below). Only THEN does
+rifle supply/demand balance affect gameplay — which is exactly why siting production first was the right order.
+If/when wired: confirm armed nations aren't perpetually short given the 15 sources, and give porcelain/tea the
+same look if they ever also feed a penalty layer. A recruitment gate is a separate pass — prefer the PROVEN
+`allow_unit_type` idiom over the UNPROVEN `trade_good_surplus`-in-unit-`allow`.
+
+---
+
+## Original draft (below) — Edits 1–5 now superseded by #180/#189; Edit 6 is the deferred item
 
 **Status: DRAFT ONLY — deliberately NOT wired into live files.** P4 is the HIGH-risk,
 6-file member of the suite and carries the one primitive the oracle pass could *not* prove
