@@ -25,7 +25,9 @@
 #   personnel  吏部    officialdom loyalty        (disloyal bureaucrats = bad)
 #   lifanyuan  理藩院  subject loyalty            (restless vassals = bad)
 #   zongli     總理衙門 great-power relations      (high GP tension = bad)
-#   grand_secretary 內務府 ruler popularity        (an unloved sovereign = bad)
+#   chamberlain 內務府 ruler popularity        (an unloved sovereign = bad)
+#   grand_secretariat 內閣 political influence     (a starved influence pool = bad)
+#   guard_commandant 領侍衛 civil-war threat        (mutinous grandees / open revolt = bad)
 #   chancellor 領班    council effectiveness      (a dysfunctional council = bad;
 #                       he is ALSO the overmighty/Heshen locus in se_QING_COUNCIL.txt)
 #
@@ -73,7 +75,9 @@ QING_accountability_pulse = {
 	QING_acc_score_office = { office = personnel metric = officials }
 	QING_acc_score_office = { office = lifanyuan metric = subjects }
 	QING_acc_score_office = { office = zongli    metric = foreign }
-	QING_acc_score_office = { office = grand_secretary     metric = ruler }
+	QING_acc_score_office = { office = chamberlain     metric = ruler }
+	QING_acc_score_office = { office = grand_secretariat metric = influence }
+	QING_acc_score_office = { office = guard_commandant  metric = civil_war }
 	QING_acc_score_office = { office = chancellor metric = council }
 
 	LOG_exit = { sys = QING  fn = "QING_accountability_pulse"  result = OK }
@@ -300,6 +304,50 @@ QING_acc_metric_council = {
 	}
 	else_if = {
 		limit = { has_variable = qing_council_effectiveness  var:qing_council_effectiveness >= 66 }
+		set_variable = { name = qing_acc_metric  value = 2 }
+	}
+	else = { set_variable = { name = qing_acc_metric  value = 1 } }
+}
+
+# CENTRAL SECRETARIAT 內閣 — political influence (#273 develop). The 內閣 drafts
+# the edicts and generates PI (its office modifier grants monthly_political_influence_modifier);
+# its charge is that the influence pool stays healthy. Starved pool = the chancery has failed;
+# a brimming pool = a smoothly-running edict engine. political_influence is the proven
+# country-scope resource read (107 uses as a >= trigger across the repo).
+QING_acc_metric_influence = {
+	if = {
+		limit = { political_influence < 20 }
+		set_variable = { name = qing_acc_metric  value = 0 }
+	}
+	else_if = {
+		limit = { political_influence >= 80 }
+		set_variable = { name = qing_acc_metric  value = 2 }
+	}
+	else = { set_variable = { name = qing_acc_metric  value = 1 } }
+}
+
+# IMPERIAL GUARD 領侍衛內大臣 — civil-war threat (#273 develop). The palace guard
+# corps exists to keep the throne physically secure; its charge is that no overmighty
+# grandee stands poised to rise. FAILING = an open civil war OR a powerful, disloyal
+# officer in our own service (power_base >= 15 AND loyalty < 40 — a coup in waiting).
+# THRIVING = at civil peace AND not even a middling disloyal power base about the court.
+# has_civil_war is a proven country trigger (00_specific_from_code.txt); the officer scan
+# reuses the same any_character{employer=ROOT} idiom as the officials metric.
+QING_acc_metric_civil_war = {
+	if = {
+		limit = {
+			OR = {
+				has_civil_war = yes
+				any_character = { count >= 1  employer = ROOT  is_ruler = no  power_base >= 15  loyalty < 40 }
+			}
+		}
+		set_variable = { name = qing_acc_metric  value = 0 }
+	}
+	else_if = {
+		limit = {
+			has_civil_war = no
+			NOT = { any_character = { count >= 1  employer = ROOT  is_ruler = no  power_base >= 10  loyalty < 55 } }
+		}
 		set_variable = { name = qing_acc_metric  value = 2 }
 	}
 	else = { set_variable = { name = qing_acc_metric  value = 1 } }

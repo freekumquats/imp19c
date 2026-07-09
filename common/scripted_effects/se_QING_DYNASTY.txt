@@ -98,6 +98,24 @@ QING_dynasty_flavour_roll = {
 			trigger = { QING_dynasty_has_crownprince = yes }
 			trigger_event = { id = qing_dynasty.5  days = { 3 12 } }
 		}
+		# --- [#272] POSITIVE: the empress intercedes / steadies the inner court
+		9 = {
+			trigger = { QING_dynasty_has_empress = yes }
+			trigger_event = { id = qing_dynasty.6  days = { 3 12 } }
+		}
+		# --- [#272] NEGATIVE: the consort clan (外戚) trades on her name
+		7 = {
+			trigger = { QING_dynasty_has_empress = yes }
+			trigger_event = { id = qing_dynasty.7  days = { 3 12 } }
+		}
+		# --- [#272] NEGATIVE: the empress and dowager clash in the inner palace
+		7 = {
+			trigger = {
+				QING_dynasty_has_empress = yes
+				QING_dynasty_has_dowager = yes
+			}
+			trigger_event = { id = qing_dynasty.8  days = { 3 12 } }
+		}
 	}
 	LOG_exit = { sys = QING  fn = "QING_dynasty_flavour_roll"  result = OK }
 }
@@ -406,4 +424,75 @@ QING_dynasty_accession_disputed = {
 	QING_dynasty_harmony_nudge = { amount = -12 }
 	QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -5 }
 	QING_dynasty_accession_core = yes
+}
+
+
+# ======================================================================
+# [#272 develop] EMPRESS 皇后 helpers. The reigning consort (current_ruler.spouse)
+# is a figurehead seat (se_QING_SEATS.txt QING_seat_refresh_empress) who also
+# scores on the council (QING_council_score_figurehead, weight 1). These beats let
+# her act on the SAME dynastic-harmony meter as the dowager/heir events. All guard
+# on QING_dynasty_has_empress; the empress is saved as scope:empress by the events.
+# ======================================================================
+
+# THE EMPRESS INTERCEDES (皇后進言) — she smooths a quarrel in the inner court and
+# lends the throne her steadying counsel. Harmony up; she gains prestige; a capable
+# consort (high charisma/finesse) is worth the more, and one close to the emperor
+# (high affinity) is heeded warmly. Mirror of the dowager-counsel beat.
+QING_dynasty_empress_intercede = {
+	LOG_line = { sys = QING  msg = "dynasty: empress intercedes, harmony up for" }
+	QING_dynasty_harmony_nudge = { amount = 6 }
+	if = {
+		limit = { QING_dynasty_has_empress = yes }
+		current_ruler.spouse = { add_prestige = 20 }
+		if = {
+			limit = { current_ruler.spouse = { OR = { charisma >= 10  finesse >= 10 } } }
+			QING_dynasty_harmony_nudge = { amount = 3 }
+			QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 2 }
+		}
+		if = {
+			limit = { current_ruler.spouse = { has_variable = qing_char_affinity  var:qing_char_affinity >= 60 } }
+			QING_dynasty_harmony_nudge = { amount = 3 }
+		}
+	}
+	current_ruler = { add_prestige = 8 }
+}
+
+# SET HER ASIDE — the emperor keeps his consort to the inner palace, ruling without
+# her voice. His prestige rises a little, but the slighted empress and a colder inner
+# court cost the house some harmony. Mirror of the dowager-overrule beat, softer.
+QING_dynasty_empress_rebuff = {
+	LOG_line = { sys = QING  msg = "dynasty: empress set aside, emperor rules alone for" }
+	QING_dynasty_harmony_nudge = { amount = -5 }
+	current_ruler = { add_prestige = 15 }
+	if = {
+		limit = { QING_dynasty_has_empress = yes  current_ruler.spouse = { has_variable = qing_char_affinity  var:qing_char_affinity >= 60 } }
+		QING_dynasty_harmony_nudge = { amount = -3 }
+	}
+}
+
+# CURB THE CONSORT CLAN (外戚) — the empress's kin have been trading on her name for
+# office and favour. The throne checks them: harmony holds, corruption eases, but the
+# empress herself resents the slight to her house (a touch of her loyalty lost).
+QING_dynasty_consort_clan_curb = {
+	LOG_line = { sys = QING  msg = "dynasty: consort clan curbed for" }
+	QING_dynasty_harmony_nudge = { amount = 2 }
+	QING_DECLINE_nudge = { var = qing_corruption_level  amount = -4 }
+	if = {
+		limit = { QING_dynasty_has_empress = yes }
+		current_ruler.spouse = { add_loyalty = -8 }
+	}
+}
+
+# INDULGE THE CONSORT CLAN — the throne lets the empress's family rise. She is
+# gratified (loyalty up), but 外戚 favour breeds venality and grumbling among the
+# old grandees (corruption up, harmony slips). The Han-dynasty warning.
+QING_dynasty_consort_clan_indulge = {
+	LOG_line = { sys = QING  msg = "dynasty: consort clan indulged for" }
+	QING_dynasty_harmony_nudge = { amount = -4 }
+	QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
+	if = {
+		limit = { QING_dynasty_has_empress = yes }
+		current_ruler.spouse = { add_loyalty = 12 }
+	}
 }

@@ -3,9 +3,19 @@
 #
 # create_unit / raise_legion follow the engine idiom verified against the
 # feasibility oracles (Invictus, Terra-Indomita): every create_unit declares a
-# base `sub_unit = <type>`, adds strength with `add_subunit = <type>`, and the
-# commander is attached INSIDE the raise_legion block via
-#   char:X = { add_to_legion = PREV } + random_legion_unit = { set_as_commander = char:X }
+# base `sub_unit = <type>`, adds strength with `add_subunit = <type>`.
+#
+# TWO commander idioms are used in this file, deliberately:
+#   1. The QING GARRISON helpers (SE_qing_raise_garrison[_cmd]) create the unit at
+#      COUNTRY scope with an inline `commander = <char>` field — the proven
+#      free-placement idiom (Invictus galatian_invasion.txt:715; 00_event_effects_
+#      inv_1_0.txt:4281). This is REQUIRED because raise_legion musters at the
+#      governorship seat and ignores `location`, which stacked the whole OOB at
+#      Beijing (#241-fix, oracle-confirmed 2026-07-08).
+#   2. The 1815 European coalition legions below (SE_occupation_of_france etc.) still
+#      use raise_legion + `char:X = { add_to_legion = PREV }` + random_legion_unit =
+#      { set_as_commander = char:X }, since they are deliberately raised from ONE
+#      capital governorship and located across France (dispersal not required there).
 # (An earlier version used add_loyal_subunit / set_personal_loyalty / a pre-add
 #  every_sub_unit loop / an external add_commander on a saved scope — none of
 #  those are valid here; that is why these effects were disabled "due to errors".)
@@ -63,50 +73,31 @@ SE_qing_raise_garrison = {
 		# CHI directly — historically these WERE Qing frontier commands. The old guard
 		# (owner = c:CHI only) silently dropped exactly these 5 garrisons via LOG_fail.
 		# is_subject_of is a proven trigger (common/military_traditions/00_indian.txt;
-		# Invictus parthia_interactions.txt). The legion is still RAISED from
-		# c:CHI.capital_scope.governorship, so it belongs to Qing regardless.
+		# Invictus parthia_interactions.txt). The unit is created by $prov$'s OWNER, so
+		# a subject-held frontier province raises under THAT subject (the intended
+		# "dispersed across China AND its subjects" behaviour).
 		limit = { exists = $prov$  $prov$ = { OR = { owner = c:CHI  owner = { is_subject_of = c:CHI } } } }
-		# [#211-fix] Raise from the garrison PROVINCE'S OWN governorship so the legion
-		# musters AT $prov$. The old scope (c:CHI.capital_scope.governorship) meant a
-		# legion raised there could not be LOCATED outside the capital governorship's
-		# territory, so every garrison clamped to the capital seat (Beijing) — the
-		# whole OOB stacked in one stack. Proven dispersal idiom: se_QING_ILI.txt:400
-		# and se_QING_SELFSTR.txt:327 ($prov$.state.governorship). A province held by a
-		# CHI SUBJECT raises under THAT subject's governorship, so the frontier banner
-		# commands (Ili/Mukden/Heilongjiang/Ürümqi/Kashgar) become subject-held
-		# garrisons — the intended "dispersed across China AND its subjects" behaviour.
-		# Capital-governorship fallback guards the rare case of a state with no
-		# governorship, so no scope error on an unusual map.
-		if = {
-			limit = { $prov$ = { exists = state.governorship } }
-			LOG_line = { sys = QING  msg = "DIAG-241 $name$ PRIMARY: raised from $prov$ own governorship (disperses to $prov$)" }
-			$prov$ = { state.governorship = {
-				raise_legion = {
-					create_unit = {
-						name = $name$
-						location = $prov$
-						sub_unit = regular_infantry
-						save_scope_as = qing_garrison_legion
-						while = { count = $size$  add_subunit = regular_infantry }
-					}
-				}
-			} }
-		}
-		else = {
-			LOG_line = { sys = QING  msg = "DIAG-241 $name$ ELSE: no governorship at $prov$; raised from Beijing capital governorship (CLAMPS to Beijing)" }
-			c:CHI.capital_scope.governorship = {
-				raise_legion = {
-					create_unit = {
-						name = $name$
-						location = $prov$
-						sub_unit = regular_infantry
-						save_scope_as = qing_garrison_legion
-						while = { count = $size$  add_subunit = regular_infantry }
-					}
-				}
+		# [#241-fix develop] ROOT CAUSE of the all-Beijing stack: the old idiom wrapped
+		# create_unit in `$prov$.state.governorship = { raise_legion = { ... } }`. Oracle
+		# consult (Invictus/Terra-Indomita, 2026-07-08) confirmed raise_legion is a
+		# MOBILISATION wrapper: the legion musters at the GOVERNORSHIP SEAT and the nested
+		# create_unit `location` is IGNORED. Every garrison therefore mustered at its
+		# governorship's state capital (in practice Beijing), not at $prov$ — the stack.
+		# FIX: drop raise_legion entirely and create the unit directly at COUNTRY scope
+		# ($prov$'s owner) with `location = $prov$`. This is the proven free-placement
+		# idiom (Invictus events/flavor_maurya.txt:1037 `owner = { create_unit { navy=no
+		# location=<prov> } }`; galatian_invasion.txt:715). `location` is respected here,
+		# so each garrison spawns AT its own province — dispersed as intended.
+		$prov$ = { owner = {
+			create_unit = {
+				navy = no
+				name = $name$
+				location = $prov$
+				sub_unit = regular_infantry
+				while = { count = $size$  add_subunit = regular_infantry }
 			}
-		}
-		LOG_line = { sys = QING  msg = "Qing garrison raised: $name$ at $prov$ (+$size$ coy)" }
+		} }
+		LOG_line = { sys = QING  msg = "[#241] Qing garrison raised: $name$ at $prov$ (+$size$ coy) via country-scope create_unit" }
 	}
 	else = {
 		LOG_fail = { sys = QING  fn = "SE_qing_raise_garrison"  reason = "$prov$ not held by Qing; $name$ not raised" }
@@ -125,54 +116,43 @@ SE_qing_raise_garrison_cmd = {
 		# above (Ili banner garrison under commander Changling char:244 is precisely
 		# one of the frontier cases this restores). See that helper for the rationale.
 		limit = { exists = $prov$  $prov$ = { OR = { owner = c:CHI  owner = { is_subject_of = c:CHI } } }  exists = $cmd$ }
-		# [#211-fix] Raise from the garrison PROVINCE'S OWN governorship (see the
-		# rationale in SE_qing_raise_garrison) so the commanded garrison musters AT
-		# $prov$ instead of clamping to Beijing. The commander $cmd$ is attached only
-		# when it belongs to the same country as the raising governorship's owner —
-		# a CHI commander cannot lead a subject-owned frontier legion (e.g. Ili raises
-		# under the ILI subject's governorship), so in that case the legion still
-		# musters correctly but the player assigns a commander. Capital-governorship
-		# fallback guards a state with no governorship.
+		# [#241-fix develop] Same root-cause fix as SE_qing_raise_garrison above: drop the
+		# raise_legion/governorship wrapper (which clamped every legion to its governorship
+		# seat, ignoring `location`) and create the unit at COUNTRY scope ($prov$'s owner)
+		# with `location = $prov$` so it disperses to its own province. create_unit accepts
+		# an inline `commander = <char>` field (Invictus events/galatian_invasion.txt:715-718
+		# `create_unit { navy=no location=pX commander=scope:... }`; common/scripted_effects/
+		# 00_event_effects_inv_1_0.txt:4281 `commander = char:13`) — this replaces the old
+		# add_to_legion + random_legion_unit.set_as_commander dance. The commander is
+		# attached only when he is a non-ruler employed by $prov$'s owner (a CHI commander
+		# cannot lead a subject-owned frontier legion — e.g. Ili raises under the ILI
+		# subject); otherwise the garrison still musters and the player assigns a commander.
 		if = {
-			limit = { $prov$ = { exists = state.governorship } }
-			LOG_line = { sys = QING  msg = "DIAG-241 $name$ PRIMARY: raised from $prov$ own governorship (disperses to $prov$)" }
-			$prov$ = { state.governorship = {
-				raise_legion = {
-					create_unit = {
-						name = $name$
-						location = $prov$
-						sub_unit = regular_infantry
-						save_scope_as = qing_garrison_legion
-						while = { count = $size$  add_subunit = regular_infantry }
-					}
-					if = {
-						limit = { $cmd$ = { is_ruler = no  employer = $prov$.owner } }
-						$cmd$ = { add_to_legion = PREV }
-						random_legion_unit = { set_as_commander = $cmd$ }
-					}
+			limit = { $cmd$ = { is_ruler = no  employer = $prov$.owner } }
+			$prov$ = { owner = {
+				create_unit = {
+					navy = no
+					name = $name$
+					location = $prov$
+					commander = $cmd$
+					sub_unit = regular_infantry
+					while = { count = $size$  add_subunit = regular_infantry }
 				}
 			} }
+			LOG_line = { sys = QING  msg = "[#241] Qing garrison raised: $name$ at $prov$ (+$size$ coy) under commander $cmd$" }
 		}
 		else = {
-			LOG_line = { sys = QING  msg = "DIAG-241 $name$ ELSE: no governorship at $prov$; raised from Beijing capital governorship (CLAMPS to Beijing)" }
-			c:CHI.capital_scope.governorship = {
-				raise_legion = {
-					create_unit = {
-						name = $name$
-						location = $prov$
-						sub_unit = regular_infantry
-						save_scope_as = qing_garrison_legion
-						while = { count = $size$  add_subunit = regular_infantry }
-					}
-					if = {
-						limit = { $cmd$ = { employer = c:CHI } }
-						$cmd$ = { add_to_legion = PREV }
-						random_legion_unit = { set_as_commander = $cmd$ }
-					}
+			$prov$ = { owner = {
+				create_unit = {
+					navy = no
+					name = $name$
+					location = $prov$
+					sub_unit = regular_infantry
+					while = { count = $size$  add_subunit = regular_infantry }
 				}
-			}
+			} }
+			LOG_line = { sys = QING  msg = "[#241] Qing garrison raised: $name$ at $prov$ (+$size$ coy); $cmd$ not eligible to command (player assigns)" }
 		}
-		LOG_line = { sys = QING  msg = "Qing garrison raised: $name$ at $prov$ (+$size$ coy) under commander $cmd$" }
 	}
 	else = {
 		LOG_fail = { sys = QING  fn = "SE_qing_raise_garrison_cmd"  reason = "$prov$ unheld or $cmd$ absent; $name$ not raised" }

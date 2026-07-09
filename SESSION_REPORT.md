@@ -2878,3 +2878,98 @@ gui/imp19c_windows.gui, no-BOM, braces 371/371.
 Verification: `git diff --stat` = 82 files, brace-balance ALL BALANCED, BOM unchanged HEAD-vs-now on
 all edited files, no non-log `from =` touched. Shipped for the user's single boot test alongside the
 still-pending #241/#242 diagnostics and the #238/#239/#243/#244/#254 batch (ab925f1b).
+
+
+## [#272/#273] Grand Council expansion — Empress seat + 2 new offices + Chamberlain rename (develop, 2026-07-09)
+
+Combined develop batch (author freekumquats). The "council-is-offices" model expanded from 11 to
+**13 appointable offices**, plus a new **Empress figurehead seat** on the throne, and the
+Regent/Emeritus seats relocated in the GUI. Ships as ONE develop push. **Two-tier per the
+fix-traceability rule: the NEW offices/events/seat are net-new features (log for debugging); the
+Chamberlain rename + the War/Censorate modifier moves are CHANGES to existing features and get the
+behavioural-equivalence notes below.**
+
+### #272 — Empress throne seat (皇后)
+- **Seat var + refresh.** `qing_office_empress_holder` mirrors `current_ruler.spouse` (the PROVEN
+  ruler scope-link, `exists = spouse`), refreshed each quarter by NEW `QING_seat_refresh_empress`
+  (added to `QING_seat_refresh_all` after crownprince; clears the var when no living spouse).
+  se_QING_SEATS.txt.
+- **Figurehead scoring only.** Empress enters `QING_council_score_figurehead` at weight 1 (display
+  + soft council-effectiveness contribution); she NEVER enters any appointable-office loop —
+  behaviourally isolated from the appoint/vacate machinery.
+- **Gate trigger** `QING_dynasty_has_empress` added to `qing_dynasty_triggers.txt` (a
+  scripted_TRIGGERS file — per the #157/#165 lesson that a limit-position condition placed in a
+  scripted_EFFECTS file registers as an effect, collapses the guard, and can hard-crash boot).
+- **3 empress events** (qing_dynasty.6/.7/.8): Empress Intercedes (positive), Consort Clan 外戚
+  (negative), Two Suns in the Inner Palace (empress-vs-dowager; gated on BOTH empress AND dowager
+  present). All `is_triggered_only`, tag=CHI + gate, fired from `QING_dynasty_flavour_roll`.
+  Helpers in se_QING_DYNASTY.txt (intercede/rebuff/consort-clan-curb/indulge), all guarded on
+  `QING_dynasty_has_empress`.
+
+### #273 — two new appointable offices (council 11 → 13)
+- **Central Secretariat — 內閣大學士 Grand Secretary** (key `grand_secretariat`, skill charisma).
+  Office modifier = political-influence generation + power-cost reduction. OWNS the accountability
+  **influence** metric (`QING_acc_metric_influence`: PI<20 fail / ≥80 thrive). 3 office events
+  (qing_secretariat.1/.2/.3 — Edict Mill / Rescript Backlog / Drafting Scandal).
+- **Imperial Guard — 領侍衛內大臣 Grand Commandant** (key `guard_commandant`, skill martial).
+  Buff = Guard vitality (land morale/discipline); the holder's power-base is reconciled onto the
+  emperor in `QING_council_recompute`. OWNS the accountability **civil-war** metric
+  (`QING_acc_metric_civil_war`). 3 office events (qing_guard.1/.2/.3 — Guard Reviewed / Plot
+  Against the Throne / Overmighty Commandant, the praetorian/Oboi problem).
+- Both offices' 6 events are gated on their office being filled by a living holder in ROOT's
+  service, and fire from `QING_frontier_flavour_roll` (se_QING_DECLINE.txt).
+- **Appoint verbs** `qing_gov_office_appoint_grand_secretariat` + `_guard_commandant`
+  (QING_governance_actions.txt): scope=character, CHI+employer shown, cost 15 political influence,
+  call `QING_office_appoint`.
+
+### CHANGES to existing features (behavioural-equivalence scrutiny)
+- **Chamberlain rename (behavioural CHANGE).** The Household Grand Secretary office was RENAMED
+  Grand Chamberlain of the Imperial Household (內務府); the office **key changed
+  `grand_secretary` → `chamberlain`** across se_QING_COUNCIL / se_QING_ACCOUNTABILITY / seats /
+  loc / GUI. The office's MECHANICS (next-ruler legitimacy + heir attraction, its accountability
+  metric) are UNCHANGED — this is a name/key relabel, not a mechanic change. Verified no stray
+  `grand_secretary` holder-var references survive (the NEW `grand_secretariat` office is a
+  DISTINCT key — the near-collision is intentional and both were grepped to confirm no crosswiring).
+- **War / Censorate modifier moves (behavioural CHANGE).** Land-morale/discipline moved off the
+  **War** office onto the new **Guard Commandant** (War now = supply/maintenance); the Censorate
+  loyalty buff (`qing_censorate_oversight_minor/_major`) is now also stripped at BOTH the
+  appoint-displacement (~910) and vacate (~971) cleanup sites in se_QING_COUNCIL.txt, so a relieved
+  officer leaves clean (previously the strip only ran in one path — a latent double-buff on office
+  churn).
+
+### GUI (government_view.gui + imp19c_windows.gui)
+- Office grid 10 → 12 cards: `grand_secretariat` (oratory/GetCharisma) + `guard_commandant`
+  (military/GetMartial) added to OFFICES row 3, templated from the zongli card.
+- Chamberlain card stale loc keys fixed (`QING_GC_OFFICE_GRAND_SECRETARY`/`_MOD_GRAND_SECRETARY`
+  → `_CHAMBERLAIN`).
+- **Throne row** Emperor | Crown Prince | **Empress** (Regent box replaced by Empress box).
+- **Regent + Emeritus relocated** into a right-hand column beside the Grand Chancellor card.
+- Picker window (imp19c_windows.gui): 2 new per-office Appoint buttons keyed on
+  `qing_gc_picker_office`.
+
+### Localization
+- qing_governance_l_english.yml: chamberlain rename, 2 office name/desc pairs, card titles, MOD
+  one-liners, appoint-button + tooltip keys, Empress seat loc, "eleven"→"thirteen" appointable.
+- qing_dynasty_l_english.yml: qing_dynasty.6/.7/.8 loc.
+- NEW qing_secretariat_l_english.yml + qing_guard_l_english.yml: full loc for the 6 office events.
+
+### se_LOG + verification
+- Every new verb/event immediate logs `sys=QING`. **All new LOG_line msgs use STATIC text only**
+  (no bracketed `[data-functions]`) per #253. Bracketed `[scope:X.GetName]`/`[ROOT.GetRuler.GetName]`
+  appear ONLY in loc desc/tooltip strings (valid there; the loc renderer resolves them).
+- Brace balance verified (delta 0) on both GUI files and every edited script; loc button-tooltip
+  keys confirmed present.
+
+### Adversarial review (workflow wf_f4b3dc43) — 2 CONFIRMED findings, both FIXED
+- **HIGH — accountability challenge could not seat the 2 new offices.** The #273 batch added
+  `grand_secretariat`/`guard_commandant` to the accountability scorer (se_QING_ACCOUNTABILITY) so a
+  failing holder can trigger `qing_accountability.1`, and to `QING_office_vacate_dispatch` (so the
+  defender is vacated), but the challenger's appoint dispatch table in option .1.b
+  (qing_accountability_events.txt) stopped at `zongli` — picking "elevate the challenger" emptied
+  the contested office and spent 15 PI without ever seating the rival. **FIX:** added `else_if`
+  branches for `grand_secretariat` + `guard_commandant` to the .1.b appoint chain (tagged [#273]).
+- **MEDIUM — Chamberlain picker button stale tooltip key.** imp19c_windows.gui:270 still pointed at
+  the deleted `QING_GOV_OFFICE_GRAND_SECRETARY_BTN_TT`; **FIX:** repointed to the live
+  `QING_GOV_OFFICE_CHAMBERLAIN_BTN_TT` (the new `grand_secretariat` button correctly uses its own
+  `_GRAND_SECRETARIAT_BTN_TT` — no crosswiring).
+- Post-fix brace balance re-verified (delta 0). Batch committed to develop as freekumquats.
