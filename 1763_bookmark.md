@@ -443,7 +443,28 @@ needed no change. Line-endings preserved (India = CRLF+BOM, AFG/Qing = LF+BOM). 
 three files; regression grep clean (no stray `set_as_ruler` to removed chars; `father=`/portrait refs
 intact).
 
-*(Per-region implementation decisions B7, … appended as the full map-surgery phase continues: Africa next, then C.Europe/HRE last.)*
+### B7. Africa region build (#236 + #240, 2026-07-09) — FIFTH full-surgery region (documentation-only)
+
+Recon read `research/1763_DELTA_Africa.md` (36 KB). The plan's substantive deltas are all **territorial /
+tag-creation**: Cape Colony British→Dutch reversion (DAF), Sokoto Caliphate → independent Hausa city-states
+(new tags Kano/Katsina/Zaria/Gobir/etc.), Oyo–Dahomey tributary relationship, Ethiopia ruler swap
+(Emperor Iyoas I), Swahili-coast / Omani reallocation, and assorted West-African kingdom edits. **Every one
+of these requires either new-tag creation with province assignment or large ownership churn in
+`00_default.txt` → all gated by the #230 oracle mass-spawn rule.** None is in the per-region crash-avoiding
+build scope.
+
+**Crash-relevant delta: NONE.** Global unborn-ruler scan found the only African character file is
+`00_West_Africa.txt` (defines OYO only), and its single `set_as_ruler` target — char:487, b.1763.01.01 —
+is born **before** the 1763.2.16 start, so it is a valid 1763 ruler and is **kept**. All other African tags
+(ETH, CAP/DAF, OMA, ASH, BOR, KON, SOK, …) have **no character files at all**, so they already receive
+engine-generated period-appropriate rulers — nothing to fix. **Zero edits applied this region.**
+
+**Net for #236:** documentation-only. No unborn-ruler crash exists in Africa; the Cape reversion, Hausa
+independence, Oyo-Dahomey, and Ethiopia ruler-identity deltas are documented as deferred limitations (oracle
+mass-spawn gate #230), consistent with the policy applied to the MENA Crimean-Khanate and Asia
+EIC/Maratha/Vietnam redistributions.
+
+*(Per-region implementation decisions B8 appended next: C.Europe/HRE, the LAST region.)*
 
 ---
 

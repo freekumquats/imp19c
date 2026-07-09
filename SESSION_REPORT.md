@@ -2728,3 +2728,16 @@ files. All remaining `set_as_ruler` targets born ≤1763. Regression grep: no st
 chars anywhere in setup/+events/; `father="char:156/527/512"` and `right_portrait=char:155/156/335` refs
 still resolve (chars retained). Adversarial-review workflow run before commit. Still OWED: in-game boot
 test (user's machine). Nothing promoted off the branch.
+
+## [#236/#240] Africa 1763 delta (1763_bookmark) — documentation-only
+
+**Scope.** Fifth Phase-2 region. `research/1763_DELTA_Africa.md`'s substantive deltas are all territorial /
+tag-creation (Cape British→Dutch DAF reversion, Sokoto→Hausa city-state tags, Oyo-Dahomey tributary,
+Ethiopia Iyoas I ruler swap, Swahili/Omani reallocation) → **all gated by the #230 oracle mass-spawn rule**,
+out of per-region crash-avoiding scope.
+
+**Crash-relevant delta: NONE.** Global unborn-ruler scan: the only African character file is
+`00_West_Africa.txt` (OYO), whose single `set_as_ruler` (char:487, b.1763.01.01) is born BEFORE 1763.2.16
+→ valid 1763 ruler, KEPT. All other African tags have no character files → engine-generated rulers already.
+**Zero setup edits applied.** Deltas documented as deferred limitations (same policy as MENA Crimea / Asia
+EIC-Maratha-Vietnam). Documentation-only region (docs commit only).
