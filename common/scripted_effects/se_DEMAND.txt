@@ -39,6 +39,29 @@ DEMAND_set_demand_from_food_all = {
 		value = DEMAND_unfulfilled_food_need_governorship
 	}
 
+	# [#279][review-fix bug1] Compute the FULL basket size BEFORE any DEMAND_set_demand_from_food call,
+	# so every good (the 6 base staples AND any local New World crop) divides the unfulfilled food need
+	# by the SAME final divisor. The earlier version reset+incremented the count interleaved with the
+	# crop calls, so base staples divided by the previous pass's leftover count and crops divided by
+	# partial counts (7,8,9) purely by call order -> ~4.6% over-demand + per-crop asymmetry. Count first,
+	# demand second fixes it. DEMAND_food_goods_count is governorship-scoped and re-derived every pass.
+	set_variable = {
+		name = DEMAND_food_goods_count
+		value = 6
+	}
+	if = {
+		limit = { GOODS_governorship_maize_produced > 0 }
+		change_variable = { name = DEMAND_food_goods_count add = 1 }
+	}
+	if = {
+		limit = { GOODS_governorship_potato_produced > 0 }
+		change_variable = { name = DEMAND_food_goods_count add = 1 }
+	}
+	if = {
+		limit = { GOODS_governorship_sweet_potato_produced > 0 }
+		change_variable = { name = DEMAND_food_goods_count add = 1 }
+	}
+
 	DEMAND_set_demand_from_food = {
 		tradegood = grain
 	}
@@ -57,6 +80,31 @@ DEMAND_set_demand_from_food_all = {
 	DEMAND_set_demand_from_food = {
 		tradegood = fish
 	}
+
+	# [#279] Conditional New World crop staples. Each crop demand is set ONLY where the governorship
+	# actually produces it (GOODS_governorship_<crop>_produced > 0). A non-producing governorship makes
+	# NO crop call -> issues no order -> runs no negative stockpile -> raises NO phantom shortage.
+	# [#279][review-fix bug2] Each gate now has an ELSE that removes the DEMAND_food_<crop> var. Without it,
+	# a governorship that STOPS producing the crop (e.g. cedes the crop provinces in a war) froze a stale
+	# DEMAND_food_<crop> var, which DEMAND_luxury_svalues.txt reads on has_variable alone -> inflated
+	# DEMAND_<crop> -> negative <crop>_stockpile -> shortage_<crop> -> the exact phantom shortage the gate
+	# was built to prevent. Clearing the var when produced==0 restores the D0/D2 no-phantom-shortage invariant.
+	if = {
+		limit = { GOODS_governorship_maize_produced > 0 }
+		DEMAND_set_demand_from_food = { tradegood = maize }
+	}
+	else = { remove_variable = DEMAND_food_maize }
+	if = {
+		limit = { GOODS_governorship_potato_produced > 0 }
+		DEMAND_set_demand_from_food = { tradegood = potato }
+	}
+	else = { remove_variable = DEMAND_food_potato }
+	if = {
+		limit = { GOODS_governorship_sweet_potato_produced > 0 }
+		DEMAND_set_demand_from_food = { tradegood = sweet_potato }
+	}
+	else = { remove_variable = DEMAND_food_sweet_potato }
+	LOG_line = { sys = ECON  msg = "food demand basket sized for governorship (base 6 + local New World crop staples)" }
 
 }
 
@@ -117,7 +165,11 @@ DEMAND_set_demand_from_food = {
 		}
 		change_variable = {
 			name = DEMAND_food_$tradegood$
-			divide = DEMAND_num_food_tradegoods
+			# [#279] Use the demand ALLOCATOR divisor (dynamic: base 6 + local crop staples), NOT the
+			# price-index divisor DEMAND_num_food_tradegoods (stays = 6). Both = 6 at baseline, so this
+			# is byte-identical until a governorship grows a New World crop, at which point the
+			# unfulfilled food need is split across the wider local basket (conserving total need).
+			divide = DEMAND_num_food_goods
 		}
 	}
 
