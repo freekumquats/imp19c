@@ -707,3 +707,25 @@ keys verified; review clean. Boot test owed to user.
 STILL TODO under #282: Asia remainder (Maratha houses GWA/INR/BRD/NAG carved from MRT, Mysore/Hyder Ali
 ruler, Sikh misls — higher-risk province allocation); C.Europe/HRE #237 (ecclesiastical electorates +
 imperial cities, Prussia pre-Silesia, Saxony-Poland). Same static pattern, region by region.
+
+### #282e — Asia: Maratha houses — INVESTIGATED, deliberately NOT redistributed
+Recon (2026-07-09) found the four Maratha successor houses ALREADY EXIST as substantial independent tags
+in the 1815 baseline with their own provinces: GWA (Gwalior) 6, INR (Indore/Holkar) 13, BRD (Baroda/Gaekwad)
+3, NAG (Nagpur/Bhonsle) 31 — alongside MRT (17). So the Maratha CONFEDERACY IS ALREADY FRAGMENTED at
+baseline; the 1763 "revert to confederacy" is structurally already true. The delta's plan to carve MRT's 17
+provinces among the houses used contested/guessed province picks (GWA/INR overlap; "from EIC" too) with no
+clean whole-area mapping (MRT spans Bombay/Candeish/Indore/Visiapour, which don't correspond to the houses'
+actual locations). Per the whole-area-approximation discipline + "don't disrupt a working setup for marginal
+gain", the Maratha holdings are LEFT AS-IS. Documented, not built.
+
+### Asia #235 remainder — status
+- Divided Vietnam (#282d): DONE.
+- Maratha houses: already fragmented, left as-is (above).
+- India ruler-identity swaps (MRT Madhavrao I, HYD Asaf Jah II, MYS Hyder Ali, AWA Shuja-ud-Daula): these
+  were deferred in #235 as "unsourced-DNA". Under the user's DNA ruling (omit DNA, sourced facts only) they
+  are now liftable, but are char-file authoring edits (create/repoint characters with correct birth years) —
+  a separate careful pass, NOT territorial. Deferred to a character-accuracy pass.
+- Sikh misls: the delta itself calls the 12-misl confederacy "unfeasible" to model as tags; left documented.
+
+**#282 territorial redistributions status: MENA (Crimea), Africa (Cape+Sokoto), Asia (Vietnam) DONE.
+Remaining: C.Europe/HRE #237 (ecclesiastical states — the largest plan), + India ruler-accuracy char pass.**
