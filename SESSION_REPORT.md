@@ -2973,3 +2973,77 @@ behavioural-equivalence notes below.**
   `QING_GOV_OFFICE_CHAMBERLAIN_BTN_TT` (the new `grand_secretariat` button correctly uses its own
   `_GRAND_SECRETARIAT_BTN_TT` — no crosswiring).
 - Post-fix brace balance re-verified (delta 0). Batch committed to develop as freekumquats.
+
+
+## [#275] Religion rework — traditional Chinese faiths vs Christian missionaries (develop, 2026-07-09)
+Concrete missionary-station layer added on top of the existing abstract anti-Christian sentiment
+meter (concrete-over-abstract rule). Built on, did not duplicate, the existing
+se_QING_MISSIONARY.txt sentiment/fever/agitator/Boxer escalation and the treaty-burden feed.
+
+### NEW concrete layer
+- **`se_QING_MISSIONARY_STATIONS.txt`** — a per-province missionary-STATION layer. After the
+  treaty system is imposed (`qing_treaty_system_imposed` gate — the interior was closed to inland
+  proselytising under the Canton system), a self-throttled ~yearly pulse plants/maintains concrete
+  mission stations in treaty-exposed provinces, stamping `qing_mission_station` (province modifier)
+  and, where local anti-Christian feeling is high, `qing_mission_unrest` (local_unrest +3 — 地方教案
+  anti-Christian disorder).
+- **`qing_missionary_station_modifiers.txt`** — the two province modifiers; all keys verified
+  province-scope-valid.
+- **Loop back into the summary meter:** a live station count (`qing_missionary_reach`, recomputed
+  each pulse) is fed ADDITIVELY into `qing_antichr_target` in the existing `QING_missionary_pulse`
+  — more missions on the ground → higher national anti-Christian sentiment → the existing
+  fever/agitator/Boxer chain. The concrete layer DRIVES the summary layer (previously fed only by
+  treaty-burden + sect-pressure). The reach-add is a no-op (0) until treaties open — so no
+  behavioural change to the existing system before the historical trigger.
+- Pulse runs off the governance pulse (se_QING_GOVERNANCE.txt step 11b, right after the existing
+  `QING_missionary_pulse` step 11).
+- **#253 honoured** (all LOG msgs static, sys = QING). Loc for the two modifiers added to
+  qing_missionary_l_english.yml.
+
+## [#276] Dynastic marriage diplomacy (develop, 2026-07-09)
+A Western-monarchy AI feature (CHI excluded), AI-autonomous like the USA #93 / Japan #94 / Mexico
+#96 arcs. All 4 unproven §3 hooks cleared against Terra-Indomita + Invictus (feasibility only)
+BEFORE building; 4 unproven idioms in the first draft caught + replaced by self-verification.
+
+### Built (L1 pact / L2 union / L3 inheritance; L4 GUI deliberately not built — AI-only system)
+- **L1** `MARRIAGE_pulse` → `MARRIAGE_form_pact`: a Western monarchy (capped 3 bonds, ruler with a
+  marriageable child) weds a MALE child of its house to a FEMALE child of one eligible foreign
+  realm (bounded random_country; opposite-sex gate = engine requirement). Records the bond both
+  ways via the PROVEN variable_list idiom, applies `royal_marriage_opmod` both ways, and an
+  `add_alliance` for a peace-time non-allied pair.
+- **L2** `MARRIAGE_check_unions`: a wedded realm whose junior house goes heirless is bound as a
+  `royal_union` (FUNC_make_subject) and marked `marriage_union_junior` so L3 fires only on our own
+  marriage-made unions.
+- **L3** `MARRIAGE_on_ruler_death_union` (from on_character_death, is_ruler=yes): when a
+  marriage-made royal_union's junior ruler dies heirless, the overlord inherits its land via the
+  PROVEN `LAND_transfer_provinces` idiom (annex_country is absent from oracles + mod, NOT used); the
+  defunct bond is then pruned from the overlord's partner list + counter.
+
+### Files
+- NEW se_MARRIAGE.txt, 00_marriage_triggers.txt (guards in scripted_TRIGGERS per #157/#165),
+  marriage_on_actions.txt.
+- EDIT 00_yearly_country.txt (pulse registration), 00_specific_from_code.txt (L3 death hook),
+  imp19c_opinions.txt (royal_marriage_opmod), opinions_l_english.yml (loc).
+- **#253 honoured** (static LOG msgs, sys = MARRIAGE). NEW subsystem; edits to existing files are
+  additive-only (list entries + one death-hook line).
+
+### Rejected unproven idioms (oracle rule)
+`married_to_this@this` dynamic-var suffix → variable_list; `random_child` → `ordered_child`;
+`is_ally_with` → `alliance_with`; `annex_country` → `LAND_transfer_provinces`.
+
+
+## [#277] Adversarial review of #165/#275/#276 + fixes (develop, 2026-07-09)
+Workflow wf_f54f9fa5: 3 finders + adversarial verifiers. 5 CONFIRMED (1 LOW rejected), all FIXED.
+- **#165 HIGH (feature inert):** se_QING_SPHERE.txt iterated the variable-list qing_sphere_states
+  with `list =` (script-list namespace) instead of `variable =` at both sites (L60 init, L262
+  pulse) → zero iterations, whole four-power sphere a silent no-op. FIX: `list=`→`variable=` both.
+- **#275 MEDIUM x2 (se_QING_MISSIONARY_STATIONS.txt):** (a) spread had no probability gate →
+  deterministic annual doubling; FIX: `random={chance=15}`. (b) reach double-count + same-pass
+  harvest/re-spread of a daughter station founded mid-sweep; FIX: per-pass province var
+  qing_station_founded_this_pass excludes newborns from the existing-station + treaty-port branches,
+  cleared at end of pulse.
+- **#276 MEDIUM (se_MARRIAGE.txt):** check_unions had no relative-size guard (weak realm could
+  absorb a stronger heirless partner); FIX: num_of_cities <= scope:union_senior.num_of_cities.
+- **#276 LOW:** L3 inheritance pruned bond only on overlord; FIX: iterate dying realm's own
+  marriage_partners list, prune reciprocal bond on every partner. Plus defensive transfer-list clear.
+- All files brace-balanced (delta 0). Committed + pushed to develop as freekumquats.

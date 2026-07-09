@@ -1,0 +1,268 @@
+########################################################################
+# se_QING_MISSIONARY_STATIONS.txt — THE MISSIONS ARRIVE (傳教士入內地).
+#
+# The CONCRETE, on-the-ground half of the missionary story. Where
+# se_QING_MISSIONARY.txt keeps the national ANTI-CHRISTIAN SENTIMENT meter and
+# the 教案-incident/Boxer escalation (the summary + drama layer), THIS module puts
+# real Christian MISSIONS on the map and lets them convert real POPS out of the
+# traditional Chinese faiths — Confucian, Daoist, Buddhist, and the Shenist folk
+# religion (儒釋道 + 民間信仰) — breeding LOCAL religious conflict province by
+# province. That local grievance is exactly what fed the national fury the older
+# module already tracks; this closes the loop with concrete objects.
+#
+# HISTORY: the Canton system (pre-1842) confined foreigners to the factories and
+# BANNED proselytising in the interior. It was the Tianjin treaties (1858/60) that
+# won the right to propagate the faith and hold property inland, with the FRENCH
+# claiming a protectorate over all Catholic missions (the largest presence), the
+# Anglo-American PROTESTANT societies close behind, and a small Russian ORTHODOX
+# ecclesiastical mission at Beijing. Missions radiated INLAND FROM THE TREATY
+# PORTS — so here they seed on the real treaty-port provinces (the qing_treaty_port
+# modifier stamped by se_QING_TREATIES.txt) and spread to neighbouring provinces,
+# converting a few pops each year. Converting a Confucian/Buddhist heartland pop
+# bred far more resentment than winning an already-marginal one — the 教案 grievance.
+#
+# CONCRETE OBJECTS (concrete-over-abstract):
+#   qing_mission_station  PROVINCE modifier — a real mission on the map. Founded at
+#                         treaty ports, spreads to neighbours. Carries province var
+#                         qing_mission_faith (flag) = the denomination it preaches.
+#   converted pops        real pops whose set_pop_religion is a Christian faith
+#                         (catholic | evangelical | orthodox) — the mission's harvest.
+#   qing_prov_missionary_tension  PROVINCE var 0..100 — local anti-Christian feeling,
+#                         high where a traditional heartland is being converted;
+#                         drives the qing_mission_unrest province modifier (local_unrest).
+#   qing_missionary_reach COUNTRY var — count of active stations, fed ADDITIVELY into
+#                         the national qing_antichristian_sentiment target (the loop back
+#                         to the existing Boxer escalation).
+#
+#   ROOT / this = the Qing (CHI, human). Prefix = QING_mission_
+#
+# Gated on the treaty system being imposed (qing_treaty_system_imposed) — dormant at
+# the 1815/1763 start, activates historically once China is forced open. All effects
+# lean on PROVEN idioms only (every_owned_province, random_neighbor_province,
+# ordered_pops_in_province + set_pop_religion [oracle-verified: Invictus 00_india_effects,
+# TI 00_christianity], random_list, add_province_modifier, the *_trigger_pop religion
+# groups). All logged sys = QING with STATIC msgs (#253).
+#
+# Sources: Paul Cohen, China and Christianity (1963); John K. Fairbank (ed.), The
+#   Missionary Enterprise in China and America (1974); Esherick, Origins of the Boxer
+#   Uprising (1987); Spence, The Search for Modern China.
+########################################################################
+
+# ======================================================================
+# QING_mission_faith_seed — pick the denomination a NEW station preaches, and stamp
+# it as the province var qing_mission_faith (flag). Weighted to the historical
+# balance: Catholic the most numerous (French protectorate), Protestant close
+# behind, a small Orthodox presence. Scope: PROVINCE (the station province).
+# ======================================================================
+QING_mission_faith_seed = {
+	random_list = {
+		55 = { set_variable = { name = qing_mission_faith  value = flag:catholic } }
+		35 = { set_variable = { name = qing_mission_faith  value = flag:evangelical } }
+		10 = { set_variable = { name = qing_mission_faith  value = flag:orthodox } }
+	}
+}
+
+# ======================================================================
+# QING_mission_found_station — stamp a real mission on a province. Scope: PROVINCE.
+# Idempotent by the caller's NOT-has-modifier gate; also seeds the faith + inits the
+# local tension var. Bumps ROOT's reach counter (a founded station IS a station).
+# ======================================================================
+QING_mission_found_station = {
+	add_province_modifier = { name = qing_mission_station  duration = -1 }
+	QING_mission_faith_seed = yes
+	if = { limit = { NOT = { has_variable = qing_prov_missionary_tension } } set_variable = { name = qing_prov_missionary_tension  value = 0 } }
+	# [#275 review-fix] mark a station founded THIS pulse pass. add_province_modifier takes
+	# effect live, so a daughter station spread-founded early in the every_owned_province
+	# sweep would otherwise be re-entered by the existing-station branch when the loop
+	# reaches it — double-counting reach AND harvesting/re-spreading it the same year it was
+	# born (deterministic cascade). The existing-station branch skips anything carrying this
+	# mark; QING_mission_stations_pulse clears all marks at the end of the pass.
+	set_variable = { name = qing_station_founded_this_pass  value = 1 }
+	ROOT = { change_variable = { name = qing_missionary_reach  add = 1 } }
+	LOG_line = { sys = QING  msg = "mission: station founded in province for" }
+}
+
+# ======================================================================
+# QING_mission_convert_faith — set the scoped pop's religion to the station's faith.
+# Scope: POP. Branches on the founding province's qing_mission_faith flag (passed via
+# scope:mission_prov). Falls back to catholic if the flag is somehow unset.
+# ======================================================================
+QING_mission_convert_faith = {
+	if = { limit = { scope:mission_prov = { var:qing_mission_faith = flag:evangelical } } set_pop_religion = evangelical }
+	else_if = { limit = { scope:mission_prov = { var:qing_mission_faith = flag:orthodox } } set_pop_religion = orthodox }
+	else = { set_pop_religion = catholic }
+}
+
+# ======================================================================
+# QING_mission_convert_pops — the mission's yearly harvest. Scope: PROVINCE (a station).
+# Converts up to two eligible NON-CHRISTIAN pops to the station's faith, PREFERRING a
+# pop of a native Chinese tradition (Confucian/Daoist/Buddhist/Shenist) — those hard-won
+# conversions out of the folk faiths are what bred the real 教案 grievance, so each such
+# conversion raises the LOCAL tension more. Slaves/nobles are never touched (the gentry
+# and bondsmen were not the missions' field). Bounded, cheap.
+# ======================================================================
+QING_mission_convert_pops = {
+	save_scope_as = mission_prov
+	if = { limit = { NOT = { has_variable = qing_prov_missionary_tension } } set_variable = { name = qing_prov_missionary_tension  value = 0 } }
+	# --- yearly decay: a quiet field cools. A fully-converted province (the else
+	# branch below, no fresh conversion) nets -3/year and tension falls; an actively
+	# worked field adds more than this back, so net tension tracks how hard the
+	# mission is pushing against the local faith.
+	change_variable = { name = qing_prov_missionary_tension  subtract = 3 }
+	if = { limit = { var:qing_prov_missionary_tension < 0 } set_variable = { name = qing_prov_missionary_tension  value = 0 } }
+	# --- first convert: prefer a traditional-faith pop (the resented harvest). ---
+	if = {
+		limit = {
+			any_pops_in_province = {
+				NOT = { pop_type = slaves }
+				NOT = { pop_type = nobles }
+				chinese_traditional_religion_trigger_pop = yes
+			}
+		}
+		random_pops_in_province = {
+			limit = {
+				NOT = { pop_type = slaves }
+				NOT = { pop_type = nobles }
+				chinese_traditional_religion_trigger_pop = yes
+			}
+			QING_mission_convert_faith = yes
+		}
+		# converting a Confucian/Daoist/Buddhist/Shenist pop bites deep locally.
+		change_variable = { name = qing_prov_missionary_tension  add = 8 }
+		LOG_line = { sys = QING  msg = "mission: a traditional-faith pop converted (resented) for" }
+	}
+	else_if = {
+		# no traditional pop left — take any other non-Christian, non-slave/noble pop.
+		limit = {
+			any_pops_in_province = {
+				NOT = { pop_type = slaves }
+				NOT = { pop_type = nobles }
+				NOT = { christian_group_trigger_pop = yes }
+			}
+		}
+		random_pops_in_province = {
+			limit = {
+				NOT = { pop_type = slaves }
+				NOT = { pop_type = nobles }
+				NOT = { christian_group_trigger_pop = yes }
+			}
+			QING_mission_convert_faith = yes
+		}
+		change_variable = { name = qing_prov_missionary_tension  add = 4 }
+		LOG_line = { sys = QING  msg = "mission: a non-Christian pop converted for" }
+	}
+	else = {
+		LOG_line = { sys = QING  msg = "mission: province wholly converted, no pop left to win for" }
+	}
+	# --- clamp local tension. ---
+	if = { limit = { var:qing_prov_missionary_tension > 100 } set_variable = { name = qing_prov_missionary_tension  value = 100 } }
+	# --- local conflict: a heavily-worked mission field breeds anti-Christian unrest. ---
+	QING_mission_apply_local_band = yes
+}
+
+# ======================================================================
+# QING_mission_apply_local_band — one province modifier matching local missionary
+# tension. High local tension = anti-Christian riot risk (地方教案). Scope: PROVINCE.
+# ======================================================================
+QING_mission_apply_local_band = {
+	remove_province_modifier = qing_mission_unrest
+	if = {
+		limit = { var:qing_prov_missionary_tension >= 50 }
+		add_province_modifier = { name = qing_mission_unrest  duration = -1 }
+		LOG_line = { sys = QING  msg = "mission: local anti-Christian unrest band applied for" }
+	}
+}
+
+# ======================================================================
+# QING_mission_spread_one — a station may plant a daughter mission in a neighbouring
+# Qing province that has none. Scope: PROVINCE (the parent station). Modest yearly
+# chance so the map fills gradually inland from the ports over the treaty decades.
+# ======================================================================
+QING_mission_spread_one = {
+	# [#275 review-fix] gate the spread on a modest per-station yearly roll (~15%). The
+	# founding branch is otherwise unconditional, so every station with any eligible
+	# neighbour spread EVERY year — station count doubled annually and blanketed the whole
+	# map within a few years of the treaties (degenerate). random={chance=15 ...} matches
+	# the documented "modest yearly chance" (idiom: se_QING_WAR.txt:89) so the map fills
+	# inland gradually over the treaty decades instead.
+	random = {
+		chance = 15
+		if = {
+			limit = {
+				any_neighbor_province = {
+					is_sea = no
+					owner = scope:mission_owner
+					NOT = { has_province_modifier = qing_mission_station }
+					state = { total_population > 0 }
+				}
+			}
+			random_neighbor_province = {
+				limit = {
+					is_sea = no
+					owner = scope:mission_owner
+					NOT = { has_province_modifier = qing_mission_station }
+					state = { total_population > 0 }
+				}
+				QING_mission_found_station = yes
+			}
+		}
+	}
+}
+
+# ======================================================================
+# QING_mission_stations_pulse — the yearly driver. Scope: COUNTRY (CHI). Gated on the
+# treaty system (missions won inland rights only with the 1858/60 treaties). One
+# every_owned_province pass: seed stations at treaty ports, and at each existing
+# station convert pops + (chance) spread to a neighbour. Recomputes qing_missionary_reach
+# from scratch so it stays an honest live count. Self-throttled ~yearly.
+# ======================================================================
+QING_mission_stations_pulse = {
+	if = {
+		limit = {
+			has_variable = qing_treaty_system_imposed
+			NOT = { has_variable = qing_mission_pulse_cooldown }
+		}
+		LOG_enter = { sys = QING  fn = "QING_mission_stations_pulse" }
+		set_variable = { name = qing_mission_pulse_cooldown  days = 365 }
+		save_scope_as = mission_owner
+		# recompute reach from zero; every founded station (existing or seeded this pass)
+		# increments it via QING_mission_found_station / the station branch below.
+		set_variable = { name = qing_missionary_reach  value = 0 }
+		every_owned_province = {
+			limit = { is_sea = no }
+			# --- an existing station (from a PRIOR pass): harvest + maybe spread inland.
+			# [#275 review-fix] a station founded THIS pass carries qing_station_founded_this_pass
+			# and is skipped here — it already bumped reach at founding, and re-harvesting /
+			# re-spreading a same-year daughter caused the reach double-count + spread cascade. ---
+			if = {
+				limit = {
+					has_province_modifier = qing_mission_station
+					NOT = { has_variable = qing_station_founded_this_pass }
+				}
+				scope:mission_owner = { change_variable = { name = qing_missionary_reach  add = 1 } }
+				QING_mission_convert_pops = yes
+				# gentle local tension decay if the field is quiet this year, then the
+				# harvest above adds back — net drift tracks how hard the mission works.
+				QING_mission_spread_one = yes
+			}
+			# --- a treaty port with no mission yet: the missions follow the flag in.
+			# [#275 review-fix] guard NOT-already-a-station so a treaty port spread-founded
+			# earlier in this same sweep is not re-founded here. ---
+			else_if = {
+				limit = {
+					has_province_modifier = qing_treaty_port
+					NOT = { has_province_modifier = qing_mission_station }
+				}
+				QING_mission_found_station = yes
+			}
+		}
+		# [#275 review-fix] clear the this-pass founding marks so next pulse treats today's
+		# newborn stations as ordinary existing stations (harvest + spread + reach-count).
+		every_owned_province = {
+			limit = { has_variable = qing_station_founded_this_pass }
+			remove_variable = qing_station_founded_this_pass
+		}
+		LOG_line = { sys = QING  msg = "mission: stations pulse complete (reach recomputed) for" }
+		LOG_exit = { sys = QING  fn = "QING_mission_stations_pulse"  result = OK }
+	}
+}
