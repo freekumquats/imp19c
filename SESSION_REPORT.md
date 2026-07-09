@@ -2706,3 +2706,112 @@ se_QING_COUNCIL.txt 393/393, QING_governance_svalues.txt 5/5). No dangling refs 
 window / `QING_GC_OPEN_CANDIDATES` / `QING_GC_HEADER_CANDIDATES`. No bugs found. se_LOG: backend
 `QING_council_refresh_candidates_by` has LOG_enter/line/exit (sys=QING). Files preserve original BOM
 state (government_view.gui + imp19c_windows.gui no-BOM; loc .yml BOM).
+
+## #254 DONE (develop) — ROOT CAUSE: dead inline-effect on_game_initialized blocks now registered via on_actions
+
+**Symptom cluster.** Grand Council empty at boot (#238), throne boxes blank (#239), Appoint
+buttons dead (#243), and NO SPHERE probe output whatsoever in debug.log (#254 origin) — despite the
+probe's own first statement being an unconditional log line. The Qing startup block
+(`QING_DECLINE_init` / `QING_open_global_diplomacy` / `QING_set_ethnic_stance` / `QING_GOV_init` /
+`QING_council_init` / `QING_council_autofill` / `QING_seat_refresh_all` / `QING_dynasty_init` +
+faction seeding) never ran; likewise dejure freeze-setup, USA sectional seed, MEX instability seed,
+Japan bakumatsu seed.
+
+**Root cause (adversarially verified; refuted gating / parse-failure / different-winner hypotheses,
+no vanilla counterexample).** The engine merges the LIST forms of `on_game_initialized`
+(`on_actions = { ... }` and `events = { ... }`) across all files declaring the block, but keeps only
+ONE file's raw inline `effect = {}` — the load-order winner, `economy/oa_economy_setup.txt`. Every
+other file that declared `on_game_initialized = { effect = { ... } }` was silently discarded and
+never executed.
+
+**Oracle confirmation (feasibility only).** Terra-Indomita ships FIVE separate
+`on_game_initialized` files; each registers a NAMED action via `on_actions = { name }` (AGE_on_init,
+COL_on_game_initialized, inv_te_on_game_initialized, fix_succession_on_action) and only ONE uses an
+inline effect. This is the proven merge-safe idiom.
+
+**Rejected the naive fix.** The original plan (append the 6 init actions to the economy file's
+existing `on_actions` list) would have broken them: that list is `delay = { days = 20 }` THEN
+`quarterly_trade_pulse`, and `delay` in an on_action list is POSITIONAL (confirmed in TI
+`00_monthly_country.txt`, which interleaves `delay` between pulses). Appending after
+`quarterly_trade_pulse` puts the entries after the delay → council/throne seeding would fire on day
+20, not at boot — reproducing the "empty at boot" bug. Rejected.
+
+**Fix applied.** Each of the 6 dead files made self-contained: its inline `effect` block renamed to
+a unique named action, registered via that file's OWN `on_game_initialized = { on_actions = { name } }`
+(list form merges; no delay; no cross-file load-order dependency; economy's inline effect keeps its
+slot). Renames:
+- qing_mechanics_on_actions.txt → `imp19c_qing_on_game_initialized`
+- dejure_on_actions.txt → `imp19c_dejure_on_game_initialized`
+- usa_section_on_actions.txt → `imp19c_usa_on_game_initialized`
+- mex_instability_on_actions.txt → `imp19c_mex_on_game_initialized`
+- japan_bakumatsu_on_actions.txt → `imp19c_japan_on_game_initialized`
+- SPHERE_probe_debug.txt → `imp19c_sphere_probe_on_game_initialized`
+
+Each effect body kept verbatim. Stale "engine merges multiple on_game_initialized blocks" comments
+(the false belief that caused the bug) corrected in all 6 files to state the LIST-vs-inline
+distinction. Verified: all 6 brace-balanced, 6 unique action names, no remaining dead inline block
+(full-mod sweep: only economy inline effect + events-list forms remain), BOM preserved per file.
+
+**Downstream.** This should independently resolve #238/#239 (council + throne seeding now runs) and
+un-silence the SPHERE probe (#254). #243 (Appoint buttons) and #241/#242 (OOB) are being
+re-evaluated post-fix — some may be root-caused here (council init) and others not (create_unit
+bodies live in the economy-run force-setup path, which was never dead). Await boot test.
+
+## #238/#239/#243/#244 + #241/#242 (develop) — council date-poison fix, minister-card layout fix, OOB diagnostics
+
+**Council cluster (#238 empty council / #239 blank thrones / #243 dead Appoint buttons).**
+Diagnosis agent traced every plumbing link (var names, scripted-GUI names, window name, onclick
+chains, refresh-verb→skill mapping) — all align 1:1. Root cause is upstream in character DATA:
+`setup/characters/00_Qing.txt:506-507` had inverted-format dates `birth_date=01.01.1753` /
+`death_date=01.12.1812` (DD.MM.YYYY) inside the `"CHI"={}` block — the ONLY two such dates in a file
+where every other date is YYYY.MM.DD. This is the same parse-poison class as the #219 fix: a
+malformed date silently drops CHI characters, so the ruler/heir don't resolve (blank thrones) and
+there's no employed courtier bench for QING_council_autofill to appoint (empty council; empty Appoint
+pickers). FIXED → `1753.1.1` / `1812.12.1`.
+  - CAVEAT (honest): the user's debug.log (Jul 8) is AMBIGUOUS on whether this is the full root
+    cause — garrison-commander log lines reference char:244/char:340 (both defined AFTER the poison
+    line), but those lines print $cmd$ outside the attach branch so they don't prove the chars
+    loaded; no ruler/heir line appears in the log, which is mildly consistent with dropped CHI chars.
+    The date is objectively malformed regardless, so the fix is correct on its own merits; whether it
+    fully clears #238/#239/#243 is a boot-test question. #254 (dead init block) also contributed to
+    the empty council and is fixed separately.
+
+**#244 (minister cards overlap Appoint buttons) — GENUINE layout defect, FIXED.** The minister card
+BODY is a `direction = vertical` flowcontainer stacking header + FILLED branch + VACANT branch as
+siblings, but `ignoreinvisible = yes` sat only on the header row — so the hidden (mutually-exclusive)
+branch still reserved its full height, overflowing the fixed 232×186 card and pushing the FILLED
+branch's Appoint/Replace button down under the next row. Fix mirrors the vanilla office-card idiom
+(government_view.gui:1808/1830, ignoreinvisible on the wrapping container): added
+`ignoreinvisible = yes` to each card-body vertical flowcontainer. 14 insertions = 3 throne boxes + 11
+office cards (personnel/revenue/rites/war/justice/works/censor/lifanyuan/grand_secretary/zongli) +
+emeritus; chancellor correctly skipped (it uses a widget-overlap body, not a vertical stack). Throne
+boxes benefit too (#239 boxes also toggle FILLED/VACANT). Braces 1730/1730, no-BOM preserved.
+
+**OOB cluster (#241 armies stack in Beijing / #242 navies vanish) — DIAGNOSTICS ADDED, not blind-fixed.**
+The OOB diagnosis agent proposed governorship-guard (army) and is_coastal/fallback (navy) rewrites.
+I checked both against the user's actual debug.log before acting:
+  - #242 agent theory REFUTED by the log: all THREE squadrons log as successfully raised —
+    Guangdong via fallback ("Canton p:9298 not coastal"), Fujian at Fuzhou, and **Zhejiang at its
+    PRIMARY Ningbo port p:2893** (not a "fallback collision"). create_unit ran for all three; the
+    disband (day 3) fires BEFORE the raises (days 4/5/6) so cannot cull them. The log (script says
+    raised) and symptom (user sees only Fujian) DIVERGE — unresolvable statically.
+  - #242 agent theory CONFIRMED in part: Canton p:9298 sits on sea_zone 10520, which IS in
+    `river_provinces` (map_data/default.map:41), so `is_coastal = yes` genuinely fails there and
+    Guangdong can never raise at its historical home port. Real defect, but NOT the disappearance
+    cause. Deferred pending the census verdict (may fix in the same pass).
+  - #241 agent theory UNCONFIRMED: the post-branch "garrison raised at $prov$" log prints $prov$
+    regardless of which branch ran, so it can't distinguish disperse-vs-Beijing-clamp; the cited
+    proven idioms (se_QING_ILI:400, SELFSTR:327) all fire mid-game, not at day 2, so they don't
+    establish governorships exist at boot.
+  - DECISION (user chose "add conclusive diagnostics, re-boot"): added
+    (a) branch-discriminating logs in SE_qing_raise_garrison[_cmd] — "DIAG-241 … PRIMARY: disperses"
+        vs "DIAG-241 … ELSE: CLAMPS to Beijing" — inside the actual if/else bodies (lines 82/96,
+        138/157), so the next boot proves which branch each garrison takes;
+    (b) a throwaway persistence census event qing_force_setup.20 (day 10, AFTER all raises), wired in
+        the economy scheduler, that counts surviving CHI navies via every_navy/any_navy (proven
+        idioms) with pure static strings (no [data-functions] — those mangle per #253). Count of
+        "one CHI navy present" lines = surviving squadrons, distinguishing spawned-then-culled /
+        never-persisted / all-present-UI-issue.
+  Both diagnostics are throwaway; they get deleted with the eventual OOB fix once the boot verdict is
+  recorded. NO speculative OOB fix shipped — evidence contradicts the navy theory and can't confirm
+  the army theory.
