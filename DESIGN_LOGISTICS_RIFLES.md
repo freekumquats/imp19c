@@ -1,6 +1,47 @@
-# P4 — `rifles` trade good + infantry gating (DRAFT, not yet applied)
+# P4 — `rifles` trade good + infantry gating
 
 *Companion to RESEARCH_MILITARY_LOGISTICS.md proposal #4. Military-logistics suite: `sys = LOGISTICS`.*
+
+## ⛔ STATUS UPDATE (#281, 2026-07-09) — BLOCKED, reverted, NOT shipped
+
+This draft predated #180/#189, which registered `rifles` as a trade good. Two #281 attempts were made on the
+`trade_goods` branch and BOTH REVERTED after an adversarial-review workflow (run wf_b0581429-d15) confirmed a
+**blocker** rooted in a pre-existing flaw in that #180/#189 registration:
+
+- **rifles carries UNIVERSAL population luxury demand** (`se_DEMAND.txt` `DEMAND_set_demand_from_luxury_all`;
+  `DEMAND_rifles` in `DEMAND_luxury_svalues.txt:386` resolves from `DEMAND_luxury_base_total`, positive for any
+  populated governorship, ungated by tech/war), **but has near-ZERO production anywhere at the 1815 start** (no
+  province ships `trade_goods = rifles`; only the Qing Self-Strengthening arsenal ever retargets one).
+  `rifles_stockpile` inits to 0.
+- So `shortage_phys_rifles ≈ 1.0` for essentially EVERY country, every quarter, in peacetime.
+- **Consequence:** the moment my se_LOGISTICS scan reads `shortage_phys_rifles`, the P1 penalty stamps
+  `country_munitions_shortage_severe` (+0.30 land attrition, −0.25 morale recovery, −0.15 movement) on the whole
+  world from turn 1. Immediately game-breaking. (Munitions/artillery avoid this — they are NOT in the pop luxury
+  list; their demand is army/arsenal-driven and matched by gated arsenal production. rifles is uniquely fatal.)
+- Attempt 2 (adding an army-linked demand term) did NOT fix it — it only stacks MORE demand on the
+  universal-demand-with-no-supply base, so the false global shortage persists.
+
+**Both code edits reverted** (`se_LOGISTICS.txt` + `DEMAND_luxury_svalues.txt` restored to the #279 commit
+`e140560e`). #281 shipped NOTHING.
+
+### Prerequisite before #281 can proceed (the REAL fix, re-scoped)
+The logistics coupling itself is a trivial, correct one-block edit; the blocker is upstream in the rifle GOOD
+model. rifles must first be made economically sane:
+1. **Remove rifles from the population luxury-demand basket** (`se_DEMAND.txt` `DEMAND_set_demand_from_luxury_all`)
+   — rifles are military materiel, not a consumer good. Re-base `DEMAND_rifles` on an army/arsenal driver ONLY
+   (like munitions), so demand is ~0 for a country with no army and no arsenals.
+2. Ensure no demand-without-supply anywhere: confirm a supplied country runs no phantom `shortage_rifles` on a
+   debug trace BEFORE any penalty consumer is added.
+3. THEN add `shortage_phys_rifles` to `LOGISTICS_scan_worst_shortages` (the reverted one-block edit).
+4. Recruitment gate (`allow_unit_type = regular_infantry`, proven idiom, or the unproven `trade_good_surplus`
+   in unit-allow) remains a separate later pass with a live recruit-behaviour test.
+
+This is an economy-rearchitecture task needing an in-game boot test, so #281 is DEFERRED (kept pending), not
+completed. The task description has been updated with this blocker + prerequisite.
+
+---
+
+## Original draft (below) — Edits 1–5 now superseded by #180/#189; Edit 6 is the deferred item
 
 **Status: DRAFT ONLY — deliberately NOT wired into live files.** P4 is the HIGH-risk,
 6-file member of the suite and carries the one primitive the oracle pass could *not* prove
