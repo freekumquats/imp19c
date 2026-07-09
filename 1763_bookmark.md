@@ -678,3 +678,17 @@ Keys verified defined, braces balanced, review clean. Boot test owed to the user
 STILL TODO under #282: Africa Hausa city-states (delete SOK caliphate + its 5 emirate deps + create 6
 Hausa tags from SOK's 13-province pool); Asia (divided Vietnam, Maratha houses, Mysore/Hyder Ali, Sikhs);
 C.Europe/HRE (ecclesiastical electorates, Prussia pre-Silesia, Saxony-Poland). Each = same static pattern.
+
+### #282c — Africa: dissolve the anachronistic Sokoto Caliphate — DONE (Africa region complete)
+The Sokoto Caliphate was founded only in 1804 (Usman dan Fodio's Fulani jihad), so it should not exist at
+the 1763 start. Deleted the 5 SOK->emirate feudatory dependencies (LIP/GBI/ADM/GMB/BIU); stripped SOK to a
+one-province rump at its capital 10155 (kept as a valid tag rather than deleted, because c:SOK is referenced
+in oa_economy_setup.txt ×7 + coat_of_arms + countryname — deletion would dangle those refs); and moved SOK's
+other 12 provinces to GBI (Gobir), a genuine pre-jihad Hausa state, which is now the independent Hausa power.
+The ex-emirates ADM/GMB/LIP/BIU become independent minor tags (overlord-less but owning their own provinces —
+valid). NOTE: the six historical Hausa city-states (Kano/Katsina/Zaria/Daura/Rano/Biram) were NOT split out
+as separate tags — the whole "Nigeria" map area has no sub-area granularity to assign 6 distinct capitals
+without guessing province IDs, so per the whole-area approximation ruling they are consolidated under GBI.
+No double-ownership; all 13 provinces single-owned; braces balanced; review clean. Boot test owed to user.
+
+**#282 Africa region (#236) COMPLETE**: Cape reversion (#282b) + Sokoto dissolution (#282c).
