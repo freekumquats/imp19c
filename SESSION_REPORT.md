@@ -2671,3 +2671,34 @@ double-ownership audit across all country own_control_core lists: **each moved/n
 owner** (no duplicates, no orphans). Both files brace-balanced (Δ0); BOM+CRLF preserved on 00_Italy.txt.
 Adversarial-review workflow (boot-crash / historical / regression dimensions, each finding independently
 verified) run before commit. Still OWED: in-game boot test (user's machine). Nothing promoted off the branch.
+
+## [#234/#240] Ottoman / MENA / Persia 1763 delta (1763_bookmark)
+
+**Scope.** Third Phase-2 region. The `research/1763_DELTA_Ottoman_MENA.md` plan was large and speculative
+(Zand dynasty swap with fabricated DNA, "add DRY as a new tag", create a Crimean Khanate, subject-type
+churn). Applying the per-region discipline (verification-first; only clearly-correct + crash-avoiding
+deltas; document the rest), recon collapsed the plan to a single verifiable crash-fix plus documented
+limitations:
+
+- **DRY (First Saudi State) already exists** in the 1815 baseline as a fully independent country
+  (`00_default.txt`: `DRY = { government=absolute_kingdom … capital=13131 own_control_core={…} }`, owns Najd
+  incl. 13131). Present in 1763 automatically → **no tag creation, no ownership edit.**
+- **No Crimean Khanate tag** in `countries.txt` (searched crim/krm/khan/tatar). New tag+provinces gated by
+  the mass-spawn oracle rule (#230), out of region scope → **documented limitation.**
+- **Zand dynasty / Shiraz capital, Ottoman vassal list, Egypt/Iraq subject-types: NOT changed** — either
+  unsourced-fabricated-data (Zand DNA) or non-crash-relevant continuity churn; deferred as future
+  refinements.
+
+**Unborn-ruler sweep (#240 crash class) — the applied delta.** Removed `c:TAG={ set_as_ruler=char:N }`
+wrappers (char defs KEPT → portraits/lineage/later spawn intact) for 8 rulers born after 1763.2.16:
+TUR 45 Mahmud II (1785), EGY 51 Mehmet Ali (1776), MOL 199 Scarlat Callimachi (1773), ALG 31 Omar (1773),
+MOR 34 Slimane (1766), TRI 37 Yusuf Karamanli (1766), MLB 551 Bashir II (1767) — all in
+`00_Ottoman Empire.txt`; PR2 539 Fath-Ali Shah (1772) in `00_Persian Empire.txt`. **Rulers KEPT** (born
+≤1763): JNI 49 (1740), WAL 250 (1754), TUN 35 (1757), ERI 548 (1742).
+
+**Verification.** Both files LF+BOM (no CRLF); brace delta 0 each. Regression grep for
+`char:{45,51,199,31,34,37,551,539}` across events/+missions/+common/: only `introduction_events.19`
+portrait lines (`left_portrait`/`right_portrait`) — chars still exist, references valid, no game-logic
+dependency (identical to the Italy pattern). No other MENA tag sets an explicit ruler (grep 0 hits).
+Adversarial-review workflow run before commit. Still OWED: in-game boot test (user's machine). Nothing
+promoted off the branch.

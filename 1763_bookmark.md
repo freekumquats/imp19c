@@ -340,7 +340,59 @@ all pure player-intro flavor gated on `tag = X`, no overlord/subject assumption;
 GEN/VEN/MIL/ION have zero event/mission references. Adversarial-review workflow (boot-crash / historical /
 regression dimensions, each finding independently verified) run before commit.
 
-*(Per-region implementation decisions B5, … appended as the full map-surgery phase continues: Ottoman/MENA/Persia next.)*
+### B5. Ottoman / MENA / Persia region build (#234 + #240, 2026-07-09) — THIRD full-surgery region
+
+**Ground-truth recon first (plan `research/1763_DELTA_Ottoman_MENA.md` triaged, not applied verbatim):**
+The delta plan proposed a large speculative rework (Zand dynasty swap with invented DNA, new DRY tag,
+Crimean Khanate creation, subject-type churn) full of open questions and unsourced character DNA. Applying
+the established per-region discipline (verification-first, only clearly-correct + crash-avoiding deltas,
+document the rest as limitations), recon of the actual baseline showed:
+
+- **First Saudi State (DRY) already exists** as a fully independent country in the 1815 baseline
+  (`00_default.txt`: `DRY = { government=absolute_kingdom … capital=13131 … own_control_core={ … } }`,
+  owns Najd provinces incl. 13131). The plan's "add DRY as a NEW tag" step was therefore moot — DRY is
+  present in 1763 automatically. No new tag, no new province ownership needed. **No edit.**
+- **No Crimean Khanate tag exists** in `countries.txt` (searched crim/krm/khan/tatar). Creating a new
+  tag + provinces is gated by the mass-spawn oracle rule (#230) and is out of this region's build scope.
+  **Documented limitation** (a future CRM tag + Qırım Giray ruler could be added if the tag-spawn
+  capability is proven).
+- **Zand dynasty swap NOT applied.** The plan wanted to replace PR2's Qajar rulers with invented Karim
+  Khan Zand characters carrying fabricated DNA strings. Per the no-unsourced-fabricated-character-data
+  discipline, the dynasty/capital rework is deferred; the crash-avoiding fix (below) is applied and the
+  Zand/Shiraz reflavour is left as a documented future refinement.
+- **Ottoman vassal list, Egypt/Iraq subject-types: NO CHANGE.** Research itself concluded most 1815
+  Ottoman vassals also existed in 1763 (continuity); the speculative subject-type churn is not
+  crash-relevant and unsourced at the needed granularity, so left as-is.
+
+**What WAS applied — unborn-ruler sweep (#240 crash class), the one verifiable crash-avoiding delta:**
+Removed the `c:TAG={ set_as_ruler=char:N }` wrapper (KEEPING each char definition, so portraits/lineage/
+later spawn stay intact) for 8 rulers born after 1763.2.16:
+
+| File | Tag | Char | Ruler (1815) | Born | 1763 reality |
+|------|-----|------|--------------|------|--------------|
+| 00_Ottoman Empire.txt | TUR | 45 | Mahmud II | 1785 | Mustafa III (r.1757-74) |
+| 00_Ottoman Empire.txt | EGY | 51 | Mehmet Ali | 1776 | Mamluk beys (Ali Bey al-Kabir) |
+| 00_Ottoman Empire.txt | MOL | 199 | Scarlat Callimachi | 1773 | Grigore Callimachi |
+| 00_Ottoman Empire.txt | ALG | 31 | Omar ben Mohammed | 1773 | a dey |
+| 00_Ottoman Empire.txt | MOR | 34 | Slimane al-'Alawi | 1766 | Mohammed III (r.1757-90) |
+| 00_Ottoman Empire.txt | TRI | 37 | Yusuf Karamanli | 1766 | Ali I Karamanli (r.1754-93) |
+| 00_Ottoman Empire.txt | MLB | 551 | Bashir II Shihab | 1767 | Shihab predecessor |
+| 00_Persian Empire.txt | PR2 | 539 | Fath-Ali Shah | 1772 | Karim Khan Zand (Shiraz) |
+
+**Rulers KEPT (born ≤ 1763.2.16, valid):** JNI/Ali Tepedelenli (1740), WAL/Ioanni Karatzas (1754),
+TUN/Mahmud Husainid (1757), ERI/Hossein Khan Sardar (1742). No other MENA tag sets an explicit ruler
+(engine auto-generates the small vassals — grep confirmed 0 hits).
+
+**Verification:** both files LF+BOM (no CRLF, unlike Italy); brace delta 0 each; the removed char IDs are
+still referenced only as `right_portrait`/`left_portrait` in `introduction_events.19` (Ottoman player intro)
+— chars still exist so those references stay valid (no regression, identical to the Italy pattern).
+Regression grep for `char:{45,51,199,31,34,37,551,539}` in events/missions/common: only the two intro-event
+portrait lines, no game-logic dependency.
+
+**Net for #234:** 8 unborn-ruler crash fixes; DRY confirmed already-present (no work); Crimean Khanate +
+Zand dynasty reflavour documented as deferred/limitations. Low-risk, crash-avoiding, verifiable-only.
+
+*(Per-region implementation decisions B6, … appended as the full map-surgery phase continues: S/E/SE Asia next.)*
 
 ---
 
