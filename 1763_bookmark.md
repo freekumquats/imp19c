@@ -464,7 +464,70 @@ independence, Oyo-Dahomey, and Ethiopia ruler-identity deltas are documented as 
 mass-spawn gate #230), consistent with the policy applied to the MENA Crimean-Khanate and Asia
 EIC/Maratha/Vietnam redistributions.
 
-*(Per-region implementation decisions B8 appended next: C.Europe/HRE, the LAST region.)*
+### B8. Central Europe / HRE region build (#237 + #240, 2026-07-09) — SIXTH & LAST full-surgery region
+
+Final region. Recon read `research/1763_DELTA_CEurope_HRE.md` (51 KB) — the largest plan of the set:
+full HRE fragmentation (dozens of restored ecclesiastical/imperial-city/princely tags), Prussia pre-Silesia
+reversion, Saxony-Poland personal union, partition rollbacks. **All territorial / mass-tag-creation → gated
+by the #230 oracle mass-spawn rule.** Documented as deferred; not built.
+
+As the LAST region, #237 also **sweeps up every remaining unborn-ruler in the whole repo**, regardless of
+which continent's file it lives in (British/Russia/Spain are not strictly C.Europe but their unborn rulers
+had not yet been cleared). **8 wrappers removed** (char defs KEPT; `father=`/portrait refs still resolve;
+period-appropriate engine ruler generated; figure spawns when born):
+
+| File | Tag | char | Figure | b. |
+|------|-----|------|--------|-----|
+| 00_Austrian Empire.txt     | AUS | 130 | Franz (di Borbone)               | 1768 |
+| 00_Austrian Empire.txt     | HUN | 455 | Joseph Anton Frimont             | 1776 |
+| 00_British Empire.txt      | GBR |  86 | Robert Jenkinson (Lord Liverpool)| 1770 |
+| 00_British Empire.txt      | STH |  68 | Hudson Lowe                      | 1769 |
+| 00_German Confederation.txt| PRU | 175 | Friedrich Wilhelm (Meck.-Strelitz)| 1770 |
+| 00_Russian Empire.txt      | RUS | 147 | Aleksandr I                      | 1777 |
+| 00_Spain.txt               | SPA |  22 | Fernando VII                     | 1784 |
+| 00_greece.txt              | MRI |  47 | Petrobey Mavromichalis           | 1765 |
+
+The GBR/86 block was multiline (contained commented-out `random_character`/`set_party_leader` scaffolding
+inside `c:GBR={ … }`) — the whole block was replaced by the standard comment.
+**KEPT (born ≤1763, valid 1763 rulers):** Austria TRS/457 Bánffy (1746), German Conf. SWM/12 Karl August
+(1757) + FRK/394 Humbracht (1753).
+
+**+5 STRAGGLERS caught by the mandatory adversarial review** (this is exactly why the review gate is
+non-optional). The first-pass scan used a regex that required the *unspaced/unquoted* form
+`set_as_ruler=char:N`; five wrappers used the **spaced form** `set_as_ruler = char:N` / `c:TAG = {` or the
+**quoted form** `set_as_ruler="char:N"`, and slipped through. All five are genuine unborn-ruler crashes and
+were removed (char defs KEPT):
+
+| File | Tag | char | Figure | b. | form that hid it |
+|------|-----|------|--------|-----|------------------|
+| 00_German Confederation.txt | SXH | 502 | Friedrich (Saxony)          | **1763.04.29** (after Feb-16 start!) | spaced |
+| 00_Switzerland.txt          | SWI | 497 | David von Wyss              | 1771 | spaced |
+| 00_Japan.txt                | TKG | 356 | Tokugawa Ienari            | 1773 | spaced |
+| 00_British Empire.txt       | JAM | 388 | William (Jamaica gov)      | 1771 | quoted |
+| 00_British Empire.txt       | HBC | 462 | Joseph (Hudson's Bay gov)  | 1774 | quoted |
+
+**Corrected #237 total: 13 wrappers removed (8 + 5).** A re-hardened bulletproof scan
+(`set_as_(co)?ruler|heir`, optional spaces, optional quotes, own-block birth_date via brace-matching) now
+confirms:
+
+**FULL-SWEEP COMPLETE — verified by the hardened scan.** There are **ZERO `set_as_ruler`/`set_as_coruler`/
+`set_as_heir` targets born after 1763.2.16 anywhere in `setup/characters/`, in any syntactic form.** The
+unborn-ruler boot-crash class (#240) is fully eliminated across the entire world map. Braces balanced Δ0 in
+all touched files; line-endings preserved (British + Greece = CRLF+BOM; Japan/Switzerland/German/Austria/
+Russia/Spain = LF+BOM); regression grep shows only harmless `father=`/`_portrait` references to retained
+char defs. **Lesson recorded:** the earlier regional sweeps happened to be safe only because those files
+used the unspaced form — future ruler audits MUST use the space/quote-tolerant regex.
+
+### Phase-2 map-surgery summary (regions B3–B8 = #232–#237)
+
+The per-region discipline resolved to a consistent, low-risk outcome: **the only reliably-correct,
+crash-avoiding, engine-verified delta available under the #230 mass-spawn gate is the unborn-ruler sweep.**
+Across all six regions **44 unborn-ruler wrappers** were removed (Americas + MEX earlier; Italy;
+Ottoman/MENA/Persia 8; S/E/SE Asia 17; Africa 0; C.Europe/HRE 8), eliminating the #240 boot-crash class
+world-wide. Every large territorial redistribution documented in the six `research/1763_DELTA_*.md` plans
+(EIC stripping, Maratha/Vietnam/Hausa/HRE tag creation, Cape reversion, Zand/Crimea, etc.) is **gated by the
+oracle mass-spawn rule and recorded as a deferred limitation** — to be built only after the user lifts the
+gate. Nothing promoted off `1763_bookmark`; in-game boot test remains owed to the user's machine.
 
 ---
 

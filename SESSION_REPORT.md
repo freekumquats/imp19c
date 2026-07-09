@@ -2741,3 +2741,39 @@ out of per-region crash-avoiding scope.
 → valid 1763 ruler, KEPT. All other African tags have no character files → engine-generated rulers already.
 **Zero setup edits applied.** Deltas documented as deferred limitations (same policy as MENA Crimea / Asia
 EIC-Maratha-Vietnam). Documentation-only region (docs commit only).
+
+## [#237/#240] Central Europe / HRE 1763 delta (1763_bookmark) — SIXTH & LAST region
+
+**Scope.** Final Phase-2 region. `research/1763_DELTA_CEurope_HRE.md` (51 KB, the largest plan) is full HRE
+fragmentation + Prussia pre-Silesia + Saxony-Poland union + partition rollbacks → **all mass-tag-creation,
+gated by #230 → deferred.** As the LAST region, #237 also sweeps up every remaining unborn ruler repo-wide
+regardless of continent.
+
+**Unborn-ruler sweep — 13 wrappers removed** (8 first-pass + 5 review-caught; char defs KEPT).
+First pass (8): AUS/130 Franz (1768), HUN/455 Frimont (1776), GBR/86 Jenkinson/Lord Liverpool (1770;
+multiline block with commented random_character scaffolding — whole block replaced), STH/68 Hudson Lowe
+(1769), PRU/175 Fr. Wilhelm Meck.-Strelitz (1770), RUS/147 Aleksandr I (1777), SPA/22 Fernando VII (1784),
+MRI/47 Petrobey Mavromichalis (1765). **KEPT** (≤1763): TRS/457 (1746), SWM/12 (1757), FRK/394 (1753).
+
+**+5 STRAGGLERS caught by the mandatory adversarial review** (wf_24b97059-6f9 — this is precisely why the
+review gate is non-optional): SXH/502 Friedrich (**b.1763.04.29, after the Feb-16 start — a genuine
+blocker**), SWI/497 David von Wyss (1771), TKG/356 Tokugawa Ienari (1773), JAM/388 William (1771),
+HBC/462 Joseph (1774). Root cause: my first-pass scan regex required the unspaced/unquoted form
+`set_as_ruler=char:N`; these five used the **spaced** (`set_as_ruler = char:N`, `c:TAG = {`) or **quoted**
+(`set_as_ruler="char:N"`) form and slipped through. **Lesson (recorded):** all future ruler audits MUST use
+a space/quote-tolerant regex `set_as_(co)?(ruler|heir)\s*=\s*"?char:(\d+)"?` with own-block birth_date via
+brace-matching. The earlier regional sweeps (#232–#236) were safe only because those files happened to use
+the unspaced form — re-verified with the hardened scan, no earlier region left a straggler.
+
+**Verification.** Braces Δ0 in all touched files (00_Austrian Empire, 00_British Empire, 00_German
+Confederation, 00_Russian Empire, 00_Spain, 00_greece, 00_Switzerland, 00_Japan); line-endings preserved
+(British+Greece CRLF+BOM; Japan/Switzerland/German/Austria/Russia/Spain LF+BOM). Regression grep after the
+5-fix: only harmless `father="char:388"` (00_British Empire.txt) and `father="char:502"`
+(00_German Confederation.txt) plus intro-event `_portrait=char:22/86/130/147` — all to retained char defs;
+no heir/coruler/party_leader dependency on any removed ruler.
+
+**FULL-SWEEP COMPLETE:** the hardened bulletproof scan (space/quote-tolerant, all forms) confirms **ZERO
+unborn set_as_ruler/coruler/heir anywhere in setup/characters/** — the #240 boot-crash class is eliminated
+world-wide. Phase-2 total across regions #232–#237: **49 unborn-ruler wrappers removed** (44 + the 5
+review-caught stragglers); all six `research/1763_DELTA_*` territorial redistributions deferred under the
+#230 oracle mass-spawn gate. Nothing promoted off the branch; in-game boot test owed.
