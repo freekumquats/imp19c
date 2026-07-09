@@ -913,5 +913,14 @@ China civ_value: was flat (mean 7.1, median 10) -> now graded (mean 11.0, median
 ONLY civilization_value= changed (587/587 line diff; amount/culture/religion/terrain/trade_goods untouched);
 BOM/LF preserved; braces 0. REST OF WORLD left as the broad anchor (Europe already differentiated ~France 20/
 Low Countries 24; Asia flat 10 like China was — acceptable broad abstraction per the ruling). Boot test owed.
-The larger "explicit building objects + INDUSTRIALISATION-csv regen" effort remains a further follow-on if the
-runtime civ_value proxy proves insufficient in the boot test.
+CORRECTION (2026-07-09): an earlier draft of this note claimed "explicit building objects remain a further
+follow-on." That was WRONG — the Qing ALREADY has explicit, SEEDED specialty production buildings, authored on
+the develop branch against the 1815 start: common/buildings/qing_production_buildings.txt defines 5
+(qing_silk_filature_building, qing_porcelain_kiln_building, qing_tea_workshop_building,
+qing_cotton_workshop_building, qing_salt_yard_building), and they are built at game start via QING_seed_building
+in se_QING_BUILDINGS.txt (Suzhou/Jiangning/Hangzhou silk, Jingdezhen porcelain, ...) plus expandable through the
+Board-of-Works chain. So #288's civ_value gradient is a COMPLEMENTARY broad-industrialisation layer on top of the
+concrete buildings that already exist. The genuine remaining gaps → tracked as #291 (see below): (1) those
+buildings are Qing-only (chinese_group-gated) — no rest-of-world specialty-production equivalents; (2) they were
+authored for 1815 on develop, so their seed provinces + good-mappings need confirming on the 1763 branch (esp.
+after the #284 pop / trade-good changes). See [[imp19c-288-buildings-correction]].
