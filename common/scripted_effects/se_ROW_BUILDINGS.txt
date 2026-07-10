@@ -1,0 +1,130 @@
+########################################################################
+# se_ROW_BUILDINGS.txt — [bookmark-1763 #291] REST-OF-WORLD starting specialty
+# production buildings.
+#
+# Companion to SE_qing_starting_buildings (se_QING_BUILDINGS.txt). The Qing get five
+# SPECIFIC, historically-named specialty works seeded into hand-picked provinces. The
+# rest of the world instead gets the two GENERIC, abstract production buildings
+# (row_manufactory_building / row_plantation_building, common/buildings/
+# row_production_buildings.txt) — deliberately lower-granularity per the granular-China
+# / broad-ROW ruling. Rather than hand-map provinces worldwide, this seeds them
+# DATA-DRIVEN: every substantial non-Chinese country gets one manufactory in its
+# most-developed finished-good province and one plantation in its most-developed
+# cash-crop province, so the 1763/1815 world opens with a plausible spread of existing
+# industry (the Lancashire mills, the Caribbean sugar estates, the Bengal muslin
+# houses) instead of a blank map the player/AI must build from zero.
+#
+# add_building_level bypasses the building `allow` tech gate (only the player build
+# menu is gated) — same as the Qing seed. Guarded + idempotent via a global sentinel.
+# Gate: NOT chinese_group (they use their own named works) + a development floor so
+# tiny/tribal tags don't get free industry. Placement mirrors QING_works_build_specialty
+# (ordered_owned_province, order_by = total_population, max = 1).
+#
+# Concrete-over-abstract per standing rule. All steps logged (sys = SETUP).
+# Called once from oa_economy_setup.txt at on_game_initialized, right after the Qing seed.
+#
+# NO BOM (se_*.txt convention).
+########################################################################
+
+SE_row_starting_buildings = {
+	# [bookmark-1763 #291] seed the two generic ROW specialty buildings across the world's
+	# substantial non-Chinese economies. Guarded, idempotent.
+	LOG_enter = { sys = SETUP  fn = "SE_row_starting_buildings" }
+	if = {
+		limit = { NOT = { has_global_variable = row_starting_buildings_done } }
+
+		every_country = {
+			# Skip the Qing culture group (their own named works cover them) and require a
+			# development floor — a real state with meaningful urban industry, not a tribe or
+			# a one-province minor. num_of_cities >= 3 keeps this to organized realms.
+			limit = {
+				exists = capital_scope
+				NOT = { country_culture_group = chinese_group }
+				num_of_cities >= 3
+			}
+			ROW_seed_country_buildings = yes
+		}
+
+		set_global_variable = row_starting_buildings_done
+		LOG_line = { sys = SETUP  msg = "ROW starting buildings: generic specialty-production seed complete" }
+	}
+	LOG_exit = { sys = SETUP  fn = "SE_row_starting_buildings"  result = OK }
+}
+
+# Seed at most one manufactory + one plantation into THIS country (called in country scope
+# from the every_country loop). Each goes to the most-populous owned province carrying a
+# matching good that doesn't already have the building. Skips silently (logged) when the
+# country has no eligible province. Mirrors QING_works_build_specialty placement.
+ROW_seed_country_buildings = {
+	# Scope: country (the iterated country from every_country). NOTE: inside a
+	# scripted_effect called from every_country, ROOT is the on_action root, NOT the
+	# iterated country (se_ECON_LOG.txt:57-58), so we stage a self-scope handle for the
+	# log line rather than reading [ROOT.GetTag].
+	save_scope_as = row_seed_country
+
+	# --- manufactory: finished / craft goods ---
+	if = {
+		limit = {
+			any_owned_province = {
+				NOT = { has_building = row_manufactory_building }
+				OR = {
+					trade_goods = cloth
+					trade_goods = wool
+					trade_goods = silk
+					trade_goods = dye
+					trade_goods = textile_fibres
+					trade_goods = industrial_fibres
+				}
+			}
+		}
+		ordered_owned_province = {
+			limit = {
+				NOT = { has_building = row_manufactory_building }
+				OR = {
+					trade_goods = cloth
+					trade_goods = wool
+					trade_goods = silk
+					trade_goods = dye
+					trade_goods = textile_fibres
+					trade_goods = industrial_fibres
+				}
+			}
+			order_by = total_population
+			max = 1
+			add_building_level = row_manufactory_building
+			LOG_line = { sys = SETUP  msg = "ROW starting buildings: row_manufactory_building seeded for [scope:row_seed_country.GetTag]" }
+		}
+	}
+
+	# --- plantation: cash crops ---
+	if = {
+		limit = {
+			any_owned_province = {
+				NOT = { has_building = row_plantation_building }
+				OR = {
+					trade_goods = sugar
+					trade_goods = tobacco
+					trade_goods = coffee
+					trade_goods = spices
+					trade_goods = opium
+				}
+			}
+		}
+		ordered_owned_province = {
+			limit = {
+				NOT = { has_building = row_plantation_building }
+				OR = {
+					trade_goods = sugar
+					trade_goods = tobacco
+					trade_goods = coffee
+					trade_goods = spices
+					trade_goods = opium
+				}
+			}
+			order_by = total_population
+			max = 1
+			add_building_level = row_plantation_building
+			LOG_line = { sys = SETUP  msg = "ROW starting buildings: row_plantation_building seeded for [scope:row_seed_country.GetTag]" }
+		}
+	}
+}
