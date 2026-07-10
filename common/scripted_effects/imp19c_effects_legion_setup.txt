@@ -83,16 +83,19 @@ SE_qing_raise_garrison = {
 		# MOBILISATION wrapper: the legion musters at the GOVERNORSHIP SEAT and the nested
 		# create_unit `location` is IGNORED. Every garrison therefore mustered at its
 		# governorship's state capital (in practice Beijing), not at $prov$ — the stack.
-		# FIX: drop raise_legion entirely and create the unit directly at COUNTRY scope
-		# ($prov$'s owner) with `location = $prov$`. This is the proven free-placement
-		# idiom (Invictus events/flavor_maurya.txt:1037 `owner = { create_unit { navy=no
-		# location=<prov> } }`; galatian_invasion.txt:715). `location` is respected here,
-		# so each garrison spawns AT its own province — dispersed as intended.
+		# FIX (#241 then #314 B21): drop raise_legion entirely and create the unit at the
+		# PROVINCE->owner scope with `location = prev.prev`. The earlier #241 attempt used
+		# `owner = { create_unit { location = $prov$ } }` (absolute p:X token inside the owner
+		# hop) and STILL stacked every garrison at Beijing on the user's re-test. Oracle
+		# consult (2026-07-10) found the reliably-dispersing idiom is the RELATIVE-scope form:
+		# `pX = { owner = { create_unit { location = prev.prev } } }` where prev = owner
+		# (country), prev.prev = pX — the ~20-use pattern in Invictus military_traditions
+		# (00_greek.txt:81 etc.). So each garrison musters AT its own province, dispersed.
 		$prov$ = { owner = {
 			create_unit = {
 				navy = no
 				name = $name$
-				location = $prov$
+				location = prev.prev
 				sub_unit = regular_infantry
 				while = { count = $size$  add_subunit = regular_infantry }
 			}
@@ -116,12 +119,12 @@ SE_qing_raise_garrison_cmd = {
 		# above (Ili banner garrison under commander Changling char:244 is precisely
 		# one of the frontier cases this restores). See that helper for the rationale.
 		limit = { exists = $prov$  $prov$ = { OR = { owner = c:CHI  owner = { is_subject_of = c:CHI } } }  exists = $cmd$ }
-		# [#241-fix develop] Same root-cause fix as SE_qing_raise_garrison above: drop the
-		# raise_legion/governorship wrapper (which clamped every legion to its governorship
-		# seat, ignoring `location`) and create the unit at COUNTRY scope ($prov$'s owner)
-		# with `location = $prov$` so it disperses to its own province. create_unit accepts
-		# an inline `commander = <char>` field (Invictus events/galatian_invasion.txt:715-718
-		# `create_unit { navy=no location=pX commander=scope:... }`; common/scripted_effects/
+		# [#241-fix develop, then #314 B21] Same root-cause fix as SE_qing_raise_garrison
+		# above: create the unit at the PROVINCE->owner scope with `location = prev.prev`
+		# (relative-scope form; prev.prev = $prov$). The earlier absolute-token form
+		# `owner = { create_unit { location = $prov$ } }` still stacked at Beijing on retest.
+		# create_unit accepts an inline `commander = <char>` field (Invictus events/
+		# galatian_invasion.txt `create_unit { navy=no location=pX commander=scope:... }`;
 		# 00_event_effects_inv_1_0.txt:4281 `commander = char:13`) — this replaces the old
 		# add_to_legion + random_legion_unit.set_as_commander dance. The commander is
 		# attached only when he is a non-ruler employed by $prov$'s owner (a CHI commander
@@ -133,7 +136,7 @@ SE_qing_raise_garrison_cmd = {
 				create_unit = {
 					navy = no
 					name = $name$
-					location = $prov$
+					location = prev.prev
 					commander = $cmd$
 					sub_unit = regular_infantry
 					while = { count = $size$  add_subunit = regular_infantry }
@@ -146,7 +149,7 @@ SE_qing_raise_garrison_cmd = {
 				create_unit = {
 					navy = no
 					name = $name$
-					location = $prov$
+					location = prev.prev
 					sub_unit = regular_infantry
 					while = { count = $size$  add_subunit = regular_infantry }
 				}
@@ -313,13 +316,15 @@ SE_qing_armies = {
 # NOT the culprit here — p:9298/p:3651/p:2893 all carry map_data/ports.csv entries,
 # so they read coastal fine.
 #
-# THE FIX: split the old monolithic SE_qing_navy into (a) a disband-only step that
-# clears the ahistorical auto-generated fleets, and (b) THREE independent
-# per-squadron effects, each raising ONE fleet. The call site (oa_economy_setup.txt)
-# now fires these on staggered days via hidden events (qing_navy_setup.1/.2/.3), so
-# each create_unit lands on its own tick and all three survive. Behaviour of each
-# squadron's raise/fallback logic is UNCHANGED from the pre-fix code — only the
-# TIMING (one-per-tick instead of three-in-one-tick) changed.
+# THE FIX (final, #314 B22): the timing changes (#223 stagger, #242 one-tick) did NOT
+# work — the user still saw only the Fujian fleet. The real culprit was the PLACEMENT
+# idiom: the country-scope `create_unit { navy=yes location=p:X }` form silently spawned
+# only one of the three fleets. Oracle consult (2026-07-10) found the reliable multi-navy
+# idiom is the SAME province->owner->`location = prev.prev` form that fixed the land
+# garrisons (Invictus common/military_traditions/00_greek.txt:81, the naval reference,
+# ~20 uses). All three squadron effects below now use it (main + fallback branches). They
+# still raise together on one tick (.11) after the .10 disband; same-tick multi-navy is
+# proven safe (Terra-Indomita me_jomon.txt:1779 spawns 12 fleets on one tick).
 # ----------------------------------------------------------------------
 
 # Disband the engine's ahistorical auto-generated blue-water fleets (seeded from
@@ -356,13 +361,20 @@ SE_qing_navy_guangdong = {
 	LOG_enter = { sys = QING  fn = "SE_qing_navy_guangdong" }
 	if = {
 		limit = { exists = p:9298  p:9298 = { owner = c:CHI  is_coastal = yes } }
-		create_unit = {
-			navy = yes
-			name = "Guangdong Coastal Patrol 廣東水師"
-			location = p:9298
-			sub_unit = brig
-			while = { count = 5  add_subunit = brig }
-		}
+		# [#314 B22-fix] Oracle (2026-07-10) confirmed the RELIABLE multi-navy idiom is the
+		# province->owner->create_unit form with `location = prev.prev` (Invictus
+		# common/military_traditions/00_greek.txt:81, ~20 uses), NOT the country-scope
+		# `location = p:X` form used before — which spawned only one of the three fleets.
+		# prev = the owner (country), prev.prev = p:9298. Same fix as the #241 land garrisons.
+		p:9298 = { owner = {
+			create_unit = {
+				navy = yes
+				name = "Guangdong Coastal Patrol 廣東水師"
+				location = prev.prev
+				sub_unit = brig
+				while = { count = 5  add_subunit = brig }
+			}
+		} }
 		LOG_line = { sys = QING  msg = "Guangdong Coastal Patrol raised at Canton (p:9298), 6x war-junk" }
 	}
 	else = {
@@ -376,13 +388,16 @@ SE_qing_navy_guangdong = {
 				max = 1
 				save_scope_as = qing_gd_fallback_port
 			}
-			create_unit = {
-				navy = yes
-				name = "Guangdong Coastal Patrol 廣東水師"
-				location = scope:qing_gd_fallback_port
-				sub_unit = brig
-				while = { count = 5  add_subunit = brig }
-			}
+			# [#314 B22-fix] province->owner->create_unit { location = prev.prev } form (see main branch).
+			scope:qing_gd_fallback_port = { owner = {
+				create_unit = {
+					navy = yes
+					name = "Guangdong Coastal Patrol 廣東水師"
+					location = prev.prev
+					sub_unit = brig
+					while = { count = 5  add_subunit = brig }
+				}
+			} }
 			LOG_line = { sys = QING  msg = "Guangdong Coastal Patrol raised at fallback coastal port (Canton p:9298 not coastal), 6x war-junk" }
 		}
 		else = {
@@ -398,13 +413,16 @@ SE_qing_navy_fujian = {
 	LOG_enter = { sys = QING  fn = "SE_qing_navy_fujian" }
 	if = {
 		limit = { exists = p:3651  p:3651 = { owner = c:CHI  is_coastal = yes } }
-		create_unit = {
-			navy = yes
-			name = "Fujian Coastal Patrol 福建水師"
-			location = p:3651
-			sub_unit = brig
-			while = { count = 3  add_subunit = brig }
-		}
+		# [#314 B22-fix] province->owner->create_unit { location = prev.prev } form (see Guangdong).
+		p:3651 = { owner = {
+			create_unit = {
+				navy = yes
+				name = "Fujian Coastal Patrol 福建水師"
+				location = prev.prev
+				sub_unit = brig
+				while = { count = 3  add_subunit = brig }
+			}
+		} }
 		LOG_line = { sys = QING  msg = "Fujian Coastal Patrol raised at Fuzhou (p:3651), 4x war-junk" }
 	}
 	else = {
@@ -418,13 +436,16 @@ SE_qing_navy_fujian = {
 				max = 1
 				save_scope_as = qing_navy_fallback_port
 			}
-			create_unit = {
-				navy = yes
-				name = "Fujian Coastal Patrol 福建水師"
-				location = scope:qing_navy_fallback_port
-				sub_unit = brig
-				while = { count = 3  add_subunit = brig }
-			}
+			# [#314 B22-fix] province->owner->create_unit { location = prev.prev } form (see Guangdong).
+			scope:qing_navy_fallback_port = { owner = {
+				create_unit = {
+					navy = yes
+					name = "Fujian Coastal Patrol 福建水師"
+					location = prev.prev
+					sub_unit = brig
+					while = { count = 3  add_subunit = brig }
+				}
+			} }
 			LOG_line = { sys = QING  msg = "Fujian Coastal Patrol raised at fallback coastal port (Fuzhou not coastal), 4x war-junk" }
 		}
 		else = {
@@ -442,13 +463,16 @@ SE_qing_navy_zhejiang = {
 	LOG_enter = { sys = QING  fn = "SE_qing_navy_zhejiang" }
 	if = {
 		limit = { exists = p:2893  p:2893 = { owner = c:CHI  is_coastal = yes } }
-		create_unit = {
-			navy = yes
-			name = "Zhejiang Coastal Patrol 浙江水師"
-			location = p:2893
-			sub_unit = brig
-			while = { count = 2  add_subunit = brig }
-		}
+		# [#314 B22-fix] province->owner->create_unit { location = prev.prev } form (see Guangdong).
+		p:2893 = { owner = {
+			create_unit = {
+				navy = yes
+				name = "Zhejiang Coastal Patrol 浙江水師"
+				location = prev.prev
+				sub_unit = brig
+				while = { count = 2  add_subunit = brig }
+			}
+		} }
 		LOG_line = { sys = QING  msg = "Zhejiang Coastal Patrol raised at Ningbo (p:2893), 3x war-junk" }
 	}
 	else = {
@@ -463,13 +487,16 @@ SE_qing_navy_zhejiang = {
 				max = 1
 				save_scope_as = qing_zj_fallback_port
 			}
-			create_unit = {
-				navy = yes
-				name = "Zhejiang Coastal Patrol 浙江水師"
-				location = scope:qing_zj_fallback_port
-				sub_unit = brig
-				while = { count = 2  add_subunit = brig }
-			}
+			# [#314 B22-fix] province->owner->create_unit { location = prev.prev } form (see Guangdong).
+			scope:qing_zj_fallback_port = { owner = {
+				create_unit = {
+					navy = yes
+					name = "Zhejiang Coastal Patrol 浙江水師"
+					location = prev.prev
+					sub_unit = brig
+					while = { count = 2  add_subunit = brig }
+				}
+			} }
 			LOG_line = { sys = QING  msg = "Zhejiang Coastal Patrol raised at fallback coastal port (Ningbo p:2893 not coastal), 3x war-junk" }
 		}
 		else = {

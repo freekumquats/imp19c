@@ -606,3 +606,69 @@ SUBJ_QING_reparent_sub_subjects = {
 		LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_reparent_sub_subjects"  result = "NONE (subject held no sub-subjects)" }
 	}
 }
+
+
+# ---- [#314 B17] TRIBUTE SIZE selector -----------------------------------
+# Repurposes the three formerly-dead "Overseer" policy toggles into a per-subject
+# small / medium / large tribute-demand selector. The three tiers are mutually
+# exclusive: setting one strips the other two first, so a subject always carries at
+# most one qing_tribute_* modifier. The modifier lives on scope:target (the subject) and
+# carries only the SUBJECT-FACING loyalty_to_overlord effect (heavier demand => the
+# subject resents US more). The income side is NOT a modifier — tribute_income_modifier
+# is overlord-global and inert on a leaf subject (the original review-caught bug) — it is
+# a CONCRETE quarterly treasury transfer (QING_subject_collect_tribute below), per the
+# concrete-over-abstract rule. $tier$ = small|medium|large.
+QING_subject_set_tribute = {
+	LOG_enter = { sys = SUBJ  fn = "QING_subject_set_tribute -> $tier$" }
+	scope:target = {
+		# strip any existing tier first (exclusive selection)
+		if = { limit = { has_country_modifier = qing_tribute_small }   remove_country_modifier = qing_tribute_small }
+		if = { limit = { has_country_modifier = qing_tribute_medium }  remove_country_modifier = qing_tribute_medium }
+		if = { limit = { has_country_modifier = qing_tribute_large }   remove_country_modifier = qing_tribute_large }
+		add_country_modifier = { name = qing_tribute_$tier$  duration = -1 }
+		# remember the current tier so the GUI toggles can show which one is active
+		set_variable = { name = qing_tribute_tier  value = flag:$tier$ }
+	}
+	LOG_exit = { sys = SUBJ  fn = "QING_subject_set_tribute"  result = OK }
+}
+
+# ---- [#314 B17] CONCRETE quarterly tribute collection --------------------
+# Called on the Qing quarterly pulse (ROOT = c:CHI). For every subject carrying a tribute
+# tier, transfer gold from the subject's treasury to the Qing scaled by tier and by the
+# subject's income (a fraction of its monthly income, so a richer march pays more). The
+# transfer is capped by what the subject actually holds, so a broke subject simply pays
+# what it can rather than going negative. This is the real income lever the tooltips
+# promise; the qing_tribute_* modifier only carries the loyalty cost. No tier => no
+# collection (the historical default is the customary light rendering, modelled as zero
+# extra transfer). Tiers: small 2% / medium 5% / large 9% of the subject's monthly income
+# per quarter.
+QING_subject_collect_tribute = {
+	LOG_enter = { sys = SUBJ  fn = "QING_subject_collect_tribute" }
+	every_subject = {
+		limit = { has_variable = qing_tribute_tier }
+		# fraction of the subject's monthly income, by tier
+		save_temporary_scope_as = trib_subject
+		if =      { limit = { var:qing_tribute_tier = flag:small }   set_variable = { name = qing_trib_rate  value = 0.02 } }
+		else_if = { limit = { var:qing_tribute_tier = flag:medium }  set_variable = { name = qing_trib_rate  value = 0.05 } }
+		else_if = { limit = { var:qing_tribute_tier = flag:large }   set_variable = { name = qing_trib_rate  value = 0.09 } }
+		else =    { set_variable = { name = qing_trib_rate  value = 0 } }
+		# quarterly haul = 3 months' income * rate, clamped to the subject's treasury.
+		# has_monthly_income is the proven country income read (00_event_values.txt).
+		set_variable = { name = qing_trib_amt  value = has_monthly_income }
+		change_variable = { name = qing_trib_amt  multiply = 3 }
+		change_variable = { name = qing_trib_amt  multiply = var:qing_trib_rate }
+		if = {
+			limit = { treasury < var:qing_trib_amt }
+			set_variable = { name = qing_trib_amt  value = treasury }
+		}
+		if = {
+			limit = { var:qing_trib_amt > 0 }
+			add_treasury = { value = var:qing_trib_amt  multiply = -1 }
+			ROOT = { add_treasury = scope:trib_subject.var:qing_trib_amt }
+			LOG_line = { sys = SUBJ  msg = "tribute collected this quarter from" }
+		}
+		remove_variable = qing_trib_rate
+		remove_variable = qing_trib_amt
+	}
+	LOG_exit = { sys = SUBJ  fn = "QING_subject_collect_tribute"  result = OK }
+}

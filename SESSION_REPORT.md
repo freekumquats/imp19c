@@ -2809,3 +2809,26 @@ Coastal W.Africa→palm/gold/elephants, Indo-Gangetic→grain/cotton/opium/silk.
 **Scope.** Covers the trade-good dimension (the dominant defect). Per-province buildings/industry/production
 seeding worldwide remains a follow-on; INDUSTRIALISATION col untouched (baseline 0/39/40 retained). Mapping
 script /tmp/region_goods_1763.py. Adversarial review run before commit (see below). Not promoted; boot test owed.
+
+---
+
+## #314 boot-test fix batch, part 2 (2026-07-10) — deterministic layout + runtime unit placement + B17 re-scope
+
+Continuation of the 1763 boot-test bug list (#314; part 1 = commit 360fe45d covered B4/B6/B7/B8/B11/B13/B18/B19/B23). This batch, on 1763_bookmark, uncommitted at time of writing:
+
+**B5 (Throne window cut off).** gui/government_view.gui — the Throne (大統) section: 3 seat cards 312×96→312×140 and their container 950×104→950×150 so the 4-skill statesmanship row is no longer clipped by the Dynastic Health window. Lives in a scrollarea, so vertical growth just scrolls.
+
+**B9 (office-row Appoint button clipped).** gui/government_view.gui — the 12 Grand-Council office cards 232×186→232×204 and their container 950×580→950×652; the filled-card Appoint/Replace button now has room.
+
+**B15 (Subject-tab buttons overlapping text).** gui/diplomatic_view.gui — the "Subject Actions" dropdown header textbox had `autoresize = yes`, which gives 0 layout height inside a vbox, so the Integrate/Loosen action buttons stacked ON TOP of the header + subject-type text. Fixed to `size = { 300 28 }` + `multiline = yes`.
+
+**B16 (Overseer showed the subject's ruler).** gui/diplomatic_view.gui — the Overseer portrait read `Country.GetRuler`; the real overseer is the resident Amban stored on the subject as the `qing_amban_here` character var. Now `Country.MakeScope.Var('qing_amban_here').GetCharacter`, `.IsSet`-guarded (portrait hides when the post is vacant), and the Post-Amban `icon_button_square` was lifted up beside the portrait (visible only when vacant).
+
+**B17 (three dead Overseer toggles → tribute-size selector).** Repurposed the placeholder `policy_button`s into a working small/medium/large tribute-demand selector on the shown subject. New scripted_guis (3 action buttons + 3 read-only tier indicators) in SUB_QING_subject_interactions.txt; effect `QING_subject_set_tribute` (exclusive modifier swap + `qing_tribute_tier` flag var) and `QING_subject_collect_tribute` in se_SUBJECT_QING.txt; wired 3 `text_button_square_highlighted` buttons in diplomatic_view.gui with a check_mark.dds active-tier overlay; loc keys in 00_subject_rework_l_english.yml.
+  - **Review-caught defect, FIXED before commit:** the first cut applied `tribute_income_modifier`/`subject_loyalty`/`subject_opinions` to the subject — but those are OVERLORD-facing keys (inert on a leaf subject, misdirected on a nested one). Re-scoped: the qing_tribute_* modifiers now carry only the SUBJECT-facing `loyalty_to_overlord`, and the income is a CONCRETE quarterly treasury transfer (`QING_subject_collect_tribute`, hooked into qing_mechanics_pulse_on_action) scaled by tier (2%/5%/9% of the subject's quarterly income, clamped to its treasury) — per the concrete-over-abstract rule. Tooltips updated to match.
+
+**B20 (Great Game desc overflow).** gui/qing_greatgame.gui — description textbox resized, dropped autoresize (carried over from part-1 work-in-progress).
+
+**B21 (all armies stack at Beijing) + B22 (only Fujian navy spawns).** imp19c_effects_legion_setup.txt. The prior #241/#223/#242 fixes (country-scope `create_unit { location = p:X }`, and same-tick vs staggered timing) did NOT work on the user's re-test. Oracle consult (Invictus + Terra-Indomita, 2026-07-10) found the reliably-dispersing idiom is the RELATIVE-scope province→owner form `pX = { owner = { create_unit { location = prev.prev } } }` (prev = owner country, prev.prev = pX) — the ~20-use pattern in common/military_traditions (00_greek.txt:81 is the naval reference). Converted all 3 garrison-helper create blocks (main + both commander branches) and all 3 navy squadron effects (main + fallback branches) to this form. Same-tick multi-navy confirmed safe (TI me_jomon.txt:1779 spawns 12 on one tick), so the .11 one-tick raise is retained. NEEDS in-game re-test to confirm dispersal (this is the 4th attempt at B21/B22 — engine behaviour was genuinely unproven).
+
+Reviews: a code-review agent passed B5/B9/B15/B16/B20 clean and caught the B17 mis-scope (now fixed). All touched script files re-verified brace-balanced. Still OWED: in-game boot test on the user's machine. Nothing promoted off the branch.
