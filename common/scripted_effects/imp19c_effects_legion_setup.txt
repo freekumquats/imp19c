@@ -83,19 +83,23 @@ SE_qing_raise_garrison = {
 		# MOBILISATION wrapper: the legion musters at the GOVERNORSHIP SEAT and the nested
 		# create_unit `location` is IGNORED. Every garrison therefore mustered at its
 		# governorship's state capital (in practice Beijing), not at $prov$ — the stack.
-		# FIX (#241 then #314 B21): drop raise_legion entirely and create the unit at the
-		# PROVINCE->owner scope with `location = prev.prev`. The earlier #241 attempt used
-		# `owner = { create_unit { location = $prov$ } }` (absolute p:X token inside the owner
-		# hop) and STILL stacked every garrison at Beijing on the user's re-test. Oracle
-		# consult (2026-07-10) found the reliably-dispersing idiom is the RELATIVE-scope form:
-		# `pX = { owner = { create_unit { location = prev.prev } } }` where prev = owner
-		# (country), prev.prev = pX — the ~20-use pattern in Invictus military_traditions
-		# (00_greek.txt:81 etc.). So each garrison musters AT its own province, dispersed.
+		# FIX (#241 → #314 B21 → #314 B21-v2): drop raise_legion entirely and create the unit
+		# at the PROVINCE->owner (country) scope. The v1 `location = prev . prev` was WRONG and
+		# was the true all-Beijing stack: inside `$prov$ = { owner = { create_unit } }` the
+		# create_unit runs in the OWNER (country) scope, where prev = $prov$ (the province) but
+		# prev.prev = the scope the province was entered FROM = ROOT (c:CHI) → resolves to the
+		# country's CAPITAL (Beijing). Every garrison therefore mustered at Beijing. The Invictus
+		# ~20-use `prev.prev` naval pattern (00_greek.txt:81 etc.) hides this because each tradition
+		# raises exactly ONE navy — nobody notices it sits at the capital port; the Qing raises ~27
+		# and they all pile up. The verified LAND idiom for a named province is the ABSOLUTE PROVINCE
+		# TOKEN at country scope: `location = p:X` (Invictus events/galatian_invasion.txt:718
+		# `create_unit { navy=no location=p:384 }`; 02_nuragic_missions_2.txt:3366 `location=p:1453`).
+		# $prov$ IS the p:X token, so `location = $prov$` places each garrison at its own province.
 		$prov$ = { owner = {
 			create_unit = {
 				navy = no
 				name = $name$
-				location = prev.prev
+				location = $prov$
 				sub_unit = regular_infantry
 				while = { count = $size$  add_subunit = regular_infantry }
 			}
@@ -119,10 +123,10 @@ SE_qing_raise_garrison_cmd = {
 		# above (Ili banner garrison under commander Changling char:244 is precisely
 		# one of the frontier cases this restores). See that helper for the rationale.
 		limit = { exists = $prov$  $prov$ = { OR = { owner = c:CHI  owner = { is_subject_of = c:CHI } } }  exists = $cmd$ }
-		# [#241-fix develop, then #314 B21] Same root-cause fix as SE_qing_raise_garrison
-		# above: create the unit at the PROVINCE->owner scope with `location = prev.prev`
-		# (relative-scope form; prev.prev = $prov$). The earlier absolute-token form
-		# `owner = { create_unit { location = $prov$ } }` still stacked at Beijing on retest.
+		# [#241 → #314 B21 → #314 B21-v2] Same root-cause fix as SE_qing_raise_garrison
+		# above: create the unit at the PROVINCE->owner scope with `location = $prov$` (the
+		# absolute province token). The v1 `location = $prov$` resolved to prev.prev = ROOT's
+		# capital (Beijing) — the real all-Beijing stack; see that helper for the full trace.
 		# create_unit accepts an inline `commander = <char>` field (Invictus events/
 		# galatian_invasion.txt `create_unit { navy=no location=pX commander=scope:... }`;
 		# 00_event_effects_inv_1_0.txt:4281 `commander = char:13`) — this replaces the old
@@ -136,7 +140,7 @@ SE_qing_raise_garrison_cmd = {
 				create_unit = {
 					navy = no
 					name = $name$
-					location = prev.prev
+					location = $prov$
 					commander = $cmd$
 					sub_unit = regular_infantry
 					while = { count = $size$  add_subunit = regular_infantry }
@@ -149,7 +153,7 @@ SE_qing_raise_garrison_cmd = {
 				create_unit = {
 					navy = no
 					name = $name$
-					location = prev.prev
+					location = $prov$
 					sub_unit = regular_infantry
 					while = { count = $size$  add_subunit = regular_infantry }
 				}
@@ -320,9 +324,13 @@ SE_qing_armies = {
 # work — the user still saw only the Fujian fleet. The real culprit was the PLACEMENT
 # idiom: the country-scope `create_unit { navy=yes location=p:X }` form silently spawned
 # only one of the three fleets. Oracle consult (2026-07-10) found the reliable multi-navy
-# idiom is the SAME province->owner->`location = prev.prev` form that fixed the land
-# garrisons (Invictus common/military_traditions/00_greek.txt:81, the naval reference,
-# ~20 uses). All three squadron effects below now use it (main + fallback branches). They
+# idiom is the SAME province->owner->create_unit form that fixed the land garrisons, but
+# with an ABSOLUTE PROVINCE / SAVED-SCOPE location token (NOT the relative `prev.prev`).
+# `prev.prev` at the owner scope resolves to ROOT's capital (Beijing) for ALL three fleets;
+# the engine cannot berth three navies at one inland capital, so only one survived (Fujian).
+# Each squadron below now locates at its OWN coastal home port (p:9298 / p:3651 / p:2893, or
+# its fallback scope) — the Invictus galatian_invasion.txt:718 absolute-token idiom, which
+# applies identically to navies. All three squadron effects use it (main + fallback). They
 # still raise together on one tick (.11) after the .10 disband; same-tick multi-navy is
 # proven safe (Terra-Indomita me_jomon.txt:1779 spawns 12 fleets on one tick).
 # ----------------------------------------------------------------------
@@ -361,16 +369,16 @@ SE_qing_navy_guangdong = {
 	LOG_enter = { sys = QING  fn = "SE_qing_navy_guangdong" }
 	if = {
 		limit = { exists = p:9298  p:9298 = { owner = c:CHI  is_coastal = yes } }
-		# [#314 B22-fix] Oracle (2026-07-10) confirmed the RELIABLE multi-navy idiom is the
-		# province->owner->create_unit form with `location = prev.prev` (Invictus
-		# common/military_traditions/00_greek.txt:81, ~20 uses), NOT the country-scope
-		# `location = p:X` form used before — which spawned only one of the three fleets.
-		# prev = the owner (country), prev.prev = p:9298. Same fix as the #241 land garrisons.
+		# [#314 B22-fix v2] The reliable multi-navy idiom is province->owner->create_unit with
+		# an ABSOLUTE location token (`location = p:9298`), NOT the relative `prev.prev`. At the
+		# owner scope prev.prev = ROOT's capital (Beijing), so all three fleets berthed at the
+		# same inland capital and the engine kept only one (Fujian) — the boot-test symptom.
+		# The absolute-token land idiom (galatian_invasion.txt:718) applies identically here.
 		p:9298 = { owner = {
 			create_unit = {
 				navy = yes
 				name = "Guangdong Coastal Patrol 廣東水師"
-				location = prev.prev
+				location = p:9298
 				sub_unit = brig
 				while = { count = 5  add_subunit = brig }
 			}
@@ -388,12 +396,12 @@ SE_qing_navy_guangdong = {
 				max = 1
 				save_scope_as = qing_gd_fallback_port
 			}
-			# [#314 B22-fix] province->owner->create_unit { location = prev.prev } form (see main branch).
+			# [#314 B22-fix] province->owner->create_unit { location = <scope> } form (see main branch).
 			scope:qing_gd_fallback_port = { owner = {
 				create_unit = {
 					navy = yes
 					name = "Guangdong Coastal Patrol 廣東水師"
-					location = prev.prev
+					location = scope:qing_gd_fallback_port
 					sub_unit = brig
 					while = { count = 5  add_subunit = brig }
 				}
@@ -413,12 +421,12 @@ SE_qing_navy_fujian = {
 	LOG_enter = { sys = QING  fn = "SE_qing_navy_fujian" }
 	if = {
 		limit = { exists = p:3651  p:3651 = { owner = c:CHI  is_coastal = yes } }
-		# [#314 B22-fix] province->owner->create_unit { location = prev.prev } form (see Guangdong).
+		# [#314 B22-fix] province->owner->create_unit { location = <p:X> } form (see Guangdong).
 		p:3651 = { owner = {
 			create_unit = {
 				navy = yes
 				name = "Fujian Coastal Patrol 福建水師"
-				location = prev.prev
+				location = p:3651
 				sub_unit = brig
 				while = { count = 3  add_subunit = brig }
 			}
@@ -436,12 +444,12 @@ SE_qing_navy_fujian = {
 				max = 1
 				save_scope_as = qing_navy_fallback_port
 			}
-			# [#314 B22-fix] province->owner->create_unit { location = prev.prev } form (see Guangdong).
+			# [#314 B22-fix] province->owner->create_unit { location = <p:X> } form (see Guangdong).
 			scope:qing_navy_fallback_port = { owner = {
 				create_unit = {
 					navy = yes
 					name = "Fujian Coastal Patrol 福建水師"
-					location = prev.prev
+					location = scope:qing_navy_fallback_port
 					sub_unit = brig
 					while = { count = 3  add_subunit = brig }
 				}
@@ -463,12 +471,12 @@ SE_qing_navy_zhejiang = {
 	LOG_enter = { sys = QING  fn = "SE_qing_navy_zhejiang" }
 	if = {
 		limit = { exists = p:2893  p:2893 = { owner = c:CHI  is_coastal = yes } }
-		# [#314 B22-fix] province->owner->create_unit { location = prev.prev } form (see Guangdong).
+		# [#314 B22-fix] province->owner->create_unit { location = <p:X> } form (see Guangdong).
 		p:2893 = { owner = {
 			create_unit = {
 				navy = yes
 				name = "Zhejiang Coastal Patrol 浙江水師"
-				location = prev.prev
+				location = p:2893
 				sub_unit = brig
 				while = { count = 2  add_subunit = brig }
 			}
@@ -487,12 +495,12 @@ SE_qing_navy_zhejiang = {
 				max = 1
 				save_scope_as = qing_zj_fallback_port
 			}
-			# [#314 B22-fix] province->owner->create_unit { location = prev.prev } form (see Guangdong).
+			# [#314 B22-fix] province->owner->create_unit { location = <p:X> } form (see Guangdong).
 			scope:qing_zj_fallback_port = { owner = {
 				create_unit = {
 					navy = yes
 					name = "Zhejiang Coastal Patrol 浙江水師"
-					location = prev.prev
+					location = scope:qing_zj_fallback_port
 					sub_unit = brig
 					while = { count = 2  add_subunit = brig }
 				}
