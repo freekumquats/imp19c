@@ -329,3 +329,64 @@ QING_seat_pick_regent = {
 	}
 	LOG_exit = { sys = QING  fn = "QING_seat_pick_regent"  result = OK }
 }
+
+
+# ======================================================================
+# [#314 B25] EMPEROR RETREATS INTO SECLUSION (退居休養 / 太上皇 precedent).
+#
+# A capable emperor voluntarily withdraws from personal rule and hands the
+# day-to-day governance to a Grand Regent — the historical form set by the
+# Qianlong Emperor, who abdicated the throne-name to his son in 1796 but ruled
+# on as 太上皇 (Emperor Emeritus). Here it is modelled the other way round: the
+# reigning emperor keeps the throne but stops governing, so a regent is warranted.
+#
+# Sets qing_emperor_secluded (which QING_seat_regency_warranted now reads), then
+# summons the ordinary regent-selection event (qing_regency.1) so the SAME
+# Empress-Dowager-first candidate pool + install path runs. ROOT = c:CHI.
+# ======================================================================
+QING_emperor_enter_seclusion = {
+	LOG_enter = { sys = QING  fn = "QING_emperor_enter_seclusion" }
+	if = {
+		limit = { NOT = { has_variable = qing_emperor_secluded } }
+		set_variable = { name = qing_emperor_secluded  value = 1 }
+		# a withdrawn sovereign leaks a little legitimacy (the court governs in his name)
+		add_legitimacy = -10
+		LOG_line = { sys = QING  msg = "emperor withdraws into seclusion — a Grand Regency is opened for" }
+		# summon the regent-selection now if no regent yet sits and the court has not
+		# already chosen bare council rule (mirrors QING_seat_evaluate_regency's guard).
+		if = {
+			limit = {
+				NOT = { has_variable = qing_office_regent_holder }
+				NOT = { has_variable = qing_regency_council_rule }
+			}
+			trigger_event = { id = qing_regency.1  days = { 1 5 } }
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_emperor_enter_seclusion"  reason = "emperor already secluded for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_emperor_enter_seclusion"  result = OK }
+}
+
+# ======================================================================
+# [#314 B25] EMPEROR RESUMES PERSONAL RULE — ends a voluntary seclusion.
+# Clears qing_emperor_secluded; the quarterly QING_seat_evaluate_regency then
+# dissolves the regency (via qing_regency.3) UNLESS another warrant still holds
+# (the emperor is also a child/incapable/aged — in which case the regency rightly
+# persists). ROOT = c:CHI.
+# ======================================================================
+QING_emperor_resume_rule = {
+	LOG_enter = { sys = QING  fn = "QING_emperor_resume_rule" }
+	if = {
+		limit = { has_variable = qing_emperor_secluded }
+		remove_variable = qing_emperor_secluded
+		add_legitimacy = 5
+		LOG_line = { sys = QING  msg = "emperor resumes personal rule (ends seclusion) for" }
+		# re-evaluate immediately so the regency lapses this tick if no other warrant holds
+		QING_seat_evaluate_regency = yes
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_emperor_resume_rule"  reason = "emperor was not in seclusion for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_emperor_resume_rule"  result = OK }
+}
