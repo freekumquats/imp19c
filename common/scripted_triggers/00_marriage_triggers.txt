@@ -151,3 +151,68 @@ MARRIAGE_needs_bridge_trigger = {
 		}
 	}
 }
+
+
+# ---- [#313] does THIS child match ROOT's gender filter? ----------------------------------
+# Character scope = a candidate child of the PARTNER house. The gender filter is on the sex of
+# OUR (ROOT's) child sent, so the partner must field the OPPOSITE sex: our son => partner female;
+# our daughter => partner male; any (default) => either. Reads ROOT's marriage_filter_gender var.
+MARRIAGE_child_matches_gender_trigger = {
+	trigger_if = {
+		limit = { ROOT = { has_variable = marriage_filter_gender  var:marriage_filter_gender = flag:son } }
+		is_female = yes
+	}
+	trigger_else_if = {
+		limit = { ROOT = { has_variable = marriage_filter_gender  var:marriage_filter_gender = flag:daughter } }
+		is_female = no
+	}
+	trigger_else = {
+		always = yes
+	}
+}
+
+# ---- [#313] does THIS child match ROOT's OWN-child gender filter? ------------------------
+# Character scope = a candidate child of OUR (ROOT's) house. Unlike the partner trigger above,
+# OUR child is the SAME sex the filter names: our son => is_male; our daughter => is_female;
+# any (default) => either. Reads ROOT's marriage_filter_gender var.
+MARRIAGE_own_child_matches_gender_trigger = {
+	trigger_if = {
+		limit = { ROOT = { has_variable = marriage_filter_gender  var:marriage_filter_gender = flag:son } }
+		is_male = yes
+	}
+	trigger_else_if = {
+		limit = { ROOT = { has_variable = marriage_filter_gender  var:marriage_filter_gender = flag:daughter } }
+		is_female = yes
+	}
+	trigger_else = {
+		always = yes
+	}
+}
+
+# ---- [#313] does OUR house field a child matching the active FAMILY + GENDER filter? -----
+# Country scope = us (ROOT). Mirror of MARRIAGE_candidate_matches_filter but for OUR side and OUR
+# child's sex (direct, not opposite). Used by the Propose gate so the button's enabled state
+# matches what MARRIAGE_form_pact will actually attempt (ruling vs non-ruling pool, our sex).
+MARRIAGE_own_house_has_match_trigger = {
+	trigger_if = {
+		limit = { has_variable = marriage_filter_family  var:marriage_filter_family = flag:other }
+		# a NON-ruling noble of our court, unwed, free, adult, matching our sex.
+		any_character = {
+			is_alive = yes  is_adult = yes  is_married = no  prisoner = no
+			from_ruler_family = no
+			NOT = { is_ruler = yes }
+			MARRIAGE_own_child_matches_gender_trigger = yes
+		}
+	}
+	trigger_else_if = {
+		limit = { has_variable = marriage_filter_family  var:marriage_filter_family = flag:any }
+		OR = {
+			current_ruler = { any_child = { is_alive = yes  is_adult = yes  is_married = no  prisoner = no  MARRIAGE_own_child_matches_gender_trigger = yes } }
+			any_character = { is_alive = yes  is_adult = yes  is_married = no  prisoner = no  from_ruler_family = no  NOT = { is_ruler = yes }  MARRIAGE_own_child_matches_gender_trigger = yes }
+		}
+	}
+	trigger_else = {
+		# RULING family (default): a ruling-family adult child matching our sex.
+		current_ruler = { any_child = { is_alive = yes  is_adult = yes  is_married = no  prisoner = no  MARRIAGE_own_child_matches_gender_trigger = yes } }
+	}
+}

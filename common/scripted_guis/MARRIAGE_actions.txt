@@ -45,18 +45,24 @@ marriage_open_candidates = {
 		# with only young children still belongs in the list (the betroth action lights up, propose does
 		# not). Per candidate we cache: power score, eligible ADULT-child count + total betrothable-child
 		# count, and whether we are already WED or BETROTHED to them (so the row can show status).
+		# [#313] the candidate loop is now ORDERED so the list is built pre-sorted (a GUI datamodel over
+		# countries cannot sort on a nested child attribute). ordered_country order_by = a script_value
+		# reading each candidate's cached display var is the proven idiom (se_DIPLOMACY order_by=svalue).
+		# The sort mode (marriage_sort_mode) selects which cached var MARRIAGE_sort_svalue returns; the
+		# FAMILY + GENDER filters (marriage_filter_family / _gender) narrow the inclusion limit.
+		# NOTE: caching (child counts, power, best-candidate age/skill) must happen BEFORE the ordered
+		# pass reads it. So we do a FIRST unordered pass to cache, then the ordered pass to build the list.
 		every_country = {
 			limit = {
 				NOT = { this = ROOT }
 				exists = current_ruler
 				MARRIAGE_eligible_realm_trigger = yes
 				ROOT = { in_diplomatic_range = prev }
-				current_ruler = {
-					any_child = { is_alive = yes  is_married = no  prisoner = no }
-				}
+				MARRIAGE_candidate_matches_filter = yes
 			}
 			set_variable = { name = marriage_display_power  value = DIPLOMACY_power }
 			MARRIAGE_cache_child_counts = yes
+			MARRIAGE_cache_best_candidate = yes
 			# status flags relative to ROOT (the viewing court), read per-row in the window.
 			if = {
 				limit = { ROOT = { is_target_in_variable_list = { name = marriage_partners  target = prev } } }
@@ -68,8 +74,51 @@ marriage_open_candidates = {
 				set_variable = { name = marriage_display_betrothed  value = 1 }
 			}
 			else = { set_variable = { name = marriage_display_betrothed  value = 0 } }
+		}
+		# second pass: add to the list in sorted order (highest svalue first).
+		ordered_country = {
+			limit = {
+				NOT = { this = ROOT }
+				exists = current_ruler
+				MARRIAGE_eligible_realm_trigger = yes
+				ROOT = { in_diplomatic_range = prev }
+				MARRIAGE_candidate_matches_filter = yes
+			}
+			order_by = MARRIAGE_sort_svalue
 			ROOT = { add_to_variable_list = { name = marriage_candidates  target = prev } }
 		}
+	}
+}
+
+# ---- [#313] does this candidate country match the active FAMILY + GENDER filter? --------
+# Country scope = the candidate. Reads ROOT's filter vars. FAMILY: ruling => the candidate must field a
+# betrothable RULING-family child; other => a betrothable NON-ruling noble; any => either. GENDER filters
+# on the sex of OUR child sent, so the PARTNER must field the OPPOSITE sex: our son => partner needs a
+# daughter; our daughter => partner needs a son; any => partner needs any eligible child.
+MARRIAGE_candidate_matches_filter = {
+	# resolve the required partner sex from OUR gender filter (default any).
+	# our son -> partner female ; our daughter -> partner male ; any -> either.
+	trigger_if = {
+		limit = { ROOT = { has_variable = marriage_filter_family  var:marriage_filter_family = flag:other } }
+		# OTHER families only: a non-ruling noble, unwed, free, matching the gender requirement.
+		any_character = {
+			is_alive = yes  is_married = no  prisoner = no
+			from_ruler_family = no
+			NOT = { is_ruler = yes }
+			MARRIAGE_child_matches_gender_trigger = yes
+		}
+	}
+	trigger_else_if = {
+		limit = { ROOT = { has_variable = marriage_filter_family  var:marriage_filter_family = flag:any } }
+		# ANY family: a ruling child OR a noble, matching the gender requirement.
+		OR = {
+			current_ruler = { any_child = { is_alive = yes  is_married = no  prisoner = no  MARRIAGE_child_matches_gender_trigger = yes } }
+			any_character = { is_alive = yes  is_married = no  prisoner = no  from_ruler_family = no  NOT = { is_ruler = yes }  MARRIAGE_child_matches_gender_trigger = yes }
+		}
+	}
+	trigger_else = {
+		# RULING family (default): a ruling-family child matching the gender requirement.
+		current_ruler = { any_child = { is_alive = yes  is_married = no  prisoner = no  MARRIAGE_child_matches_gender_trigger = yes } }
 	}
 }
 
@@ -93,6 +142,44 @@ MARRIAGE_cache_child_counts = {
 	}
 }
 
+# ---- [#313] cache this candidate's BEST-child age + top-skill (country scope = candidate) ----
+# The window sorts on these cached display vars (a GUI datamodel can't sort on a nested child
+# attribute), so we pre-compute per candidate: marriage_display_best_age = the eldest eligible
+# ruling child's age; marriage_display_best_skill = the highest single attribute among eligible
+# ruling children. Eligible = ruling-family child, alive, unwed, free. Cheap ruler-children loop.
+MARRIAGE_cache_best_candidate = {
+	set_variable = { name = marriage_display_best_age    value = 0 }
+	set_variable = { name = marriage_display_best_skill  value = 0 }
+	save_scope_as = best_cand_home
+	# eldest eligible ruling child's AGE — pick it directly with ordered_child (proven idiom used
+	# throughout se_MARRIAGE) and read its age into the home country's display var.
+	current_ruler = {
+		ordered_child = {
+			limit = { is_alive = yes  is_married = no  prisoner = no }
+			order_by = age
+			max = 1
+			save_scope_as = best_cand_eldest
+		}
+	}
+	if = {
+		limit = { exists = scope:best_cand_eldest }
+		set_variable = { name = marriage_display_best_age  value = scope:best_cand_eldest.age }
+	}
+	# top single attribute among eligible ruling children — each child, if its attribute beats the
+	# running best, writes it. Uses save_temporary_scope_as so the child scope is explicit (no prev
+	# value-position read). Cheap ruler-children loop.
+	current_ruler = {
+		every_child = {
+			limit = { is_alive = yes  is_married = no  prisoner = no }
+			save_temporary_scope_as = best_cand_child
+			if = { limit = { scope:best_cand_home = { var:marriage_display_best_skill < scope:best_cand_child.martial } }   scope:best_cand_home = { set_variable = { name = marriage_display_best_skill  value = scope:best_cand_child.martial } } }
+			if = { limit = { scope:best_cand_home = { var:marriage_display_best_skill < scope:best_cand_child.finesse } }   scope:best_cand_home = { set_variable = { name = marriage_display_best_skill  value = scope:best_cand_child.finesse } } }
+			if = { limit = { scope:best_cand_home = { var:marriage_display_best_skill < scope:best_cand_child.charisma } }  scope:best_cand_home = { set_variable = { name = marriage_display_best_skill  value = scope:best_cand_child.charisma } } }
+			if = { limit = { scope:best_cand_home = { var:marriage_display_best_skill < scope:best_cand_child.zeal } }      scope:best_cand_home = { set_variable = { name = marriage_display_best_skill  value = scope:best_cand_child.zeal } } }
+		}
+	}
+}
+
 # ---- PROPOSE A MARRIAGE to the target house -------------------------------------------
 # Available when both realms are eligible, in range, not already wedded, both field a
 # marriageable child, AND the pair is COMPATIBLE (same bloc / same faith / a forged bridge).
@@ -107,10 +194,21 @@ marriage_action_propose = {
 	}
 	is_valid = {
 		in_diplomatic_range = scope:target
-		current_ruler = { MARRIAGE_has_marriageable_child_trigger = yes }
 		scope:target = {
 			MARRIAGE_eligible_realm_trigger = yes
-			current_ruler = { MARRIAGE_has_marriageable_child_trigger = yes }
+		}
+		# [#313] the gate now honours the active FAMILY + GENDER filter on BOTH sides, so the
+		# button's enabled state matches what MARRIAGE_form_pact will actually attempt: OUR house
+		# must field a child of the filtered pool + sex, and the TARGET must field the mirror
+		# (opposite sex, matching family pool). Replaces the old ruling-only both-sides check that
+		# disagreed with the from_ruler=no / gender-filter effect paths.
+		custom_tooltip = {
+			text = marriage_action_needs_our_match_tt
+			MARRIAGE_own_house_has_match_trigger = yes
+		}
+		custom_tooltip = {
+			text = marriage_action_needs_their_match_tt
+			scope:target = { MARRIAGE_candidate_matches_filter = yes }
 		}
 		# not already wedded to this house
 		NOT = { is_target_in_variable_list = { name = marriage_partners  target = scope:target } }
@@ -127,9 +225,19 @@ marriage_action_propose = {
 	}
 	effect = {
 		MARRIAGE_init = yes
-		# form the pact directly against the chosen partner (senior = us, the proposer).
-		MARRIAGE_form_pact = { partner = scope:target }
-		LOG_line = { sys = MARRIAGE  msg = "player proposed + concluded a marriage with the target house" }
+		# [#313] form the pact against the chosen partner (senior = us). The FAMILY filter chosen in
+		# the candidate window (marriage_filter_family = flag:other) routes to a NON-ruling noble match
+		# (a lesser tie: goodwill only, no union); the default / flag:ruling routes to the full dynastic
+		# match. from_ruler is derived from that filter var here.
+		if = {
+			limit = { has_variable = marriage_filter_family  var:marriage_filter_family = flag:other }
+			MARRIAGE_form_pact = { partner = scope:target  from_ruler = no }
+			LOG_line = { sys = MARRIAGE  msg = "player concluded a NON-ruling (lesser) marriage tie with the target house" }
+		}
+		else = {
+			MARRIAGE_form_pact = { partner = scope:target  from_ruler = yes }
+			LOG_line = { sys = MARRIAGE  msg = "player proposed + concluded a dynastic marriage with the target house" }
+		}
 	}
 }
 
@@ -228,3 +336,90 @@ marriage_action_repudiate = {
 		LOG_line = { sys = MARRIAGE  msg = "player repudiated a betrothal with the target house" }
 	}
 }
+
+# ======================================================================
+# [#313] CANDIDATE-LIST FILTERS + SORTS. Each toggle sets a country var read by
+# marriage_open_candidates when it (re)builds the list, then re-runs the builder so
+# the window refreshes immediately. Vars (all on the player country):
+#   marriage_filter_family : flag:ruling | flag:other | flag:any   (which family pool)
+#   marriage_filter_gender : flag:any | flag:son | flag:daughter   (gender of OUR child sent)
+#   marriage_sort_mode     : flag:power | flag:age | flag:skill    (list ordering)
+# The toggles CYCLE their var to the next value, so one button per dimension suffices.
+# ======================================================================
+
+# --- FAMILY filter cycle: ruling -> other -> any -> ruling ---
+marriage_filter_family_cycle = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { MARRIAGE_eligible_realm_trigger = yes }
+	is_valid = { always = yes }
+	effect = {
+		if = {
+			limit = { OR = { NOT = { has_variable = marriage_filter_family }  var:marriage_filter_family = flag:any } }
+			set_variable = { name = marriage_filter_family  value = flag:ruling }
+		}
+		else_if = {
+			limit = { var:marriage_filter_family = flag:ruling }
+			set_variable = { name = marriage_filter_family  value = flag:other }
+		}
+		else = {
+			set_variable = { name = marriage_filter_family  value = flag:any }
+		}
+		marriage_open_candidates = yes
+	}
+}
+
+# --- GENDER filter cycle: any -> son -> daughter -> any ---
+marriage_filter_gender_cycle = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { MARRIAGE_eligible_realm_trigger = yes }
+	is_valid = { always = yes }
+	effect = {
+		if = {
+			limit = { OR = { NOT = { has_variable = marriage_filter_gender }  var:marriage_filter_gender = flag:daughter } }
+			set_variable = { name = marriage_filter_gender  value = flag:any }
+		}
+		else_if = {
+			limit = { var:marriage_filter_gender = flag:any }
+			set_variable = { name = marriage_filter_gender  value = flag:son }
+		}
+		else = {
+			set_variable = { name = marriage_filter_gender  value = flag:daughter }
+		}
+		marriage_open_candidates = yes
+	}
+}
+
+# --- SORT cycle: power -> age -> skill -> power ---
+marriage_sort_cycle = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { MARRIAGE_eligible_realm_trigger = yes }
+	is_valid = { always = yes }
+	effect = {
+		if = {
+			limit = { OR = { NOT = { has_variable = marriage_sort_mode }  var:marriage_sort_mode = flag:skill } }
+			set_variable = { name = marriage_sort_mode  value = flag:power }
+		}
+		else_if = {
+			limit = { var:marriage_sort_mode = flag:power }
+			set_variable = { name = marriage_sort_mode  value = flag:age }
+		}
+		else = {
+			set_variable = { name = marriage_sort_mode  value = flag:skill }
+		}
+		marriage_open_candidates = yes
+	}
+}
+
+# --- read-only indicators for the window to label the active filter/sort ---
+marriage_filter_family_is_ruling   = { scope = country  ai_is_valid = { always = no }  is_shown = { OR = { NOT = { has_variable = marriage_filter_family }  var:marriage_filter_family = flag:ruling } } }
+marriage_filter_family_is_other    = { scope = country  ai_is_valid = { always = no }  is_shown = { has_variable = marriage_filter_family  var:marriage_filter_family = flag:other } }
+marriage_filter_family_is_any      = { scope = country  ai_is_valid = { always = no }  is_shown = { has_variable = marriage_filter_family  var:marriage_filter_family = flag:any } }
+marriage_filter_gender_is_any      = { scope = country  ai_is_valid = { always = no }  is_shown = { OR = { NOT = { has_variable = marriage_filter_gender }  var:marriage_filter_gender = flag:any } } }
+marriage_filter_gender_is_son      = { scope = country  ai_is_valid = { always = no }  is_shown = { has_variable = marriage_filter_gender  var:marriage_filter_gender = flag:son } }
+marriage_filter_gender_is_daughter = { scope = country  ai_is_valid = { always = no }  is_shown = { has_variable = marriage_filter_gender  var:marriage_filter_gender = flag:daughter } }
+marriage_sort_is_power             = { scope = country  ai_is_valid = { always = no }  is_shown = { OR = { NOT = { has_variable = marriage_sort_mode }  var:marriage_sort_mode = flag:power } } }
+marriage_sort_is_age               = { scope = country  ai_is_valid = { always = no }  is_shown = { has_variable = marriage_sort_mode  var:marriage_sort_mode = flag:age } }
+marriage_sort_is_skill             = { scope = country  ai_is_valid = { always = no }  is_shown = { has_variable = marriage_sort_mode  var:marriage_sort_mode = flag:skill } }

@@ -116,7 +116,7 @@ MARRIAGE_pulse = {
 			}
 			if = {
 				limit = { exists = scope:marriage_partner_realm }
-				MARRIAGE_form_pact = { partner = scope:marriage_partner_realm }
+				MARRIAGE_form_pact = { partner = scope:marriage_partner_realm  from_ruler = yes }
 			}
 		}
 		# --- [#betrothal-rework] L1b: mature standing child betrothals (wed the pair once both are
@@ -226,22 +226,57 @@ MARRIAGE_apply_marriage_bond = {
 # standing goodwill opinion BOTH ways and, for a strong match, a formal alliance.
 # ======================================================================
 MARRIAGE_form_pact = {
-	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_form_pact" }
+	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_form_pact (from_ruler=$from_ruler$)" }
 	save_scope_as = pact_senior
 	$partner$ = { save_scope_as = pact_junior }
-	# 1. a marriageable FEMALE child of the PARTNER house (the foreign court). ordered_child
-	#    with order_by = age, max = 1 = the eldest eligible — the standard idiom. The
-	#    engine requires an OPPOSITE-SEX pair to wed, so we pick a bride here and a groom
-	#    below (a symmetric same-sex fallback is not worth the branch for AI flavour).
-	scope:pact_junior = {
-		current_ruler = {
-			ordered_child = {
+	# [#313] $from_ruler$ = yes (default dynastic match, ruling family) | no (a lesser tie to a
+	#   NON-ruling noble house of each realm: no union/inheritance implications — see the payload
+	#   branch below). The selection idioms differ: ruling = current_ruler.ordered_child; other =
+	#   ordered_character over the court's from_ruler_family=no adults. Both are proven (Invictus
+	#   propose_marriage.txt gates on from_ruler_family; any_character/ordered_character are standard).
+	#
+	# [#313 FIX] GENDER ORIENTATION. The gender filter (marriage_filter_gender, read on the acting/
+	#   senior country = ROOT/this) says which of OUR children weds: flag:daughter → OUR child is
+	#   FEMALE and the PARTNER's is MALE; anything else (flag:son, or unset — the pulse/betrothal
+	#   callers never set it) → OUR child is MALE and the partner's FEMALE (the historical default).
+	#   Previously the pairing was hardcoded our-male/their-female, so flag:daughter silently no-opped
+	#   (and a ruler with only daughters could never wed). We now pick our child of the filtered sex
+	#   and the partner's child of the opposite sex. scope:marriage_bride = the PARTNER child,
+	#   scope:marriage_groom = OUR child (names kept for the downstream payload; not literal sexes).
+	if = {
+		limit = { has_variable = marriage_filter_gender  var:marriage_filter_gender = flag:daughter }
+		set_variable = { name = marriage_our_child_female  value = 1 }
+	}
+	else = {
+		set_variable = { name = marriage_our_child_female  value = 0 }
+	}
+	# 1. the PARTNER child (opposite sex to ours) — eldest eligible (order_by = age, max = 1).
+	if = {
+		limit = { $from_ruler$ = yes }
+		scope:pact_junior = {
+			current_ruler = {
+				ordered_child = {
+					limit = {
+						is_alive = yes  is_adult = yes  is_married = no  prisoner = no
+						trigger_if = { limit = { scope:pact_senior = { var:marriage_our_child_female = 1 } }  is_female = no }
+						trigger_else = { is_female = yes }
+					}
+					order_by = age
+					max = 1
+					save_scope_as = marriage_bride
+				}
+			}
+		}
+	}
+	else = {
+		scope:pact_junior = {
+			ordered_character = {
 				limit = {
-					is_alive = yes
-					is_adult = yes
-					is_married = no
-					prisoner = no
-					is_female = yes
+					is_alive = yes  is_adult = yes  is_married = no  prisoner = no
+					from_ruler_family = no
+					NOT = { is_ruler = yes }
+					trigger_if = { limit = { scope:pact_senior = { var:marriage_our_child_female = 1 } }  is_female = no }
+					trigger_else = { is_female = yes }
 				}
 				order_by = age
 				max = 1
@@ -249,26 +284,38 @@ MARRIAGE_form_pact = {
 			}
 		}
 	}
-	# 2. a marriageable MALE child of OUR house, married to the foreign bride. Guard the
-	#    whole wedding on the partner child being found (a house can run dry between
-	#    the pulse's trigger check and here).
+	# 2. OUR child (of the filtered sex), married to the partner child. Guarded on the partner found.
 	if = {
-		limit = { exists = scope:marriage_bride }
+		limit = { exists = scope:marriage_bride  $from_ruler$ = yes }
 		current_ruler = {
 			ordered_child = {
 				limit = {
-					is_alive = yes
-					is_adult = yes
-					is_married = no
-					prisoner = no
-					is_male = yes
-					NOT = { this = scope:marriage_bride }
+					is_alive = yes  is_adult = yes  is_married = no  prisoner = no  NOT = { this = scope:marriage_bride }
+					trigger_if = { limit = { scope:pact_senior = { var:marriage_our_child_female = 1 } }  is_female = yes }
+					trigger_else = { is_male = yes }
 				}
 				order_by = age
 				max = 1
 				marry_character = scope:marriage_bride
 				save_scope_as = marriage_groom
 			}
+		}
+	}
+	else_if = {
+		limit = { exists = scope:marriage_bride }
+		ordered_character = {
+			limit = {
+				is_alive = yes  is_adult = yes  is_married = no  prisoner = no
+				from_ruler_family = no
+				NOT = { is_ruler = yes }
+				NOT = { this = scope:marriage_bride }
+				trigger_if = { limit = { scope:pact_senior = { var:marriage_our_child_female = 1 } }  is_female = yes }
+				trigger_else = { is_male = yes }
+			}
+			order_by = age
+			max = 1
+			marry_character = scope:marriage_bride
+			save_scope_as = marriage_groom
 		}
 	}
 	# 3. record the bond + diplomatic payload, but only if the wedding actually happened. The
@@ -280,7 +327,19 @@ MARRIAGE_form_pact = {
 			exists = scope:marriage_bride
 			exists = scope:marriage_groom
 		}
-		MARRIAGE_apply_marriage_bond = { partner = scope:pact_junior }
+		# [#313] RULING-family match = full dynastic payload (bond record + alliance/entente + the union
+		# road, since MARRIAGE_check_unions reads marriage_partners). OTHER-families match ($from_ruler=no)
+		# = a LESSER tie: goodwill opinion only, NOT added to marriage_partners, so NO alliance/union/
+		# inheritance can follow from it.
+		if = {
+			limit = { $from_ruler$ = yes }
+			MARRIAGE_apply_marriage_bond = { partner = scope:pact_junior }
+		}
+		else = {
+			scope:pact_senior = { add_opinion = { modifier = noble_marriage_opmod  target = scope:pact_junior } }
+			scope:pact_junior = { add_opinion = { modifier = noble_marriage_opmod  target = scope:pact_senior } }
+			LOG_line = { sys = MARRIAGE  msg = "lesser (non-ruling) marriage tie formed for" }
+		}
 		# [#311 hook #10] a LOVELESS match: if the wedded pair are badly mismatched in temper
 		# (a wide zeal gap — the fervent-vs-worldly friction the affinity engine already scores),
 		# the union is unhappy and casts a shadow over the senior house's succession. Cheap read
