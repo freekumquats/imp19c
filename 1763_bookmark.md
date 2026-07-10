@@ -417,8 +417,16 @@ churn) and is therefore OUT of the per-region crash-avoiding build scope. It is 
 > **[PARTLY SUPERSEDED 2026-07-09]** The "#230 gate" premise was wrong (static setup, not `create_country`).
 > Of this list: **Vietnam Trịnh/Nguyễn split BUILT** (#282d, `b9432597` — new TRH tag); **Maratha houses
 > already fragmented** at baseline, left as-is (#282e, `fad59f47`); **India ruler accuracy BUILT** (#287,
-> `ad2e7303`, DNA-less). GENUINELY still unbuilt: EIC province-stripping, Bengal-Nawab tag, Sikh misls,
-> Siam capital relocation, insular-sultanate ruler swaps → tracked as task #300.
+> `ad2e7303`, DNA-less).
+> **[#300 UPDATE 2026-07-09]** The remaining Asia items were then built or found already-present:
+> **Bengal-Nawab tag BUILT** (#300 — new BNG tag, Nawab of Bengal/Mir Qasim, 23 Bengal+Bihar provinces
+> stripped out of the EIC and given to sovereign BNG; Calcutta 6219 kept with the EIC per its real 1690
+> Fort William holding — this IS the EIC-province-stripping for the core Bengal case); **Siam capital
+> relocated** to Ayutthaya 3850 (was anachronistic Bangkok 8873, which only became capital in 1782);
+> **Sikh already modeled** — KHL (Khalistan) ships sovereign with 38 punjabi/sikhism provinces, so the
+> "12-misl confederacy unfeasible" note is moot (a consolidated Sikh state already exists). GENUINELY
+> still deferred: broader EIC-stripping beyond Bengal (the other ~130 EIC provinces + subjects AWA/HYD/BNR),
+> insular East-Indies sultanate ruler-identity swaps.
 
 The tractable, crash-relevant delta for this region is the same class as the earlier regions: the
 **unborn-ruler sweep**. Global scan found the only Asian character files carrying `set_as_ruler` wrappers
@@ -483,9 +491,13 @@ mass-spawn gate #230), consistent with the policy applied to the MENA Crimean-Kh
 EIC/Maratha/Vietnam redistributions.
 > **[SUPERSEDED 2026-07-09]** This "documentation-only / zero edits" verdict is STALE — the #230 gate premise
 > was wrong (static setup works). Africa territorial WAS built: **Cape→Dutch (DAF) BUILT** (#282b, `56a89948`)
-> and **Sokoto Caliphate dissolved → Gobir BUILT** (#282c, `957df71b`). GENUINELY still unbuilt: the 6 discrete
-> Hausa city-states (consolidated under GBI instead), Ethiopia ruler Emperor Iyoas I (buildable DNA-less now),
-> Oyo–Dahomey tributary, Omani/Swahili-coast reallocation → tracked as task #300.
+> and **Sokoto Caliphate dissolved → Gobir BUILT** (#282c, `957df71b`).
+> **[#300 UPDATE 2026-07-09]** Remaining Africa items built or found present: **Ethiopia ruler Emperor Iyoas I
+> BUILT** (#300 — new GDR char:737 Iyoas, r.1755-69, amharic/coptic, DNA-less); **Oyo–Dahomey tributary
+> already present** (00_default `first = OYO second = DAH subject_type = tributary` — historically correct
+> 1730s-1820s); **Omani Swahili coast already present** (OMA ships with 9 provinces). Remaining deferred: the
+> 6 DISCRETE Hausa city-states (deliberately consolidated under GBI per the whole-area-approximation ruling,
+> 1763_bookmark.md:689 — not a bug, a scope decision).
 
 ### B8. Central Europe / HRE region build (#237 + #240, 2026-07-09) — SIXTH & LAST full-surgery region
 
@@ -866,17 +878,19 @@ day-offsets from START_DATE 1763.2.16) + localization/english/<ns>_l_english.yml
   1796, Dos de Mayo 1808, Ferdinand VII restoration 1814.
 
 **Scope decisions (documented, not gaps):**
-- **No scripted great-power wars or hard territory cessions.** Fixed-date GP-vs-GP declare_war and cessions
-  across a fully AI-driven 50-year timeline are fragile (border/subject state unpredictable) and are left to
-  engine war resolution, NUDGED by the aggressive_expansion/prestige/stability shifts each beat applies. Only
-  the engine-impossible transformations (govt changes, ruler installs) are hard-scripted (FRA). This keeps the
-  whole set boot-safe. The three Partitions of Poland appear as PRU/AUS/RUS prestige+expansion beats rather
-  than coordinated cross-tag province transfers.
-- **The "+US" dimension:** USA already exists as a province-owning tag at the 1763 bookmark start (pre-existing
-  map state) and already has the #93 usa_section Civil-War arc. A full American-Revolution release mechanic
-  would conflict with that working setup, so the US independence beat is represented from the British side
-  (gbr_empire .2 American War, .3 Loss of America), not as a new USA arc — per the "reasonably accurate, don't
-  over-engineer / don't disrupt a working setup" discipline.
+- **[SUPERSEDED 2026-07-09 by #303 — user directive: "delete this design decision, it is wrong."]** An earlier
+  draft of this note said great-power wars would NOT be scripted (deemed fragile across a 50-year AI timeline)
+  and left them to engine resolution nudged by prestige/expansion shifts. That was my call, not the user's, and
+  is reversed: the great Atlantic-world wars ARE scripted as dated events (#303) using the same scheduled-trigger
+  pattern as #302 (a hidden imp19c_setup.* event fires the war-declaration effect at the historical date):
+  American Revolutionary War (1775, offset 4445), French Revolutionary Wars (1792, 10656), Napoleonic Wars
+  (1803/1805). Built robustly — every belligerent guarded on `exists`, province-anchored wargoals, coalition
+  members via add_to_war — since these fire mid-timeline (not at init) the AI is walking its historical path.
+  The engine-impossible transformations (govt changes, ruler installs) remain scripted in the arcs as before.
+- **The "+US" dimension:** USA exists as a province-owning tag at the 1763 start. Under #289 it is now a GBR
+  client_colony at start (Thirteen Colonies were British in 1763), released to independence by gbr_empire.3
+  (1783 Loss of America); #303 adds the Revolutionary War itself (1775, USA declares independence_wargoal on
+  GBR). The pre-existing #93 usa_section Civil-War arc still fires ~1820 on the released independent USA.
 
 **Validation:** all 18 files BOM/LF; brace balance 0 in all 6 event + 6 on_action files; per-arc event count ==
 seed count; all picture keys defined in common/event_pictures; all trait keys defined; all effect verbs proven
