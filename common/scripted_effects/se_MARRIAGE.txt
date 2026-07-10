@@ -124,7 +124,12 @@ MARRIAGE_pulse = {
 		MARRIAGE_check_betrothals = yes
 		# --- L2: escalate any standing bond whose junior house is now heirless.
 		MARRIAGE_check_unions = yes
-		# --- [#311 hook #2] L2b: let aged dynastic alliances lapse (bond remains, alliance fades).
+		# --- [#324] L2b: the FEMALE-LINE claim — a wedded house whose only heir is a
+		# daughter its own agnatic law bars breeds a pressable inheritance claim for our
+		# line (the #312 succession-law × marriage coupling; a cognatic realm lets her
+		# inherit, so no claim). One grant per partner.
+		MARRIAGE_check_heiress_claim = yes
+		# --- [#311 hook #2] L2c: let aged dynastic alliances lapse (bond remains, alliance fades).
 		MARRIAGE_check_decay = yes
 		# --- [#311 hook #13] recompute our DYNASTIC BLOC WEIGHT (a simple numeric: the land this
 		# bloodline's marriage network commands), so blocs can be ranked against each other.
@@ -412,6 +417,68 @@ MARRIAGE_check_unions = {
 }
 
 # ======================================================================
+# [#324 / #312+#313 heiress-claim coupling] MARRIAGE_check_heiress_claim — L2b.
+# Scope: COUNTRY (senior house). The FEMALE-LINE dimension of the dynastic game, and the
+# concrete payoff of the #312 succession laws: where a wedded junior house has ONLY a
+# DAUGHTER to inherit (a ruler with living daughters but no living son) AND that house's
+# succession law BARS the female line (agnatic_succession_law), the heiress is
+# disinherited at home — and if OUR house married into it, our line carries her claim.
+# This is the Habsburg/Burgundy dynamic: Mary of Burgundy's hand brought the Burgundian
+# inheritance to Maximilian precisely because the Salic bar made her a claim to be pressed,
+# not a queen to be crowned. We grant our house a standing pressable claim on that realm's
+# land, ONCE per partner (guarded by a per-target flag), so a female-line marriage can
+# mature into a war of inheritance.
+#
+# The MIRROR case is handled by ABSENCE: if the junior house runs a female-PERMITTING law
+# (cognatic — the #312 reform), the daughter inherits cleanly at home, so no disinheritance
+# and no claim arises (the branch simply does not fire). Thus the succession LAW a realm
+# adopts concretely changes which marriages breed pressable claims — exactly the coupling
+# #312/#313 deferred. Bounded to one grant per pulse (random_country over our partners).
+#   ROOT / this = the senior (our) house.
+# ======================================================================
+MARRIAGE_check_heiress_claim = {
+	if = {
+		limit = { var:marriage_bond_count > 0 }
+		save_scope_as = heiress_senior
+		random_country = {
+			limit = {
+				NOT = { this = scope:heiress_senior }
+				# wedded to us (proven variable_list membership on the senior)
+				scope:heiress_senior = {
+					is_target_in_variable_list = { name = marriage_partners  target = prev }
+				}
+				exists = current_ruler
+				# the junior house has a DAUGHTER but NO SON to inherit — the heiress case.
+				current_ruler = {
+					any_child = { is_alive = yes  is_female = yes }
+					NOT = { any_child = { is_alive = yes  is_female = no } }
+				}
+				# ...and its law BARS her (agnatic). A cognatic realm lets her inherit -> no claim.
+				has_law = agnatic_succession_law
+				# not already granted a claim on this house's inheritance (once per partner).
+				# [#324 review-fix] the marriage_heiress_claimed list lives on the SENIOR (it is
+				# written on the senior at the grant below), so the membership test MUST re-enter
+				# the senior's scope — exactly like the marriage_partners test above. Read at the
+				# bare candidate scope it inspected the JUNIOR's (never-written) list and the NOT
+				# always passed, leaking a duplicate + re-firing the claim every pulse.
+				scope:heiress_senior = {
+					NOT = { is_target_in_variable_list = { name = marriage_heiress_claimed  target = prev } }
+				}
+			}
+			save_scope_as = heiress_junior
+		}
+		if = {
+			limit = { exists = scope:heiress_junior }
+			# record the grant so it fires once per partner, then press the claim on the
+			# heiress's realm (the proven claim-grant path shared with the succession-war hook).
+			add_to_variable_list = { name = marriage_heiress_claimed  target = scope:heiress_junior }
+			MARRIAGE_press_succession_claim = { realm = scope:heiress_junior }
+			LOG_line = { sys = MARRIAGE  msg = "female-line heiress barred by agnatic law -> our house presses her inheritance claim" }
+		}
+	}
+}
+
+# ======================================================================
 # MARRIAGE_on_ruler_death_union — L3. Scope: CHARACTER (a ruler who just died).
 # Called from on_character_death. If the dead ruler headed a royal_union junior we
 # created by marriage (marriage_union_junior) AND that junior is now truly extinct
@@ -532,6 +599,12 @@ MARRIAGE_on_ruler_death_union = {
 							if = {
 								limit = { is_target_in_variable_list = { name = marriage_alliance_partners  target = scope:union_dying_realm } }
 								remove_list_variable = { name = marriage_alliance_partners  target = scope:union_dying_realm }
+							}
+							# [#324] and the heiress-claim once-guard, so the dead realm leaves no stale
+							# entry (harmless, but keeps the list clean and lets a future bond re-trigger).
+							if = {
+								limit = { is_target_in_variable_list = { name = marriage_heiress_claimed  target = scope:union_dying_realm } }
+								remove_list_variable = { name = marriage_heiress_claimed  target = scope:union_dying_realm }
 							}
 						}
 					}

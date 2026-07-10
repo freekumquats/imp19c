@@ -109,5 +109,18 @@ Branch: **overnight-312-315-audits** (off `1763_bookmark`). Autonomous run.
 
 ---
 
+### #324 — Heiress-claim coupling (the #312/#313 shared deferral, NOW BUILT + reviewed)
+- **CONTEXT:** #312 and #313 both deferred "female-line law × marriage → pressable claim, needs a claim-generation layer." On investigation that layer LARGELY EXISTED (se_MARRIAGE.txt already has MARRIAGE_grant_dowry_claim, MARRIAGE_press_succession_claim, MARRIAGE_on_ruler_death_union inheritance). The real gap was wiring the #312 succession LAW into WHEN a marriage breeds a claim.
+- Built `MARRIAGE_check_heiress_claim` (se_MARRIAGE.txt L2b, wired into MARRIAGE_pulse): where a wedded junior house's only heir is a DAUGHTER its own `agnatic_succession_law` bars (living daughter, no living son), our line carries her disinherited claim — the Habsburg/Burgundy dynamic. Grants a pressable claim (via the existing MARRIAGE_press_succession_claim) once per partner (marriage_heiress_claimed once-guard list). The MIRROR is by ABSENCE: a cognatic realm (the #312 reform) lets the daughter inherit, so no claim fires — the law concretely changes which marriages breed claims. Once-guard pruned in the union-death teardown loop alongside marriage_partners/alliance_partners.
+- Runs AI-side too (like MARRIAGE_check_unions) — enriches AI dynastic wars, consistent with the existing union layer.
+- **ADVERSARIAL REVIEW (4-agent workflow w58qvf60b) — 1 MAJOR (both reviewers, independently), FIXED:**
+  - **MAJOR (FIXED):** the once-per-partner dedup guard read `is_target_in_variable_list` at the bare CANDIDATE (junior) scope, but the list lives on the SENIOR — so it inspected the junior's never-written list, the NOT always passed, and every ~5yr pulse re-appended a duplicate + re-fired the claim (unbounded list leak + log spam; add_claim idempotent so no war runaway). **FIX:** wrapped the read in `scope:heiress_senior = { ... target = prev }`, exactly mirroring the proven marriage_partners membership test three lines above.
+
+### Other #312/#313/#315 deferrals — CONFIRMED as deliberate design (not build gaps)
+- **Egyptian / agnatic-seniority / elective succession tiers (#312):** out of scope — task was female-line only; a separate feature, not a defect.
+- **CHI-only reform GUI (#312):** intentional — the laws are engine-wide so `change_law` is valid, but only the Qing have a player surface; confirmed correct by the #312 review.
+- **AI never uses the filter / non-ruling marriage paths (#313):** correct by design (`ai_is_valid = no`) — these are player-GUI affordances.
+- **No southern-fleet unit spawn (#315):** deliberate concrete-over-abstract choice matching the sibling colonization branches (add_claim + migration-pull, no bespoke fleet).
+
 ## Run summary
 All mandated tasks COMPLETE on branch `overnight-312-315-audits` (unpushed, per branch policy — develop is the push target, but this is a dedicated overnight branch): #312, #313, #315 (pre-existing commit), plus the Top-3 build candidates #321 (Exam hire-pool), #322 (Tributary embassies), #323 (Canal grain logistics). Each was built as a reviewed vertical slice, ran a deep adversarial Workflow review after completion, and had every CONFIRMED finding fixed before commit. All standing rules honoured (freekumquats identity, byte conventions, se_LOG wiring, oracle-verified idioms, concrete-over-abstract). DEFERRED pieces are logged per-task above. Boot-test still OWED (no in-game verification performed this run).
