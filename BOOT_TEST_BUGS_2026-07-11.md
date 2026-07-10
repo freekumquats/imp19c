@@ -106,13 +106,49 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 - **CONTROL (works):** the SAME fix pattern DID take for the **USA** — Madison/Jefferson no longer appear (correctly de-seated). So the ruler-fix mechanism works in general; it is failing specifically for RUS.
 - **Code state (1763_bookmark, looks CORRECT on paper):** `setup/characters/00_Russian Empire.txt` char:144 = "Yekaterina II 'the Great'", birth 1729 / death 1796 (alive at 1763.2.16), with a `c:RUS = { set_as_ruler = char:144 }` block inside her definition (added by #320 / commit `33d45d36`). char:147 = Aleksandr I, birth **1777** (unborn at 1763).
 - **THE TELL:** an **infant Aleksandr I (b.1777) cannot exist at a 1763 start from data alone** — his appearing means either (a) the whole RUS character block is being read against a LATER date context / a different setup path is overriding it, or (b) `set_as_ruler` here is not taking and the engine is falling back to its own generated line (Bulganin) plus surfacing Aleksandr from somewhere. This is NOT explicable by the character data, which is correct.
-- **LEADS (needs runtime diagnosis — do NOT just re-edit the char file, it looks right):**
-  1. **Is char:144's `set_as_ruler` actually the winning setup path?** Grep for OTHER places RUS's ruler is set — `setup/main/00_default.txt`, a `create_country`/`history` block, `setup/countries/e_europe/russia.txt`, or a `RUS = { ... ruler = }` elsewhere. #240 "removed the unborn Aleksandr as ruler but left none set" — confirm there isn't a SECOND stale reference re-seating Aleksandr (b.1777) that runs AFTER char:144's block. The infant-Aleksandr symptom strongly implies a surviving `set_as_ruler = char:147` (or an `1777` ruler-history entry) somewhere.
-  2. **Date/effective_date:** does the RUS setup or Aleksandr's char entry carry an `effect_date`/history date that the engine applies regardless of the 1763 bookmark? Check whether Aleksandr's block has a ruler-history line.
-  3. **Confirm char:144 loads at all** — a syntax error or a mismatched brace earlier in `00_Russian Empire.txt` could make the engine skip her block (and thus the set_as_ruler), falling back to a placeholder. Brace-check the whole file.
-  4. **error.log / debug.log** for RUS setup — a "set_as_ruler failed / char not found / dead character" line would pin it.
-- **Severity:** MAJOR (a major power has the wrong head of state at start — also feeds B12: a placeholder ruler is childless, emptying the marriage market).
-- **Compare to FRA/GBR/TUR:** the user has NOT yet reported on France (Louis XV), GB (George III), or the Ottomans (Abdul Hamid I) — CHECK THOSE TOO. If RUS is the only failure, it's a RUS-specific stale reference; if FRA/GBR also fail, the whole B1/B2 fix has a systemic problem (only USA's DE-SEAT took because de-seating needs no set_as_ruler).
+- **✅ ROOT CAUSE FOUND + FIXED (via error.log). It was SYSTEMIC, not RUS-specific.** error.log:
+  `set_as_ruler effect [ Target Character ... Yekaterina II ... ( ID: 144 ) is not alive ]`. The SAME
+  error fires for **Louis XV (FRA 406), Qianlong (CHI 214), Abdul Hamid (TUR 42)** — every historical
+  ruler I seated via in-block `set_as_ruler` who carries a `death_date`. **The engine's setup snapshot
+  treats ANY character bearing a `death_date` as already-dead when it evaluates `set_as_ruler`** — even
+  though the death_date (1774/1796/1799/1789) is AFTER the 1763.2.16 start. So the effect no-ops and the
+  engine auto-generates a placeholder line (Bulganin) + surfaces the next historical Romanov (the b.1777
+  Aleksandr) as the heir. Confirmed idiom: **0 of 94 Invictus setup rulers carry a death_date** — a setup
+  ruler must NOT have one; natural death is handled by the age/history system after load. **FIX:** removed
+  the `death_date` field from all four ruler blocks (RUS 144, FRA 406, CHI 214, TUR 42). Runtime was
+  correctly 1763 (the High Qing garrison branch `current_date < 1772.1.1` fired), so this was purely the
+  death_date-in-setup rule, NOT a stale 1815 clock.
+- **NOTE (why USA worked):** USA needed a DE-seat (remove Madison/Jefferson), which needs no `set_as_ruler`
+  — that's why it took while the four death_dated rulers silently failed.
+- **Severity:** MAJOR — RESOLVED for RUS/FRA/CHI/TUR (pending boot-test). Also unblocks B12 (a real ruler now
+  loads with real children for the marriage market). **A SEPARATE bug (ID-range, see below) still leaves
+  Poland's ruler unseated.**
+
+---
+
+## NEW-B27 (from logs) — setup character ID-range violations leave ~28 chars UNCREATED (incl. Poland's ruler)
+- **Observed (error.log):** `Character 730 in country POL should have id 572 or use create_character` — and 27 more:
+  **CHI 700–729** (the anachronistic-figure roster), **POL 730, MRT 731, HYD 732, MYS 733, AWA 734, MLB 735,
+  ERI 736, GDR 737, MEX 9232**. For each, the engine then throws `Failed to scope to character via ID 'N'`
+  → `set_as_ruler [ target was null ]` (Poland line 19).
+- **ROOT CAUSE:** the setup character loader assigns IDs from a **running global counter per country**; a
+  hand-written id that exceeds the country's next-expected slot is **rejected — the character is NEVER
+  created**. So any `set_as_ruler = char:730` (POL) scopes to null and POL falls back to an engine-gen ruler.
+  This is distinct from the death_date bug: 730 dies 1763.10.05 (8 months AFTER start, i.e. alive at start)
+  yet still fails — because it was never instantiated, not because it's "dead".
+- **Scope of impact:** POL loses its historical ruler (Augustus III). The CHI 700–729 block is the
+  anachronistic-spawn roster (characters summoned later by event) — if those are meant to be created at
+  runtime via `create_character`, they should NOT be in setup at all; if meant to exist at start, they need
+  in-range ids. MRT/HYD/MYS/AWA/etc. (Indian states) + MEX 9232 similarly lose seated characters.
+- **FIX (NOT done this pass — larger structural change, needs care):** either (a) renumber these characters
+  into their country's allocated id block (fragile — must match the exact expected counter), or (b) move the
+  ones that are meant to be spawned-later out of setup and into a `create_character` in the relevant event
+  (the engine's own suggested remedy: "or use create_character"). Poland's ruler (730) should be renumbered
+  to an in-range id so `set_as_ruler` resolves. **Deferred — flag for user: this is a separate work item from
+  the death_date ruler fix, touches many files, and the CHI 700–729 roster needs a design decision (setup vs
+  event-spawn).**
+- **Severity:** MAJOR for POL (wrong ruler); MEDIUM overall (mostly anachronistic-roster chars that may be
+  event-spawned anyway — needs confirmation).
 
 ---
 
@@ -122,9 +158,14 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 - **So this is a DESIGN CHOICE reading as a bug:** TKG was intentionally left to engine-gen (no real 1763 shogun was seated). The fix is a JUDGEMENT CALL:
   - **(a)** Accept engine-gen (as designed) — but then it will occasionally draw jarring real-historical names. Acceptable if TKG is minor/background.
   - **(b)** Seat the HISTORICAL 1763 shogun — **Tokugawa Ieharu** (10th shogun, r.1760-1786) — as a proper character with `set_as_ruler`, the same fix pattern as RUS/FRA. This is the correct historical answer (Japan is a real 1763 power and the Bakumatsu arc #94 cares about the shogunate). RECOMMENDED.
-- **File(s):** `setup/characters/00_Japan.txt` (add Tokugawa Ieharu, b.1737 d.1786, + `c:TKG = { set_as_ruler = char:X }`).
-- **Severity:** MINOR (cosmetic anachronism; TKG functions, just mis-named) — but easy to fix properly and Japan is a significant power for the arc content.
-- **NOTE:** the RUS "Bulganin" placeholder is the SAME engine-gen mechanism (random name from the russian namelist), BUT RUS is a genuine bug because it HAS a `set_as_ruler = char:144` that should have overridden the engine-gen and didn't. Japan has no such override to fail — it was never seated. Two different situations sharing a symptom.
+- **✅ FIXED — option (b).** Repurposed the existing in-range `char:356` block (was the unborn Ienari,
+  b.1773) into the actual 1763 shogun **Tokugawa Ieharu** (家治, 10th shogun, r.1760–1786, b.1737) and
+  added `c:TKG = { set_as_ruler = char:356 }`. Carries **NO death_date** (per the RUS/FRA rule — a setup
+  ruler with a death_date reads as already-dead). Reused char:356 rather than adding a new id to avoid the
+  setup ID-range rule (see the ID-range bug below); succession seats the historical successors after his
+  natural death via the age system.
+- **File(s):** `setup/characters/00_Japan.txt` char:356.
+- **Severity:** MINOR — RESOLVED (pending boot-test).
 
 ---
 
