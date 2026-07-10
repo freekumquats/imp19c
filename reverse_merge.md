@@ -459,3 +459,32 @@ Isolated from the big Qing batch (marriage files don't overlap it) — will get 
 - **GUI review:** 0 findings — all 3 dimensions (load-crash, loc-refs, runtime/scope) returned clean before
   verification. The window, candidate-list builder, entry button, and loc are proven-idiom and internally
   consistent (braces balanced, var names match builder↔window, all 3 row-button GUIs have saved_scopes={target}).
+
+### #311 betrothal REWORK (user, post-commit — new work on 1763_bookmark) — all **[MECH]**
+The betrothal was a bare country-level goodwill pledge that never matured. Reworked into a real child
+betrothal per the user's spec: "promise two children will marry upon reaching adulthood, serious penalty
+for breaking, but not if one child dies"; "betrothal must not create an alliance itself, only improve
+relations in anticipation"; "great powers can't ally in vanilla — marriages must work around it"; "include
+betrothals + eligible children in the UI".
+- **`se_MARRIAGE.txt`**: `MARRIAGE_betroth` now binds two SPECIFIC children (minors allowed — the point),
+  each getting a character var `betrothed_to_char` (→ partner child) + `betrothed_partner_country` (the
+  proven TI `set_variable value=scope:X days=N` idiom, propose_marriage.txt); it applies ONLY the
+  betrothal goodwill opinion — NO alliance (relations warm in anticipation). New `MARRIAGE_check_betrothals`
+  (in the pulse) matures a pledge → marriage once BOTH children are adult+unwed, or dissolves it with NO
+  penalty if a betrothed child died. New helpers: `MARRIAGE_mature_betrothal`, `MARRIAGE_dissolve_betrothal`,
+  `MARRIAGE_clear_country_betrothal`, and `MARRIAGE_apply_marriage_bond` (the shared country-level payload,
+  extracted from form_pact so maturation reuses it). `MARRIAGE_repudiate` now only penalises a WILFUL break
+  (both children alive) and cleans the child-level vars.
+- **GP-alliance workaround** [user]: `MARRIAGE_apply_marriage_bond` branches — a real `add_alliance` ONLY
+  when neither house is `rank = great_power`; when a GP is involved it lays down a NEW `royal_marriage_entente`
+  country modifier on both courts (diplomatic_relations +1, global_defensive +0.05, diplomatic_reputation +1)
+  — the bond that works around the engine's hardcoded GP no-alliance rule. `MARRIAGE_check_decay` now strips
+  the entente OR breaks the alliance (whichever applies) when the shared 30-yr timer lapses.
+- **Death hook**: `on_character_death` (00_specific_from_code.txt) dissolves a dead betrothed child's pledge
+  with no penalty, releasing the partner child.
+- **UI** [user]: `marriage_open_candidates` now lists houses with any BETROTHABLE child (not only marriageable
+  adults) and caches per-candidate `marriage_display_adult_children` / `_child_count` / `_wed` / `_betrothed`;
+  `marriage_window.gui` gained a per-row line showing the children counts + a Wed/Betrothed status tag;
+  `marriage_action_betroth` gained a betrothable-child gate. New modifier + loc keys (royal_marriage_entente,
+  MARRIAGE_WINDOW_CHILDREN_*, MARRIAGE_WINDOW_STATUS_*, marriage_action_needs_betrothable_child_tt).
+- Owes its OWN adversarial review before commit (not yet run).

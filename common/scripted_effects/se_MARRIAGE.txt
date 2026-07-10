@@ -119,6 +119,9 @@ MARRIAGE_pulse = {
 				MARRIAGE_form_pact = { partner = scope:marriage_partner_realm }
 			}
 		}
+		# --- [#betrothal-rework] L1b: mature standing child betrothals (wed the pair once both are
+		# adult) or dissolve them without penalty if a betrothed child has died.
+		MARRIAGE_check_betrothals = yes
 		# --- L2: escalate any standing bond whose junior house is now heirless.
 		MARRIAGE_check_unions = yes
 		# --- [#311 hook #2] L2b: let aged dynastic alliances lapse (bond remains, alliance fades).
@@ -127,6 +130,91 @@ MARRIAGE_pulse = {
 		# bloodline's marriage network commands), so blocs can be ranked against each other.
 		MARRIAGE_recompute_bloc_weight = yes
 		LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_pulse"  result = OK }
+	}
+}
+
+# ======================================================================
+# [#betrothal-rework] MARRIAGE_apply_marriage_bond — the shared COUNTRY-level marriage payload:
+# record the per-partner bond both ways, seal a formal alliance for a peace-time match, pay the
+# dowry, and (for a deep bond) grant the dowry claim. Call in the SENIOR country scope; $partner$ =
+# the junior COUNTRY. Extracted so BOTH a fresh marriage (MARRIAGE_form_pact) and a matured betrothal
+# (MARRIAGE_mature_betrothal) apply an identical bond. Assumes the wedding (marry_character) already
+# happened; the caller owns the char-specific loveless check.
+# ======================================================================
+MARRIAGE_apply_marriage_bond = {
+	save_scope_as = bond_senior
+	$partner$ = { save_scope_as = bond_junior }
+	# per-partner bond via the proven variable_list idiom, both directions, so the pair never double-weds.
+	scope:bond_senior = {
+		MARRIAGE_init = yes
+		if = {
+			limit = { NOT = { is_target_in_variable_list = { name = marriage_partners  target = scope:bond_junior } } }
+			add_to_variable_list = { name = marriage_partners  target = scope:bond_junior }
+			change_variable = { name = marriage_bond_count  add = 1 }
+			add_opinion = { modifier = royal_marriage_opmod  target = scope:bond_junior }
+		}
+	}
+	scope:bond_junior = {
+		MARRIAGE_init = yes
+		if = {
+			limit = { NOT = { is_target_in_variable_list = { name = marriage_partners  target = scope:bond_senior } } }
+			add_to_variable_list = { name = marriage_partners  target = scope:bond_senior }
+			change_variable = { name = marriage_bond_count  add = 1 }
+			add_opinion = { modifier = royal_marriage_opmod  target = scope:bond_senior }
+		}
+	}
+	# a strong dynastic match (not already allied, both at peace) seals a bond — BUT in Imperator
+	# vanilla a GREAT POWER cannot hold ordinary alliances (engine-hardcoded rank restriction). So we
+	# branch [user]: if NEITHER house is a great power, seal the real formal alliance (the Coburg
+	# pattern); if EITHER is a great power, lay down the royal_marriage_entente modifier on both courts
+	# instead — the diplomatic-warmth + mutual-defence bond that works around the no-alliance rule.
+	# Both paths stamp the SAME self-expiring 30-yr timer + tracking list, so MARRIAGE_check_decay
+	# lapses them uniformly when the generation passes.
+	if = {
+		limit = {
+			NOT = { scope:bond_senior = { alliance_with = scope:bond_junior } }
+			scope:bond_senior = { NOT = { at_war = yes } }
+			scope:bond_junior = { NOT = { at_war = yes } }
+		}
+		if = {
+			# neither party a great power → a real formal alliance is allowed.
+			limit = {
+				scope:bond_senior = { NOT = { rank = great_power } }
+				scope:bond_junior = { NOT = { rank = great_power } }
+			}
+			scope:bond_senior = { add_alliance = scope:bond_junior }
+			LOG_line = { sys = MARRIAGE  msg = "pact sealed with a formal alliance (30-yr dynastic bond)" }
+		}
+		else = {
+			# a great power is involved → the entente workaround (no formal alliance possible).
+			# [#betrothal-review B19 fix] guard against STACKING — add_country_modifier stacks, so a
+			# repeat match with the same great-power house would pile up duplicate entente modifiers.
+			# Apply only when not already present (mirrors the guarded marriage_partners bond-record above).
+			if = {
+				limit = { scope:bond_senior = { NOT = { has_country_modifier = royal_marriage_entente } } }
+				scope:bond_senior = { add_country_modifier = { name = royal_marriage_entente  duration = -1 } }
+			}
+			if = {
+				limit = { scope:bond_junior = { NOT = { has_country_modifier = royal_marriage_entente } } }
+				scope:bond_junior = { add_country_modifier = { name = royal_marriage_entente  duration = -1 } }
+			}
+			LOG_line = { sys = MARRIAGE  msg = "pact sealed with a dynastic ENTENTE (great power cannot ally; 30-yr bond)" }
+		}
+		# [#311 hook #2] the bond is DYNASTIC — it fades with the generation that made it: stamp a
+		# self-expiring 30-yr timer + record it (both ways) so MARRIAGE_check_decay lapses it (breaking
+		# the alliance OR stripping the entente) unless a fresh marriage renews it.
+		scope:bond_senior = { set_variable = { name = marriage_alliance_timer  days = 10950 } }
+		scope:bond_junior = { set_variable = { name = marriage_alliance_timer  days = 10950 } }
+		scope:bond_senior = { add_to_variable_list = { name = marriage_alliance_partners  target = scope:bond_junior } }
+		scope:bond_junior = { add_to_variable_list = { name = marriage_alliance_partners  target = scope:bond_senior } }
+	}
+	# [#311 hook #3] the DOWRY — a patrimonial transaction, not just a bond. Development capital flows
+	# to the senior (the bride's portion; Catherine of Braganza / the Farnese portion). Once per pact.
+	scope:bond_senior = { CURRENCY_grant_country_wealth = { thousands = 30 } }
+	# a deep bond may carry a territorial claim in the contract (Burgundy→Maximilian).
+	if = {
+		limit = { scope:bond_senior = { has_variable = marriage_bond_count  var:marriage_bond_count >= 2 } }
+		scope:bond_senior = { MARRIAGE_grant_dowry_claim = { from = scope:bond_junior } }
 	}
 }
 
@@ -183,67 +271,16 @@ MARRIAGE_form_pact = {
 			}
 		}
 	}
-	# 3. record the bond (both directions) and apply the diplomatic payload, but only
-	#    if the wedding actually happened (both scopes exist).
+	# 3. record the bond + diplomatic payload, but only if the wedding actually happened. The
+	#    country-level payload (bond record, alliance, dowry) is the shared MARRIAGE_apply_marriage_bond
+	#    helper (reused by betrothal maturation); the CHAR-specific loveless check stays here where the
+	#    two wedded character scopes are available.
 	if = {
 		limit = {
 			exists = scope:marriage_bride
 			exists = scope:marriage_groom
 		}
-		# per-partner bond via the proven variable_list idiom, both directions, so
-		# the pair never double-weds.
-		scope:pact_senior = {
-			add_to_variable_list = { name = marriage_partners  target = scope:pact_junior }
-			change_variable = { name = marriage_bond_count  add = 1 }
-			add_opinion = { modifier = royal_marriage_opmod  target = scope:pact_junior }
-		}
-		scope:pact_junior = {
-			MARRIAGE_init = yes
-			add_to_variable_list = { name = marriage_partners  target = scope:pact_senior }
-			change_variable = { name = marriage_bond_count  add = 1 }
-			add_opinion = { modifier = royal_marriage_opmod  target = scope:pact_senior }
-		}
-		# a strong dynastic match (not already allied to us, both at peace) seals a
-		# formal alliance — the Coburg pattern. add_alliance is symmetric.
-		if = {
-			limit = {
-				NOT = { scope:pact_senior = { alliance_with = scope:pact_junior } }
-				scope:pact_senior = { NOT = { at_war = yes } }
-				scope:pact_junior = { NOT = { at_war = yes } }
-			}
-			scope:pact_senior = { add_alliance = scope:pact_junior }
-			# [#311 hook #2] the alliance is a DYNASTIC bond that fades with the generation that
-			# made it: stamp a self-expiring timer (30 game-years). MARRIAGE_check_decay reads it
-			# and lets the alliance lapse once the timer runs out unless a fresh marriage renews it.
-			scope:pact_senior = { set_variable = { name = marriage_alliance_timer  days = 10950 } }
-			scope:pact_junior = { set_variable = { name = marriage_alliance_timer  days = 10950 } }
-			# [#311 engine-review fix] Record that WE created this alliance, in a dedicated list.
-			# Decay must break ONLY marriage-created alliances — NOT a pre-existing/independent
-			# alliance with a house we happen to also wed. Previously decay inferred "expired" from
-			# the mere ABSENCE of marriage_alliance_timer; but if the couple wed while ALREADY allied
-			# (or at war), this branch is skipped, no timer is ever set, yet bond_count>0 — so on the
-			# next pulse decay's "no timer" limit was true and it broke the unrelated alliance. Now
-			# decay iterates this list (not marriage_partners), so an alliance we did not create is
-			# never touched. Both directions, mirroring the alliance + timer.
-			scope:pact_senior = { add_to_variable_list = { name = marriage_alliance_partners  target = scope:pact_junior } }
-			scope:pact_junior = { add_to_variable_list = { name = marriage_alliance_partners  target = scope:pact_senior } }
-			LOG_line = { sys = MARRIAGE  msg = "pact sealed with a formal alliance (30-yr dynastic bond)" }
-		}
-		# [#311 hook #3] the DOWRY — a marriage was a patrimonial transaction, not just a bond.
-		# The junior house brings development capital to the senior (the bride's portion). Modest,
-		# once per pact. Grounded in the contract-dowry norm (Catherine of Braganza, the Farnese
-		# portion). Uses the currency public interface so it flows through the economy layer.
-		scope:pact_senior = { CURRENCY_grant_country_wealth = { thousands = 30 } }
-		# a STRONG match (the two houses already share the closest goodwill) may also carry a
-		# territorial claim in the contract — the road by which marriages moved provinces
-		# (Burgundy to Maximilian). Modelled as a pressable claim on ONE of the junior's border
-		# provinces adjacent to the senior, guarded so it only fires for a genuinely deep bond.
-		if = {
-			limit = {
-				scope:pact_senior = { has_variable = marriage_bond_count  var:marriage_bond_count >= 2 }
-			}
-			scope:pact_senior = { MARRIAGE_grant_dowry_claim = { from = scope:pact_junior } }
-		}
+		MARRIAGE_apply_marriage_bond = { partner = scope:pact_junior }
 		# [#311 hook #10] a LOVELESS match: if the wedded pair are badly mismatched in temper
 		# (a wide zeal gap — the fervent-vs-worldly friction the affinity engine already scores),
 		# the union is unhappy and casts a shadow over the senior house's succession. Cheap read
@@ -515,31 +552,286 @@ MARRIAGE_forge_bridge = {
 }
 
 # ======================================================================
-# [#311 hook #15] MARRIAGE_betroth — a BETROTHAL: a pledged-but-not-yet-consummated match. Binds
-# the two houses with a lighter goodwill than a full marriage, and ARMS the repudiation-insult
-# hook: breaking it later is a grave affront. Call in the PROPOSER country scope; $other$ = the
-# partner COUNTRY. Records a per-partner betrothal bond both ways (marriage_betrothed list).
-# Historically the arranged childhood betrothal (Marie-Antoinette pledged years before 1770).
+# [#311 hook #15 / #betrothal-rework] MARRIAGE_betroth — a CHILD BETROTHAL: a binding pledge that
+# two SPECIFIC children (who may be MINORS) will wed once BOTH reach adulthood. Historically the
+# arranged childhood betrothal (Marie-Antoinette pledged years before her 1770 wedding). Unlike a
+# marriage, this can be pledged for children not yet of age — that IS the point.
+#
+# Call in the PROPOSER country scope; $other$ = the partner COUNTRY. We pick one eligible child of
+# each ruling house (opposite sex; the senior house supplies the GROOM, the partner the BRIDE — the
+# same senior=groom convention MARRIAGE_form_pact uses) and bind them:
+#   • each child gets a CHARACTER var betrothed_to_char pointing at the partner child (the proven TI
+#     `set_variable value=scope:X days=N` idiom — a self-expiring cross-character reference), and a
+#     betrothed_partner_country var, so the maturation checker + death handler can find the pair.
+#   • the COUNTRY-level marriage_betrothed list + royal_betrothal_opmod goodwill are kept (they drive
+#     the diplomacy UI / repudiation-insult exactly as before).
+# If either house cannot field an eligible child the pledge is a no-op (logged). Maturation into an
+# actual marriage is handled by MARRIAGE_check_betrothals (from the pulse); a child's death dissolves
+# it WITHOUT penalty (an act of God), also in that checker.
 # ======================================================================
 MARRIAGE_betroth = {
 	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_betroth" }
 	MARRIAGE_init = yes
 	save_scope_as = betroth_home
-	if = {
-		limit = { NOT = { is_target_in_variable_list = { name = marriage_betrothed  target = $other$ } } }
-		add_to_variable_list = { name = marriage_betrothed  target = $other$ }
-		add_opinion = { modifier = royal_betrothal_opmod  target = $other$ }
-	}
-	$other$ = {
-		MARRIAGE_init = yes
-		if = {
-			limit = { NOT = { is_target_in_variable_list = { name = marriage_betrothed  target = scope:betroth_home } } }
-			add_to_variable_list = { name = marriage_betrothed  target = scope:betroth_home }
-			add_opinion = { modifier = royal_betrothal_opmod  target = scope:betroth_home }
+	$other$ = { MARRIAGE_init = yes  save_scope_as = betroth_other }
+	# 1. a betrothable child of the PARTNER house (the bride side): from the ruling family, alive,
+	#    unwed, free, not already betrothed. MINORS ALLOWED (no is_adult gate) — the whole point.
+	scope:betroth_other = {
+		current_ruler = {
+			ordered_child = {
+				limit = {
+					is_alive = yes
+					is_married = no
+					prisoner = no
+					is_female = yes
+					NOT = { has_variable = betrothed_to_char }
+				}
+				order_by = age
+				max = 1
+				save_scope_as = betroth_bride
+			}
 		}
 	}
-	LOG_line = { sys = MARRIAGE  msg = "a betrothal was pledged between two houses" }
+	# 2. a betrothable child of OUR house (the groom side), guarded on the bride being found.
+	if = {
+		limit = { exists = scope:betroth_bride }
+		current_ruler = {
+			ordered_child = {
+				limit = {
+					is_alive = yes
+					is_married = no
+					prisoner = no
+					is_male = yes
+					NOT = { has_variable = betrothed_to_char }
+					NOT = { this = scope:betroth_bride }
+				}
+				order_by = age
+				max = 1
+				save_scope_as = betroth_groom
+			}
+		}
+	}
+	# 3. bind the pair + record the country-level pledge, only if BOTH children were found.
+	if = {
+		limit = {
+			exists = scope:betroth_bride
+			exists = scope:betroth_groom
+		}
+		# --- character-level bond: each child points at the other + at the partner COUNTRY.
+		#     Self-expiring after 40 years (a betrothal that never matures lapses quietly).
+		scope:betroth_groom = {
+			set_variable = { name = betrothed_to_char        value = scope:betroth_bride  days = 14600 }
+			set_variable = { name = betrothed_partner_country value = scope:betroth_other  days = 14600 }
+		}
+		scope:betroth_bride = {
+			set_variable = { name = betrothed_to_char        value = scope:betroth_groom  days = 14600 }
+			set_variable = { name = betrothed_partner_country value = scope:betroth_home   days = 14600 }
+		}
+		# --- [#betrothal-review B18 fix] RULER-INDEPENDENT anchor: record OUR betrothed child on a
+		#     COUNTRY-level list so the pledge survives a SUCCESSION. Previously the child was re-found
+		#     only via current_ruler.ordered_child — but a betrothal binds MINORS for years, so when the
+		#     home ruler dies mid-wait the child is no longer current_ruler's child (it is a sibling of
+		#     the new ruler, or IS the new ruler), the lookup found nothing, and the pledge was spuriously
+		#     dissolved as if the child had died / could never mature. Each house stores its OWN betrothed
+		#     child here; the checker/dissolve/repudiate resolve the child through this list (guarded
+		#     is_alive), never through the ruler. betroth_home stores its groom; betroth_other its bride.
+		scope:betroth_home  = { add_to_variable_list = { name = betrothed_children  target = scope:betroth_groom } }
+		scope:betroth_other = { add_to_variable_list = { name = betrothed_children  target = scope:betroth_bride } }
+		# --- country-level bond both ways: the diplomacy pledge + betrothal goodwill (as before).
+		if = {
+			limit = { NOT = { is_target_in_variable_list = { name = marriage_betrothed  target = scope:betroth_other } } }
+			add_to_variable_list = { name = marriage_betrothed  target = scope:betroth_other }
+			add_opinion = { modifier = royal_betrothal_opmod  target = scope:betroth_other }
+		}
+		scope:betroth_other = {
+			if = {
+				limit = { NOT = { is_target_in_variable_list = { name = marriage_betrothed  target = scope:betroth_home } } }
+				add_to_variable_list = { name = marriage_betrothed  target = scope:betroth_home }
+				add_opinion = { modifier = royal_betrothal_opmod  target = scope:betroth_home }
+			}
+		}
+		LOG_line = { sys = MARRIAGE  msg = "a child betrothal was pledged (two specific children bound to wed at adulthood)" }
+	}
+	else = {
+		LOG_fail = { sys = MARRIAGE  msg = "betrothal no-op: a house could not field an eligible child" }
+	}
 	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_betroth"  result = OK }
+}
+
+# ======================================================================
+# [#betrothal-rework] MARRIAGE_check_betrothals — mature or dissolve standing child betrothals.
+# Called from MARRIAGE_pulse (country scope, the home realm). For each partner in our
+# marriage_betrothed list, find the betrothed CHILD PAIR (via the betrothed_to_char character vars)
+# and act:
+#   • BOTH children alive + adult + unwed  → MARRY them (the pledge is kept: convert to a full
+#     marriage bond via MARRIAGE_form_pact's payload), clear the betrothal cleanly.
+#   • either child DEAD/absent            → dissolve the betrothal with NO penalty (an act of God,
+#     per the design: "not if one child dies"); clear the country pledge + the surviving child's var.
+#   • otherwise (still minors)            → leave the pledge standing.
+# Bounded: iterates our own betrothal list (cap 3-ish) and, per entry, our ruler's children. O(1)
+# amortised. We locate OUR betrothed child by matching its betrothed_partner_country to the partner.
+# ======================================================================
+MARRIAGE_check_betrothals = {
+	if = {
+		limit = { has_variable_list = marriage_betrothed }
+		save_scope_as = betroth_check_home
+		every_in_list = {
+			variable = marriage_betrothed
+			save_scope_as = betroth_check_partner
+			# NOTE: inside this every_in_list the SCOPE is the listed PARTNER country. All HOME-side
+			# operations must run inside scope:betroth_check_home explicitly.
+			scope:betroth_check_home = {
+				# [#betrothal-review B18 fix] clear any stale flag from a PRIOR partner iteration, so a
+				# partner with no matching child below cannot inherit the previous partner's child.
+				remove_variable = betroth_our_child_found
+				# find OUR betrothed child pledged to THIS partner via the RULER-INDEPENDENT betrothed_children
+				# list (survives succession — the child may no longer be current_ruler's offspring). Match on
+				# the child's own betrothed_partner_country pointer + still alive.
+				ordered_in_list = {
+					variable = betrothed_children
+					limit = {
+						is_alive = yes
+						has_variable = betrothed_partner_country
+						var:betrothed_partner_country = scope:betroth_check_partner
+					}
+					order_by = age
+					max = 1
+					save_scope_as = betroth_our_child
+					scope:betroth_check_home = { set_variable = betroth_our_child_found }
+				}
+			}
+			# resolve the partner child from our child's own pointer (guard: our child may be gone).
+			# All the resolution effects run in the HOME scope (this every_in_list scope is the partner).
+			if = {
+				limit = { scope:betroth_check_home = { has_variable = betroth_our_child_found } }
+				if = {
+					# --- our child's betrothed partner is DEAD/absent → dissolve, NO penalty.
+					limit = { NOT = { exists = scope:betroth_our_child.var:betrothed_to_char } }
+					scope:betroth_check_home = { MARRIAGE_dissolve_betrothal = { partner = scope:betroth_check_partner  reason = death } }
+				}
+				else = {
+					scope:betroth_our_child.var:betrothed_to_char = { save_scope_as = betroth_their_child }
+					if = {
+						# --- BOTH alive + adult + unwed → the pledge matures into a marriage.
+						limit = {
+							scope:betroth_our_child = { is_alive = yes  is_adult = yes  is_married = no }
+							scope:betroth_their_child = { is_alive = yes  is_adult = yes  is_married = no }
+						}
+						scope:betroth_check_home = { MARRIAGE_mature_betrothal = { partner = scope:betroth_check_partner } }
+					}
+					# else: at least one still a minor (or transiently unwed-blocked) → leave standing.
+				}
+			}
+			else = {
+				# our betrothed child is gone (died) → dissolve, NO penalty.
+				scope:betroth_check_home = { MARRIAGE_dissolve_betrothal = { partner = scope:betroth_check_partner  reason = death } }
+			}
+		}
+	}
+}
+
+# ======================================================================
+# [#betrothal-rework] MARRIAGE_mature_betrothal — the pledge is KEPT: wed the two betrothed children
+# (both now adult) and upgrade the country bond from betrothal to full marriage. Country scope (home);
+# $partner$ = the partner COUNTRY. Requires scope:betroth_our_child + scope:betroth_their_child set by
+# the caller (MARRIAGE_check_betrothals). Marries the specific pledged pair (NOT a fresh child pick),
+# then applies the standing marriage payload via the shared helper.
+# ======================================================================
+MARRIAGE_mature_betrothal = {
+	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_mature_betrothal" }
+	save_scope_as = pact_senior
+	$partner$ = { save_scope_as = pact_junior }
+	# wed the exact pledged children (bride = the female of the pair, for marry_character's opposite-sex
+	# requirement — one of the two is female by construction of MARRIAGE_betroth).
+	if = {
+		limit = { scope:betroth_our_child = { is_female = yes } }
+		scope:betroth_their_child = { marry_character = scope:betroth_our_child }
+	}
+	else = {
+		scope:betroth_our_child = { marry_character = scope:betroth_their_child }
+	}
+	# upgrade the country bond: drop the betrothal pledge (the shared teardown clears the children's
+	# betrothal vars + the betrothed_children list entries on BOTH courts, succession-safe), then lay
+	# down the full marriage payload.
+	MARRIAGE_clear_country_betrothal = { other = scope:pact_junior }
+	MARRIAGE_apply_marriage_bond = { partner = scope:pact_junior }
+	LOG_line = { sys = MARRIAGE  msg = "a betrothal MATURED into marriage as both children came of age" }
+	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_mature_betrothal"  result = OK }
+}
+
+# ======================================================================
+# [#betrothal-rework] MARRIAGE_dissolve_betrothal — end a betrothal. $partner$ = the partner COUNTRY,
+# $reason$ = death (no penalty — an act of God) or lapse. Clears the country pledge both ways and any
+# surviving betrothed child's character vars. A pure teardown; NO jilted grievance (that belongs only
+# to a WILFUL break — MARRIAGE_repudiate). Country scope (home).
+# ======================================================================
+MARRIAGE_dissolve_betrothal = {
+	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_dissolve_betrothal" }
+	# [#betrothal-review B18 fix] the full teardown (country pledge both ways + betrothed_children list
+	# entries + the children's char vars on both courts, matched by partner-country) is centralised in
+	# MARRIAGE_clear_country_betrothal, which is succession-safe — no current_ruler.every_child (which
+	# missed a child re-parented by a succession, leaving stale vars until the 40-yr self-expiry).
+	MARRIAGE_clear_country_betrothal = { other = $partner$ }
+	LOG_line = { sys = MARRIAGE  msg = "a betrothal dissolved ($reason$) — no grievance (not a wilful break)" }
+	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_dissolve_betrothal"  result = OK }
+}
+
+# ======================================================================
+# [#betrothal-rework / B18 fix] MARRIAGE_clear_country_betrothal — the SINGLE teardown for a betrothal
+# with $other$: clears the COUNTRY-level pledge (marriage_betrothed) both ways, AND the ruler-independent
+# betrothed_children list entries + the pledged children's character vars on BOTH courts. Matched purely
+# by the partner-country pointer, so it works regardless of any succession that re-parented the children.
+# Shared by maturation, dissolution, and repudiation so every exit path cleans symmetrically. The child
+# scopes are captured into a scratch list first because removing from a variable_list mid-iteration is
+# unsafe. Country scope (home).
+# ======================================================================
+MARRIAGE_clear_country_betrothal = {
+	save_scope_as = clearbetroth_home
+	# --- OUR side: find each betrothed child pledged to $other$, clear its vars, drop it from the list.
+	clear_variable_list = betroth_clear_scratch
+	every_in_list = {
+		variable = betrothed_children
+		limit = {
+			has_variable = betrothed_partner_country
+			var:betrothed_partner_country = $other$
+		}
+		scope:clearbetroth_home = { add_to_variable_list = { name = betroth_clear_scratch  target = prev } }
+	}
+	every_in_list = {
+		variable = betroth_clear_scratch
+		save_scope_as = betroth_clear_child
+		scope:betroth_clear_child = { remove_variable = betrothed_to_char  remove_variable = betrothed_partner_country }
+		scope:clearbetroth_home = { remove_list_variable = { name = betrothed_children  target = scope:betroth_clear_child } }
+	}
+	clear_variable_list = betroth_clear_scratch
+	# --- country-list pledge, our side.
+	if = {
+		limit = { is_target_in_variable_list = { name = marriage_betrothed  target = $other$ } }
+		remove_list_variable = { name = marriage_betrothed  target = $other$ }
+	}
+	# --- THE PARTNER'S side: symmetric cleanup of its child pointed back at us + its country-list entry.
+	$other$ = {
+		clear_variable_list = betroth_clear_scratch
+		every_in_list = {
+			variable = betrothed_children
+			limit = {
+				has_variable = betrothed_partner_country
+				var:betrothed_partner_country = scope:clearbetroth_home
+			}
+			prev = { add_to_variable_list = { name = betroth_clear_scratch  target = prev } }
+		}
+		every_in_list = {
+			variable = betroth_clear_scratch
+			save_scope_as = betroth_clear_child2
+			scope:betroth_clear_child2 = { remove_variable = betrothed_to_char  remove_variable = betrothed_partner_country }
+			prev = { remove_list_variable = { name = betrothed_children  target = scope:betroth_clear_child2 } }
+		}
+		clear_variable_list = betroth_clear_scratch
+		if = {
+			limit = { is_target_in_variable_list = { name = marriage_betrothed  target = scope:clearbetroth_home } }
+			remove_list_variable = { name = marriage_betrothed  target = scope:clearbetroth_home }
+		}
+	}
 }
 
 # ======================================================================
@@ -552,17 +844,14 @@ MARRIAGE_betroth = {
 MARRIAGE_repudiate = {
 	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_repudiate" }
 	save_scope_as = repudiator
-	if = {
-		limit = { is_target_in_variable_list = { name = marriage_betrothed  target = $other$ } }
-		remove_list_variable = { name = marriage_betrothed  target = $other$ }
-	}
+	# [#betrothal-review B18 fix] full teardown of the betrothal both ways (country pledge + the
+	# betrothed_children list entries + the children's char vars on both courts) via the succession-safe
+	# shared helper — no current_ruler.every_child (which missed a succession-re-parented child).
+	MARRIAGE_clear_country_betrothal = { other = $other$ }
 	# the jilted house's grievance: a deep opinion hit + a lasting resentment modifier on THEM
-	# toward us, and the alliance (if any) is broken.
+	# toward us, and the alliance (if any) is broken. This is the WILFUL-break penalty; a betrothal
+	# ended by a child's DEATH goes through MARRIAGE_dissolve_betrothal instead and carries NO penalty.
 	$other$ = {
-		if = {
-			limit = { is_target_in_variable_list = { name = marriage_betrothed  target = scope:repudiator } }
-			remove_list_variable = { name = marriage_betrothed  target = scope:repudiator }
-		}
 		add_opinion = { modifier = royal_jilted_opmod  target = scope:repudiator }
 		if = {
 			limit = { alliance_with = scope:repudiator }
@@ -613,11 +902,25 @@ MARRIAGE_check_decay = {
 		# the timer and re-populates the list, starting a fresh generation cleanly.
 		every_in_list = {
 			variable = marriage_alliance_partners
-			limit = { scope:decay_home = { alliance_with = prev } }
 			save_scope_as = decay_partner
 			scope:decay_home = {
-				break_alliance = scope:decay_partner
-				LOG_line = { sys = MARRIAGE  msg = "a dynastic alliance lapsed as its generation passed (bond remains)" }
+				# a lesser-pair bond is a real alliance → break it; a great-power bond is the
+				# royal_marriage_entente modifier → strip it from both courts. Handle whichever applies.
+				if = {
+					limit = { alliance_with = scope:decay_partner }
+					break_alliance = scope:decay_partner
+					LOG_line = { sys = MARRIAGE  msg = "a dynastic alliance lapsed as its generation passed (bond remains)" }
+				}
+				if = {
+					limit = { has_country_modifier = royal_marriage_entente }
+					remove_country_modifier = royal_marriage_entente
+				}
+			}
+			scope:decay_partner = {
+				if = {
+					limit = { has_country_modifier = royal_marriage_entente }
+					remove_country_modifier = royal_marriage_entente
+				}
 			}
 		}
 		scope:decay_home = { clear_variable_list = marriage_alliance_partners }

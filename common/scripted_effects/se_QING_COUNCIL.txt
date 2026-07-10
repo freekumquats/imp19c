@@ -9,7 +9,7 @@
 # of filled great offices. You join the council by being APPOINTED TO AN OFFICE;
 # there is no seat action and no councillor population.
 #
-# The appointable offices (11):
+# The appointable offices (13):
 #   chancellor  領班軍機大臣  Grand Chancellor      (summit; all four skills)
 #   personnel   吏部          Grand Minister of Personnel   (finesse)
 #   revenue     戶部          Grand Minister of Revenue     (finesse)
@@ -797,12 +797,29 @@ QING_council_refresh_candidates_by = {
 	LOG_enter = { sys = QING  fn = "QING_council_refresh_candidates_by" }
 	QING_council_init = yes
 	clear_variable_list = qing_council_candidates
+	# [#314 B7 fix] The picker was EMPTY after game start: QING_council_autofill staffs EVERY
+	# office at start (debug.log confirms), and this refresh excluded ALL office-holders
+	# (NOT has_variable qing_office_held) — so zero candidates remained and the Appoint/Replace
+	# button did nothing. Include SITTING office-holders too: QING_office_appoint already
+	# one-office-per-man relieves a man of his prior office first (#175), so appointing a sitting
+	# minister to another seat cleanly RESHUFFLES the council (the intended "Replace" behaviour).
+	# The per-office picker's is_shown still hides a man from the seat he already holds, so this
+	# only adds cross-office reshuffle candidates — the list is never spuriously empty again.
 	ordered_character = {
 		limit = {
 			employer = ROOT
 			is_adult = yes
 			is_alive = yes
-			NOT = { has_variable = qing_office_held }
+			# still exclude the two dynastic FIGUREHEAD seats that ride on qing_office_held —
+			# the Grand Regent (攝政) and Emperor Emeritus (太上皇): they hold by regency/abdication,
+			# not appointment, and must not be shuffled into an ordinary office by the picker.
+			# (Emperor/Empress/Crown Prince do NOT set qing_office_held, so they never appear here.)
+			NOT = {
+				AND = {
+					has_variable = qing_office_held
+					OR = { var:qing_office_held = flag:regent  var:qing_office_held = flag:emeritus }
+				}
+			}
 		}
 		order_by = $sortval$
 		check_range_bounds = no

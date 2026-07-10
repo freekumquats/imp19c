@@ -36,19 +36,59 @@ marriage_open_candidates = {
 	effect = {
 		LOG_line = { sys = MARRIAGE  msg = "candidate-list window opened by" }
 		clear_variable_list = marriage_candidates
-		# cache OUR own power for the side-by-side comparison in the window header.
+		# cache OUR own power + our own eligible-child count for the window header.
 		set_variable = { name = marriage_display_power  value = DIPLOMACY_power }
+		MARRIAGE_cache_child_counts = yes
+		# [#betrothal-rework] include every foreign eligible dynastic monarchy in range that fields at
+		# least one BETROTHABLE child (from the ruling family, alive, unwed, free) — NOT only houses
+		# with a marriageable ADULT. A minor child cannot marry yet but CAN be betrothed, so a house
+		# with only young children still belongs in the list (the betroth action lights up, propose does
+		# not). Per candidate we cache: power score, eligible ADULT-child count + total betrothable-child
+		# count, and whether we are already WED or BETROTHED to them (so the row can show status).
 		every_country = {
 			limit = {
 				NOT = { this = ROOT }
 				exists = current_ruler
 				MARRIAGE_eligible_realm_trigger = yes
 				ROOT = { in_diplomatic_range = prev }
-				current_ruler = { MARRIAGE_has_marriageable_child_trigger = yes }
+				current_ruler = {
+					any_child = { is_alive = yes  is_married = no  prisoner = no }
+				}
 			}
-			# cache this candidate's power score so the row can show it against ours.
 			set_variable = { name = marriage_display_power  value = DIPLOMACY_power }
+			MARRIAGE_cache_child_counts = yes
+			# status flags relative to ROOT (the viewing court), read per-row in the window.
+			if = {
+				limit = { ROOT = { is_target_in_variable_list = { name = marriage_partners  target = prev } } }
+				set_variable = { name = marriage_display_wed  value = 1 }
+			}
+			else = { set_variable = { name = marriage_display_wed  value = 0 } }
+			if = {
+				limit = { ROOT = { is_target_in_variable_list = { name = marriage_betrothed  target = prev } } }
+				set_variable = { name = marriage_display_betrothed  value = 1 }
+			}
+			else = { set_variable = { name = marriage_display_betrothed  value = 0 } }
 			ROOT = { add_to_variable_list = { name = marriage_candidates  target = prev } }
+		}
+	}
+}
+
+# ---- cache a house's eligible-child counts (country scope) -----------------------------
+# [#betrothal-rework] Two counts read by the marriage window rows: marriage_display_adult_children =
+# ruler's children who could MARRY now (adult, unwed, free); marriage_display_child_count = children
+# who could be BETROTHED (any age, unwed, free). Cheap ruler-children iteration; O(1) amortised.
+MARRIAGE_cache_child_counts = {
+	set_variable = { name = marriage_display_adult_children  value = 0 }
+	set_variable = { name = marriage_display_child_count  value = 0 }
+	save_scope_as = child_count_home
+	current_ruler = {
+		every_child = {
+			limit = { is_alive = yes  is_married = no  prisoner = no }
+			scope:child_count_home = { change_variable = { name = marriage_display_child_count  add = 1 } }
+			if = {
+				limit = { is_adult = yes }
+				scope:child_count_home = { change_variable = { name = marriage_display_adult_children  add = 1 } }
+			}
 		}
 	}
 }
@@ -143,6 +183,22 @@ marriage_action_betroth = {
 		scope:target = { MARRIAGE_eligible_realm_trigger = yes }
 		# not already betrothed to this house
 		NOT = { is_target_in_variable_list = { name = marriage_betrothed  target = scope:target } }
+		# [#betrothal-review B19 fix] nor already WED to this house (an existing marriage bond makes a
+		# fresh betrothal to the same house meaningless).
+		NOT = { is_target_in_variable_list = { name = marriage_partners  target = scope:target } }
+		# both houses must field a BETROTHABLE child (any age — minors allowed, unlike marriage —
+		# from the ruling family, alive, unwed, free, not already pledged elsewhere).
+		custom_tooltip = {
+			text = marriage_action_needs_betrothable_child_tt
+			current_ruler = {
+				any_child = { is_alive = yes  is_married = no  prisoner = no  NOT = { has_variable = betrothed_to_char } }
+			}
+			scope:target = {
+				current_ruler = {
+					any_child = { is_alive = yes  is_married = no  prisoner = no  NOT = { has_variable = betrothed_to_char } }
+				}
+			}
+		}
 		# the pair must be compatible (a betrothal presumes a possible marriage)
 		custom_tooltip = {
 			text = marriage_action_needs_compatible_tt
