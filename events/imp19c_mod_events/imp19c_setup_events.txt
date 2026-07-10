@@ -27,3 +27,180 @@ imp19c_setup.1 = {
 		setup_trigger_spanish_american_independence_wars = yes
 	}
 }
+
+########################################################################
+# .2  AMERICAN REVOLUTIONARY WAR (1775.4.19).
+#     The #283 GBR arc scripts the FLAVOUR (gbr_empire.2 "The American War", posture
+#     nudges) and the RESOLUTION (gbr_empire.3 "Loss of America", 1783, release_subject
+#     = c:USA). This event adds the actual WAR: USA — a GBR client_colony at the 1763
+#     start (00_default.txt:673) — declares its independence war on GBR. independence_wargoal
+#     is gated on is_subject = yes (common/wargoals/00_default.txt:43), which USA satisfies.
+#     Upstream idiom (Invictus epigoni.txt:1008 / me_gordyene.txt:14): the subject declares
+#     from its own scope with province = capital_scope, target = the overlord. The 1783
+#     gbr_empire.3 release then ends the war on schedule.
+#
+#     ROOT = c:USA (the declarer). Hidden, one-shot, self-guarded on still being GBR's subject.
+########################################################################
+imp19c_setup.2 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		if = {
+			limit = {
+				exists = c:USA
+				exists = c:GBR
+				c:USA = { is_subject_of = c:GBR }
+			}
+			c:USA = {
+				FUNC_declare_war_with_wargoal_province = {
+					war_goal = independence_wargoal
+					province = capital_scope
+					target = c:GBR
+				}
+			}
+			LOG_line = { sys = SETUP  msg = "EVENT imp19c_setup.2: American Revolutionary War — USA declares independence on GBR (1775)" }
+		}
+		else = {
+			LOG_line = { sys = SETUP  msg = "EVENT imp19c_setup.2: SKIP American Revolutionary War — USA is not a GBR subject" }
+		}
+	}
+}
+
+########################################################################
+# .3  FRENCH REVOLUTIONARY WARS (1792.4.20).
+#     The #283 FRA arc scripts the government transitions (fra_revolution.3 proclaims the
+#     Republic in 1792). This event adds the War of the First Coalition: revolutionary
+#     France attacks the crowned heads of Europe. FRA declares conquer_wargoal on its
+#     land neighbours Austria (AUS) and Prussia (PRU) — the historical First-Coalition
+#     core — via FUNC_declare_war_with_wargoal_province (targeting each power's capital
+#     province). conquer_wargoal is the sovereign-vs-sovereign goal used by the proven
+#     #302 setup_trigger (se_setup.txt:526).
+#
+#     ROOT carrier = c:FRA. Hidden, one-shot, self-guarded on the belligerents existing +
+#     not already at war with each other (idempotent if the AI already started a war).
+########################################################################
+imp19c_setup.3 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = SETUP  msg = "EVENT imp19c_setup.3: French Revolutionary Wars — War of the First Coalition (1792)" }
+		# FRA vs Austria (the lead First-Coalition power).
+		if = {
+			limit = {
+				exists = c:FRA
+				exists = c:AUS
+				NOT = { c:FRA = { war_with = c:AUS } }
+			}
+			c:FRA = {
+				FUNC_declare_war_with_wargoal_province = {
+					war_goal = conquer_wargoal
+					province = p:245
+					target = c:AUS
+				}
+			}
+		}
+		# FRA vs Prussia (the other First-Coalition core). Only if FRA didn't just fold
+		# into the Austrian war as the same conflict — a second declaration is fine, the
+		# engine merges co-belligerents, and add_to_war handling lives in FUNC.
+		if = {
+			limit = {
+				exists = c:FRA
+				exists = c:PRU
+				NOT = { c:FRA = { war_with = c:PRU } }
+			}
+			c:FRA = {
+				FUNC_declare_war_with_wargoal_province = {
+					war_goal = conquer_wargoal
+					province = p:929
+					target = c:PRU
+				}
+			}
+		}
+	}
+}
+
+########################################################################
+# .4  NAPOLEONIC WARS, PHASE 1 — the Anglo-French resumption (1803.5.18).
+#     When the Peace of Amiens broke down on 18 May 1803, BRITAIN ALONE resumed the war
+#     against France; the continental powers (Austria, Russia) did not join until the War
+#     of the Third Coalition formed in 1805 (see .5). This event fires only the FRA-vs-GBR
+#     maritime war — the standing enemy of the Napoleonic era — leaving the continental
+#     coalition to .5. gbr_empire.5 (Trafalgar, 1805) supplies the naval flavour.
+#
+#     ROOT carrier = c:FRA. Hidden, one-shot, self-guarded on existence + not-already-at-war.
+########################################################################
+imp19c_setup.4 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = SETUP  msg = "EVENT imp19c_setup.4: Napoleonic Wars phase 1 — Anglo-French resumption after Amiens (1803)" }
+		# FRA vs Britain (the maritime war — the sole 1803 belligerent).
+		if = {
+			limit = {
+				exists = c:FRA
+				exists = c:GBR
+				NOT = { c:FRA = { war_with = c:GBR } }
+			}
+			c:FRA = {
+				FUNC_declare_war_with_wargoal_province = {
+					war_goal = conquer_wargoal
+					province = p:3388
+					target = c:GBR
+				}
+			}
+		}
+	}
+}
+
+########################################################################
+# .5  NAPOLEONIC WARS, PHASE 2 — the War of the Third Coalition (1805).
+#     Austria and Russia joined Britain against France in 1805 (Anglo-Russian treaty Apr
+#     1805, Austria Aug 1805; the Ulm campaign Sep + Austerlitz Dec 1805). This event fires
+#     the CONTINENTAL war — France attacks the Austerlitz land powers Austria (AUS) + Russia
+#     (RUS) — split out from the 1803 Anglo-French resumption (.4) so the belligerents enter
+#     on their real dates. Fires AFTER the First Empire is proclaimed (fra_revolution.5,
+#     offset 15264 = 1804.12.2), so Napoleon is Emperor when the coalition forms.
+#
+#     ROOT carrier = c:FRA. Hidden, one-shot, self-guarded on existence + not-already-at-war.
+########################################################################
+imp19c_setup.5 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = SETUP  msg = "EVENT imp19c_setup.5: Napoleonic Wars phase 2 — War of the Third Coalition (1805)" }
+		# FRA vs Austria.
+		if = {
+			limit = {
+				exists = c:FRA
+				exists = c:AUS
+				NOT = { c:FRA = { war_with = c:AUS } }
+			}
+			c:FRA = {
+				FUNC_declare_war_with_wargoal_province = {
+					war_goal = conquer_wargoal
+					province = p:245
+					target = c:AUS
+				}
+			}
+		}
+		# FRA vs Russia.
+		if = {
+			limit = {
+				exists = c:FRA
+				exists = c:RUS
+				NOT = { c:FRA = { war_with = c:RUS } }
+			}
+			c:FRA = {
+				FUNC_declare_war_with_wargoal_province = {
+					war_goal = conquer_wargoal
+					province = p:3174
+					target = c:RUS
+				}
+			}
+		}
+	}
+}
