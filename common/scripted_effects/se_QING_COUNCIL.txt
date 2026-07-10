@@ -1150,3 +1150,64 @@ QING_office_vacate_dispatch = {
 	}
 	LOG_exit = { sys = QING  fn = "QING_office_vacate_dispatch"  result = OK }
 }
+
+# ======================================================================
+# [#330 user] QING_council_foreign_spouse_check — the quarterly roll for a FOREIGN-BORN SPOUSE
+# on the Grand Council lobbying for her homeland. A princess wed into the imperial house (or a
+# minister's foreign consort) who then holds a great office is a standing conduit for her birth
+# court's interests — the classic "foreign queen with a faction at court" dynamic.
+#
+# Scope: COUNTRY (CHI, from the quarterly qing_mechanics_pulse). Scans the derived council roster
+# (qing_council_members, rebuilt each recompute) for a member carrying the marriage_origin_country
+# tag (stamped by MARRIAGE_form_pact / MARRIAGE_mature_betrothal when a foreign bride weds into our
+# house) whose homeland still EXISTS and is a DIFFERENT, non-subject country (a subject already owes
+# loyalty; the tie there is the marriage_subject_tie, not a lobby). Fires qing_office.30 against the
+# first such member found, saving the councillor + her homeland as scopes. Self-throttled by the
+# pulse's own 90-day cadence + a low chance in the on_action; re-checks presence so an empty court is
+# a clean no-op. LOG-instrumented per the standing rule.
+# ======================================================================
+QING_council_foreign_spouse_check = {
+	LOG_enter = { sys = QING  fn = "QING_council_foreign_spouse_check" }
+	if = {
+		limit = {
+			has_variable_list = qing_council_members
+			# at least one seated member is a foreign spouse whose homeland still stands
+			any_in_list = {
+				variable = qing_council_members
+				is_alive = yes
+				has_variable = marriage_origin_country
+				var:marriage_origin_country = {
+					exists = yes
+					NOT = { this = ROOT }
+					NOT = { is_subject_of = ROOT }   # a subject is bound by the marriage_subject_tie, not a lobby
+				}
+			}
+		}
+		# pick ONE qualifying councillor (bounded single fire per pulse). random_in_list is the
+		# proven variable-list single-pick idiom (ordered_in_list in this codebase is only used with
+		# a named `list =` + order_by; the members roster is a variable_list iterated via `variable =`).
+		random_in_list = {
+			variable = qing_council_members
+			limit = {
+				is_alive = yes
+				has_variable = marriage_origin_country
+				var:marriage_origin_country = {
+					exists = yes
+					NOT = { this = ROOT }
+					NOT = { is_subject_of = ROOT }
+				}
+			}
+			save_scope_as = qing_lobby_councillor
+			var:marriage_origin_country = { save_scope_as = qing_lobby_homeland }
+		}
+		if = {
+			limit = { exists = scope:qing_lobby_councillor  exists = scope:qing_lobby_homeland }
+			trigger_event = { id = qing_office.30 }
+			LOG_line = { sys = QING  msg = "foreign-spouse council lobby fired (a councillor petitions for her homeland)" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_council_foreign_spouse_check"  reason = "no foreign-spouse councillor with an extant independent homeland" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_council_foreign_spouse_check"  result = OK }
+}

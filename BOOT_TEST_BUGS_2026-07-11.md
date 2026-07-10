@@ -67,8 +67,8 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
   1. **Diplomatic range.** At a 1763 Qing start the empire is isolationist — `in_diplomatic_range` may exclude the European dynastic houses entirely, leaving only near neighbours (which may be tribes/republics/subjects that fail `MARRIAGE_eligible_realm_trigger`, or lack an eligible child). If so, the list is legitimately empty by the range gate. **Check debug.log for the "candidate-list window opened" LOG_line and whether any add_to_variable_list fired.** Consider whether CHI should see out-of-range houses in this window (the marriage window may need to relax `in_diplomatic_range`, since a dynastic match is a reason to open relations).
   2. **Childless rulers (B1/B2 residue).** If neighbouring monarchies' rulers still load without children at 1763, the `any_child` test fails for all of them. Cross-check with whether B1/B2 (ruler data) actually holds in THIS test — verify a few neighbours (Korea, Vietnam, Burma, the Central Asian khanates) have real rulers WITH children.
   3. **narrow_monarchy_trigger** may exclude the East/Central-Asian monarchies (khanates, the Tibetan/Nepalese states) if it's tuned to European monarchy government types — so even in-range neighbours fail eligibility. Inspect what `narrow_monarchy_trigger` accepts.
-- **Severity:** MAJOR (the marriage feature is unusable for the Qing player — nothing to court).
-- **NOTE:** distinct from the overnight #313 two-pass rewrite — 1763_bookmark still has the older #311 single-pass `every_country` build. Diagnose on THIS code.
+- **✅ ROOT CAUSE CONFIRMED (via debug.log) + FIXED (#330).** debug.log shows the builder fired (5× "candidate-list window opened by") but added nobody → the `every_country` limit rejected all. Two structural causes for an isolationist 1763 Qing, both now addressed: (1) **`in_diplomatic_range`** excluded essentially every dynastic house (the isolationist Qing reaches almost no European/distant court) — **DROPPED** from the candidate builder (a marriage overture is itself a reason to open relations; the propose/betroth ACTIONS keep their own range check so an unreachable match is shown-but-gated). (2) **`is_subject = no`** (inside `MARRIAGE_eligible_realm_trigger`) excluded the Qing's own tributary monarchies (Korea/Vietnam/the khanates) — the builder + propose + betroth now use a new **`MARRIAGE_candidate_realm_trigger`** = an eligible realm OR **ROOT's own subject monarchy**, so tributaries appear (per the user's "also allow subjects" decision + the marry-into-subject tightens-ties feature #330). Also relies on the #329 death_date ruler fix so real rulers with real children now load. **File:** `common/scripted_triggers/00_marriage_triggers.txt` (new trigger), `common/scripted_guis/MARRIAGE_actions.txt` (builder + actions).
+- **Severity:** MAJOR — RESOLVED (pending boot-test).
 
 ---
 
@@ -140,7 +140,8 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
   anachronistic-spawn roster (characters summoned later by event) — if those are meant to be created at
   runtime via `create_character`, they should NOT be in setup at all; if meant to exist at start, they need
   in-range ids. MRT/HYD/MYS/AWA/etc. (Indian states) + MEX 9232 similarly lose seated characters.
-- **FIX (NOT done this pass — larger structural change, needs care):** either (a) renumber these characters
+- **✅ FIXED + COMMITTED (dadbf328).** Renumbered all 28 to their engine-expected sequential ids (700→553 … 9232→580) and updated every `char:<id>` reference; the setup id space is now contiguous 0–580. Adversarially reviewed → 0 findings. (Original deferral note kept below for context.)
+- **FIX (original plan):** either (a) renumber these characters
   into their country's allocated id block (fragile — must match the exact expected counter), or (b) move the
   ones that are meant to be spawned-later out of setup and into a `create_character` in the relevant event
   (the engine's own suggested remedy: "or use create_character"). Poland's ruler (730) should be renumbered
