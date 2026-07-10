@@ -611,16 +611,6 @@ These are date-invariant 1759↔1763 (grain, furs, Falun copper, Baltic naval st
 - Everything stays on `1763_bookmark`; promotion to develop/master only on the user's in-game
   verification + explicit request (branch policy).
 
-## AGENT / TASK STATE (as of 2026-07-08)
-- DONE: #198 feasibility scout, #199 Qing economy review, #203 date-flip+arc-rebase, #206 re-dispatch,
-  branch rename, doc rename.
-- RUNNING/IN: #200 world rulers research + #201 world economy research (regional agents + teammates);
-  #207 Ottoman/MENA economy synthesis.
-- PENDING: #202 update BOOKMARK_PROCESS.md; #204 finish rename tidy-ups; #205 Qing delta doc (done above);
-  then map-surgery edit phase → adversarial review → commit as freekumquats.
-
----
-
 ## [#278] World economy pass — placeholder-cloth trade-good realism (Phase 3)
 
 **Problem.** `map_data/province_setup.csv` shipped with **9601 of 10067 goods-bearing provinces set to the
