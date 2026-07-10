@@ -75,6 +75,9 @@ qing_faction.1 = {
 		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -4 }
 		scope:reformer = { add_loyalty = loyalty_qing_commended }
 		scope:conservative = { add_loyalty = loyalty_qing_estranged }
+		# [#308 A] the decision ripples through the court: the reformer's friends + fellow
+		# reformists are gratified, his rivals + the conservatives affronted (and vice versa).
+		QING_faction_ripple = { favoured = scope:reformer  slighted = scope:conservative }
 		add_political_influence = -10
 	}
 
@@ -86,6 +89,9 @@ qing_faction.1 = {
 		add_stability = 1
 		scope:conservative = { add_loyalty = loyalty_qing_commended }
 		scope:reformer = { add_loyalty = loyalty_qing_estranged }
+		# [#308 A] ripple: favouring the conservative gratifies his friends + fellow
+		# traditionalists and affronts the reformer's camp.
+		QING_faction_ripple = { favoured = scope:conservative  slighted = scope:reformer }
 	}
 
 	# --- Seek a middle course (self-strengthening without upheaval) --------------
@@ -138,6 +144,9 @@ qing_faction.2 = {
 		scope:dowager = { add_prestige = 30 }
 		# the dowager's grip on the agenda drags the council rightward
 		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -3 }
+		# [#308 A] deferring to the conservative Dowager ripples through the council: her
+		# friends + the conservatives are satisfied, the reformist Emperor's allies affronted.
+		QING_faction_ripple = { favoured = scope:dowager  slighted = current_ruler }
 	}
 
 	# --- Defy her and press the reforms (a house divided) ------------------------
@@ -148,6 +157,9 @@ qing_faction.2 = {
 		QING_dynasty_harmony_nudge = { amount = -14 }
 		current_ruler = { add_prestige = 15 }
 		add_political_influence = -15
+		# [#308 A] defying the Dowager to back the reformist Emperor ripples the other way:
+		# the Emperor's allies + reformists rally to him, the Dowager's conservative clique bristle.
+		QING_faction_ripple = { favoured = current_ruler  slighted = scope:dowager }
 	}
 }
 
@@ -204,10 +216,15 @@ qing_faction.3 = {
 			limit = { var:qing_faction_ref_count <= var:qing_faction_con_count }
 			scope:reformer = { QING_office_vacate_dispatch = yes  add_loyalty = loyalty_qing_estranged }
 			change_variable = { name = qing_reform_faction_balance  subtract = 4 }
+			# [#308 A] purging the reformist voice ripples: the conservatives + the purged
+			# man's rivals are satisfied, his friends + fellow reformists estranged.
+			QING_faction_ripple = { favoured = scope:conservative  slighted = scope:reformer }
 		}
 		else = {
 			scope:conservative = { QING_office_vacate_dispatch = yes  add_loyalty = loyalty_qing_estranged }
 			change_variable = { name = qing_reform_faction_balance  add = 4 }
+			# [#308 A] the mirror: purging the conservative voice rallies the reformists.
+			QING_faction_ripple = { favoured = scope:reformer  slighted = scope:conservative }
 		}
 		QING_council_recompute = yes
 		add_tyranny = 2
@@ -229,5 +246,107 @@ qing_faction.3 = {
 		custom_tooltip = "qing_faction.3.c.tt"
 		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -6 }
 		scope:reformer = { add_rival = scope:conservative }
+	}
+}
+
+# ======================================================================
+# qing_faction.4 — A COLLECTIVE MEMORIAL (聯名上奏)
+# [#308/user] The councillors do not only act alone: a BLOC of them bands together and
+# lobbies the throne with one voice — usually a factional caucus (a reformist push or a
+# conservative stand), sometimes a cross-aisle issue coalition. QING_faction_form_bloc
+# (se_QING_FACTION.txt) assembles the bloc into qing_lobby_bloc, picks its spokesman
+# (scope:lobby_leader) and stamps its kind (qing_lobby_kind) + size. The throne may
+# CONCEDE (satisfy the bloc, bend the realm's course their way), REBUFF (face them down —
+# they are estranged, their friends across the court bristle via the ripple), or CO-OPT the
+# spokesman (buy him off with favour, splitting the bloc). Fires from the flavour roll when
+# a like-minded bloc of >=2 stands. The whole bloc's reaction uses the affinity ripple.
+# ======================================================================
+qing_faction.4 = {
+	type = country_event
+	title = "qing_faction.4.t"
+	desc = "qing_faction.4.desc"
+	picture = council_country
+	left_portrait = root.current_ruler
+	right_portrait = scope:lobby_leader
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable_list = qing_council_members
+		OR = {
+			var:qing_faction_ref_count >= 2
+			var:qing_faction_con_count >= 2
+		}
+	}
+
+	immediate = {
+		QING_faction_form_bloc = yes
+		LOG_line = { sys = QING  msg = "EVENT qing_faction.4 (collective lobby, size=[ROOT.MakeScope.GetVariable('qing_lobby_size').GetValue|0]) [ROOT.GetTag]" }
+	}
+
+	# --- Concede to the memorial — bend the realm's course their way -------------
+	option = {
+		name = "qing_faction.4.a"
+		custom_tooltip = "qing_faction.4.a.tt"
+		trigger = { exists = scope:lobby_leader }
+		# the bloc's demand shifts the reform trajectory in its direction, and the whole
+		# bloc is gratified; the opposite wing is affronted (handled by the ripple around
+		# the spokesman). A reformist/issue win pushes reform; a conservative win rolls back.
+		if = {
+			limit = { var:qing_lobby_kind = flag:conservative }
+			change_variable = { name = qing_reform_faction_balance  subtract = 8 }
+			add_stability = 1
+		}
+		else = {
+			change_variable = { name = qing_reform_faction_balance  add = 8 }
+			QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -4 }
+		}
+		# reward the whole bloc directly (collective satisfaction). The bloc IS the favoured
+		# party here, so the reaction is the per-member grant above — no single-target ripple
+		# (a self-referential favoured==slighted ripple would cancel out; the bloc loop is the
+		# correct collective analogue).
+		every_in_list = {
+			variable = qing_lobby_bloc
+			limit = { is_alive = yes  employer = ROOT }
+			add_loyalty = loyalty_qing_commended
+		}
+		add_political_influence = -15
+	}
+
+	# --- Face them down — the throne will not be dictated to ---------------------
+	option = {
+		name = "qing_faction.4.b"
+		custom_tooltip = "qing_faction.4.b.tt"
+		trigger = { exists = scope:lobby_leader }
+		# assert the autocrat's prerogative: the bloc is rebuffed and estranged, a little
+		# tyranny, and the council governs a touch worse for the sullen caucus — but the
+		# throne's authority is undivided.
+		add_tyranny = 1
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -3 }
+		every_in_list = {
+			variable = qing_lobby_bloc
+			limit = { is_alive = yes  employer = ROOT }
+			add_loyalty = loyalty_qing_estranged
+		}
+	}
+
+	# --- Co-opt the spokesman — buy him off and split the bloc -------------------
+	option = {
+		name = "qing_faction.4.c"
+		custom_tooltip = "qing_faction.4.c.tt"
+		trigger = { exists = scope:lobby_leader }
+		# elevate the leader (favour + standing) so he abandons the caucus; the bloc, leaderless
+		# and betrayed, is left estranged — divide and rule. The ripple gratifies the leader's
+		# friends and stings his rivals, as any elevation does.
+		scope:lobby_leader = {
+			add_loyalty = loyalty_qing_commended
+			add_prominence = 10
+		}
+		every_in_list = {
+			variable = qing_lobby_bloc
+			limit = { is_alive = yes  employer = ROOT  NOT = { this = scope:lobby_leader } }
+			add_loyalty = -3
+		}
+		add_political_influence = -10
 	}
 }

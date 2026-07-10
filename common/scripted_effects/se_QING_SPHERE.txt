@@ -9,14 +9,27 @@
 # historical entrenchment of the European powers ramping their push up over the
 # century.
 #
-# DESIGN — PROVEN "PUSH" model only. The oracle-flagged PULL model (reading a
-# neighbour's numeric influence var to pull toward it) is UNPROVEN, so it is NOT
-# used. Instead each power PUSHES a score onto a state it can reach (proven
-# property reads: ownership, is_subject_of, is_in_region via the sphere
-# classifiers, every_neighbor_province), all scores decay yearly, and the
-# dominant holder is a plain 4-way max over four FIXED-name vars — no dynamic
-# ordered_in_list deref. This is the memory's documented safe fallback
-# (imp19c-sphere-idioms-oracle).
+# DESIGN — PUSH sources + PULL diffusion. [#307] The PULL model (a state reading a
+# NEIGHBOURING state's numeric influence var mid-iteration) is now PROVEN: the
+# corrected SPHERE probe (develop c38b3f38) returned "PULL VERDICT = SUPPORTED" from
+# a genuine script trigger (var:sphere_pull_sum > 0) — a state CAN read a neighbour's
+# numeric var both as a trigger (var:X >= n) and an effect (change_variable add =
+# scope:nbr.var:X). See memory imp19c-sphere-idioms-oracle (RESOLVED). This SUPERSEDES
+# the earlier "PUSH-only, PULL is UNPROVEN" fallback note.
+#
+# The contest now has TWO terms:
+#   • PUSH (source): each power injects influence into states it can reach by PROVEN
+#     property reads — China on its/subjects' soil + the immediate frontier, each
+#     European power in its theatre (the QING_gp_sphere_is_* classifiers), ramped over
+#     the century. These are the SOURCES that originate influence.
+#   • PULL (diffusion): influence then BLEEDS between adjacent contested marches — a
+#     state pulls each power's influence toward its neighbours' (a power dominant in one
+#     march radiates into the next), via the proven cross-state numeric read. To keep
+#     the bleed order-independent, each ring state's four scores are SNAPSHOT (into
+#     *_influence_snap) before any tick, and the bleed reads neighbours' snapshots (not
+#     the live values being mutated this pass).
+# All scores decay yearly; the dominant holder is a plain 4-way max over four FIXED-name
+# vars — no dynamic ordered_in_list deref.
 #
 # The dominant holder is stored as a NUMERIC CODE (proven numeric equality;
 # flag-var-to-flag-var equality has no precedent in this codebase and is avoided):
@@ -177,6 +190,12 @@ QING_sphere_ensure_vars = {
 	if = { limit = { NOT = { has_variable = britain_influence } } set_variable = { name = britain_influence  value = 0 } }
 	if = { limit = { NOT = { has_variable = france_influence } }  set_variable = { name = france_influence   value = 0 } }
 	if = { limit = { NOT = { has_variable = russia_influence } }  set_variable = { name = russia_influence   value = 0 } }
+	# [#307 PULL] per-power SNAPSHOT of this state's scores, stamped once per pulse before any
+	# tick so the neighbour-bleed reads a stable value (not one being mutated mid-iteration).
+	if = { limit = { NOT = { has_variable = china_influence_snap } }   set_variable = { name = china_influence_snap    value = 0 } }
+	if = { limit = { NOT = { has_variable = britain_influence_snap } } set_variable = { name = britain_influence_snap  value = 0 } }
+	if = { limit = { NOT = { has_variable = france_influence_snap } }  set_variable = { name = france_influence_snap   value = 0 } }
+	if = { limit = { NOT = { has_variable = russia_influence_snap } }  set_variable = { name = russia_influence_snap   value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_sphere_dominant } }      set_variable = { name = qing_sphere_dominant       value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_sphere_dominant_prev } } set_variable = { name = qing_sphere_dominant_prev  value = 0 } }
 	set_variable = { name = qing_sphere_contested  value = 1 }
@@ -276,6 +295,84 @@ QING_sphere_recompute_dominant = {
 }
 
 # ======================================================================
+# QING_sphere_snapshot_state — [#307 PULL] freeze this state's four live scores into
+# their *_influence_snap vars. Called on EVERY ring state before ANY tick, so the
+# neighbour-bleed (which reads snapshots) is order-independent — a state bled early in
+# the pass and one bled late both read the SAME pre-pass neighbour values. Scope: STATE.
+# ======================================================================
+QING_sphere_snapshot_state = {
+	QING_sphere_ensure_vars = yes
+	set_variable = { name = china_influence_snap    value = var:china_influence }
+	set_variable = { name = britain_influence_snap  value = var:britain_influence }
+	set_variable = { name = france_influence_snap   value = var:france_influence }
+	set_variable = { name = russia_influence_snap   value = var:russia_influence }
+}
+
+# ======================================================================
+# QING_sphere_bleed_state — [#307 PULL] neighbour diffusion. Each power's influence
+# on THIS state is pulled a little toward the HIGHEST value that power holds on an
+# adjacent CONTESTED march (a power dominant next door radiates in). Reads neighbours'
+# *_influence_snap (the frozen pre-pass value — the proven cross-state numeric read:
+# var:X as a trigger + scope:nbr.var:X in an effect), so the bleed is order-independent
+# and cannot feed back on itself within a pass. Scope: STATE. Runs AFTER snapshot, BEFORE
+# the source push/decay tick, so the tick's clamp/cap/recompute see the bled values.
+#
+# For each power: find the max neighbour snapshot (only among contested marches — those
+# carry qing_sphere_contested); if it EXCEEDS this state's own snapshot, pull a fraction
+# (1/4 of the gap, min 0) toward it. A power weak everywhere nearby bleeds nothing.
+# ======================================================================
+QING_sphere_bleed_state = {
+	save_scope_as = bleed_src_state
+	QING_sphere_bleed_one_power = { power = china }
+	QING_sphere_bleed_one_power = { power = britain }
+	QING_sphere_bleed_one_power = { power = france }
+	QING_sphere_bleed_one_power = { power = russia }
+}
+
+# One power's neighbour-bleed. Scope: STATE (= scope:bleed_src_state, set by the caller).
+# $power$ = china|britain|france|russia. Accumulates the max neighbour snapshot on a
+# persistent temp var on the SOURCE state (so the nested province/neighbour loop writes
+# back to a stable saved scope, not a transient one), then pulls 1/4 the positive gap.
+QING_sphere_bleed_one_power = {
+	# Running max of neighbour snapshots, on a PERSISTENT temp var on the source state
+	# (persistent-var arithmetic is the proven idiom; local_var arithmetic with var:
+	# operands is not). Cleared at the end of this call so no state carries it between pulses.
+	set_variable = { name = sphere_bleed_nbrmax  value = 0 }
+	# Walk the source state's provinces -> their land neighbours -> the neighbour's state,
+	# and raise sphere_bleed_nbrmax to the strongest contested-neighbour snapshot for this power.
+	every_state_province = {
+		every_neighbor_province = {
+			limit = { is_sea = no  exists = state }
+			state = {
+				if = {
+					limit = {
+						NOT = { this = scope:bleed_src_state }
+						has_variable = qing_sphere_contested
+						var:$power$_influence_snap > scope:bleed_src_state.var:sphere_bleed_nbrmax
+					}
+					# raise the running max on the SOURCE state (proven cross-state numeric read).
+					save_scope_as = bleed_nbr_state
+					scope:bleed_src_state = {
+						set_variable = { name = sphere_bleed_nbrmax  value = scope:bleed_nbr_state.var:$power$_influence_snap }
+					}
+				}
+			}
+		}
+	}
+	# Pull toward the strongest neighbour if it out-influences our own snapshot: close 1/4 the gap.
+	if = {
+		limit = { var:sphere_bleed_nbrmax > var:$power$_influence_snap }
+		# gap = nbrmax - own snapshot; bleed = gap / 4 (persistent-var arithmetic, proven).
+		set_variable = { name = sphere_bleed_gap  value = var:sphere_bleed_nbrmax }
+		change_variable = { name = sphere_bleed_gap  subtract = var:$power$_influence_snap }
+		change_variable = { name = sphere_bleed_gap  divide = 4 }
+		change_variable = { name = $power$_influence  add = var:sphere_bleed_gap }
+		remove_variable = sphere_bleed_gap
+	}
+	remove_variable = sphere_bleed_nbrmax
+}
+
+# ======================================================================
 # QING_sphere_pulse — quarterly driver (self-throttled to ~yearly). Rebuilds the
 # ring, evolves every contested state, tallies the balance, and fires GP tension
 # on any state that changed hands. Scope: COUNTRY (CHI).
@@ -288,8 +385,17 @@ QING_sphere_pulse = {
 		save_scope_as = sphere_owner
 		QING_sphere_reset_counters = yes
 		QING_sphere_build_ring = yes
+		# [#307 PULL] Pass 1: SNAPSHOT every ring state's scores BEFORE any tick, so the
+		# neighbour-bleed in pass 2 reads frozen pre-pass values (order-independent).
+		every_in_list = {
+			variable = qing_sphere_states
+			QING_sphere_snapshot_state = yes
+		}
+		# [#307 PULL] Pass 2: bleed (neighbour diffusion, reads snapshots) then tick (source
+		# push/decay/clamp/cap/recompute) each state, and tally the freshly-recomputed holder.
 		every_in_list = {
 			variable = qing_sphere_states	# [#165 review-fix] see QING_sphere_init: iterate the variable-list with variable=, not list=
+			QING_sphere_bleed_state = yes
 			QING_sphere_tick_state = yes
 			# Tally the (freshly recomputed) dominant holder into CHI's counters.
 			if = { limit = { var:qing_sphere_dominant = 1 } scope:sphere_owner = { change_variable = { name = qing_sphere_china_count    add = 1 } } }

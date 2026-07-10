@@ -1,0 +1,174 @@
+########################################################################
+# MARRIAGE_actions.txt — [#311] the PLAYER-FACING (L4) dynastic-marriage interface.
+#
+# The AI-autonomous pulse (se_MARRIAGE.txt MARRIAGE_pulse) runs marriage diplomacy for
+# every eligible realm; THIS file gives the PLAYER the deliberate levers the pulse cannot
+# express — choosing WHOM to court, spending to bridge a confessional gap, pledging or
+# breaking a betrothal. Built as country-TARGET scripted GUIs (the sell_provinces idiom:
+# saved_scopes = { target }), so each is invoked against a chosen foreign realm from the
+# diplomacy UI and operates on scope:target. Gated by the marriage triggers (00_marriage_
+# triggers.txt), which read the other house as scope:target (bound natively by saved_scopes,
+# and readable in trigger context — no in-trigger scope-setting).
+#
+# Enabled for ALL eligible dynastic monarchies INCLUDING the Qing (#311 enables CHI). The
+# hard confessional/cultural gate still stands: a CHI<->Western match is impossible until a
+# bridge (dispensation/conversion) is forged — the historical reality that there was no
+# routine Sino-European marriage market.
+#
+# Prefix = marriage_action_. All effects call se_MARRIAGE.txt verbs; all logged sys=MARRIAGE.
+########################################################################
+
+# ---- OPEN THE CANDIDATE-LIST WINDOW ----------------------------------------------------
+# [#311 L4 GUI] Builds the datamodel the marriage_window reads: every FOREIGN realm that is an
+# eligible dynastic monarchy (MARRIAGE_eligible_realm_trigger), in diplomatic range, and fields a
+# marriageable child — i.e. every house you could actually court. Each candidate is stored in the
+# marriage_candidates variable-list (rendered as rows); its great-power SCORE (DIPLOMACY_power, the
+# same metric the parity gate uses) is cached into marriage_display_power on BOTH that candidate and
+# ROOT, so the window can show the power comparison the parity band is judged on. Per-row buttons then
+# invoke marriage_action_propose / _seek_bridge / _betroth against that row's country as scope:target,
+# each self-gating on compatibility — so the row itself reveals whether a house is free-marriageable,
+# needs a bridge, or is already wed. Country scope; wired to a button (createwidget marriage_window).
+marriage_open_candidates = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { MARRIAGE_eligible_realm_trigger = yes }
+	is_valid = { always = yes }
+	effect = {
+		LOG_line = { sys = MARRIAGE  msg = "candidate-list window opened by" }
+		clear_variable_list = marriage_candidates
+		# cache OUR own power for the side-by-side comparison in the window header.
+		set_variable = { name = marriage_display_power  value = DIPLOMACY_power }
+		every_country = {
+			limit = {
+				NOT = { this = ROOT }
+				exists = current_ruler
+				MARRIAGE_eligible_realm_trigger = yes
+				ROOT = { in_diplomatic_range = prev }
+				current_ruler = { MARRIAGE_has_marriageable_child_trigger = yes }
+			}
+			# cache this candidate's power score so the row can show it against ours.
+			set_variable = { name = marriage_display_power  value = DIPLOMACY_power }
+			ROOT = { add_to_variable_list = { name = marriage_candidates  target = prev } }
+		}
+	}
+}
+
+# ---- PROPOSE A MARRIAGE to the target house -------------------------------------------
+# Available when both realms are eligible, in range, not already wedded, both field a
+# marriageable child, AND the pair is COMPATIBLE (same bloc / same faith / a forged bridge).
+marriage_action_propose = {
+	scope = country
+	saved_scopes = { target }
+	ai_is_valid = { always = no }
+	is_shown = {
+		MARRIAGE_eligible_realm_trigger = yes
+		exists = scope:target
+		NOT = { scope:target = root }
+	}
+	is_valid = {
+		in_diplomatic_range = scope:target
+		current_ruler = { MARRIAGE_has_marriageable_child_trigger = yes }
+		scope:target = {
+			MARRIAGE_eligible_realm_trigger = yes
+			current_ruler = { MARRIAGE_has_marriageable_child_trigger = yes }
+		}
+		# not already wedded to this house
+		NOT = { is_target_in_variable_list = { name = marriage_partners  target = scope:target } }
+		# under the bond cap
+		custom_tooltip = {
+			text = marriage_action_needs_bond_slot_tt
+			OR = { NOT = { has_variable = marriage_bond_count }  var:marriage_bond_count < 3 }
+		}
+		# the pair must be compatible (the compat trigger reads scope:marriage_faith_other)
+		custom_tooltip = {
+			text = marriage_action_needs_compatible_tt
+			MARRIAGE_pair_compatible_trigger = yes
+		}
+	}
+	effect = {
+		MARRIAGE_init = yes
+		# form the pact directly against the chosen partner (senior = us, the proposer).
+		MARRIAGE_form_pact = { partner = scope:target }
+		LOG_line = { sys = MARRIAGE  msg = "player proposed + concluded a marriage with the target house" }
+	}
+}
+
+# ---- SEEK A DISPENSATION / OFFER A CONVERSION (forge a bridge) -------------------------
+# The ONLY road to a cross-confessional / cross-bloc match (a Qing<->Western union, or a
+# Catholic<->Protestant one). Costs political influence + treasury (the price of the papal
+# dispensation apparatus, or of the diplomatic groundwork for a bride's conversion). Shown
+# only when a bridge is actually NEEDED (not same-faith, not same-bloc, none yet forged).
+marriage_action_seek_bridge = {
+	scope = country
+	saved_scopes = { target }
+	ai_is_valid = { always = no }
+	is_shown = {
+		MARRIAGE_eligible_realm_trigger = yes
+		exists = scope:target
+		NOT = { scope:target = root }
+		# only surface when a bridge is genuinely required
+		MARRIAGE_needs_bridge_trigger = yes
+	}
+	is_valid = {
+		in_diplomatic_range = scope:target
+		custom_tooltip = {
+			text = marriage_action_needs_pi_40_tt
+			political_influence >= 40
+		}
+		custom_tooltip = {
+			text = marriage_action_needs_treasury_80_tt
+			treasury >= 80
+		}
+	}
+	effect = {
+		add_political_influence = -40
+		add_treasury = -80
+		MARRIAGE_forge_bridge = { other = scope:target }
+		LOG_line = { sys = MARRIAGE  msg = "player forged a marriage bridge (dispensation/conversion) with the target house" }
+	}
+}
+
+# ---- PLEDGE A BETROTHAL (a lighter pledge, arms the repudiation-insult) ----------------
+marriage_action_betroth = {
+	scope = country
+	saved_scopes = { target }
+	ai_is_valid = { always = no }
+	is_shown = {
+		MARRIAGE_eligible_realm_trigger = yes
+		exists = scope:target
+		NOT = { scope:target = root }
+	}
+	is_valid = {
+		in_diplomatic_range = scope:target
+		scope:target = { MARRIAGE_eligible_realm_trigger = yes }
+		# not already betrothed to this house
+		NOT = { is_target_in_variable_list = { name = marriage_betrothed  target = scope:target } }
+		# the pair must be compatible (a betrothal presumes a possible marriage)
+		custom_tooltip = {
+			text = marriage_action_needs_compatible_tt
+			MARRIAGE_pair_compatible_trigger = yes
+		}
+	}
+	effect = {
+		MARRIAGE_betroth = { other = scope:target }
+		LOG_line = { sys = MARRIAGE  msg = "player pledged a betrothal with the target house" }
+	}
+}
+
+# ---- REPUDIATE A BETROTHAL (a grave insult — the 1725 affront) -------------------------
+marriage_action_repudiate = {
+	scope = country
+	saved_scopes = { target }
+	ai_is_valid = { always = no }
+	is_shown = {
+		MARRIAGE_eligible_realm_trigger = yes
+		exists = scope:target
+		# only when a betrothal with this house actually stands
+		is_target_in_variable_list = { name = marriage_betrothed  target = scope:target }
+	}
+	is_valid = { always = yes }
+	effect = {
+		MARRIAGE_repudiate = { other = scope:target }
+		LOG_line = { sys = MARRIAGE  msg = "player repudiated a betrothal with the target house" }
+	}
+}

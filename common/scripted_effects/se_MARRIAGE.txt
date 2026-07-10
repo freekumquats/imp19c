@@ -7,13 +7,14 @@
 # a junior house is left without a male heir — opens the road to DYNASTIC UNION and
 # eventual inheritance, modelled on the existing royal_union subject type.
 #
-# SCOPE (DESIGN_MARRIAGE_DIPLOMACY.md §6, conservative default — user away, build
-# ordered): this is a WESTERN-MONARCHY AI feature. It self-gates on
-# basic_western_group_country_trigger + narrow_monarchy_trigger and is AI-autonomous
-# (drives itself while the player runs the Qing, exactly like the USA #93 / Japan #94
-# / Mexico #96 arcs). The Qing do NOT participate in unions or inheritance — they
-# integrate their subjects, they are not inherited — so CHI is excluded here (a
-# foreign-princess Empress for CHI is left to the separate Empress-seat flavour).
+# SCOPE: an AI-autonomous dynastic layer for every eligible MONARCHY, driving itself while
+# the player runs any realm (like the USA #93 / Japan #94 / Mexico #96 arcs). [#311 UPDATE]
+# the feature is now FULL: eligibility gates (rank/religion/bloc), a dispensation/conversion
+# BRIDGE for cross-confessional matches, dowry + claim transfer, betrothal + repudiation,
+# alliance decay, contested-succession war-claims, loveless-marriage dysfunction, a bloc-weight
+# indicator, and a PLAYER L4 GUI (MARRIAGE_actions.txt). The QING (CHI) are now ELIGIBLE — but a
+# CHI<->Western match is hard-gated behind the bridge (there was no routine Sino-European marriage
+# market), so the AI never forces one; only a deliberate player dispensation/conversion enables it.
 #
 # ORACLE GATE (all four §3 hooks cleared 2026-07-09, Terra-Indomita + Invictus):
 #   [U-3] cross-court marry_character — PROVEN: c:TAG = { <child iterator> = {
@@ -86,6 +87,11 @@ MARRIAGE_pulse = {
 				var:marriage_bond_count < 3
 				current_ruler = { MARRIAGE_has_marriageable_child_trigger = yes }
 			}
+			# [#311] the pair-compatibility trigger reads the OTHER house as scope:target.
+			# Faith/bloc compatibility is SYMMETRIC, so we save OUR OWN realm as scope:target and
+			# evaluate the trigger from inside each candidate's scope (candidate-vs-home). save_scope_as
+			# is an effect, so it is set HERE (not inside the random_country limit = trigger context).
+			save_scope_as = target
 			random_country = {
 				limit = {
 					NOT = { this = scope:marriage_home }
@@ -99,6 +105,12 @@ MARRIAGE_pulse = {
 					}
 					# the partner house must also field a marriageable child to wed
 					current_ruler = { MARRIAGE_has_marriageable_child_trigger = yes }
+					# [#311] the AUTONOMOUS pulse only makes COMPATIBLE matches (same Western bloc or
+					# same faith). A cross-confessional / cross-bloc union (e.g. a Qing<->Western match)
+					# needs a deliberate BRIDGE (dispensation/conversion) and is PLAYER-DRIVEN only, via
+					# the marriage GUI — the AI does not force one (there was no routine Sino-European
+					# marriage market). Evaluated candidate(this)-vs-home(scope:target, saved above).
+					MARRIAGE_pair_compatible_trigger = yes
 				}
 				save_scope_as = marriage_partner_realm
 			}
@@ -109,6 +121,11 @@ MARRIAGE_pulse = {
 		}
 		# --- L2: escalate any standing bond whose junior house is now heirless.
 		MARRIAGE_check_unions = yes
+		# --- [#311 hook #2] L2b: let aged dynastic alliances lapse (bond remains, alliance fades).
+		MARRIAGE_check_decay = yes
+		# --- [#311 hook #13] recompute our DYNASTIC BLOC WEIGHT (a simple numeric: the land this
+		# bloodline's marriage network commands), so blocs can be ranked against each other.
+		MARRIAGE_recompute_bloc_weight = yes
 		LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_pulse"  result = OK }
 	}
 }
@@ -195,9 +212,54 @@ MARRIAGE_form_pact = {
 				scope:pact_junior = { NOT = { at_war = yes } }
 			}
 			scope:pact_senior = { add_alliance = scope:pact_junior }
-			LOG_line = { sys = MARRIAGE  msg = "pact sealed with a formal alliance" }
+			# [#311 hook #2] the alliance is a DYNASTIC bond that fades with the generation that
+			# made it: stamp a self-expiring timer (30 game-years). MARRIAGE_check_decay reads it
+			# and lets the alliance lapse once the timer runs out unless a fresh marriage renews it.
+			scope:pact_senior = { set_variable = { name = marriage_alliance_timer  days = 10950 } }
+			scope:pact_junior = { set_variable = { name = marriage_alliance_timer  days = 10950 } }
+			# [#311 engine-review fix] Record that WE created this alliance, in a dedicated list.
+			# Decay must break ONLY marriage-created alliances — NOT a pre-existing/independent
+			# alliance with a house we happen to also wed. Previously decay inferred "expired" from
+			# the mere ABSENCE of marriage_alliance_timer; but if the couple wed while ALREADY allied
+			# (or at war), this branch is skipped, no timer is ever set, yet bond_count>0 — so on the
+			# next pulse decay's "no timer" limit was true and it broke the unrelated alliance. Now
+			# decay iterates this list (not marriage_partners), so an alliance we did not create is
+			# never touched. Both directions, mirroring the alliance + timer.
+			scope:pact_senior = { add_to_variable_list = { name = marriage_alliance_partners  target = scope:pact_junior } }
+			scope:pact_junior = { add_to_variable_list = { name = marriage_alliance_partners  target = scope:pact_senior } }
+			LOG_line = { sys = MARRIAGE  msg = "pact sealed with a formal alliance (30-yr dynastic bond)" }
 		}
-		LOG_line = { sys = MARRIAGE  msg = "royal marriage concluded between two houses" }
+		# [#311 hook #3] the DOWRY — a marriage was a patrimonial transaction, not just a bond.
+		# The junior house brings development capital to the senior (the bride's portion). Modest,
+		# once per pact. Grounded in the contract-dowry norm (Catherine of Braganza, the Farnese
+		# portion). Uses the currency public interface so it flows through the economy layer.
+		scope:pact_senior = { CURRENCY_grant_country_wealth = { thousands = 30 } }
+		# a STRONG match (the two houses already share the closest goodwill) may also carry a
+		# territorial claim in the contract — the road by which marriages moved provinces
+		# (Burgundy to Maximilian). Modelled as a pressable claim on ONE of the junior's border
+		# provinces adjacent to the senior, guarded so it only fires for a genuinely deep bond.
+		if = {
+			limit = {
+				scope:pact_senior = { has_variable = marriage_bond_count  var:marriage_bond_count >= 2 }
+			}
+			scope:pact_senior = { MARRIAGE_grant_dowry_claim = { from = scope:pact_junior } }
+		}
+		# [#311 hook #10] a LOVELESS match: if the wedded pair are badly mismatched in temper
+		# (a wide zeal gap — the fervent-vs-worldly friction the affinity engine already scores),
+		# the union is unhappy and casts a shadow over the senior house's succession. Cheap read
+		# on the two saved characters; stamps the dysfunction modifier on the senior realm.
+		if = {
+			limit = {
+				exists = scope:marriage_groom
+				exists = scope:marriage_bride
+				OR = {
+					AND = { scope:marriage_groom = { zeal >= 10 }  scope:marriage_bride = { zeal <= 3 } }
+					AND = { scope:marriage_bride = { zeal >= 10 }  scope:marriage_groom = { zeal <= 3 } }
+				}
+			}
+			scope:pact_senior = { MARRIAGE_apply_dysfunction = yes }
+		}
+		LOG_line = { sys = MARRIAGE  msg = "royal marriage concluded between two houses (dowry paid)" }
 	}
 	else = {
 		LOG_fail = { sys = MARRIAGE  fn = "MARRIAGE_form_pact"  reason = "no marriageable pair found at wedding time" }
@@ -282,6 +344,40 @@ MARRIAGE_on_ruler_death_union = {
 					exists = overlord
 				}
 				overlord = { save_scope_as = union_inheritor }
+				# [#311 hook #8] CONTESTED inheritance: if ANOTHER realm was ALSO wedded to the dying
+				# house AND is a near-equal of the overlord (a rival dynastic claim of comparable weight),
+				# the succession is DISPUTED — no clean inheritance; both press the claim by arms (the War
+				# of the Spanish/Austrian/Bavarian Succession pattern). Set a guard so the clean land
+				# transfer below is skipped, and grant claims to the overlord + the rival.
+				set_variable = { name = union_contested  value = 0 }
+				if = {
+					limit = {
+						any_country = {
+							NOT = { this = scope:union_inheritor }
+							NOT = { this = scope:union_dying_realm }
+							exists = current_ruler
+							is_target_in_variable_list = { name = marriage_partners  target = scope:union_dying_realm }
+							num_of_cities >= scope:union_inheritor.num_of_cities
+						}
+					}
+					set_variable = { name = union_contested  value = 1 }
+					random_country = {
+						limit = {
+							NOT = { this = scope:union_inheritor }
+							NOT = { this = scope:union_dying_realm }
+							exists = current_ruler
+							is_target_in_variable_list = { name = marriage_partners  target = scope:union_dying_realm }
+							num_of_cities >= scope:union_inheritor.num_of_cities
+						}
+						save_scope_as = union_rival_claimant
+					}
+					scope:union_inheritor = { MARRIAGE_press_succession_claim = { realm = scope:union_dying_realm } }
+					if = {
+						limit = { exists = scope:union_rival_claimant }
+						scope:union_rival_claimant = { MARRIAGE_press_succession_claim = { realm = scope:union_dying_realm } }
+					}
+					LOG_line = { sys = MARRIAGE  msg = "CONTESTED succession — a rival dynastic claim; pressed by arms, no clean inheritance" }
+				}
 				LOG_line = { sys = MARRIAGE  msg = "royal-union junior house extinct -> inheritance" }
 				# gather the whole junior realm's land into a NAMED list (the idiom
 				# LAND_transfer_provinces expects — target_provinces takes a plain list
@@ -296,7 +392,13 @@ MARRIAGE_on_ruler_death_union = {
 					}
 				}
 				if = {
-					limit = { any_in_list = { list = marriage_inherit_provs  count >= 1 } }
+					# [#311 hook #8] clean inheritance ONLY if the succession is uncontested; a
+					# contested one (guard set above) is decided by war via the pressed claims, not
+					# by an automatic land transfer.
+					limit = {
+						any_in_list = { list = marriage_inherit_provs  count >= 1 }
+						var:union_contested = 0
+					}
 					scope:union_inheritor = {
 						LAND_transfer_provinces = {
 							target_provinces = marriage_inherit_provs
@@ -328,10 +430,267 @@ MARRIAGE_on_ruler_death_union = {
 								remove_list_variable = { name = marriage_partners  target = scope:union_dying_realm }
 								change_variable = { name = marriage_bond_count  subtract = 1 }
 							}
+							# [#311 engine-review fix] also prune the created-alliance list, else the
+							# dead realm leaves a stale marriage_alliance_partners entry that keeps the
+							# decay guard's list non-empty forever (a phantom that never lapses).
+							if = {
+								limit = { is_target_in_variable_list = { name = marriage_alliance_partners  target = scope:union_dying_realm } }
+								remove_list_variable = { name = marriage_alliance_partners  target = scope:union_dying_realm }
+							}
 						}
 					}
 				}
 			}
 		}
 	}
+}
+
+# ======================================================================
+# [#311 hook #3] MARRIAGE_grant_dowry_claim — a strong match carries a territorial claim
+# in the contract (the road by which marriages moved provinces: Burgundy→Maximilian). Call
+# in the SENIOR country scope; $from$ = the junior partner COUNTRY. Grants the senior a
+# pressable claim on ONE of the junior's provinces that BORDERS the senior (a claim you can
+# actually reach). Guarded so it is a clean no-op if the junior has no adjacent province.
+# ======================================================================
+MARRIAGE_grant_dowry_claim = {
+	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_grant_dowry_claim" }
+	save_scope_as = dowry_senior
+	if = {
+		limit = {
+			$from$ = {
+				any_owned_province = {
+					is_sea = no
+					NOT = { owner = scope:dowry_senior }
+					any_neighbor_province = { owner = scope:dowry_senior }
+				}
+			}
+		}
+		$from$ = {
+			random_owned_province = {
+				limit = {
+					is_sea = no
+					NOT = { owner = scope:dowry_senior }
+					any_neighbor_province = { owner = scope:dowry_senior }
+				}
+				save_scope_as = dowry_claim_prov
+			}
+		}
+		if = {
+			limit = { exists = scope:dowry_claim_prov }
+			scope:dowry_senior = { add_claim = scope:dowry_claim_prov }
+			LOG_line = { sys = MARRIAGE  msg = "dowry carried a border claim into the senior house" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = MARRIAGE  fn = "MARRIAGE_grant_dowry_claim"  reason = "junior has no border province adjacent to senior; no dowry-claim" }
+	}
+	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_grant_dowry_claim"  result = OK }
+}
+
+# ======================================================================
+# [#311 hook #7] MARRIAGE_forge_bridge — establish a marriage BRIDGE with a house across the
+# confessional/cultural line (a papal dispensation, or a bride's conversion — Catherine née
+# Sophie of Anhalt-Zerbst converting to Orthodoxy, 1744). This is the ONLY way a cross-bloc /
+# cross-faith pair becomes MARRIAGE_pair_compatible. Records the bond BOTH ways (bridges are
+# mutual) via the proven variable_list idiom. Call in the PROPOSER country scope; $other$ =
+# the partner COUNTRY. Player-driven (from the marriage GUI); costs are applied by the caller.
+# ======================================================================
+MARRIAGE_forge_bridge = {
+	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_forge_bridge" }
+	MARRIAGE_init = yes
+	save_scope_as = bridge_home
+	if = {
+		limit = { NOT = { is_target_in_variable_list = { name = marriage_bridge_partners  target = $other$ } } }
+		add_to_variable_list = { name = marriage_bridge_partners  target = $other$ }
+	}
+	$other$ = {
+		MARRIAGE_init = yes
+		if = {
+			limit = { NOT = { is_target_in_variable_list = { name = marriage_bridge_partners  target = scope:bridge_home } } }
+			add_to_variable_list = { name = marriage_bridge_partners  target = scope:bridge_home }
+		}
+	}
+	LOG_line = { sys = MARRIAGE  msg = "a marriage bridge (dispensation/conversion) was forged between two houses" }
+	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_forge_bridge"  result = OK }
+}
+
+# ======================================================================
+# [#311 hook #15] MARRIAGE_betroth — a BETROTHAL: a pledged-but-not-yet-consummated match. Binds
+# the two houses with a lighter goodwill than a full marriage, and ARMS the repudiation-insult
+# hook: breaking it later is a grave affront. Call in the PROPOSER country scope; $other$ = the
+# partner COUNTRY. Records a per-partner betrothal bond both ways (marriage_betrothed list).
+# Historically the arranged childhood betrothal (Marie-Antoinette pledged years before 1770).
+# ======================================================================
+MARRIAGE_betroth = {
+	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_betroth" }
+	MARRIAGE_init = yes
+	save_scope_as = betroth_home
+	if = {
+		limit = { NOT = { is_target_in_variable_list = { name = marriage_betrothed  target = $other$ } } }
+		add_to_variable_list = { name = marriage_betrothed  target = $other$ }
+		add_opinion = { modifier = royal_betrothal_opmod  target = $other$ }
+	}
+	$other$ = {
+		MARRIAGE_init = yes
+		if = {
+			limit = { NOT = { is_target_in_variable_list = { name = marriage_betrothed  target = scope:betroth_home } } }
+			add_to_variable_list = { name = marriage_betrothed  target = scope:betroth_home }
+			add_opinion = { modifier = royal_betrothal_opmod  target = scope:betroth_home }
+		}
+	}
+	LOG_line = { sys = MARRIAGE  msg = "a betrothal was pledged between two houses" }
+	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_betroth"  result = OK }
+}
+
+# ======================================================================
+# [#311 hook #5] MARRIAGE_repudiate — BREAK a standing betrothal: a grave diplomatic insult
+# (the 1725 Louis XV / Spanish infanta affair, which needed Fleury's repair diplomacy). Call in
+# the REPUDIATING country scope; $other$ = the jilted partner COUNTRY. Strips the betrothal bond
+# both ways, lands a heavy opinion penalty + a lasting "jilted" grievance modifier on the injured
+# house, and breaks any standing alliance between them. The repudiator takes a prestige hit.
+# ======================================================================
+MARRIAGE_repudiate = {
+	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_repudiate" }
+	save_scope_as = repudiator
+	if = {
+		limit = { is_target_in_variable_list = { name = marriage_betrothed  target = $other$ } }
+		remove_list_variable = { name = marriage_betrothed  target = $other$ }
+	}
+	# the jilted house's grievance: a deep opinion hit + a lasting resentment modifier on THEM
+	# toward us, and the alliance (if any) is broken.
+	$other$ = {
+		if = {
+			limit = { is_target_in_variable_list = { name = marriage_betrothed  target = scope:repudiator } }
+			remove_list_variable = { name = marriage_betrothed  target = scope:repudiator }
+		}
+		add_opinion = { modifier = royal_jilted_opmod  target = scope:repudiator }
+		if = {
+			limit = { alliance_with = scope:repudiator }
+			break_alliance = scope:repudiator
+			# [#311 engine-review fix] if that broken alliance was a marriage-created one, drop the
+			# entry from the created-alliance list so decay never targets a dead alliance later.
+			if = {
+				limit = { is_target_in_variable_list = { name = marriage_alliance_partners  target = scope:repudiator } }
+				remove_list_variable = { name = marriage_alliance_partners  target = scope:repudiator }
+			}
+		}
+	}
+	# the affront also costs the repudiator standing at the courts of Europe.
+	current_ruler = { add_prestige = -30 }
+	LOG_line = { sys = MARRIAGE  msg = "a betrothal was REPUDIATED — a grave insult to the jilted house" }
+	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_repudiate"  result = OK }
+}
+
+# ======================================================================
+# [#311 hook #2] MARRIAGE_check_decay — let dynastic alliances FADE with the generation that
+# made them. Called from the pulse. If our marriage-alliance timer has run out (the couple's
+# generation has passed) AND the bond has not been renewed by a fresh marriage, the formal
+# alliance lapses to mere goodwill — the historical decay of the Family Compacts across reigns.
+# Country scope (the home realm). O(partners).
+# ======================================================================
+MARRIAGE_check_decay = {
+	if = {
+		# the timer variable is REMOVED by the engine when it expires (days= form), so its
+		# ABSENCE — WHILE we still hold at least one marriage-CREATED alliance — is the decay signal.
+		# [#311 engine-review fix] Gate on the dedicated marriage_alliance_partners list, NOT on
+		# marriage_bond_count. bond_count>0 with no timer is a FALSE decay signal in the common case
+		# where a couple wed while already allied (the alliance branch was skipped, so no timer was
+		# ever set) — which previously made decay break that pre-existing, unrelated alliance every
+		# pulse. Requiring a non-empty marriage_alliance_partners list means we only decay when we
+		# genuinely created a marriage alliance whose timer has now run out.
+		limit = {
+			has_variable_list = marriage_alliance_partners
+			NOT = { has_variable = marriage_alliance_timer }
+		}
+		save_scope_as = decay_home
+		# lapse the alliance with each partner whose alliance WE created and are still allied to but
+		# whose bond has aged out; the goodwill opinion + the marriage bond itself remain (the houses
+		# are still kin), only the binding military alliance fades. Iterate the created-alliance list
+		# so an independently-negotiated alliance with a wedded house is never touched. The shared
+		# timer means the whole generation of marriage alliances lapses together (the intended
+		# realm-aggregate Family-Compacts model), so we CLEAR the list AFTER the loop rather than
+		# pruning per-entry (mutating a list mid-iteration is unsafe). A later re-marriage re-stamps
+		# the timer and re-populates the list, starting a fresh generation cleanly.
+		every_in_list = {
+			variable = marriage_alliance_partners
+			limit = { scope:decay_home = { alliance_with = prev } }
+			save_scope_as = decay_partner
+			scope:decay_home = {
+				break_alliance = scope:decay_partner
+				LOG_line = { sys = MARRIAGE  msg = "a dynastic alliance lapsed as its generation passed (bond remains)" }
+			}
+		}
+		scope:decay_home = { clear_variable_list = marriage_alliance_partners }
+	}
+}
+
+# ======================================================================
+# [#311 hook #10] MARRIAGE_apply_dysfunction — a LOVELESS/incompatible match is a dynastic
+# liability (Joseph II's barren, unhappy second marriage; Frederick the Great's estrangement).
+# Call in the country scope of a house whose ruler's marriage is incompatible; stamps a lasting
+# court-discord modifier (a legitimacy + fertility drag). Guarded once. Used by the union/
+# succession events when a match is judged incompatible (opposed traits / no heir produced).
+# ======================================================================
+MARRIAGE_apply_dysfunction = {
+	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_apply_dysfunction" }
+	if = {
+		limit = { NOT = { has_country_modifier = royal_marriage_dysfunction } }
+		add_country_modifier = { name = royal_marriage_dysfunction  duration = -1 }
+		LOG_line = { sys = MARRIAGE  msg = "a loveless dynastic marriage breeds court discord" }
+	}
+	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_apply_dysfunction"  result = OK }
+}
+
+# ======================================================================
+# [#311 hook #8] MARRIAGE_press_succession_claim — when a wedded junior house dies out and the
+# union inheritance is CONTESTED (a near-equal rival also has a marriage claim), grant the
+# senior a pressable claim + a succession-war casus belli rather than a clean inheritance — the
+# War of the Spanish/Austrian/Bavarian Succession pattern. Call in the SENIOR country scope;
+# $realm$ = the extinct junior COUNTRY (still on the map, its land not yet transferred). Grants
+# claims on all its provinces so the senior can press the inheritance by arms.
+# ======================================================================
+MARRIAGE_press_succession_claim = {
+	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_press_succession_claim" }
+	save_scope_as = claim_senior
+	$realm$ = {
+		every_owned_province = {
+			limit = { is_sea = no }
+			scope:claim_senior = { add_claim = prev }
+		}
+	}
+	LOG_line = { sys = MARRIAGE  msg = "a contested dynastic inheritance — the senior house presses its claim by right of marriage" }
+	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_press_succession_claim"  result = OK }
+}
+
+# ======================================================================
+# [#311 hook #13, per user] DYNASTIC BLOC WEIGHT — a simple NUMERIC indicator of how much
+# territory a bloodline's marriage network commands, comparable across houses (the Habsburg-
+# vs-Bourbon-bloc measure), instead of a bespoke mapmode. Bloc weight = our own num_of_cities
+# PLUS the num_of_cities of every realm we are directly wedded to (marriage_partners). Stored
+# as qing_marriage_bloc_weight on the country + refreshed each pulse; the GUI/tooltip reads it
+# and it can be compared to any other realm's same var to see who leads the dynastic game.
+# Country scope (ROOT = the home realm). O(partners). NOT double-counting: a straight sum of
+# the network's cities (a partner shared by two houses counts in each — bloc weight is a reach
+# measure, not a partition).
+# ======================================================================
+MARRIAGE_recompute_bloc_weight = {
+	MARRIAGE_init = yes
+	save_scope_as = bloc_home
+	# start with our own realm's cities.
+	set_variable = { name = qing_marriage_bloc_weight  value = num_of_cities }
+	# add each wedded partner's cities (guarded: a partner may have been annexed/removed).
+	if = {
+		limit = { has_variable_list = marriage_partners }
+		every_in_list = {
+			variable = marriage_partners
+			limit = { exists = this  is_country = yes }
+			# read the partner's city count into a scratch, then fold it into the home total.
+			save_scope_as = bloc_partner
+			set_variable = { name = bloc_partner_cities  value = num_of_cities }
+			scope:bloc_home = {
+				change_variable = { name = qing_marriage_bloc_weight  add = scope:bloc_partner.var:bloc_partner_cities }
+			}
+		}
+	}
+	LOG_line = { sys = MARRIAGE  msg = "dynastic bloc weight recomputed (own + wedded partners' cities) for" }
 }

@@ -1,32 +1,51 @@
 ########################################################################
-# 00_marriage_triggers.txt — [#276] triggers for the dynastic-marriage layer.
+# 00_marriage_triggers.txt — [#276 / #311] triggers for the dynastic-marriage layer.
 #
 # Guard fragments MUST live in a scripted_TRIGGERS file (not scripted_effects), per
 # the #157/#165 lesson — a limit-position condition placed in a scripted_effect can
 # collapse the enclosing guard at load and crash the boot. Referenced from
-# se_MARRIAGE.txt. Prefix = MARRIAGE_. See DESIGN_MARRIAGE_DIPLOMACY.md.
+# se_MARRIAGE.txt + the marriage GUI. Prefix = MARRIAGE_.
+#
+# [#311 full build] The engine is grounded in native-language 18th-c. dynastic history
+# (research/1763_ROYAL_MARRIAGE_diplomacy.md). These triggers implement the ELIGIBILITY
+# GATES the history demanded: equal birth / rank (Ebenbürtigkeit), religion (Catholic /
+# Protestant / Orthodox divides, bridgeable only by dispensation or conversion), and a
+# marriageable-child check. The Qing (CHI) are now ELIGIBLE (#311 enables the feature for
+# them) — but they sit OUTSIDE the Western Christian marriage market, so a CHI<->Western
+# match is gated hard and needs the explicit bridge, exactly as the history says (there was
+# no Sino-European dynastic-marriage tradition, no shared rank order, no religious bridge).
 ########################################################################
 
 # ----------------------------------------------------------------------
-# MARRIAGE_eligible_realm_trigger — COUNTRY. The realms that take part in dynastic
-# marriage: a Western-culture dynastic monarchy that still exists, holds land, and
-# is nobody's subject (a subject house does not marry off its own crown). Excludes
-# the Qing (CHI integrate their subjects, they are not inherited) and the barbarian
-# placeholder tag.
+# MARRIAGE_eligible_realm_trigger — COUNTRY. A realm that takes part in dynastic marriage
+# at all: a dynastic MONARCHY that exists, holds land, and is nobody's subject (a subject
+# house does not marry off its own crown). [#311] The Qing are no longer excluded — they
+# marry too — but the barbarian placeholder tag is. The CULTURE/religion COMPATIBILITY of a
+# specific pair is a SEPARATE gate (MARRIAGE_pair_compatible_trigger) so CHI can enter the
+# system without automatically being wedded into the Western bloc.
 # ----------------------------------------------------------------------
 MARRIAGE_eligible_realm_trigger = {
 	exists = current_ruler
 	is_subject = no
-	basic_western_group_country_trigger = yes
 	narrow_monarchy_trigger = yes
-	NOT = { tag = CHI }
 	NOT = { tag = BAR }
 	num_of_cities >= 1
 }
 
 # ----------------------------------------------------------------------
-# MARRIAGE_has_marriageable_child_trigger — CHARACTER (a ruler). True when the ruler
-# has at least one living, adult, unwed, free child who could be married abroad.
+# MARRIAGE_western_house_trigger — COUNTRY. The Western Christian dynastic bloc: the realms
+# that share the rank order + (broadly) the faith that let them intermarry freely. This is
+# the set the AI-autonomous pulse pairs WITHIN by default (the Habsburg/Bourbon/Coburg web).
+# CHI is deliberately NOT in it — a Qing match must clear the harder cross-bloc gate below.
+# ----------------------------------------------------------------------
+MARRIAGE_western_house_trigger = {
+	MARRIAGE_eligible_realm_trigger = yes
+	basic_western_group_country_trigger = yes
+}
+
+# ----------------------------------------------------------------------
+# MARRIAGE_has_marriageable_child_trigger — CHARACTER (a ruler). True when the ruler has at
+# least one living, adult, unwed, free child who could be married abroad.
 # ----------------------------------------------------------------------
 MARRIAGE_has_marriageable_child_trigger = {
 	any_child = {
@@ -34,5 +53,101 @@ MARRIAGE_has_marriageable_child_trigger = {
 		is_adult = yes
 		is_married = no
 		prisoner = no
+	}
+}
+
+# ----------------------------------------------------------------------
+# SCOPE CONVENTION (#311): the per-pair triggers below read the OTHER house as `scope:target`
+# — the scope the marriage GUI binds natively via `saved_scopes = { target }` (readable in a
+# scripted_gui's is_shown/is_valid trigger context) AND the scope the AI pulse sets on the HOME
+# realm before its random_country candidate loop. Faith/bloc/bridge compatibility is SYMMETRIC,
+# so evaluating "this vs scope:target" works whether `this` is the proposer (GUI) or the
+# candidate (pulse). We do NOT set a scope inside these triggers (save_* is an effect and would
+# be illegal in trigger context) — the caller supplies scope:target.
+# ----------------------------------------------------------------------
+
+# MARRIAGE_same_faith_trigger — this-country vs scope:target. The two houses share a faith and
+# may wed without a bridge (proven cross-scope religion compare via the two rulers).
+MARRIAGE_same_faith_trigger = {
+	exists = scope:target
+	current_ruler = {
+		exists = scope:target.current_ruler
+		religion = scope:target.current_ruler.religion
+	}
+}
+
+# MARRIAGE_power_parity_trigger — this-country vs scope:target. EQUAL STANDING was not only a
+# matter of formal rank (Ebenbürtigkeit) but of POWER: a great power did not wed its heir to a
+# petty princeling, nor a minor house presume to the imperial line. [user] "not just rank ...
+# Great Power has an economic + military metric" — so parity is measured on the mod's OWN
+# great-power SCORE, DIPLOMACY_power (economy + military + tech + RECURSIVE subjects + admin +
+# stability), NOT the formal rank enum. A pair is "of comparable standing" when NEITHER house's
+# power score exceeds THREE TIMES the other's — a near-peer band (hoisted into MARRIAGE_power_x3_own
+# and read cross-scope via the proven `scope:target.<svalue>` idiom, since a value-block trigger
+# RHS is unattested here). Two great powers, or two minor houses, may wed freely; a great-power-
+# to-petty-princeling gulf is bridgeable only by the same dispensation/dowry BRIDGE as the
+# confessional gap (the Farnese-to-a-throne pattern), handled in the compatibility gate below.
+MARRIAGE_power_parity_trigger = {
+	exists = scope:target
+	# our power must not tower over theirs (theirs ×3 must at least reach ours)...
+	DIPLOMACY_power <= scope:target.MARRIAGE_power_x3_own
+	# ...and theirs must not tower over ours (our power ×3 must at least reach theirs).
+	scope:target.DIPLOMACY_power <= MARRIAGE_power_x3_own
+}
+
+# MARRIAGE_pair_compatible_trigger — the FULL per-pair eligibility gate (this vs scope:target).
+# A pair may wed freely if BOTH are eligible dynastic monarchies AND (both in the Western
+# Christian bloc, OR they share a faith, OR a bridge has been forged between them). The bridge
+# is tracked per-pair via the proven is_target_in_variable_list over marriage_bridge_partners
+# (a dynamic tag-in-varname is unattested, so a list membership test is used instead).
+MARRIAGE_pair_compatible_trigger = {
+	exists = scope:target
+	MARRIAGE_eligible_realm_trigger = yes
+	scope:target = { MARRIAGE_eligible_realm_trigger = yes }
+	OR = {
+		# THE FREE-MARRIAGE PATH: comparable STANDING (power parity) AND a shared world —
+		# either both in the Western Christian bloc, or a shared faith anywhere. Equal birth +
+		# equal power together, exactly as the courts of Europe required.
+		AND = {
+			MARRIAGE_power_parity_trigger = yes
+			OR = {
+				# both in the Western Christian bloc — the free-marriage market
+				AND = {
+					MARRIAGE_western_house_trigger = yes
+					scope:target = { MARRIAGE_western_house_trigger = yes }
+				}
+				# a shared faith anywhere (two Orthodox, two Catholic, etc.)
+				MARRIAGE_same_faith_trigger = yes
+			}
+		}
+		# THE BRIDGE PATH: a forged dispensation/conversion (dowry-backed) waives BOTH the
+		# confessional gap AND the power/rank gulf — the deliberate, expensive cross-line match
+		# (the Farnese-to-a-throne / Catherine-née-Sophie pattern). Player-driven via the GUI.
+		is_target_in_variable_list = { name = marriage_bridge_partners  target = scope:target }
+	}
+}
+
+# MARRIAGE_needs_bridge_trigger — this vs scope:target. True when the two WANT to marry but
+# CANNOT yet (not same-bloc, not same-faith, no bridge) — a dispensation/conversion is REQUIRED.
+# Drives the GUI's "seek a dispensation" option (the Catherine-née-Sophie cross-confessional case).
+MARRIAGE_needs_bridge_trigger = {
+	exists = scope:target
+	MARRIAGE_eligible_realm_trigger = yes
+	scope:target = { MARRIAGE_eligible_realm_trigger = yes }
+	# no bridge yet forged...
+	NOT = { is_target_in_variable_list = { name = marriage_bridge_partners  target = scope:target } }
+	# ...and the free path is blocked — i.e. NOT (power parity AND a shared bloc/faith). A block
+	# on EITHER the confessional/bloc axis OR the power axis means a bridge is required.
+	NOT = {
+		AND = {
+			MARRIAGE_power_parity_trigger = yes
+			OR = {
+				AND = {
+					MARRIAGE_western_house_trigger = yes
+					scope:target = { MARRIAGE_western_house_trigger = yes }
+				}
+				MARRIAGE_same_faith_trigger = yes
+			}
+		}
 	}
 }

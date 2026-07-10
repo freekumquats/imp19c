@@ -48,6 +48,7 @@ QING_faction_init = {
 	LOG_enter = { sys = QING  fn = "QING_faction_init" }
 	if = { limit = { NOT = { has_variable = qing_council_reform_lean } }  set_variable = { name = qing_council_reform_lean  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_council_polarization } } set_variable = { name = qing_council_polarization  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_council_polar_weight } } set_variable = { name = qing_council_polar_weight  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_council_polar_pen } }    set_variable = { name = qing_council_polar_pen  value = 0 } }
 	LOG_exit = { sys = QING  fn = "QING_faction_init"  result = OK }
 }
@@ -108,12 +109,89 @@ QING_char_stance = {
 	# --- INTEGRITY: principled reform -------------------------------------------
 	if = { limit = { OR = { has_trait = honest  has_trait = just } } change_variable = { name = qing_char_stance  add = 5 } }
 
+	# --- [#308/user] PERSONAL DRIFT: a man's alignment is not fixed to his traits. This
+	# persistent per-character component (qing_stance_drift, moved by QING_char_stance_shift)
+	# lets an official gradually — or suddenly, at an event — shift where he stands, so the
+	# office-name colours in the GC panel change over a reign. Folded in here so every read of
+	# stance reflects the accumulated drift on top of the structural (trait/age/culture) base.
+	if = { limit = { has_variable = qing_stance_drift }  change_variable = { name = qing_char_stance  add = var:qing_stance_drift } }
+
 	# --- clamp -100..100
 	if = { limit = { var:qing_char_stance > 100 }  set_variable = { name = qing_char_stance  value = 100 } }
 	if = { limit = { var:qing_char_stance < -100 } set_variable = { name = qing_char_stance  value = -100 } }
 
 	LOG_line = { sys = QING  msg = "char stance: = (>0 reformist) for" }
 	LOG_exit = { sys = QING  fn = "QING_char_stance"  result = OK }
+}
+
+# ======================================================================
+# [#308/user] SHIFT A CHARACTER's ALIGNMENT. Call inside a character scope. $amount$ signed
+# (positive = drift reformist, negative = drift conservative). Moves the persistent
+# qing_stance_drift component that QING_char_stance folds in, clamped so drift alone can flip
+# a man but not send stance out of a sane band. Used by the occasional-shift pass below and
+# available to events (a conversion, a disillusionment, a bandwagon to the winning side).
+# ======================================================================
+QING_char_stance_shift = {
+	if = { limit = { NOT = { has_variable = qing_stance_drift } }  set_variable = { name = qing_stance_drift  value = 0 } }
+	change_variable = { name = qing_stance_drift  add = $amount$ }
+	if = { limit = { var:qing_stance_drift > 60 }  set_variable = { name = qing_stance_drift  value = 60 } }
+	if = { limit = { var:qing_stance_drift < -60 } set_variable = { name = qing_stance_drift  value = -60 } }
+	# re-score so the change takes effect (and the GC office-name colour updates) at once.
+	QING_char_stance = yes
+	LOG_line = { sys = QING  msg = "char stance shift: drift += $amount$ for" }
+}
+
+# ======================================================================
+# [#308/user] OCCASIONAL ALIGNMENT SHIFTS across the council — the mechanic that makes the
+# office-name colours change over time. Called ~yearly from QING_council_recompute (self-
+# throttled there). Each seated member has a small chance to shift, USUALLY toward the court's
+# prevailing lean (bandwagoning to the ascendant faction — the historical pull of a winning
+# side), but sometimes AGAINST it (a contrarian, a man of conviction digging in). Reformer/
+# traditionalist TRAIT-holders are anchored (they rarely move — their conviction is structural).
+# Country scope (ROOT = CHI). O(offices).
+# ======================================================================
+QING_faction_drift_alignments = {
+	LOG_enter = { sys = QING  fn = "QING_faction_drift_alignments" }
+	if = {
+		limit = { has_variable_list = qing_council_members }
+		every_in_list = {
+			variable = qing_council_members
+			limit = {
+				is_alive = yes
+				employer = ROOT
+				# the strongly-committed (explicit reformer/traditionalist) do not drift.
+				NOT = { has_trait = reformer }
+				NOT = { has_trait = traditionalist }
+			}
+			random = {
+				chance = 20
+				# usually bandwagon toward the council's prevailing lean; ~1 in 4, buck it.
+				# random_list gives a true 75/25 split (two sibling random blocks would roll
+				# independently — both or neither could fire).
+				random_list = {
+					75 = {
+						if = {
+							limit = { ROOT = { has_variable = qing_council_reform_lean  var:qing_council_reform_lean >= 0 } }
+							QING_char_stance_shift = { amount = 6 }
+						}
+						else = {
+							QING_char_stance_shift = { amount = -6 }
+						}
+					}
+					25 = {
+						if = {
+							limit = { ROOT = { has_variable = qing_council_reform_lean  var:qing_council_reform_lean >= 0 } }
+							QING_char_stance_shift = { amount = -6 }
+						}
+						else = {
+							QING_char_stance_shift = { amount = 6 }
+						}
+					}
+				}
+			}
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_faction_drift_alignments"  result = OK }
 }
 
 # ======================================================================
@@ -134,15 +212,28 @@ QING_faction_tally = {
 		change_variable = { name = qing_faction_weight_sum  add = $weight$ }
 		change_variable = { name = qing_faction_head_count  add = 1 }
 	}
-	# bloc headcount (unweighted): a member counts to the reformist or conservative
-	# bloc when he leans clearly one way; the lukewarm middle counts to neither.
+	# bloc counts: a member counts to the reformist or conservative bloc when he leans
+	# clearly one way; the lukewarm middle counts to neither. We track BOTH an unweighted
+	# HEADCOUNT (ref/con_count — used by the flavour-roll triggers that just need "≥2 of a
+	# side seated") AND a WEIGHTED tally (ref/con_weight) that respects each figure's clout.
+	# [#308/user] the weighted tally is what drives the DEADLOCK penalty: the Emperor can
+	# override his ministers, the Grand Chancellor and the other figureheads carry extra
+	# weight, so a court is only truly "split" when the HEAVY anchors are divided — not merely
+	# when the headcount is even. $weight$ is the caller's clout (Emperor 3, Chancellor 2, other
+	# figureheads 2, ordinary ministers 1).
 	if = {
 		limit = { var:qing_char_stance >= 20 }
-		ROOT = { change_variable = { name = qing_faction_ref_count  add = 1 } }
+		ROOT = {
+			change_variable = { name = qing_faction_ref_count  add = 1 }
+			change_variable = { name = qing_faction_ref_weight  add = $weight$ }
+		}
 	}
 	else_if = {
 		limit = { var:qing_char_stance <= -20 }
-		ROOT = { change_variable = { name = qing_faction_con_count  add = 1 } }
+		ROOT = {
+			change_variable = { name = qing_faction_con_count  add = 1 }
+			change_variable = { name = qing_faction_con_weight  add = $weight$ }
+		}
 	}
 }
 
@@ -161,20 +252,44 @@ QING_faction_recompute = {
 	set_variable = { name = qing_faction_head_count  value = 0 }
 	set_variable = { name = qing_faction_ref_count  value = 0 }
 	set_variable = { name = qing_faction_con_count  value = 0 }
+	# [#308/user] weighted bloc tallies (respect each figure's clout — see the deadlock calc below)
+	set_variable = { name = qing_faction_ref_weight  value = 0 }
+	set_variable = { name = qing_faction_con_weight  value = 0 }
 
-	# --- seated office-holders (the Grand Council proper), weight 1 each
+	# --- seated office-holders (the Grand Council proper), weight 1 each — EXCEPT the Grand
+	# Chancellor (領班軍機大臣), the head of the council, who carries extra weight (2): his lean
+	# sways the chamber as no ordinary board president can. [#308/user] He is in the members
+	# list, so tally him at weight 1 here would undercount him; instead skip him in the loop and
+	# tally him explicitly at weight 2 below.
 	if = {
 		limit = { has_variable_list = qing_council_members }
 		every_in_list = {
 			variable = qing_council_members
-			limit = { is_alive = yes  employer = ROOT }
+			limit = {
+				is_alive = yes
+				employer = ROOT
+				NOT = {
+					AND = {
+						ROOT = { has_variable = qing_office_chancellor_holder }
+						this = ROOT.var:qing_office_chancellor_holder
+					}
+				}
+			}
 			QING_faction_tally = { weight = 1 }
 		}
 	}
+	# the Grand Chancellor, at his heavier weight (guarded on a live, seated holder).
+	if = {
+		limit = {
+			has_variable = qing_office_chancellor_holder
+			var:qing_office_chancellor_holder = { is_alive = yes  employer = ROOT }
+		}
+		var:qing_office_chancellor_holder = { QING_faction_tally = { weight = 2 } }
+	}
 
-	# --- the three dynastic figureheads, who sit above the council and ANCHOR the
-	# factions (heavier weights). Guarded the same way se_QING_DYNASTY.txt guards
-	# them. The Emperor weighs most (the throne sets the tone), then the Dowager
+	# --- the dynastic figureheads, who sit above the council and ANCHOR the factions
+	# (heavier weights). Guarded the same way se_QING_DYNASTY.txt / se_QING_COUNCIL.txt
+	# guard them. The Emperor weighs most (the throne sets the tone), then the Dowager
 	# and the Crown Prince (the two rival poles of the Guangxu/Cixi split).
 	if = {
 		limit = { exists = current_ruler }
@@ -188,6 +303,41 @@ QING_faction_recompute = {
 		limit = { QING_dynasty_has_crownprince = yes }
 		var:qing_office_crownprince_holder = { QING_faction_tally = { weight = 2 } }
 	}
+	# [#308 C] the user's full anchor roster: the Empress, the Grand Regent, and the
+	# Emperor Emeritus can ALL be faction anchors too (mirrors the effectiveness-scoring
+	# figureheads in QING_council_recompute, so faction and effectiveness see the same court).
+	# EMPRESS 皇后 (current_ruler.spouse) — the consort's clique, weight 2 (a real pole: the
+	# Dowager was once an Empress, and a strong consort shapes the court). Guarded on spouse
+	# existing + alive, exactly as the effectiveness scorer guards her.
+	if = {
+		limit = {
+			exists = current_ruler
+			exists = current_ruler.spouse
+			current_ruler.spouse = { is_alive = yes }
+		}
+		current_ruler.spouse = { QING_faction_tally = { weight = 2 } }
+	}
+	# GRAND REGENT 攝政 — when a minority/incapacity has installed a regent he wields the
+	# throne's authority, so he anchors as heavily as the Emperor (weight 3). Guarded exactly
+	# as the effectiveness scorer + se_QING_DYNASTY guard him.
+	if = {
+		limit = {
+			has_variable = qing_office_regent_holder
+			var:qing_office_regent_holder = { is_alive = yes  employer = ROOT }
+		}
+		var:qing_office_regent_holder = { QING_faction_tally = { weight = 3 } }
+	}
+	# EMPEROR EMERITUS 太上皇 — the retired sovereign who "rules on in all but name"
+	# (Qianlong 1796-99, #304). He keeps real weight over the court while he lives, so he
+	# anchors at weight 3 like the throne itself. Guarded on the emeritus office being filled
+	# by a live, still-employed holder (set by QING_emeritus_abdicate / the Napoleon path).
+	if = {
+		limit = {
+			has_variable = qing_office_emeritus_holder
+			var:qing_office_emeritus_holder = { is_alive = yes  employer = ROOT }
+		}
+		var:qing_office_emeritus_holder = { QING_faction_tally = { weight = 3 } }
+	}
 
 	# --- reform lean = weighted-average stance (-100..100)
 	set_variable = { name = qing_council_reform_lean  value = 0 }
@@ -197,21 +347,37 @@ QING_faction_recompute = {
 		change_variable = { name = qing_council_reform_lean  divide = var:qing_faction_weight_sum }
 	}
 
-	# --- polarization = the SMALLER of the two opposing blocs (gridlock only when
-	# BOTH sides are well represented; a lopsided council is united, not deadlocked)
+	# --- polarization (HEADCOUNT) = the SMALLER of the two opposing blocs by headcount.
+	# Kept as the raw-headcount meter the GUI + the flavour-roll deadlock trigger read
+	# ("both sides well represented"). Gridlock only when BOTH sides are present.
 	set_variable = { name = qing_council_polarization  value = var:qing_faction_ref_count }
 	if = {
 		limit = { var:qing_faction_con_count < var:qing_faction_ref_count }
 		set_variable = { name = qing_council_polarization  value = var:qing_faction_con_count }
 	}
 
-	# --- gridlock penalty: each fully-opposed pair costs ~5 effectiveness, capped
-	# at 20 so a hung court is a serious drag but never the whole story.
-	set_variable = { name = qing_council_polar_pen  value = var:qing_council_polarization }
+	# --- [#308/user] WEIGHTED deadlock = the smaller of the two blocs BY CLOUT. Not everyone
+	# weighs the same: the Emperor (3) can override his ministers, the Regent/Emeritus (3) and
+	# the other figureheads + Grand Chancellor (2) carry extra weight, ordinary ministers 1. So
+	# a court is only truly deadlocked when the HEAVY anchors are divided — if the throne and the
+	# chancellor decisively lean one way, a knot of weight-1 dissenters does NOT hang the chamber.
+	# The penalty is driven by the smaller WEIGHTED bloc, not the headcount.
+	set_variable = { name = qing_council_polar_weight  value = var:qing_faction_ref_weight }
+	if = {
+		limit = { var:qing_faction_con_weight < var:qing_faction_ref_weight }
+		set_variable = { name = qing_council_polar_weight  value = var:qing_faction_con_weight }
+	}
+
+	# --- gridlock penalty from the WEIGHTED minority bloc. Old scale was ~5/opposed head,
+	# cap 20; weights roughly double the numbers (figureheads 2-3, chancellor 2), so /2 * 5
+	# keeps the magnitude comparable — a genuinely split heavy court still docks up to 20, but a
+	# court the throne+chancellor dominate barely moves.
+	set_variable = { name = qing_council_polar_pen  value = var:qing_council_polar_weight }
 	change_variable = { name = qing_council_polar_pen  multiply = 5 }
+	change_variable = { name = qing_council_polar_pen  divide = 2 }
 	if = { limit = { var:qing_council_polar_pen > 20 } set_variable = { name = qing_council_polar_pen  value = 20 } }
 
-	LOG_line = { sys = QING  msg = "faction: lean= polar= (ref= con=) pen= for" }
+	LOG_line = { sys = QING  msg = "faction: lean= polar= polar_weight= (ref= con=) pen= for" }
 	LOG_exit = { sys = QING  fn = "QING_faction_recompute"  result = OK }
 }
 
@@ -259,12 +425,326 @@ QING_faction_feed_reform_balance = {
 }
 
 # ======================================================================
+# [#308 A] COURT RIPPLE — a Grand Council decision does not touch only its two
+# protagonists: it ripples through the whole court along the SAME relationship web the
+# affinity chart already reads. When the throne favours one man over another (backing a
+# memorial, deferring to the Dowager, purging a firebrand), every OTHER seated member
+# takes it personally by how he stands to the two: a FRIEND of the favoured man (or a
+# RIVAL of the slighted one) is gratified; a RIVAL of the favoured man (or a FRIEND of the
+# slighted one) is affronted; and a member who shares the favoured man's reform STANCE
+# nods along while his opposite bristles. This is the user's ask — "the Empress lobbying
+# for one annoys his rivals and satisfies his friends, and vice versa" — made general.
+#
+# Call at COUNTRY scope (ROOT = CHI) AFTER the two protagonists are saved:
+#   QING_faction_ripple = { favoured = scope:reformer  slighted = scope:conservative }
+# Pure engine relations (is_friend/is_rival) + the already-computed qing_char_stance; O(offices).
+# Skips the two protagonists themselves (the calling event handles them directly) and the
+# dead/departed. Loyalty nudges are small (+/-2..3) so the ripple colours the court without
+# swamping the direct rewards the event options apply to the principals.
+# ======================================================================
+QING_faction_ripple = {
+	LOG_enter = { sys = QING  fn = "QING_faction_ripple" }
+	if = {
+		limit = { has_variable_list = qing_council_members }
+		# save the two protagonists' stance so members can compare (guard: they may be
+		# figureheads not in the roster, but stance is computed on them by the tally/affinity).
+		every_in_list = {
+			variable = qing_council_members
+			limit = {
+				is_alive = yes
+				employer = ROOT
+				NOT = { this = $favoured$ }
+				NOT = { this = $slighted$ }
+			}
+			# --- relationship to the FAVOURED man -----------------------------------
+			if = {
+				limit = { is_friend = $favoured$ }
+				add_loyalty = loyalty_qing_commended
+			}
+			else_if = {
+				limit = { is_rival = $favoured$ }
+				add_loyalty = loyalty_qing_estranged
+			}
+			# --- relationship to the SLIGHTED man (independent, can stack) -----------
+			if = {
+				limit = { is_friend = $slighted$ }
+				add_loyalty = loyalty_qing_estranged
+			}
+			else_if = {
+				limit = { is_rival = $slighted$ }
+				add_loyalty = loyalty_qing_commended
+			}
+			# --- shared reform STANCE with the favoured man: the like-minded approve,
+			# the opposed resent — the faction dimension of the same decision. Guarded on
+			# both carrying a scored stance (computed by the faction/affinity passes).
+			if = {
+				limit = {
+					has_variable = qing_char_stance
+					$favoured$ = { has_variable = qing_char_stance }
+					OR = {
+						AND = { var:qing_char_stance >= 20  $favoured$ = { var:qing_char_stance >= 20 } }
+						AND = { var:qing_char_stance <= -20  $favoured$ = { var:qing_char_stance <= -20 } }
+					}
+				}
+				add_loyalty = loyalty_qing_commended
+			}
+			else_if = {
+				limit = {
+					has_variable = qing_char_stance
+					$favoured$ = { has_variable = qing_char_stance }
+					OR = {
+						AND = { var:qing_char_stance >= 20  $favoured$ = { var:qing_char_stance <= -20 } }
+						AND = { var:qing_char_stance <= -20  $favoured$ = { var:qing_char_stance >= 20 } }
+					}
+				}
+				add_loyalty = loyalty_qing_estranged
+			}
+		}
+		LOG_line = { sys = QING  msg = "faction ripple: court realigned around the favoured/slighted principals for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_faction_ripple"  result = OK }
+}
+
+# ======================================================================
+# [#308 A] AFFINITY-AWARE TARGET SELECTION for Grand Council events. The user's rule:
+# a POSITIVE beat (a reward, an elevation, a mark of favour) should fall on a man the
+# throne is close to — a friend, a same-faction ally, a high-affinity courtier; a
+# NEGATIVE beat (a scandal, an impeachment, a purge) should fall on a man the throne is
+# set against — a rival, an opposite-faction figure, a low-affinity courtier. So the
+# court's own relationship web decides WHO the drama lands on, not a blind pick.
+#
+# Both helpers save a member of qing_council_members (guarded alive + still employed)
+# into a caller-named scope, ranked by an affinity-and-faction SCORE the members carry.
+# We reuse the already-computed qing_char_affinity (refreshed every recompute) as the
+# spine and tilt it by the ruler's own reform lean via qing_char_stance, so "same faction
+# as the throne" and "friend of the throne" both pull a member up the positive ranking.
+# Call at COUNTRY scope (ROOT = CHI); each self-guards on the roster existing.
+#
+#   QING_faction_pick_ally = yes   -> saves scope:qing_picked_ally (highest favour+alignment)
+#   QING_faction_pick_foe  = yes   -> saves scope:qing_picked_foe  (lowest — most estranged/opposed)
+# (Fixed saved-scope names, not a macro arg: $MACRO$ into save_scope_as is unattested in this
+# codebase, so the callers copy scope:qing_picked_* into their own event scope after the call.)
+#
+# Selection score is stamped per-member into qing_char_court_favour (a transient read):
+# affinity (0..100) + a faction-alignment bonus (same lean as ruler +15, opposite -15) +
+# a friend/rival-of-ruler tilt (+15 / -15). ordered_in_list on that var picks the extreme.
+# ======================================================================
+QING_faction_score_court_favour = {
+	# call INSIDE a member's char scope; ROOT = CHI. Seeds qing_char_court_favour.
+	if = { limit = { NOT = { has_variable = qing_char_affinity } }  QING_char_affinity = yes }
+	if = { limit = { NOT = { has_variable = qing_char_stance } }    QING_char_stance = yes }
+	set_variable = { name = qing_char_court_favour  value = var:qing_char_affinity }
+	# faction alignment with the throne's own lean (the ruler anchors his faction).
+	if = {
+		limit = {
+			ROOT = { has_variable = qing_council_reform_lean }
+			OR = {
+				AND = { var:qing_char_stance >= 20  ROOT = { var:qing_council_reform_lean >= 15 } }
+				AND = { var:qing_char_stance <= -20  ROOT = { var:qing_council_reform_lean <= -15 } }
+			}
+		}
+		change_variable = { name = qing_char_court_favour  add = 15 }
+	}
+	else_if = {
+		limit = {
+			ROOT = { has_variable = qing_council_reform_lean }
+			OR = {
+				AND = { var:qing_char_stance >= 20  ROOT = { var:qing_council_reform_lean <= -15 } }
+				AND = { var:qing_char_stance <= -20  ROOT = { var:qing_council_reform_lean >= 15 } }
+			}
+		}
+		change_variable = { name = qing_char_court_favour  subtract = 15 }
+	}
+	# friend / rival of the reigning emperor (engine secondary relations).
+	if = { limit = { exists = root.current_ruler  is_friend = root.current_ruler }  change_variable = { name = qing_char_court_favour  add = 15 } }
+	if = { limit = { exists = root.current_ruler  is_rival = root.current_ruler }   change_variable = { name = qing_char_court_favour  subtract = 15 } }
+}
+
+QING_faction_pick_ally = {
+	LOG_enter = { sys = QING  fn = "QING_faction_pick_ally" }
+	if = {
+		limit = { has_variable_list = qing_council_members }
+		every_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT }
+			QING_faction_score_court_favour = yes
+		}
+		ordered_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT  has_variable = qing_char_court_favour }
+			order_by = var:qing_char_court_favour
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_picked_ally
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_faction_pick_ally"  result = OK }
+}
+
+QING_faction_pick_foe = {
+	LOG_enter = { sys = QING  fn = "QING_faction_pick_foe" }
+	if = {
+		limit = { has_variable_list = qing_council_members }
+		every_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT }
+			QING_faction_score_court_favour = yes
+		}
+		# order_by picks the HIGHEST; for the foe we want the LOWEST favour. Negate the
+		# score into a scratch and order by that (the proven no-"min" workaround, cf.
+		# qing_faction.1's conservative pick). Stamp qing_char_court_disfavour = -favour.
+		every_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT  has_variable = qing_char_court_favour }
+			set_variable = { name = qing_char_court_disfavour  value = var:qing_char_court_favour }
+			change_variable = { name = qing_char_court_disfavour  multiply = -1 }
+		}
+		ordered_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT  has_variable = qing_char_court_disfavour }
+			order_by = var:qing_char_court_disfavour
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_picked_foe
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_faction_pick_foe"  result = OK }
+}
+
+# ======================================================================
+# [#308/user] COLLECTIVE LOBBY — councillors GROUP UP to press the throne together.
+# The great-office holders do not only act as individuals: they band into a bloc and
+# lobby the emperor collectively, USUALLY (but not always) along faction lines — a
+# reformist caucus pressing for change, a conservative one digging in, or, less often, a
+# cross-faction issue-coalition (a shared grievance that unites men who otherwise differ).
+#
+# QING_faction_form_bloc builds that bloc into the list qing_lobby_bloc, picks its leader
+# (scope:lobby_leader), and stamps qing_lobby_kind (flag: reformist | conservative | issue)
+# + qing_lobby_size. Country scope (ROOT = CHI). Called from the qing_faction.4 event's
+# immediate. Reuses the proven variable_list idiom + qing_char_stance.
+# ======================================================================
+QING_faction_form_bloc = {
+	LOG_enter = { sys = QING  fn = "QING_faction_form_bloc" }
+	clear_variable_list = qing_lobby_bloc
+	set_variable = { name = qing_lobby_size  value = 0 }
+	# [#308 review fix] RESET the bloc-kind every call. qing_lobby_kind is persistent and the
+	# derivation below is gated on NOT has_variable — so without this remove, the FIRST call froze
+	# the kind forever: ~75% of later calls (those that miss the 25% issue-roll) never re-derived
+	# the majority wing from the CURRENT ref/con counts. Worse, if the council had flipped (e.g.
+	# con_count now 0 but the stale kind = conservative) the conservative branch gathered zero
+	# members, scope:lobby_leader was never saved, and qing_faction.4 — whose every option gates on
+	# exists = scope:lobby_leader — fired option-less (softlock). Clearing it forces a fresh recompute.
+	remove_variable = qing_lobby_kind
+	# decide the bloc's character: usually factional (following whichever wing is better
+	# represented), but ~1 in 4 a cross-faction issue coalition. random={chance} is the
+	# proven roll idiom; the else picks the majority wing so the caucus reads naturally.
+	random = {
+		chance = 25
+		set_variable = { name = qing_lobby_kind  value = flag:issue }
+	}
+	if = {
+		limit = { NOT = { has_variable = qing_lobby_kind } }
+		# factional: follow the larger wing (ties -> reformist, the pressing-for-change default).
+		if = {
+			limit = { var:qing_faction_con_count > var:qing_faction_ref_count }
+			set_variable = { name = qing_lobby_kind  value = flag:conservative }
+		}
+		else = {
+			set_variable = { name = qing_lobby_kind  value = flag:reformist }
+		}
+	}
+	# gather the members who join the bloc, by kind. A factional caucus takes the members
+	# who lean that way; an issue coalition takes any member who feels strongly EITHER way
+	# (the shared grievance cuts across the aisle). Leader = the strongest-stance member in
+	# the bloc's own direction (reformist: highest stance; conservative: most negative).
+	if = {
+		limit = { var:qing_lobby_kind = flag:reformist }
+		every_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT  has_variable = qing_char_stance  var:qing_char_stance >= 20 }
+			ROOT = {
+				add_to_variable_list = { name = qing_lobby_bloc  target = prev }
+				change_variable = { name = qing_lobby_size  add = 1 }
+			}
+		}
+		ordered_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT  has_variable = qing_char_stance  var:qing_char_stance >= 20 }
+			order_by = var:qing_char_stance
+			check_range_bounds = no
+			max = 1
+			save_scope_as = lobby_leader
+		}
+	}
+	else_if = {
+		limit = { var:qing_lobby_kind = flag:conservative }
+		every_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT  has_variable = qing_char_stance  var:qing_char_stance <= -20 }
+			ROOT = {
+				add_to_variable_list = { name = qing_lobby_bloc  target = prev }
+				change_variable = { name = qing_lobby_size  add = 1 }
+			}
+		}
+		# most-conservative leader: negate stance into a scratch, order by that (no "min").
+		every_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT  has_variable = qing_char_stance  var:qing_char_stance <= -20 }
+			set_variable = { name = qing_lobby_neg_stance  value = var:qing_char_stance }
+			change_variable = { name = qing_lobby_neg_stance  multiply = -1 }
+		}
+		# [#308 review fix] leader limit must re-test CURRENT stance, not merely has_variable =
+		# qing_lobby_neg_stance. That scratch var is set-but-never-cleared, so a member who was
+		# conservative in a prior call but has since drifted above -20 still carries a stale
+		# qing_lobby_neg_stance and could be picked as the bloc's leader despite not being IN the
+		# (current-stance-gated) bloc. Match the bloc/setter gate exactly.
+		ordered_in_list = {
+			variable = qing_council_members
+			limit = { is_alive = yes  employer = ROOT  has_variable = qing_char_stance  var:qing_char_stance <= -20 }
+			order_by = var:qing_lobby_neg_stance
+			check_range_bounds = no
+			max = 1
+			save_scope_as = lobby_leader
+		}
+	}
+	else = {
+		# issue coalition: anyone with a strong view either way joins; leader = the most
+		# prominent of them (the natural spokesman, cutting across faction).
+		every_in_list = {
+			variable = qing_council_members
+			limit = {
+				is_alive = yes  employer = ROOT  has_variable = qing_char_stance
+				OR = { var:qing_char_stance >= 20  var:qing_char_stance <= -20 }
+			}
+			ROOT = {
+				add_to_variable_list = { name = qing_lobby_bloc  target = prev }
+				change_variable = { name = qing_lobby_size  add = 1 }
+			}
+		}
+		ordered_in_list = {
+			variable = qing_council_members
+			limit = {
+				is_alive = yes  employer = ROOT  has_variable = qing_char_stance
+				OR = { var:qing_char_stance >= 20  var:qing_char_stance <= -20 }
+			}
+			order_by = prominence
+			check_range_bounds = no
+			max = 1
+			save_scope_as = lobby_leader
+		}
+	}
+	LOG_line = { sys = QING  msg = "faction bloc formed (size, kind) lobbying the throne for" }
+	LOG_exit = { sys = QING  fn = "QING_faction_form_bloc"  result = OK }
+}
+
+# ======================================================================
 # FACTION FLAVOUR ROLL — offered from the governance flavour dispatcher (quarterly
 # Qing pulse). Low chance; each branch re-checks its own trigger in the fired
 # event, so a stale pick is a harmless no-op. Country scope (ROOT = CHI).
 #   .1 reform memorial (needs a reformist AND a conservative seated)
 #   .2 dowager blocks a reformist council (the 慈禧/1898 showdown)
 #   .3 a council at deadlock (blocs at parity)
+#   .4 a bloc of councillors collectively lobbies the throne (usually factional)
 # ======================================================================
 QING_faction_flavour_roll = {
 	LOG_enter = { sys = QING  fn = "QING_faction_flavour_roll" }
@@ -295,6 +775,18 @@ QING_faction_flavour_roll = {
 				var:qing_council_polarization >= 2
 			}
 			trigger_event = { id = qing_faction.3  days = { 3 12 } }
+		}
+		# [#308/user] a COLLECTIVE LOBBY — needs a bloc of >=2 like-minded members to band
+		# together (the event's immediate forms the bloc + picks its kind/leader).
+		8 = {
+			trigger = {
+				has_variable_list = qing_council_members
+				OR = {
+					var:qing_faction_ref_count >= 2
+					var:qing_faction_con_count >= 2
+				}
+			}
+			trigger_event = { id = qing_faction.4  days = { 3 12 } }
 		}
 	}
 	LOG_exit = { sys = QING  fn = "QING_faction_flavour_roll"  result = OK }

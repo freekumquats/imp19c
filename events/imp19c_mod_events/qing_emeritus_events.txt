@@ -1,0 +1,131 @@
+namespace = qing_emeritus
+
+########################################################################
+# qing_emeritus_events.txt — [bookmark-1763 #304] THE HISTORICAL EMPEROR EMERITUS (太上皇).
+#
+# The historical abdication path to the 太上皇 office (see se_QING_EMERITUS.txt), distinct
+# from the Napoleon alt-history (#65, se_QING_NAPOLEON.txt). At a 1763 start the historical
+# case is Qianlong (char:214): in 1796, aged 85 and one year short of his grandfather
+# Kangxi's 61-year record, he abdicated to Jiaqing but ruled on as Taishang Huang with real
+# power until his death in 1799. The mechanic is GENERIC (any Qing emperor who reaches great
+# age with an adult heir may take the same path), so it also works for a long-lived ruler
+# in any later game.
+#
+#   .1  ARM CHECKER (hidden, yearly) — offers the abdication when conditions form.
+#   .2  THE ABDICATION OFFER (shown) — take the Taishang Huang office, or reign on.
+#
+#   ROOT / this = the Qing (CHI, player or AI).
+#
+# NO BOM (events convention).
+########################################################################
+
+# ----------------------------------------------------------------------
+# .1  ABDICATION CONDITION CHECKER (hidden, yearly re-arming).
+# Armed from oa_economy_setup. Offers the abdication (fires .2) when the sovereign is very
+# old (age >= 84 — Qianlong was 85 at his 1796 abdication; this captures "a reign long
+# enough to rival Kangxi" without a reign counter) AND a designated adult heir exists AND
+# the realm is not already under an Emeritus. Re-arms yearly until it fires or the ruler
+# dies. Self-guards so it is a cheap no-op most years.
+# ----------------------------------------------------------------------
+qing_emeritus.1 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	trigger = {
+		tag = CHI
+		NOT = { has_variable = qing_emeritus_active }
+		NOT = { has_variable = qing_emeritus_abdication_done }
+	}
+	immediate = {
+		if = {
+			limit = {
+				current_ruler = { age >= 84 }
+				has_primary_heir = yes
+				exists = primary_heir
+				primary_heir = { age >= 18 }
+			}
+			LOG_line = { sys = QING  msg = "qing_emeritus.1: abdication conditions met — offering the 太上皇 for [ROOT.GetTag]" }
+			trigger_event = { id = qing_emeritus.2  days = { 3 15 } }
+		}
+		else = {
+			# not yet — re-arm in ~1 year (chain dies when the ruler dies: the trigger's
+			# age gate simply stops being met and a new young ruler won't qualify for decades)
+			trigger_event = { id = qing_emeritus.1  days = { 350 380 } }
+		}
+	}
+}
+
+# ----------------------------------------------------------------------
+# .2  THE ABDICATION OFFER (shown).
+# The aged sovereign may abdicate to Taishang Huang — retaining real power (the emeritus
+# office + its country buff) while the heir reigns as junior emperor — or reign on to the end.
+# ----------------------------------------------------------------------
+qing_emeritus.2 = {
+	type = country_event
+	title = "qing_emeritus.2.t"
+	desc = "qing_emeritus.2.desc"
+	picture = throneroom
+
+	left_portrait = root.current_ruler
+	right_portrait = root.primary_heir  # a face only; the enthroned heir is chosen in immediate
+
+	is_triggered_only = yes
+	trigger = {
+		tag = CHI
+		NOT = { has_variable = qing_emeritus_active }
+		NOT = { has_variable = qing_emeritus_abdication_done }
+		current_ruler = { age >= 84 }
+		has_primary_heir = yes
+		exists = primary_heir
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_emeritus.2 (太上皇 abdication offer) for [ROOT.GetTag]" }
+		# Pick the successor. For the HISTORICAL case (Qianlong, char:214, abdicating) enthrone
+		# the historical Jiaqing (char:224) if he is alive — the engine's default primary_heir
+		# may otherwise pick an older surviving son line (e.g. Yonghuang char:221). For any other
+		# emperor (the generic/reusable case) fall back to the designated primary_heir.
+		if = {
+			limit = {
+				current_ruler = { this = char:214 }
+				exists = char:224
+				char:224 = { is_alive = yes }
+			}
+			char:224 = { save_scope_as = qing_emeritus_heir }
+		}
+		else = {
+			primary_heir = { save_scope_as = qing_emeritus_heir }
+		}
+	}
+
+	# --- Abdicate to Taishang Huang (太上皇), reigning on in all but name. -----------------
+	#     The historical Qianlong choice: honour the ancestor, keep the power. The emeritus
+	#     office + its prosperity-grade buff stay with the abdicated sovereign; the heir takes
+	#     the throne as junior emperor. A burst of legitimacy for the supreme filial gesture.
+	option = {
+		name = "qing_emeritus.2.a"
+		custom_tooltip = "qing_emeritus.2.a.tt"
+		set_variable = { name = qing_emeritus_abdication_done  value = 1 }
+		# add_prestige is a CHARACTER effect (countries have no prestige) — scope to the
+		# still-reigning old emperor so the +30 lands before QING_emeritus_abdicate enthrones
+		# the heir. A bare country-scope add_prestige is a silent no-op (review defect 2).
+		current_ruler = { add_prestige = 30 }
+		QING_emeritus_abdicate = { heir = qing_emeritus_heir }
+		# [#304-fix] add_legitimacy AFTER the abdication: set_as_ruler (inside QING_emeritus_
+		# abdicate) starts a fresh reign whose legitimacy is reinitialised from
+		# next_ruler_legitimacy, so a +15 applied to the outgoing reign would be wiped. Apply it
+		# now, to the just-enthroned junior emperor — matching the qing_succession.2 post-change
+		# pattern and honouring the tooltip's promised "+15 Legitimacy".
+		add_legitimacy = 15
+	}
+
+	# --- Reign on; the Mandate is not laid down while breath remains. --------------------
+	#     Forgo the filial-piety prestige; keep the throne undivided. The offer will not
+	#     return (marked done), and the natural succession runs its course on the ruler's death.
+	option = {
+		name = "qing_emeritus.2.b"
+		custom_tooltip = "qing_emeritus.2.b.tt"
+		set_variable = { name = qing_emeritus_abdication_done  value = 1 }
+		add_stability = 1
+	}
+}

@@ -44,7 +44,39 @@ QING_DECLINE_nudge = {
 # Initialise every counter to 0 if unset. Called once on game start for CHI.
 QING_DECLINE_init = {
 	LOG_enter = { sys = QING  fn = "QING_DECLINE_init" }
-	if = { limit = { NOT = { has_variable = qing_corruption_level } }  set_variable = { name = qing_corruption_level  value = 0 } }
+	# [bookmark-1763 #304] HIGH QING ERA detection. This suite is tuned for the 1815
+	# decline; at a pre-Heshen start (game begins before 1772.1.1, i.e. the 1763 bookmark)
+	# the dynasty is at its zenith, not sliding. Set a one-shot era flag + grant the
+	# prosperity modifier so the pulse suppresses the passive decline creep until the
+	# Heshen inflection (qing_decline.40/.41) ends it. current_date at this init call
+	# = the game-start date (QING_DECLINE_init runs at on_game_initialized). The 1772.1.1
+	# threshold MATCHES the qing_decline.40 checker-arming gate in oa_economy_setup, so the
+	# era flag is never granted without the checker also being armed (no permanent golden
+	# age from a start in a threshold gap). Guarded so an 1815 start (current_date past 1772)
+	# never enters the High Qing branch, and so a mid-game re-init after the era has ended
+	# cannot re-grant it.
+	if = {
+		limit = {
+			current_date < 1772.1.1
+			NOT = { has_variable = qing_high_qing_era }
+			NOT = { has_variable = qing_high_qing_era_ended }
+		}
+		set_variable = { name = qing_high_qing_era  value = 1 }
+		add_country_modifier = { name = qing_high_qing_prosperity  duration = -1 }
+		LOG_line = { sys = QING  msg = "HIGH QING ERA active (pre-1775 zenith): prosperity granted, decline creep suppressed for" }
+	}
+	# [bookmark-1763 #304] Corruption starts LOW in the High Qing (baseline administrative
+	# friction, not the systemic 陋規/Heshen graft of the post-1775 court); the 1815 start
+	# keeps the historical value 0 baseline (the pulse ramps it). Seed 12 for a High Qing
+	# start so the corruption band opens in its lowest tier, 0 otherwise.
+	if = {
+		limit = { NOT = { has_variable = qing_corruption_level } }
+		if = {
+			limit = { has_variable = qing_high_qing_era }
+			set_variable = { name = qing_corruption_level  value = 12 }
+		}
+		else = { set_variable = { name = qing_corruption_level  value = 0 } }
+	}
 	if = { limit = { NOT = { has_variable = qing_sect_pressure } }     set_variable = { name = qing_sect_pressure  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_banner_decay } }      set_variable = { name = qing_banner_decay  value = 10 } }
 	# task #88 — the Green Standard (綠營) rots IN PARALLEL to the banners: a second
@@ -785,8 +817,16 @@ QING_DECLINE_pulse = {
 	# escaped the dynastic cycle — the passive martial-caste rot no longer creeps.
 	# Player choices can still move the meters, but they no longer regenerate on
 	# their own. Guarded on the qing_fully_modernized flag set by the capstone.
+	# [bookmark-1763 #304] the passive martial-caste rot is ALSO suppressed during the High
+	# Qing era (pre-1775 zenith): the Banners had just destroyed the Zunghars (1759) and the
+	# Green Standard held a realm at peace, so neither creeps until the Heshen inflection
+	# (qing_decline.40) ends the era. The 1815 start has no qing_high_qing_era flag, so it
+	# rots as before.
 	if = {
-		limit = { NOT = { has_variable = qing_fully_modernized } }
+		limit = {
+			NOT = { has_variable = qing_fully_modernized }
+			NOT = { has_variable = qing_high_qing_era }
+		}
 		QING_DECLINE_nudge = { var = qing_banner_decay  amount = 1 }
 		# task #88 — the Green Standard rots in parallel, and slightly faster: the more
 		# neglected, garrison-bound Han standing army. Green-standard drills push back.
@@ -861,8 +901,13 @@ QING_DECLINE_pulse = {
 	# already throttled to ~quarterly by the on_action cooldown).
 	# task #88 (user): a fully-modernized realm no longer suffers the old-order
 	# decline reactions (flood-by-corruption, sect unrest, banner incidents).
+	# [bookmark-1763 #304] nor does the High Qing zenith (pre-1775): the decline reactions
+	# are the symptoms of the post-Heshen slide, not the golden age.
 	if = {
-		limit = { NOT = { has_variable = qing_fully_modernized } }
+		limit = {
+			NOT = { has_variable = qing_fully_modernized }
+			NOT = { has_variable = qing_high_qing_era }
+		}
 		random = {
 			chance = 35
 			QING_DECLINE_roll_reaction = yes
@@ -957,14 +1002,29 @@ QING_frontier_flavour_roll = {
 				trigger_event = { id = qing_vassal.4  days = { 3 12 } }
 			}
 			# --- New#8 a missionary incident (教案): fires once anti-Christian
-			# sentiment is simmering and a treaty power is on the map. The event
-			# re-checks its own trigger.
+			# POLITICAL sentiment is simmering and a treaty power is on the map. The event
+			# re-checks its own trigger. [#309] this is the TREATY-ERA political incident
+			# (consul-vs-gentry, indemnity); the political meter only rises post-treaty, so
+			# this naturally does not fire in the pre-treaty centuries.
 			7 = {
 				trigger = {
 					var:qing_antichristian_sentiment >= 40
+					has_variable = qing_treaty_system_imposed
 					OR = { exists = c:FRA  exists = c:GBR  exists = c:RUS }
 				}
 				trigger_event = { id = qing_missionary.1  days = { 3 12 } }
+			}
+			# --- [#309] a PRE-TREATY local crackdown (地方教案): a purely domestic
+			# heterodoxy scare where social friction has built, with NO foreign power involved
+			# and NO diplomatic stake (a missionary could be expelled/executed with zero
+			# international consequence before 1860). Fires only pre-treaty; the event re-checks.
+			7 = {
+				trigger = {
+					NOT = { has_variable = qing_treaty_system_imposed }
+					has_variable = qing_mission_social_friction
+					var:qing_mission_social_friction >= 25
+				}
+				trigger_event = { id = qing_missionary.2  days = { 3 12 } }
 			}
 			# --- #60 WESTERN EMBASSIES (西使覲見; qing_embassy_events.txt). A Western
 			# power arrives seeking audience + trade; the court chooses the tribute
@@ -972,11 +1032,15 @@ QING_frontier_flavour_roll = {
 			# own trigger (power on the map + not yet resolved), so a stale pick is a
 			# no-op. Weighted early-heavy for Britain (Macartney/Amherst, 1793/1816).
 			10 = {
-				trigger = { exists = c:GBR  NOT = { has_variable = qing_embassy_britain } }
-				# Macartney (1793) predates the 1815 start by a generation — it is REFERENCED
-				# in the Amherst text but never fires as a live event. Amherst (1816) is the
-				# sole British embassy that occurs, and the historically-correct caller at St
-				# Helena that kicks off the Emperor Emeritus chain (#65).
+				# [bookmark-1763 #304] Stand down when the British embassies are on their real-date
+				# schedule (a 1763 start — qing_embassy_dated_schedule set in oa_economy_setup, which
+				# fires Macartney 1793 + Amherst 1816 directly). Otherwise (the 1815 start) the roll
+				# offers Amherst as before. Macartney (1793) predates the 1815 start by a generation.
+				trigger = {
+					exists = c:GBR
+					NOT = { has_variable = qing_embassy_britain }
+					NOT = { has_variable = qing_embassy_dated_schedule }
+				}
 				trigger_event = { id = qing_embassy.2  days = { 3 12 } }
 			}
 			6 = {
@@ -1055,6 +1119,10 @@ QING_frontier_flavour_roll = {
 			# --- #7 Golden Urn (needs a Tibetan-Buddhist subject) ---
 			10 = {
 				trigger = {
+					# [bookmark-1763 #304] the Golden Urn lottery (金瓶掣籤) was instituted by the
+					# 1793 欽定藏內善後章程; not available before then. Harmless at the 1815 start
+					# (current_date always >= 1793); gates only the pre-1793 (1763) window.
+					current_date >= 1793.1.1
 					any_subject = { OR = { religion = vajrayana  country_culture_group = bodish } }
 				}
 				random_subject = {
@@ -1525,10 +1593,18 @@ QING_rebellion_roll = {
 		random_list = {
 			# --- 白蓮教 White Lotus: a corrupt court and a stirring sect ------
 			10 = {
+				# [#309/user] a corrupt court + stirring sect, OR a realm inflamed by RELIGIOUS
+				# tension: the White Lotus was the archetypal 邪教 rising, and officials lumped
+				# Christian heterodoxy in with it — high mission friction / anti-foreign fury feeds
+				# the same millenarian panic, so it is an alternative ignition path.
 				trigger = {
 					NOT = { has_variable = qing_rebel_white_lotus }
-					var:qing_corruption_level >= 35
 					var:qing_sect_pressure >= 25
+					OR = {
+						var:qing_corruption_level >= 35
+						var:qing_mission_social_friction >= 35
+						var:qing_antichristian_sentiment >= 50
+					}
 				}
 				trigger_event = { id = qing_rebellion.1  days = { 3 12 } }
 			}
@@ -1576,10 +1652,16 @@ QING_rebellion_roll = {
 			}
 			# --- 紅巾 Red Turban: secret-society, corruption + sect ----------
 			8 = {
+				# [#309/user] secret-society rising: corruption + sect, OR religious tension (the
+				# Triads 天地會 fed on the same anti-establishment 邪教 ferment as the mission scares).
 				trigger = {
 					NOT = { has_variable = qing_rebel_red_turban }
-					var:qing_corruption_level >= 30
 					var:qing_sect_pressure >= 30
+					OR = {
+						var:qing_corruption_level >= 30
+						var:qing_mission_social_friction >= 35
+						var:qing_antichristian_sentiment >= 50
+					}
 				}
 				trigger_event = { id = qing_rebellion.7  days = { 3 12 } }
 			}

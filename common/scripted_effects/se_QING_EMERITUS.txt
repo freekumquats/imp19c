@@ -1,0 +1,93 @@
+########################################################################
+# se_QING_EMERITUS.txt — [bookmark-1763 #304] THE HISTORICAL EMPEROR EMERITUS (太上皇).
+#
+# The 太上皇 (Taishang Huang, "Supreme Emperor Emeritus") office already exists in the mod
+# as a generic office (key `emeritus`, plugged into QING_office_appoint / the council-is-
+# offices model), but the ONLY path to it is the Napoleon alt-history (se_QING_NAPOLEON.txt,
+# #65). Historically the office was Qianlong's own: he abdicated on 1796.2.9 to the Jiaqing
+# Emperor so as not to out-reign his grandfather Kangxi (61 years), yet ruled on as 太上皇
+# with real power until his death in 1799.2.7 (Elliott, *Emperor Qianlong* 2009:305-7; 戴逸).
+#
+# This module adds the HISTORICAL path: any long-reigning Qing emperor (60+ years, aged, with
+# an adult heir) may abdicate to Taishang Huang, retaining the office's power on the Grand
+# Council while the new emperor reigns. It reuses the SAME `emeritus` office plumbing as the
+# Napoleon path (QING_office_appoint = { office = emeritus }) so vacancy/holder/teardown all
+# work for free (se_QING_COUNCIL.txt:1020). Qianlong (char:214) is the historical case at a
+# 1763 start; the mechanic is generic (reusable by any future 60-year reign).
+#
+# Driven by the qing_emeritus.* events (events/imp19c_mod_events/qing_emeritus_events.txt),
+# armed by a yearly checker from oa_economy_setup. All steps logged (sys = QING).
+# NO BOM (se_*.txt convention).
+########################################################################
+
+# ======================================================================
+# CONFER the Taishang Huang office on the ABDICATING emperor and enthrone the heir.
+# Called in COUNTRY scope (ROOT = CHI). $heir$ = a saved scope pointing at the chosen
+# successor character. The abdicating emperor (current_ruler at call time) keeps real
+# power via the emeritus office + its country buff; the heir becomes the reigning (but
+# junior) emperor. Mirrors the fra_revolution set_as_ruler idiom + the Napoleon office
+# path. Idempotent-ish: guarded by the caller's qing_emeritus_active flag.
+# ======================================================================
+QING_emeritus_abdicate = {
+	LOG_enter = { sys = QING  fn = "QING_emeritus_abdicate" }
+	# Save the abdicating sovereign before the throne changes hands.
+	current_ruler = { save_scope_as = qing_abdicating_emperor }
+
+	# Enthrone the heir. set_as_ruler at runtime is proven (fra_revolution_events.txt:180).
+	if = {
+		limit = { exists = scope:$heir$ }
+		set_as_ruler = scope:$heir$
+		LOG_line = { sys = QING  msg = "emeritus: [scope:$heir$.GetName] enthroned as the reigning (junior) emperor for" }
+	}
+
+	# The abdicated sovereign takes the 太上皇 office — which, under the council-is-offices
+	# model, IS his retained seat + power base on the Grand Council. QING_office_appoint is
+	# called in the APPOINTEE's character scope.
+	scope:qing_abdicating_emperor = {
+		QING_emeritus_take_office = yes
+	}
+
+	set_variable = { name = qing_emeritus_active  value = 1 }
+	# NOTE: his death is detected in on_character_death via the emeritus office flag +
+	# qing_emeritus_active (00_specific_from_code.txt), NOT via a stored char-ref, so no
+	# qing_emeritus_char var is kept (it would be dead state — review defect 3).
+	LOG_line = { sys = QING  msg = "emeritus: 太上皇 abdication complete — [scope:qing_abdicating_emperor.GetName] rules as Emperor Emeritus for" }
+	LOG_exit = { sys = QING  fn = "QING_emeritus_abdicate"  result = OK }
+}
+
+# Give the abdicating emperor the emeritus office. Called in his CHARACTER scope. Reuses the
+# generic office system exactly as the Napoleon path (se_QING_NAPOLEON.txt:107), MINUS the
+# foreigner conservative backlash (a Qing patriarch abdicating to his own son provokes no
+# Manchu old-guard reaction — the historical 太上皇 was the height of filial legitimacy).
+QING_emeritus_take_office = {
+	QING_office_appoint = { office = emeritus }
+	add_loyalty = loyalty_qing_elevated
+	employer = {
+		QING_council_recompute = yes
+		LOG_line = { sys = QING  msg = "emeritus: Emperor Emeritus 太上皇 office conferred (historical abdication) for" }
+	}
+}
+
+# ======================================================================
+# THE EMERITUS DIES — hand real power to the reigning emperor and (if the realm is corrupt)
+# trigger the favourite-purge windfall. Called in COUNTRY scope when the Taishang Huang dies
+# (his death_date, or old age). The emeritus office is torn down automatically by the death
+# hook (QING_office_vacate_dispatch, se_QING_COUNCIL.txt:1020); this clears the tracking
+# state and models the new emperor's assertion of independent rule (the historical Jiaqing
+# arrest of Heshen, 1799 — treasury windfall scaled to the corruption that had accumulated).
+# ======================================================================
+QING_emeritus_on_death = {
+	LOG_enter = { sys = QING  fn = "QING_emeritus_on_death" }
+	remove_variable = qing_emeritus_active
+	# The favourite-purge windfall: the new emperor asserts himself by confiscating the
+	# corrupt favourite's fortune (Heshen's confiscation, 1799, reputedly ~years of revenue).
+	# Scaled to the accumulated corruption so a clean realm yields little, a rotten one a lot.
+	if = {
+		limit = { has_variable = qing_corruption_level  var:qing_corruption_level >= 40 }
+		add_treasury = 150
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -20 }
+		add_stability = 2
+		LOG_line = { sys = QING  msg = "emeritus: the favourite purged on the Emeritus's death — treasury windfall, corruption cut for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_emeritus_on_death"  result = OK }
+}

@@ -42,7 +42,18 @@ QING_missionary_init = {
 	# audit-fix (#79): peer inits (QING_selfstr_init, QING_taiping_init) carry the
 	# LOG_enter/LOG_exit pair; wire it here so the sentiment-meter seed is traceable.
 	LOG_enter = { sys = QING  fn = "QING_missionary_init" }
+	# qing_antichristian_sentiment = the POLITICAL / anti-foreign meter (仇教情緒): the
+	# 教案-incident/indemnity/Boxer grievance that only has stakes once foreign consuls and
+	# gunboats stand behind the missions. It is driven toward its target ONLY post-treaty
+	# (QING_missionary_pulse), so it stays ~0 in the pre-treaty centuries — exactly the
+	# history: missionaries could be expelled or executed with zero international consequence.
 	if = { limit = { NOT = { has_variable = qing_antichristian_sentiment } } set_variable = { name = qing_antichristian_sentiment  value = 0 } }
+	# [#309] qing_mission_social_friction = the SOCIAL meter (民教相爭): the cultural irritant
+	# that existed for ~280 years before the treaties — literati contempt for heterodoxy (邪教),
+	# periodic local persecutions, occasional martyrdoms — WITHOUT diplomatic stakes. Present at
+	# every era (incl. 1763); driven by the on-the-ground station footprint. This is the low,
+	# quiet tension the research calls for; the political meter above stays near-zero until 1860.
+	if = { limit = { NOT = { has_variable = qing_mission_social_friction } } set_variable = { name = qing_mission_social_friction  value = 0 } }
 	LOG_exit = { sys = QING  fn = "QING_missionary_init"  result = OK }
 }
 
@@ -80,6 +91,37 @@ QING_missionary_indulge = {
 	LOG_exit = { sys = QING  fn = "QING_missionary_indulge"  result = OK }
 }
 
+# ======================================================================
+# [#309] PRE-TREATY CRACKDOWN — the DOMESTIC lever, no foreign power involved. A local
+# heterodoxy scare (邪教 panic) where the gentry demand the magistrates act. The throne may
+# TOLERATE (the pragmatic High-Qing norm: leave the quiet communities be — social friction
+# eases, at a whiff of gentry displeasure) or SUPPRESS (enforce the 1724 proscription: expel
+# priests, scatter converts — friction drops hard now, a little tyranny, but the underground
+# resilience means it creeps back). NEITHER touches any great power or the political meter:
+# the whole point of the pre-treaty era is that this carried ZERO diplomatic stake. Country scope.
+# ======================================================================
+QING_missionary_tolerate_local = {
+	LOG_enter = { sys = QING  fn = "QING_missionary_tolerate_local" }
+	QING_missionary_init = yes
+	QING_DECLINE_nudge = { var = qing_mission_social_friction  amount = -6 }
+	# the gentry grumble at inaction (a faint sect-pressure tick), but the realm stays calm.
+	QING_DECLINE_nudge = { var = qing_sect_pressure  amount = 2 }
+	LOG_line = { sys = QING  msg = "missionary: local scare TOLERATED (quiet communities left be) for" }
+	LOG_exit = { sys = QING  fn = "QING_missionary_tolerate_local"  result = OK }
+}
+QING_missionary_suppress_local = {
+	LOG_enter = { sys = QING  fn = "QING_missionary_suppress_local" }
+	QING_missionary_init = yes
+	# enforce the proscription: a hard, immediate drop in social friction...
+	QING_DECLINE_nudge = { var = qing_mission_social_friction  amount = -18 }
+	# ...at the cost of a little tyranny (executions/expulsions) and a nudge to sect pressure
+	# (the persecuted communities harden). No foreign consequence — there are no consuls yet.
+	add_tyranny = 1
+	QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -3 }
+	LOG_line = { sys = QING  msg = "missionary: local scare SUPPRESSED (1724 proscription enforced) for" }
+	LOG_exit = { sys = QING  fn = "QING_missionary_suppress_local"  result = OK }
+}
+
 # Ease / pressure the aggrieved power's great-power tension. Britain/France/Russia
 # have counters; a no-op-with-log for any unmapped power.
 QING_missionary_ease_power = {
@@ -113,34 +155,100 @@ QING_missionary_pulse = {
 	LOG_enter = { sys = QING  fn = "QING_missionary_pulse" }
 	QING_missionary_init = yes
 
-	# --- sentiment drifts toward a blend of the treaty burden (the humiliation the
-	# missions embody) and sect pressure (the popular unrest they inflame). Both are
-	# existing suite meters; if the treaty system is not imposed the burden reads 0.
-	set_variable = { name = qing_antichr_target  value = 0 }
-	if = { limit = { has_variable = qing_treaty_burden } change_variable = { name = qing_antichr_target  add = var:qing_treaty_burden } }
-	change_variable = { name = qing_antichr_target  add = var:qing_sect_pressure }
-	change_variable = { name = qing_antichr_target  divide = 2 }
-	# [#275] the CONCRETE missions on the ground push the target up too: every active
-	# mission station (traditional-faith heartlands being converted, the very grievance
-	# the 教案 embodied) adds to the national fury. qing_missionary_reach is the live
-	# station count recomputed each year by QING_mission_stations_pulse; 0 (and this
-	# add a no-op) until the treaty system opens the interior. Read O(1).
-	if = { limit = { has_variable = qing_missionary_reach } change_variable = { name = qing_antichr_target  add = var:qing_missionary_reach } }
-	if = { limit = { var:qing_antichr_target > 100 } set_variable = { name = qing_antichr_target  value = 100 } }
+	# ==================================================================
+	# [#309] SOCIAL FRICTION (民教相爭) — drifts at EVERY era (incl. 1763). The quiet
+	# cultural irritant of a foreign heterodoxy: it tracks the on-the-ground station
+	# footprint (qing_missionary_reach, live at every era now that the station pulse runs
+	# pre-treaty too) plus a share of general sect pressure. LOW ceiling by construction —
+	# even a wide pre-treaty mission presence reads as "a tolerated nuisance", never a
+	# national crisis. No diplomatic stakes: this meter drives only the social band + the
+	# local-crackdown chance, never the powers or the Boxers.
+	# ==================================================================
+	set_variable = { name = qing_social_friction_target  value = 0 }
+	if = { limit = { has_variable = qing_missionary_reach }  change_variable = { name = qing_social_friction_target  add = var:qing_missionary_reach } }
+	# a modest share of sect pressure (heterodoxy panics swept Christianity up with the sects).
+	set_variable = { name = qing_social_friction_sect_tmp  value = var:qing_sect_pressure }
+	change_variable = { name = qing_social_friction_sect_tmp  divide = 4 }
+	change_variable = { name = qing_social_friction_target  add = var:qing_social_friction_sect_tmp }
+	remove_variable = qing_social_friction_sect_tmp
+	# the low ceiling: pre-treaty social friction never exceeds a contained 45 (a nuisance,
+	# not a crisis). Post-treaty the political meter below carries the real danger.
+	if = { limit = { var:qing_social_friction_target > 45 }  set_variable = { name = qing_social_friction_target  value = 45 } }
 	if = {
-		limit = { var:qing_antichristian_sentiment < var:qing_antichr_target }
-		QING_DECLINE_nudge = { var = qing_antichristian_sentiment  amount = 1 }
+		limit = { var:qing_mission_social_friction < var:qing_social_friction_target }
+		QING_DECLINE_nudge = { var = qing_mission_social_friction  amount = 1 }
 	}
 	else_if = {
-		limit = { var:qing_antichristian_sentiment > var:qing_antichr_target }
-		QING_DECLINE_nudge = { var = qing_antichristian_sentiment  amount = -1 }
+		limit = { var:qing_mission_social_friction > var:qing_social_friction_target }
+		QING_DECLINE_nudge = { var = qing_mission_social_friction  amount = -1 }
+	}
+	QING_missionary_apply_social_band = yes
+
+	# [#309/user] RELIGIOUS TENSION FEEDS THE SECT PANIC → the great heterodox risings.
+	# The Qing state grouped Christianity with the White Lotus (白蓮教), Eight Trigrams and
+	# the Triads (天地會) as one undifferentiated "evil sect" (邪教) menace — a province seething
+	# with heterodoxy panic fed the SAME millenarian/secret-society fury whatever its flavour.
+	# So sustained religious tension (social friction pre-treaty, or the political anti-foreign
+	# fury post-treaty) slowly stokes qing_sect_pressure — the very meter that gates the White
+	# Lotus (qing_rebellion.1) and Red Turban (qing_rebellion.7) rolls (se_QING_DECLINE.txt).
+	# Small, gated on a real head of tension so a quiet church never tips the realm into revolt.
+	if = {
+		limit = {
+			OR = {
+				var:qing_mission_social_friction >= 30
+				var:qing_antichristian_sentiment >= 40
+			}
+		}
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = 1 }
+		LOG_line = { sys = QING  msg = "missionary: religious tension stokes the sect panic (sect pressure +1) for" }
+	}
+
+	# ==================================================================
+	# POLITICAL / ANTI-FOREIGN SENTIMENT (仇教情緒) — the treaty-era grievance. Driven
+	# toward its target ONLY once the treaty system stands: pre-treaty there are no consuls,
+	# no extraterritoriality, no gunboats, so a missionary dispute carries NO political
+	# stake and this meter does not move (the research's "political tension ≈ 0" for the
+	# 1724-1860 era). Post-treaty it blends the treaty burden, sect pressure, and the now-
+	# aggressive station reach — the road to the 教案 incidents and the Boxers.
+	# ==================================================================
+	if = {
+		limit = { has_variable = qing_treaty_system_imposed }
+		set_variable = { name = qing_antichr_target  value = 0 }
+		if = { limit = { has_variable = qing_treaty_burden } change_variable = { name = qing_antichr_target  add = var:qing_treaty_burden } }
+		change_variable = { name = qing_antichr_target  add = var:qing_sect_pressure }
+		change_variable = { name = qing_antichr_target  divide = 2 }
+		# [#275] the CONCRETE missions on the ground push the target up too: every active
+		# mission station (traditional-faith heartlands being converted, the very grievance
+		# the 教案 embodied) adds to the national fury. qing_missionary_reach is the live
+		# station count recomputed each year by QING_mission_stations_pulse. Read O(1).
+		if = { limit = { has_variable = qing_missionary_reach } change_variable = { name = qing_antichr_target  add = var:qing_missionary_reach } }
+		if = { limit = { var:qing_antichr_target > 100 } set_variable = { name = qing_antichr_target  value = 100 } }
+		if = {
+			limit = { var:qing_antichristian_sentiment < var:qing_antichr_target }
+			QING_DECLINE_nudge = { var = qing_antichristian_sentiment  amount = 1 }
+		}
+		else_if = {
+			limit = { var:qing_antichristian_sentiment > var:qing_antichr_target }
+			QING_DECLINE_nudge = { var = qing_antichristian_sentiment  amount = -1 }
+		}
+	}
+	else = {
+		# pre-treaty: the political meter bleeds slowly back to zero (no state backing means
+		# no political grievance can accumulate) — so a game that opens then revises treaties
+		# does not leave a stranded political charge.
+		if = {
+			limit = { var:qing_antichristian_sentiment > 0 }
+			QING_DECLINE_nudge = { var = qing_antichristian_sentiment  amount = -1 }
+		}
 	}
 
 	QING_missionary_apply_band = yes
 
-	# [#91 item P] give the fury a FACE: at fever-pitch sentiment, conjure a real
-	# anti-missionary agitator (once). The call is gated on the same guard the effect
-	# carries so the pulse does not spam the LOG_fail branch every tick.
+	# [#91 item P] give the fury a FACE: at fever-pitch POLITICAL sentiment, conjure a real
+	# anti-missionary agitator (once). This is a treaty-era 扶清滅洋 firebrand, so it is
+	# gated on the political meter (which only rises post-treaty) — no such national agitator
+	# arises from the quiet pre-treaty social friction. The call is gated on the same guard
+	# the effect carries so the pulse does not spam the LOG_fail branch every tick.
 	if = {
 		limit = {
 			var:qing_antichristian_sentiment >= 66
@@ -149,9 +257,11 @@ QING_missionary_pulse = {
 		QING_missionary_spawn_agitator = yes
 	}
 
-	# --- the boil-over: once sentiment is at fever pitch AND the Boxers have not yet
-	# risen, the accumulated grievance erupts into the Boxer moment. We route into the
-	# EXISTING Boxer rising (qing_rebellion.9), whose own guard (qing_rebel_boxer_rose)
+	# --- the boil-over: once POLITICAL sentiment is at fever pitch AND the Boxers have not
+	# yet risen, the accumulated grievance erupts into the Boxer moment. Because the political
+	# meter only moves post-treaty, this can only fire in the treaty era — the Boxer rising was
+	# a response to the treaty-protected missions, never a pre-treaty possibility. We route into
+	# the EXISTING Boxer rising (qing_rebellion.9), whose own guard (qing_rebel_boxer_rose)
 	# ensures it fires once. Guarded here on the same flag so we do not re-trigger.
 	if = {
 		limit = {
@@ -164,6 +274,23 @@ QING_missionary_pulse = {
 	}
 
 	LOG_exit = { sys = QING  fn = "QING_missionary_pulse"  result = OK }
+}
+
+# ======================================================================
+# [#309] SOCIAL-FRICTION BAND — the pre-treaty (and general) low-intensity face of
+# Christian presence. A separate, milder band from the political fever above: it reads
+# as literati unease and occasional local friction, never a foreign-relations danger.
+# One active band matching the social meter. Country scope.
+# ======================================================================
+QING_missionary_apply_social_band = {
+	LOG_enter = { sys = QING  fn = "QING_missionary_apply_social_band" }
+	remove_country_modifier = qing_mission_social_unease
+	if = {
+		limit = { var:qing_mission_social_friction >= 25 }
+		add_country_modifier = { name = qing_mission_social_unease  duration = -1 }
+		LOG_line = { sys = QING  msg = "band mission social = unease for (friction=)" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_missionary_apply_social_band"  result = OK }
 }
 
 # ======================================================================

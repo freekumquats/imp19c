@@ -299,3 +299,129 @@ qing_decline.20 = {
 		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -8 }
 	}
 }
+
+########################################################################
+# .40  HESHEN-INFLECTION CONDITION CHECKER (hidden, yearly re-arming).
+# [bookmark-1763 #304] The end of the High Qing golden age is NOT a fixed calendar beat:
+# Heshen rose because an AGEING, complacent Qianlong let a favourite with an independent
+# power base capture the court while corruption crept up — a conjunction of conditions, not
+# a date (戴逸; 郭成康; Rowe 2009). So rather than force the inflection at 1775, this hidden
+# checker arms at ~1772 (offset 3245, when the historical Heshen entered service) and
+# re-fires yearly. It ends the era (fires the player-facing .41) when the Heshen CONJUNCTION
+# holds: rising corruption + an aged/unpopular emperor + an overmighty non-ruler courtier
+# (the engine's own power_base/prominence "Heshen pattern", se_QING_COUNCIL.txt:378 +
+# se_QING_ACCOUNTABILITY.txt:341) — EARNED, and applies to a human player too. An AI-ONLY
+# backstop (is_ai + current_date >= 1796, Qianlong's historical abdication) forces the turn
+# for an AI Qing so it walks the historical arc; a skilled HUMAN player is never railroaded
+# off the golden age and can sustain it indefinitely by good governance. Self-guards on the
+# era still being active; stops re-arming once ended.
+########################################################################
+qing_decline.40 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	trigger = {
+		tag = CHI
+		has_variable = qing_high_qing_era
+		NOT = { has_variable = qing_high_qing_era_ended }
+	}
+	immediate = {
+		if = {
+			# THE HESHEN CONJUNCTION — the favourite captures a slackening court. This is
+			# EARNED, not railroaded: it applies to a human player too, but only when they let
+			# the conditions form (they can govern to avoid it indefinitely). A backstop forces
+			# the turn for an AI Qing ONLY (is_ai = yes) so the AI follows the historical path;
+			# a skilled human player is never railroaded off the golden age.
+			limit = {
+				OR = {
+					AND = {
+						# corruption already creeping up from the low High-Qing baseline
+						var:qing_corruption_level >= 20
+						# an ageing or unpopular sovereign — the grip has loosened
+						current_ruler = { OR = { age >= 63  popularity <= 15 } }
+						# a non-ruler courtier with a dangerous independent power base
+						# (the "Heshen pattern": holdings + loyal veterans + court prominence)
+						any_character = {
+							count >= 1
+							employer = ROOT
+							is_ruler = no
+							OR = { power_base >= 12  prominence >= 55 }
+						}
+					}
+					# AI-only backstop: an AI Qing follows the historical arc — by Qianlong's
+					# abdication year (1796) the era ends regardless. A HUMAN Qing is not
+					# railroaded (no date backstop); it ends only on the earned conjunction above.
+					AND = {
+						is_ai = yes
+						current_date >= 1796.1.1
+					}
+				}
+			}
+			LOG_line = { sys = QING  msg = "qing_decline.40: Heshen conjunction met (or backstop) — firing inflection for [ROOT.GetTag]" }
+			trigger_event = { id = qing_decline.41  days = { 3 15 } }
+		}
+		else = {
+			# conditions not yet met — re-arm the checker in ~1 year
+			trigger_event = { id = qing_decline.40  days = { 350 380 } }
+		}
+	}
+}
+
+########################################################################
+# .41  THE HESHEN INFLECTION (和珅) — END OF THE HIGH QING ERA (player-facing).
+# [bookmark-1763 #304] Fired by the .40 checker when the Heshen conjunction forms (or the
+# 1796 backstop). The rise of Heshen is the standard historiographic hinge from zenith to
+# slide: endemic 陋規 graft, court-favorite monopoly on appointments, the hollowing of the
+# campaign-era army. The state transition (clear era flag, drop the prosperity modifier so
+# the pulse's passive decline creep + reaction rolls resume) ALWAYS fires in immediate{};
+# the OPTIONS let the player shape how hard the turn bites. Idempotent via
+# qing_high_qing_era_ended. Shown; loc in qing_mechanics_l_english.yml.
+########################################################################
+qing_decline.41 = {
+	type = country_event
+	title = "qing_decline.41.t"
+	desc = "qing_decline.41.desc"
+	picture = dagger_behind_back
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+	trigger = {
+		tag = CHI
+		has_variable = qing_high_qing_era
+		NOT = { has_variable = qing_high_qing_era_ended } # once
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_decline.41 (Heshen inflection): High Qing era ends, decline resumes for [ROOT.GetTag]" }
+		# The state transition ALWAYS fires (the golden age is over regardless of choice):
+		# clear the era flag + stamp the once-sentinel + drop the prosperity modifier, so the
+		# decline suite resumes exactly as at an 1815 start.
+		remove_variable = qing_high_qing_era
+		set_variable = { name = qing_high_qing_era_ended  value = 1 }
+		remove_country_modifier = qing_high_qing_prosperity
+	}
+
+	# --- Indulge the favourite — his flattery is pleasant and his creatures efficient.
+	#     The path of least resistance: a burst of legitimacy now, but corruption entrenches
+	#     hard and dynastic harmony suffers as the honest officials are frozen out. ----------
+	option = {
+		name = "qing_decline.41.a"
+		custom_tooltip = "qing_decline.41.a.tt"
+		add_legitimacy = 10
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 25 }
+		QING_dynasty_harmony_nudge = { amount = -15 }
+	}
+
+	# --- Hold the favourite at arm's length — keep the old campaign-generals and censors
+	#     close. Costs the ruler some standing against the rising clique, but the corruption
+	#     ratchet is far gentler and harmony largely holds. --------------------------------
+	option = {
+		name = "qing_decline.41.b"
+		custom_tooltip = "qing_decline.41.b.tt"
+		add_legitimacy = -5
+		add_stability = 1
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 8 }
+		QING_dynasty_harmony_nudge = { amount = -4 }
+	}
+}
