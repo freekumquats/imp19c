@@ -503,15 +503,28 @@ qing_office.8 = {
 	}
 
 	immediate = {
-		ordered_in_list = {
-			variable = qing_council_members
-			limit = { is_alive = yes  employer = ROOT }
-			order_by = combined_stats_council_svalue
-			check_range_bounds = no
-			max = 1
-			save_scope_as = councillor
+		# [#308 A] POSITIVE beat -> the memorial comes from a councillor the throne is
+		# CLOSE to: a friend, a same-faction ally, a high-affinity man (QING_faction_pick_ally
+		# ranks the roster by affinity + faction alignment + friendship of the emperor and saves
+		# scope:qing_picked_ally). A reward should fall on an ally, not a blind pick of the ablest.
+		QING_faction_pick_ally = yes
+		if = {
+			limit = { exists = scope:qing_picked_ally }
+			scope:qing_picked_ally = { save_scope_as = councillor }
 		}
-		LOG_line = { sys = QING  msg = "EVENT qing_office.8 (councillor memorial) [ROOT.GetTag]" }
+		# fall back to the ablest man if the affinity roster somehow yielded nothing.
+		if = {
+			limit = { NOT = { exists = scope:councillor } }
+			ordered_in_list = {
+				variable = qing_council_members
+				limit = { is_alive = yes  employer = ROOT }
+				order_by = combined_stats_council_svalue
+				check_range_bounds = no
+				max = 1
+				save_scope_as = councillor
+			}
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_office.8 (councillor memorial, ally-picked) [ROOT.GetTag]" }
 	}
 
 	# --- Act on the fiscal memorial (streamline the revenue) -------------
@@ -660,21 +673,42 @@ qing_office.10 = {
 
 	immediate = {
 		var:qing_office_chancellor_holder = { save_scope_as = clique_chief }
-		# the clique's ringleader: the member who clashes worst with the chief
-		random_in_list = {
-			variable = qing_council_members
+		# [#308 A] NEGATIVE beat -> the clique's ringleader is a man the throne is set
+		# AGAINST: a rival, an opposite-faction figure, a low-affinity courtier
+		# (QING_faction_pick_foe ranks the roster the other way, saving scope:qing_picked_foe).
+		# A faction forming against the chief naturally coalesces around the emperor's own
+		# antagonists. If the foe-pick lands on the chief himself (a small council) or yields
+		# nothing, fall back to the old prominence pick so the event still has a ringleader.
+		QING_faction_pick_foe = yes
+		if = {
 			limit = {
-				is_alive = yes
-				employer = ROOT
-				NOT = { this = scope:clique_chief }
+				exists = scope:qing_picked_foe
+				NOT = { scope:qing_picked_foe = { this = scope:clique_chief } }
 			}
-			order_by = prominence
-			check_range_bounds = no
-			max = 1
-			save_scope_as = clique_head
+			scope:qing_picked_foe = { save_scope_as = clique_head }
+		}
+		if = {
+			limit = {
+				OR = {
+					NOT = { exists = scope:clique_head }
+					scope:clique_head = { this = scope:clique_chief }
+				}
+			}
+			random_in_list = {
+				variable = qing_council_members
+				limit = {
+					is_alive = yes
+					employer = ROOT
+					NOT = { this = scope:clique_chief }
+				}
+				order_by = prominence
+				check_range_bounds = no
+				max = 1
+				save_scope_as = clique_head
+			}
 		}
 		QING_pair_friction = { a = scope:clique_chief  b = scope:clique_head }
-		LOG_line = { sys = QING  msg = "EVENT qing_office.10 (clique vs chief [scope:clique_chief.GetName], head [scope:clique_head.GetName], friction=[ROOT.MakeScope.GetVariable('qing_pair_friction').GetValue|0]) [ROOT.GetTag]" }
+		LOG_line = { sys = QING  msg = "EVENT qing_office.10 (clique vs chief [scope:clique_chief.GetName], head [scope:clique_head.GetName], foe-picked, friction=[ROOT.MakeScope.GetVariable('qing_pair_friction').GetValue|0]) [ROOT.GetTag]" }
 	}
 
 	# --- Break the clique; uphold the chief's authority ------------------

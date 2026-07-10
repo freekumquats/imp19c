@@ -130,6 +130,12 @@ QING_council_recompute = {
 	set_variable = { name = qing_council_figurehead_count  value = 0 }
 	set_variable = { name = qing_council_manchu_count  value = 0 }
 	set_variable = { name = qing_council_han_count  value = 0 }
+	# [#308 D] a THIRD ethnic bucket. The old split was Manchu (dynasty culture) vs Han
+	# (EVERYTHING else) — which wrongly lumped Mongol, Tibetan and Turkic bannermen / frontier
+	# officials in with the Han. The court was in truth Manchu / Han / OTHER (the Lifan Yuan
+	# 理藩院 seated Mongol and Tibetan grandees). This counter holds the non-Han, non-Manchu
+	# members; the balance bonus below now rewards a genuinely broad court, not a two-bloc one.
+	set_variable = { name = qing_council_other_count  value = 0 }
 	clear_variable_list = qing_council_members
 
 	# [#157 fix] MANCHU REFERENCE for the 滿漢 split. The score functions compare a
@@ -258,6 +264,40 @@ QING_council_recompute = {
 	# BEFORE the eff_target math below, which reads the deadlock penalty it derives.
 	QING_faction_recompute = yes
 
+	# --- [#308 E] SINICIZATION DRIFT of the council. Over the generations the Manchu
+	# conquest elite steadily assimilated to Han ways (漢化) — language, dress, letters —
+	# a drift the throne alternately fought (國語騎射) and could not stop. Model it on the
+	# court itself: once a year, every seated member (and the throne row) edges toward the
+	# Han pole, EXCEPT the conservatives — traditionalists and staunch zealots dig in, and
+	# some even harden the other way. Self-throttled ~yearly so the drift is generational,
+	# not quarterly. Reuses QING_char_shift_identity (se_QING_MECHANICS.txt).
+	if = {
+		limit = { NOT = { has_variable = qing_council_sinicize_cooldown } }
+		set_variable = { name = qing_council_sinicize_cooldown  days = 365 }
+		if = {
+			limit = { has_variable_list = qing_council_members }
+			every_in_list = {
+				variable = qing_council_members
+				limit = { is_alive = yes  employer = ROOT }
+				QING_council_sinicize_drift_one = yes
+			}
+		}
+		# the throne row drifts too (the Qianlong-to-Puyi arc of an ever-more-sinophone court).
+		if = { limit = { exists = current_ruler }  current_ruler = { QING_council_sinicize_drift_one = yes } }
+		if = {
+			limit = {
+				exists = current_ruler.spouse
+				current_ruler.spouse = { is_alive = yes }
+			}
+			current_ruler.spouse = { QING_council_sinicize_drift_one = yes }
+		}
+		# [#308/user] on the same yearly cadence, the council's FACTION alignments drift too:
+		# officials occasionally shift reformist/conservative (usually bandwagoning to the
+		# ascendant wing, sometimes bucking it) — the mechanic that makes the office-name
+		# colours in the GC panel change over a reign. (se_QING_FACTION.txt)
+		QING_faction_drift_alignments = yes
+	}
+
 	# --- base = weighted-average governing skill of the filled offices AND the
 	# dynastic figureheads, scaled to ~0..100. A council of solid specialists
 	# (governing skill ~9) lands near the effective band; brilliant men clear it,
@@ -275,13 +315,19 @@ QING_council_recompute = {
 		change_variable = { name = qing_council_eff_target  multiply = 7 }
 	}
 
-	# --- dyarchic balance bonus: both blocs seated => +15 (滿漢並用)
+	# --- [#308 D] balance bonus: the 滿漢並用 dyarchy (both Manchu AND Han seated) is the
+	# core +15; a genuinely BROAD court that ALSO seats a non-Han/non-Manchu grandee (Mongol/
+	# Tibetan/Turkic — the multi-ethnic empire governing itself, 因俗而治) earns a further +5.
 	if = {
 		limit = {
 			var:qing_council_manchu_count >= 1
 			var:qing_council_han_count >= 1
 		}
 		change_variable = { name = qing_council_eff_target  add = 15 }
+		if = {
+			limit = { var:qing_council_other_count >= 1 }
+			change_variable = { name = qing_council_eff_target  add = 5 }
+		}
 	}
 
 	# --- vacancy penalty: 13 appointable offices (12 domain boards + chancellor,
@@ -397,6 +443,70 @@ QING_council_recompute = {
 	LOG_exit = { sys = QING  fn = "QING_council_recompute"  result = OK }
 }
 
+# ======================================================================
+# [#308 D] CLASSIFY A HOLDER's ETHNICITY into one of THREE buckets. Call INSIDE the
+# holder's character scope (this = the office-holder); ROOT = CHI. Manchu = shares the
+# dynasty's own culture (the conquest elite); Han = the chinese_group (the literati-
+# official majority); Other = everyone else (Mongol/Tibetan/Turkic bannermen + frontier
+# grandees, esp. the Lifan Yuan). Uses the proven scope-link culture compare + the
+# has_culture_group idiom (both verified in-mod). Bumps the matching country counter.
+# ======================================================================
+QING_council_classify_ethnicity = {
+	if = {
+		limit = {
+			exists = scope:qing_council_manchu_ref
+			culture = scope:qing_council_manchu_ref.culture
+		}
+		ROOT = { change_variable = { name = qing_council_manchu_count  add = 1 } }
+	}
+	else_if = {
+		limit = { has_culture_group = chinese_group }
+		ROOT = { change_variable = { name = qing_council_han_count  add = 1 } }
+	}
+	else = {
+		ROOT = { change_variable = { name = qing_council_other_count  add = 1 } }
+	}
+}
+
+# ======================================================================
+# [#308 E] SINICIZATION DRIFT — nudge ONE character's Manchu identity. Call INSIDE the
+# character scope (this = the member / throne-row figure). Most of the court drifts toward
+# the Han pole (漢化); the conservatives resist or even harden. Guarded so it only acts on
+# characters who actually carry a Manchu identity to lose (Han/other members sit near the
+# sinicized floor already and QING_char_shift_identity clamps at 0, so calling them is a
+# cheap no-op). Reuses QING_char_shift_identity (se_QING_MECHANICS.txt; +=Manchu, -=Han).
+# ======================================================================
+QING_council_sinicize_drift_one = {
+	QING_char_init_identity = yes
+	# CONSERVATIVES dig in: a traditionalist, a fervent zealot, or an already-staunch
+	# Manchu (identity >= 66) resists the tide — and the hardest cases harden further.
+	if = {
+		limit = {
+			OR = {
+				has_trait = traditionalist
+				zeal >= 12
+				var:qing_manchu_identity >= 80
+			}
+		}
+		# the staunchest reassert the Manchu Way (a small hardening); the merely conservative
+		# simply hold the line (no drift this year).
+		if = {
+			limit = { OR = { has_trait = traditionalist  var:qing_manchu_identity >= 80 } }
+			QING_char_shift_identity = { amount = 2 }
+		}
+	}
+	else = {
+		# the rest of the court drifts Han-ward. A reformer drifts faster (he embraces it).
+		if = {
+			limit = { has_trait = reformer }
+			QING_char_shift_identity = { amount = -5 }
+		}
+		else = {
+			QING_char_shift_identity = { amount = -3 }
+		}
+	}
+}
+
 # Score one DOMAIN office on its single governing skill. Country scope.
 # $office$ = office key, $skill$ = martial|finesse|charisma|zeal. Adds the
 # holder's governing skill to the running total, counts him toward the filled
@@ -418,16 +528,8 @@ QING_council_score_office = {
 			# culture balance (滿漢): dynasty-culture holders count Manchu, others Han.
 			# [#157 fix] compare against the saved ruler's culture via the proven
 			# `culture = scope:X.culture` link idiom (ROOT.primary_culture is invalid here).
-			if = {
-				limit = {
-					exists = scope:qing_council_manchu_ref
-					culture = scope:qing_council_manchu_ref.culture
-				}
-				ROOT = { change_variable = { name = qing_council_manchu_count  add = 1 } }
-			}
-			else = {
-				ROOT = { change_variable = { name = qing_council_han_count  add = 1 } }
-			}
+			# [#308 D] three-bucket 滿漢蒙回藏 classification (was Manchu / else-Han).
+			QING_council_classify_ethnicity = yes
 		}
 	}
 }
@@ -451,16 +553,8 @@ QING_council_score_chancellor = {
 				add_to_variable_list = { name = qing_council_members  target = prev }
 			}
 			# [#157 fix] see QING_council_score_office: scope-link culture compare.
-			if = {
-				limit = {
-					exists = scope:qing_council_manchu_ref
-					culture = scope:qing_council_manchu_ref.culture
-				}
-				ROOT = { change_variable = { name = qing_council_manchu_count  add = 1 } }
-			}
-			else = {
-				ROOT = { change_variable = { name = qing_council_han_count  add = 1 } }
-			}
+			# [#308 D] three-bucket 滿漢蒙回藏 classification (was Manchu / else-Han).
+			QING_council_classify_ethnicity = yes
 		}
 		change_variable = { name = qing_council_tmp  divide = 4 }
 		change_variable = { name = qing_council_skill_total  add = var:qing_council_tmp }

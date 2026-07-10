@@ -217,11 +217,19 @@ QING_mission_spread_one = {
 # from scratch so it stays an honest live count. Self-throttled ~yearly.
 # ======================================================================
 QING_mission_stations_pulse = {
+	# [#309] TWO MODES. The interior missions are no longer dormant until the treaties:
+	# Christianity was physically present for ~280 years before 1860 (200-300k converts,
+	# Jesuit court science, underground provincial communities). What the treaties changed
+	# was the INTENSITY and the political stakes, not the existence. So:
+	#   • PRE-TREATY  (no qing_treaty_system_imposed): a LOW-INTENSITY mode — a handful of
+	#     tolerated/underground stations seeded slowly at the most populous interior provinces
+	#     (not treaty ports — there are none), a gentle inland creep, a thin conversion trickle,
+	#     and NO foreign stakes. Feeds only social friction + the local-crackdown chance.
+	#   • POST-TREATY: the existing HIGH-INTENSITY mode — stations follow the flag in at the
+	#     treaty ports, spread and convert aggressively, feeding the political grievance/Boxers.
+	# Both share the reach recount, the same-pass guard, and the yearly self-throttle.
 	if = {
-		limit = {
-			has_variable = qing_treaty_system_imposed
-			NOT = { has_variable = qing_mission_pulse_cooldown }
-		}
+		limit = { NOT = { has_variable = qing_mission_pulse_cooldown } }
 		LOG_enter = { sys = QING  fn = "QING_mission_stations_pulse" }
 		set_variable = { name = qing_mission_pulse_cooldown  days = 365 }
 		save_scope_as = mission_owner
@@ -240,21 +248,38 @@ QING_mission_stations_pulse = {
 					NOT = { has_variable = qing_station_founded_this_pass }
 				}
 				scope:mission_owner = { change_variable = { name = qing_missionary_reach  add = 1 } }
-				QING_mission_convert_pops = yes
-				# gentle local tension decay if the field is quiet this year, then the
-				# harvest above adds back — net drift tracks how hard the mission works.
-				QING_mission_spread_one = yes
+				# post-treaty: the aggressive harvest (feeds the political grievance). pre-treaty:
+				# a thin trickle that raises only LOCAL friction, no national political charge.
+				if = {
+					limit = { scope:mission_owner = { has_variable = qing_treaty_system_imposed } }
+					QING_mission_convert_pops = yes
+					QING_mission_spread_one = yes
+				}
+				else = {
+					QING_mission_convert_pops_pretreaty = yes
+					QING_mission_spread_one_pretreaty = yes
+				}
 			}
-			# --- a treaty port with no mission yet: the missions follow the flag in.
+			# --- POST-TREATY: a treaty port with no mission yet — the missions follow the flag in.
 			# [#275 review-fix] guard NOT-already-a-station so a treaty port spread-founded
 			# earlier in this same sweep is not re-founded here. ---
 			else_if = {
 				limit = {
+					scope:mission_owner = { has_variable = qing_treaty_system_imposed }
 					has_province_modifier = qing_treaty_port
 					NOT = { has_province_modifier = qing_mission_station }
 				}
 				QING_mission_found_station = yes
 			}
+		}
+		# --- PRE-TREATY seeding: no treaty ports exist, so the low-intensity presence is
+		# seeded slowly at the most populous INTERIOR provinces (Jiangnan/Fujian/Sichuan
+		# analogues — the real underground-community heartlands). Capped at a small standing
+		# footprint so it stays a tolerated minority, never a blanket. One new station per
+		# pass, and only up to a modest ceiling; O(1) beyond the single ordered pick.
+		if = {
+			limit = { NOT = { has_variable = qing_treaty_system_imposed } }
+			QING_mission_seed_pretreaty = yes
 		}
 		# [#275 review-fix] clear the this-pass founding marks so next pulse treats today's
 		# newborn stations as ordinary existing stations (harvest + spread + reach-count).
@@ -264,5 +289,113 @@ QING_mission_stations_pulse = {
 		}
 		LOG_line = { sys = QING  msg = "mission: stations pulse complete (reach recomputed) for" }
 		LOG_exit = { sys = QING  fn = "QING_mission_stations_pulse"  result = OK }
+	}
+}
+
+# ======================================================================
+# [#309] PRE-TREATY LOW-INTENSITY HELPERS. The quiet-era counterparts to the
+# post-treaty founding/harvest/spread above: slower, capped, and with NO foreign
+# stakes. Christianity present but underground/tolerated (1601-1860).
+# ======================================================================
+
+# Seed the low-intensity presence: one new station per pass at the most-populous interior
+# province with none, up to a small standing ceiling (a tolerated minority, not a blanket).
+# The ceiling scales with realm size but stays low. Scope: COUNTRY (CHI), called in-pulse.
+QING_mission_seed_pretreaty = {
+	# a modest standing footprint: the pre-treaty church was ~200-300k in a country of
+	# ~300M — a handful of concentrated communities, not a province-by-province spread.
+	if = {
+		limit = {
+			var:qing_missionary_reach < 6
+			any_owned_province = {
+				is_sea = no
+				NOT = { has_province_modifier = qing_mission_station }
+				state = { total_population > 0 }
+			}
+		}
+		ordered_owned_province = {
+			limit = {
+				is_sea = no
+				NOT = { has_province_modifier = qing_mission_station }
+				state = { total_population > 0 }
+			}
+			order_by = total_population
+			max = 1
+			QING_mission_found_station = yes
+		}
+		LOG_line = { sys = QING  msg = "mission: pre-treaty low-intensity station seeded for" }
+	}
+}
+
+# Pre-treaty harvest: a THIN trickle. Converts at most one non-traditional-preferring pop,
+# raises only LOCAL friction, and applies the local band — no national political charge.
+# Scope: PROVINCE (a station).
+QING_mission_convert_pops_pretreaty = {
+	save_scope_as = mission_prov
+	if = { limit = { NOT = { has_variable = qing_prov_missionary_tension } } set_variable = { name = qing_prov_missionary_tension  value = 0 } }
+	# a quiet field cools faster than an actively-worked treaty-era one.
+	change_variable = { name = qing_prov_missionary_tension  subtract = 4 }
+	if = { limit = { var:qing_prov_missionary_tension < 0 } set_variable = { name = qing_prov_missionary_tension  value = 0 } }
+	# modest yearly chance of a single conversion (underground catechism, not open preaching).
+	random = {
+		chance = 40
+		if = {
+			limit = {
+				any_pops_in_province = {
+					NOT = { pop_type = slaves }
+					NOT = { pop_type = nobles }
+					NOT = { christian_group_trigger_pop = yes }
+				}
+			}
+			random_pops_in_province = {
+				limit = {
+					NOT = { pop_type = slaves }
+					NOT = { pop_type = nobles }
+					NOT = { christian_group_trigger_pop = yes }
+				}
+				QING_mission_convert_faith = yes
+			}
+			# a smaller local bite than the treaty-era harvest (no foreign patronage flaunted).
+			change_variable = { name = qing_prov_missionary_tension  add = 5 }
+			LOG_line = { sys = QING  msg = "mission: pre-treaty quiet conversion for" }
+		}
+	}
+	if = { limit = { var:qing_prov_missionary_tension > 100 } set_variable = { name = qing_prov_missionary_tension  value = 100 } }
+	QING_mission_apply_local_band = yes
+}
+
+# Pre-treaty spread: much rarer than the treaty-era 15% — underground missions crept, they
+# did not radiate. Scope: PROVINCE (the parent station).
+# [#309 review fix] Spread is CAPPED at the same standing ceiling as seeding (reach < 6). Without
+# this, seeding stopped at 6 but each station kept rolling a 5% daughter-chance every yearly pulse
+# with NO ceiling — exponential growth (~14yr doubling) that over the long pre-treaty window (esp.
+# the ~97yr 1763 start) blankets the interior into the hundreds, defeating the documented "handful
+# of concentrated communities, never a blanket" cap and silently pegging social friction at 45,
+# which in turn fed qing_sect_pressure and inflated White Lotus / Red Turban rebellion pressure.
+QING_mission_spread_one_pretreaty = {
+	if = {
+		limit = { scope:mission_owner = { var:qing_missionary_reach < 6 } }
+		random = {
+			chance = 5
+			if = {
+				limit = {
+					any_neighbor_province = {
+						is_sea = no
+						owner = scope:mission_owner
+						NOT = { has_province_modifier = qing_mission_station }
+						state = { total_population > 0 }
+					}
+				}
+				random_neighbor_province = {
+					limit = {
+						is_sea = no
+						owner = scope:mission_owner
+						NOT = { has_province_modifier = qing_mission_station }
+						state = { total_population > 0 }
+					}
+					QING_mission_found_station = yes
+				}
+			}
+		}
 	}
 }
