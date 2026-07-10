@@ -281,8 +281,13 @@ char:55 (Boyer), HTK char:60 (Christophe). The engine auto-generates period-appr
   later dedicated pass.
 - **HAI = Haida** (Pacific-NW indigenous), **not Haiti** — the `1763_DELTA_Americas.md` plan's item #5 was
   a tag misidentification and is **void**. The real Haiti tags are HTI/HTK (handled above).
-- **NGR inactive**; New Granada land is held by SFB + the colombian tags, which is why QTO/VNZ fall back to
-  direct SPA rather than nesting under a New-Granada viceroyalty.
+- **NGR inactive** (defined in countries.txt but owns ZERO provinces — no own_control_core block, and its
+  SPA dependency is commented out); New Granada land is held by SFB (the real viceregal capital, 29 provs) +
+  QTO + VNZ + VLL, each a *direct* SPA `client_colony`, which is why QTO/VNZ fall back to direct SPA rather
+  than nesting under a New-Granada viceroyalty.
+  > **[NOTE 2026-07-09]** The QTO/VNZ entries above describe NGR as "modeled as an independent confederacy" —
+  > that wording is INACCURATE; NGR is simply inert (owns nothing), not an active confederacy. Activating NGR
+  > as the parent viceroyalty (SPA→NGR→QTO/VNZ, folding SFB in) is the historically-correct fix → task #296.
 
 **Verification.** Per-region regression grep of all changed tags (QTO/FLO/VNZ/AR1/LFP/PRG/MEX/HTI/HTK/GAS)
 across `events/` + `missions/` → **zero references** (no trigger regression surface, matching B0's "Latin
@@ -356,10 +361,18 @@ document the rest as limitations), recon of the actual baseline showed:
   tag + provinces is gated by the mass-spawn oracle rule (#230) and is out of this region's build scope.
   **Documented limitation** (a future CRM tag + Qırım Giray ruler could be added if the tag-spawn
   capability is proven).
+  > **[SUPERSEDED 2026-07-09]** CRM WAS built in #282a (commit `30dca41b`) — see the #282a section below.
+  > The "#230 gate" premise was wrong: bookmark-start tags use STATIC setup, not `create_country` (see the
+  > #282 BUILD header). CRM now owns 22 Taurida provinces as a TUR feudatory. The named **Qırım Giray**
+  > ruler is still unbuilt (engine auto-generates) → tracked as task #297. Doc-fix folded into #300/#297.
 - **Zand dynasty swap NOT applied.** The plan wanted to replace PR2's Qajar rulers with invented Karim
   Khan Zand characters carrying fabricated DNA strings. Per the no-unsourced-fabricated-character-data
   discipline, the dynasty/capital rework is deferred; the crash-avoiding fix (below) is applied and the
   Zand/Shiraz reflavour is left as a documented future refinement.
+  > **[CORRECTION 2026-07-09]** The "fabricated DNA" rationale is INVALID: #287 proved rulers install
+  > DNA-LESS (sourced facts only, engine renders the portrait). So the Karim Khan Zand *ruler* was never
+  > actually gated — it is buildable exactly like the four #287 India rulers. Only the dynasty/capital
+  > (Qajar→Zand family, Tehran→Shiraz) is a genuine unbuilt refinement. Both tracked as task #298.
 - **Ottoman vassal list, Egypt/Iraq subject-types: NO CHANGE.** Research itself concluded most 1815
   Ottoman vassals also existed in 1763 (continuity); the speculative subject-type churn is not
   crash-relevant and unsourced at the needed granularity, so left as-is.
@@ -401,6 +414,11 @@ Sikh misls, Siam capital relocation, and dozens of insular-sultanate ruler swaps
 gated by the #230 oracle mass-spawn rule** (new tags need new province assignments / `create_country`
 churn) and is therefore OUT of the per-region crash-avoiding build scope. It is documented here as a
 **deferred redistribution limitation**, not built.
+> **[PARTLY SUPERSEDED 2026-07-09]** The "#230 gate" premise was wrong (static setup, not `create_country`).
+> Of this list: **Vietnam Trịnh/Nguyễn split BUILT** (#282d, `b9432597` — new TRH tag); **Maratha houses
+> already fragmented** at baseline, left as-is (#282e, `fad59f47`); **India ruler accuracy BUILT** (#287,
+> `ad2e7303`, DNA-less). GENUINELY still unbuilt: EIC province-stripping, Bengal-Nawab tag, Sikh misls,
+> Siam capital relocation, insular-sultanate ruler swaps → tracked as task #300.
 
 The tractable, crash-relevant delta for this region is the same class as the earlier regions: the
 **unborn-ruler sweep**. Global scan found the only Asian character files carrying `set_as_ruler` wrappers
@@ -463,6 +481,11 @@ engine-generated period-appropriate rulers — nothing to fix. **Zero edits appl
 independence, Oyo-Dahomey, and Ethiopia ruler-identity deltas are documented as deferred limitations (oracle
 mass-spawn gate #230), consistent with the policy applied to the MENA Crimean-Khanate and Asia
 EIC/Maratha/Vietnam redistributions.
+> **[SUPERSEDED 2026-07-09]** This "documentation-only / zero edits" verdict is STALE — the #230 gate premise
+> was wrong (static setup works). Africa territorial WAS built: **Cape→Dutch (DAF) BUILT** (#282b, `56a89948`)
+> and **Sokoto Caliphate dissolved → Gobir BUILT** (#282c, `957df71b`). GENUINELY still unbuilt: the 6 discrete
+> Hausa city-states (consolidated under GBI instead), Ethiopia ruler Emperor Iyoas I (buildable DNA-less now),
+> Oyo–Dahomey tributary, Omani/Swahili-coast reallocation → tracked as task #300.
 
 ### B8. Central Europe / HRE region build (#237 + #240, 2026-07-09) — SIXTH & LAST full-surgery region
 
@@ -470,6 +493,14 @@ Final region. Recon read `research/1763_DELTA_CEurope_HRE.md` (51 KB) — the la
 full HRE fragmentation (dozens of restored ecclesiastical/imperial-city/princely tags), Prussia pre-Silesia
 reversion, Saxony-Poland personal union, partition rollbacks. **All territorial / mass-tag-creation → gated
 by the #230 oracle mass-spawn rule.** Documented as deferred; not built.
+> **[PARTLY SUPERSEDED / PARTLY INVALID 2026-07-09]** The "#230 gate" premise was wrong (static setup works).
+> Item-by-item: **HRE fragmentation BUILT** — 23 Reichsstände, #286/#282f (`eaee9a32`), see that section below.
+> **Prussia "pre-Silesia reversion" is HISTORICALLY INVALID for 1763** — Prussia won Silesia in 1742 and the
+> Treaty of Hubertusburg (15 Feb 1763, one day before START_DATE) confirmed it, so Prussia holding Silesia at
+> start is CORRECT; do NOT build. **"Partition rollbacks" are MOOT** — the Polish partitions were 1772/1793/1795,
+> all after the 1763 start; nothing to roll back (the baseline POL→LIT royal_union already models the intact
+> pre-partition Commonwealth). **Saxony–Poland personal union** is genuinely unbuilt + buildable (both tags
+> exist; Augustus III of Saxony held the Polish crown until his death Oct 1763) → tracked as task #300.
 
 As the LAST region, #237 also **sweeps up every remaining unborn-ruler in the whole repo**, regardless of
 which continent's file it lives in (British/Russia/Spain are not strictly C.Europe but their unborn rulers
@@ -528,6 +559,20 @@ world-wide. Every large territorial redistribution documented in the six `resear
 (EIC stripping, Maratha/Vietnam/Hausa/HRE tag creation, Cape reversion, Zand/Crimea, etc.) is **gated by the
 oracle mass-spawn rule and recorded as a deferred limitation** — to be built only after the user lifts the
 gate. Nothing promoted off `1763_bookmark`; in-game boot test remains owed to the user's machine.
+
+> **[SUPERSEDED 2026-07-09 — the deferral was REVERSED; see the "[#282] BUILD" section below.]** The
+> "#230 mass-spawn gate" premise was WRONG: a 1763 bookmark adds nations via STATIC setup (countries.txt +
+> country file + own_control_core + optional dependency), not runtime `create_country`. The #282-series then
+> BUILT most of what this paragraph calls "deferred":
+> - **BUILT:** Crimea (#282a), Cape→Dutch (#282b), Sokoto→Gobir (#282c), divided Vietnam (#282d), HRE 23 tags
+>   (#286), India rulers (#287) — plus Americas (#232) and Italy (#233) which shipped even earlier.
+> - **Investigated, intentionally left as-is:** Maratha houses (already fragmented at baseline, #282e).
+> - **Historically invalid / moot (do NOT build):** Prussia pre-Silesia reversion (Prussia kept Silesia at
+>   1763), Polish partition rollbacks (partitions are 1772+).
+> - **GENUINELY still unbuilt** → tracked as task #300: EIC province-stripping, Bengal-Nawab tag, Sikh misls,
+>   Siam capital relocation, insular-sultanate ruler swaps, the 6 discrete Hausa city-states, Ethiopia ruler
+>   Iyoas I, Oyo–Dahomey tributary, Omani/Swahili coast, Saxony–Poland union; + #298 Zand reflavour, #297
+>   Qırım Giray ruler, #296 NGR viceroyalty nesting, #289 USA/Louisiana revert, #291 ROW specialty buildings.
 
 ---
 
@@ -848,6 +893,9 @@ seed count; all picture keys defined in common/event_pictures; all trait keys de
 in-repo (change_government targets defined governments; the fragile set_diplomatic_stance was REMOVED after
 finding no proven effect form — replaced with add_aggressive_expansion); loc keys conform to ' key:0 "text"';
 namespaces unique. Adversarial review pending. Boot test owed to the user.
+> **[UPDATE 2026-07-09]** #283 committed (`ab6cb9c5`); all 6 arc event + on_action + loc files present.
+> Adversarial review since DONE and CLEAN. Their on_game_initialized seeds were later converted to the #254
+> on_actions LIST form during the develop→1763 merge (commit `e5fc2af9`) so all 6 arcs actually register.
 
 ### #284 (merged #284+#285) — 1763 world population distribution — CHINA sub-phase DONE
 
