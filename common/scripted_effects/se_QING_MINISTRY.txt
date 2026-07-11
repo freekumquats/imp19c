@@ -33,10 +33,11 @@ QING_ministry_recompute_all_perf = {
 		QING_ministry_recompute_perf_rites = yes
 		QING_ministry_recompute_perf_revenue = yes
 		QING_ministry_recompute_perf_grand_secretariat = yes
+		QING_ministry_recompute_perf_chamberlain = yes
 		# (Personnel #365, Justice #363, Censorate #362,
-		#  Imperial Household #359, Imperial Guard #364 each append
-		#  their recompute call here as they ship. Central Secretariat #361 reuses the
-		#  grand_secretariat compute already registered here for the Hanlin Academy #358.)
+		#  Imperial Guard #364 each append their recompute call here as they ship.
+		#  Central Secretariat #361 reuses the grand_secretariat compute already
+		#  registered here for the Hanlin Academy #358.)
 	}
 }
 
@@ -608,4 +609,73 @@ QING_ministry_recompute_perf_grand_secretariat = {
 	if = { limit = { var:qing_min_perf_grand_secretariat < 0 }   set_variable = { name = qing_min_perf_grand_secretariat  value = 0 } }
 	if = { limit = { var:qing_min_perf_grand_secretariat > 100 } set_variable = { name = qing_min_perf_grand_secretariat  value = 100 } }
 	LOG_line = { sys = QING  msg = "grand-secretariat (Hanlin) performance recomputed" }
+}
+
+# ======================================================================
+# [#359] IMPERIAL HOUSEHOLD (內務府) PERFORMANCE — qing_min_perf_chamberlain
+# (0..100, 50 = adequate).
+#
+# The chamberlain office (總管內務府大臣) heads the throne's PERSONAL establishment: the
+# privy purse (內帑), the palace eunuchs (太監), and the imperial workshops (造辦處). The
+# closest man to the sovereign. We build the meter from the concrete household state
+# se_QING_HOUSEHOLD.txt already tracks:
+#   • the chamberlain's own CHARISMA (內務府's governing skill — the courtier's gift, x4),
+#   • PRIVY PURSE health — the emperor's private silver reserve deviation from a comfortable
+#     50, /4 (a full purse = a household well kept; a drained one = mismanagement),
+#   • EUNUCH DANGER — a hard -20 penalty if a eunuch faction leader exists in the court (the
+#     perennial Qing peril the chamberlain is meant to check),
+#   • CORRUPTION DRAG — subtract corruption/10 (the Heshen risk in the household).
+# A VACANT chamberlain office floors the meter low (no one keeps the throne's household).
+# Reads guarded; scratch reads use var:X (bare name = 0). Clamp 0..100. No roster list —
+# the household is the purse + the eunuch danger, not a set of on-map objects (the panel
+# reads the purse var + the eunuch indicator directly).
+# ======================================================================
+QING_ministry_recompute_perf_chamberlain = {
+	# base: adequate.
+	set_variable = { name = qing_min_perf_chamberlain  value = 50 }
+	if = {
+		# office FILLED by a live employed chamberlain — score on his charisma + the household.
+		limit = {
+			has_variable = qing_office_chamberlain_holder
+			var:qing_office_chamberlain_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the chamberlain's charisma, deviation from a competent baseline of 7, x4.
+		var:qing_office_chamberlain_holder = { save_scope_as = qing_chamberlain_holder }
+		set_variable = { name = qing_min_cham_scratch  value = 0 }
+		change_variable = { name = qing_min_cham_scratch  add = scope:qing_chamberlain_holder.charisma }
+		change_variable = { name = qing_min_cham_scratch  subtract = 7 }
+		change_variable = { name = qing_min_cham_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_chamberlain  add = var:qing_min_cham_scratch }
+		# (b) PRIVY PURSE health — the private reserve vs a comfortable 50, /4. Guarded on the var.
+		if = {
+			limit = { has_variable = qing_privy_purse }
+			set_variable = { name = qing_min_cham_scratch  value = var:qing_privy_purse }
+			change_variable = { name = qing_min_cham_scratch  subtract = 50 }
+			change_variable = { name = qing_min_cham_scratch  divide = 4 }
+			change_variable = { name = qing_min_perf_chamberlain  add = var:qing_min_cham_scratch }
+		}
+		# (c) EUNUCH DANGER — a hard penalty if a eunuch faction leader stalks the court (the
+		# chamberlain has failed his signal charge: keeping the eunuchs in check).
+		if = {
+			limit = {
+				any_character = { employer = ROOT  has_variable = qing_eunuch_faction_leader  is_alive = yes }
+			}
+			change_variable = { name = qing_min_perf_chamberlain  subtract = 20 }
+		}
+		# (d) CORRUPTION DRAG — the Heshen risk in the household. subtract corruption/10.
+		if = {
+			limit = { has_variable = qing_corruption_level }
+			set_variable = { name = qing_min_cham_scratch  value = var:qing_corruption_level }
+			change_variable = { name = qing_min_cham_scratch  divide = 10 }
+			change_variable = { name = qing_min_perf_chamberlain  subtract = var:qing_min_cham_scratch }
+		}
+	}
+	else = {
+		# VACANT chamberlain office — the household drifts, the eunuchs creep. Floor it low.
+		set_variable = { name = qing_min_perf_chamberlain  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_chamberlain < 0 }   set_variable = { name = qing_min_perf_chamberlain  value = 0 } }
+	if = { limit = { var:qing_min_perf_chamberlain > 100 } set_variable = { name = qing_min_perf_chamberlain  value = 100 } }
+	LOG_line = { sys = QING  msg = "imperial-household (chamberlain) performance recomputed" }
 }

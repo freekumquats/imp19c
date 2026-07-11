@@ -416,3 +416,34 @@ appointment code.
   or folded into #358 outright — flagged for the deferrals section rather than duplicating the perf
   spine. Header icon menu_religion.dds (scholarship); window `qing_hanlin_panel`; open button wired
   into government_view after Revenue. All referenced vars/effects verified to exist.
+
+---
+
+## #359 — Imperial Household Department panel (內務府)
+
+Built the Imperial Household as an INTERACTIVE Grand-Council-clone L4 panel over the EXISTING
+se_QING_HOUSEHOLD.txt substrate (privy purse, eunuchs, workshops) + its 4 events
+(qing_household_events.txt). No new household code — three action levers each fire a proven event.
+
+- **D45 — Perf compute (chamberlain office).** Added `QING_ministry_recompute_perf_chamberlain`,
+  registered in the dispatcher. Formula: base 50; filled → (charisma−7)×4 [內務府's governing
+  skill] + (privy_purse−50)/4 [the emperor's private reserve health] − 20 if a eunuch faction
+  leader stalks the court [the chamberlain's signal charge is checking the eunuchs] − corruption/10;
+  vacant floor = 25; clamp 0..100. Council fold needs NO edit — the `chamberlain` office key is
+  already enumerated.
+- **D46 — No roster.** Unlike the roster panels, the household is the privy purse + the eunuch
+  danger, not a set of on-map objects — the panel reads the purse var + the eunuch indicator
+  directly (a read-out panel with action levers, not a dynamicgridbox).
+- **D47 — Three action levers, all reusing proven events.**
+  (1) MANAGE THE PRIVY PURSE (內帑): fires qing_household.1 (replenish/tap/drain), gated on the
+  purse being tracked.
+  (2) DEAL WITH THE EUNUCHS (太監): fires qing_household.2 (check/indulge/instrument), both
+  is_shown AND is_valid gated on a live eunuch faction leader existing (button hidden otherwise).
+  (3) COMMISSION THE WORKSHOPS (造辦處): fires qing_household.3, gated on a seated chamberlain
+  with charisma ≥ 8 (matching the event's own gate, so button and event agree).
+- **D48 — Loc appended, not overwritten.** qing_household_l_english.yml already held the 4 events'
+  keys; the panel keys (QING_HOUSEHOLD_*) were APPENDED. Header icon menu_trade.dds (silver/fisc
+  flavour for the privy purse); window `qing_household_panel`; open button wired into government_view
+  after Hanlin. All referenced vars/effects/events verified to exist.
+- **D49 — #360 (Harem 後宮) sits under this Neiwufu.** The harem mechanic will hook into the same
+  chamberlain office / household substrate (consorts as household characters). Not built here.
