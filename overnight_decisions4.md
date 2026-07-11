@@ -684,3 +684,44 @@ the throne's succession engine, not a new council seat. New se_QING_HAREM.txt + 
   they never operate on a stale roster regardless of call context), the cost is a few extra court
   iterations for ONE country per quarter (negligible), and removing them would trade that for a
   fragile hidden ordering dependency. Not worth the correctness risk.
+
+
+---
+
+## D61 — #363 Board of Punishments panel (刑部, justice office)
+
+- **Concrete object = a DOCKET (待審) of accused officials** (marked qing_justice_accused), distinct
+  from the Censorate's instant impeach (#362): the 刑部 is the high COURT, so it CHARGES first then
+  TRIES. Panel levers: ACCUSE the most-corrupt courtier onto the docket → CONVICT (定罪) or ACQUIT (開釋)
+  each. Concrete "slaves class" hook the design called for = PENAL SERVITUDE (籍沒): CONVICT reduces a
+  pop in the capital province to the slave class via the proven `set_pop_type = slaves` at capital_scope
+  (naval_raiding.txt:174; `create_state_pop = slaves` is NOT attested — only freemen/tribesmen — so it
+  was avoided). Guarded against a no-eligible-pop capital.
+- **LATENT COUNCIL-FOLD BUG CLOSED (same class as #362 censor):** qing_min_perf_justice was enumerated in
+  QING_council_perf_accumulate (se_QING_COUNCIL.txt:1388) but NEVER SET, so the self-guarding fold silently
+  DROPPED the Grand Minister of Justice from the council average. Added QING_ministry_recompute_perf_justice
+  (holder zeal×4 + just/honest integrity +6 each − docket-backlog×3 − corruption/8, vacant floor 25,
+  clamp 0..100; rebuilds qing_justice_docket roster) and registered it in QING_ministry_recompute_all_perf.
+- Files: se_QING_MINISTRY.txt (compute + dispatcher), se_QING_JUSTICE.txt (docket domain verbs),
+  QING_justice_panel.txt (scripted GUIs), gui/qing_justice.gui, government_view.gui (open button),
+  qing_justice_l_english.yml (panel loc appended to the #125 events loc). Commit 5de45e714.
+
+### #362 adversarial review (wubl4n68g / wf_3edbfa91) — 3 confirmed, ALL FIXED
+
+- **#362-R1 (major) — Impeach-the-Venal lever was spam-clickable.** No cost/cooldown: each click ran
+  QING_censorate_impeach_uphold (corruption −6 + a fresh disgrace) unthrottled, so a player could floor
+  qing_corruption_level to 0 in a single day and re-hammer the same already-disgraced courtier (find_corrupt
+  keeps re-selecting him — disgrace keeps loyalty < 40). FIX: added a ~1-quarter cooldown
+  (qing_censorate_impeach_cooldown, days=90) — is_valid now gates on NOT has_variable, effect stamps it.
+- **#362-R2 (major) — inspector double-count when an inspector is promoted to a great office.** The corps
+  roster/count (every_character has_variable=qing_is_censor_inspector) didn't exclude office-holders, so an
+  inspector later made Censor-in-Chief was scored as chief in term (a) AND tallied in corps term (c) (+2
+  inflate) and rendered in both the summit card and the roster. FIX: added NOT={has_variable=qing_office_held}
+  to the roster-rebuild limit — fixes both the count and the panel render at once.
+- **#362-R3 (minor) — disgraced inspector kept his corps mark.** QING_censorate_impeach_uphold cleansed/
+  vacated the target but never removed qing_is_censor_inspector, so a disgraced inspector stayed a ghost in
+  the corps count. FIX: remove_variable = qing_is_censor_inspector in the uphold effect (guarded).
+- **Preemptive carry-over to #363:** applied the R2 lesson to the fresh Board of Punishments — the sitting
+  Minister of Justice is now EXCLUDED from QING_justice_find_accusable + the accuse-lever gate (proven
+  `this = scope:X` char-equality), so he can never be charged onto his own docket (which would double-role
+  him). Fixes committed together in the follow-up commit.
