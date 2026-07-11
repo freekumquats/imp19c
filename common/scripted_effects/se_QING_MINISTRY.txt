@@ -143,7 +143,23 @@ QING_ministry_recompute_perf_lifanyuan = {
 	# real resident characters (qing_char_affinity, se_QING_AFFINITY.txt), not just their count.
 	set_variable = { name = qing_lifan_amban_affinity_sum  value = 0 }
 	every_subject = {
-		limit = { is_subject_type = autonomous_governorship }
+		# [#334-fix] a subject WARRANTS a resident amban iff it matches the SAME predicate
+		# QING_amban_post_sweep (se_QING_AMBAN.txt:164-181) uses to post one: a real
+		# Inner-Asian dependency whose RULER is of a mongolic/bodish culture group. The old
+		# `is_subject_type = autonomous_governorship` filter was a phantom roster — nearly
+		# disjoint from where ambans actually go (Tibet's ambans never counted; Manchu-ruled
+		# governorships dragged coverage), so the Director was scored against subjects that
+		# neither warrant nor ever receive a resident. Match the poster so warrant == postable.
+		limit = {
+			any_owned_province = { count >= 1 }
+			exists = current_ruler
+			current_ruler = {
+				OR = {
+					has_culture_group = mongolic
+					has_culture_group = bodish
+				}
+			}
+		}
 		ROOT = { change_variable = { name = qing_lifan_warrant_count  add = 1 } }
 		if = {
 			limit = {
@@ -407,8 +423,13 @@ QING_ministry_recompute_perf_works = {
 			}
 			ROOT = { add_to_variable_list = { name = qing_works_provinces  target = prev } }
 		}
-		if = { limit = { has_building = qing_dike_building }           ROOT = { change_variable = { name = qing_works_building_count  add = 1 }  change_variable = { name = qing_dike_count  add = 1 } } }
-		if = { limit = { has_building = qing_canal_depot_building }    ROOT = { change_variable = { name = qing_works_building_count  add = 1 }  change_variable = { name = qing_depot_count  add = 1 } } }
+		# [review-fix Option C] dike 河堤 + canal depot 漕運倉 tally into their DEDICATED canal counts
+		# ONLY — NOT qing_works_building_count. They already reach the works meter through term (d)
+		# canal-condition (via qing_dike_count/qing_depot_count -> qing_canal_condition); counting them
+		# into coverage term (b) too double-credited canal infrastructure vs walls/manufactories. This
+		# mirrors the granary exclusion just below — every works building now hits exactly ONE term.
+		if = { limit = { has_building = qing_dike_building }           ROOT = { change_variable = { name = qing_dike_count  add = 1 } } }
+		if = { limit = { has_building = qing_canal_depot_building }    ROOT = { change_variable = { name = qing_depot_count  add = 1 } } }
 		if = { limit = { has_building = qing_wall_section_building }   ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
 		if = { limit = { has_building = qing_silk_filature_building }  ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
 		if = { limit = { has_building = qing_porcelain_kiln_building } ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
@@ -437,11 +458,14 @@ QING_ministry_recompute_perf_works = {
 		change_variable = { name = qing_min_works_scratch  subtract = 7 }
 		change_variable = { name = qing_min_works_scratch  multiply = 4 }
 		change_variable = { name = qing_min_perf_works  add = var:qing_min_works_scratch }
-		# (b) WORKS COVERAGE — count of standing works vs a healthy establishment of ~8, x2.
-		# A Board that has raised few dikes/depots/manufactories has neglected the realm's
-		# infrastructure. Count, not any skill re-use, so nothing is double-folded.
+		# (b) WORKS COVERAGE — count of standing NON-CANAL works (walls 城牆 + the manufactories:
+		# silk/porcelain/tea/cotton/salt) vs a healthy establishment of ~5, x2. Canal buildings
+		# (dikes/depots) are DELIBERATELY excluded here — they score through term (d) canal-condition
+		# instead (Option C de-dup), so this term now measures only the works NOT already credited via
+		# the canal. Baseline dropped 8 -> 5 to match the smaller non-canal establishment (was 8 when
+		# dikes/depots were counted). Count, not skill re-use, so nothing is double-folded.
 		set_variable = { name = qing_min_works_scratch  value = var:qing_works_building_count }
-		change_variable = { name = qing_min_works_scratch  subtract = 8 }   # deviation from a healthy establishment
+		change_variable = { name = qing_min_works_scratch  subtract = 5 }   # deviation from a healthy non-canal establishment
 		change_variable = { name = qing_min_works_scratch  multiply = 2 }
 		change_variable = { name = qing_min_perf_works  add = var:qing_min_works_scratch }
 		# (c) CORRUPTION DRAG — the 河工 graft. High realm corruption saps real output.
