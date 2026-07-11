@@ -144,6 +144,15 @@ MARRIAGE_PLAY_resolve = {
 			else = {
 				scope:mplay_bride = { marry_character = scope:mplay_groom }
 			}
+			# [#356 review-fix, MINOR] parity with the AI marriage paths (se_MARRIAGE.txt:404/:956):
+			# stamp marriage_origin_country on the foreign consort who ENTERS our house so the Grand
+			# Council foreign-spouse lobby (QING_council_foreign_spouse_check / qing_office.30) can
+			# fire if she later holds an office. mplay_bride is always the TARGET-court character;
+			# tag her only when she is the female joining our male.
+			if = {
+				limit = { scope:mplay_bride = { is_female = yes } }
+				scope:mplay_bride = { set_variable = { name = marriage_origin_country  value = scope:play_target_country } }
+			}
 			# a DECISIVE win seals the full country bond (alliance/entente + dowry); reuse the
 			# shared payload in the SENIOR (proposer) scope, partner = the target realm.
 			if = {
@@ -297,6 +306,14 @@ MARRIAGE_PLAY_build_own = {
 # list their MALES; else their females (the default before we pick is to list both sexes — but we
 # gate on our pick existing to fix the sex, matching the spec's step order). Guarded on a target set.
 MARRIAGE_PLAY_build_their = {
+	# [#356 review-fix, BLOCKER] anchor every list/var op to the COUNTRY explicitly. This
+	# effect is called from TWO scripted-gui contexts: marriage_play_pick_realm (GUI scope =
+	# country, so ROOT == this == country) AND marriage_play_pick_own (GUI scope = character,
+	# SetRoot = the clicked Character; the builder runs inside scope:player = {}, so `this` is
+	# the country but ROOT is the CHARACTER). Using ROOT for the list writes / want_male reads
+	# therefore appended to the character + read an unset var in the pick_own path, emptying
+	# column 3 and defeating the sex filter. `this` is the country in BOTH paths, so save it.
+	save_scope_as = mplay_home_country
 	clear_variable_list = marriage_play_their_candidates
 	if = {
 		limit = { has_variable = marriage_play_target }
@@ -317,10 +334,10 @@ MARRIAGE_PLAY_build_their = {
 					prisoner = no
 					from_ruler_family = yes
 					NOT = { is_ruler = yes }
-					trigger_if = { limit = { ROOT = { var:marriage_play_want_male = 1 } }  is_male = yes }
+					trigger_if = { limit = { scope:mplay_home_country = { var:marriage_play_want_male = 1 } }  is_male = yes }
 					trigger_else = { is_female = yes }
 				}
-				ROOT = { add_to_variable_list = { name = marriage_play_their_candidates  target = prev } }
+				scope:mplay_home_country = { add_to_variable_list = { name = marriage_play_their_candidates  target = prev } }
 			}
 			# pass 2: the rest of the target court, wanted sex.
 			every_character = {
@@ -331,10 +348,10 @@ MARRIAGE_PLAY_build_their = {
 					prisoner = no
 					from_ruler_family = no
 					NOT = { is_ruler = yes }
-					trigger_if = { limit = { ROOT = { var:marriage_play_want_male = 1 } }  is_male = yes }
+					trigger_if = { limit = { scope:mplay_home_country = { var:marriage_play_want_male = 1 } }  is_male = yes }
 					trigger_else = { is_female = yes }
 				}
-				ROOT = { add_to_variable_list = { name = marriage_play_their_candidates  target = prev } }
+				scope:mplay_home_country = { add_to_variable_list = { name = marriage_play_their_candidates  target = prev } }
 			}
 		}
 		LOG_line = { sys = MARRIAGE  msg = "marriage picker: their-candidate list built (opposite gender)" }

@@ -316,3 +316,37 @@ Review this file when you're back. **Deferrals are called out at the very top.**
 - New files: QING_rites_ministry_panel.txt, gui/qing_rites_ministry.gui, qing_rites_ministry_
   l_english.yml; edited se_QING_MINISTRY.txt (+perf +dispatcher) + government_view.gui (button,
   in the col2 strip after Works).
+
+### #356 REVIEW — 4 confirmed findings fixed (post-commit, adversarial workflow wf_6c025264)
+The #356 marriage-proposal play review confirmed 1 blocker + 2 major + 1 minor in the
+already-committed code. All fixed on merge-overnight:
+- **(BLOCKER) MARRIAGE_PLAY_build_their mixed `this` and ROOT scopes.** Called from two
+  scripted-guis: pick_realm (GUI scope=country → ROOT==this) AND pick_own (GUI scope=character,
+  SetRoot=Character; builder runs inside `scope:player={}` so `this`=country but ROOT=the clicked
+  character). The `ROOT = { add_to_variable_list ... }` writes + `ROOT = { var:want_male }` reads
+  therefore appended to the CHARACTER and read an unset var in the pick_own path → column 3 emptied
+  after picking an own char + the sex filter always fell to female. FIX: `save_scope_as =
+  mplay_home_country` (=`this`, the country in BOTH paths) at the top; replaced all 4 ROOT refs
+  (2 want_male reads + 2 list writes) with scope:mplay_home_country. NOT scope:player (absent in
+  the pick_realm path).
+- **(MAJOR) No opposite-sex guard → same-sex pair could launch + silently no-op.** Columns are
+  clickable in any order; a stale same-sex their_pick could survive a re-pick, and marry_character
+  rejects same-sex → play consumed, begin-price paid, no marriage, false WED log. FIX: added an
+  OR(opposite-sex) clause to marriage_play_launch.is_valid; and in marriage_play_pick_own, after
+  the their-list rebuild, drop a now-invalid same-sex marriage_play_their_pick so the player
+  re-chooses from the correctly-sexed column.
+- **(MAJOR) Marriage play's monthly territorial-crisis dispatcher not goal-guarded.** play_target_
+  area = the proposer's OWN capital, so DIPLOMACY_trigger_diplomatic_play_event fired send_settlers/
+  agitator/Fashoda/Agadir AT the proposer's own capital (loyalty damage) and could escalate to a
+  conquer-wargoal war on it. FIX: wrapped the whole early/middle/late event body in
+  `if = { limit = { NOT = { var:play_goal = flag:marriage_proposal } } ... }`. A marriage play has
+  no territorial locus; its progression is the seeded success + Zongli factor (#357) + the
+  goal-guarded finale (MARRIAGE_PLAY_resolve).
+- **(MINOR) Foreign spouse's marriage_origin_country never stamped.** The AI paths
+  (se_MARRIAGE.txt:404/:956) tag the incoming consort so the Grand Council foreign-spouse lobby
+  (qing_office.30) can fire; the play path didn't. FIX: in BOTH the marry branch and
+  MARRIAGE_PLAY_betroth_pair, stamp scope:mplay_bride.marriage_origin_country = scope:play_target_
+  country when she is female (mplay_bride is always the target-court char).
+- Two findings correctly REJECTED by the verify pass (betrothal-overwrite self-heals via
+  MARRIAGE_check_betrothals; MARRIAGE_PLAY_add_incentive is inert dead code, not a defect) — left
+  as-is; add_incentive stays for a future mid-play incentive button.

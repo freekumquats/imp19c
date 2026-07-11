@@ -63,6 +63,19 @@ marriage_play_pick_own = {
 			set_variable = { name = marriage_play_our_pick  value = prev }
 			# our pick's sex fixes the opposite-gender filter for the target list; rebuild it.
 			if = { limit = { has_variable = marriage_play_target }  MARRIAGE_PLAY_build_their = yes }
+			# [#356 review-fix, MAJOR] a re-picked own character may now be the SAME sex as an
+			# already-chosen their_pick (which is no longer on the rebuilt opposite-sex list). Drop
+			# a now-invalid their_pick so the player must re-choose from the correctly-sexed column.
+			if = {
+				limit = {
+					has_variable = marriage_play_their_pick
+					OR = {
+						AND = { var:marriage_play_our_pick = { is_female = yes }  var:marriage_play_their_pick = { is_female = yes } }
+						AND = { var:marriage_play_our_pick = { is_male = yes }    var:marriage_play_their_pick = { is_male = yes } }
+					}
+				}
+				remove_variable = marriage_play_their_pick
+			}
 		}
 		LOG_line = { sys = MARRIAGE  msg = "marriage picker: our character chosen" }
 	}
@@ -96,6 +109,14 @@ marriage_play_launch = {
 		has_variable = marriage_play_their_pick
 		var:marriage_play_our_pick = { is_alive = yes  is_married = no }
 		var:marriage_play_their_pick = { is_alive = yes  is_married = no }
+		# [#356 review-fix, MAJOR] the pair MUST be opposite sex — marry_character requires it, and
+		# the columns are clickable in any order, so a stale same-sex their_pick can survive a re-pick.
+		# Without this guard a same-sex pair could launch, pay the begin price, and resolve to a silent
+		# no-op (the engine rejects same-sex marry_character).
+		OR = {
+			AND = { var:marriage_play_our_pick = { is_female = yes }  var:marriage_play_their_pick = { is_male = yes } }
+			AND = { var:marriage_play_our_pick = { is_male = yes }    var:marriage_play_their_pick = { is_female = yes } }
+		}
 	}
 	effect = {
 		var:marriage_play_our_pick   = { save_scope_as = marriage_play_our_char }
