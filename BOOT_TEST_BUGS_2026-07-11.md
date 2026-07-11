@@ -271,3 +271,40 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 - **FIX:** strip `death_date` from all ~109 future-dated setup characters (natural death is handled by the age system after load — see the RUS char:144 / POL char:572 / TKG char:356 precedent). Leave PAST death_dates intact. Also fix the Poland `1763.10.05.` trailing-period typo if that block still has it. Mechanical sweep + per-file brace check.
 - **Severity:** MAJOR (systemic — heirs/rulers/dynasts across 16 nations shown dead; feeds wrong-heir + empty-marriage-candidate symptoms).
 
+---
+
+## === LOG-DRIVEN FIX PASS 2026-07-10 (debug.log + error.log analysis) ===
+**error.log was 340MB / 4.3M lines; debug.log 42k lines. Root-caused + fixed:**
+
+- **🔥 #1 the 1.4M-error flood (95% of error.log) — FIXED (commit a55636be).** ALL bottomed out at `culture = ROOT/root.primary_culture` on a CHARACTER scope (primary_culture is a COUNTRY trigger, not a culture link) via QING_char_init_identity / QING_char_shift_identity / QING_council_sinicize_drift. Fixed all 8 char-scope sites to the ruler-culture link `culture = <char>.culture`; create_character culture fields fixed to literals. This ALSO un-breaks Manchu-identity / sinicization / council-culture-split (they were PostValidating false → everyone counted Han).
+- **N-DEATHDATE — FIXED (a55636be).** Stripped 110 future death_dates across 16 countries (Louis Ferdinand/Pavel confirmed in-game) + fixed char:219 Gunggala malformed dates.
+- **B7 picker horizontal/clipped — FIXED (0f59bd7c).** dynamicgridbox(wrap=1) → vbox (vertical list; also killed the 'margin not handled' error).
+- **B12 sym3 Marriage Power — FIXED (0f59bd7c).** Inline "Marriage Power: N".
+- **N-GREATGAME tab caps — FIXED (0f59bd7c).** "GREAT GAME" → "Great Game".
+- **🔥 Bug 1 throne boxes (no bar / no skill numbers) — FIXED (2c967c9a).** ROOT CAUSE: `multi_line` is INVALID (correct = `multiline`) — 17 sites broke widget parsing. The Emperor/Crown Prince/Empress boxes' subtree failed to build past the bad property. Fixed all 17.
+- **Bug1b 2-digit skill numbers showing "...." — FIXED (bd2f6602).** icon_and_text has 48px fixed chrome; size={48 24} left 0px for text. Widened all 16 GC/throne + 4 picker skill cells.
+
+**Diagnosed, NOT yet fixed (need decisions / own boot-test):**
+- **B21/B22 (armies on Beijing / only Fujian navy) — DIAGNOSIS CONFIRMED via debug.log:** ALL 27 garrisons + 3 navies log "raised" at their correct provinces, navy_disband runs BEFORE raises (correct), NO army disband exists. So units ARE created then placement collapses to the scope-owner's capital — the engine IGNORES `location=` at on_game_initialized (both c:CHI→Beijing and subject→subject-capital). Needs a DIFFERENT placement mechanism (not another scope variant); own boot-test.
+- **B12 no candidates — ROOT understood:** cascades from (1) death_date bug [FIXED] + (2) N-RULER-NO-FAMILY (rulers with no children fail the any_child gate). Should partially populate now; fully once rulers get children. ALSO found: MARRIAGE_same_faith_trigger throws "Inconsistent trigger scopes (character vs country)" 1250x (uses current_ruler in a char-scope eval) — needs a scope guard.
+- **N-RULER-NO-FAMILY (31 rulers, incl. POL/TKG) — big data task, not started.**
+- **Bug 6 religion panel empty, N-GREATGAME text spill, B15 overlap — GUI render class, own boot-test.**
+- **N-ATTR-ICONS — NOT A BUG (user): intentional 2022 upstream art. Follow-up: replace the OLD icons still used in Offices/Technology for consistency (shared_icons/* got new art in 2022; font_icons/* + powers/* fall through to vanilla — needs NEW .dds art, cannot be done in script).**
+
+---
+
+## N-RULER-NO-FAMILY — RESOLVED for the genuine dynasts (IDs 598-608)
+- Scope (user): full families ONLY for genuine HEREDITARY dynasts; appointed governors / Pope Pius VII / EIC+RAC company officials correctly keep NO hereditary heir.
+- ID rule (oracle-confirmed vs Invictus/TI): new setup id = contiguous from global max (was 597 → used 598-608). IDs are EXPLICIT + globally unique, NOT load-order-assigned (proven: chars 581-597 live in early-loading 00_Qing.txt while lower 573-580 live in later files). Added the kin DIRECTLY into each existing country block (no new file / repeated-tag wrapper, which is unproven).
+- BUILT (genealogy EN+native, alive-Feb-1763 filter, no fabrication):
+  - POL Augustus III (572): +heir Frederick Christian 598 (widower, no spouse). FIXES the foreign-Romanov-heir bug.
+  - ERI Karim Khan Zand (578): +consort Khadijeh 599, +sons Abol-Fath 600 / Mohammad-Ali 601.
+  - MYS Hyder Ali (575): +wife Fatima 602, +heir Tipu Sultan 603.
+  - AWA Shuja-ud-Daula (576): +wife Bahu Begum 604, +heir Asaf-ud-Daula 605.
+  - HYD Nizam Ali Khan (574): +wife Bakhshi Begum 606 (heir birth undocumented → wife only, no invented child).
+  - MSS Maria Beatrice d'Este (134): +parents Ercole III 607 / Maria Teresa 608 (she is 12, no spouse/heir yet).
+  - Set shared family= on rulers that had only family_name= (POL Wettin, ERI Zand, MYS Ali, MSS dEste).
+- NOT built (data honesty — no fabrication):
+  - Qirim Giray (Crimea, 577): no documented children/spouse dates → cannot author an heir.
+  - **RULER-IDENTITY bugs surfaced (separate follow-up):** the seated 1763 ruler is the WRONG person for TUN char:35 "Mahmud" (should be Ali II Bey, r.1759-82), BHW char:529 "Sadeq Muhammad Khan" (should be Muhammad Mubarak Khan II), OTT char:42 "Abdul Hamid" (NOT sultan in 1763 — Mustafa III reigned; Abdülhamid was imprisoned). Giving the mis-identified char a family would cement the error — flagged for a ruler-identity fix instead.
+
