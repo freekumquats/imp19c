@@ -36,8 +36,8 @@ QING_ministry_recompute_all_perf = {
 		QING_ministry_recompute_perf_chamberlain = yes
 		QING_ministry_recompute_perf_censor = yes
 		QING_ministry_recompute_perf_justice = yes
-		# (Personnel #365,
-		#  Imperial Guard #364 each append their recompute call here as they ship.
+		QING_ministry_recompute_perf_guard_commandant = yes
+		# (Personnel #365 appends its recompute call here as it ships.
 		#  Central Secretariat #361 reuses the grand_secretariat compute already
 		#  registered here for the Hanlin Academy #358.)
 	}
@@ -888,4 +888,86 @@ QING_ministry_recompute_perf_justice = {
 	if = { limit = { var:qing_min_perf_justice < 0 }   set_variable = { name = qing_min_perf_justice  value = 0 } }
 	if = { limit = { var:qing_min_perf_justice > 100 } set_variable = { name = qing_min_perf_justice  value = 100 } }
 	LOG_line = { sys = QING  msg = "board-of-punishments performance recomputed" }
+}
+
+# ======================================================================
+# [#364] IMPERIAL GUARD (領侍衛內大臣) PERFORMANCE — qing_min_perf_guard_commandant
+# (0..100, 50 = adequate).
+#
+# [#364 BUG-FIX] Like the censor (#362) and justice (#363) offices before it, the council
+# fold has always enumerated `office = guard_commandant` (QING_council_perf_accumulate,
+# se_QING_COUNCIL.txt:1395) but NO effect ever SET qing_min_perf_guard_commandant — so the
+# self-guarding accumulate helper silently DROPPED the Commandant of the Imperial Guard
+# from the council average. This compute closes that gap so the 領侍衛內大臣 folds into his
+# own Grand Council standing (his OTHER contributions — the emperor's power base + sovereign
+# vitality — already run in se_QING_COUNCIL.txt and are UNCHANGED here).
+#
+# The Commandant of the Imperial Guard (領侍衛內大臣) commanded the elite Manchu palace guard
+# drawn from the Upper Three Banners (上三旗) — the 侍衛 guardsmen and the Bayara braves
+# (巴牙喇) who warded the emperor's person and the metropolitan approaches. We build the meter
+# from concrete state the panel #364 manages:
+#   • the Commandant's own MARTIAL (領侍衛內大臣's governing skill — the soldier's competence, x4),
+#     plus a bonus for a LOYAL Commandant (the guard answers only to a man the throne trusts;
+#     high personal loyalty +6),
+#   • GUARDSMEN CORPS DEPTH — the 侍衛 guardsmen serving in the corps (qing_guard_corps list),
+#     count deviation from a healthy watch of ~4, x2,
+#   • a BAYARA-GUARD READINESS bonus — whether the elite Bayara legion (巴牙喇) stands raised
+#     (qing_bayara_guard_raised): +10 when the guard is under arms.
+# A VACANT Commandant post floors the meter low (no one commands the guard). Rebuilds the
+# qing_guard_corps roster (the panel datamodel), EXCLUDING great-office holders from the tally
+# (the #362-R2 double-count fix, applied here from the start). Reads guarded; scratch reads
+# use var:X. Clamp 0..100. Bounded O(court).
+# ======================================================================
+QING_ministry_recompute_perf_guard_commandant = {
+	# --- rebuild the guardsmen corps roster (panel datamodel) + tally count. A "guardsman"
+	# = a courtier flagged qing_is_imperial_guardsman (enrolled via the #364 panel). Excludes
+	# great-office holders so a guardsman later given an office is not double-counted (the
+	# #362-R2 lesson, baked in from the start). Bounded O(court).
+	clear_variable_list = qing_guard_corps
+	set_variable = { name = qing_guard_corps_count  value = 0 }
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			has_variable = qing_is_imperial_guardsman
+			NOT = { has_variable = qing_office_held }
+		}
+		ROOT = {
+			add_to_variable_list = { name = qing_guard_corps  target = prev }
+			change_variable = { name = qing_guard_corps_count  add = 1 }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_guard_commandant  value = 50 }
+	if = {
+		# office FILLED by a live employed Commandant — score on his martial + loyalty + corps.
+		limit = {
+			has_variable = qing_office_guard_commandant_holder
+			var:qing_office_guard_commandant_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the Commandant's martial, deviation from a competent baseline of 7, x4.
+		var:qing_office_guard_commandant_holder = { save_scope_as = qing_guard_commandant_s }
+		set_variable = { name = qing_min_guard_scratch  value = 0 }
+		change_variable = { name = qing_min_guard_scratch  add = scope:qing_guard_commandant_s.martial }
+		change_variable = { name = qing_min_guard_scratch  subtract = 7 }
+		change_variable = { name = qing_min_guard_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_guard_commandant  add = var:qing_min_guard_scratch }
+		# (b) LOYALTY — the guard answers only to a man the throne can trust with the palace, +6.
+		if = { limit = { scope:qing_guard_commandant_s = { loyalty >= 50 } }  change_variable = { name = qing_min_perf_guard_commandant  add = 6 } }
+		# (c) GUARDSMEN CORPS DEPTH — the 侍衛 vs a healthy watch of ~4, x2.
+		set_variable = { name = qing_min_guard_scratch  value = var:qing_guard_corps_count }
+		change_variable = { name = qing_min_guard_scratch  subtract = 4 }
+		change_variable = { name = qing_min_guard_scratch  multiply = 2 }
+		change_variable = { name = qing_min_perf_guard_commandant  add = var:qing_min_guard_scratch }
+		# (d) BAYARA-GUARD READINESS — the elite Bayara legion under arms, +10.
+		if = { limit = { has_variable = qing_bayara_guard_raised }  change_variable = { name = qing_min_perf_guard_commandant  add = 10 } }
+	}
+	else = {
+		# VACANT Commandant post — the guard drifts leaderless. Floor it low.
+		set_variable = { name = qing_min_perf_guard_commandant  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_guard_commandant < 0 }   set_variable = { name = qing_min_perf_guard_commandant  value = 0 } }
+	if = { limit = { var:qing_min_perf_guard_commandant > 100 } set_variable = { name = qing_min_perf_guard_commandant  value = 100 } }
+	LOG_line = { sys = QING  msg = "imperial-guard performance recomputed" }
 }
