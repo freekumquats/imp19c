@@ -58,6 +58,34 @@ Review this file when you're back. **Deferrals are called out at the very top.**
 
 ## Per-task decisions
 
+### #356 Marriage-proposal diplomatic play (replaces Dynastic Match) — BUILT (pending review)
+- **D25 (new play goal):** a NEW `play_goal = flag:marriage_proposal` (flag literals are ad-hoc,
+  no declaration needed) with a new branch in DIPLOMACY_trigger_diplomatic_play_finale_event →
+  MARRIAGE_PLAY_resolve. The two chosen chars are stored on the play provobj as
+  marriage_play_groom/_bride; play_target_area = the proposer's capital (a play needs an area;
+  the marriage has no land locus and the finale branch does NO land transfer, so it is never ceded).
+- **D26 (reuse, not reinvent):** resolution REUSES the existing marriage machinery — marry_character
+  + MARRIAGE_apply_marriage_bond if both adult (decisive → full state bond; partial → private
+  match), or a betrothal via the existing betrothed_to_char / betrothed_children / marriage_betrothed
+  bookkeeping (matured/dissolved by the existing MARRIAGE_check_betrothals pulse) if either is a minor.
+- **D27 (success seeding + player levers):** opening success seeded from the EXISTING compatibility
+  triggers (pair_compatible → 45 warm, power_parity → 30 moderate, else 15 cold). The Zongli-Yamen
+  factor (#357) rides every pulse; MARRIAGE_PLAY_add_incentive (dowry/gifts, +10 success, -50 treasury)
+  is the player lever; adverse events ride the generic play-event system.
+- **D28 (two-step picker):** new marriage_play_window.gui — 3 columns (target realm → our unmarried
+  char → their opposite-gender unmarried char), ruling family FIRST (two-pass add: from_ruler_family
+  then the rest), MINORS INCLUDED (betrothal path). Backed by MARRIAGE_PLAY_actions.txt (pick_realm/
+  pick_own/pick_their/launch) + list-builders in se_MARRIAGE_PLAY.txt. Opposite-gender fixed by our
+  pick's sex (rebuilds their list on pick).
+- **D29 (deletion):** DELETED gui/marriage_window.gui + common/scripted_guis/MARRIAGE_actions.txt
+  (the old Dynastic Match window/builder — fixes the F5 empty-list bug by removal). Verified no
+  live dependency: the AI marriage pulse (se_MARRIAGE.txt) uses none of the deleted GUI defs; the
+  only remaining reference is a comment in MARRIAGE_svalues.txt (left in place — its svalues may be
+  shared with se_MARRIAGE, deleting risks breakage; a dead comment is harmless). government_view
+  button swapped to open the new picker.
+- New files: se_MARRIAGE_PLAY.txt, MARRIAGE_PLAY_actions.txt, gui/marriage_play_window.gui,
+  qing_marriage_play_l_english.yml; edited se_DIPLOMACY.txt (finale branch), government_view.gui.
+
 ### #357 Zongli-Yamen global play-success factor + #354 Zongli Yamen panel — BUILT
 - **D22:** qing_min_perf_zongli = Director charisma (dev-7 x4) + DIPLOMAT-CORPS staffing
   (count vs a healthy ~4, x2; empty corps penalised). Rebuilds qing_zongli_diplomats (a
