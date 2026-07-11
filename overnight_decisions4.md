@@ -950,3 +950,28 @@ religion=root.religion; finalize in the saved scope), `QING_office_appoint_first
 pulse self-replenishes at 25% when corps < 6 and the pool has talent.
 
 Adversarial review launched next.
+
+## D69 — #365 review COMPLETED (wf_983aaaac-0ff) — 1 CONFIRMED fix, 1 already-fixed
+
+The #365 (Board of Personnel 吏部) adversarial review raised two findings:
+
+- **R1 (major, ROOT-rebinding on the per-governor recompute-refresh):** ALREADY FIXED. The
+  personnel recompute was made root-independent by the #362-R2 systemic pass — it captures
+  `save_scope_as = qing_min_recompute_ctry` and references `scope:qing_min_recompute_ctry` in place
+  of every `employer = ROOT` / `ROOT = {}` write (se_QING_MINISTRY.txt:1047+). So the char-scoped
+  CULTIVATE/DISCIPLINE levers calling `scope:player = { QING_ministry_recompute_perf_personnel }`
+  rebuild the corps correctly regardless of the caller's ROOT. Finding refuted (stale).
+
+- **R2 (minor→CONFIRMED, DISCIPLINE no-op for its own meter):** REAL. The DISCIPLINE lever's
+  tooltip promised to "purge the rot", but the effect only applied `loyalty_qing_disgraced` +
+  `add_prominence = -5` — it never touched the `corrupt` trait or the `corruption` stat that SOLELY
+  define the clean-count (NOT corrupt AND corruption<40). So the integrity read-out,
+  qing_min_perf_personnel, and the Grand Council fold never moved on discipline. **FIX:** discipline
+  now `remove_trait = corrupt` + `add_corruption = -25` (a punitive clean — deliberately NOT
+  QING_char_cleanse, which would bump affinity upward; a disgraced governor is not brought closer to
+  the throne). The recompute call that follows now sees a cleaner corps and lifts the meter as
+  promised. Committed on QING_personnel_panel.txt (braces 59/59).
+
+NOTE: the #365 review run appeared to stall (started 6 agents, journal recorded only 2 results, no
+progress after ~09:53) — I read the journal find-pass findings directly and self-verified both
+against the on-disk code rather than waiting on the orphaned run.
