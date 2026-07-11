@@ -71,12 +71,49 @@ QING_canal_init = {
 QING_canal_update_condition = {
 	# derive the target from the works in place + the neglect factors.
 	set_variable = { name = qing_canal_cond_target  value = 40 }   # a bare, unmaintained baseline
-	# each depot/dike province lifts the target (bounded add via presence checks — cheap,
-	# no full province sweep; the depots are few and high-value).
-	if = { limit = { any_owned_province = { has_building = qing_canal_depot_building } }  change_variable = { name = qing_canal_cond_target  add = 25 } }
-	if = { limit = { any_owned_province = { has_building = qing_dike_building } }         change_variable = { name = qing_canal_cond_target  add = 20 } }
-	# a staffed Works office keeps the 河工 works in hand; a vacancy lets them slide.
-	if = { limit = { has_variable = qing_office_works_holder }  change_variable = { name = qing_canal_cond_target  add = 15 } }
+	# [#335] CONCRETE BUILDING COUNTS drive the target, not binary presence. The per-type tallies
+	# qing_depot_count (漕運倉) and qing_dike_count (河堤) are computed each gov pulse by
+	# QING_ministry_recompute_perf_works's owned-province sweep (which runs BEFORE this canal tick
+	# in the same pulse, so they are fresh). Each depot lifts the canal target +8 (cap +24 at 3),
+	# each dike +6 (cap +18 at 3) — so raising a SECOND/THIRD depot has a real, diminishing payoff
+	# rather than the old flat +25 for merely owning one. Guarded on the tally existing (the sweep
+	# always sets it, but belt-and-suspenders for an out-of-order call).
+	if = {
+		limit = { has_variable = qing_depot_count  var:qing_depot_count > 0 }
+		set_variable = { name = qing_canal_cond_scratch  value = var:qing_depot_count }
+		change_variable = { name = qing_canal_cond_scratch  multiply = 8 }
+		if = { limit = { var:qing_canal_cond_scratch > 24 } set_variable = { name = qing_canal_cond_scratch  value = 24 } }
+		change_variable = { name = qing_canal_cond_target  add = var:qing_canal_cond_scratch }
+		remove_variable = qing_canal_cond_scratch
+	}
+	if = {
+		limit = { has_variable = qing_dike_count  var:qing_dike_count > 0 }
+		set_variable = { name = qing_canal_cond_scratch  value = var:qing_dike_count }
+		change_variable = { name = qing_canal_cond_scratch  multiply = 6 }
+		if = { limit = { var:qing_canal_cond_scratch > 18 } set_variable = { name = qing_canal_cond_scratch  value = 18 } }
+		change_variable = { name = qing_canal_cond_target  add = var:qing_canal_cond_scratch }
+		remove_variable = qing_canal_cond_scratch
+	}
+	# [#335] a staffed Works office keeps the 河工 works in hand, and a CAPABLE minister keeps them
+	# in BETTER hand: +10 for a filled office, plus the minister's finesse deviation from 7 (±,
+	# ~±5) so a master hydraulic administrator (a 靳輔/高斌 figure) shores the canal further and a
+	# dolt lets it slide. A VACANT office is a real drag (−12), not merely a missing bonus — the
+	# 河道總督 seat empty means no one drives the dredging and the silt wins (deepens the old
+	# "missing +15").
+	if = {
+		limit = {
+			has_variable = qing_office_works_holder
+			var:qing_office_works_holder = { is_alive = yes  employer = ROOT }
+		}
+		change_variable = { name = qing_canal_cond_target  add = 10 }
+		set_variable = { name = qing_canal_cond_scratch  value = var:qing_office_works_holder.finesse }
+		change_variable = { name = qing_canal_cond_scratch  subtract = 7 }
+		change_variable = { name = qing_canal_cond_target  add = var:qing_canal_cond_scratch }
+		remove_variable = qing_canal_cond_scratch
+	}
+	else = {
+		change_variable = { name = qing_canal_cond_target  subtract = 12 }
+	}
 	# corruption siphons the hydraulic budget (the endemic 河工 graft).
 	if = { limit = { has_variable = qing_corruption_level }  set_variable = { name = qing_canal_cond_drag  value = var:qing_corruption_level }  change_variable = { name = qing_canal_cond_drag  divide = 4 }  change_variable = { name = qing_canal_cond_target  subtract = var:qing_canal_cond_drag } }
 	# clamp the target 0..100.
@@ -125,6 +162,20 @@ QING_canal_run_grain_balance = {
 	}
 	# consumption: the capital + banner garrisons + frontier armies draw a steady ~4/quarter.
 	set_variable = { name = qing_grain_draw  value = 4 }
+	# [#335] CONCRETE GRANARY BUFFER (常平倉/糧倉): the ever-normal granaries stored grain locally
+	# against the lean quarter, so a realm that has raised them draws LESS on the canal-borne
+	# tribute (the stored stock covers part of the consumption). Each qing_granary_building shaves
+	# the draw by 1, to a floor of 2 (two granaries fully halve the shortfall pressure; the capital
+	# still consumes). qing_granary_count is tallied by the works sweep earlier this pulse. This
+	# makes the granary — currently spawned by the decline engine but read by NOTHING in the grain
+	# balance — a concrete lever on the reserve, per the concrete-over-abstract rule.
+	if = {
+		limit = { has_variable = qing_granary_count  var:qing_granary_count > 0 }
+		set_variable = { name = qing_grain_draw_relief  value = var:qing_granary_count }
+		if = { limit = { var:qing_grain_draw_relief > 2 } set_variable = { name = qing_grain_draw_relief  value = 2 } }
+		change_variable = { name = qing_grain_draw  subtract = var:qing_grain_draw_relief }
+		remove_variable = qing_grain_draw_relief
+	}
 	# net onto the reserve.
 	change_variable = { name = qing_grain_reserve  add = var:qing_grain_delivery }
 	change_variable = { name = qing_grain_reserve  subtract = var:qing_grain_draw }

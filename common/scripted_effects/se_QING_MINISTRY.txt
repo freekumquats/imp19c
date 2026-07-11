@@ -319,6 +319,14 @@ QING_ministry_recompute_perf_works = {
 	# is on the roster if it holds ANY Board-of-Works building. Bounded O(owned provinces).
 	clear_variable_list = qing_works_provinces
 	set_variable = { name = qing_works_building_count  value = 0 }
+	# [#335] per-type canal-relevant tallies — the CONCRETE inputs QING_canal_update_condition /
+	# QING_canal_run_grain_balance read (dike 河堤, depot 漕運倉, granary 糧倉). Kept SEPARATE from
+	# qing_works_building_count so the works-coverage term (b, baseline ~8) is undisturbed. Reset
+	# each recompute; tallied in the same O(owned) sweep that already runs first every gov pulse,
+	# so they are fresh when the Works pulse's canal tick reads them later in the same quarter.
+	set_variable = { name = qing_dike_count     value = 0 }
+	set_variable = { name = qing_depot_count    value = 0 }
+	set_variable = { name = qing_granary_count  value = 0 }
 	every_owned_province = {
 		limit = {
 			OR = {
@@ -330,6 +338,7 @@ QING_ministry_recompute_perf_works = {
 				has_building = qing_tea_workshop_building
 				has_building = qing_cotton_workshop_building
 				has_building = qing_salt_yard_building
+				has_building = qing_granary_building
 			}
 		}
 		# [#351 fix] The province joins the roster once if it holds ANY works building, but the
@@ -338,14 +347,19 @@ QING_ministry_recompute_perf_works = {
 		# A single per-province +1 undercounted that stack (3 buildings read as 1) and depressed
 		# qing_min_perf_works. Add the province once; count each of the 8 works types it holds.
 		ROOT = { add_to_variable_list = { name = qing_works_provinces  target = prev } }
-		if = { limit = { has_building = qing_dike_building }           ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
-		if = { limit = { has_building = qing_canal_depot_building }    ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
+		if = { limit = { has_building = qing_dike_building }           ROOT = { change_variable = { name = qing_works_building_count  add = 1 }  change_variable = { name = qing_dike_count  add = 1 } } }
+		if = { limit = { has_building = qing_canal_depot_building }    ROOT = { change_variable = { name = qing_works_building_count  add = 1 }  change_variable = { name = qing_depot_count  add = 1 } } }
 		if = { limit = { has_building = qing_wall_section_building }   ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
 		if = { limit = { has_building = qing_silk_filature_building }  ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
 		if = { limit = { has_building = qing_porcelain_kiln_building } ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
 		if = { limit = { has_building = qing_tea_workshop_building }   ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
 		if = { limit = { has_building = qing_cotton_workshop_building }ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
 		if = { limit = { has_building = qing_salt_yard_building }      ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
+		# granary counted into its own tally only (NOT qing_works_building_count — it is the
+		# decline-engine's ever-normal granary, not a Works-minister commission; folding it into
+		# coverage term (b) would inflate the works-minister's score for infrastructure he did
+		# not raise).
+		if = { limit = { has_building = qing_granary_building }        ROOT = { change_variable = { name = qing_granary_count  add = 1 } } }
 	}
 	# base: adequate.
 	set_variable = { name = qing_min_perf_works  value = 50 }
@@ -377,6 +391,22 @@ QING_ministry_recompute_perf_works = {
 			set_variable = { name = qing_min_works_scratch  value = var:qing_corruption_level }
 			change_variable = { name = qing_min_works_scratch  divide = 10 }
 			change_variable = { name = qing_min_perf_works  subtract = var:qing_min_works_scratch }
+		}
+		# (d) [#335] CANAL CONDITION — the Board of Works' defining charge was the 漕運 lifeline:
+		# the Grand Canal + Yellow River dikes that carried the grain-tribute north. Its live
+		# condition (qing_canal_condition, se_QING_CANAL.txt) IS the minister's headline result,
+		# so it folds directly into his standing: deviation from a sound-canal baseline of 60,
+		# /4 (~±10 across the 0..100 band). This makes the concrete canal state the minister keeps
+		# (via the dike/depot buildings he raises) drive his Grand Council performance — and thus,
+		# through the generic council fold, his effectiveness at the table. Reads the PREVIOUS
+		# tick's condition (the canal tick runs later in the same gov pulse); a one-quarter lag is
+		# immaterial to a meter that itself drifts ±3/tick. Guarded on the var existing.
+		if = {
+			limit = { has_variable = qing_canal_condition }
+			set_variable = { name = qing_min_works_scratch  value = var:qing_canal_condition }
+			change_variable = { name = qing_min_works_scratch  subtract = 60 }
+			change_variable = { name = qing_min_works_scratch  divide = 4 }
+			change_variable = { name = qing_min_perf_works  add = var:qing_min_works_scratch }
 		}
 	}
 	else = {
