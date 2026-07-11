@@ -71,6 +71,11 @@ QING_southernstudy_init = {
 			limit = { exists = current_ruler }
 			QING_southernstudy_seed_attendant = { degree = jinshi  nick = "NICKNAME_QING_SS_LIANGSHIZHENG"  fin = 9  cha = 7  aged = 66 }
 			QING_southernstudy_seed_attendant = { degree = jinshi  nick = "NICKNAME_QING_SS_YUMINZHONG"    fin = 8  cha = 8  aged = 49 }
+			# [#336 review-fix] recompute at once so the seeded cabinet's literary depth is tallied and
+			# the luster country modifier is applied FROM TURN 1 — otherwise count reads 2 but literary
+			# reads 0 (throne carries no luster) until the first monthly pulse. Nothing folds this into
+			# a game-start QING_ministry_recompute_all_perf, so init must recompute itself.
+			QING_southernstudy_recompute_roster = yes
 		}
 	}
 	LOG_exit = { sys = QING  fn = "QING_southernstudy_init"  result = OK }
@@ -384,6 +389,16 @@ QING_southernstudy_remove_on_death = {
 				remove_list_variable = { name = qing_southernstudy_attendants  target = scope:qing_dead_attendant }
 				if = { limit = { var:qing_southernstudy_count > 0 }  change_variable = { name = qing_southernstudy_count  subtract = 1 } }
 				LOG_line = { sys = QING  msg = "southern-study: an attendant died, removed from the Southern Study for" }
+			}
+			# [#336 review-fix] if the 首席 (lead) himself died, clear the chief var here too so it
+			# does not point at a corpse until the next recompute. Every read-site re-checks is_alive,
+			# so this is a tidiness/transient-staleness fix, not a crash.
+			if = {
+				limit = {
+					has_variable = qing_southernstudy_chief
+					var:qing_southernstudy_chief = scope:qing_dead_attendant
+				}
+				remove_variable = qing_southernstudy_chief
 			}
 		}
 	}

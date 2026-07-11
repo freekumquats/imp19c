@@ -74,6 +74,10 @@ QING_upperstudy_init = {
 			limit = { exists = current_ruler }
 			QING_upperstudy_seed_tutor = { culture = han            nick = "NICKNAME_QING_US_CAIXIN"  degree = jinshi  fin = 9  mar = 4  cha = 7  aged = 56 }
 			QING_upperstudy_seed_tutor = { culture = root.primary_culture  nick = "NICKNAME_QING_US_GUANBAO"  degree = jinshi  fin = 6  mar = 8  cha = 6  aged = 55 }
+			# [#337 review-fix] recompute at once so the seeded school's teaching quality is tallied
+			# from TURN 1 (else count reads 2 but quality reads 0 until the first monthly pulse, and the
+			# INTENSIVE lever's quality>=24 gate reads stale). Mirrors the #336 Southern Study fix.
+			QING_upperstudy_recompute_roster = yes
 		}
 	}
 	LOG_exit = { sys = QING  fn = "QING_upperstudy_init"  result = OK }
@@ -419,6 +423,16 @@ QING_upperstudy_remove_on_death = {
 				remove_list_variable = { name = qing_upperstudy_tutors  target = scope:qing_dead_tutor }
 				if = { limit = { var:qing_upperstudy_count > 0 }  change_variable = { name = qing_upperstudy_count  subtract = 1 } }
 				LOG_line = { sys = QING  msg = "upper-study: a master died, removed from the Upper Study for" }
+			}
+			# [#337 review-fix] if the 總師傅 (Grand Tutor) himself died, clear the chief var here too
+			# so it does not point at a corpse until the next recompute (every read-site re-checks
+			# is_alive, so this is a transient-staleness tidiness fix). Mirrors #336.
+			if = {
+				limit = {
+					has_variable = qing_upperstudy_chief
+					var:qing_upperstudy_chief = scope:qing_dead_tutor
+				}
+				remove_variable = qing_upperstudy_chief
 			}
 		}
 	}
