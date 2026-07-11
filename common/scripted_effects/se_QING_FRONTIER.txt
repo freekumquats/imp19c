@@ -31,26 +31,25 @@ QING_fgar_scan = {
 	if = {
 		limit = { tag = CHI }
 		LOG_line = { sys = QING  msg = "frontier-garrison overlay scan firing for" }
-		every_army = {
+		# Iterate the QING's autonomous-governorship SUBJECTS (Ili/Xinjiang/Mukden/
+		# Heilongjiang). [#346 review-fix — BLOCKER] the frontier garrisons are RAISED IN THE
+		# SUBJECT'S SCOPE with a subject-employed commander (SE_qing_raise_garrison_cmd creates
+		# in scope:garrison_owner = the province owner = the subject; #338/B21), so CHI's OWN
+		# every_army NEVER sees them. We instead detect a garrison the SUBJECT itself fields on
+		# its OWN soil — that IS the frontier banner command (historically a 將軍 answering to
+		# Beijing, but engine-owned by the dependency). Its PRESENCE is the imperial-occupation
+		# signal this overlay models. Bounded O(subjects × own armies).
+		every_subject = {
 			limit = {
-				is_moving = no
-				in_combat = no
-				unit_size >= 3
-				exists = commander
-				commander = { is_alive = yes  employer = ROOT }   # a QING (Beijing) officer, not the subject's
-				exists = unit_location
-				unit_location = {
-					exists = owner
-					owner = { is_subject_of = ROOT }               # the ground belongs to a CHI subject
-					owner = { is_subject_type = autonomous_governorship }
+				is_subject_type = autonomous_governorship
+				# the dependency fields a settled garrison of its own (the frontier banner host).
+				any_army = {
+					is_moving = no
+					in_combat = no
+					unit_size >= 3
 				}
 			}
-			# save the occupied dependency + the Qing commander via step-by-step scope
-			# pushes (avoid a chained unit_location.owner deref in an effect).
-			commander = { save_scope_as = qing_frontier_commander }
-			unit_location = {
-				owner = { save_scope_as = qing_frontier_subject }
-			}
+			save_scope_as = qing_frontier_subject
 			ROOT = { QING_fgar_apply_occupation = yes }
 		}
 	}
@@ -81,11 +80,23 @@ QING_fgar_apply_occupation = {
 		# is not a bond). The subject's opinion of the overlord is the loyalty driver
 		# (se_SUBJECT_QING model); nudge it down with a standing occupation modifier.
 		scope:qing_frontier_subject = {
+			# ONSET DETECTION: the standing occupation modifier absent means the garrison just
+			# arrived this cycle — the moment to fire the one-time diplomatic shock (opinion),
+			# which then decays on its own. On subsequent re-fires the modifier is already
+			# present, so the opinion is NOT re-added (no unbounded stacking — the #346 review
+			# stacking finding). The CONTINUOUS loyalty drag is carried by the modifier itself.
 			if = {
 				limit = { NOT = { has_country_modifier = qing_frontier_occupied } }
-				add_country_modifier = { name = qing_frontier_occupied  duration = 200 }
+				add_opinion = { modifier = qing_frontier_occupation_opinion  target = ROOT }
 			}
-			add_opinion = { modifier = qing_frontier_occupation_opinion  target = ROOT }
+			# remove-then-add each cycle (proven refresh idiom, #347 fix): exactly one instance,
+			# fresh ~200-day timer that outlives the ~180-day re-fire cadence, so the occupation
+			# modifier stays continuously present while a garrison sits — no expiry flicker.
+			if = {
+				limit = { has_country_modifier = qing_frontier_occupied }
+				remove_country_modifier = qing_frontier_occupied
+			}
+			add_country_modifier = { name = qing_frontier_occupied  duration = 200 }
 		}
 		# (3) LIFAN-YUAN TURF WAR — direct military occupation steps on the Court of
 		# Colonial Affairs' indirect-rule remit. If the Lifan Yuan office is filled AND a

@@ -109,7 +109,31 @@ Review this file when you're back. **Deferrals are called out at the very top.**
   se_QING_MINISTRY.txt (+zongli perf +play-boost +dispatcher), se_QING_DIPLO.txt (scan
   splice), imp19c_windows.gui (picker diplomat row), government_view.gui (button).
 
-### #346 Frontier-garrison overlay + War↔Lifan-Yuan turf war — BUILT (pending review)
+### #346 Frontier-garrison overlay + War↔Lifan-Yuan turf war — BUILT + REVIEWED (fixes applied)
+- **REVIEW — 1 BLOCKER + 3 real findings fixed:**
+  1. (BLOCKER) `QING_fgar_scan` iterated c:CHI's OWN `every_army` with `commander={employer=ROOT}`
+     — but subject-soil frontier garrisons are RAISED IN THE SUBJECT'S SCOPE with a subject-employed
+     commander (#338/B21), so CHI's own armies never see them: the scan could NEVER match. FIX:
+     rewrote the scan to iterate `every_subject` (autonomous_governorship) and detect a garrison the
+     SUBJECT itself fields on its own soil (`any_army { is_moving=no in_combat=no unit_size>=3 }`) —
+     THAT is the frontier banner host. Dropped the `commander=employer=ROOT` filter + the dead
+     commander-scope save. Proven idioms: `every_subject` (INCOME_svalues), `any_army` (agadir_crisis
+     naval sibling `any_navy`), `is_subject_type=autonomous_governorship` (00_monthly_country).
+  2. (major) occupation-modifier FLICKER — duration 200 under a `NOT has_country_modifier` add-guard +
+     180-day throttle meant the modifier lapsed at T200 and wasn't re-added until T360 (~44% of every
+     cycle the -10 loyalty_to_overlord vanished though the garrison stayed). FIX: unconditional
+     remove-then-add each cycle (the #347 refresh idiom) → continuously present.
+  3. (minor) opinion STACKING — `add_opinion` fired unconditionally every 180d, laying unbounded
+     -10 instances. FIX: fire the opinion ONCE at occupation ONSET (guarded on the modifier being
+     absent = garrison just arrived); the continuous drag is carried by the modifier itself. Avoided
+     the review's suggested `has_opinion` guard (UNPROVEN in this codebase — used nowhere else).
+  4. (minor) missing loc key `qing_amban_cooperation_opinion` (option B) + the parallel unlocalized
+     amban opinions. FIX: added loc for cooperation/clash/capable/ineffective to qing_amban_l_english.yml
+     (single home, no dup). Also wired the previously-dead `qing_frontier_garrisoned` var LIVE into the
+     Lifan Yuan panel roster (a "#R Under imperial garrison#!" marker per dependency).
+- Re-verified brace balance (se_QING_FRONTIER 41/41, qing_lifanyuan.gui 84/84, event 22/22).
+
+### #346 Frontier-garrison overlay + War↔Lifan-Yuan turf war — original BUILD notes
 - **D18 (overlay, not re-architecture):** the setup OOB deliberately raises subject-soil
   frontier garrisons UNDER the subject for engine placement-validity (#338/B21). #346 does
   NOT change that — it LAYERS on the #347 detection idiom: a Qing pulse (QING_fgar_scan, hooked
