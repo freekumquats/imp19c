@@ -367,6 +367,47 @@ QING_council_recompute = {
 		change_variable = { name = qing_council_eff_target  subtract = var:qing_council_polar_pen }
 	}
 
+	# --- [#331 user] OFFICER-CORPS coupling: the quality of the standing army's commanders
+	# (the historical 1763 garrison generals — Fuheng, Zhaohui, Mingrui et al.) bleeds into
+	# how well the War office (兵部) and, for the capital, the Guard Commandant (領侍衛內大臣)
+	# can govern the military. Aggregate the MARTIAL of every seated legion commander employed
+	# by us: count the corps and sum martial, then fold the AVERAGE-martial deviation from a
+	# competent baseline (7) into the target — a corps of brilliant generals lifts effectiveness,
+	# a present-but-mediocre officer corps (avg martial < 7) drags it; a corps with NO living
+	# commanders at all is a clean no-op (guarded on count > 0, which also avoids /0). Scaled to a modest +/-6 band (avg 0..~15 → dev
+	# -7..+8, /1.2) so it never dominates skill/vacancy. Cheap: one every_unit walk, guarded on
+	# the War office being filled (no minister = no coupling — the corps has no political voice).
+	# Iterator = every_unit + has_commander + commander = { ... } (the codebase-proven country-scope
+	# army walk: QING_army_apply_decay_debuffs uses every_unit; military_colonies.txt reads a unit's
+	# commander via `commander = { ... }`). We DON'T filter is_navy=no here — a fleet flag officer
+	# (the Fujian/Guangdong water-force commanders) is as much a part of the officer corps as a
+	# banner general, and the historical naval commanders are seeded too.
+	set_variable = { name = qing_officer_corps_count  value = 0 }
+	set_variable = { name = qing_officer_corps_martial  value = 0 }
+	every_unit = {
+		limit = { has_commander = yes  commander = { is_alive = yes  employer = ROOT } }
+		commander = {
+			# proven idiom (this file, chancellor score ~L582): <char> = { ROOT = { ... add = prev.martial } }
+			# — inside the ROOT block, prev = the commander character scope.
+			ROOT = {
+				change_variable = { name = qing_officer_corps_count  add = 1 }
+				change_variable = { name = qing_officer_corps_martial  add = prev.martial }
+			}
+		}
+	}
+	if = {
+		# only couple when there IS an officer corps AND a War minister to answer for it.
+		limit = {
+			var:qing_officer_corps_count > 0
+			has_variable = qing_office_war_holder
+		}
+		set_variable = { name = qing_officer_corps_mod  value = var:qing_officer_corps_martial }
+		change_variable = { name = qing_officer_corps_mod  divide = var:qing_officer_corps_count }  # average martial
+		change_variable = { name = qing_officer_corps_mod  subtract = 7 }    # deviation from the competent baseline
+		change_variable = { name = qing_officer_corps_mod  divide = 1.2 }    # scale to ~+/-6 band
+		change_variable = { name = qing_council_eff_target  add = var:qing_officer_corps_mod }
+	}
+
 	# --- clamp target 0..100
 	if = { limit = { var:qing_council_eff_target < 0 }   set_variable = { name = qing_council_eff_target  value = 0 } }
 	if = { limit = { var:qing_council_eff_target > 100 } set_variable = { name = qing_council_eff_target  value = 100 } }
@@ -1210,4 +1251,95 @@ QING_council_foreign_spouse_check = {
 		LOG_fail = { sys = QING  fn = "QING_council_foreign_spouse_check"  reason = "no foreign-spouse councillor with an extant independent homeland" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_council_foreign_spouse_check"  result = OK }
+}
+
+# ======================================================================
+# [#331 user] QING_council_officer_report_check — quarterly roll: the Grand Minister of War
+# (兵部尚書) reports to the throne on a serving garrison commander. If the chosen commander leads
+# the CAPITAL garrison (a legion at Beijing p:8363), the report instead comes from the Grand
+# Commandant of the Imperial Guard (領侍衛內大臣, guard_commandant) who answers for the metropolitan
+# banners. Scope: COUNTRY (CHI). Self-guards: needs a War minister seated (or Guard Commandant for
+# the capital case) AND at least one living legion commander in our employ. Fires qing_office.31.
+# ======================================================================
+QING_council_officer_report_check = {
+	LOG_enter = { sys = QING  fn = "QING_council_officer_report_check" }
+	if = {
+		limit = {
+			has_variable = qing_office_war_holder
+			any_unit = { has_commander = yes  commander = { is_alive = yes  employer = ROOT } }
+		}
+		# pick one serving unit to report on (codebase-proven country-scope army walk: every_unit /
+		# has_commander / commander = { ... }, per QING_army_apply_decay_debuffs + military_colonies.txt).
+		random_unit = {
+			limit = { has_commander = yes  commander = { is_alive = yes  employer = ROOT } }
+			commander = { save_scope_as = officer_report_commander }
+			# is this the CAPITAL garrison? (a unit stationed on the Qing capital province)
+			if = {
+				limit = { exists = ROOT.capital_scope  unit_location = { this = ROOT.capital_scope } }
+				ROOT = { set_variable = { name = officer_report_is_capital  value = 1 } }
+			}
+		}
+		if = {
+			limit = { exists = scope:officer_report_commander }
+			# choose the reporting minister: Guard Commandant for the capital garrison (if seated),
+			# else the War minister.
+			if = {
+				limit = {
+					has_variable = officer_report_is_capital
+					has_variable = qing_office_guard_commandant_holder
+					var:qing_office_guard_commandant_holder = { is_alive = yes  employer = ROOT }
+				}
+				var:qing_office_guard_commandant_holder = { save_scope_as = officer_report_minister }
+			}
+			else_if = {
+				# match the file-wide holder idiom: only a LIVING, employed war minister reports.
+				limit = { var:qing_office_war_holder = { is_alive = yes  employer = ROOT } }
+				var:qing_office_war_holder = { save_scope_as = officer_report_minister }
+			}
+			if = {
+				limit = { exists = scope:officer_report_minister }
+				trigger_event = { id = qing_office.31 }
+				LOG_line = { sys = QING  msg = "War-minister officer report fired on [scope:officer_report_commander.GetName]" }
+			}
+		}
+		if = { limit = { has_variable = officer_report_is_capital }  remove_variable = officer_report_is_capital }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_council_officer_report_check"  reason = "no War minister or no living legion commander" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_council_officer_report_check"  result = OK }
+}
+
+# ======================================================================
+# [#331 user] QING_council_on_commander_death — lifecycle: when a serving legion COMMANDER dies,
+# the Grand Minister of War brings a replacement recommendation before the throne (qing_office.32).
+# Scope: the DYING CHARACTER (called from on_character_death). Guards: the dead char was a legion
+# commander in CHI's employ (had qing_officer_marker, stamped when attached — see below) AND a War
+# minister is seated to make the recommendation. Employer = CHI.
+# ======================================================================
+QING_council_on_commander_death = {
+	if = {
+		limit = {
+			has_variable = qing_officer_marker
+			# [review-fix] only a general who STILL held a command at death fires the "a commander
+			# falls, a garrison stands without its general" event — a marked officer long since
+			# relieved / reassigned to a civil post is not a falling commander. is_general is the
+			# engine's "leads a unit" test (00_hardcoded.txt).
+			is_general = yes
+			exists = employer
+			employer = {
+				tag = CHI
+				has_variable = qing_office_war_holder
+				var:qing_office_war_holder = { is_alive = yes }
+			}
+			# [review-fix] guard the minister-is-not-the-corpse overlap: if the dying character IS
+			# himself the seated war minister, there is no living minister to bring a recommendation.
+			NOT = { this = employer.var:qing_office_war_holder }
+		}
+		employer = {
+			var:qing_office_war_holder = { save_scope_as = officer_report_minister }
+			trigger_event = { id = qing_office.32 }
+			LOG_line = { sys = QING  msg = "a serving garrison commander died; War-minister replacement recommendation fired" }
+		}
+	}
 }
