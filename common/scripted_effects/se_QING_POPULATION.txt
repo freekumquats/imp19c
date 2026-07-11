@@ -52,10 +52,14 @@
 QING_pop_recompute_target = {
 	# --- CROWDING (the core driver): total_population vs a carrying baseline. High Qing China
 	# is already crowded; the target rises as population grows past the baseline. total_population
-	# reads at country scope (proven: slave_revolt_svalue). Scaled /12000 and offset so 1763-era
-	# numbers land in a sane 0..~50 band, then clamped.
+	# reads at country scope as the COUNT of pop objects (proven: slave_revolt_svalue subtracts
+	# num_of_slaves; housing_svalues total_population_tenth = total_population*0.1). CHI ships ~40k
+	# pop objects at the 1763 start, so /1200 lands the base crowding term at ~34 — a sane High-Qing
+	# baseline that the involution (+18) and thin-granary (+15) offsets push into the strain (>=45),
+	# crisis (>=75) and event bands. [#371-R: was /12000, which pinned the target to ~4 so the meter
+	# could NEVER cross any band and the whole Malthusian dynamic was inert — a 10x scale error.]
 	set_variable = { name = qing_pop_pressure_target  value = total_population }
-	change_variable = { name = qing_pop_pressure_target  divide = 12000 }
+	change_variable = { name = qing_pop_pressure_target  divide = 1200 }
 	# floor at 0 (a tiny realm has no man-land crisis).
 	if = { limit = { var:qing_pop_pressure_target < 0 } set_variable = { name = qing_pop_pressure_target  value = 0 } }
 
@@ -123,7 +127,19 @@ QING_pop_pulse = {
 		LOG_line = { sys = QING  msg = "population: the crowded heartland sheds its surplus to the frontier for" }
 	}
 	else_if = {
-		limit = { var:qing_pop_pressure < 35 }
+		# [#371-R] clear the heartland push ONLY when no crop-boom-driven migration is meant to be
+		# live. QING_COLON_clear_heartland_push strips migr_gov_push from EVERY owned province, and
+		# the crop-boom events (qing_migration.20/.23.b) set that SAME variable on the top provinces
+		# to drive the boom's out-migration over the decade migration pulse. Without this guard the
+		# quarterly clear wiped the boom's push within one quarter (in the common low-pressure state),
+		# silently defeating the boom's frontier settlement. The golden path (.22) clears its own push.
+		limit = {
+			var:qing_pop_pressure < 35
+			NOR = {
+				has_country_modifier = qing_migr_crop_boom
+				has_country_modifier = qing_migr_overpopulation
+			}
+		}
 		QING_COLON_clear_heartland_push = yes
 	}
 
