@@ -1,0 +1,479 @@
+########################################################################
+# se_QING_XINJIANG.txt — the Xinjiang Consolidation Arc (新疆善後), #367.
+#
+# The 1763 CONSOLIDATION layer for the New Dominion (新疆). After the Qianlong
+# conquest of Dzungaria (準噶爾) and Altishahr (回疆) 1755-59, the throne faced the
+# decades-long WORK of holding the far west: the 善後 ("settling the aftermath"). This
+# feature is the emperor's LEVERS to make the new frontier pacified, integrated and
+# self-sustaining — or to bungle it into the revolt that history delivered in 1826
+# (Jahangir Khoja, 張格爾之亂).
+#
+# IT LAYERS ON THE EXISTING XINJIANG MACHINERY — it does NOT duplicate it:
+#   • se_QING_ILI.txt OWNS the qing_xinjiang_control meter (0..100) + the map bands
+#     (QING_ili_apply_control_band runs EVERY pulse, unconditionally — so any control
+#     change #367 makes is banded onto the country + provinces for free). se_QING_ILI is
+#     the LATE (1874-81) Ili-crisis set-piece, gated on qing_rebel_dungan; #367 is the
+#     EARLY consolidation that feeds the SAME meter in the decades before that crisis.
+#   • se_QING_AMBAN.txt runs the resident (駐紮大臣) lifecycle; #367 does not touch it.
+#   • The frontier's HEALTH folds into the LIFAN YUAN (理藩院) Grand Director — the office
+#     that historically governed Xinjiang — via an additive consolidation term inside
+#     QING_ministry_recompute_perf_lifanyuan (se_QING_MINISTRY.txt). That recompute SETS
+#     the meter fresh each pulse, so the fold MUST be additive-inside, not a post-hoc
+#     nudge (which the next recompute would clobber). One-pulse lag, no crash.
+#
+# CONCRETE ON-MAP OBJECTS (concrete-over-abstract rule):
+#   • BEGS (伯克) — real Uighur characters (culture = uighur, religion = sunni) employed by
+#     the XNG (Kashgaria/Altishahr) subject, the setup's own "Beg appointed from Uighur
+#     nobles by a Qing amban". Held in the corps list qing_xj_begs on CHI, rebuilt each
+#     pulse (alive + employer = c:XNG + NOT a great-office holder — the #362-R2 exclusion).
+#     A festering khoja scare can TURN a beg (qing_xj_beg_venal); the discipline lever
+#     cashiers him. A full loyal corps holds the south; an empty/venal one invites revolt.
+#   • TUNTIAN colonies (屯田) — a concrete count qing_xj_tuntian of state military farms
+#     planted in Dzungaria (the emptied north), each a real province modifier
+#     qing_xj_tuntian_colony + a step of ILI integration.
+#   • XIEXIANG subsidy (協餉) — the interior-province silver stipend that kept Xinjiang
+#     solvent, a toggled country modifier (a treasury drain that buys the grip).
+#
+# STATE (CHI country scope):
+#   qing_xinjiang_control   0..100  (OWNED by se_QING_ILI; #367 nudges it)
+#   qing_xj_consolidation   0..100  the composite frontier-health score (folds into Lifan)
+#   qing_xj_tuntian         int     count of planted 屯田 colonies
+#   qing_xj_beg_count       int     living begs in the corps
+#   qing_xj_beg_venal_count int     begs turned by a khoja scare (discipline targets)
+#   qing_xj_begs            variable_list of the living begs
+#   qing_xj_initialized     init guard
+# Character-scope marks (on each beg):
+#   qing_is_xj_beg          flag (corps membership + death-cleanup key)
+#   qing_xj_beg_venal       flag (turned by a khoja scare — a discipline target)
+#
+# PREFIX: QING_xj_ / sys = QING. CHI-only. Init from on_game_initialized (after the ILI
+# init that seeds the meter); drifts quarterly via QING_xj_pulse (se_QING_GOVERNANCE.txt).
+# All logged sys = QING, STATIC msgs only (#253). Proven idioms only: the create_character
+# mint (#90 rule; amban's uighur-equivalent), the marked-courtier roster rebuild (#362),
+# QING_DECLINE_nudge for the clamped meter, area:Dzungaria/every_area_province (se_QING_ILI),
+# SUBJ_QING_advance_integration, and add_treasury. NO council-office fold edit here — the
+# fold lives inside QING_ministry_recompute_perf_lifanyuan (that office's own recompute).
+#
+#   ROOT / this = the Qing country (CHI, player); root.current_ruler = the emperor.
+########################################################################
+
+# ======================================================================
+# QING_xj_init — seed the consolidation bookkeeping once + the 1763 opening beg corps.
+# Scope: COUNTRY (CHI). Idempotent (guards on a dedicated flag, not a count — the pulse
+# recompute runs at game start and would set the count first; the harem/#336 lesson).
+# The qing_xinjiang_control meter itself is seeded by QING_ili_init (value 40); #367 only
+# seeds its OWN state here + the historical begs, then recomputes so the composite score
+# and the Lifan fold are live from turn 1.
+# ======================================================================
+QING_xj_init = {
+	LOG_enter = { sys = QING  fn = "QING_xj_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_xj_initialized } }
+		set_variable = { name = qing_xj_initialized  value = 1 }
+		set_variable = { name = qing_xj_tuntian        value = 0 }
+		set_variable = { name = qing_xj_beg_count       value = 0 }
+		set_variable = { name = qing_xj_beg_venal_count value = 0 }
+		set_variable = { name = qing_xj_consolidation   value = 50 }
+		clear_variable_list = qing_xj_begs
+		# the 1763 opening beg corps — two real loyal begs of the early consolidation:
+		#   額敏和卓 (Emin Khoja, the Turfan leader who aided the Qing conquest and was
+		#     made a 郡王 prince — the model loyal beg), and
+		#   鄂對 (Odui, hakim beg of Aksu, a pillar of the early Altishahr administration).
+		# Only if the Kashgaria subject actually exists at this start (guarded — a game
+		# where XNG was released/absorbed simply opens with an empty corps).
+		if = {
+			limit = { exists = c:XNG }
+			QING_xj_seed_beg = { nick = "NICKNAME_QING_XJ_EMINKHOJA"  fin = 6  mar = 6  cha = 7  aged = 69 }
+			QING_xj_seed_beg = { nick = "NICKNAME_QING_XJ_ODUI"       fin = 6  mar = 5  cha = 6  aged = 58 }
+		}
+		# recompute at once so the composite score is tallied and the Lifan fold reads a
+		# real value FROM TURN 1 (nothing folds this into a game-start dispatcher, so init
+		# must recompute itself — the #336 init-recompute lesson).
+		QING_xj_recompute_consolidation = yes
+	}
+	LOG_exit = { sys = QING  fn = "QING_xj_init"  result = OK }
+}
+
+# ======================================================================
+# QING_xj_seed_beg — create ONE named historical beg and enrol him in the corps. Scope:
+# COUNTRY (CHI). $nick$ = loc nickname key, $fin$/$mar$/$cha$ = stat line, $aged$ = age.
+# A Uighur Muslim notable, moved to the Kashgaria subject (his employer), bound to the
+# throne. Marked qing_is_xj_beg. Mirrors QING_amban_post's mint (#90 rule — no modifiers
+# inside create_character; set_as_minor_character + move_country in the saved scope).
+# ======================================================================
+QING_xj_seed_beg = {
+	create_character = {
+		age = $aged$
+		culture = uighur
+		religion = sunni
+		add_finesse = $fin$
+		add_martial = $mar$
+		add_charisma = $cha$
+		add_zeal = 3
+		save_scope_as = qing_new_beg
+	}
+	scope:qing_new_beg = {
+		set_as_minor_character = THIS
+		move_country = c:XNG
+		set_variable = { name = qing_is_xj_beg  value = 1 }
+		# a beg confirmed by the throne is bound to it (the loyal-notable model).
+		QING_char_bind = yes
+		QING_roster_finalize = { nick = $nick$ }
+	}
+	add_to_variable_list = { name = qing_xj_begs  target = scope:qing_new_beg }
+	change_variable = { name = qing_xj_beg_count  add = 1 }
+	LOG_line = { sys = QING  msg = "xinjiang: a historical beg is confirmed on the New Dominion for" }
+}
+
+# ======================================================================
+# QING_xj_mint_beg — mint a fresh loyal beg (an appointed Uighur notable) into the corps.
+# Scope: COUNTRY (CHI). The APPOINT lever's worker: a capable local placed over a Tarim
+# oasis by the amban. A Uighur Muslim, moved to XNG, bound to the throne. Self-caps are
+# handled by the caller (corps cap 5).
+# ======================================================================
+QING_xj_mint_beg = {
+	create_character = {
+		age = { 34 52 }
+		culture = uighur
+		religion = sunni
+		add_finesse = { 3 6 }
+		add_martial = { 2 5 }
+		add_charisma = { 3 6 }
+		add_zeal = { 2 4 }
+		save_scope_as = qing_new_beg
+	}
+	scope:qing_new_beg = {
+		set_as_minor_character = THIS
+		move_country = c:XNG
+		set_variable = { name = qing_is_xj_beg  value = 1 }
+		QING_char_bind = yes
+		QING_roster_finalize = { nick = "NICKNAME_QING_XJ_BEG" }
+	}
+	add_to_variable_list = { name = qing_xj_begs  target = scope:qing_new_beg }
+	change_variable = { name = qing_xj_beg_count  add = 1 }
+	LOG_line = { sys = QING  msg = "xinjiang: a beg is appointed over an oasis for" }
+}
+
+# ======================================================================
+# QING_xj_recompute_consolidation — rebuild the beg corps fresh from the live marked
+# characters (alive + employer = c:XNG + NOT a great-office holder — the #362-R2 exclusion),
+# tally the count + the venal count, then compute the composite frontier-health score
+# qing_xj_consolidation (0..100) from the master grip + institutional depth:
+#   base   = qing_xinjiang_control (the ILI-owned grip meter — the spine)
+#   + begs  : +4 per loyal beg (a staffed south)         (corps cap 5  -> up to +20)
+#   + 屯田  : +3 per tuntian colony, contribution capped   (up to +18)
+#   + 協餉  : +8 if the xiexiang subsidy is flowing
+#   - venal : -6 per turned beg (a defector on the frontier)
+# Clamped 0..100. This score is what folds into the Lifan Yuan office-holder (additively,
+# inside that office's own recompute). Self-healing; bounded O(characters). Scope: CHI.
+# ======================================================================
+QING_xj_recompute_consolidation = {
+	QING_xj_init = yes
+	clear_variable_list = qing_xj_begs
+	set_variable = { name = qing_xj_beg_count       value = 0 }
+	set_variable = { name = qing_xj_beg_venal_count value = 0 }
+	if = {
+		limit = { exists = c:XNG }
+		every_character = {
+			limit = {
+				has_variable = qing_is_xj_beg
+				is_alive = yes
+				employer = c:XNG
+				# a beg elevated into a great office (rare, but the office model allows it)
+				# LEAVES the corps — he is on the council now, not holding the frontier.
+				NOT = { has_variable = qing_office_held }
+			}
+			ROOT = {
+				add_to_variable_list = { name = qing_xj_begs  target = prev }
+				change_variable = { name = qing_xj_beg_count  add = 1 }
+			}
+			if = {
+				limit = { has_variable = qing_xj_beg_venal }
+				ROOT = { change_variable = { name = qing_xj_beg_venal_count  add = 1 } }
+			}
+		}
+	}
+	# --- composite score. Build in a scratch var, then clamp into qing_xj_consolidation.
+	# start from the master grip meter (seeded/owned by se_QING_ILI).
+	set_variable = { name = qing_xj_consol_scratch  value = 0 }
+	if = { limit = { has_variable = qing_xinjiang_control }  change_variable = { name = qing_xj_consol_scratch  add = var:qing_xinjiang_control } }
+	# begs: +4 each (loyal corps).
+	set_variable = { name = qing_xj_consol_begterm  value = var:qing_xj_beg_count }
+	change_variable = { name = qing_xj_consol_begterm  multiply = 4 }
+	change_variable = { name = qing_xj_consol_scratch  add = var:qing_xj_consol_begterm }
+	# tuntian: +3 each, but cap the colony contribution at +18 (six colonies' worth) so a
+	# runaway coloniser cannot peg the score on farms alone.
+	set_variable = { name = qing_xj_consol_tunterm  value = var:qing_xj_tuntian }
+	change_variable = { name = qing_xj_consol_tunterm  multiply = 3 }
+	if = { limit = { var:qing_xj_consol_tunterm > 18 }  set_variable = { name = qing_xj_consol_tunterm  value = 18 } }
+	change_variable = { name = qing_xj_consol_scratch  add = var:qing_xj_consol_tunterm }
+	# xiexiang subsidy flowing: +8.
+	if = {
+		limit = { has_country_modifier = qing_xj_xiexiang }
+		change_variable = { name = qing_xj_consol_scratch  add = 8 }
+	}
+	# venal begs drag: -6 each.
+	set_variable = { name = qing_xj_consol_venterm  value = var:qing_xj_beg_venal_count }
+	change_variable = { name = qing_xj_consol_venterm  multiply = 6 }
+	change_variable = { name = qing_xj_consol_scratch  subtract = var:qing_xj_consol_venterm }
+	# clamp 0..100 into the published score.
+	if = { limit = { var:qing_xj_consol_scratch < 0 }   set_variable = { name = qing_xj_consol_scratch  value = 0 } }
+	if = { limit = { var:qing_xj_consol_scratch > 100 } set_variable = { name = qing_xj_consol_scratch  value = 100 } }
+	set_variable = { name = qing_xj_consolidation  value = var:qing_xj_consol_scratch }
+	LOG_line = { sys = QING  msg = "xinjiang: consolidation score recomputed for" }
+}
+
+# ======================================================================
+# QING_xj_plant_tuntian (屯田) — plant a military colony in Dzungaria. Scope: COUNTRY (CHI).
+# Spends treasury; raises the grip; stamps a REAL Dzungaria province with the colony
+# modifier; advances the ILI subject's integration a step (settlement knits the north into
+# the empire). Guarded on treasury + an unstamped Dzungaria province + the colony cap (8);
+# the panel button mirrors this.
+# ======================================================================
+QING_xj_plant_tuntian = {
+	LOG_enter = { sys = QING  fn = "QING_xj_plant_tuntian" }
+	QING_xj_init = yes
+	if = {
+		limit = {
+			treasury >= 30
+			var:qing_xj_tuntian < 8
+			area:Dzungaria = {
+				any_area_province = { NOT = { has_province_modifier = qing_xj_tuntian_colony } }
+			}
+		}
+		add_treasury = -30
+		change_variable = { name = qing_xj_tuntian  add = 1 }
+		# stamp one unstamped Dzungaria province with the concrete colony modifier.
+		area:Dzungaria = {
+			random_area_province = {
+				limit = { NOT = { has_province_modifier = qing_xj_tuntian_colony } }
+				add_province_modifier = { name = qing_xj_tuntian_colony  duration = -1 }
+			}
+		}
+		# a colony raises the throne's grip on the New Dominion.
+		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 5 }
+		# settlement tightens the Yili Governorate's integration into the empire.
+		if = {
+			limit = { exists = c:ILI  c:ILI = { is_subject = yes } }
+			c:ILI = { save_scope_as = target }
+			SUBJ_QING_advance_integration = { steps = 1 }
+		}
+		QING_xj_recompute_consolidation = yes
+		LOG_line = { sys = QING  msg = "xinjiang: a tuntian colony is planted in Dzungaria for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_xj_plant_tuntian"  result = OK }
+}
+
+# ======================================================================
+# QING_xj_appoint_beg (授伯克) — appoint a loyal beg over a Tarim oasis. Scope: COUNTRY
+# (CHI). Mints a fresh Uighur notable into the corps + raises the grip. Guarded on the
+# Kashgaria subject existing + the corps cap (5); the panel button mirrors this.
+# ======================================================================
+QING_xj_appoint_beg = {
+	LOG_enter = { sys = QING  fn = "QING_xj_appoint_beg" }
+	QING_xj_init = yes
+	if = {
+		limit = {
+			exists = c:XNG
+			var:qing_xj_beg_count < 5
+		}
+		QING_xj_mint_beg = yes
+		# a well-staffed south steadies the grip.
+		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 4 }
+		QING_xj_recompute_consolidation = yes
+		LOG_line = { sys = QING  msg = "xinjiang: a loyal beg is appointed for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_xj_appoint_beg"  result = OK }
+}
+
+# ======================================================================
+# QING_xj_discipline_beg (懲辦) — cashier a beg who has turned (a khoja-scare defector,
+# qing_xj_beg_venal). Scope: COUNTRY (CHI). Purging the disloyal element restores order —
+# he leaves the corps (his marker stripped, so the rebuild drops him) and the grip firms.
+# Guarded on a venal beg actually existing; the panel button mirrors this.
+# ======================================================================
+QING_xj_discipline_beg = {
+	LOG_enter = { sys = QING  fn = "QING_xj_discipline_beg" }
+	QING_xj_recompute_consolidation = yes
+	if = {
+		limit = {
+			has_variable_list = qing_xj_begs
+			any_in_list = {
+				variable = qing_xj_begs
+				is_alive = yes
+				employer = c:XNG
+				has_variable = qing_xj_beg_venal
+			}
+		}
+		# pick the ablest defector first (the most dangerous to leave in place).
+		ordered_in_list = {
+			variable = qing_xj_begs
+			limit = {
+				is_alive = yes
+				employer = c:XNG
+				has_variable = qing_xj_beg_venal
+			}
+			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_xj_purge_pick
+		}
+		if = {
+			limit = { exists = scope:qing_xj_purge_pick }
+			# strip his corps + venal marks — the rebuild drops him; he is no longer a beg.
+			scope:qing_xj_purge_pick = {
+				if = { limit = { has_variable = qing_is_xj_beg }    remove_variable = qing_is_xj_beg }
+				if = { limit = { has_variable = qing_xj_beg_venal } remove_variable = qing_xj_beg_venal }
+			}
+			# a purge of the disloyal restores the throne's grip a notch.
+			QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 3 }
+			LOG_line = { sys = QING  msg = "xinjiang: a turned beg is cashiered for" }
+		}
+		QING_xj_recompute_consolidation = yes
+	}
+	LOG_exit = { sys = QING  fn = "QING_xj_discipline_beg"  result = OK }
+}
+
+# ======================================================================
+# QING_xj_xiexiang_on / _off (協餉) — toggle the interior-province silver subsidy that kept
+# Xinjiang solvent. Scope: COUNTRY (CHI). ON applies the drain-for-grip country modifier;
+# OFF removes it. The GUI offers whichever is applicable (subsidize when off, cut when on).
+# ======================================================================
+QING_xj_xiexiang_on = {
+	LOG_enter = { sys = QING  fn = "QING_xj_xiexiang_on" }
+	QING_xj_init = yes
+	if = {
+		limit = { NOT = { has_country_modifier = qing_xj_xiexiang } }
+		add_country_modifier = { name = qing_xj_xiexiang  duration = -1 }
+		# the stipend reaches the garrisons at once — a lift to the grip.
+		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 6 }
+		QING_xj_recompute_consolidation = yes
+		LOG_line = { sys = QING  msg = "xinjiang: the xiexiang silver subsidy begins flowing for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_xj_xiexiang_on"  result = OK }
+}
+
+QING_xj_xiexiang_off = {
+	LOG_enter = { sys = QING  fn = "QING_xj_xiexiang_off" }
+	QING_xj_init = yes
+	if = {
+		limit = { has_country_modifier = qing_xj_xiexiang }
+		remove_country_modifier = qing_xj_xiexiang
+		# the subsidy lapses — the unpaid frontier begins to fray.
+		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = -6 }
+		QING_xj_recompute_consolidation = yes
+		LOG_line = { sys = QING  msg = "xinjiang: the xiexiang silver subsidy is cut for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_xj_xiexiang_off"  result = OK }
+}
+
+# ======================================================================
+# QING_xj_pulse — quarterly drift. Scope: COUNTRY (CHI). Called from the governance pulse
+# (BEFORE the ministry recompute would be irrelevant — the fold reads the published score
+# with a one-pulse lag either way). Rebuilds the corps + score, applies the slow
+# maintenance/neglect drift on the grip (a paid, staffed frontier holds; a neglected one
+# erodes), and on a throttled roll when the grip is low AND the corps is empty/venal, fires
+# the khoja revolt-scare (qing_xinjiang.1). Self-guarded; a clean no-op at a firm frontier.
+# ======================================================================
+QING_xj_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_xj_pulse" }
+	QING_xj_recompute_consolidation = yes
+	# --- maintenance vs neglect drift on the grip (small, so it is a background pressure).
+	if = {
+		# a paid subsidy + a staffed beg corps = a frontier that steadily settles.
+		limit = {
+			has_country_modifier = qing_xj_xiexiang
+			var:qing_xj_beg_count > 0
+		}
+		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 1 }
+	}
+	else_if = {
+		# no subsidy flowing = the garrison goes unpaid, the grip slips.
+		limit = { NOT = { has_country_modifier = qing_xj_xiexiang } }
+		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = -1 }
+	}
+	# --- khoja revolt-scare risk: a low grip + an empty or disloyal beg corps invites the
+	# White-Mountain khojas (backed from Kokand, KOK — the neighbouring Turkic power, per
+	# the separatism-backer rule). Throttled roll; the event re-checks its own trigger.
+	if = {
+		limit = {
+			has_variable = qing_xinjiang_control
+			var:qing_xinjiang_control <= 30
+			OR = {
+				var:qing_xj_beg_count = 0
+				var:qing_xj_beg_venal_count > 0
+			}
+			NOT = { has_variable = qing_xj_khoja_pending }
+		}
+		random = {
+			chance = 15
+			set_variable = { name = qing_xj_khoja_pending  value = 1 }
+			LOG_line = { sys = QING  msg = "xinjiang: the far west stirs -> queue the khoja revolt-scare for" }
+			trigger_event = { id = qing_xinjiang.1  days = { 10 40 } }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_xj_pulse"  result = OK }
+}
+
+# ======================================================================
+# QING_xj_turn_a_beg — a khoja scare TURNS one loyal beg into a defector (marks him
+# qing_xj_beg_venal). Scope: COUNTRY (CHI). Called from the fester branch of qing_xinjiang.1.
+# Picks a currently-loyal serving beg; a no-op if the corps is empty or already all venal.
+# ======================================================================
+QING_xj_turn_a_beg = {
+	QING_xj_recompute_consolidation = yes
+	if = {
+		limit = {
+			has_variable_list = qing_xj_begs
+			any_in_list = {
+				variable = qing_xj_begs
+				is_alive = yes
+				employer = c:XNG
+				NOT = { has_variable = qing_xj_beg_venal }
+			}
+		}
+		ordered_in_list = {
+			variable = qing_xj_begs
+			limit = {
+				is_alive = yes
+				employer = c:XNG
+				NOT = { has_variable = qing_xj_beg_venal }
+			}
+			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_xj_turn_pick
+		}
+		if = {
+			limit = { exists = scope:qing_xj_turn_pick }
+			scope:qing_xj_turn_pick = { set_variable = { name = qing_xj_beg_venal  value = 1 } }
+			LOG_line = { sys = QING  msg = "xinjiang: a beg is turned by the khoja for" }
+		}
+		QING_xj_recompute_consolidation = yes
+	}
+}
+
+# ======================================================================
+# QING_xj_remove_on_death — call in a DYING character's scope (hooked into
+# on_character_death). If the dead man was a beg, drop him from the corps list on CHI so no
+# orphan reference survives + keep the count honest. Self-guards on the marker. Mirrors
+# QING_southernstudy_remove_on_death. The corps list lives on CHI (ROOT there is the dying
+# char, so we reach CHI via c:CHI — the beg's employer is XNG, not the list-holder).
+# ======================================================================
+QING_xj_remove_on_death = {
+	if = {
+		limit = {
+			has_variable = qing_is_xj_beg
+			exists = c:CHI
+		}
+		save_scope_as = qing_dead_beg
+		c:CHI = {
+			if = {
+				limit = { has_variable_list = qing_xj_begs }
+				remove_list_variable = { name = qing_xj_begs  target = scope:qing_dead_beg }
+				if = { limit = { var:qing_xj_beg_count > 0 }  change_variable = { name = qing_xj_beg_count  subtract = 1 } }
+				LOG_line = { sys = QING  msg = "xinjiang: a beg died, removed from the corps for" }
+			}
+		}
+	}
+}

@@ -1097,3 +1097,58 @@ colonies (buildings/pops), real begs (伯克, minted characters on the XNG/ILI s
 amban residents, real khoja-revolt risk. Levers historically: post tuntian colonies, appoint/discipline
 begs, subsidize with 協餉 xiexiang silver stipends, settle banner garrisons. Full build detail in the
 build commit + follow-on decision entry.
+
+## D74 — #367 XINJIANG CONSOLIDATION ARC: BUILT (per D73 design)
+
+Built the 1763 consolidation layer exactly as scoped in D73. Files (all brace-balanced 0):
+- **common/scripted_effects/se_QING_XINJIANG.txt** (NEW) — init (seeds state + the 1763 opening
+  beg corps 額敏和卓 Emin Khoja + 鄂對 Odui on XNG, recomputes at seed time per the #336 lesson);
+  seed/mint beg (create_character #90 rule, culture=uighur religion=sunni, move_country=c:XNG,
+  set_as_minor_character, QING_char_bind — mirrors QING_amban_post); recompute (rebuilds corps
+  excluding office-holders per #362-R2; composite score = qing_xinjiang_control + 4/loyal-beg +
+  3/tuntian capped +18 + 8 xiexiang − 6/venal-beg, clamped 0..100); FOUR levers — plant tuntian
+  (spend 30, +5 grip, stamp a Dzungaria province, advance ILI integration 1 step), appoint beg
+  (mint, +4 grip, cap 5), discipline beg (cashier ablest venal, +3 grip), xiexiang on/off
+  (±6 grip + the drain modifier); pulse (maintenance +1 / neglect −1 drift, khoja-scare roll at
+  grip≤30 & empty/venal corps); turn-a-beg (fester payoff); remove_on_death (drops beg from the
+  CHI corps list — reaches CHI via c:CHI since the beg's employer is XNG).
+- **common/modifiers/qing_xinjiang_consol_modifiers.txt** (NEW) — qing_xj_xiexiang (COUNTRY:
+  army_maintenance_cost +0.08 drain, global_unrest −0.5, land_morale +0.02) + qing_xj_tuntian_colony
+  (PROVINCE: local_tax +0.10, food +0.15, pop-cap +0.10, civilization +0.02). All tokens grep-proven.
+- **common/scripted_guis/QING_xinjiang_panel.txt** (NEW) — open button + 4 lever GUIs (plant/appoint/
+  discipline + xiexiang begin/cut, the two toggles mutually exclusive by has_country_modifier state);
+  every is_valid mirrors the effect guard (no dead clicks); ai_is_valid=no, is_shown tag=CHI.
+- **gui/qing_xinjiang.gui** (NEW) — Grand-Council-clone L4 window: grip + consolidation + beg-count +
+  tuntian read-outs, 4 lever buttons (xiexiang begin/cut swap by visible=IsShown), beg roster
+  (dynamicgridbox, martial+charisma icons). Mirrors qing_southern_study.gui.
+- **localization/english/qing_xinjiang_l_english.yml** (NEW) — all panel/tooltip/event loc + the beg
+  nickname keys (Emin Khoja / Odui / generic beg).
+- **events/imp19c_mod_events/qing_xinjiang_events.txt** (NEW) — qing_xinjiang.1 khoja revolt-scare:
+  suppress (spend 50, +12 grip) vs fester (−10 grip, +6 ethnic tension, turn a beg, sour KOK opinion).
+  Backer = KOK Kokand ONLY (neighbouring Turkic power, per the separatism-backer standing rule).
+- **common/opinions/imp19c_opinions.txt** (EDIT) — added qing_xj_kokand_emboldened (−20, decay 3).
+
+THE FOLD (the standing directive — every bureaucracy's performance drives its Grand Council leader):
+folds into the **Lifan Yuan Grand Director** (理藩院, qing_min_perf_lifanyuan) — the office that
+historically governed Xinjiang. Implemented as an ADDITIVE term (c) INSIDE
+QING_ministry_recompute_perf_lifanyuan (se_QING_MINISTRY.txt), NOT a post-hoc nudge — because that
+recompute SETS the meter fresh each pulse and would clobber a nudge. Term = (qing_xj_consolidation −
+50) / 3 → ±16 at the extremes. This is COMPLEMENTARY to the existing amban-coverage term (b): (b)
+scores STAFFING, (c) scores the frontier's HEALTH — not double-counted. One-pulse lag (harmless).
+
+WIRING: init after QING_ili_init (on_action, so the qing_xinjiang_control meter it reads is seeded
+first); QING_xj_pulse after QING_ili_pulse in QING_GOV_pulse (so the ILI control-band — which runs
+EVERY pulse unconditionally — has already banded this pulse's grip onto map + country); remove_on_death
+after the study hooks; open button in government_view.gui after the Upper Study button.
+
+KEY DECISIONS:
+- **Layer, don't duplicate (D73 confirmed in code):** #367 only NUDGES qing_xinjiang_control (owned by
+  se_QING_ILI) via the shared QING_DECLINE_nudge helper; ILI's per-pulse QING_ili_apply_control_band
+  then bands it onto the map for free. #367 never touches ILI's stage machinery / Dungan gate.
+- **Begs employed by XNG, corps list on CHI:** the beg's employer is the Kashgaria subject (the setup's
+  "Beg appointed from Uighur nobles by a Qing amban"), but the roster variable_list lives on CHI (the
+  player). remove_on_death therefore reaches the list via c:CHI, not employer (which is XNG).
+- **monthly_wage_expense_add was UNPROVEN** (only my own draft used it) → swapped to army_maintenance_cost
+  (80+ proven uses; xiexiang literally funded the western garrison, so semantically right too).
+- All create_character honour the #90 rule (no modifiers inside; set_as_minor_character + move_country +
+  QING_char_bind in the saved scope). All LOG msgs STATIC (#253). GUI text wraps (multiline+fixed width).
