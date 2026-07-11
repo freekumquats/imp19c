@@ -181,7 +181,18 @@ QING_tribute_receive = {
 	if = {
 		limit = { exists = $sender$ }
 		$sender$ = {
-			set_variable = { name = qing_trib_gift  value = has_monthly_income }
+			# [logfix] INITIALIZE-BEFORE-READ: seed the var to 0 so it ALWAYS exists before
+			# any read. The prior `set_variable = { value = has_monthly_income }` was not
+			# persisting the var (60k/session "Failed to fetch variable 'qing_trib_gift' due
+			# to not being set" at the two reads below), so the `< 0` and `> 0` comparisons
+			# hit an unset var. Seeding first, then accumulating income via `add =` (the
+			# proven form, event_values 00_event_values.txt:23 `add = root.has_monthly_income`),
+			# guarantees the var is a real value type before it is ever compared.
+			set_variable = { name = qing_trib_gift  value = 0 }
+			if = {
+				limit = { has_monthly_income >= 0 }
+				change_variable = { name = qing_trib_gift  add = has_monthly_income }
+			}
 			change_variable = { name = qing_trib_gift  multiply = 0.25 }
 			if = { limit = { var:qing_trib_gift < 0 }  set_variable = { name = qing_trib_gift  value = 0 } }
 		}

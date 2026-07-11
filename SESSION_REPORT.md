@@ -2866,3 +2866,38 @@ Two code-review agents ran across the batch: B5/B9/B15/B16/B20 clean; B17 mis-sc
 **Fix:** removed the `if{ limit{ any_in_list } }` guard and run its body UNCONDITIONALLY (de-indented one level). Behaviour-IDENTICAL: the guard was a pure short-circuit and the body is already self-limiting — Block 1 (`every_in_list` over $target_provinces$) filters on `state.has_variable = DIPLOMACY_influenced_by` (zero iterations, adds nothing to states_to_recalculate_influence when no province is influenced); Block 2 (`every_in_list` over states_to_recalculate_influence) is a no-op on the empty list AND is independently self-protected by its inner `if local_var:state_transfer_provinces = FUNC_num_provinces_in_state` (false for any state not in the current target set, so no stray influence removal even on a dirty list); the final recalc loop was already outside the guard. So guarded-and-skipped == unguarded-and-filtered-to-nothing. Uses only proven constructs (every_in_list + macro).
 
 **Review:** code-review agent verified behaviour-identical (traced both the empty-target and dirty-list cases; confirmed the inner-if self-protection, no cross-call divergence, braces balanced, no body statement dropped, correct minimal fix vs alternatives, and no other macro-in-trigger-list-block pattern in se_LAND.txt or its callees). One MEDIUM caught + fixed: my initial save had normalised the file CRLF->LF (900-line phantom reflow diff); re-saved with CRLF to match HEAD so the recorded diff is only the ~10 real lines. One LOW noted as pre-existing/out-of-scope (states_to_recalculate_influence is never drained after the final recalc — latent from 554d8875, affects guarded+unguarded equally). No runtime LOG marker (core hot path). In-game boot test owed to confirm the 38 errors are gone and land transfers work.
+
+
+---
+
+## #371 LOG-DRIVEN fixing — 6 runtime-error clusters from the fresh 1763 boot (2026-07-11)
+
+Per the directive to fix what the LOGS actually report (ranked by frequency), swept the fresh error.log (~5.09M lines) with a dedup signature survey and fixed the six highest-frequency scope/variable clusters (>1.55M log lines total). Each is a SCOPE-MISMATCH or unset-variable class error, fixed to a PROVEN upstream idiom (not my own files). `[logfix]` comments on every touched line; all files brace-balanced; line endings preserved.
+
+**1. `invention` in unit `allow` — Wrong scope: state, expected country (~1.5M lines, two files).**
+Unit `allow`/`on_activate` blocks evaluate in STATE scope, not country (the in-file comment claiming "country scope" was wrong). `invention` is a COUNTRY trigger. Fixed by hopping state->country via `owner = { invention = ... }` (proven building-gate idiom, qing_production_buildings.txt:42):
+  - common/units/army_riflemen.txt: `invention = tech_rifles` -> `owner = { invention = tech_rifles }` (trade_good_surplus stays bare — valid in state scope, warelephant precedent).
+  - common/units/army_artillery.txt: `invention = tech_cannons` -> `owner = { invention = tech_cannons }`.
+
+**2. `qing_trib_gift` unset-variable — Failed to fetch variable (60k lines).**
+common/scripted_effects/se_QING_TRIBUTE.txt QING_tribute_receive: `set_variable = { value = has_monthly_income }` was not persisting the var, so the `< 0` / `> 0` reads below hit an unset var. Switched to INITIALIZE-BEFORE-READ: seed to 0, then `change_variable = { add = has_monthly_income }` under a `>= 0` guard (proven add-income form, 00_event_values.txt:23). Guarantees a real value type before any compare.
+
+**3. `num_of_unit_type` in governorship scope — Wrong scope: governorship, expected country (4071 lines).**
+common/script_values/DEMAND_luxury_svalues.txt DEMAND_rifles_base evaluates in GOVERNORSHIP scope. `num_of_unit_type` is a COUNTRY trigger. Moved it INTO the existing `owner = {}` hop alongside the (already-correctly-hopped) invention gate.
+
+**4. `total_population` read in STATE scope — Wrong scope: state, expected province (~1.5k lines, two files).**
+`total_population` is a PROVINCE trigger.
+  - se_QING_SPHERE.txt: the STATE-scope `state = { total_population > 0 }` and two `every_country_state` limits -> reach the province via `any_state_province = { total_population > 0 }` (proven, invest_in_state_buttons.txt:149).
+  - se_QING_MISSIONARY_STATIONS.txt: six `state = { total_population > 0 }` reads were already in PROVINCE scope (inside owned/neighbor-province iterators) -> dropped the stray `state = {..}` wrapper, read `total_population > 0` directly. (order_by = total_population at line 322 is a valid province-scope order key, untouched.)
+
+**5. `famine_province` undefined event target (245 lines).**
+events/imp19c_mod_events/economy/shortage_events.txt shortage.1: the event could fire (and the random pick could land) on a shortage-governorship whose every candidate province was already recent_famine-flagged, so save_scope_as = famine_province never ran and every scope:famine_province read threw. Tightened the event `trigger` and each `random_*` `limit` to require, at EVERY level, a descendant province that is populated (`total_population > 1`) AND not already `recent_famine` — guaranteeing a save-able province before the scope is read.
+
+**6. bare `religion =` on CHARACTER scope — Wrong scope: character, expected country (~261 lines, three files).**
+`religion` is a COUNTRY trigger (CONTRAST: `culture` IS a valid character trigger — the parallel culture-compare lines correctly needed no change, and log evidence confirmed 0 culture errors). A char-scope faith compare must navigate the `.religion` link on BOTH sides: `this.religion = X.religion` (proven, party_types 00_default_republic.txt:154).
+  - se_QING_AFFINITY.txt QING_char_affinity:73 (`limit = { this.religion = root.current_ruler.religion }`) and QING_pair_friction:371 (`limit = { NOT = { $a$ = { this.religion = $b$.religion } } }`).
+  - 00_marriage_triggers.txt MARRIAGE_same_faith_trigger:106 (`current_ruler = { this.religion = scope:target.current_ruler.religion }`).
+
+**Adversarial self-review:** full diff re-read; all 9 files brace-balanced (verified OK); every fix maps to a cited proven upstream site; no behaviour change beyond eliminating the scope/unset error (each fix makes an errored read into the intended clean read/false). Committed to 1763_bookmark. In-game boot test owed to confirm the clusters are gone.
+
+**DEFERRED (documented, next log clusters):** illegal-operator `<`/`>` council chain (BT-13/#373); `sqrt line: 27` illegal-op + empty-type "Variable not of the 'value' scope type" (3796) in oa_wealth_changes.txt; ADD_PRESTIGE_EFFECT_POSITIVE loc-key 66k (display-only, overlaps BT-5/6/#380); char-via-ID scope failures (272); ChineseEvents.txt:43 parse (low priority, upstream 1815-only Amherst event); set_as_ruler nulls (upstream setup files).
