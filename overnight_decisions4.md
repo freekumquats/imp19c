@@ -760,3 +760,41 @@ the throne's succession engine, not a new council seat. New se_QING_HAREM.txt + 
   gui/qing_guard.gui (new — the window), se_QING_MINISTRY.txt (perf-compute + dispatcher registration),
   government_view.gui (open button after the Justice button), imp19c_windows.gui (imperial_guardsman
   picker row), qing_guard_l_english.yml (panel loc appended to the #273 events loc). Commit 8538087c.
+
+
+---
+
+## D63 — #365 Board of Personnel panel (吏部, personnel office)
+
+- **Concrete object = the GOVERNOR CORPS** — the provincial officialdom, real is_governor=yes engine
+  characters (NOT a marked-var pseudo-object): the same corps QING_personnel_evaluate_governors and the
+  大計 (Great Reckoning) review already iterate. The panel is the CENTRAL read-across-all-governors
+  dashboard, mirroring the Lifan-Yuan roster-over-engine-objects archetype (#350) but with character
+  items (Scope.GetCharacter) rather than country items.
+- **No player governor-appointment lever** — governor assignment in this mod is AI/automatic (no proven
+  player verb exists; searched common/ + setup/, only AI governor_policies + the trade governorship-tax
+  plumbing). So the panel's levers act on the EXISTING corps rather than staffing it:
+  1. **CONVENE THE 大計 (Great Reckoning)** — reuses the PROVEN QING_personnel_daji_review (the exact effect
+     qing_personnel.1 calls), gated on the shared qing_personnel_daji_cooldown (days=1095) so the panel lever
+     and the flavour event share ONE ~3-year throttle (no double-reckoning, no spam);
+  2. **per-governor CULTIVATE (培養)** — a capable Minister (finesse>=9, the same threshold the 大計 rewards
+     use) rewards an able governor: add_loyalty=loyalty_qing_commended (NAMED modifier) + standing lift, 1/yr;
+  3. **per-governor DISCIPLINE (懲處)** — cashiers a venal/disloyal governor (corrupt|corruption>=40|loyalty<40):
+     add_loyalty=loyalty_qing_disgraced + prominence cut, 1/yr.
+- **PREEMPTIVE #362-R1 SPAM GUARD:** both per-governor levers carry a 365-day cooldown var
+  (qing_personnel_cultivate_cooldown / _discipline_cooldown). Without it the DISCIPLINE lever would be
+  infinitely re-clickable — a venal governor stays venal, so corruption>=40 keeps qualifying and the
+  loyalty/prominence penalties would pile up unbounded. (The #362-R1 impeach-spam lesson, applied at build.)
+- **NAMED loyalty modifiers, not raw scalars** — add_loyalty uses loyalty_qing_commended / _disgraced
+  (defined in common/loyalty/00_imp19c_loyalty.txt), NOT raw integers (the #361-review no-op lesson). NOTE:
+  the pre-existing se_QING_PERSONNEL.txt / qing_personnel_events.txt still use raw add_loyalty = 5/-10/-1 —
+  those are the #371 mod-wide raw-integer audit's territory, deliberately left untouched here.
+- **LATENT COUNCIL-FOLD BUG CLOSED (4th of the class — after censor #362, justice #363, guard #364):**
+  qing_min_perf_personnel was enumerated in QING_council_perf_accumulate (se_QING_COUNCIL.txt:1385) but
+  NEVER SET, silently dropping the Grand Minister of Personnel from the council average. Added
+  QING_ministry_recompute_perf_personnel (finesse×4 + governor-corps-integrity term: clean% deviation from
+  fully-clean, scaled 0..-25; vacant floor 25; clamp 0..100; rebuilds qing_personnel_governor_corps) and
+  registered it in QING_ministry_recompute_all_perf.
+- Files: QING_personnel_panel.txt (new), qing_personnel.gui (new), se_QING_MINISTRY.txt (compute +
+  dispatcher), government_view.gui (open button after the Guard button), qing_personnel_panel_l_english.yml
+  (new loc). Commit 1641dc32.
