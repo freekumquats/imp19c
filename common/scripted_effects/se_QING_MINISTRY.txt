@@ -34,7 +34,8 @@ QING_ministry_recompute_all_perf = {
 		QING_ministry_recompute_perf_revenue = yes
 		QING_ministry_recompute_perf_grand_secretariat = yes
 		QING_ministry_recompute_perf_chamberlain = yes
-		# (Personnel #365, Justice #363, Censorate #362,
+		QING_ministry_recompute_perf_censor = yes
+		# (Personnel #365, Justice #363,
 		#  Imperial Guard #364 each append their recompute call here as they ship.
 		#  Central Secretariat #361 reuses the grand_secretariat compute already
 		#  registered here for the Hanlin Academy #358.)
@@ -717,4 +718,86 @@ QING_ministry_recompute_perf_chamberlain = {
 	if = { limit = { var:qing_min_perf_chamberlain < 0 }   set_variable = { name = qing_min_perf_chamberlain  value = 0 } }
 	if = { limit = { var:qing_min_perf_chamberlain > 100 } set_variable = { name = qing_min_perf_chamberlain  value = 100 } }
 	LOG_line = { sys = QING  msg = "imperial-household (chamberlain) performance recomputed" }
+}
+
+# ======================================================================
+# [#362] CENSORATE (都察院) PERFORMANCE — qing_min_perf_censor (0..100, 50 = adequate).
+#
+# [#362 BUG-FIX] The council fold (QING_council_fold_ministry_perf) has always
+# enumerated `office = censor`, but NO effect ever SET qing_min_perf_censor — so the
+# Censor-in-Chief's charge silently contributed NOTHING to the Grand Council (the
+# accumulate helper self-guards on has_variable = qing_min_perf_censor and just skipped
+# it). This compute closes that gap: the Censorate now folds into its leader's standing
+# like every other office.
+#
+# The Censorate (都察院) is the dynasty's internal check on venality — the Censor-in-Chief
+# (左都御史) and his corps of investigating censors (御史/言官) impeach the corrupt and
+# remonstrate with the throne. We build the meter from concrete state se_QING_CENSORATE.txt
+# already tracks + the NEW inspector corps this panel manages:
+#   • the Censor-in-Chief's own FINESSE (都察院's governing skill — the investigator's rigour,
+#     x4), plus a bonus for an HONEST / JUST censor (the fearless remonstrant, +6 each),
+#   • INSPECTOR CORPS DEPTH — the investigating censors (御史) reporting to him
+#     (qing_censor_inspectors list), count deviation from a healthy bench of ~4, x2,
+#   • less a CORRUPTION DRAG — a court awash in graft (qing_corruption_level) means the
+#     Censorate is failing its signal charge no matter the man; subtract corruption/8.
+# A VACANT Censorate floors the meter low (no one checks venality). Rebuilds the
+# qing_censor_inspectors roster (the panel datamodel). Reads guarded; scratch reads use
+# var:X (bare = 0). Clamp 0..100. Bounded O(court).
+# ======================================================================
+QING_ministry_recompute_perf_censor = {
+	# --- rebuild the inspecting-censor corps roster (panel datamodel) + tally count.
+	# An "inspector" = a courtier flagged qing_is_censor_inspector (stamped when commissioned
+	# to the corps via the #362 panel). Bounded O(court).
+	clear_variable_list = qing_censor_inspectors
+	set_variable = { name = qing_censor_inspector_count  value = 0 }
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			has_variable = qing_is_censor_inspector
+		}
+		ROOT = {
+			add_to_variable_list = { name = qing_censor_inspectors  target = prev }
+			change_variable = { name = qing_censor_inspector_count  add = 1 }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_censor  value = 50 }
+	if = {
+		# office FILLED by a live employed Censor-in-Chief — score on his finesse + integrity + corps.
+		limit = {
+			has_variable = qing_office_censor_holder
+			var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the Censor-in-Chief's finesse, deviation from a competent baseline of 7, x4.
+		var:qing_office_censor_holder = { save_scope_as = qing_censor_chief }
+		set_variable = { name = qing_min_censor_scratch  value = 0 }
+		change_variable = { name = qing_min_censor_scratch  add = scope:qing_censor_chief.finesse }
+		change_variable = { name = qing_min_censor_scratch  subtract = 7 }
+		change_variable = { name = qing_min_censor_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_censor  add = var:qing_min_censor_scratch }
+		# (b) INTEGRITY — an honest / just censor is the fearless remonstrant the office needs, +6 each.
+		if = { limit = { scope:qing_censor_chief = { has_trait = honest } }  change_variable = { name = qing_min_perf_censor  add = 6 } }
+		if = { limit = { scope:qing_censor_chief = { has_trait = just } }    change_variable = { name = qing_min_perf_censor  add = 6 } }
+		# (c) INSPECTOR CORPS DEPTH — the investigating censors (御史) vs a healthy bench of ~4, x2.
+		set_variable = { name = qing_min_censor_scratch  value = var:qing_censor_inspector_count }
+		change_variable = { name = qing_min_censor_scratch  subtract = 4 }
+		change_variable = { name = qing_min_censor_scratch  multiply = 2 }
+		change_variable = { name = qing_min_perf_censor  add = var:qing_min_censor_scratch }
+		# (d) CORRUPTION DRAG — a court awash in graft = a Censorate failing its charge. subtract corruption/8.
+		if = {
+			limit = { has_variable = qing_corruption_level }
+			set_variable = { name = qing_min_censor_scratch  value = var:qing_corruption_level }
+			change_variable = { name = qing_min_censor_scratch  divide = 8 }
+			change_variable = { name = qing_min_perf_censor  subtract = var:qing_min_censor_scratch }
+		}
+	}
+	else = {
+		# VACANT Censorate — no one checks venality. Floor it low.
+		set_variable = { name = qing_min_perf_censor  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_censor < 0 }   set_variable = { name = qing_min_perf_censor  value = 0 } }
+	if = { limit = { var:qing_min_perf_censor > 100 } set_variable = { name = qing_min_perf_censor  value = 100 } }
+	LOG_line = { sys = QING  msg = "censorate performance recomputed" }
 }

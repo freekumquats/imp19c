@@ -617,3 +617,34 @@ the throne's succession engine, not a new council seat. New se_QING_HAREM.txt + 
   avoiding council-strip clutter. Init guards on a dedicated `qing_secretariat_initialized` flag
   (not the backlog var) per the #360 D49 ordering gotcha (perf recompute reads the backlog at
   game-start before init).
+
+### D56–D60 — #362 Censorate panel (都察院) + a LATENT-BUG FIX
+
+- **D56 — FIXES a never-computed council fold (latent bug).** The council fold
+  (QING_council_fold_ministry_perf) has always enumerated `office = censor`, but NO effect ever
+  SET `qing_min_perf_censor` — QING_council_perf_accumulate self-guards on
+  `has_variable = qing_min_perf_censor` and silently DROPPED the Censor-in-Chief from the average.
+  So the censor's charge contributed NOTHING to the Grand Council. #362 builds
+  QING_ministry_recompute_perf_censor + registers it in the dispatcher, closing the gap so the
+  Censorate now folds into its leader's standing like every other office (the HARD requirement).
+- **D57 — Concrete Inspectors-General corps (御史), not an abstract counter (house rule).** The
+  panel manages a real corps of investigating censors: courtiers flagged
+  `qing_is_censor_inspector`, rebuilt into `qing_censor_inspectors` + tallied each pulse (exact
+  mirror of the #354 Zongli diplomat-corps archetype). Commissioned via the SHARED court picker
+  keyed `censor_inspector`; capped at 6 (a select service, not the whole court); per-inspector
+  recall on the roster.
+- **D58 — Perf-compute (fixes the meter).** base 50; office-filled adds (finesse−7)×4 + honest/just
+  +6 each + (inspector_count−4)×2 − corruption/8; vacant floors at 25; clamp 0..100. Finesse is the
+  censor's governing skill (matches se_QING_CENSORATE's own vigor formula). The corruption drag makes
+  the meter a real signal of the court's cleanliness, not just the man.
+- **D59 — Reuses the proven Censorate domain for the IMPEACH lever.** The panel's IMPEACH THE VENAL
+  lever chains the existing QING_censorate_find_corrupt (ordered_character by corruption →
+  scope:qing_censorate_target) + QING_censorate_impeach_uphold (cleanse + vacate office +
+  corruption −6) — no new prosecution logic. is_valid MIRRORS find_corrupt's own limit (present
+  Censor-in-Chief + a venal courtier exists via any_character) so the lever is dead when the court
+  is clean — no live-but-no-op affordance.
+- **D60 — Opened from a government_view council-strip button (its own great office).** Unlike the
+  #361 內閣 facet, the Censorate IS its own distinct great office (censor holder), so it gets its
+  own council-strip open button (after the 內務府 Household button), its own window
+  (gui/qing_censorate.gui), and appoint routing through imp19c_windows.gui. Open button recomputes
+  the meter so the panel is fresh on open.

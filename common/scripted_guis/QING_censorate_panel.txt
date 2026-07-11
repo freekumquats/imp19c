@@ -1,0 +1,157 @@
+########################################################################
+# QING_censorate_panel.txt — scripted GUIs for the Censorate panel (#362).
+#
+# The Censorate (都察院) bureaucracy: a Grand-Council-clone L4 window headed by the
+# Censor-in-Chief (左都御史), surfacing the corps of investigating censors (御史/言官)
+# that reports to him, the ministry-performance meter qing_min_perf_censor (which folds
+# into his Grand Council standing — a fold that had NEVER been computed before #362), the
+# realm's corruption level, and two action levers: COMMISSION AN INSPECTOR (an 御史, via the
+# shared court picker) and IMPEACH THE VENAL (the proven QING_censorate_find_corrupt +
+# QING_censorate_impeach_uphold pair — find the most corrupt courtier and disgrace him).
+#
+# Scoped to the Qing player (ROOT = CHI). AI never evaluates these (ai_is_valid = no).
+# Opened by qing_censorate_open_panel_button (a button in government_view.gui).
+# Window: gui/qing_censorate.gui. Prefix = qing_censorate_. se_LOG sys = QING.
+########################################################################
+
+# ---- OPEN THE CENSORATE PANEL (button in the government view) --------------
+qing_censorate_open_panel_button = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		# recompute so the meter + inspector roster are fresh the moment the panel opens.
+		QING_ministry_recompute_perf_censor = yes
+		LOG_line = { sys = QING  msg = "EVENT qing_censorate_open_panel_button fired; opening the Censorate panel for" }
+	}
+}
+
+# ---- CENSOR-IN-CHIEF HOLDER INDICATOR --------------------------------------
+qing_censorate_filled = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_office_censor_holder
+		var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
+	}
+}
+
+qing_censorate_vacant = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		NOR = {
+			AND = {
+				has_variable = qing_office_censor_holder
+				var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
+			}
+		}
+	}
+}
+
+# ---- COMMISSION AN INSPECTOR — flag a courtier as a member of the inspecting-
+# censor corps (御史). Row action on the court-candidate picker (reuses the shared
+# court pool the Appoint window lists). Capped at 6 inspectors so the corps is a
+# select service, not the whole court. ROOT = the player; the char comes via the
+# picker datacontext (GuiScope char + player). Mirrors qing_zongli_appoint_diplomat.
+# ----------------------------------------------------------------------
+qing_censorate_appoint_inspector = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+	}
+	is_valid = {
+		# an eligible, unassigned courtier of the player, corps not yet full.
+		is_alive = yes
+		is_adult = yes
+		employer = scope:player
+		NOT = { has_variable = qing_is_censor_inspector }
+		NOT = { has_variable = qing_office_held }
+		scope:player = {
+			OR = {
+				NOT = { has_variable = qing_censor_inspector_count }
+				var:qing_censor_inspector_count < 6
+			}
+		}
+	}
+	effect = {
+		# stamp the inspector mark (read by QING_ministry_recompute_perf_censor, which
+		# rebuilds the roster + count each pulse).
+		set_variable = { name = qing_is_censor_inspector  value = 1 }
+		LOG_line = { sys = QING  msg = "censorate: a courtier commissioned to the inspecting-censor corps (御史) for" }
+		# recompute immediately so the panel + the count gate reflect the new appointee.
+		scope:player = { QING_ministry_recompute_perf_censor = yes }
+	}
+}
+
+# ---- RECALL AN INSPECTOR — remove a serving inspector from the corps. -------
+qing_censorate_recall_inspector = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		has_variable = qing_is_censor_inspector
+	}
+	is_valid = {
+		has_variable = qing_is_censor_inspector
+		employer = scope:player
+	}
+	effect = {
+		remove_variable = qing_is_censor_inspector
+		LOG_line = { sys = QING  msg = "censorate: an inspector recalled from the corps for" }
+		scope:player = { QING_ministry_recompute_perf_censor = yes }
+	}
+}
+
+# ---- IMPEACH THE VENAL — find the most corrupt courtier and disgrace him.
+# Reuses the proven QING_censorate_find_corrupt (ordered_character by corruption ->
+# scope:qing_censorate_target) + QING_censorate_impeach_uphold (cleanse + vacate +
+# corruption -6). Gated on a present Censor-in-Chief AND the existence of a corrupt
+# target (mirrors the effect's own find guard, so no false affordance). Country scope.
+# ----------------------------------------------------------------------
+qing_censorate_impeach_venal = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		# a present Censor-in-Chief must be in place to prosecute...
+		has_variable = qing_office_censor_holder
+		var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
+		# ...and there must BE a venal courtier to impeach (mirror find_corrupt's limit,
+		# so the lever is dead when there is no one to prosecute — no no-op affordance).
+		any_character = {
+			employer = ROOT
+			is_ruler = no
+			is_adult = yes
+			is_alive = yes
+			NOT = { has_variable = qing_rebel_foil }
+			OR = {
+				corruption >= 30
+				has_trait = corrupt
+				loyalty < 40
+			}
+		}
+	}
+	effect = {
+		QING_censorate_find_corrupt = yes
+		if = {
+			limit = { exists = scope:qing_censorate_target }
+			QING_censorate_impeach_uphold = yes
+		}
+		# refresh so the corruption read-out + meter reflect the prosecution.
+		QING_ministry_recompute_perf_censor = yes
+		LOG_line = { sys = QING  msg = "censorate: the venal impeached from the panel for" }
+	}
+}
+
+# ---- CLOSE ------------------------------------------------------------------
+qing_censorate_close_panel = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_valid = { always = yes }
+	effect = { }
+}
