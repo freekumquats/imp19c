@@ -139,6 +139,9 @@ QING_ministry_recompute_perf_lifanyuan = {
 	clear_variable_list = qing_lifanyuan_amban_subjects
 	set_variable = { name = qing_lifan_amban_count  value = 0 }   # subjects WITH a live amban
 	set_variable = { name = qing_lifan_warrant_count  value = 0 } # subjects that WARRANT one
+	# [#334] running sum of the resident amban corps' affinity — the concrete quality of the
+	# real resident characters (qing_char_affinity, se_QING_AFFINITY.txt), not just their count.
+	set_variable = { name = qing_lifan_amban_affinity_sum  value = 0 }
 	every_subject = {
 		limit = { is_subject_type = autonomous_governorship }
 		ROOT = { change_variable = { name = qing_lifan_warrant_count  add = 1 } }
@@ -150,6 +153,14 @@ QING_ministry_recompute_perf_lifanyuan = {
 			ROOT = {
 				change_variable = { name = qing_lifan_amban_count  add = 1 }
 				add_to_variable_list = { name = qing_lifanyuan_amban_subjects  target = prev }
+			}
+			# [#334] accumulate this resident's affinity (guarded — the score is set at post and
+			# re-scored by QING_amban_evaluate; a brand-new amban before its first eval still has
+			# the post-time score). ROOT-scoped add so the sum lives on CHI.
+			if = {
+				limit = { var:qing_amban_here = { has_variable = qing_char_affinity } }
+				var:qing_amban_here = { save_scope_as = qing_lifan_amban_char }
+				ROOT = { change_variable = { name = qing_lifan_amban_affinity_sum  add = scope:qing_lifan_amban_char.var:qing_char_affinity } }
 			}
 		}
 	}
@@ -206,6 +217,36 @@ QING_ministry_recompute_perf_lifanyuan = {
 		if = {
 			limit = { has_variable = qing_caravan_prosperity }
 			set_variable = { name = qing_min_lifan_scratch  value = var:qing_caravan_prosperity }
+			change_variable = { name = qing_min_lifan_scratch  subtract = 50 }   # deviation from neutral (-50..+50)
+			change_variable = { name = qing_min_lifan_scratch  divide = 5 }       # scale (~-10..+10)
+			change_variable = { name = qing_min_perf_lifanyuan  add = var:qing_min_lifan_scratch }
+		}
+		# (e) [#334] AMBAN CORPS QUALITY — the concrete resident characters, not just their count.
+		# Term (b) scores STAFFING (how many warrant subjects have a resident); this scores the
+		# QUALITY of those residents — the average qing_char_affinity of the amban corps, deviation
+		# from a neutral 50, /5 (~±10). A Director who staffs the marches with loyal, culturally-fit
+		# residents (a Fuk'anggan) runs them better than one whose ambans have gone native or turned
+		# disloyal — so the real characters the Amban system tracks drive his Grand Council standing.
+		# Guarded on there being at least one resident to average (avoid divide-by-zero).
+		if = {
+			limit = { var:qing_lifan_amban_count > 0 }
+			set_variable = { name = qing_min_lifan_scratch  value = var:qing_lifan_amban_affinity_sum }
+			change_variable = { name = qing_min_lifan_scratch  divide = var:qing_lifan_amban_count }  # average affinity
+			change_variable = { name = qing_min_lifan_scratch  subtract = 50 }   # deviation from neutral (-50..+50)
+			change_variable = { name = qing_min_lifan_scratch  divide = 5 }       # scale (~-10..+10)
+			change_variable = { name = qing_min_perf_lifanyuan  add = var:qing_min_lifan_scratch }
+		}
+		# (f) [#334] SUZERAIN PRESTIGE — the health of the whole tributary order (保藩威望,
+		# qing_suzerain_prestige, se_QING_VASSAL.txt). The Court of Colonial Affairs was the organ
+		# of the 藩屬 relationships (Mongolia, Tibet, the Central-Asian khanates, and — with the
+		# Board of Rites — the outer tributaries); a crumbling tributary order is a Lifan Yuan
+		# failure as much as a Rites one. Fold its deviation from a neutral 50, /5 (~±10). This is
+		# the piece that made the suzerain-prestige meter (which fed NO office before #334) answer
+		# to a Grand Council seat. Complementary to Rites term b (which scores tributary COVERAGE,
+		# the embassy count); this scores the ORDER's standing, not the headcount. Guarded.
+		if = {
+			limit = { has_variable = qing_suzerain_prestige }
+			set_variable = { name = qing_min_lifan_scratch  value = var:qing_suzerain_prestige }
 			change_variable = { name = qing_min_lifan_scratch  subtract = 50 }   # deviation from neutral (-50..+50)
 			change_variable = { name = qing_min_lifan_scratch  divide = 5 }       # scale (~-10..+10)
 			change_variable = { name = qing_min_perf_lifanyuan  add = var:qing_min_lifan_scratch }
