@@ -526,3 +526,51 @@ se_QING_HOUSEHOLD.txt substrate (privy purse, eunuchs, workshops) + its 4 events
   `has_variable = qing_council_vacancy` + `var:qing_council_vacancy > 0` (maintained by
   QING_council_recompute, exact 13-office scope). Commit a051ee49b. (All 3 confirmed findings were
   the same bug.)
+
+---
+
+## #360 — Harem (後宮) — imperial consorts under the Neiwufu
+
+Built the imperial harem as a CONCRETE roster of on-map consort characters under the Imperial
+Household Department (內務府), whose health folds into the chamberlain's Grand Council standing —
+the throne's succession engine, not a new council seat. New se_QING_HAREM.txt + gui/qing_harem.gui
++ common/scripted_guis/QING_harem_panel.txt.
+
+- **D46 — Concrete roster, not a counter (house rule).** `qing_harem_consorts` is a variable_list
+  of REAL female characters (created via the proven create_character roster idiom, mirroring
+  QING_exam_mint_scholar), each marked `qing_is_harem_consort`. `qing_harem_consort_count` is kept
+  in step for the GUI + perf. Self-healing: `QING_harem_recompute_roster` rebuilds the list fresh
+  from the live marked characters (prunes dead/departed) each quarterly perf recompute + on panel
+  open; `QING_harem_remove_on_death` (hooked into on_character_death after the exam prune) keeps the
+  count honest immediately.
+- **D47 — Folds into the chamberlain (the HARD wire).** Added term (e) to
+  `QING_ministry_recompute_perf_chamberlain` (se_QING_MINISTRY.txt): rebuild the roster, then score
+  `(consort_count − 4) × 2` into qing_min_perf_chamberlain (a full court of 8 → +8, an empty one →
+  −8), bounded so it stays a MINOR term next to the charisma/purse/eunuch/corruption terms. The
+  chamberlain office key is already enumerated in the council perf fold, so NO se_QING_COUNCIL edit —
+  the harem's health reaches the Grand Council through the chamberlain, per the standing requirement
+  that every bureaucracy's performance determines its leader's council performance.
+- **D48 — Heirs via make_pregnant, NOT create_character parentage.** FAVOUR A CONSORT (臨幸) gets a
+  consort with child by the emperor via `make_pregnant = { father = <emperor scope>  known_bastard =
+  no  number_of_children = 1 }` run on the WOMAN. RATIONALE: this session's oracle consultation
+  verified make_pregnant with 3 verbatim Invictus examples (father can be ANY char scope, not just a
+  spouse), whereas create_character with `father=`/`mother=` has ZERO proven usages I could point to.
+  Per the proven-code rule I used the verified idiom. It is also more robust — the child is borne
+  through the engine's own birth mechanic, so legitimacy / dynasty / the family graph (and thus the
+  succession) are handled natively rather than hand-assembled. Guarded on a male reigning emperor +
+  a living, `is_pregnant = no` consort (both effect and panel button), so a favouring never
+  double-conceives an already-pregnant woman and the button is not a no-op affordance.
+- **D49 — Init ordering gotcha (dedicated flag, not the count var).** The perf recompute runs at
+  game-start (on_action line 48) BEFORE QING_harem_init (~line 110) and calls
+  QING_harem_recompute_roster, which SETS qing_harem_consort_count. So QING_harem_init guards on a
+  dedicated `qing_harem_initialized` flag — guarding on the count var would wrongly skip minting the
+  opening inner court of 3. (This is the same class of ordering bug as #353's game-start fold order.)
+- **D50 — AI-autonomous + panel levers.** QING_harem_pulse (governance pulse, after
+  QING_household_pulse) rebuilds the roster, rolls a 20%/quarter favoured-consort birth (so the inner
+  court does its dynastic work AI-side too), and drifts dynastic-harmony down a touch under a
+  vacant/venal chamberlain. Two GUI levers (選秀 draft gated below a court of 8; 臨幸 favour) reuse the
+  same proven effects. Draft nudges dynastic-harmony +2; a birth nudges it +4 and the consort +15
+  prestige. Panel opened from a button in gui/qing_household.gui (the harem sits under the Household).
+- All idioms verified proven: create_character roster + add_* + set_home_country (se_QING_EXAM);
+  random_in_list + limit (se_EDU); is_pregnant (schemes/death); variable_list roster + on-death prune
+  (se_QING_EXAM); make_pregnant (Invictus oracle, this session). Brace balance 76/76, 27/27, 83/83.
