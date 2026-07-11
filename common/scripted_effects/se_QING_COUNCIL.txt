@@ -83,12 +83,53 @@ QING_council_autofill = {
 	LOG_exit = { sys = QING  fn = "QING_council_autofill"  result = OK }
 }
 
+# ======================================================================
+# [#352 F3/F8] STALE-SEAT PRUNE — one office. A seat var (qing_office_$office$_holder)
+# can outlive its holder when a minister dies without the on_character_death handler
+# resolving him, or simply LEAVES CHI employ (a departure fires no death event). The
+# var then stays SET but points at a dead / foreign character: the GUI renders a filled
+# card off the raw .IsSet, while recompute's is_alive+employer guard counts the seat
+# vacant — the "13 shown / 12 counted / 1 Unassigned" the boot-test surfaced. Clear the
+# var whenever its holder is no longer a living CHI employee. Country scope.
+QING_council_prune_seat = {
+	if = {
+		limit = {
+			has_variable = qing_office_$office$_holder
+			NOT = { var:qing_office_$office$_holder = { is_alive = yes  employer = ROOT } }
+		}
+		remove_variable = qing_office_$office$_holder
+	}
+}
+
+# Prune ALL thirteen appointable office seats in one call. Country scope. Cheap: O(13)
+# var checks. Called at the top of QING_council_recompute so a seat whose holder died /
+# departed this tick is cleared BEFORE the GUI and the count read it.
+QING_council_prune_all_seats = {
+	QING_council_prune_seat = { office = chancellor }
+	QING_council_prune_seat = { office = personnel }
+	QING_council_prune_seat = { office = revenue }
+	QING_council_prune_seat = { office = rites }
+	QING_council_prune_seat = { office = war }
+	QING_council_prune_seat = { office = justice }
+	QING_council_prune_seat = { office = works }
+	QING_council_prune_seat = { office = censor }
+	QING_council_prune_seat = { office = lifanyuan }
+	QING_council_prune_seat = { office = chamberlain }
+	QING_council_prune_seat = { office = zongli }
+	QING_council_prune_seat = { office = grand_secretariat }
+	QING_council_prune_seat = { office = guard_commandant }
+}
+
 # Fill ONE office if vacant with the ablest unassigned courtier. Country scope.
 # $office$ = the office key. Reuses combined_stats_council_svalue as the ranking
 # (the same overall-worth measure the old pool used); the office's own governing
 # skill is what then MATTERS for effectiveness (QING_council_recompute), but a
 # well-rounded man is the sensible default pick when the throne fills a post.
 QING_council_autofill_office = {
+	# [#352 F3/F8] prune a stale-set seat (holder dead / left CHI employ) before filling,
+	# so a var pointing at an invalid character does not read as "already filled" and block
+	# the autofill (the "1 Unassigned that Convene never cleared" boot-test bug).
+	QING_council_prune_seat = { office = $office$ }
 	if = {
 		limit = { NOT = { has_variable = qing_office_$office$_holder } }
 		ordered_character = {
@@ -123,6 +164,10 @@ QING_council_recompute = {
 	# [#103] se_LOG enter/exit wiring (council-is-offices rewrite)
 	LOG_enter = { sys = QING  fn = "QING_council_recompute" }
 	QING_council_init = yes
+
+	# [#352 F3/F8] prune any seat whose holder died / left CHI employ this tick, so the
+	# GUI (raw .IsSet) and the count (is_alive+employer guard) agree — no phantom filled card.
+	QING_council_prune_all_seats = yes
 
 	# --- reset accumulators + rebuild the DERIVED office-holder roster
 	set_variable = { name = qing_council_skill_total  value = 0 }

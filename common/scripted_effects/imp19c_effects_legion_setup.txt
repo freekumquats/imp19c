@@ -5,20 +5,22 @@
 # feasibility oracles (Invictus, Terra-Indomita): every create_unit declares a
 # base `sub_unit = <type>`, adds strength with `add_subunit = <type>`.
 #
-# TWO commander idioms are used in this file, deliberately:
-#   1. The QING GARRISON helpers (SE_qing_raise_garrison[_cmd]) create the unit at
-#      COUNTRY scope with an inline `commander = <char>` field — the proven
-#      free-placement idiom (Invictus galatian_invasion.txt:715; 00_event_effects_
-#      inv_1_0.txt:4281). This is REQUIRED because raise_legion musters at the
-#      governorship seat and ignores `location`, which stacked the whole OOB at
-#      Beijing (#241-fix, oracle-confirmed 2026-07-08).
+# TWO unit-creation idioms are used in this file, deliberately:
+#   1. The QING GARRISON helpers (SE_qing_raise_garrison[_cmd]) use a BARE create_unit
+#      (navy = no) issued directly in the province OWNER's country scope, with an
+#      ABSOLUTE `location = <province>` token and an inline `commander = <char>` field.
+#      [#352 F4] This is REQUIRED because raise_legion enforces ONE LEGION PER
+#      GOVERNORSHIP: all ~26 garrisons raise from the same CHI capital governorship, so
+#      only the first (Beijing) succeeds and the rest throw "Governorship already has
+#      legion" (5080× in error.log — the boot test saw exactly ONE army). A bare
+#      create_unit has NO such limit and honours the absolute location, so every garrison
+#      spawns dispersed at its own province. PROVEN: Terra-Indomita galatian_invasion.txt
+#      :1839/1455 (create_unit = { navy = no  location = p:X  commander = scope:Y }) and
+#      Invictus invasions.txt:221/239 (two land units, one country scope, one tick).
 #   2. The 1815 European coalition legions below (SE_occupation_of_france etc.) still
 #      use raise_legion + `char:X = { add_to_legion = PREV }` + random_legion_unit =
-#      { set_as_commander = char:X }, since they are deliberately raised from ONE
-#      capital governorship and located across France (dispersal not required there).
-# (An earlier version used add_loyal_subunit / set_personal_loyalty / a pre-add
-#  every_sub_unit loop / an external add_commander on a saved scope — none of
-#  those are valid here; that is why these effects were disabled "due to errors".)
+#      { set_as_commander = char:X }, since each coalition power raises from its OWN
+#      capital governorship (one legion each — within the per-governorship limit).
 #
 # Prefix = SE
 ########################################################################
@@ -46,22 +48,24 @@
 #     regional commands (Zhili, Liangjiang, Huguang, Sichuan, Liangguang,
 #     Shaan-Gan, Fujian incl. Taiwan, Yunnan-Guizhou).
 #
-# IMPLEMENTATION NOTE: every legion is raised from c:CHI.capital_scope.governorship
-# (proven to exist) but LOCATED at its garrison province — exactly the pattern
-# SE_occupation_of_france uses (all raised from the GBR capital governorship,
-# located across France). This sidesteps any per-province state.governorship
-# existence risk. Each raise is individually guarded on province existence +
-# Qing ownership via the SE_qing_raise_garrison[_cmd] helpers, so a partitioned
-# or shrunken Qing simply gets fewer garrisons (each miss logs LOG_fail) instead
-# of a scope error. count = $size$ in the while-loop is the number of ADDITIONAL
-# regular_infantry companies on top of the 1 base sub_unit (so total = size + 1).
+# IMPLEMENTATION NOTE: [#352 F4] each garrison is created with a BARE create_unit
+# (navy = no) in the province OWNER's country scope, LOCATED at its garrison province
+# via an absolute `location = $prov$` token — NOT via raise_legion. raise_legion caps
+# ONE legion per governorship, so raising all ~26 from the shared CHI capital
+# governorship left only the first (Beijing) and errored the rest; a bare create_unit
+# has no such cap and disperses correctly. Each raise is individually guarded on
+# province existence + Qing (or CHI-subject) ownership via the SE_qing_raise_garrison
+# [_cmd] helpers, so a partitioned or shrunken Qing simply gets fewer garrisons (each
+# miss logs LOG_fail) instead of a scope error. count = $size$ in the while-loop is the
+# number of ADDITIONAL regular_infantry companies on top of the 1 base sub_unit
+# (so total = size + 1).
 ########################################################################
 
 # ----------------------------------------------------------------------
 # Helper: raise a garrison legion of ($size$ + 1) regular_infantry companies at
 # province $prov$, named $name$, with NO scripted commander (the player assigns
-# one). Guards province existence + Qing ownership; raises from the Qing capital
-# governorship and locates the unit at $prov$. Silent LOG_fail if $prov$ is not
+# one). Guards province existence + Qing ownership; creates the unit (bare create_unit,
+# no raise_legion) in the owner's scope located at $prov$. Silent LOG_fail if $prov$ is not
 # held. Assumes c:CHI exists (the caller SE_qing_armies guards that once).
 # ----------------------------------------------------------------------
 SE_qing_raise_garrison = {
@@ -77,43 +81,34 @@ SE_qing_raise_garrison = {
 		# a subject-held frontier province raises under THAT subject (the intended
 		# "dispersed across China AND its subjects" behaviour).
 		limit = { exists = $prov$  $prov$ = { OR = { owner = c:CHI  owner = { is_subject_of = c:CHI } } } }
-		# [#241 → B21-v3] ROOT CAUSE of the all-Beijing stack (oracle diagnosis 2026-07-11, HIGH
-		# confidence): the load-bearing bug was the `$prov$ = { owner = { create_unit } }` PROVINCE->
-		# OWNER wrapper itself — NOT the location token, the tick, or a missing commander. Entering the
-		# country scope THROUGH a province scope makes the new unit's placement re-resolve against the
-		# scope-entry context (collapsing to ROOT's capital = Beijing) instead of honouring the absolute
-		# `location` token. Every proven reference spawn (Invictus invasions.2 two land units one tick;
-		# galatian_invasion.10 `create_unit { navy=no location=p:384 }`; me_tasm.13 THREE navies at three
-		# ports one tick; vanilla me_duuchuu.5 TWELVE navies one tick) issues create_unit DIRECTLY in a
-		# bare country scope with an absolute `location = p:X` token and NEVER via `p:X = { owner = { } }`.
-		# FIX: create in a bare COUNTRY scope. For a CHI-owned province that is c:CHI; for a frontier
-		# province owned by a CHI SUBJECT (ILI/MKD/HLJ/XNG) save that owner and create in ITS scope —
-		# without re-entering the province. $prov$ stays the absolute location token. No commander needed
-		# (commanderless creates outnumber commanded 203:66 in Invictus and persist fine).
-		# [R2-2/3/4 — B21/B22 attempt #6, ORACLE-PROVEN] The bare `<owner> = { create_unit { location } }`
-		# idiom did NOT honour `location=` — the 2026-07-10 boot test put every CHI garrison at Beijing and
-		# every subject garrison at the SUBJECT's capital (location ignored → owner's capital). The PROVEN
-		# dispersal idiom is raise_legion INSIDE the owner's capital_scope.governorship with
-		# `location = <province>` on the create_unit — verified in the oracle: Terra-Indomita
-		# rel_flavor_kemetic.7 raises legions at p:613 (Patigga) and p:569 — provinces DIFFERENT from the
-		# capital — via `capital_scope.governorship = { raise_legion = { create_unit = { location = p:613 } } }`
-		# (italian_flavor.txt does the same). Raise from the OWNER's capital governorship, place at $prov$;
-		# a CHI subject-owned frontier province raises under that subject. Do NOT interpolate $name$/$prov$/
-		# $size$ into a LOG string (breaks the arg compiler) — keep the log line static.
+		# [#352 F4 — ROOT CAUSE, log-confirmed + the user's own data point] The R2-2/3/4 attempt #6
+		# wrapped each garrison in `capital_scope.governorship = { raise_legion = { create_unit } }`.
+		# raise_legion enforces ONE LEGION PER GOVERNORSHIP: all ~26 garrisons raise from the SAME CHI
+		# capital governorship, so the FIRST (Beijing) succeeds and the other 25 throw
+		# "Governorship already has legion" (5080× in error.log) — the boot test saw exactly ONE army.
+		# The PRE-R2 code used bare create_unit (no legion limit → all 22 spawned) but stacked them at
+		# Beijing because it entered the country scope THROUGH the province (`$prov$ = { owner = { } }`),
+		# which re-resolved `location` to the owner's capital.
+		# FIX (both bugs at once): the PROVEN land-army idiom is a BARE create_unit — NO raise_legion, so
+		# NO governorship limit — issued directly in the OWNER's country scope, with an ABSOLUTE
+		# `location = $prov$` token. Verified in Terra-Indomita galatian_invasion.txt:1839
+		# (`create_unit = { navy = no  location = p:384  commander = scope:X  while = {...} }`, bare in the
+		# country scope) and Invictus invasions.txt:221/239 (two land units, one country scope, one tick,
+		# no raise_legion). Create in the owner's scope so a CHI-owned province spawns a CHI unit (fixes
+		# "subject armies under subject control") and a subject-owned frontier province spawns under that
+		# subject. $prov$ stays the absolute location token. Do NOT interpolate $name$/$prov$/$size$ into a
+		# LOG string (breaks the arg compiler) — keep the log line static.
 		$prov$ = { owner = { save_scope_as = garrison_owner } }
 		scope:garrison_owner = {
-			capital_scope.governorship = {
-				raise_legion = {
-					create_unit = {
-						name = $name$
-						location = $prov$
-						sub_unit = regular_infantry
-						while = { count = $size$  add_subunit = regular_infantry }
-					}
-				}
+			create_unit = {
+				navy = no
+				name = $name$
+				location = $prov$
+				sub_unit = regular_infantry
+				while = { count = $size$  add_subunit = regular_infantry }
 			}
 		}
-		LOG_line = { sys = QING  msg = "Qing garrison raised via owner capital-governorship raise_legion at target province" }
+		LOG_line = { sys = QING  msg = "Qing garrison raised via bare create_unit at target province (no governorship limit)" }
 	}
 	else = {
 		LOG_fail = { sys = QING  fn = "SE_qing_raise_garrison"  reason = "province not held by Qing; garrison not raised" }
@@ -132,55 +127,51 @@ SE_qing_raise_garrison_cmd = {
 		# above (Ili banner garrison under commander Changling char:244 is precisely
 		# one of the frontier cases this restores). See that helper for the rationale.
 		limit = { exists = $prov$  $prov$ = { OR = { owner = c:CHI  owner = { is_subject_of = c:CHI } } }  exists = $cmd$ }
-		# [R2-2/3/4] Same oracle-proven raise_legion idiom as SE_qing_raise_garrison: raise from the
-		# OWNER's capital_scope.governorship with `location = $prov$` (disperses correctly), NOT a bare
-		# create_unit (which ignored location → owner capital). The commander is attached via the proven
-		# add_to_legion = PREV + random_legion_unit = { set_as_commander } form (SE_occupation_of_france /
-		# TI kemetic.7) — the inline `commander =` field did NOT attach on the CHI path in the boot test.
-		# Attach only when $cmd$ is a non-ruler EMPLOYED BY the province owner (a CHI commander cannot lead
-		# a subject-owned frontier legion — e.g. Ili raises under the ILI subject); else muster commanderless.
-		$prov$ = { owner = { save_scope_as = garrison_owner } }
-		if = {
-			limit = { $cmd$ = { is_ruler = no  employer = scope:garrison_owner } }
-			scope:garrison_owner = {
-				capital_scope.governorship = {
-					raise_legion = {
-						create_unit = {
-							name = $name$
-							location = $prov$
-							sub_unit = regular_infantry
-							while = { count = $size$  add_subunit = regular_infantry }
-						}
-						# proven commander attach (oracle SE_occupation_of_france / kemetic.7): add the
-						# char to the just-raised legion, then promote a unit of it to commander. The inline
-						# `commander =` field did NOT attach on the CHI path in the boot test; this form does.
-						$cmd$ = { add_to_legion = PREV }
-						random_legion_unit = { set_as_commander = $cmd$ }
+			# [#352 F4] Same bare-create_unit fix as SE_qing_raise_garrison (no raise_legion -> no
+			# governorship limit -> every garrison spawns, dispersed at its own $prov$). Commander attach
+			# uses the PROVEN TWO-STEP: create_unit { save_scope_as = U ... } then scope:U = { set_as_commander
+			# = $cmd$ }. The boot test showed the INLINE `commander =` field rejected a stat-less setup officer
+			# ('Failed to assign leader ( 596 ): EligibleForCommandOnly', error.log 4423873), whereas the
+			# save-scope + set_as_commander form attached all 14 land commanders that same tick (debug.log).
+			# PROVEN: Invictus startup_events.txt:133 (random_navy = { set_as_commander = char:253 }) and
+			# egyptian_revolt_events.txt:176 (scope:thebes_unit = { set_as_commander = scope:thebes_general }).
+			# Attach only when $cmd$ is a non-ruler EMPLOYED BY the province owner (a CHI commander cannot lead
+			# a subject-owned frontier legion — e.g. Ili raises under the ILI subject); else muster commanderless.
+			$prov$ = { owner = { save_scope_as = garrison_owner } }
+			if = {
+				limit = { $cmd$ = { is_alive = yes  is_ruler = no  employer = scope:garrison_owner } }
+				scope:garrison_owner = {
+					create_unit = {
+						navy = no
+						name = $name$
+						location = $prov$
+						sub_unit = regular_infantry
+						while = { count = $size$  add_subunit = regular_infantry }
+						save_scope_as = qing_new_garrison
 					}
 				}
+				# proven two-step commander attach (see comment above): set the historical commander on the
+				# just-created unit scope. Works for stat-less setup officers where inline `commander =` fails.
+				scope:qing_new_garrison = { set_as_commander = $cmd$ }
+				# [#331 user] mark this char as a serving Qing garrison/army commander so the
+				# lifecycle event (QING_council_on_commander_death -> qing_office.32) can detect
+				# that a member of the officer corps has died and prompt the War Minister for a
+				# replacement recommendation. Stamped ONLY on the successfully-attached path.
+				$cmd$ = { set_variable = { name = qing_officer_marker  value = 1 } }
+				LOG_line = { sys = QING  msg = "Qing garrison raised under attached historical commander (save-scope set_as_commander)" }
 			}
-			# [#331 user] mark this char as a serving Qing garrison/army commander so the
-			# lifecycle event (QING_council_on_commander_death → qing_office.32) can detect
-			# that a member of the officer corps has died and prompt the War Minister for a
-			# replacement recommendation. Stamped ONLY on the successfully-attached path.
-			$cmd$ = { set_variable = { name = qing_officer_marker  value = 1 } }
-			LOG_line = { sys = QING  msg = "Qing garrison raised under attached commander" }
-		}
-		else = {
-			scope:garrison_owner = {
-				capital_scope.governorship = {
-					raise_legion = {
-						create_unit = {
-							name = $name$
-							location = $prov$
-							sub_unit = regular_infantry
-							while = { count = $size$  add_subunit = regular_infantry }
-						}
+			else = {
+				scope:garrison_owner = {
+					create_unit = {
+						navy = no
+						name = $name$
+						location = $prov$
+						sub_unit = regular_infantry
+						while = { count = $size$  add_subunit = regular_infantry }
 					}
 				}
+				LOG_line = { sys = QING  msg = "Qing garrison raised commanderless (attached commander not eligible; player assigns)" }
 			}
-			LOG_line = { sys = QING  msg = "Qing garrison raised commanderless (attached commander not eligible; player assigns)" }
-		}
 	}
 	else = {
 		LOG_fail = { sys = QING  fn = "SE_qing_raise_garrison_cmd"  reason = "province unheld or commander absent; garrison not raised" }
@@ -389,7 +380,12 @@ SE_qing_navy_disband = {
 SE_qing_navy_guangdong = {
 	LOG_enter = { sys = QING  fn = "SE_qing_navy_guangdong" }
 	if = {
-		limit = { exists = p:9298  p:9298 = { owner = c:CHI  is_coastal = yes } }
+		# [#352 F4-navy] Canton p:9298 is a RIVER port (its port sea-zone 10520 is in default.map's
+		# river_provinces LIST, not sea_zones) -> create_unit rejected it 'not coastal' and the fallback
+		# picked a non-naval province ('does not belong', error.log 4423870). Berth the Guangdong
+		# water-force at Zhuhai p:7190 — the Pearl estuary MOUTH (sea zone 10323, a real sea), the
+		# historical Humen/Bogue anti-pirate station. CHI-owned in setup/provinces/00_Guangdong.txt.
+		limit = { exists = p:7190  p:7190 = { owner = c:CHI  is_coastal = yes } }
 		# [R2-4 — B22 fix] Issue create_unit BARE in the CHI country scope (this effect is called from a
 		# CHI country_event, so ROOT/this = c:CHI already). The old `c:CHI = { create_unit ... }` wrapper
 		# RE-ENTERED the country scope, which re-resolved the absolute `location` token to the capital
@@ -400,21 +396,32 @@ SE_qing_navy_guangdong = {
 		create_unit = {
 			navy = yes
 			name = QING_UNIT_GUANGDONG_COASTAL_PATROL
-			location = p:9298
-			commander = char:597
+			location = p:7190
 			sub_unit = brig
 			while = { count = 5  add_subunit = brig }
+			save_scope_as = qing_new_gd_navy
 		}
-		char:597 = { set_variable = { name = qing_officer_marker  value = 1 } }  # [#331 user] serving-officer mark
-		LOG_line = { sys = QING  msg = "Guangdong Coastal Patrol raised at Canton (p:9298), 6x war-junk" }
+		# [#352 F4-navy] proven two-step commander attach (Invictus startup_events.txt:133
+		# random_navy = { set_as_commander = char:253 }): set the historical 水師提督 on the new fleet
+		# scope. The inline `commander =` field rejected this stat-less setup officer in the boot test.
+		# [#352 F4-navy review] guard the attach: only seat the admiral if he exists, is a
+		# living non-ruler in CHI service (the 1763 roster would be dead at an 1815 start —
+		# death_date was stripped for the setup-attach, so the age system may kill them in the
+		# 31-day gap before this fires). Else the fleet musters commanderless (player assigns).
+		if = {
+			limit = { exists = char:597  char:597 = { is_alive = yes  is_ruler = no  employer = c:CHI } }
+			scope:qing_new_gd_navy = { set_as_commander = char:597 }  # Huang Shijian 黃仕簡
+			char:597 = { set_variable = { name = qing_officer_marker  value = 1 } }
+		}
+		LOG_line = { sys = QING  msg = "Guangdong Coastal Patrol raised at Zhuhai/Humen (p:7190) under Huang Shijian, 6x war-junk" }
 	}
 	else = {
 		# [#212-fix] fallback: raise at the largest owned coastal province, excluding
-		# the other two water-forces' home ports (3651/2893).
+		# the other two water-forces' home ports (3651 Fuzhou / 2968 Xiangshan).
 		if = {
-			limit = { any_owned_province = { is_coastal = yes  NOT = { province_id = 3651 }  NOT = { province_id = 2893 } } }
+			limit = { any_owned_province = { is_coastal = yes  NOT = { province_id = 3651 }  NOT = { province_id = 2968 } } }
 			ordered_owned_province = {
-				limit = { is_coastal = yes  NOT = { province_id = 3651 }  NOT = { province_id = 2893 } }
+				limit = { is_coastal = yes  NOT = { province_id = 3651 }  NOT = { province_id = 2968 } }
 				order_by = total_population
 				max = 1
 				save_scope_as = qing_gd_fallback_port
@@ -428,10 +435,10 @@ SE_qing_navy_guangdong = {
 				sub_unit = brig
 				while = { count = 5  add_subunit = brig }
 			}
-			LOG_line = { sys = QING  msg = "Guangdong Coastal Patrol raised at fallback coastal port (Canton p:9298 not coastal), 6x war-junk" }
+			LOG_line = { sys = QING  msg = "Guangdong Coastal Patrol raised at fallback sea port (Zhuhai p:7190 unavailable), 6x war-junk" }
 		}
 		else = {
-			LOG_fail = { sys = QING  fn = "SE_qing_navy_guangdong"  reason = "p:9298 Canton not held/coastal and no fallback port; Guangdong Coastal Patrol not raised" }
+			LOG_fail = { sys = QING  fn = "SE_qing_navy_guangdong"  reason = "p:7190 Zhuhai not held/coastal and no fallback sea port; Guangdong Coastal Patrol not raised" }
 		}
 	}
 	LOG_exit = { sys = QING  fn = "SE_qing_navy_guangdong"  result = OK }
@@ -449,20 +456,30 @@ SE_qing_navy_fujian = {
 			navy = yes
 			name = QING_UNIT_FUJIAN_COASTAL_PATROL
 			location = p:3651
-			commander = char:596
 			sub_unit = brig
 			while = { count = 3  add_subunit = brig }
+			save_scope_as = qing_new_fj_navy
 		}
-			char:596 = { set_variable = { name = qing_officer_marker  value = 1 } }  # [#331 user] serving-officer mark
-		LOG_line = { sys = QING  msg = "Fujian Coastal Patrol raised at Fuzhou (p:3651), 4x war-junk" }
+		# [#352 F4-navy] two-step attach (see Guangdong): the inline `commander = char:596` rejected
+		# Gan Guobao as 'EligibleForCommandOnly' (error.log 4423873); set_as_commander on the unit works.
+		# [#352 F4-navy review] guard the attach: only seat the admiral if he exists, is a
+		# living non-ruler in CHI service (the 1763 roster would be dead at an 1815 start —
+		# death_date was stripped for the setup-attach, so the age system may kill them in the
+		# 31-day gap before this fires). Else the fleet musters commanderless (player assigns).
+		if = {
+			limit = { exists = char:596  char:596 = { is_alive = yes  is_ruler = no  employer = c:CHI } }
+			scope:qing_new_fj_navy = { set_as_commander = char:596 }  # Gan Guobao 甘國寶, 福建水師提督
+			char:596 = { set_variable = { name = qing_officer_marker  value = 1 } }
+		}
+		LOG_line = { sys = QING  msg = "Fujian Coastal Patrol raised at Fuzhou (p:3651) under Gan Guobao, 4x war-junk" }
 	}
 	else = {
 		if = {
 			limit = { any_owned_province = { is_coastal = yes } }
 			ordered_owned_province = {
-				# [#193-fix task #193] exclude Canton (9298) and Ningbo (2893) so the Fujian
-				# fallback never stacks a second squadron on the Guangdong/Zhejiang port.
-				limit = { is_coastal = yes  NOT = { province_id = 9298 }  NOT = { province_id = 2893 } }
+				# [#193-fix] exclude the Guangdong (7190 Zhuhai) and Zhejiang (2968 Xiangshan) home
+				# ports so the Fujian fallback never stacks a second squadron on them.
+				limit = { is_coastal = yes  NOT = { province_id = 7190 }  NOT = { province_id = 2968 } }
 				order_by = total_population
 				max = 1
 				save_scope_as = qing_navy_fallback_port
@@ -492,26 +509,41 @@ SE_qing_navy_fujian = {
 SE_qing_navy_zhejiang = {
 	LOG_enter = { sys = QING  fn = "SE_qing_navy_zhejiang" }
 	if = {
-		limit = { exists = p:2893  p:2893 = { owner = c:CHI  is_coastal = yes } }
+		# [#352 F4-navy] Ningbo p:2893 has a port/adjacency ZONE MISMATCH (ports.csv sea-zone 12416 but
+		# its sea crossing is via 12178) -> create_unit rejected it 'does not belong' (error.log 4423877).
+		# Berth the Zhejiang water-force at Xiangshan p:2968 (clean sea zone 12416, no special adjacency),
+		# the Dinghai/Zhenhai approaches. CHI-owned in setup/provinces/00_Zhejiang.txt.
+		limit = { exists = p:2968  p:2968 = { owner = c:CHI  is_coastal = yes } }
 		# [#314 B22-fix] province->owner->create_unit { location = <p:X> } form (see Guangdong).
 		# [R2-4] create_unit issued BARE in the CHI country scope (ROOT=c:CHI here); the old c:CHI={ } wrapper re-entered the country scope and re-resolved location to the capital (Beijing, inland) so only Fujian survived. Oracle: TI kemetic.7 navy create_unit is bare in country scope.
 		create_unit = {
 			navy = yes
 			name = QING_UNIT_ZHEJIANG_COASTAL_PATROL
-			location = p:2893
+			location = p:2968
 			sub_unit = brig
 			while = { count = 2  add_subunit = brig }
+			save_scope_as = qing_new_zj_navy
 		}
-		LOG_line = { sys = QING  msg = "Zhejiang Coastal Patrol raised at Ningbo (p:2893), 3x war-junk" }
+		# [#352 F4-navy] two-step commander attach (see Guangdong): the Zhejiang 水師提督.
+		# [#352 F4-navy review] guard the attach: only seat the admiral if he exists, is a
+		# living non-ruler in CHI service (the 1763 roster would be dead at an 1815 start —
+		# death_date was stripped for the setup-attach, so the age system may kill them in the
+		# 31-day gap before this fires). Else the fleet musters commanderless (player assigns).
+		if = {
+			limit = { exists = char:609  char:609 = { is_alive = yes  is_ruler = no  employer = c:CHI } }
+			scope:qing_new_zj_navy = { set_as_commander = char:609 }  # Luo Yingdou 羅英笏, 浙江水師提督
+			char:609 = { set_variable = { name = qing_officer_marker  value = 1 } }
+		}
+		LOG_line = { sys = QING  msg = "Zhejiang Coastal Patrol raised at Xiangshan (p:2968) under Luo Yingdou, 3x war-junk" }
 	}
 	else = {
 		# [#223-fix] fallback: largest owned coastal province excluding the other two
-		# home ports (9298/3651), so Zhejiang still gets a squadron if Ningbo is not
-		# held/coastal — matching the Guangdong/Fujian fallback idiom.
+		# home ports (7190 Zhuhai / 3651 Fuzhou), so Zhejiang still gets a squadron if
+		# Xiangshan is not held/coastal — matching the Guangdong/Fujian fallback idiom.
 		if = {
-			limit = { any_owned_province = { is_coastal = yes  NOT = { province_id = 9298 }  NOT = { province_id = 3651 } } }
+			limit = { any_owned_province = { is_coastal = yes  NOT = { province_id = 7190 }  NOT = { province_id = 3651 } } }
 			ordered_owned_province = {
-				limit = { is_coastal = yes  NOT = { province_id = 9298 }  NOT = { province_id = 3651 } }
+				limit = { is_coastal = yes  NOT = { province_id = 7190 }  NOT = { province_id = 3651 } }
 				order_by = total_population
 				max = 1
 				save_scope_as = qing_zj_fallback_port
@@ -525,10 +557,10 @@ SE_qing_navy_zhejiang = {
 				sub_unit = brig
 				while = { count = 2  add_subunit = brig }
 			}
-			LOG_line = { sys = QING  msg = "Zhejiang Coastal Patrol raised at fallback coastal port (Ningbo p:2893 not coastal), 3x war-junk" }
+			LOG_line = { sys = QING  msg = "Zhejiang Coastal Patrol raised at fallback sea port (Xiangshan p:2968 unavailable), 3x war-junk" }
 		}
 		else = {
-			LOG_fail = { sys = QING  fn = "SE_qing_navy_zhejiang"  reason = "p:2893 Ningbo not held/coastal and no fallback port; Zhejiang Coastal Patrol not raised" }
+			LOG_fail = { sys = QING  fn = "SE_qing_navy_zhejiang"  reason = "p:2968 Xiangshan not held/coastal and no fallback sea port; Zhejiang Coastal Patrol not raised" }
 		}
 	}
 	LOG_exit = { sys = QING  fn = "SE_qing_navy_zhejiang"  result = OK }
