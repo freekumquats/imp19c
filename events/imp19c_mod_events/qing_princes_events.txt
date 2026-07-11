@@ -1,0 +1,160 @@
+########################################################################
+# qing_princes_events.txt — Court Intrigue + Succession (宮闈鬥爭 / 立儲之爭) — #368.
+#
+# The CONCRETE-prince layer over the abstract succession events (qing_succession.1/.2,
+# qing_regency_events.txt). Where qing_succession.1 raises the abstract 九子奪嫡 jockeying flag,
+# these events surface the PRINCES THEMSELVES — a live roster of the emperor's adult sons, each
+# with a court-backing score (se_QING_PRINCES.txt) — and let the throne act on named princes:
+# groom the ablest, seal the tablet on a specific heir (秘密立儲), or curb an over-mighty son.
+#
+#   .1  THE PRINCES CONTEND (奪嫡之爭) — offered by QING_princes_pulse when the backing spread
+#       first turns dangerous under an unsealed succession. SEAL NOW (秘密立儲) vs GROOM THE
+#       ABLEST (培植, keep it open) vs STAND ALOOF (let it simmer — a harmony risk).
+#   .2  AN OVER-MIGHTY PRINCE (儲位太盛) — offered when a single prince's backing grows alarming.
+#       CURB HIM (查辦) vs ELEVATE HIM (seal on him now) vs WATCH.
+#
+# These do NOT own the accession machinery — they drive the SAME qing_secret_succession_sealed /
+# qing_succession_jockeying flags the existing qing_succession.2 accession event consumes, so the
+# concrete and abstract layers interlock. All CHI-only, player-focused, logged sys = QING.
+#
+# HISTORY: the 九子奪嫡 (Nine Lords' struggle for Kangxi's succession, 1708-1722) drove Yongzheng
+# to institute 秘密立儲 — the heir's name sealed behind the 正大光明 tablet. #368 makes that
+# concrete: you seal on a SPECIFIC prince from the roster. The over-mighty-prince arc is the
+# Yinreng/Yinsi pattern (an heir apparent building his own faction, deposed 1712).
+########################################################################
+
+namespace = qing_princes
+
+########################################################################
+# .1  THE PRINCES CONTEND (奪嫡之爭)
+# Fired by QING_princes_pulse when the backing spread first turns dangerous (>=40) under an
+# unsealed succession with >=2 adult princes. The immediate re-checks state and saves the ablest
+# prince (the natural front-runner) for the portrait + tooltips.
+########################################################################
+qing_princes.1 = {
+	type = country_event
+	title = "qing_princes.1.t"
+	desc = "qing_princes.1.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:qing_contest_frontrunner
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		is_monarchy = yes
+		has_variable = qing_prince_count
+		var:qing_prince_count >= 2
+		NOT = { has_variable = qing_secret_succession_sealed }
+	}
+
+	immediate = {
+		# [#368-R] set the once-only offered flag HERE (only when the event actually fires),
+		# not in the pulse — so a re-check failure during the trigger delay never strands it.
+		set_variable = { name = qing_princes_contest_seen  value = 1 }
+		QING_princes_recompute_roster = yes
+		# save the ablest prince (the front-runner) for the portrait/tooltips.
+		if = {
+			limit = { has_variable_list = qing_princes }
+			ordered_in_list = {
+				variable = qing_princes
+				order_by = qing_prince_backing
+				max = 1
+				save_scope_as = qing_contest_frontrunner
+			}
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_princes.1 (奪嫡之爭 princes contend) for [ROOT.GetTag]" }
+	}
+
+	# --- SEAL NOW (秘密立儲) — name the front-runner the hidden heir. The teeth. -----
+	option = {
+		name = "qing_princes.1.a"
+		custom_tooltip = "qing_princes.1.a.tt"
+		QING_princes_seal_succession = yes
+	}
+
+	# --- GROOM THE ABLEST (培植) — advance a front-runner, keep the succession open --
+	option = {
+		name = "qing_princes.1.b"
+		custom_tooltip = "qing_princes.1.b.tt"
+		QING_princes_favour = yes
+		# the contest simmers on; re-offer later if it stays dangerous.
+		if = {
+			limit = { has_variable = qing_princes_contest_seen }
+			remove_variable = qing_princes_contest_seen
+		}
+	}
+
+	# --- STAND ALOOF — let them contend (a harmony risk) ----------------------------
+	option = {
+		name = "qing_princes.1.c"
+		custom_tooltip = "qing_princes.1.c.tt"
+		QING_dynasty_harmony_nudge = { amount = -3 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 2 }
+	}
+}
+
+########################################################################
+# .2  AN OVER-MIGHTY PRINCE (儲位太盛)
+# Fired by QING_princes_pulse when a single prince's backing reaches >=85 under an unsealed
+# succession. The immediate saves that prince for the portrait + the curb/elevate options.
+########################################################################
+qing_princes.2 = {
+	type = country_event
+	title = "qing_princes.2.t"
+	desc = "qing_princes.2.desc"
+	picture = chinese_throne_room
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:qing_overmighty_prince
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		is_monarchy = yes
+		has_variable_list = qing_princes
+		NOT = { has_variable = qing_secret_succession_sealed }
+		any_in_list = { variable = qing_princes  var:qing_prince_backing >= 85 }
+	}
+
+	immediate = {
+		# [#368-R] set the once-only offered flag HERE (only when the event actually fires).
+		set_variable = { name = qing_princes_overmighty_seen  value = 1 }
+		QING_princes_recompute_roster = yes
+		# save the highest-backing prince for the portrait/tooltips.
+		if = {
+			limit = { has_variable_list = qing_princes }
+			ordered_in_list = {
+				variable = qing_princes
+				order_by = qing_prince_backing
+				max = 1
+				save_scope_as = qing_overmighty_prince
+			}
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_princes.2 (儲位太盛 over-mighty prince) for [ROOT.GetTag]" }
+	}
+
+	# --- CURB HIM (查辦) — the Censorate investigates; strip his backing hard --------
+	option = {
+		name = "qing_princes.2.a"
+		custom_tooltip = "qing_princes.2.a.tt"
+		QING_princes_investigate = yes
+	}
+
+	# --- ELEVATE HIM — accept the front-runner and seal on him now ------------------
+	option = {
+		name = "qing_princes.2.b"
+		custom_tooltip = "qing_princes.2.b.tt"
+		QING_princes_seal_succession = yes
+	}
+
+	# --- WATCH — do nothing (let it ride, a harmony risk) ---------------------------
+	option = {
+		name = "qing_princes.2.c"
+		custom_tooltip = "qing_princes.2.c.tt"
+		QING_dynasty_harmony_nudge = { amount = -2 }
+	}
+}
