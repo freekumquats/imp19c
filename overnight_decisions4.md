@@ -574,3 +574,46 @@ the throne's succession engine, not a new council seat. New se_QING_HAREM.txt + 
 - All idioms verified proven: create_character roster + add_* + set_home_country (se_QING_EXAM);
   random_in_list + limit (se_EDU); is_pregnant (schemes/death); variable_list roster + on-death prune
   (se_QING_EXAM); make_pregnant (Invictus oracle, this session). Brace balance 76/76, 27/27, 83/83.
+
+---
+
+## #361 — Central Secretariat (內閣) — the working chancery
+
+**Commit:** (pending) · Built on `merge-overnight`. Files: `common/scripted_effects/se_QING_SECRETARIAT.txt` (NEW), `common/scripted_guis/QING_secretariat_panel.txt` (NEW), `gui/qing_secretariat.gui` (NEW), `common/scripted_effects/se_QING_MINISTRY.txt` (term (e)), `gui/qing_hanlin.gui` (open button), `common/on_action/qing_mechanics_on_actions.txt` (init), `common/scripted_effects/se_QING_GOVERNANCE.txt` (pulse), `localization/english/qing_secretariat_l_english.yml` (panel loc).
+
+- **D51 — Re-scoped to a THIN facet, NOT a second office/meter (the key call).** The design doc
+  (overnight_design4.md:58/61) pairs #361 with #358: *"grand_secretariat | 內閣 | ... Central
+  Secretariat — fed by Hanlin (#361/#358)"* and *"Hanlin Academy (#358) feeds #361."* Both target
+  the SAME `grand_secretariat` office key. #358 already built the full perf meter
+  (qing_min_perf_grand_secretariat), the Hanlin scholar roster, the draw-scholar lever, and the
+  council fold. A second full panel with its OWN perf meter would double-count into the fold. So
+  #361 is built as the WORKING-CHANCERY facet of that one office (exact mirror of the #360
+  harem→household precedent, D46/D47): the Hanlin is the talent RESERVOIR, the 內閣 is where those
+  men WORK. It reuses the existing meter — no new meter, NO council edit.
+- **D52 — Concrete rescript backlog (票擬積壓), not an abstract score (house rule).**
+  `qing_secretariat_backlog` (0..100) is the concrete measure of chancery throughput. Fresh
+  rescripts accumulate +6/quarter (the throne's business never stops); a live Grand Secretary
+  works it DOWN by his charisma (his drafting throughput — able hand charisma 10 clears ~10/qtr
+  = net −4; weak hand charisma 5 clears ~5 = net +1 creep). A vacant chancery has no throughput,
+  so it climbs untended. Clamp 0..100.
+- **D53 — Folds into the EXISTING grand_secretariat meter (the HARD wire).** Added term (e) to
+  QING_ministry_recompute_perf_grand_secretariat (se_QING_MINISTRY.txt): backlog deviation from a
+  tolerable 30, /4 (bounded so it neither dominates the finesse/Hanlin terms nor is negligible),
+  ADDED to the meter (a cleared backlog < 30 lifts it, a choked one > 30 drags it). Inside the
+  office-FILLED branch (a vacant office already floors the meter at 25 — no backlog term needed
+  there). So the chancery's health reaches the Grand Council through the Grand Secretary's own
+  standing, satisfying the HARD requirement that every bureaucracy's performance determines its
+  leader's council performance.
+- **D54 — CONVENE THE CHANCERY (票擬) lever + AI-autonomous pulse.** The panel's single lever fires
+  QING_secretariat_convene: clears 30 backlog + generates political influence scaled by the
+  secretary's charisma (charisma/2, echoing the #273 qing_secretariat.1 Edict Mill), +2 loyalty,
+  on a 270-day cooldown. `add_political_influence = var:X` is proven upstream (se_INCOME.txt:500).
+  Button is_valid MIRRORS the effect's own guard (present secretary + backlog ≥ 20 + no cooldown)
+  so it is never a live-but-no-op affordance. The quarterly QING_secretariat_pulse runs the drift
+  AI-side too; the #273 events remain the flavour beats layered on top.
+- **D55 — Opened from the Hanlin panel, not a new council button.** Since it is one office, the
+  內閣 window opens from a button INSIDE gui/qing_hanlin.gui (Execute + createwidget idiom), not a
+  new government_view.gui council-strip entry — reinforcing "one man, one office, two facets" and
+  avoiding council-strip clutter. Init guards on a dedicated `qing_secretariat_initialized` flag
+  (not the backlog var) per the #360 D49 ordering gotcha (perf recompute reads the backlog at
+  game-start before init).
