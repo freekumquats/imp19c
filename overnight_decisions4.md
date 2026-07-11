@@ -875,3 +875,47 @@ were actioned in commit ed4bcb10:
 - **New pattern rule:** a man seated in a great office must LEAVE any inner-court corps he served in (the
   corps rosters all exclude office-holders); strip his corps mark(s) in QING_office_appoint. Folded into the
   roster-panel archetype checklist alongside the office-held-exclusion rule from D65.
+
+
+---
+
+## D67 — #362 review COMPLETED (wf_3edbfa91-10b) — 1 CONFIRMED systemic fix (supersedes the D at line 709)
+
+The #362 adversarial review's **verify pass** completed (2026-07-11) and OVERTURNED its own find-pass:
+the three find-pass findings recorded earlier (R1 spam-click cooldown, R2 inspector double-count, R3
+disgraced-inspector ghost) were ALL ruled `real:false` — the code on disk already carries those fixes
+(the cooldown at QING_censorate_panel.txt:130/153, the `NOT={has_variable=qing_office_held}` at
+se_QING_MINISTRY.txt:764, the mark-strip at se_QING_CENSORATE.txt:147). Those were stale re-reports.
+
+**What the verify pass CONFIRMED instead (both verifier agents, `real:true`) — a genuine SYSTEMIC bug:**
+- The char-scoped appoint/recall panels (censor **and** zongli, guard, justice, personnel) run their
+  immediate refresh as `scope:player = { QING_ministry_recompute_perf_X = yes }`. In a `scope = character`
+  scripted_gui the execution ROOT is the appointed COURTIER; `scope:player = {}` changes THIS to the country
+  but **leaves ROOT = the character** (ROOT is immutable across an effect; a scope-nav block never re-roots —
+  proven by Invictus `bribe_mercenary_button` / `invest_in_state_button_effect`).
+- Inside the recompute every `employer = ROOT` then compared a courtier's employer (a country) to a
+  character → matched nobody. So on every appoint/recall: the corps roster rebuilt **EMPTY**, the count reset
+  to **0**, the office-filled gate failed → office read **VACANT** → `qing_min_perf_X` floored to **25** — the
+  exact opposite of the refresh's purpose. Self-healed only at the next monthly QING_GOV_pulse (ROOT=CHI).
+  Side effect: the `< 6` corps cap in is_valid was bypassable between pulses (count kept resetting to 0), and
+  an over-6 corps then inflated the corps-depth term after the pulse.
+- Severity: the second verifier rated it **major** (wrong roster + vacant-floored meter until next pulse,
+  cap bypass); the first rated the same root cause **minor** (transient, self-healing, the wrong meter never
+  reaches the council fold because the fold recomputes only at pulse time after a fresh ROOT=CHI recompute).
+  Either way it is a real runtime defect and shared across all 5 char-scoped panels.
+
+**FIX (the root-independent option both verifiers endorsed over the delete-the-refresh stopgap):** at the
+top of each of the 5 affected recomputes (`_zongli`, `_censor`, `_justice`, `_guard_commandant`,
+`_personnel`) capture `save_scope_as = qing_min_recompute_ctry` — THIS is the country in ALL THREE call
+contexts (pulse dispatcher, country-scoped open-button, and the `scope:player` wrapper) — then reference
+`scope:qing_min_recompute_ctry` in place of every `employer = ROOT` and every `ROOT = { ... }` write. The
+recompute is now root-independent, so the immediate panel refresh is correct regardless of the caller's ROOT
+and the pulse-path behaviour (ROOT=CHI) is unchanged. The war/works/rites/revenue/grand_secretariat/
+chamberlain/lifanyuan recomputes were left as-is — they have NO char-scoped callers (pulse + country open
+buttons only), so their `employer = ROOT` always resolves to CHI. Secretariat + harem panels are all
+`scope = country`. Commit on se_QING_MINISTRY.txt (braces 538/538).
+
+**New standing rule (folded into the roster-panel archetype checklist):** a corps recompute that a
+char-scoped panel refreshes MUST be root-independent — never rely on ROOT inside it. Capture the country
+via `save_scope_as` at the top and reference the saved scope, because a `scope:player = {}` wrapper around a
+scripted-effect call sets THIS but NOT ROOT.
