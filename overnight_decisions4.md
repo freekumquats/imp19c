@@ -1295,3 +1295,68 @@ set and the one-time event never re-offered. FIXED by moving each set_variable i
 (qing_opium.1/.3/.4 — fires only when the event actually fires). Same flag-leak class as the #367 khoja fix.
 
 **#368 adversarial review:** launched wf_e71fa6e0-64e (running).
+
+---
+
+## D78 — #369 Population / Migration / Famine Deep Model (人口壓力 / 人地矛盾 / 饑荒) — BUILT (commit ca52862fc)
+
+**GOAL:** the concrete-over-abstract standing driver over the mod's EXISTING one-shot demographic fragments.
+The suite already modelled the story in pieces — the New World crop boom fires ONCE and forks ONCE
+(qing_migration.20-.23), qing_granary_stock drifts as a famine reserve, and se_MIGRATION.txt is a full
+bottom-up migration engine with migr_gov_push/pull government levers — but NOTHING continuously drove them
+off the realm's crowding. #369 supplies that missing engine: a live qing_pop_pressure meter (0..100, 人口壓力)
+that MOUNTS with the population boom + involution (內卷) and RELAXES with New World crops / frontier
+resettlement / granary relief, continuously coupling the existing pieces. This is Hong Liangji 洪亮吉's 治平篇
+(c.1793) thesis — "China's Malthus", five years before Malthus — made into a live meter.
+
+**ENGINE (se_QING_POPULATION.txt, 91/91 braces):**
+- QING_pop_recompute_target — target = total_population/12000 (floored), +18 involution (crops fired, not
+  golden), +15 granary<30, −8 granary>=60, −12 frontier_resettlement flag, −10 golden crop; clamped 0..100.
+- QING_pop_pulse (quarterly, from QING_GOV_pulse after QING_princes_pulse) — recompute target; EASE the meter
+  1/4 toward it (hysteresis, matches the currency-stress design) via qing_pop_ease_tmp then remove it; couple
+  into migration (>=60 → QING_COLON_heartland_push count=3; <35 → clear); couple into sects (>=70 → nudge
+  qing_sect_pressure +2, the famine→rebellion linkage); offer .1 / .2.
+- 3 levers: QING_pop_relief_resettle (賑濟移墾, treasury>=60), QING_pop_tax_remission (蠲免, treasury>=30),
+  QING_pop_promote_resettlement (移民實邊, standing policy set-once). QING_pop_open_frontier_valve sets
+  migr_gov_pull=12 on owned provinces in Turkestan/Yunnan/Guizhou/Sichuan_Kham/Gansu/Qinghai.
+
+**FOLD (D3 — a REAL per-office drag, NOT the transitive harmony fold):** population pressure is a matter of
+STATE ADMINISTRATION, so it folds into the Board of Revenue (戶部), historically the keeper of the 黃冊 census
+and 常平倉 ever-normal granaries. Added ONE drag term (f) to QING_ministry_recompute_perf_revenue inside the
+office-FILLED branch (qing_pop_pressure/8 subtracted from qing_min_perf_revenue) — the SAME shape as the
+currency-stress (d) and corruption (e) drags. So a realm buckling under 人地矛盾 IS a Revenue-Minister failure
+on the Grand Council.
+
+**LAYER-DON'T-DUPLICATE:** qing_pop_pressure joins the EXISTING shared counter family (se_QING_DECLINE.txt:
+corruption/sect/currency/granary) — same clamped-nudge idiom (QING_DECLINE_nudge, amount=var: proven), same
+band-swap (QING_DECLINE_apply_pop_pressure_band: remove both, add current), same init (=20 if absent). Two
+bands (qing_population_modifiers.txt): strain>=45, crisis>=75. No new meter machinery.
+
+**EVENTS (qing_population_events.txt, 28/28):** .1 治平之憂 THE MEMORIAL ON POPULATION (pressure>=65: RELIEVE
+賑濟移墾 / REMIT 蠲免 / RESETTLE 移民實邊 / LET-NATURE 聽其自然 which nudges reform_pressure+3 & re-offers);
+.2 歲饑 FAMINE IN THE PROVINCES (pressure>=60 AND granary<=15: OPEN-GRANARIES 賑災 +add_legitimacy 4 /
+WORK-RELIEF 以工代賑 / CANNOT-RESPOND which nudges sect+12 pressure+6 stability−2 & re-offers). Once-only
+offered flags (qing_population_memorial_seen/_famine_seen) set in each event's OWN immediate, NOT the pulse —
+the #366/#368 flag-leak fix.
+
+**PANEL:** QING_population_panel.txt (6 scripted-guis, 31/31) + gui/qing_population.gui (67/67, menu_trade.dds
+icon) — pressure / granary / sect read-outs, resettlement banner gated on qing_population_is_resettling, 3
+lever buttons (each is_valid mirrors its effect's treasury/state guard — no dead clicks). Open button in
+government_view.gui after the court-intrigue (#368) button.
+
+**KEY DECISIONS / PROVEN-CODE:**
+- ALL primitives grep-verified proven in-repo (no oracle needed): total_population at country scope, the
+  clamped counter idiom (amount=var: reference), banded country modifiers, the migration levers
+  (QING_COLON_heartland_push count param, migr_gov_pull/push read by MIGRATION_push/pull_province), all 6
+  region keys (map_data/regions.txt), all 5 modifier tokens.
+- FRONTIER VALVE routes to the historically-OPEN valves only — Xinjiang 屯田 (Turkestan), the southwest
+  改土歸流 (Yunnan/Guizhou/Sichuan_Kham), Gansu/Qinghai — NOT Manchuria, which the 柳條邊 Willow Palisade kept
+  legally closed to Han settlement until ~1860 (research-flagged).
+- HYSTERESIS: the meter eases 1/4 toward a recomputed target rather than snapping, so a shock (bad harvest,
+  crop-boom fork) doesn't jump the band — matches the currency-stress design.
+- All LOG msgs STATIC. GUI text wraps. No create_character (no #90 risk — this is a pure counter model).
+
+**#369 adversarial review:** launched wf_9371b193-50a (running).
+
+**#368 adversarial review (wf_e71fa6e0-64e) result:** found the #368-R2 bare-order_by bug + #368-R3 per-reign
+flag bug — BOTH already fixed (commits cefe2f99e, 6e713560f) before this session resumed.
