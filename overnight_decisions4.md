@@ -58,6 +58,29 @@ Review this file when you're back. **Deferrals are called out at the very top.**
 
 ## Per-task decisions
 
+### #357 Zongli-Yamen global play-success factor + #354 Zongli Yamen panel — BUILT
+- **D22:** qing_min_perf_zongli = Director charisma (dev-7 x4) + DIPLOMAT-CORPS staffing
+  (count vs a healthy ~4, x2; empty corps penalised). Rebuilds qing_zongli_diplomats (a
+  courtier list flagged qing_zongli_diplomat) for the panel. Folds into the Director's
+  council standing via the shared fold.
+- **D23 (#357 the global factor):** QING_zongli_play_boost applies once per Qing pulse to
+  EACH of the Qing's OWN live plays (spliced into QING_gp_scan_plays' (A) instigator=self
+  branch, in the play-provobj scope): converts (perf-50)/25 into a ±success delta via
+  DIPLOMACY_modify_play_success (clamped 0..100, idempotent-safe to re-apply). So a well-run
+  Zongli advances every play, a poor one fumbles it — applies to ALL plays incl. the #356
+  marriage play. Reads the Qing perf var via $home$.var: (proven se_AI.txt:1202).
+- **D24 (#354 diplomats):** the "lower-ranked diplomats reporting to the Grand Director" are
+  courtiers flagged qing_zongli_diplomat, appointed via qing_zongli_appoint_diplomat (a new
+  row in the shared court picker keyed on qing_gc_picker_office='zongli_diplomat', capped at
+  6) and recalled from the panel roster. Reuses the proven picker + refresh idiom.
+- **REVIEW FIX (from #349 review, applied here too):** all scratch-var reads use `add =
+  var:X` — the bare-name `add = X` bug the #349 review caught (bare name resolves as an
+  undefined script_value = 0, pinning the meter at 50). Fixed the War + Lifan Yuan reads and
+  wrote the Zongli reads correctly from the start.
+- New files: QING_zongli_panel.txt, gui/qing_zongli.gui, qing_zongli_l_english.yml; edited
+  se_QING_MINISTRY.txt (+zongli perf +play-boost +dispatcher), se_QING_DIPLO.txt (scan
+  splice), imp19c_windows.gui (picker diplomat row), government_view.gui (button).
+
 ### #346 Frontier-garrison overlay + War↔Lifan-Yuan turf war — BUILT (pending review)
 - **D18 (overlay, not re-architecture):** the setup OOB deliberately raises subject-soil
   frontier garrisons UNDER the subject for engine placement-validity (#338/B21). #346 does

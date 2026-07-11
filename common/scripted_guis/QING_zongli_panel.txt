@@ -1,0 +1,112 @@
+########################################################################
+# QING_zongli_panel.txt — scripted GUIs for the Zongli Yamen panel (#354).
+#
+# The Office for the General Management of Affairs (總理衙門) bureaucracy: a
+# Grand-Council-clone L4 window headed by the Grand Director (總理衙門大臣), surfacing
+# the diplomat corps (駐外使臣) that reports to him, the ministry-performance meter
+# qing_min_perf_zongli (which folds into his Grand Council standing AND drives the
+# per-play success factor #357), and an appoint-a-diplomat action.
+#
+# Scoped to the Qing player (ROOT = CHI). AI never evaluates these (ai_is_valid = no).
+# Opened by qing_zongli_open_panel_button (a button in government_view.gui).
+# Window: gui/qing_zongli.gui. Prefix = qing_zongli_.
+########################################################################
+
+# ---- OPEN THE ZONGLI YAMEN PANEL (button in the government view) ------------
+qing_zongli_open_panel_button = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		LOG_line = { sys = QING  msg = "EVENT qing_zongli_open_panel_button fired; opening the Zongli Yamen panel for" }
+	}
+}
+
+# ---- DIRECTOR HOLDER INDICATOR ---------------------------------------------
+qing_zongli_filled = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_office_zongli_holder
+		var:qing_office_zongli_holder = { is_alive = yes  employer = ROOT }
+	}
+}
+
+qing_zongli_vacant = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		NOR = {
+			AND = {
+				has_variable = qing_office_zongli_holder
+				var:qing_office_zongli_holder = { is_alive = yes  employer = ROOT }
+			}
+		}
+	}
+}
+
+# ---- APPOINT A DIPLOMAT — flag a courtier as a member of the diplomat corps
+# (駐外使臣). Row action on the court-candidate picker (reuses qing_council_candidates,
+# the same court pool the Appoint window lists). Capped at 6 diplomats so the corps is
+# a select service, not the whole court. ROOT = the player; scope:target-style char
+# comes via the picker datacontext (GuiScope char + player).
+# ----------------------------------------------------------------------
+qing_zongli_appoint_diplomat = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+	}
+	is_valid = {
+		# an eligible, unassigned courtier of the player, corps not yet full.
+		is_alive = yes
+		is_adult = yes
+		employer = scope:player
+		NOT = { has_variable = qing_zongli_diplomat }
+		NOT = { has_variable = qing_office_held }
+		scope:player = {
+			OR = {
+				NOT = { has_variable = qing_zongli_diplomat_count }
+				var:qing_zongli_diplomat_count < 6
+			}
+		}
+	}
+	effect = {
+		# stamp the diplomat mark (read by QING_ministry_recompute_perf_zongli, which
+		# rebuilds the roster + count each pulse); a light prominence bump for the post.
+		set_variable = { name = qing_zongli_diplomat  value = 1 }
+		LOG_line = { sys = QING  msg = "zongli: a courtier appointed to the diplomat corps (駐外使臣) for" }
+		# recompute immediately so the panel + the count gate reflect the new appointee.
+		scope:player = { QING_ministry_recompute_perf_zongli = yes }
+	}
+}
+
+# ---- RECALL A DIPLOMAT — remove a serving diplomat from the corps. ----------
+qing_zongli_recall_diplomat = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		has_variable = qing_zongli_diplomat
+	}
+	is_valid = {
+		has_variable = qing_zongli_diplomat
+		employer = scope:player
+	}
+	effect = {
+		remove_variable = qing_zongli_diplomat
+		LOG_line = { sys = QING  msg = "zongli: a diplomat recalled from the corps for" }
+		scope:player = { QING_ministry_recompute_perf_zongli = yes }
+	}
+}
+
+# ---- CLOSE ------------------------------------------------------------------
+qing_zongli_close_panel = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_valid = { always = yes }
+	effect = { }
+}

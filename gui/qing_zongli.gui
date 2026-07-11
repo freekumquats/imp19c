@@ -1,0 +1,278 @@
+########################################################################
+# qing_zongli.gui — the Zongli Yamen panel window (#354).
+#
+# A Grand-Council-clone dashboard for the Office for the General Management of Affairs
+# (總理衙門): the Grand Director (總理衙門大臣) in the summit-card slot, the ministry-
+# performance meter qing_min_perf_zongli (folds into his Grand Council standing AND
+# drives the per-play success factor #357), and the diplomat corps (駐外使臣) that reports
+# to him as a scrolling roster with per-diplomat recall (the qing_zongli_diplomats list
+# built each pulse in se_QING_MINISTRY.txt).
+#
+# Opened by qing_zongli_open_panel_button (QING_zongli_panel.txt), wired to a button in
+# gui/government_view.gui. Mirrors gui/qing_war_ministry.gui (the #349 ref panel). Roster
+# datamodel idiom = imp19c_windows.gui:71 (Scope.GetCharacter + row action buttons).
+#
+# TAB indentation throughout (Paradox house style for .gui files).
+########################################################################
+
+base_window = {
+	name = "qing_zongli_panel"
+	size = { 520 700 }
+	allow_outside = yes
+	movable = yes
+
+	using = main_window_template
+
+	state = {
+		name = _show
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+	state = {
+		name = _hide
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+
+	flowcontainer = {
+		direction = vertical
+
+		# HEADER
+		widget = {
+			size = { 520 48 }
+			using = MainWindowHeaderBox
+			blockoverride "Title_text" { text = "QING_ZONGLI_PANEL_TITLE" }
+			blockoverride "FlagOrIcon" {
+				icon = {
+					texture = "gfx/interface/base_parts/yellow_button_color_200fs.dds"
+					framesize = { 100 100 }
+					frame = 6
+					position = { -2 -2 }
+					size = { 32 32 }
+					modify_texture = {
+						texture = "gfx/interface/icons/menu_buttons/menu_diplomacy.dds"
+						blend_mode = alphamultiply
+					}
+				}
+			}
+			blockoverride "White_buttons" {
+				button_close = {
+					onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_zongli_panel')]"
+					tooltip = "CLOSE"
+					shortcut = "close_window"
+				}
+			}
+		}
+
+		# BODY
+		margin_widget = {
+			size = { 520 640 }
+			margin = { 10 10 }
+
+			scrollarea = {
+				size = { 500 620 }
+				scrollbarpolicy_horizontal = always_off
+				scrollbar_vertical = { using = VerticalScrollBar }
+				using = VerticalScrollAreaCutOff
+				scrollwidget = {
+					flowcontainer = {
+						direction = vertical
+						spacing = 12
+
+						textbox = {
+							size = { 480 64 }
+							multiline = yes
+							using = BaseFontM
+							using = Default_FontColor
+							text = "QING_ZONGLI_PANEL_DESC"
+						}
+
+						# --- DIRECTOR + PERFORMANCE SECTION -----------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_ZONGLI_DIRECTOR_TITLE"
+							}
+
+							flowcontainer = {
+								visible = "[GetScriptedGui('qing_zongli_filled').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								spacing = 8
+								cpt_button = {
+									size = { 50 77 }
+									datacontext = "[Player.MakeScope.Var('qing_office_zongli_holder').GetCharacter]"
+								}
+								flowcontainer = {
+									direction = vertical
+									spacing = 4
+									textbox = {
+										size = { 380 24 }
+										using = BaseFontM
+										using = Default_FontColor
+										text = "[Player.MakeScope.Var('qing_office_zongli_holder').GetCharacter.GetName]"
+									}
+									flowcontainer = {
+										datacontext = "[Player.MakeScope.Var('qing_office_zongli_holder').GetCharacter]"
+										icon_and_text = {
+											size = { 70 24 }
+											blockoverride "Icon" { using = icon_oratory }
+											blockoverride "Text" { text = "[Character.GetCharisma]" }
+											tooltip = "[Character.GetCharismaToolTip]"
+										}
+									}
+								}
+							}
+
+							textbox = {
+								visible = "[GetScriptedGui('qing_zongli_vacant').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								size = { 460 26 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_ZONGLI_VACANT"
+							}
+
+							# performance meter (qing_min_perf_zongli)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 180 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_ZONGLI_PERF_LABEL"
+									tooltip = "QING_ZONGLI_PERF_TT"
+								}
+								textbox = {
+									size = { 40 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_min_perf_zongli').GetValue|0]"
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 220 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_min_perf_zongli').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
+							}
+
+							# the play-success effect this directorate has (#357)
+							textbox = {
+								size = { 460 40 }
+								multiline = yes
+								using = BaseFontS
+								using = Default_FontColor
+								text = "QING_ZONGLI_PLAYFACTOR_NOTE"
+							}
+
+							# contribution to the Grand Council
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 300 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_MINISTRY_COUNCIL_CONTRIB_LABEL"
+									tooltip = "QING_MINISTRY_COUNCIL_CONTRIB_TT"
+								}
+								textbox = {
+									size = { 60 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_min_perf_council_mod').GetValue|0]"
+								}
+							}
+						}
+
+						# --- DIPLOMAT CORPS SECTION -------------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_ZONGLI_CORPS_TITLE"
+							}
+
+							# appoint-a-diplomat: opens the court candidate picker (shared with Appoint)
+							text_button_square_highlighted = {
+								size = { 220 28 }
+								blockoverride "Center_text" { text = "QING_ZONGLI_APPOINT_BTN"  max_width = 200 }
+								blockoverride "On_click" {
+									onclick = "[GetVariableSystem.Set('qing_gc_picker_office', 'zongli_diplomat')]"
+									onclick = "[GetScriptedGui('qing_gov_council_refresh_candidates').Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ExecuteConsoleCommand('gui.createwidget gui/imp19c_windows.gui qing_office_picker_window')]"
+								}
+								tooltip = "QING_ZONGLI_APPOINT_TT"
+							}
+
+							textbox = {
+								visible = "[IsDataModelEmpty( Player.MakeScope.GetList('qing_zongli_diplomats') )]"
+								size = { 460 26 }
+								using = BaseFontS
+								using = Default_FontColor
+								text = "QING_ZONGLI_CORPS_EMPTY"
+							}
+
+							# the diplomat roster with per-diplomat recall
+							dynamicgridbox = {
+								datamodel = "[Player.MakeScope.GetList('qing_zongli_diplomats')]"
+								datamodel_wrap = 1
+								item = {
+									widget = {
+										size = { 468 84 }
+										margin = { 2 3 }
+										datacontext = "[Scope.GetCharacter]"
+										using = background_widget
+										flowcontainer = {
+											spacing = 8
+											margin = { 8 6 }
+											cpt_button = { size = { 46 68 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = { text = "[Character.GetName]"  maximumsize = { 260 24 }  using = BaseFontM  using = Default_FontColor }
+												flowcontainer = {
+													datacontext = "[Character.MakeScope]"
+													icon_and_text = {
+														size = { 70 24 }
+														blockoverride "Icon" { using = icon_oratory }
+														blockoverride "Text" { text = "[Character.GetCharisma]" }
+														tooltip = "[Character.GetCharismaToolTip]"
+													}
+												}
+											}
+											widget = {
+												size = { 90 68 }
+												text_button_square_highlighted = {
+													parentanchor = vcenter
+													size = { 84 28 }
+													datacontext = "[GetScriptedGui('qing_zongli_recall_diplomat')]"
+													visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													blockoverride "Center_text" { text = "QING_ZONGLI_RECALL_BTN"  max_width = 78 }
+													blockoverride "On_click" {
+														enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+														onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													}
+													tooltip = "QING_ZONGLI_RECALL_TT"
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

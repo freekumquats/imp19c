@@ -28,9 +28,10 @@ QING_ministry_recompute_all_perf = {
 		limit = { tag = CHI }
 		QING_ministry_recompute_perf_war = yes
 		QING_ministry_recompute_perf_lifanyuan = yes
-		# (Works #351, Rites #353, Zongli #354, Revenue #355, Personnel #365, Justice #363,
-		#  Censorate #362, Central Secretariat #361, Imperial Household #359, Imperial Guard
-		#  #364 each append their recompute call here as they ship.)
+		QING_ministry_recompute_perf_zongli = yes
+		# (Works #351, Rites #353, Revenue #355, Personnel #365, Justice #363, Censorate #362,
+		#  Central Secretariat #361, Imperial Household #359, Imperial Guard #364 each append
+		#  their recompute call here as they ship.)
 	}
 }
 
@@ -80,7 +81,7 @@ QING_ministry_recompute_perf_war = {
 		change_variable = { name = qing_min_war_scratch  add = scope:qing_war_minister.martial }
 		change_variable = { name = qing_min_war_scratch  subtract = 7 }
 		change_variable = { name = qing_min_war_scratch  multiply = 4 }
-		change_variable = { name = qing_min_perf_war  add = qing_min_war_scratch }
+		change_variable = { name = qing_min_perf_war  add = var:qing_min_war_scratch }
 		# (b) OFFICER-CORPS COVERAGE — is the standing army adequately officered? A count
 		# term (deviation from a healthy establishment of ~10 serving commanders), x2. We
 		# use COUNT, NOT average martial: the corps' average MARTIAL is ALREADY folded into
@@ -95,7 +96,7 @@ QING_ministry_recompute_perf_war = {
 			set_variable = { name = qing_min_war_scratch  value = var:qing_war_roster_count }
 			change_variable = { name = qing_min_war_scratch  subtract = 10 }   # deviation from a healthy establishment
 			change_variable = { name = qing_min_war_scratch  multiply = 2 }
-			change_variable = { name = qing_min_perf_war  add = qing_min_war_scratch }
+			change_variable = { name = qing_min_perf_war  add = var:qing_min_war_scratch }
 		}
 		else = {
 			# no serving officer corps at all — a paper ministry; a real penalty.
@@ -158,7 +159,7 @@ QING_ministry_recompute_perf_lifanyuan = {
 		change_variable = { name = qing_min_lifan_scratch  add = scope:qing_lifan_director.charisma }
 		change_variable = { name = qing_min_lifan_scratch  subtract = 7 }
 		change_variable = { name = qing_min_lifan_scratch  multiply = 4 }
-		change_variable = { name = qing_min_perf_lifanyuan  add = qing_min_lifan_scratch }
+		change_variable = { name = qing_min_perf_lifanyuan  add = var:qing_min_lifan_scratch }
 		# (b) AMBAN COVERAGE — fraction of warrant subjects with a resident, scaled to +/-.
 		# coverage% = 100 * amban / warrant; deviation from a target of 100% (full coverage),
 		# divided down so an uncovered dependency is a real but bounded drag.
@@ -169,7 +170,7 @@ QING_ministry_recompute_perf_lifanyuan = {
 			change_variable = { name = qing_min_lifan_scratch  divide = var:qing_lifan_warrant_count }  # coverage %
 			change_variable = { name = qing_min_lifan_scratch  subtract = 100 }   # deviation from full coverage (<=0)
 			change_variable = { name = qing_min_lifan_scratch  divide = 4 }        # scale (0..-25)
-			change_variable = { name = qing_min_perf_lifanyuan  add = qing_min_lifan_scratch }
+			change_variable = { name = qing_min_perf_lifanyuan  add = var:qing_min_lifan_scratch }
 		}
 	}
 	else = {
@@ -180,4 +181,94 @@ QING_ministry_recompute_perf_lifanyuan = {
 	if = { limit = { var:qing_min_perf_lifanyuan < 0 }   set_variable = { name = qing_min_perf_lifanyuan  value = 0 } }
 	if = { limit = { var:qing_min_perf_lifanyuan > 100 } set_variable = { name = qing_min_perf_lifanyuan  value = 100 } }
 	LOG_line = { sys = QING  msg = "lifan-yuan performance recomputed" }
+}
+
+# ======================================================================
+# [#354/#357] ZONGLI YAMEN (總理衙門) PERFORMANCE — qing_min_perf_zongli (0..100,
+# 50 = adequate). The Office for the General Management of Affairs administered the
+# Qing's modern foreign relations. Its performance is built from:
+#   • the Grand Director's own charisma (總理衙門大臣 — charisma is its governing skill, x4),
+#   • the DIPLOMAT CORPS it fields — lower-ranked diplomats (駐外使臣) reporting to the
+#     Director (qing_zongli_diplomats list), scored on their count + average charisma
+#     vs a healthy establishment. A staffed, able foreign service runs the plays well.
+# A VACANT Zongli office floors the meter low. Also rebuilds qing_zongli_diplomats
+# (the diplomat roster the panel #354 renders). The meter drives BOTH the fold into the
+# Director's Grand Council standing AND the per-play success nudge (#357,
+# QING_zongli_play_boost, applied in QING_gp_scan_plays). All reads guarded; O(court).
+# ======================================================================
+QING_ministry_recompute_perf_zongli = {
+	# --- rebuild the diplomat corps roster (panel datamodel) + tally count/skill.
+	# A "diplomat" = a courtier flagged qing_zongli_diplomat (stamped when appointed to
+	# the corps; the corps seeding/appointment lives with the #354 panel). Bounded O(court).
+	clear_variable_list = qing_zongli_diplomats
+	set_variable = { name = qing_zongli_diplomat_count  value = 0 }
+	set_variable = { name = qing_zongli_diplomat_charisma  value = 0 }
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			has_variable = qing_zongli_diplomat
+		}
+		ROOT = {
+			add_to_variable_list = { name = qing_zongli_diplomats  target = prev }
+			change_variable = { name = qing_zongli_diplomat_count  add = 1 }
+			change_variable = { name = qing_zongli_diplomat_charisma  add = prev.charisma }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_zongli  value = 50 }
+	if = {
+		# office FILLED — score on the Director's charisma + the diplomat corps.
+		limit = {
+			has_variable = qing_office_zongli_holder
+			var:qing_office_zongli_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the Director's charisma, deviation from a competent baseline of 7, x4.
+		var:qing_office_zongli_holder = { save_scope_as = qing_zongli_director }
+		set_variable = { name = qing_min_zongli_scratch  value = 0 }
+		change_variable = { name = qing_min_zongli_scratch  add = scope:qing_zongli_director.charisma }
+		change_variable = { name = qing_min_zongli_scratch  subtract = 7 }
+		change_variable = { name = qing_min_zongli_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_zongli  add = var:qing_min_zongli_scratch }
+		# (b) DIPLOMAT CORPS — a staffed foreign service. Count term (deviation from a
+		# healthy ~4 diplomats), x2; a corps of zero is a real penalty.
+		if = {
+			limit = { var:qing_zongli_diplomat_count > 0 }
+			set_variable = { name = qing_min_zongli_scratch  value = var:qing_zongli_diplomat_count }
+			change_variable = { name = qing_min_zongli_scratch  subtract = 4 }   # deviation from a healthy corps
+			change_variable = { name = qing_min_zongli_scratch  multiply = 2 }
+			change_variable = { name = qing_min_perf_zongli  add = var:qing_min_zongli_scratch }
+		}
+		else = {
+			change_variable = { name = qing_min_perf_zongli  subtract = 8 }
+		}
+	}
+	else = {
+		# VACANT Zongli Yamen — no one manages foreign relations. Floor it low.
+		set_variable = { name = qing_min_perf_zongli  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_zongli < 0 }   set_variable = { name = qing_min_perf_zongli  value = 0 } }
+	if = { limit = { var:qing_min_perf_zongli > 100 } set_variable = { name = qing_min_perf_zongli  value = 100 } }
+	LOG_line = { sys = QING  msg = "zongli-yamen performance recomputed" }
+}
+
+# ======================================================================
+# [#357] QING_zongli_play_boost — the Zongli Yamen's per-play success factor. Applied
+# once per Qing pulse to EACH of the Qing's live diplomatic plays (from QING_gp_scan_plays,
+# the (A) instigator=self branch). Scope: the PLAY PROVOBJ. A capable, well-staffed Zongli
+# (qing_min_perf_zongli > 50) nudges the play's success UP; a poor/vacant one (< 50) drags
+# it DOWN — the foreign service either advances the crisis or fumbles it. Counter-only +
+# clamped (DIPLOMACY_modify_play_success clamps 0..100), so it is idempotent-safe to
+# re-apply every pulse (like the GP-tension pressure it rides alongside). ROOT = CHI is
+# passed as $home$ so the provobj can read the Qing's perf var.
+# ======================================================================
+QING_zongli_play_boost = {
+	# convert (perf - 50) into a small per-pulse success delta: +/-50 perf -> +/-2 success.
+	# read the Qing's perf var off the passed home country.
+	set_variable = { name = qing_zongli_play_delta  value = $home$.var:qing_min_perf_zongli }
+	change_variable = { name = qing_zongli_play_delta  subtract = 50 }
+	change_variable = { name = qing_zongli_play_delta  divide = 25 }   # ~ +/-2 at the rails
+	DIPLOMACY_modify_play_success = { amt = var:qing_zongli_play_delta }
+	remove_variable = qing_zongli_play_delta
 }
