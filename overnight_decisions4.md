@@ -1411,6 +1411,35 @@ population button. menu_trade.dds icon (verified present). qing_caravan_modifier
 picture=trade_port (the undefined `trade` was swapped out). All LOG msgs STATIC. GUI text wraps. No
 create_character (no #90 risk — pure counter/lever model). All files brace-balanced (+0).
 
-**#370 adversarial review:** launched wf_d3352c2a-a5c (running).
+**#370 adversarial review:** first run (wf_d3352c2a-a5c) result was lost when the tmp task dir
+rolled over at the date change; re-run fresh as wf_9e226c8e-904 (running).
 
-**#369 adversarial review (wf_9371b193-50a):** result still owed — check when it lands.
+**#369 adversarial review (wf_9371b193-50a) — DONE, 2 real bugs found + fixed (commit 253f63f2):**
+- **BLOCKER** — `QING_pop_recompute_target` scaled `total_population` by `/12000`. At country
+  scope `total_population` is the COUNT of pop objects (~40k for CHI at 1763), so the crowding
+  base pinned to ~4; the meter (seeded 20) eased DOWN to ~4 and NEVER crossed the strain(45) /
+  crisis(75) / event(60/65) bands — the whole Malthusian dynamic was inert. **Fix:** divisor
+  `/12000 → /1200` (base crowding ~34, a sane High-Qing baseline the +18 involution / +15
+  thin-granary offsets push into the strain/crisis/event bands). se_QING_POPULATION.txt:62.
+- **MAJOR** — `QING_pop_pulse`'s `pressure < 35` branch called `QING_COLON_clear_heartland_push`
+  UNCONDITIONALLY, stripping `migr_gov_push` from every owned province each quarter and wiping
+  the crop-boom events' (qing_migration.20/.23.b) own push within one quarter — silently
+  defeating the boom's frontier out-migration. **Fix:** guarded the clear with
+  `NOR = { has_country_modifier = qing_migr_crop_boom  has_country_modifier = qing_migr_overpopulation }`.
+  se_QING_POPULATION.txt:129-144.
+- A verifier also flagged one MINOR (same clear-strips-boom-push class) — subsumed by the MAJOR
+  fix's NOR guard. One claim (integer-truncation on `divide = 4`) was correctly REFUTED: Imperator
+  script vars are floating-point, so the 1/4 hysteresis ease is fractional as intended.
+
+## D80 — #371 mod-wide raw-integer add_loyalty audit (DONE, commit ecc4b9b6)
+
+**Thesis:** `add_loyalty` takes a NAMED loyalty modifier, never a raw integer — a raw-int call
+silently no-ops (verified: 0 raw-int uses across 1,918 reference usages in Invictus + Terra
+Indomita; self-documented at 00_imp19c_loyalty.txt:35). A prior sweep left 54 raw-int
+`add_loyalty = <n>` sites across the Qing feature code, every one of which was doing NOTHING.
+
+**Fix:** appended a graduated loyalty-delta ladder to common/loyalty/00_imp19c_loyalty.txt —
+`loyalty_qing_delta_p1/p2/p3/p5/p10/p12/p15/p20` and `_n1…_n20` (18 rungs; each `value = <signed>`,
+`yearly_decay 1` if |v|≤5 else 2, `min = v*2` on negatives) — and converted all 54 sites across 13
+files (`add_loyalty = <int>` → `add_loyalty = loyalty_qing_delta_[pn]<abs>`). Now the loyalty
+nudges these events/effects always intended actually land.
