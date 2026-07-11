@@ -1012,3 +1012,28 @@ QING_DECLINE_nudge, and add_finesse/add_martial on live chars (proven Invictus
 scripted_gui (the proven negation idiom). All LOG msgs static (#253). Cap = 6 masters.
 
 Adversarial review launched next.
+
+## D71 — CANDIDATE REORDER: #366 (Silver/Opium monetary) DEFERRED past #367 (Xinjiang) [COLLISION, not size]
+
+Reordering the remaining candidate builds: **#367 Xinjiang Consolidation Arc is built before #366
+Silver/Opium Monetary Model.** This is a COLLISION reason, not a size deferral (the standing rule
+is: don't defer for size/complexity alone):
+
+- **#366 collides with in-flight currency work.** The five most-recent master commits are ALL
+  currency-layer refactors (2cc43112 foreign-influence listing, 65bf36c7 global-currency tooltip,
+  d40c5c2b currency-power tooltip, plus se_CURRENCY / CURRENCY_svalues / se_CURRENCY_STRESS actively
+  extended). A Qing silver/opium balance-of-trade model layered on top of a framework the user is
+  currently rewriting risks immediate rework + merge conflict. There is ALSO already a
+  qing_currency_stress silver-drain band mechanic (se_QING_DECLINE.txt) + a concrete smuggler-pod
+  spawn (#91 item O) — #366 would need to reconcile with both. Better built once the currency
+  refactor settles + with the user's input on the framework's final shape. NOT abandoned — sequenced.
+
+- **#367 fits the 1763 zenith perfectly + is low-collision.** The Dzungar genocide + Altishahr
+  (回部) conquest concluded 1759; in 1763 consolidation of the new 新疆 ("New Frontier") is THE live
+  issue. It is concrete (real ILI/XNG subjects, frontier garrisons, provinces) and the existing
+  se_QING_FRONTIER.txt overlay + amban/subject machinery give proven hooks to LAYER on (tuntian
+  military colonies, the beg 伯克 system, Han settler inflow, khoja-revolt risk) rather than
+  duplicate. Building #367 next.
+
+(#368 Court Intrigue, #369 Population/Famine, #370 Silk Road caravan remain after; #371 add_loyalty
+audit is independent and can slot in any time.)
