@@ -725,3 +725,38 @@ the throne's succession engine, not a new council seat. New se_QING_HAREM.txt + 
   Minister of Justice is now EXCLUDED from QING_justice_find_accusable + the accuse-lever gate (proven
   `this = scope:X` char-equality), so he can never be charged onto his own docket (which would double-role
   him). Fixes committed together in the follow-up commit.
+
+
+---
+
+## D62 — #364 Imperial Guard panel (領侍衛內大臣, guard_commandant office)
+
+- **Two concrete objects for the guard_commandant office** (whose Grand Council office was already
+  fully wired — emperor-power-base reconcile + sovereign-vitality modifiers in se_QING_COUNCIL.txt,
+  UNCHANGED):
+  1. a **CORPS of 侍衛 guardsmen** — real courtiers enrolled into the guard (marked
+     qing_is_imperial_guardsman, capped at 6), rebuilt into the qing_guard_corps variable_list each
+     pulse by QING_ministry_recompute_perf_guard_commandant. Enrol via the SHARED court picker
+     (qing_gc_picker_office = 'imperial_guardsman' → new picker row in imp19c_windows.gui), discharge
+     per-row from the panel. The corps-roster archetype (Censorate #362 / Justice #363).
+  2. the **BAYARA GUARD (巴牙喇)** — a raise-once elite legion the player musters at the capital.
+- **DEVIATION FROM THE DESIGN DOC (recorded per directive):** overnight_design4.md:152 called for a
+  brand-new elite unit *type* in common/units/bayara.txt modeled on regular_infantry.txt. I DELIBERATELY
+  did NOT create a new unit type — a new unit type needs GFX (model/sprite/icon), tech-gating, and AI
+  build-weights that cannot be tested headless (placeholder-icon risk, per the standing GFX rule). Instead
+  the Bayara Guard is a **real raised legion** via the PROVEN raise_legion / capital_scope.state.governorship
+  idiom (se_QING_ILI.txt:430, se_QING_SELFSTR.txt:340): 4× regular_infantry + 1 artillery, named "Bayara
+  Guard". This delivers the "elite bodyguard corps under arms" concretely, on the map, at ZERO GFX risk.
+  Readiness flag qing_bayara_guard_raised gates the muster (raise-once, no dead-affordance).
+- **LATENT COUNCIL-FOLD BUG CLOSED (3rd of the class — after censor #362, justice #363):**
+  qing_min_perf_guard_commandant was enumerated in QING_council_perf_accumulate (se_QING_COUNCIL.txt:1395)
+  but NEVER SET, so the self-guarding fold silently DROPPED the Commandant from the council average. Added
+  QING_ministry_recompute_perf_guard_commandant (base 50 + (martial−7)×4 + loyalty≥50 ? +6 + (corps−4)×2 +
+  bayara-raised ? +10; vacant floor 25; clamp 0..100; rebuilds qing_guard_corps EXCLUDING great-office
+  holders per the #362-R2 double-count fix) and registered it in QING_ministry_recompute_all_perf.
+- **Enrol exclusion (baked-in #362-R2):** a great-office holder cannot also serve as a guardsman — the
+  enrol verb + roster rebuild both exclude qing_office_held, so no double-role / double-count.
+- Files: se_QING_GUARD.txt (new — muster verbs), QING_guard_panel.txt (new — scripted GUIs),
+  gui/qing_guard.gui (new — the window), se_QING_MINISTRY.txt (perf-compute + dispatcher registration),
+  government_view.gui (open button after the Justice button), imp19c_windows.gui (imperial_guardsman
+  picker row), qing_guard_l_english.yml (panel loc appended to the #273 events loc). Commit 8538087c.
