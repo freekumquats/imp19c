@@ -798,3 +798,80 @@ the throne's succession engine, not a new council seat. New se_QING_HAREM.txt + 
 - Files: QING_personnel_panel.txt (new), qing_personnel.gui (new), se_QING_MINISTRY.txt (compute +
   dispatcher), government_view.gui (open button after the Guard button), qing_personnel_panel_l_english.yml
   (new loc). Commit 1641dc32.
+
+---
+
+## D64 — #364 review-fix (adversarial review wf_0afce0ec-c63)
+
+- **Bug (major, both review agents concurring):** the Bayara-Guard readiness read-out in
+  gui/qing_guard.gui:195/202 gated its "Under arms" / "Not mustered" textboxes on
+  `Player.MakeScope.Exists( ...GetVariable('qing_bayara_guard_raised') )`. `.Exists` is NOT a scope
+  accessor — a country Scope exposes only GetVariable/Var/GetList/GetCharacter/ScriptValue; the only
+  `.Exists` in the engine is `GetVariableSystem.Exists('literal_key')`. The datafunction failed to
+  resolve, leaving the Bayara line permanently blank regardless of muster state.
+- **Fix:** replaced with the mod's proven idiom `.GetVariable('qing_bayara_guard_raised').IsSet` (used
+  30× in gui/province_window.gui shortage read-outs). Swept gui/ for the same invalid `.Exists(` pattern
+  in Qing panels — no other leaks. Braces 110/110. Commit f4fc3db6.
+- **Lesson (added to the GUI-accessor rule):** `Player.MakeScope` value-presence tests use
+  `.GetVariable('x').IsSet`, never `.Exists(...)`; reserve `.Exists('literal')` for GetVariableSystem.
+
+---
+
+## D65 — #363 review-fix (adversarial review wf_7b9c40c7-9ff)
+
+- **Bug (major):** QING_ministry_recompute_perf_justice's docket-roster rebuild (se_QING_MINISTRY.txt:840)
+  omitted the `NOT = { has_variable = qing_office_held }` exclusion the sibling censor (#362-R2) and guard
+  (#364) rosters carry. Failure path: an accused courtier (qing_justice_accused) who is later autofilled
+  into a great office — QING_council_autofill_office excludes only sitting office-holders, not accused men —
+  would be double-counted: scored as the sitting Minister of Justice's zeal AND tallied in
+  qing_justice_docket_count (hit by the term-(c) backlog drag), and rendered as a Convict/Acquit row against
+  himself in the panel. This is the exact double-role find_accusable's sitting-minister exclusion prevents.
+- **Fix:** added `NOT = { has_variable = qing_office_held }` to the docket-sweep limit, matching censor/guard.
+  Braces 525/525. Commit follows.
+- **Pattern note:** this is the 3rd roster-rebuild to need the office-held exclusion (censor #362-R2, guard
+  #364, now justice #363). The corps-roster archetype MUST carry `NOT={has_variable=qing_office_held}` in its
+  every_character limit — folded into the archetype checklist for #336 and all future roster panels.
+
+---
+
+## D66 — #363/#364 SECOND-round review-fixes (adversarial verify passes)
+
+The full review workflows (which run a find pass THEN an adversarial verify pass) surfaced findings the
+first partial reads had not; my earlier D64/D65 fixes were confirmed, and these NEW confirmed findings
+were actioned in commit ed4bcb10:
+
+**#363 Board of Punishments (wf_7b9c40c7-9ff):**
+- MAJOR — ACCUSE could charge a courtier who holds a DIFFERENT great office, but the docket rebuild (which
+  I had just guarded with NOT={qing_office_held} in D65) excludes office-holders. So charging one produced
+  an accused man who NEVER appeared on the docket: the lever visibly no-op'd and left a permanent, un-triable
+  qing_justice_accused mark (a phantom docket entry once he later lost office). FIX: widened both
+  QING_justice_find_accusable's limit AND the accuse is_valid gate to NOT={has_variable=qing_office_held}
+  (subsumes the old sitting-Justice-minister-only exclusion). Now the accuse filters + docket rebuild agree.
+- MINOR — ACQUIT required no seated Minister while CONVICT did → a headless Board could dispense clemency
+  (+ free loyalty_qing_commended) during a vacancy. FIX: mirrored the seated-minister gate onto acquit.
+
+**#364 Imperial Guard (wf_0afce0ec-c63):**
+- MAJOR — qing_bayara_guard_raised was set once and NEVER cleared, fully decoupled from the legion's
+  existence: a Bayara wiped in battle kept its +10 readiness (term d) forever AND left the raise-once muster
+  permanently spent (dead affordance). FIX: re-coupled the flag to the concrete legion's lifetime. The muster
+  now creates a MARKED founding commander (qing_is_bayara_commander) and attaches him via the proven
+  create_character + add_to_legion=PREV + random_legion_unit set_as_commander idiom
+  (se_QING_SELFSTR.txt:364); QING_ministry_recompute_perf_guard_commandant then AUTHORITATIVELY re-derives
+  the flag each pulse from any_legion_commander{has_variable=qing_is_bayara_commander} — set while the marked
+  commander still leads a legion, cleared once the Bayara is destroyed/disbanded. This simultaneously stops
+  the +10 leak and reopens the muster.
+  - REJECTED the reviewer's suggested fix (mark the legion + clear via on_legion_dissolved): NO variable is
+    ever held on a legion scope in vanilla, Invictus, Terra-Indomita, Tianxia, or our own mod, and
+    on_legion_dissolved is used nowhere — an UNPROVEN engine capability. Per the proven-idioms-only +
+    oracle-before-unproven standing rules, I re-derived from the PROVEN any_legion_commander country iterator
+    instead. New loc key NICKNAME_QING_BAYARA_COMMANDER.
+- MINOR — the cap-6 guardsman corps could be exceeded via an office round-trip: a guardsman's
+  qing_is_imperial_guardsman mark was not cleared when he took a great office, and the corps recompute
+  excludes office-holders, so a returning ex-officer silently rejoined the corps as a hidden 7th without
+  passing the enrol gate. FIX: QING_office_appoint now strips all three inner-court corps marks
+  (qing_is_imperial_guardsman / qing_is_censor_inspector / qing_zongli_diplomat) on seating — the guard has
+  the only hard cap, but batching all three keeps every enrol cap exact and forestalls the same latent leak
+  in the Censorate + Zongli corps.
+- **New pattern rule:** a man seated in a great office must LEAVE any inner-court corps he served in (the
+  corps rosters all exclude office-holders); strip his corps mark(s) in QING_office_appoint. Folded into the
+  roster-panel archetype checklist alongside the office-held-exclusion rule from D65.
