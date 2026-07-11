@@ -474,3 +474,26 @@ se_QING_HOUSEHOLD.txt substrate (privy purse, eunuchs, workshops) + its 4 events
   missing UTF-8 BOM breaks CJK rendering" finding: 5 sibling CJK panels already ship BOM-less on
   master (user-verified-in-game) and render fine; the loader decodes valid UTF-8 without a BOM. No
   action. (Recorded so the deferrals section doesn't re-surface it.)
+
+---
+
+## Review fix — #359 (review wo4tx38hv, MAJOR)
+
+- **#359 privy-purse lever false affordance.** `qing_household_manage_purse`'s is_valid gated only
+  on `has_variable = qing_privy_purse`, but the event it fires (qing_household.1) is
+  is_triggered_only with trigger `var:qing_privy_purse < 35`, re-checked at fire time. Since
+  QING_household_init seeds the purse to 50, the button was live at game start yet fired a silent
+  no-op (the event dropped itself). The sibling eunuch + workshop levers correctly mirror their
+  events' gates; only this one omitted it. FIX: add `var:qing_privy_purse < 35` to the lever's
+  is_valid + update the tooltip to state the low-purse requirement. Commit 13e641cce. (All 3
+  confirmed findings were the same bug, de-duplicated.)
+
+## Review fix — #358 (review wru2g1xcn, minor)
+
+- **#358 Draw-a-Laureate inert when council full.** `qing_hanlin_draw_scholar`'s is_valid gated
+  only on a waiting un-officed scholar in qing_scholar_pool, not on an actual office vacancy. With
+  all 13 offices manned the button stayed enabled, QING_exam_fill_first_vacant_from_pool no-op'd,
+  yet the effect logged a false success — contradicting the lever's own comment/tooltip. FIX: add
+  `has_variable = qing_council_vacancy` + `var:qing_council_vacancy > 0` (maintained by
+  QING_council_recompute, exact 13-office scope). Commit a051ee49b. (All 3 confirmed findings were
+  the same bug.)
