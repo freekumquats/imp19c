@@ -18,8 +18,10 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 - **File:** `common/scripted_effects/imp19c_effects_legion_setup.txt` — `SE_qing_raise_garrison` (line ~94) + `SE_qing_raise_garrison_cmd` (line ~135). Raised from `SE_qing_armies`, fired via `qing_force_setup.1`.
 - **✅ ROOT CAUSE FOUND + FIXED (B21-v3 — supersedes v1/v2; the user confirmed it was ALWAYS broken, incl. the absolute-token builds).** So the location TOKEN was never the fix. Oracle diagnosis (2026-07-11, HIGH confidence, 3 parallel investigations vs Invictus/vanilla) found the load-bearing bug is the **`$prov$ = { owner = { create_unit } }` PROVINCE→OWNER wrapper itself**: entering the country scope THROUGH a province scope makes the new unit's placement re-resolve against the scope-entry context (collapsing to ROOT's capital = Beijing) instead of honouring the absolute `location` token. Every proven reference spawn issues create_unit **DIRECTLY in a bare country scope** with an absolute `location = p:X` token and NEVER via `p:X = { owner = { } }` — Invictus `invasions.2` (2 land units, 1 tick, bare country scope), `galatian_invasion.10` (`create_unit { navy=no location=p:384 }`), `me_tasm.13` (3 navies at 3 ports, 1 tick), vanilla `me_duuchuu.5` (12 navies, 1 tick). Commander is NOT required (commanderless creates outnumber commanded 203:66 in Invictus and persist). **FIX:** `SE_qing_raise_garrison`/`_cmd` now do `$prov$ = { owner = { save_scope_as = garrison_owner } }` then `scope:garrison_owner = { create_unit { navy=no location=$prov$ ... } }` — a BARE country scope (c:CHI, or the frontier SUBJECT that owns the province), absolute location token, no province→owner wrapper. Adversarially reviewed → 0 findings.
 - **Severity:** MAJOR — RESOLVED (pending boot-test confirmation). ⚠️ This is the FIRST time the actual wrapper (not the token) was addressed; all prior "fixes" (incl. c6d04a26) only changed the token and left the wrapper, so they never worked.
+- **❌ BOOT-TEST 2026-07-10 (build c7cc248d): STILL BROKEN.** User: "I see 22 armies stacked on Beijing, none of which have commanders." So the v3 wrapper-removal fix ALSO failed — IDENTICAL symptom to every prior build. TWO independent code theories (v1 location-token, v3 wrapper-removal) now produce the EXACT same result → both falsified. Plus a NEW datapoint: **no commanders attach either.** The `commander = $cmd$` inline field is also being ignored at `on_game_initialized`. Conclusion forming: at game-init time `create_unit` honours NEITHER `location=` NOR `commander=` for these land units — the problem is likely the FIRING CONTEXT (on_game_initialized), not the scope idiom. STOP blind-coding scope variants. Need the DECISIVE artifact (see below) before the next attempt.
 
 ---
+- **🔑 NEW RUNTIME CLUE (boot-test 2026-07-10):** User: "I don't see any other [non-Qing] armies raised, though I did see some armies popping up in Qing vassals (this is probably the same garrison script) — however they are gone now, not sure if AI manually disbanded them or a bug." IMPLICATIONS: (a) garrisons raised in SUBJECT-owned frontier provinces (Ili p:3534 etc. via the scope:garrison_owner = <subject> branch) DID appear AT THE CORRECT PROVINCE — so `location = p:X` WAS honoured there, partially CONTRADICTING the "engine ignores location" theory; (b) they then DISAPPEARED — so the real mechanism may be post-creation CULLING/DISBAND, not misplacement. That reframes B21/B22: units are created (some at the right place), then merged/relocated/disbanded. Suspects to check in logs: the SE_qing_navy_disband `every_navy = { destroy_unit }` (does an analogous army-disband exist / does every_navy catch land units?); AI vassal auto-disband of a handed-down legion it can't afford; or the units being created UNDER the subject (owner=subject) then culled when the subject can't support them. The Qing's OWN units piling at Beijing may be a DIFFERENT facet (created in c:CHI scope, placement collapses to capital) than the vassal units (created under subject, placed right, then culled). DIAGNOSE FROM debug.log LOG_line markers — do NOT blind-fix.
 
 ## REGRESSION-B22 — only the Fujian water-force spawns; Guangdong + Zhejiang still missing
 - **Observed:** at start only **福建水師 (Fujian Coastal Patrol)** exists. The **廣東水師 (Guangdong, Canton p:9298)** and **浙江水師 (Zhejiang, Ningbo p:2893)** squadrons do NOT appear (same symptom as before the "fix").
@@ -27,6 +29,9 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 - **File:** `common/scripted_effects/imp19c_effects_legion_setup.txt` — `SE_qing_navy_guangdong` (~360), `_fujian`, `_zhejiang`, `SE_qing_navy_disband` (~334). Wired via `qing_force_setup.10` (disband) + `.11` (raise all three).
 - **✅ ROOT CAUSE FOUND + FIXED (B22-v3 — SAME wrapper bug as B21; supersedes v2).** debug.log proved all 3 navy scripts SUCCEED (each logs "raised" at a valid port) yet only Fujian survives — the units are created then merged/culled, not failed. The culprit is the **`p:X = { owner = { create_unit } }` province→owner wrapper** (see B21), which collapses all 3 hulls' placement so the engine keeps only the last. **FIX:** all 3 squadrons (main + fallback branches) now create in a **bare `c:CHI` scope** — `c:CHI = { create_unit { navy=yes location=p:9298/p:3651/p:2893 ... } }` (fallbacks use `location = scope:qing_*_fallback_port`), verbatim the Invictus `me_tasm.13` idiom (3 commanderless navies at 3 ports, one tick, bare country scope — all persist). No owner wrapper, no commander, no stagger needed. Adversarially reviewed → 0 findings. (The location-token and same-tick theories were both wrong; the wrapper was always the bug.)
 - **Severity:** MAJOR — RESOLVED (pending boot-test confirmation).
+- **❌ BOOT-TEST 2026-07-10 (build c7cc248d): STILL BROKEN.** User: "Fujian coastal patrol is the only navy, also no commander." Same symptom as every prior build + no commander. Same root class as B21 — the v3 bare-c:CHI-scope fix did NOT work. Firing context (on_game_initialized) is the prime suspect, not the scope idiom.
+
+- **🔑 CLUE REFINED (same test):** User: "I believe they appeared in subject CAPITAL cities, though I'm not sure." If the vassal garrisons landed at the SUBJECT'S CAPITAL (not the target frontier province Ili p:3534 etc.), then `location = p:X` was NOT honoured in the subject branch either — placement collapsed to the scope-owner's capital, EXACTLY like the Qing units collapsing to Beijing. So it is ONE consistent bug after all: **create_unit places the unit at the SCOPE OWNER'S CAPITAL and ignores the `location` token** — for c:CHI that's Beijing, for scope:garrison_owner=<subject> that's the subject's capital. This RESURRECTS the location-ignored theory (now confirmed in BOTH scopes) and means the "wrapper removal" (v3) genuinely did not change engine behaviour. The vanishing afterward is a SECOND effect (AI subject disbanding a legion it didn't order / can't afford, OR the disband sweep). Two things to confirm in debug.log: (1) the LOG_line says "raised at p:3534" while the unit actually sits at the subject capital = location ignored; (2) whether a later tick logs a disband. STILL do not blind-fix — but the leading hypothesis is now: create_unit at game-init ignores location= entirely (a known-hard Imperator limitation), and the real fix is likely a DIFFERENT placement mechanism (raise_legion at a province-scoped governorship, or a dated/on_action deferred raise rather than on_game_initialized).
 
 ---
 
@@ -35,6 +40,7 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 - **Prior status:** B7 was on the 2026-07-10 list as "wiring OK = runtime" (my audit memory said the dead-GUI audit cleared B7 as a runtime issue, not dead wiring). This test shows it is STILL broken at runtime on 1763_bookmark.
 - **✅ ROOT CAUSE = THE SAME CORRUPTED BOM AS B14 — FIXED.** `error.log`: `Could not find widget 'qing_office_picker_window' in 'gui/imp19c_windows.gui'`. The picker window IS defined (imp19c_windows.gui:37) and the Appoint onclick (`gui.createwidget gui/imp19c_windows.gui qing_office_picker_window`, government_view.gui:2634 etc.) is correct — but the double-encoded BOM at the top of imp19c_windows.gui broke parsing at line 1, so `qing_office_picker_window` never registered → createwidget found nothing → click did nothing. The BOM repair (see B14 entry) restores it. **B7 + B14 share the one fix; nothing else needed.**
 - **Severity:** MAJOR — RESOLVED by the BOM repair.
+- **⚠️ BOOT-TEST 2026-07-10 (build c7cc248d): WINDOW OPENS (BOM fix WORKED), but NEW layout bug.** User: "the character list is displayed horizontally and cut off on the right side. It should instead be displayed vertically, and scrollable." CAUSE: gui/imp19c_windows.gui:71-73 the candidate list uses `dynamicgridbox { datamodel_wrap = 1 }` which flows items into a horizontal GRID row → clips on the right. FIX: render as a vertical scrollable list (vbox/flowcontainer direction=vertical + datamodel, or dynamicgridbox with proper vertical flow). Tracked as B7-layout.
 
 ---
 
@@ -44,6 +50,7 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 - **File(s):** `gui/government_view.gui` — the "The Throne" container and the "Dynastic Health" container; look for the flowcontainer spacing / a fixed size that's too short to fit the three bars, or a following block positioned with a hardcoded offset that overlaps.
 - **Severity:** MINOR (layout/readability — data is there, just not shown).
 - **NOTE:** this is a NEW section vs the 2026-07-10 layout — likely introduced by the B10 Edicts-strip reorg or the develop GC restructure (Empress seat / relocated Regent+Emeritus). Check what pushed the Throne block's height.
+- **⚠️ BOOT-TEST 2026-07-10 (build c7cc248d): SPACING FIXED, but NEW sub-bug.** User: "the Dynastic Health section was successfully moved down and I see the bottom of the three boxes (Emperor, Crown Prince, Empress) but curiously there is no statesmanship bar displayed for any of them." + "all three boxes should display a statesmanship bar the same way as shown by the Grand Chancellor box." FIX: give the Emperor/Crown-Prince/Empress boxes the SAME statesmanship-bar widget the Grand Chancellor box uses (copy that box's bar block). Tracked as Bug1-throne-bars. ALSO (same three boxes, same test): the Martial/Finesse/Charisma/Zeal ICONS render but with NO number beside each — the skill VALUE textbox is missing/empty. User: "they should display each character's values." Almost certainly the SAME root cause (the three boxes lack the content widgets the Grand Chancellor box has). Fix both together by mirroring the Grand Chancellor box's stat + bar widgets.
 
 ---
 
@@ -58,6 +65,7 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 - **Severity:** MINOR (cosmetic/de-clutter + tooltip wording).
 
 ---
+- **✅ BOOT-TEST 2026-07-10 (build c7cc248d): FIXED — CONFIRMED.** User: "Bug 2 is fixed."
 
 ## REGRESSION-B12 — Royal Marriage / Dynastic Match window opens but the candidate list is EMPTY
 - **Observed:** the **Dynastic Match** window now OPENS (so the B14-style window-culling is fixed), but the candidate list inside is **empty** — no foreign houses shown.
@@ -72,6 +80,10 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 - **Severity:** MAJOR — RESOLVED (pending boot-test).
 
 ---
+- **❌ BOOT-TEST 2026-07-10 (build c7cc248d): WORSE — 3 symptoms.** User: "B12 is broken and weirder than ever, no candidates are displayed and now Our House shows minor_chi instead of the previous (and correct) Aisin Gioro. Also the old number for Marriage Power has been replaced by the literal text 'Marriage Power' instead of the correct 'Marriage Power: [value]'."
+  1. **No candidates** (still empty) — the core B12. Awaiting logs to see whether the builder loop iterates (per-candidate LOG lines) or the ruler-data cascade (B1/B2) still yields childless neighbours.
+  2. **"Our House" = `minor_chi`** — `minor_chi` = the engine's auto-generated `minor_<tag>` family, shown when the read character has NO family_name. char:214 (Qianlong) IS correctly `set_as_ruler=char:214` with `family_name="Aisin Gioro"` (death_date stripped), so the marriage window's "Our House" is reading a DIFFERENT character than the seated ruler (a scope/data problem, NOT loc). DIAGNOSE FROM LOGS — do not blind-fix. Possible link to the missing-commanders / mis-seated-character class (B21/B22).
+  3. **"Marriage Power" literal, no value** — this is the Bug 3 fix (MARRIAGE_WINDOW_POWER_LABEL="Marriage Power", value moved to hover tooltip MARRIAGE_WINDOW_POWER_TT). User wants the value INLINE: "Marriage Power: [value]". RECONCILE Bug 3 (remove stray raw number) with this (labelled inline value) — change the label cell to show `Marriage Power: [Country.MakeScope.Var('marriage_display_power').GetValue|0]` (marriage_window.gui:169 already reads that var; fold it into the label text). Standalone loc/gui fix, not log-gated.
 
 ## 3 — Marriage window own-house row shows a stray raw number (e.g. "21447") on the far right
 - **Observed:** in the Dynastic Match window, the own-house row reads **"Our House: Aisin Gioro"** (correct) but a bare number (**21447**) is displayed at the far RIGHT of the same row. Should not be shown.
@@ -101,6 +113,7 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 *(A reported "Tribute S/M/L buttons inert" was investigated and withdrawn — the buttons were merely greyed by the 25-political-influence `is_valid` gate at a low-PI start. Working as designed, NOT a bug.)*
 
 ---
+- **✅ BOOT-TEST 2026-07-10 (build c7cc248d): FIXED — CONFIRMED.** User: "the Supranational window is opening properly now." The BOM repair resolved it (shared fix with B7, which also now opens).
 
 ## REGRESSION-B1/B2 (RUS) — Russia STILL shows the wrong ruler (Bulganin placeholder + infant Aleksandr I)
 - **Observed:** at the 1763 start Russia's ruler is still the engine placeholder **Grigoriy Bulganin** and an **infant Aleksandr I Romanov** appears — NOT **Catherine II**, which the #320 fix was supposed to seat.
@@ -126,6 +139,8 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
   Poland's ruler unseated.**
 
 ---
+- **BOOT-TEST 2026-07-10 (build c7cc248d): RUS half-fixed** (Catherine II now ruler ✅), but heir/Pavel death_date residue → see the death_date + no-family systemic entries below.
+- **✅ OTHER RULER SPOT-CHECKS PASS:** FRA = Louis XV ✅, CHI = "Qianlong Emperor" ✅ (throne correct — note CHI's marriage-window "Our House = minor_chi" is a SEPARATE marriage-window family-read bug, not the ruler seating). Japan = Ieharu ✅ (see #5). POL ruler = August Wettin ✅ but wrong HEIR (see N-POL-HEIR / N-RULER-NO-FAMILY).
 
 ## NEW-B27 (from logs) — setup character ID-range violations leave ~28 chars UNCREATED (incl. Poland's ruler)
 - **Observed (error.log):** `Character 730 in country POL should have id 572 or use create_character` — and 27 more:
@@ -170,6 +185,7 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 - **Severity:** MINOR — RESOLVED (pending boot-test).
 
 ---
+- **✅ BOOT-TEST 2026-07-10 (build c7cc248d): FIXED — CONFIRMED.** User: "Japan shows Tokugawa Ieharu." Ieharu = 10th shogun (r.1760-1786), CORRECT for the 1763.2.16 start. The setup now seats char:356 Ieharu explicitly (was auto-picking the anachronistic last-shogun Yoshinobu). Resolved.
 
 ## REGRESSION-B15 — Integrate/Loosen buttons STILL overlap the subject header/type labels
 - **Observed:** in the diplomatic view → Subject Actions (Qing subject open), the **Integrate / Loosen** action buttons still render **on top of** the header + subject-type text, despite the B15 fix.
@@ -183,6 +199,7 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 - **Severity:** MINOR (readability/overlap; feature still usable).
 
 ---
+- **❌ BOOT-TEST 2026-07-10 (build c7cc248d): STILL BROKEN.** User: "the Tighten and Loosen Control buttons still very much overlap (try moving the text down instead)." Both prior fixes (v1 header autoresize→fixed, v2 subject-type only_text→fixed textbox) did NOT resolve it. The vbox (diplomatic_view.gui:1526) holds header textbox → subject-type textbox → integration progress widget → the diplomacy_action_button rows. LEAD: the action buttons carry `parentanchor = hcenter` (e.g. line 1583) which can DETACH them from the vbox's vertical flow so they float up over the label rows regardless of the labels reserving height. USER'S SUGGESTED APPROACH: move the TEXT down (add top margin/offset to the header+type labels, or push the whole label block below where the buttons anchor) rather than trying again to make the labels reserve height. Consider: drop parentanchor=hcenter from the buttons so they stack in flow, OR add margin_top to the label block. Verify in-game. Tracked as B15-v3.
 
 ## 6 — Religion panel ("Faith & Sedition") opens EMPTY — only the header renders, no meters
 - **Observed:** the Qing Religion window opens showing only the **"Faith & Sedition"** title/header; the whole body (the 5 meters — Anti-Foreign / Social Friction / Sectarian Pressure / Missionary Reach / Reform Pressure — the band text, and the Taiping section) is MISSING.
@@ -195,6 +212,7 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 - **Severity:** MAJOR — RESOLVED (pending boot-test confirmation).
 
 ---
+- **❌ BOOT-TEST 2026-07-10 (build c7cc248d): STILL BROKEN.** User: "Religion panel still shows empty panel with just the label 'Faith & Sedition'." The scrollarea>scrollwidget wrapper fix did NOT resolve it. Braces balanced (94/94); the structure now closely mirrors the proven-rendering twin qing_greatgame.gui (base_window + main_window_template + flowcontainer[header widget + margin_widget[scrollarea>scrollwidget>flowcontainer(vertical)]]). Yet the body still collapses to nothing. THIRD GUI/layout theory this session to pass review but fail in-game (with B21, B22). NOT blind-fixing a 4th variant. Get error.log/debug.log — need to see whether the window emits a parse/scope error at open, or the body's scripted-gui `visible=` conditions all evaluate false (which would blank every meter row). Candidate to compare byte-for-byte against qing_greatgame.gui in a focused diff. Tracked as Bug6-v2.
 
 ## 7 — Grand Council office cards: move the displayed modifier list into hover text on the office name
 - **Request (design/UX, not a defect):** for EVERY Grand Council office card, the modifiers are currently displayed inline on the card. Move them into a **tooltip on the office NAME** instead. The tooltip should read as a short description of the office FOLLOWED by the granted modifiers, e.g.:
@@ -207,3 +225,49 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
   4. **Best path (verify):** if `qing_office_<office>_active` is a real country modifier, the engine can auto-render its effect list in a tooltip via the modifier-reference token — so the loc need only supply the description + lead sentence, and the engine appends the modifier lines. Confirm the token that does this against an existing modifier tooltip in the mod.
 - **File(s):** `gui/government_view.gui` (office cards — remove inline modifiers, add name tooltips); `localization/english/qing_governance_l_english.yml` (13 `_ROLE_TT` keys); ref `common/modifiers/qing_governance_modifiers.txt` (the `qing_office_*_active` modifiers).
 - **Severity:** enhancement / UX polish (declutters the cards, adds flavor + discoverability). Not a bug.
+
+---
+- **⚠️ BOOT-TEST 2026-07-10 (build c7cc248d): MOSTLY FIXED, minor formatting.** User: "the modifier is awkwardly displayed on a newline after the description, fix that." The 13 QING_GC_OFFICE_<X>_TT keys (qing_governance_l_english.yml:245-257) format the modifier as `<desc>\n\nWhen filled, the office grants the following to Great Qing:\n<modifiers>` — the modifier values sit on their own line under the intro. FIX: tighten the modifier presentation (put the values on the SAME line as the intro, or drop the verbose intro line so the modifier reads cleanly right after the description). Confirm desired exact layout with user before editing. Tracked as Bug7-tooltip-format.
+
+## N-ATTR-ICONS — Martial/Finesse/Charisma/Zeal icons wrong in many places
+- **Observed:** the four attribute icons are wrong/swapped in many places (introduced by my recent GUI edits). Correct reference: https://imperator.paradoxwikis.com/Attributes — and vanilla/other-mod usage.
+- **Canonical mapping (vanilla):** Martial → `icon_military` (font_icon_military.dds), Finesse → `icon_civic` (font_icon_civic.dds), Charisma → `icon_oratory` (font_icon_oratory.dds), Zeal → `icon_religious` (font_icon_religious.dds). Templates defined in `gui/shared/font_icons.gui` (texticon military_icon/civic_icon/oratory_icon/religious_icon). Reference files that map them correctly: `gui/selectcommanderwindow.gui`, `gui/select_office.gui`, `gui/shared/gui_base.gui`.
+- **NOTE:** my picker block in `imp19c_windows.gui:93-113` ALREADY uses the correct vanilla mapping, so the breakage is elsewhere — either an overridden icon TEXTURE or a crossed `blockoverride "Icon"` in another file I edited. FIX PASS: `git diff` my GUI commits vs the vanilla reference files, find where the icon↔attribute mapping got crossed, restore to the canonical mapping above.
+- **Severity:** MINOR (cosmetic, but widespread + confusing).
+
+---
+
+## N-GREATGAME — Great Game tab label all-caps + panel DESC still spills
+- **Observed (boot-test 2026-07-10, build c7cc248d):** (1) the Qing diplomatic-view "GREAT GAME" tab is ALL-CAPS, should be "Great Game". (2) the Great Game panel intro ("The throne's dashboard for playing the great powers...") STILL spills off the right edge of the window despite the #314 B20 multiline+fixed-width fix.
+- **Symptom 1 CAUSE + FIX:** `QING_GREAT_GAME_TAB_BUTTON:0 "GREAT GAME"` (qing_greatgame_l_english.yml:40) is literally uppercase in the loc → change to "Great Game". (The sibling QING_GREAT_GAME_TAB_TITLE is already "The Great Game".) Trivial loc fix.
+- **Symptom 2:** GREAT_GAME_PANEL_DESC textbox (qing_greatgame.gui:88-94) ALREADY has multiline=yes + fixed size {460 64} (the B20 fix) yet STILL spills. So multiline+fixed-width alone isn't wrapping here — same failure the text-wrap standing rule warns about. Needs boot-verified diagnosis: check the parent width anchor / a missing max_width / whether 460 exceeds the usable width. Compare to a proven-wrapping textbox. Log-gated with the other GUI-render mysteries (Bug6).
+- **STANDING RULE created:** GUI paragraph text must wrap (multiline=yes + fixed width, never autoresize=yes) — recurs in many places per user. See memory [[imp19c-text-wrap-rule]]. Fix pass should SWEEP all textboxes for autoresize=yes on paragraph text.
+- **Severity:** MINOR (cosmetic), but the wrap issue is WIDESPREAD.
+
+---
+
+## N-POL-HEIR — Poland's heir (flag-right) is a foreign Russian (Aleksandr I Romanov)
+- **Observed (boot-test 2026-07-10):** POL shows August Wettin (ruler, left of flag — CORRECT, the NEW-B27/#329 fix worked) but **Aleksandr I Romanov on the RIGHT (heir)**. The right side IS the heir/successor slot.
+- **CAUSE:** August Wettin (char:572, the seated POL king) has NO child/heir defined in-realm. Poland's setup file (00_Poland.txt) also parks a RUSSIAN prince — char:153 "Konstantin", `family="c:RUS.fam:Romanov"`, father=char:146/mother=char:145 (the RUS Romanov line), culture=russian — as an unlanded character (staged for a later Congress-Poland / personal-union arc). With no in-realm successor for a childless elective-monarchy king, the engine's succession auto-picks the nearest eligible character it can reach through the defined family graph → it lands on the RUS Romanov line (Aleksandr I). Same *class* as the RUS Bulganin/Aleksandr auto-pick: a slot left unfilled → engine grabs a wrong character.
+- **FIX OPTIONS (confirm with user):** (a) give August Wettin a defined child/heir (historically his son Frederick Christian of Saxony, or seat the historical 1764 successor Poniatowski as heir); (b) if Poland is an elective monarchy with no dynastic heir by design, that may be ENGINE-correct behaviour to leave — but it should not pull a foreign Romanov. Needs a real Polish/Saxon heir character. Also relates to the parked RUS char:153 in the POL file (should it carry a death_date/where does it belong?).
+- **Severity:** MODERATE (wrong heir → wrong succession, foreign dynasty inherits Poland). Data fix.
+
+---
+
+## N-RULER-NO-FAMILY — many seated 1763 rulers have NO family graph (parents/spouse/siblings/children)
+- **Observed (boot-test 2026-07-10):** User: "both August Wettin and Tokugawa Ieharu have no parents, spouses, siblings, or children which doesn't seem correct (this is probably a much bigger issue affecting many characters you created)." CORRECT — systemic.
+- **SCOPE (grep of setup/characters/): 31 SET-AS-RULER characters have ZERO family-relation fields** (no father/mother/spouse/marry_character/children). Incl. POL char:572 August Wettin, and by the same pattern TKG char:356 Ieharu (has a bare `family=` clan tag but no actual kin). Others: AUS 457, Central_Asia 323 (Songjun), COL 41, GER 394, India 573/93/575/574/529/530/532/533/576, Italy 18/134, N.America 453/478/580/16/85/81/141, Ottoman 42/250/35/577, Persia 548/578, Peru 1, RUA 552. (Many predate my work; the 1763-bookmark ones I seated — 572, 356, the char:5xx roster — are squarely in scope.)
+- **CONSEQUENCE:** this is the ROOT of N-POL-HEIR — a childless ruler with no dynasty forces the engine's succession to auto-pick the nearest reachable character (a foreign Romanov for POL). Also means: no heir shown on flag-right for many nations, broken/foreign succession, empty dynastic trees, and likely feeds B12 (marriage candidate rulers with no children fail the any_child gate — the ORIGINAL B12 empty-list theory). Possibly linked to the marriage `minor_chi` (a family-less character shows the engine's minor_<tag> auto-family).
+- **FIX (large data task, confirm scope with user):** give each seated ruler a minimal historical family — at minimum a spouse + an heir (child), ideally parents for dynasty continuity. Prioritise: (1) the rulers I created for 1763 (POL 572, TKG 356, + the char:5xx bookmark roster) and (2) any nation whose flag-right shows a foreign/wrong heir. Use real historical kin where known. This likely also resolves N-POL-HEIR and materially helps B12.
+- **Severity:** MAJOR (systemic — succession, heirs, marriage candidates, dynastic trees all depend on the family graph).
+
+
+---
+
+## N-DEATHDATE — ~109 setup characters carry a FUTURE death_date → shown as already-dead
+- **Rule:** the setup snapshot treats ANY character with a `death_date` as already-dead (the #329 class), so anyone with death_date AFTER the 1763.2.16 start (alive-then, dies-later) is wrongly shown dead. Only past death_dates (e.g. Pyotr III 1762) are legitimate.
+- **SCOPE (grep, comments excluded): ~109 future-dated death_dates across 16 country files.** Per-country: AFG 2, Austria 6, Brazil 1, Britain 10, France 8, German Conf 6, Haiti 2, India 1, Italy 4, Korea 1, N.America 9, Ottoman 2, Persia 3, Qing 51, Russia 1 (Pavel — the last un-stripped), W.Africa 2. (Poland's was already stripped; note Poland's had a trailing-period typo `1763.10.05.`.)
+- **CONFIRMED in-game instances:** RUS Pavel I "died 1801"; **FRA heir Louis Ferdinand de Bourbon (char:407) "dead since 20 Dec 1765"** (Louis XV's son + heir, correctly alive at 1763). Both future → the bug.
+- **FIX:** strip `death_date` from all ~109 future-dated setup characters (natural death is handled by the age system after load — see the RUS char:144 / POL char:572 / TKG char:356 precedent). Leave PAST death_dates intact. Also fix the Poland `1763.10.05.` trailing-period typo if that block still has it. Mechanical sweep + per-file brace check.
+- **Severity:** MAJOR (systemic — heirs/rulers/dynasts across 16 nations shown dead; feeds wrong-heir + empty-marriage-candidate symptoms).
+
