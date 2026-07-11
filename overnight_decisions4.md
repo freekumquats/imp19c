@@ -14,7 +14,14 @@ Review this file when you're back. **Deferrals are called out at the very top.**
 > dependency on an unbuilt feature). Anything deferred is listed here with its concrete
 > blocker and what would unblock it.
 
-- *(none yet — updated as the build proceeds)*
+- **NONE.** All planned build tasks (#333–#371, the deferred exam/tributary/canal follow-ons, the
+  8 candidate deep-sims, and the 13 ministry panels) were built in full — no feature was deferred for
+  size or complexity, and no hard external blocker (an unproven engine capability both oracles lack,
+  or a dependency on an unbuilt feature) was hit. The two remaining items are NOT build deferrals:
+  (1) the develop / develop-mech-port merge PLAN (a post-build deliverable the user explicitly asked
+  to draw up *after* all tasks finish, covering both the 1763 branch and merge-overnight); and
+  (2) #319 in-game verification (B21/B22 unit placement, B12 marriage table, B14 Supranational) —
+  owed to the USER at the game client, not codeable here.
 
 ---
 
@@ -1443,3 +1450,72 @@ Indomita; self-documented at 00_imp19c_loyalty.txt:35). A prior sweep left 54 ra
 `yearly_decay 1` if |v|≤5 else 2, `min = v*2` on negatives) — and converted all 54 sites across 13
 files (`add_loyalty = <int>` → `add_loyalty = loyalty_qing_delta_[pn]<abs>`). Now the loyalty
 nudges these events/effects always intended actually land.
+
+## D81 — #370 caravan review actioned (adversarial review; 1 CONFIRMED MAJOR, commit d07b8c0d)
+
+**Review verdict:** the #370 adversarial review raised 3 claims; 1 confirmed MAJOR, 2 refuted.
+- **CONFIRMED (MAJOR, flag-leak of the #366/#368 class):** `qing_caravan_routecut_seen` is set in
+  `qing_caravan.2`'s immediate but was cleared ONLY on the 'lapse' option. The 'escort' and
+  'negotiate' options resolved the route-cut crisis WITHOUT clearing it, so once the player
+  resolved it non-destructively the first time, a FUTURE khoja scare (se_QING_XINJIANG re-raises
+  `qing_xj_khoja_pending`) could never re-fire `.2` — the recurring crisis was permanently
+  suppressed, and its prosperity drag stuck with no player recourse.
+- **FIX (commit d07b8c0d):** both 'escort' and 'negotiate' now clear the flag on resolution
+  (`if = { limit = { has_variable = qing_caravan_routecut_seen } remove_variable = ... }`),
+  mirroring 'lapse'. The crisis can now recur whenever a fresh scare pends.
+- **REFUTED:** (a) an `add_opinion` claimed to stack — refuted; `add_opinion` REFRESHES an existing
+  (modifier,target) pair. (b) an "unbounded feedback loop" between prosperity and grip — refuted;
+  both counters are `QING_DECLINE_nudge` clamped 0..100, so the coupling is bounded.
+
+## D82 — #334 Deferred Tributary follow-ons (朝貢體系): wire the tributary/amban order into the Lifan Yuan leader (commit 4f551c14)
+
+**Thesis (D3 completeness):** the tributary system (#322) and the Amban corps had NO fold into the
+Grand Council — `qing_suzerain_prestige` (se_QING_VASSAL.txt) fed NO office at all, and the resident
+Ambans' individual quality (`qing_char_affinity`) drove nothing central. Per the "wire every
+bureaucracy into its leader" rule, the Lifan Yuan office-holder (理藩院尚書) is the natural leader
+whose Grand Council standing the whole tributary order should determine.
+
+**Built (per concrete-over-abstract):**
+- **se_QING_MINISTRY.txt / `QING_ministry_recompute_perf_lifanyuan`:** a new
+  `qing_lifan_amban_affinity_sum` accumulator (reset 0 each recompute) sums the REAL resident
+  characters' `qing_char_affinity` over every autonomous-governorship subject with a live
+  `qing_amban_here` (scope-saved + ROOT-scoped add, guarded on the var existing). Two new folds
+  inside the office-FILLED branch:
+  - **(e) AMBAN CORPS QUALITY:** average amban affinity (`sum / count`, guarded count>0 so
+    no divide-by-zero), deviation from neutral 50, /5 (~+/-10). Complements existing term (b) which
+    scores STAFFING count — (e) scores the quality of the concrete resident characters.
+  - **(f) SUZERAIN PRESTIGE:** `qing_suzerain_prestige` deviation from 50, /5 (~+/-10) — the piece
+    that made the tributary-order meter answer to a Grand Council seat for the first time.
+- **gui/qing_lifanyuan.gui:** a suzerain-prestige progressbar, and a central "Tributary Order
+  (朝貢體系)" dashboard — a dynamicgridbox over `qing_rites_tributaries` using the proven
+  `new_country_flag { blockoverride "Size" {30 30} }` + `[Country.GetName]` idiom. Per-subject
+  interactions stay in the Diplomatic View — this rosters the whole order in one place, no dup.
+- **localization:** 5 keys (SUZERAIN_LABEL/_TT, TRIBUTE_TITLE/_NOTE/_EMPTY).
+
+**Verified pre-commit:** braces balanced on all 3 files; 5 loc keys present; source vars confirmed
+populated (`qing_char_affinity` base 50 at se_QING_AFFINITY.txt:47, `qing_suzerain_prestige` base 70
+at se_QING_VASSAL.txt:43); scope-save + read within one effect block; div-by-zero guarded; perf
+clamped 0..100. Adversarial review launched (wf_062c9da0-88d) — outcome to be actioned.
+
+## D83 — #335 Deferred Grand Canal follow-ons (漕運): concrete building tallies drive canal + fold into Works leader (commit 7b870a35)
+
+**Thesis (concrete-over-abstract + D3):** the Grand Canal condition/grain model (#323) drifted off
+binary building presence and folded nothing into the Works office-holder. #335 makes it answer to
+CONCRETE per-type building counts and folds canal health into the Works Minister's Grand Council
+standing.
+
+**Built:**
+- **se_QING_MINISTRY.txt / `QING_ministry_recompute_perf_works`:** the owned-province sweep now
+  resets + tallies `qing_dike_count` / `qing_depot_count` / `qing_granary_count` (added
+  `has_building = qing_granary_building` to the OR limit). New fold **(d):** guarded
+  `has_variable = qing_canal_condition`, `(condition - 60)/4` added to `qing_min_perf_works`.
+- **se_QING_CANAL.txt / `QING_canal_update_condition`:** the canal target now scales off
+  `qing_depot_count` (x8 cap 24) + `qing_dike_count` (x6 cap 18); filled Works office adds
+  `+10 + (finesse - 7)`, vacant drags -12; minus corruption/4; drifts +/-3 toward target; all
+  scratch vars removed on every path. `QING_canal_run_grain_balance` shaves `qing_grain_draw` by
+  `min(qing_granary_count, 2)` — the granaries now buffer the reserve.
+- **gui/qing_works_ministry.gui + loc:** canal-condition + grain-reserve progressbars + a
+  dike/depot/granary tally readout.
+
+**Verified pre-commit:** braces balanced; 7 works loc keys present. Adversarial review launched
+(wf_18966771-a79) — outcome to be actioned.
