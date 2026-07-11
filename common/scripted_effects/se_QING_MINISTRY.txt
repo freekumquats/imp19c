@@ -1,0 +1,183 @@
+########################################################################
+# se_QING_MINISTRY.txt — [#349+] the MINISTRY-PERFORMANCE backbone.
+#
+# The Grand Council IS the set of filled great offices (se_QING_COUNCIL.txt). This
+# file makes each office a working BUREAUCRACY: it computes a per-ministry 0..100
+# performance meter qing_min_perf_<office> (50 = adequate) from that ministry's own
+# concrete sub-state (the officer corps + garrisons for War, the Amban roster for the
+# Lifan Yuan, the special buildings for Works, ...). Those meters are then FOLDED into
+# the council's effectiveness target by QING_council_fold_ministry_perf (se_QING_COUNCIL.txt),
+# so a well-run ministry raises its Minister's standing on the Grand Council and a
+# poorly-run one drags it down — the leader answers for how his ministry is run.
+#
+# CADENCE: QING_ministry_recompute_all_perf is called at the TOP of QING_GOV_pulse
+# (se_QING_GOVERNANCE.txt), before QING_council_recompute, so the fold reads fresh
+# values. Each ministry adds ONE compute effect + its call here. All O(offices/roster)
+# counter maths; no unbounded pop/province sweeps.
+#
+# Scope: COUNTRY (ROOT = CHI) throughout. se_LOG sys = QING. Prefix = QING_ministry_.
+########################################################################
+
+# ======================================================================
+# DISPATCHER — recompute every ministry-performance meter. Each ministry-panel
+# feature appends its own QING_ministry_recompute_perf_<office> call below. Gated
+# to CHI (the meters only matter for the Qing player's Grand Council).
+# ======================================================================
+QING_ministry_recompute_all_perf = {
+	if = {
+		limit = { tag = CHI }
+		QING_ministry_recompute_perf_war = yes
+		QING_ministry_recompute_perf_lifanyuan = yes
+		# (Works #351, Rites #353, Zongli #354, Revenue #355, Personnel #365, Justice #363,
+		#  Censorate #362, Central Secretariat #361, Imperial Household #359, Imperial Guard
+		#  #364 each append their recompute call here as they ship.)
+	}
+}
+
+# ======================================================================
+# [#349] WAR MINISTRY (兵部) PERFORMANCE — qing_min_perf_war (0..100, 50 = adequate).
+# The Board of War answered for the standing army: the officer corps and the
+# garrisons that hold the realm. We build the meter from concrete state the mod
+# already tracks:
+#   • the Minister of War's own martial competence (the Board president 兵部尚書, x4),
+#   • OFFICER-CORPS COVERAGE — the SIZE of the officer corps vs a healthy establishment
+#     (a shrunken corps = posts unfilled = a weaker army). Deliberately NOT the corps'
+#     average martial — that is already folded into council effectiveness directly
+#     (se_QING_COUNCIL.txt ~404-408), so re-using it here would double-count.
+# A VACANT War office floors the meter low (no one runs the Board). All reads guarded.
+# ======================================================================
+QING_ministry_recompute_perf_war = {
+	# --- rebuild the OFFICER-CORPS ROSTER list (the concrete on-map commanders the War
+	# panel #349 renders). Every serving unit-commander in CHI's employ, deduped by the
+	# is_target_in_variable_list guard (a general can lead several sub-units). This is the
+	# datamodel the panel's dynamicgridbox iterates. Bounded O(units).
+	clear_variable_list = qing_war_officer_roster
+	set_variable = { name = qing_war_roster_count  value = 0 }
+	every_unit = {
+		limit = { has_commander = yes  commander = { is_alive = yes  employer = ROOT } }
+		commander = {
+			ROOT = {
+				if = {
+					limit = { NOT = { is_target_in_variable_list = { name = qing_war_officer_roster  target = prev } } }
+					add_to_variable_list = { name = qing_war_officer_roster  target = prev }
+					change_variable = { name = qing_war_roster_count  add = 1 }
+				}
+			}
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_war  value = 50 }
+	if = {
+		# office FILLED by a live employed minister — score on his martial + the corps.
+		limit = {
+			has_variable = qing_office_war_holder
+			var:qing_office_war_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the minister's martial, deviation from a competent baseline of 7, x4 (the
+		# minister's own competence is the DOMINANT driver of how well the Board is run).
+		set_variable = { name = qing_min_war_scratch  value = 0 }
+		var:qing_office_war_holder = { save_scope_as = qing_war_minister }
+		change_variable = { name = qing_min_war_scratch  add = scope:qing_war_minister.martial }
+		change_variable = { name = qing_min_war_scratch  subtract = 7 }
+		change_variable = { name = qing_min_war_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_war  add = qing_min_war_scratch }
+		# (b) OFFICER-CORPS COVERAGE — is the standing army adequately officered? A count
+		# term (deviation from a healthy establishment of ~10 serving commanders), x2. We
+		# use COUNT, NOT average martial: the corps' average MARTIAL is ALREADY folded into
+		# council effectiveness directly (se_QING_COUNCIL.txt ~404-408, the officer-corps
+		# coupling), so re-scoring it here would DOUBLE-COUNT it. Coverage (are the posts
+		# manned at all) is an orthogonal Board-of-War responsibility not folded elsewhere.
+		# Reads qing_war_roster_count — the count WE JUST TALLIED above (fresh this pulse),
+		# NOT the council's qing_officer_corps_count (which is recomputed LATER in the same
+		# pulse, so reading it here would be one pulse stale).
+		if = {
+			limit = { var:qing_war_roster_count > 0 }
+			set_variable = { name = qing_min_war_scratch  value = var:qing_war_roster_count }
+			change_variable = { name = qing_min_war_scratch  subtract = 10 }   # deviation from a healthy establishment
+			change_variable = { name = qing_min_war_scratch  multiply = 2 }
+			change_variable = { name = qing_min_perf_war  add = qing_min_war_scratch }
+		}
+		else = {
+			# no serving officer corps at all — a paper ministry; a real penalty.
+			change_variable = { name = qing_min_perf_war  subtract = 10 }
+		}
+	}
+	else = {
+		# VACANT Board of War — the army drifts without a head. Floor it low.
+		set_variable = { name = qing_min_perf_war  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_war < 0 }   set_variable = { name = qing_min_perf_war  value = 0 } }
+	if = { limit = { var:qing_min_perf_war > 100 } set_variable = { name = qing_min_perf_war  value = 100 } }
+	LOG_line = { sys = QING  msg = "war-ministry performance recomputed" }
+}
+
+# ======================================================================
+# [#350] LIFAN YUAN (理藩院) PERFORMANCE — qing_min_perf_lifanyuan (0..100, 50 = adequate).
+# The Court of Colonial Affairs administered the Inner-Asian dependencies through its
+# resident Ambans (駐防大臣). We build the meter from concrete state the amban system
+# already tracks:
+#   • the Grand Director's own charisma (the 理藩院尚書 — charisma is its governing skill),
+#   • AMBAN COVERAGE — of the subjects that WARRANT a resident (the autonomous-governorship
+#     Inner-Asian dependencies), how many actually HAVE a live amban posted. A dependency
+#     left without a resident = the Court failing its remit.
+# A VACANT Lifan Yuan office floors the meter low. Also (re)builds the roster list
+# qing_lifanyuan_amban_subjects (the amban-holding subjects the panel #350 renders).
+# All reads guarded; O(subjects).
+# ======================================================================
+QING_ministry_recompute_perf_lifanyuan = {
+	# --- rebuild the amban-holding-subjects roster (panel datamodel) + tally coverage.
+	clear_variable_list = qing_lifanyuan_amban_subjects
+	set_variable = { name = qing_lifan_amban_count  value = 0 }   # subjects WITH a live amban
+	set_variable = { name = qing_lifan_warrant_count  value = 0 } # subjects that WARRANT one
+	every_subject = {
+		limit = { is_subject_type = autonomous_governorship }
+		ROOT = { change_variable = { name = qing_lifan_warrant_count  add = 1 } }
+		if = {
+			limit = {
+				has_variable = qing_amban_here
+				var:qing_amban_here = { is_alive = yes  employer = prev }
+			}
+			ROOT = {
+				change_variable = { name = qing_lifan_amban_count  add = 1 }
+				add_to_variable_list = { name = qing_lifanyuan_amban_subjects  target = prev }
+			}
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_lifanyuan  value = 50 }
+	if = {
+		# office FILLED — score on the Director's charisma + amban coverage.
+		limit = {
+			has_variable = qing_office_lifanyuan_holder
+			var:qing_office_lifanyuan_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the Director's charisma, deviation from a competent baseline of 7, x4.
+		var:qing_office_lifanyuan_holder = { save_scope_as = qing_lifan_director }
+		set_variable = { name = qing_min_lifan_scratch  value = 0 }
+		change_variable = { name = qing_min_lifan_scratch  add = scope:qing_lifan_director.charisma }
+		change_variable = { name = qing_min_lifan_scratch  subtract = 7 }
+		change_variable = { name = qing_min_lifan_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_lifanyuan  add = qing_min_lifan_scratch }
+		# (b) AMBAN COVERAGE — fraction of warrant subjects with a resident, scaled to +/-.
+		# coverage% = 100 * amban / warrant; deviation from a target of 100% (full coverage),
+		# divided down so an uncovered dependency is a real but bounded drag.
+		if = {
+			limit = { var:qing_lifan_warrant_count > 0 }
+			set_variable = { name = qing_min_lifan_scratch  value = var:qing_lifan_amban_count }
+			change_variable = { name = qing_min_lifan_scratch  multiply = 100 }
+			change_variable = { name = qing_min_lifan_scratch  divide = var:qing_lifan_warrant_count }  # coverage %
+			change_variable = { name = qing_min_lifan_scratch  subtract = 100 }   # deviation from full coverage (<=0)
+			change_variable = { name = qing_min_lifan_scratch  divide = 4 }        # scale (0..-25)
+			change_variable = { name = qing_min_perf_lifanyuan  add = qing_min_lifan_scratch }
+		}
+	}
+	else = {
+		# VACANT Court of Colonial Affairs — the dependencies drift. Floor it low.
+		set_variable = { name = qing_min_perf_lifanyuan  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_lifanyuan < 0 }   set_variable = { name = qing_min_perf_lifanyuan  value = 0 } }
+	if = { limit = { var:qing_min_perf_lifanyuan > 100 } set_variable = { name = qing_min_perf_lifanyuan  value = 100 } }
+	LOG_line = { sys = QING  msg = "lifan-yuan performance recomputed" }
+}

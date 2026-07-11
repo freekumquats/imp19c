@@ -408,6 +408,17 @@ QING_council_recompute = {
 		change_variable = { name = qing_council_eff_target  add = var:qing_officer_corps_mod }
 	}
 
+	# --- [#347+ / D8] MINISTRY-PERFORMANCE FOLD. Each ministry bureaucracy panel (War #349,
+	# Lifan Yuan #350, Works #351, Rites #353, Zongli #354, Revenue #355, Personnel #365,
+	# Justice #363, Censorate #362, Central Secretariat #361, Imperial Household #359, Imperial
+	# Guard #364) drives one country var qing_min_perf_<office> (0..100, 50 = adequate). A
+	# well-run ministry raises its Minister's council standing; a poorly-run one drags it. This
+	# single helper averages the deviation-from-50 across every office that BOTH reports a perf
+	# var AND has a live filled holder, so the term stays bounded no matter how many panels ship
+	# — panels can be added incrementally without destabilising the band. A clean no-op until at
+	# least one ministry reports (n=0), so pre-panel saves are unchanged.
+	QING_council_fold_ministry_perf = yes
+
 	# --- clamp target 0..100
 	if = { limit = { var:qing_council_eff_target < 0 }   set_variable = { name = qing_council_eff_target  value = 0 } }
 	if = { limit = { var:qing_council_eff_target > 100 } set_variable = { name = qing_council_eff_target  value = 100 } }
@@ -1347,5 +1358,70 @@ QING_council_on_commander_death = {
 			trigger_event = { id = qing_office.32 }
 			LOG_line = { sys = QING  msg = "a serving garrison commander died; War-minister replacement recommendation fired" }
 		}
+	}
+}
+
+# ======================================================================
+# [#347+ / D8] QING_council_fold_ministry_perf — the MINISTRY-PERFORMANCE FOLD.
+# Scope: COUNTRY (ROOT = CHI), called from QING_council_recompute after the officer-
+# corps fold. Each ministry bureaucracy panel drives one 0..100 var qing_min_perf_<office>
+# (50 = adequate). This folds the NET average deviation-from-50 across all reporting
+# offices into qing_council_eff_target, so a well-run set of ministries lifts the
+# council and a poorly-run set drags it — and each Minister answers on the Grand
+# Council for how his own ministry is run (the D3 coupling).
+#
+# BOUNDED BY AVERAGING: we sum (perf-50) only over offices that BOTH have the perf var
+# set AND a live, employed office-holder, count them, and add avg/5 (so the whole fold
+# stays within ~[-10,+10] however many ministries report). n=0 -> clean no-op (pre-panel
+# saves unchanged). The applied term is stored in qing_min_perf_council_mod so the GC
+# tooltip + each panel can surface "this ministry's contribution to the council".
+# All O(offices) counter maths; no pop/province sweeps.
+# ======================================================================
+QING_council_fold_ministry_perf = {
+	set_variable = { name = qing_min_perf_sum    value = 0 }
+	set_variable = { name = qing_min_perf_count  value = 0 }
+	# accumulate each reporting office's deviation-from-50 (guarded on a live holder).
+	QING_council_perf_accumulate = { office = war }
+	QING_council_perf_accumulate = { office = personnel }
+	QING_council_perf_accumulate = { office = revenue }
+	QING_council_perf_accumulate = { office = rites }
+	QING_council_perf_accumulate = { office = justice }
+	QING_council_perf_accumulate = { office = works }
+	QING_council_perf_accumulate = { office = censor }
+	QING_council_perf_accumulate = { office = lifanyuan }
+	QING_council_perf_accumulate = { office = chamberlain }
+	QING_council_perf_accumulate = { office = zongli }
+	QING_council_perf_accumulate = { office = grand_secretariat }
+	QING_council_perf_accumulate = { office = guard_commandant }
+	# fold the bounded average into the effectiveness target.
+	if = {
+		limit = { var:qing_min_perf_count > 0 }
+		set_variable = { name = qing_min_perf_council_mod  value = var:qing_min_perf_sum }
+		change_variable = { name = qing_min_perf_council_mod  divide = var:qing_min_perf_count }  # average deviation
+		change_variable = { name = qing_min_perf_council_mod  divide = 5 }                        # scale to ~+/-10 band
+		change_variable = { name = qing_council_eff_target  add = var:qing_min_perf_council_mod }
+		LOG_line = { sys = QING  msg = "ministry-performance fold applied to council effectiveness target" }
+	}
+	else = {
+		# no ministry has reported a performance var yet: the fold contributes nothing.
+		set_variable = { name = qing_min_perf_council_mod  value = 0 }
+	}
+}
+
+# ----------------------------------------------------------------------
+# QING_council_perf_accumulate — add ONE office's (perf-50) to the running sum + count,
+# but ONLY when that office both reports a perf var AND has a live, employed holder (an
+# unstaffed or unreported ministry contributes nothing). Scope: COUNTRY. $office$ = key.
+# ----------------------------------------------------------------------
+QING_council_perf_accumulate = {
+	if = {
+		limit = {
+			has_variable = qing_min_perf_$office$
+			has_variable = qing_office_$office$_holder
+			var:qing_office_$office$_holder = { is_alive = yes  employer = ROOT }
+		}
+		change_variable = { name = qing_min_perf_sum   add = var:qing_min_perf_$office$ }
+		change_variable = { name = qing_min_perf_sum   subtract = 50 }
+		change_variable = { name = qing_min_perf_count add = 1 }
 	}
 }

@@ -1,0 +1,131 @@
+########################################################################
+# army_effects_on_actions.txt — [#347] STANDING-ARMY PROVINCE EFFECTS.
+#
+# A stationed field army has consequences for the province it sits on:
+#   1. PACIFICATION — soldiers on the ground deter unrest (a local_unrest modifier
+#      scaled to the garrison's size), refreshed while the army stays, lapsing on
+#      its own when it leaves (short timed modifier + a per-pulse re-stamp).
+#   2. BILLETING STRAIN — a LARGE host quartered on a province frets the population
+#      (foraging/requisition), a happiness cost that balances heavy pacification.
+#   3. GOVERNOR FRICTION — a big garrison sitting on a governor's land, especially
+#      under a low-discipline/disloyal commander, breeds billeting disputes with the
+#      provincial governor (a friction event, competence-gated).
+#
+# FOOD is ALREADY engine-driven: unit food_consumption vs the province's local food
+# capacity produces attrition without any scripting — documented here, not scripted.
+#
+# GENERIC layer: this fires for EVERY country with a stationed army, so any realm's
+# garrisons pacify their ground. The Qing-frontier overlay (#346, War-Ministry
+# reporting + Lifan-Yuan turf war) LAYERS on this same detection idiom.
+#
+# DETECTION IDIOM (proven, Invictus): every_army from the COUNTRY scope, gated
+# is_moving = no + exists = commander + unit_size threshold (02_blemmia_missions.txt:974
+# any_army { exists=commander is_moving=no unit_size>=10 in_combat=no }); the army's
+# province is army.location, and a province's governor is <prov>.governor
+# (egypt_mission_3_empire.txt:664 p:3360.governor, guarded exists = <prov>.governor).
+#
+# Hooked to monthly_country_pulse (per-country, so every_army stays in-country and
+# O(own armies)); the friction event is throttled per country by a cooldown var.
+# se_LOG sys = ARMY, STATIC msgs only. Prefix = ARMY_.
+########################################################################
+
+# ---- REGISTRATION: append to the monthly country pulse ---------------------
+# (monthly_country_pulse itself lives in 00_monthly_country.txt; on_actions there
+# are listed by name, and the engine merges same-named on_action blocks across
+# files, so this registration is additive.)
+monthly_country_pulse = {
+	on_actions = {
+		army_standing_effects_on_action
+	}
+}
+
+# ---- THE PULSE: stamp/refresh standing-army province effects ---------------
+# Scope: COUNTRY. Runs monthly for every country. Guards on the country actually
+# fielding a stationed army before iterating, so a country with no armies is a
+# cheap early-out. Each qualifying army stamps its province; a large host under a
+# poor commander may additionally queue a governor-friction event (throttled).
+army_standing_effects_on_action = {
+	trigger = {
+		# only bother for a country that HAS a settled (non-moving) army with a size
+		# worth modelling — a token escort or a marching column does not garrison.
+		any_army = {
+			is_moving = no
+			in_combat = no
+			unit_size >= 3
+		}
+	}
+	effect = {
+		LOG_line = { sys = ARMY  msg = "standing-army province pulse firing for country" }
+		every_army = {
+			limit = {
+				is_moving = no
+				in_combat = no
+				unit_size >= 3
+				exists = unit_location
+			}
+			ARMY_apply_garrison_effects = yes
+		}
+	}
+}
+
+# ---- PER-ARMY: stamp the province + maybe breed governor friction ----------
+# Scope: ARMY (a settled army). Reaches its province via location, refreshes the
+# pacification (+ billeting-strain for a large host), then rolls the governor-
+# friction beat. All province modifiers are RE-STAMPED each pulse (short timed
+# duration), so a departed army's effect lapses within one window without needing
+# an explicit teardown.
+ARMY_apply_garrison_effects = {
+	# capture the army's strength into a LOCAL var (persists across the scope push into
+	# location; set_local_variable is the proven cross-scope carry, se_DIPLOMACY.txt:105 —
+	# and armies are transient objects, so a persistent set_variable on them is avoided).
+	set_local_variable = { name = arm_size_here  value = unit_size }
+	unit_location = {
+		save_scope_as = arm_province
+		# 1+2. PACIFICATION (scaled by size) + BILLETING STRAIN (large host only).
+		# RE-STAMP FRESH EACH PULSE via REMOVE-then-ADD (the proven refresh idiom — see the
+		# remove_province_modifier/add pairs in Invictus mission files). We do NOT gate the add
+		# on "NOT has_province_modifier": that would leave the modifier un-refreshed while it
+		# sits (30-day pulse < 40-day duration), so it would EXPIRE at day 40 and flicker off
+		# until day 60 (a ~20-day gap every cycle). Unconditional remove-then-add guarantees
+		# exactly one instance carrying a fresh 40-day timer each pulse — no flicker, no stack.
+		# The remove is a no-op when absent. 40 days > the monthly cadence, so while the army
+		# stays the modifier never lapses; once it leaves, the last stamp expires ~40 days on.
+		remove_province_modifier = army_garrison_pacified
+		remove_province_modifier = army_garrison_pacified_heavy
+		remove_province_modifier = army_garrison_billeting_strain
+		if = {
+			limit = { local_var:arm_size_here >= 12 }
+			# a field host: heavy pacification, but it strains the province it eats off.
+			add_province_modifier = { name = army_garrison_pacified_heavy  duration = 40 }
+			add_province_modifier = { name = army_garrison_billeting_strain  duration = 40 }
+		}
+		else = {
+			# an ordinary standing garrison: light pacification, no billeting strain.
+			add_province_modifier = { name = army_garrison_pacified  duration = 40 }
+		}
+	}
+	# 3. GOVERNOR FRICTION — a LARGE host on a governor's province, under a
+	# low-loyalty commander, breeds a billeting dispute. Guard on: the province has a
+	# governor distinct from the army's commander, the host is large, the commander
+	# is disloyal/low-martial, and the owning country is not already on cooldown.
+	if = {
+		limit = {
+			unit_size >= 12
+			exists = commander
+			exists = scope:arm_province.governor
+			unit_owner = { NOT = { has_variable = army_gov_friction_cd } }
+			# the commander and the governor are different people (a general billeting
+			# on his OWN governorate does not quarrel with himself).
+			NOT = { commander = { this = scope:arm_province.governor } }
+			# friction springs from an ill-disciplined / disaffected host.
+			commander = { OR = { loyalty < 40  martial < 6 } }
+		}
+		commander = { save_scope_as = arm_commander }
+		scope:arm_province.governor = { save_scope_as = arm_governor }
+		unit_owner = {
+			set_variable = { name = army_gov_friction_cd  days = 200 }
+			LOG_line = { sys = ARMY  msg = "billeting friction between a stationed host and the provincial governor for" }
+			trigger_event = { id = army_governor_friction.1  days = { 5 30 } }
+		}
+	}
+}
