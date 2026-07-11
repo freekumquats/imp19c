@@ -1104,18 +1104,33 @@ WEALTH_cache_shipping_trade_values = {
 	# Scope: Governorship
 	# Function: Cache the shipping trade values in a variable so they remain static throughout the quarter
 	# Called: After the quarterly trade tick
+	# [logfix] this effect runs at oa_wealth_changes.txt:277, ONE line BEFORE
+	# GT_reset_trade_transaction_totals (line 279) seeds trade_*_due_shipping = 0.
+	# So on the FIRST quarterly tick these source vars do not yet exist, and the bare
+	# reads/compare below threw "Invalid left side during comparison 'var'" (~41k lines
+	# /session) + cached a garbage value. Guard each read with has_variable and default
+	# the cache to 0 when absent (proven guard idiom, SHIPPING_svalues.txt:281/291).
 	set_variable = {
 		name = WEALTH_cached_last_quarter_trade_income_due_shipping
 		value = {
-			value = var:trade_income_due_shipping
+			value = 0
+			if = {
+				limit = { has_variable = trade_income_due_shipping }
+				add = var:trade_income_due_shipping
+			}
 		}
 	}
 	set_variable = {
 		name = WEALTH_cached_last_quarter_trade_expenses_due_shipping
 		value = {
-			value = var:trade_expenses_due_shipping
+			value = 0
+			if = {
+				limit = { has_variable = trade_expenses_due_shipping }
+				add = var:trade_expenses_due_shipping
+			}
 			if = {
 				limit = {
+					has_variable = trade_expenses_due_shipping
 					var:trade_expenses_due_shipping > 0
 				}
 				multiply = -1
