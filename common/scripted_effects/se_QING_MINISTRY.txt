@@ -31,7 +31,8 @@ QING_ministry_recompute_all_perf = {
 		QING_ministry_recompute_perf_zongli = yes
 		QING_ministry_recompute_perf_works = yes
 		QING_ministry_recompute_perf_rites = yes
-		# (Revenue #355, Personnel #365, Justice #363, Censorate #362,
+		QING_ministry_recompute_perf_revenue = yes
+		# (Personnel #365, Justice #363, Censorate #362,
 		#  Central Secretariat #361, Imperial Household #359, Imperial Guard #364 each append
 		#  their recompute call here as they ship.)
 	}
@@ -405,6 +406,99 @@ QING_ministry_recompute_perf_rites = {
 	if = { limit = { var:qing_min_perf_rites < 0 }   set_variable = { name = qing_min_perf_rites  value = 0 } }
 	if = { limit = { var:qing_min_perf_rites > 100 } set_variable = { name = qing_min_perf_rites  value = 100 } }
 	LOG_line = { sys = QING  msg = "rites-ministry performance recomputed" }
+}
+
+# ======================================================================
+# [#355] MINISTRY OF REVENUE (戶部) PERFORMANCE — qing_min_perf_revenue (0..100, 50 = adequate).
+# The Board of Revenue held the imperial fisc: the census, the land tax, the SALT GABELLE
+# (鹽政 — a vast revenue riddled with patronage), the ever-normal GRANARIES (常平倉, grain
+# reserves against famine), and the response to the 19thC SILVER CRISIS (銀荒/銀貴錢賤). This
+# mod tracks all of these as concrete counters/buildings the decline engine already drives
+# (se_QING_REVENUE.txt): qing_salt_gabelle_reformed, qing_currency_stress, qing_corruption_level,
+# and the qing_granary_building in the Yellow-River provinces. We build the ministry meter
+# from that concrete state:
+#   • the Grand Minister of Revenue's own FINESSE (戶部尚書 — finesse is its governing skill,
+#     the same stat QING_revenue_assess_fitness leans on, x4),
+#   • GRANARY COVERAGE — the ever-normal reserves standing across the Yellow-River provinces
+#     vs a healthy ~5 (empty granaries = famine unmanaged), x3,
+#   • a SALT-GABELLE bonus (an honest, reformed 鹽政 lifts the fisc), and
+#   • drags for the SILVER CRISIS (qing_currency_stress) and realm CORRUPTION (the graft that
+#     ate the land-tax). Deliberately NOT the minister's honesty/loyalty traits — those feed
+#     QING_revenue_assess_fitness for the domain EVENTS, an orthogonal path; the council fold
+#     already scores the holder's own attributes via QING_council_score_office, so we score
+#     ministry OUTPUT (reserves/salt/currency), not the man again.
+# A VACANT Revenue office floors the meter low. Also rebuilds qing_revenue_granaries (the
+# granary-province roster the panel #355 renders) + tallies qing_revenue_granary_count.
+# All reads guarded; O(owned provinces).
+# ======================================================================
+QING_ministry_recompute_perf_revenue = {
+	# --- rebuild the granary-province roster (panel datamodel) + tally the reserves. A
+	# province is on the roster if it holds an ever-normal granary. Bounded O(owned provinces).
+	clear_variable_list = qing_revenue_granaries
+	set_variable = { name = qing_revenue_granary_count  value = 0 }
+	every_owned_province = {
+		limit = { has_building = qing_granary_building }
+		ROOT = {
+			add_to_variable_list = { name = qing_revenue_granaries  target = prev }
+			change_variable = { name = qing_revenue_granary_count  add = 1 }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_revenue  value = 50 }
+	if = {
+		# office FILLED by a live employed minister — score on his finesse + fiscal output.
+		limit = {
+			has_variable = qing_office_revenue_holder
+			var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the minister's finesse, deviation from a competent baseline of 7, x4 (finesse is
+		# the Board's governing skill — the administrator's gift for the fisc).
+		var:qing_office_revenue_holder = { save_scope_as = qing_revenue_minister }
+		set_variable = { name = qing_min_revenue_scratch  value = 0 }
+		change_variable = { name = qing_min_revenue_scratch  add = scope:qing_revenue_minister.finesse }
+		change_variable = { name = qing_min_revenue_scratch  subtract = 7 }
+		change_variable = { name = qing_min_revenue_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_revenue  add = var:qing_min_revenue_scratch }
+		# (b) GRANARY COVERAGE — ever-normal reserves standing vs a healthy establishment of ~5,
+		# x3. Empty granaries = the realm one bad harvest from famine. Count, not skill re-use.
+		set_variable = { name = qing_min_revenue_scratch  value = var:qing_revenue_granary_count }
+		change_variable = { name = qing_min_revenue_scratch  subtract = 5 }   # deviation from a healthy reserve
+		change_variable = { name = qing_min_revenue_scratch  multiply = 3 }
+		change_variable = { name = qing_min_perf_revenue  add = var:qing_min_revenue_scratch }
+		# (c) SALT GABELLE — a reformed, honest 鹽政 lifts the fisc (+10); an unreformed one is
+		# the baseline (patronage tolerated, no bonus).
+		if = {
+			limit = {
+				has_variable = qing_salt_gabelle_reformed
+				var:qing_salt_gabelle_reformed = 1
+			}
+			change_variable = { name = qing_min_perf_revenue  add = 10 }
+		}
+		# (d) SILVER CRISIS DRAG — the 銀荒: the currency stress the Board is failing to arrest.
+		# subtract currency_stress/6 (0..-~16 at the rails), guarded on the var existing.
+		if = {
+			limit = { has_variable = qing_currency_stress }
+			set_variable = { name = qing_min_revenue_scratch  value = var:qing_currency_stress }
+			change_variable = { name = qing_min_revenue_scratch  divide = 6 }
+			change_variable = { name = qing_min_perf_revenue  subtract = var:qing_min_revenue_scratch }
+		}
+		# (e) CORRUPTION DRAG — the graft that ate the land-tax. subtract corruption/10
+		# (0..-10 at the rails), guarded on the var existing.
+		if = {
+			limit = { has_variable = qing_corruption_level }
+			set_variable = { name = qing_min_revenue_scratch  value = var:qing_corruption_level }
+			change_variable = { name = qing_min_revenue_scratch  divide = 10 }
+			change_variable = { name = qing_min_perf_revenue  subtract = var:qing_min_revenue_scratch }
+		}
+	}
+	else = {
+		# VACANT Board of Revenue — the salt graft entrenches, the granaries empty. Floor it low.
+		set_variable = { name = qing_min_perf_revenue  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_revenue < 0 }   set_variable = { name = qing_min_perf_revenue  value = 0 } }
+	if = { limit = { var:qing_min_perf_revenue > 100 } set_variable = { name = qing_min_perf_revenue  value = 100 } }
+	LOG_line = { sys = QING  msg = "revenue-ministry performance recomputed" }
 }
 
 # ======================================================================

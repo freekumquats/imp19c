@@ -350,3 +350,35 @@ already-committed code. All fixed on merge-overnight:
 - Two findings correctly REJECTED by the verify pass (betrothal-overwrite self-heals via
   MARRIAGE_check_betrothals; MARRIAGE_PLAY_add_incentive is inert dead code, not a defect) — left
   as-is; add_incentive stays for a future mid-play incentive button.
+
+---
+
+## #355 — Ministry of Revenue panel (戶部)
+
+Built the Board of Revenue as an INTERACTIVE Grand-Council-clone L4 panel (the Works pattern,
+not the read-only Rites/War/Lifan pattern) — it owns the imperial fisc and gives the Revenue
+minister two levers. All fiscal logic reuses existing se_QING_REVENUE.txt — no new fiscal code.
+
+- **D36 — Perf spine (folds into the Grand Council).** `qing_min_perf_revenue` recomputed in
+  `QING_ministry_recompute_perf_revenue`, registered in the `QING_ministry_recompute_all_perf`
+  dispatcher (se_QING_MINISTRY.txt). Formula: base 50; filled → (finesse−7)×4 [finesse is the
+  Board's governing skill] + (granary_count−5)×3 [ever-normal reserves vs a healthy establishment
+  of ~5] + 10 if the salt gabelle is reformed − currency_stress/6 [the 銀荒 silver drag]
+  − corruption/10; vacant floor = 25; clamp 0..100. The council fold needs NO edit — the office
+  key `revenue` is already enumerated in QING_council_perf_accumulate.
+- **D37 — Granary roster as concrete province links.** The compute effect rebuilds
+  `qing_revenue_granaries` (every owned province holding `qing_granary_building`) +
+  `qing_revenue_granary_count` each pulse, following the concrete-over-abstract rule. The panel
+  scrolls this as a province roster with goto_buttons (the Works-panel datamodel idiom).
+- **D38 — Two action levers, both reusing proven logic.**
+  (1) STOCK A GRANARY (常平倉): `qing_revenue_ministry_stock_granary` — gated on a seated minister
+  with finesse ≥ 7, treasury ≥ 60, and a Yellow-River city province (北京/天津/保定/開封/濟南);
+  charges −60 treasury then calls the proven `QING_revenue_stock_granary`.
+  (2) REFORM THE SALT GABELLE (鹽政): `qing_revenue_ministry_reform_salt` — gated on a seated
+  minister + an unreformed gabelle; fires the proven `qing_revenue.1` event with its fitness-gated
+  reform/milk/defer choices.
+- **D39 — Read-outs.** Perf meter, granary count, silver-crisis (qing_currency_stress),
+  salt-gabelle reformed/unreformed state (via the `qing_revenue_ministry_salt_reformed` indicator),
+  finesse minister card (icon_civic/GetFinesse), and the shared council-contrib line.
+- Header icon menu_trade.dds (fisc); window `qing_revenue_ministry_panel`; open button wired into
+  the government_view col2 strip after Rites. All referenced vars/effects verified to exist.
