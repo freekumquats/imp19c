@@ -1519,3 +1519,27 @@ standing.
 
 **Verified pre-commit:** braces balanced; 7 works loc keys present. Adversarial review launched
 (wf_18966771-a79) — outcome to be actioned.
+
+## D84 — #335 canal review actioned (adversarial review wf_18966771; 1 CONFIRMED minor, commit 316a7fb4)
+
+**Review verdict:** 4 findings raised, 1 confirmed (minor), 3 refuted.
+- **CONFIRMED (minor, attribution mismatch):** adding `qing_granary_building` to the works sweep's
+  `every_owned_province` OR-limit made granary-ONLY provinces join `qing_works_provinces`, so the Works
+  panel's "Public Works of the Realm" roster listed ever-normal granaries (the decline-engine's building,
+  deliberately kept OUT of `qing_works_building_count`) as Board-of-Works commissions — roster non-empty
+  while the works count reads 0.
+  - **FIX (commit 316a7fb4):** gated the `add_to_variable_list` on the province holding a genuine
+    (non-granary) Works building. The granary still passes the outer OR-limit, so `qing_granary_count`
+    is still tallied for the canal grain balance — only the panel roster is gated, not the loop entry.
+    (The finding split 2-real / 1-refuted among the three verifiers — two argued the panel deliberately
+    frames granaries as hydraulic works via the HYDRAULIC line; the fix is trivial + safe either way, so
+    applied.)
+- **REFUTED (MAJOR downgraded to non-issue):** the claim that `value = var:qing_office_works_holder.finesse`
+  (se_QING_CANAL.txt:109) is an unproven dotted-read that reads 0/errors — refuted; the `var:X.attr` read
+  in a `set_variable` value context is proven in the mod's trade code (se_DEMAND.txt:178
+  `var:trade_center.var:local_price_*`, +4 more), and `.finesse` off a live char scope is proven in the
+  sibling recompute. Behaviour is identical to the save_scope_as form; the minister's canal boost lands.
+- **REFUTED (×2 minor):** two further framings of the same granary-roster observation — one arguing the
+  inclusion is by-design (the panel's HYDRAULIC line counts granaries), one that the count!=roster-length
+  invariant never existed. Both correct that it is non-load-breaking; fix applied anyway for clean
+  attribution.
