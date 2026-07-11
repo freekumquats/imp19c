@@ -2853,3 +2853,22 @@ Reviews: a code-review agent passed B5/B9/B15/B16/B20 clean and caught the B17 m
   Fixing the ruler seats restores real rulers-with-children, which resolves B12 (marriage table populates) for those powers.
 
 Two code-review agents ran across the batch: B5/B9/B15/B16/B20 clean; B17 mis-scope caught + fixed (see part 2); B10/B25/B26 clean with 2 low notes both addressed (Great Game scrollarea; dropped a vestigial datacontext). All touched files brace-balanced, BOM/indent preserved. In-game boot test still owed (esp. B21/B22 placement + the ruler seats).
+
+---
+
+## #340 trade_fix — define three dangling PURCHASE_* trade effects (2026-07-11)
+
+**Symptom:** ~200 "Unknown effect" load errors from `common/scripted_effects/se_PURCHASE.txt` — three scripted-effects CALLED but NEVER DEFINED in any historical commit.
+
+**Diagnosis (git-blame + full history search, all upstream code — dementive/Sobisonator):** these are dangling calls left behind when upstream's WiP external-trade / quick-rank framework was added (commits d94457a5 "WiP external trade functionality", 73803c2a "TEST - Added external trade functionality") and then reverted (b60906d1 "Reverted to original trade ranking method"). The call sites survived; the definitions never existed at top level in any commit.
+  - `PURCHASE_get_preferred_tradezone_internal` — called ~68x (inlined) on the LIVE path: events/economy/trade.txt:175 → PURCHASE_make_internal_shopping_list → PURCHASE_check_shopping_internal (line ~399).
+  - `PURCHASE_order_external` — called ~68x in the same effect's "# EXTERNAL" branch (line ~441).
+  - `PURCHASE_check_shopping_external` — called 67x inside PURCHASE_make_external_shopping_list (which is itself DEAD CODE: zero live callers, megacomplex-APPLY loops commented out) — but dead code still errors at load. (Caught by the code-review agent; not in the original 2-effect task scope.)
+
+**Fix:** defined all three as documented, empty-bodied NO-OP STUBS. Rationale: an undefined scripted-effect call is dropped by the compiler and does nothing at runtime; an empty-bodied definition also does nothing → runtime is BYTE-IDENTICAL to today (the 1763 boot ran fine with these undefined), while the load errors are eliminated. Wiring them to real ranking/external-order logic (the proven quickrank in wip_quicktraderank.txt:500 exists but is unwired) would CHANGE economy behaviour — explicitly out of scope for a load-error fix under "don't break anything."
+
+**Proven-code verification (oracle, not self-reference):** empty scripted_effect bodies are engine-legal — Invictus ships many literal `X = {}` no-op defs (ai_laws_effects.txt) + a comment-only cleanup effect; this repo itself already ships ~52 comment-only/empty scripted effects (se_PURCHASE_new.txt, se_SELL.txt DEFUNCT_*, se_AI.txt). So the load-bearing "empty body is valid + no-op" assumption is confirmed against upstream, not assumed.
+
+**Consequence (documented, unchanged from today):** the internal stub sets no *_rank_internal_supplier_$tradegood$ vars, so PURCHASE_order_internal still finds no ranked supplier and places no internal order — exactly the current "original ranking method" state. No behavioural change.
+
+**Review:** code-review agent PASSED the core fix on all points (load-bearing assumption TRUE; placement/braces/no-duplicates PASS; live-loop regression NONE — byte-identical; stub-vs-wiring correct). It surfaced the third undefined effect (now stubbed) + two LOW doc inaccuracies (both fixed: dropped the inaccurate "empty-bodied sibling" claim in favour of the Invictus citation; corrected the order_external call-site line ref 467→441). Post-fix sweep confirms ZERO remaining called-but-undefined PURCHASE_ effects. Single file, braces 851/851. No runtime LOG markers (hot quarterly trade loop — logging would flood the log); traced via in-code #340 comments + this entry. In-game boot test owed to confirm the load log is clean.

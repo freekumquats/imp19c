@@ -625,6 +625,41 @@ PURCHASE_get_preferred_tradezone_external = {
 	}
 }
 
+# [#340 trade_fix] DEFINE the internal-supplier preference effect that was CALLED (line ~399, live
+# path PURCHASE_make_internal_shopping_list -> PURCHASE_check_shopping_internal, wired at
+# events/economy/trade.txt:175) but NEVER DEFINED in any historical commit -> ~68 "Unknown effect"
+# load errors. It is a dangling call left behind when upstream's WiP external/quick-rank trade
+# framework was reverted (commit b60906d1 "Reverted to original trade ranking method"; the working
+# variant PURCHASE_get_preferred_tradezone_internal_quickrank still lives in wip_quicktraderank.txt
+# but is NOT wired into the live path).
+#
+# This is a BEHAVIOUR-PRESERVING no-op stub. An undefined scripted-effect call is dropped by the
+# compiler and does nothing at runtime; an empty-bodied definition also does nothing. So runtime is
+# byte-identical to today (the 1763 boot test ran fine with these undefined), but the load errors go.
+# PROVEN (oracle, not my own reasoning): an empty scripted_effect body is engine-legal — Invictus
+# ships many, e.g. ai_laws_effects.txt:1054 `ai_choose_and_enact_law_republic_medium_priority = {}`
+# plus the comment-only gadir_mission_01..._cleanup_effect. The nearby sibling
+# PURCHASE_get_preferred_tradezone_external (dementive/Sobisonator) is likewise a do-nothing stub
+# (its only body is an empty every_in_list with TODO comments).
+#
+# CONSEQUENCE (unchanged, documented for clarity): because no *_rank_internal_supplier_$tradegood$
+# vars get set here, the following PURCHASE_order_internal finds no ranked supplier and places no
+# internal order — the current live state under the "original ranking method". To make internal
+# supplier ranking actually fire, wire this to the proven quickrank logic
+# (wip_quicktraderank.txt:500 PURCHASE_get_preferred_tradezone_internal_quickrank) — but that is a
+# deliberate behaviour CHANGE to the economy, out of scope for this load-error fix.
+#
+# No runtime LOG marker: this runs in the hot quarterly trade loop (every governorship x every
+# tradegood); logging here would flood the log and hurt performance. Traced via this comment + the
+# #340 task + SESSION_REPORT per the behavioural-equivalence tier of the fix-traceability rule.
+PURCHASE_get_preferred_tradezone_internal = {
+	# Scope: governorship
+	# Function (intended): rank the internal trade scope's tradezones as suppliers of $tradegood$ and
+	# award 1st..6th_rank_internal_supplier_$tradegood$ on the ranking governorship.
+	# Arguments (as passed by the caller): $tradegood$, $order_size$.
+	# STUB — no-op, see block comment above. Preserves current runtime behaviour exactly.
+}
+
 PURCHASE_try_supplier = {
 	# Scope: governorship
 	# Function: check the name of the current tradezone rank being checked, and poll the corresponding stockpile variable
@@ -1107,6 +1142,38 @@ PURCHASE_order_internal = {
 		}
 	}
 }
+
+# [#340 trade_fix] DEFINE the external purchase-order effect that was CALLED (line ~441, live path
+# PURCHASE_check_shopping_internal -> "# EXTERNAL" branch) but NEVER DEFINED in any historical commit
+# -> ~68 "Unknown effect" load errors. Like PURCHASE_get_preferred_tradezone_internal above, this is
+# a dangling call left behind when upstream's WiP external-trade framework was added
+# (commits d94457a5 "WiP external trade functionality Added external purchase order framework",
+# 73803c2a "TEST - Added external trade functionality") and then reverted -- the caller survived, the
+# definition never existed. The parallel PURCHASE_check_shopping_internal_pre_ranked path already has
+# its own PURCHASE_order_external call COMMENTED OUT (line ~531), confirming external ordering was
+# intentionally shelved.
+#
+# BEHAVIOUR-PRESERVING no-op stub. An undefined scripted-effect call is dropped by the compiler and
+# does nothing at runtime; an empty-bodied definition also does nothing -> runtime byte-identical to
+# today (the 1763 boot test ran fine with this undefined), load errors gone. Empty scripted_effect
+# bodies are engine-legal and PROVEN in Invictus (ai_laws_effects.txt has many `X = {}` no-op stubs).
+# There is no proven upstream external-order body to recover (it was never written -- only the
+# framework scaffolding in the reverted WiP commits), so a stub is the faithful, zero-risk fix.
+# Building real external trade
+# (score partner tradezones -> ship goods across the route -> apply tariffs/shipping cost -> transfer
+# into the governorship stockpile) is a large economy FEATURE, explicitly out of scope for this
+# load-error fix.
+#
+# No runtime LOG marker (hot quarterly trade loop -- logging would flood the log). Traced via this
+# comment + #340 task + SESSION_REPORT per the behavioural-equivalence tier of the traceability rule.
+PURCHASE_order_external = {
+	# Scope: governorship
+	# Function (intended): fulfil the still-unmet demand for $tradegood$ from an EXTERNAL trade partner
+	# (buy across a route, apply tariffs + shipping cost, transfer into this governorship's stockpile).
+	# Arguments (as passed by the caller): $tradegood$, $order_size$, $category$.
+	# STUB -- no-op, see block comment above. Preserves current runtime behaviour exactly.
+}
+
 
 PURCHASE_transfer_goods_internally = {
 	# Scope: governorship (seller scope)
@@ -1798,6 +1865,30 @@ PURCHASE_make_external_shopping_list = {
 		category = military_goods
 	}
 }
+
+# [#340 trade_fix] DEFINE the external per-good shopping check that PURCHASE_make_external_shopping_list
+# CALLS 67x (once per tradegood, just above) but which was NEVER DEFINED -> ~67 more "Unknown effect"
+# load errors. Same dangling-call class as PURCHASE_get_preferred_tradezone_internal / _order_external:
+# it is the external-market twin of the live PURCHASE_check_shopping_internal, left behind when the WiP
+# external-trade framework was reverted. NOTE the whole external branch is DEAD CODE at runtime --
+# PURCHASE_make_external_shopping_list has ZERO live callers (only ..._internal is wired, at
+# events/economy/trade.txt:175) and its internal megacomplex-APPLY loops are commented out -- but dead
+# code still generates load-time "Unknown effect" errors, so it must be defined to clean the log.
+#
+# BEHAVIOUR-PRESERVING no-op stub (empty scripted_effect bodies are engine-legal and PROVEN -- this
+# repo already ships ~52 comment-only/empty scripted effects, e.g. se_PURCHASE_new.txt, se_SELL.txt
+# DEFUNCT_*, se_AI.txt; Invictus ai_laws_effects.txt has many literal `X = {}`). Runtime is unchanged
+# (this never ran: undefined-and-dropped before, empty-and-inert now, and its container is uncalled).
+# Wiring real external-market logic is a large economy FEATURE, out of scope for this load-error fix.
+# No runtime LOG marker (would be dead anyway). Traced via this comment + #340 task + SESSION_REPORT.
+PURCHASE_check_shopping_external = {
+	# Scope: governorship
+	# Function (intended): external-market twin of PURCHASE_check_shopping_internal -- check unmet demand
+	# for $tradegood$ and place an external order under spend-$category$.
+	# Arguments (as passed by the caller): $tradegood$, $category$.
+	# STUB -- no-op, see block comment above. Preserves current runtime behaviour exactly (dead path).
+}
+
 
 
 PURCHASE_reset_quarterly_var = {
