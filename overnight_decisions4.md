@@ -1543,3 +1543,25 @@ standing.
   inclusion is by-design (the panel's HYDRAULIC line counts granaries), one that the count!=roster-length
   invariant never existed. Both correct that it is non-load-breaking; fix applied anyway for clean
   attribution.
+
+## D85 — #370-R2: caravan once-only flag-leaks (adversarial review wf_9e226c8e)
+The #370 review confirmed 2 MAJOR flag-leaks (the #366/#368 class, siblings of #370-R):
+- **qing_caravan.2 NEGOTIATE** granted the aqsaqal but never cleared `qing_caravan_routecut_seen`,
+  so after a later revoke the route-cut crisis could never re-fire (road silently stays cut).
+- **qing_caravan.1 GRANT** never cleared `qing_caravan_ultimatum_seen`, so grant-then-revoke left the
+  Kokand ultimatum permanently suppressed despite the revoke re-provoking Kokand.
+Both now clear their `_seen` flag on resolution (mirroring escort/lapse). **REFUSE deliberately KEEPS
+`ultimatum_seen` set** — it sets the khoja scare and does not drop prosperity, so clearing it would
+re-fire .1 next quarter and preempt the .2 route-cut the refusal is meant to provoke. Commit 5499fe3ca.
+
+## D86 — Merge-plan audit: 2 gaps in DEVELOP_MERGE_PLAN_2.md (Layer A)
+Answering "does the plan cover all mechanics added to the 1763 branch?", I audited the plan against the
+FULL 6a31f077..fbd1c073 range (62 commits), not just the ee44b72a9-onward slice it enumerated:
+- **GAP (real): #291 (1921f3b06) ROW specialty buildings** — `row_production_buildings.txt`,
+  `se_ROW_BUILDINGS.txt`, `row_buildings_l_english.yml` are ABSENT on develop-mech-port and were NOT
+  carried by batch 1 (which took only the Qing companion se_QING_BUILDINGS). Branch-agnostic [MECH].
+  **Added to A-MECH.**
+- **GAP (doc): #283/#302/#303** six-power 1763→1815 AI-catch-up arcs + dated-war scheduler + setup-events
+  were only an "open decision". All START_DATE-offset [DATE] → firm **skip**; now named in A-DATE, §4.3
+  RESOLVED. Commit ef0adf352.
+All other absent-from-dmp files in the range = world-surgery (skip) or process/research docs (§4.2).
