@@ -35,7 +35,8 @@ QING_ministry_recompute_all_perf = {
 		QING_ministry_recompute_perf_grand_secretariat = yes
 		QING_ministry_recompute_perf_chamberlain = yes
 		QING_ministry_recompute_perf_censor = yes
-		# (Personnel #365, Justice #363,
+		QING_ministry_recompute_perf_justice = yes
+		# (Personnel #365,
 		#  Imperial Guard #364 each append their recompute call here as they ship.
 		#  Central Secretariat #361 reuses the grand_secretariat compute already
 		#  registered here for the Hanlin Academy #358.)
@@ -800,4 +801,85 @@ QING_ministry_recompute_perf_censor = {
 	if = { limit = { var:qing_min_perf_censor < 0 }   set_variable = { name = qing_min_perf_censor  value = 0 } }
 	if = { limit = { var:qing_min_perf_censor > 100 } set_variable = { name = qing_min_perf_censor  value = 100 } }
 	LOG_line = { sys = QING  msg = "censorate performance recomputed" }
+}
+
+# ======================================================================
+# [#363] BOARD OF PUNISHMENTS (刑部) PERFORMANCE — qing_min_perf_justice (0..100, 50 = adequate).
+#
+# [#363 BUG-FIX] Like the Censorate before #362, the council fold has always enumerated
+# `office = justice` (se_QING_COUNCIL.txt), but NO effect ever SET qing_min_perf_justice —
+# QING_council_perf_accumulate self-guards on has_variable and silently DROPPED the Grand
+# Minister of Justice from the average, so his charge contributed NOTHING to the Grand
+# Council. This compute closes that gap so the 刑部 folds into its leader's standing.
+#
+# The Board of Punishments (刑部) was the empire's high court + keeper of the penal code
+# (大清律例), one of the 三法司. Its concrete work is a DOCKET of accused officials (待審) it
+# holds and TRIES — convicting the venal (disgrace + penal servitude 流刑) or acquitting the
+# wronged. We build the meter from concrete state:
+#   • the Grand Minister of Justice's own ZEAL (刑部尚書 — zeal is the office's governing skill,
+#     the same stat se_QING_JUSTICE gates its pulse on; the upright judge, x4), plus a bonus
+#     for a JUST / HONEST minister (even-handed application of the code, +6 each),
+#   • less a DOCKET-BACKLOG drag — a Board that lets accused pile up UNTRIED (待審積壓) is
+#     failing its charge; subtract the docket count x3 (bounded, since the docket self-caps),
+#   • less a CORRUPTION drag — arbitrary, purchasable justice (the 刑名 clerk's graft); subtract
+#     corruption/8. A VACANT Board floors the meter low (the law drifts). Rebuilds the
+#     qing_justice_docket roster (the panel datamodel). Clamp 0..100. Bounded O(court).
+# ======================================================================
+QING_ministry_recompute_perf_justice = {
+	# --- rebuild the docket roster (panel datamodel) + tally count. An "accused" = a
+	# courtier flagged qing_justice_accused (docketed via the #363 panel / justice domain).
+	clear_variable_list = qing_justice_docket
+	set_variable = { name = qing_justice_docket_count  value = 0 }
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			has_variable = qing_justice_accused
+		}
+		ROOT = {
+			add_to_variable_list = { name = qing_justice_docket  target = prev }
+			change_variable = { name = qing_justice_docket_count  add = 1 }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_justice  value = 50 }
+	if = {
+		# office FILLED by a live employed Minister of Justice — score on his zeal + integrity.
+		limit = {
+			has_variable = qing_office_justice_holder
+			var:qing_office_justice_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the Minister's zeal, deviation from a competent baseline of 7, x4.
+		var:qing_office_justice_holder = { save_scope_as = qing_justice_minister_s }
+		set_variable = { name = qing_min_justice_scratch  value = 0 }
+		change_variable = { name = qing_min_justice_scratch  add = scope:qing_justice_minister_s.zeal }
+		change_variable = { name = qing_min_justice_scratch  subtract = 7 }
+		change_variable = { name = qing_min_justice_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_justice  add = var:qing_min_justice_scratch }
+		# (b) INTEGRITY — a just / honest minister applies the code even-handedly, +6 each.
+		if = { limit = { scope:qing_justice_minister_s = { has_trait = just } }    change_variable = { name = qing_min_perf_justice  add = 6 } }
+		if = { limit = { scope:qing_justice_minister_s = { has_trait = honest } }  change_variable = { name = qing_min_perf_justice  add = 6 } }
+		# (c) DOCKET BACKLOG (待審積壓) — accused left untried drag the Board's standing, x3.
+		if = {
+			limit = { var:qing_justice_docket_count > 0 }
+			set_variable = { name = qing_min_justice_scratch  value = var:qing_justice_docket_count }
+			change_variable = { name = qing_min_justice_scratch  multiply = 3 }
+			change_variable = { name = qing_min_perf_justice  subtract = var:qing_min_justice_scratch }
+		}
+		# (d) CORRUPTION DRAG — arbitrary, purchasable justice (刑名 graft). subtract corruption/8.
+		if = {
+			limit = { has_variable = qing_corruption_level }
+			set_variable = { name = qing_min_justice_scratch  value = var:qing_corruption_level }
+			change_variable = { name = qing_min_justice_scratch  divide = 8 }
+			change_variable = { name = qing_min_perf_justice  subtract = var:qing_min_justice_scratch }
+		}
+	}
+	else = {
+		# VACANT Board — the law drifts, justice is arbitrary. Floor it low.
+		set_variable = { name = qing_min_perf_justice  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_justice < 0 }   set_variable = { name = qing_min_perf_justice  value = 0 } }
+	if = { limit = { var:qing_min_perf_justice > 100 } set_variable = { name = qing_min_perf_justice  value = 100 } }
+	LOG_line = { sys = QING  msg = "board-of-punishments performance recomputed" }
 }

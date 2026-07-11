@@ -167,6 +167,93 @@ QING_justice_vindicate_appeal = {
 	LOG_exit = { sys = QING  fn = "QING_justice_vindicate_appeal"  result = OK }
 }
 
+# ======================================================================
+# [#363] THE DOCKET (待審) — the Board of Punishments' concrete work: a roster of
+# accused officials it HOLDS and TRIES. Distinct from the Censorate's instant impeach
+# (都察院, #362 — surveillance + one-blow disgrace): the 刑部 is the high COURT, so it
+# CHARGES a suspect onto its docket first (qing_justice_accused), then convicts or
+# acquits him at trial. These verbs back the #363 panel; se_LOG throughout.
+# ======================================================================
+
+# FIND AN ACCUSABLE OFFICIAL — the most corrupt courtier NOT already on the docket,
+# saved as scope:qing_justice_target. Mirrors QING_censorate_find_corrupt's limit but
+# excludes men already charged (so ACCUSE never re-charges a docketed suspect). Country scope.
+QING_justice_find_accusable = {
+	LOG_enter = { sys = QING  fn = "QING_justice_find_accusable" }
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_ruler = no
+			is_adult = yes
+			is_alive = yes
+			NOT = { has_variable = qing_rebel_foil }
+			NOT = { has_variable = qing_justice_accused }
+			OR = {
+				corruption >= 30
+				has_trait = corrupt
+				loyalty < 40
+			}
+		}
+		order_by = corruption
+		check_range_bounds = no
+		max = 1
+		save_scope_as = qing_justice_target
+	}
+	if = {
+		limit = { exists = scope:qing_justice_target }
+		LOG_line = { sys = QING  msg = "justice: an accusable official found for the docket for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_justice_find_accusable"  reason = "no accusable official found for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_justice_find_accusable"  result = OK }
+}
+
+# CONVICT AN ACCUSED (定罪) — the trial goes against the accused. Disgrace + strip
+# office + reduce corruption, and (the concrete 刑部 penalty the design calls for) condemn
+# the convict's household to PENAL SERVITUDE (流刑/籍沒): a pop in the realm's capital is
+# reduced to the slave class. Scope: the accused CHARACTER (ROOT); scope:player = CHI.
+# Uses only proven idioms: QING_char_taint, QING_office_vacate_dispatch, and the
+# set_pop_type = slaves conversion (naval_raiding.txt:174). Unmarks the docket flag.
+QING_justice_convict_accused = {
+	LOG_enter = { sys = QING  fn = "QING_justice_convict_accused" }
+	# the code falls on the convict: tainted (corrupt trait + corruption up), disgraced,
+	# and stripped of any great office he held.
+	QING_char_taint = yes
+	add_loyalty = loyalty_qing_disgraced
+	add_popularity = -20
+	if = { limit = { has_variable = qing_office_held }  QING_office_vacate_dispatch = yes }
+	remove_variable = qing_justice_accused
+	# PENAL SERVITUDE (籍沒): the convict's household reduced to bond-servitude — a non-slave
+	# pop in the capital province is condemned to the slave class. Guarded so it no-ops when
+	# the capital has no eligible pop (never errors). Concrete slaves-class hook per the design.
+	scope:player = {
+		capital_scope = {
+			if = {
+				limit = { any_pops_in_province = { NOT = { pop_type = slaves } } }
+				random_pops_in_province = {
+					limit = { NOT = { pop_type = slaves } }
+					set_pop_type = slaves
+				}
+			}
+		}
+		# a conviction cleans a little rot out of the system.
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -5 }
+	}
+	LOG_line = { sys = QING  msg = "justice: an accused convicted — disgraced, stripped, household to penal servitude for" }
+	LOG_exit = { sys = QING  fn = "QING_justice_convict_accused"  result = OK }
+}
+
+# ACQUIT AN ACCUSED (開釋) — the trial clears him. Struck from the docket; a wrongly-held
+# man's loyalty is soothed a touch. Scope: the accused CHARACTER (ROOT); scope:player = CHI.
+QING_justice_acquit_accused = {
+	LOG_enter = { sys = QING  fn = "QING_justice_acquit_accused" }
+	remove_variable = qing_justice_accused
+	add_loyalty = loyalty_qing_commended
+	LOG_line = { sys = QING  msg = "justice: an accused acquitted and struck from the docket for" }
+	LOG_exit = { sys = QING  fn = "QING_justice_acquit_accused"  result = OK }
+}
+
 # Protect the official (京控 denied) — shield the magistrate, suppress the appeal.
 QING_justice_deny_appeal = {
 	LOG_enter = { sys = QING  fn = "QING_justice_deny_appeal" }
