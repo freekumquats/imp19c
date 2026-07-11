@@ -648,3 +648,20 @@ the throne's succession engine, not a new council seat. New se_QING_HAREM.txt + 
   own council-strip open button (after the 內務府 Household button), its own window
   (gui/qing_censorate.gui), and appoint routing through imp19c_windows.gui. Open button recomputes
   the meter so the panel is fresh on open.
+
+### #361 adversarial review (wada9zxq1) — 2 confirmed fixes applied
+
+- **#361-R1 (major/display) — `Player.MakeScope.GetPoliticalInfluence` → `Player.GetPoliticalInfluence`.**
+  gui/qing_secretariat.gui:203 read the influence pool off a GuiScope; GetPoliticalInfluence is a
+  Country accessor (MakeScope exposes only GetVariable/Var/GetList/GetCharacter). The lone such call
+  in the repo — fixed to the bare-Country form the 5 other influence read-outs + the vanilla topbar use.
+- **#361-R2 (minor) — `add_loyalty = 2` → `add_loyalty = loyalty_qing_commended`** in
+  QING_secretariat_convene. The engine's add_loyalty takes a NAMED loyalty-modifier key, not a raw
+  scalar (00_imp19c_loyalty.txt:35; verified: ZERO raw-integer add_loyalty anywhere in the repo or
+  the Invictus/TI oracles — every working call uses a key). A bare `= 2` silently no-ops.
+- **DEFERRED (tracked, NOT defer-for-size): mod-wide raw-integer add_loyalty audit.** The review
+  flagged the same no-op anti-pattern pre-existing in se_QING_HOUSEHOLD.txt (#359), se_QING_DYNASTY.txt
+  (#312) and se_QING_PERSONNEL.txt — 12 sites. These belong to already-committed OTHER features and a
+  proper fix needs NEW small-value loyalty keys (the existing keys are all ±12..±40, too coarse for the
+  ±1/±3/±5 personnel sites) + per-site semantic mapping — genuine design, not a mechanical swap, and
+  each site wants its own review. Logged as a standalone cleanup task rather than smuggled into #363.
