@@ -37,8 +37,32 @@ QING_guard_raise_bayara = {
 			NOT = { has_variable = qing_bayara_guard_raised }
 			exists = capital_scope
 		}
+		# [#364-R2 review-fix] create a MARKED founding commander for the Bayara Guard, so the
+		# perf recompute can RE-DERIVE the guard's existence each pulse from any_legion_commander
+		# (a proven country-scope check) rather than trusting a set-once flag. This closes the
+		# leak the adversarial review found: previously qing_bayara_guard_raised was set once and
+		# never cleared, so a Bayara wiped in battle kept its +10 readiness forever AND left the
+		# raise-once muster permanently spent. Marking the commander re-couples the flag to the
+		# concrete legion's lifetime. create_character at country scope + attributes inside is the
+		# proven idiom (QING_napoleon_spawn); NO modifiers inside create_character (the #90 rule).
+		create_character = {
+			culture = ROOT.primary_culture
+			religion = ROOT.religion
+			add_martial = 8
+			add_trait = tactician
+			save_scope_as = bayara_commander
+		}
+		scope:bayara_commander = {
+			set_home_country = ROOT
+			add_nickname = "NICKNAME_QING_BAYARA_COMMANDER"
+			# the durable mark the perf recompute reads to re-derive Bayara readiness.
+			set_variable = qing_is_bayara_commander
+		}
 		capital_scope = { state.governorship = { QING_guard_raise_bayara_at = { loc = ROOT.capital_scope } } }
-		# mark the guard under arms — read by QING_ministry_recompute_perf_guard_commandant (+10).
+		# immediate feedback: mark the guard under arms so the muster gate closes at once. The
+		# perf recompute then AUTHORITATIVELY re-derives this flag from the live legion each pulse
+		# (set if a marked commander still leads a legion; cleared otherwise), so the flag can
+		# never leak past the legion's destruction.
 		set_variable = { name = qing_bayara_guard_raised  value = 1 }
 		LOG_line = { sys = QING  msg = "guard: the Bayara Guard is mustered at the capital for" }
 	}
@@ -50,6 +74,9 @@ QING_guard_raise_bayara = {
 
 # Raise one Bayara Guard legion at $loc$ (a province scope). Called in governorship scope.
 # An elite shock host: 4 line battalions + 1 field gun. Mirrors QING_ili_raise_reconquest_legion_at.
+# Attaches scope:bayara_commander (the marked founding commander) via the proven add_to_legion=PREV
+# + random_legion_unit set_as_commander idiom (se_QING_SELFSTR.txt:364), so the legion stands under
+# a marked head the perf recompute can re-derive it from.
 QING_guard_raise_bayara_at = {
 	# $loc$ = province scope for the legion's muster point
 	raise_legion = {
@@ -61,6 +88,11 @@ QING_guard_raise_bayara_at = {
 			add_subunit = regular_infantry
 			add_subunit = regular_infantry
 			add_subunit = artillery
+		}
+		if = {
+			limit = { exists = scope:bayara_commander }
+			scope:bayara_commander = { add_to_legion = PREV }
+			random_legion_unit = { set_as_commander = scope:bayara_commander }
 		}
 	}
 }
