@@ -1,0 +1,388 @@
+########################################################################
+# qing_upper_study.gui — the Upper Study (上書房) panel window (#337).
+#
+# A Grand-Council-clone dashboard for the palace school that tutors the imperial princes:
+# the 上書房總師傅 (Grand Tutor, qing_upperstudy_chief) in the summit-card slot, the corps
+# of 師傅 tutors (qing_upperstudy_tutors, rebuilt each pulse in se_QING_UPPERSTUDY.txt) as
+# a scrolling CHARACTER roster, the corps depth (qing_upperstudy_count) + the schooling
+# progress (qing_upperstudy_schooling) as read-outs, the reigning CROWN PRINCE
+# (qing_office_crownprince_holder) as the schooling-target card, and FOUR action levers —
+# CHOOSE A MASTER (擇師), RECRUIT A RENOWNED MASTER, INTENSIVE SCHOOLING (勤學不輟), and
+# ELEVATE THE GRAND TUTOR (擢用) into the first vacant great office.
+#
+# Unlike the ministry panels the Study is NOT a Grand Council office — it serves the
+# HEIRS rather than sitting on the council, so there is no ministry-performance meter
+# here; the schooling read-out + the crown-prince card stand in its place. Opened by
+# qing_upperstudy_open_panel_button (QING_upperstudy_panel.txt), wired to a button in
+# gui/government_view.gui. Mirrors gui/qing_southern_study.gui. TAB indentation throughout.
+########################################################################
+
+base_window = {
+	name = "qing_upper_study_panel"
+	size = { 520 800 }
+	allow_outside = yes
+	movable = yes
+
+	using = main_window_template
+
+	state = {
+		name = _show
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+	state = {
+		name = _hide
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+
+	flowcontainer = {
+		direction = vertical
+
+		# HEADER
+		widget = {
+			size = { 520 48 }
+			using = MainWindowHeaderBox
+			blockoverride "Title_text" { text = "QING_US_PANEL_TITLE" }
+			blockoverride "FlagOrIcon" {
+				icon = {
+					texture = "gfx/interface/base_parts/yellow_button_color_200fs.dds"
+					framesize = { 100 100 }
+					frame = 6
+					position = { -2 -2 }
+					size = { 32 32 }
+					modify_texture = {
+						texture = "gfx/interface/icons/menu_buttons/menu_religion.dds"
+						blend_mode = alphamultiply
+					}
+				}
+			}
+			blockoverride "White_buttons" {
+				button_close = {
+					onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_upper_study_panel')]"
+					tooltip = "CLOSE"
+					shortcut = "close_window"
+				}
+			}
+		}
+
+		# BODY
+		margin_widget = {
+			size = { 520 740 }
+			margin = { 10 10 }
+
+			scrollarea = {
+				size = { 500 720 }
+				scrollbarpolicy_horizontal = always_off
+				scrollbar_vertical = { using = VerticalScrollBar }
+				using = VerticalScrollAreaCutOff
+				scrollwidget = {
+					flowcontainer = {
+						direction = vertical
+						spacing = 12
+
+						# DESCRIPTION (wraps)
+						textbox = {
+							size = { 480 96 }
+							multiline = yes
+							using = BaseFontM
+							using = Default_FontColor
+							text = "QING_US_PANEL_DESC"
+						}
+
+						# --- GRAND TUTOR + SCHOOLING SECTION ----------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_US_CHIEF_TITLE"
+							}
+
+							# Grand Tutor card (shown when the chief is present)
+							flowcontainer = {
+								visible = "[GetScriptedGui('qing_upperstudy_has_chief').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								spacing = 8
+								cpt_button = {
+									size = { 50 77 }
+									datacontext = "[Player.MakeScope.Var('qing_upperstudy_chief').GetCharacter]"
+								}
+								flowcontainer = {
+									direction = vertical
+									spacing = 4
+									textbox = {
+										size = { 380 24 }
+										using = BaseFontM
+										using = Default_FontColor
+										text = "[Player.MakeScope.Var('qing_upperstudy_chief').GetCharacter.GetName]"
+									}
+									# finesse + martial + charisma read-out (a master's learning + drill + bearing)
+									flowcontainer = {
+										datacontext = "[Player.MakeScope.Var('qing_upperstudy_chief').GetCharacter]"
+										spacing = 10
+										icon_and_text = {
+											size = { 66 24 }
+											blockoverride "Icon" { using = icon_civic }
+											blockoverride "Text" { text = "[Character.GetFinesse]" }
+											tooltip = "[Character.GetFinesseToolTip]"
+										}
+										icon_and_text = {
+											size = { 66 24 }
+											blockoverride "Icon" { using = icon_military }
+											blockoverride "Text" { text = "[Character.GetMartial]" }
+											tooltip = "[Character.GetMartialToolTip]"
+										}
+										icon_and_text = {
+											size = { 66 24 }
+											blockoverride "Icon" { using = icon_oratory }
+											blockoverride "Text" { text = "[Character.GetCharisma]" }
+											tooltip = "[Character.GetCharismaToolTip]"
+										}
+									}
+								}
+							}
+
+							# Empty-school note
+							textbox = {
+								visible = "[GetScriptedGui('qing_upperstudy_no_chief').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								size = { 460 46 }
+								multiline = yes
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_US_EMPTY"
+							}
+
+							# Corps-depth read-out (師傅 serving)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_US_DEPTH_LABEL"
+									tooltip = "QING_US_DEPTH_TT"
+								}
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_upperstudy_count').GetValue|0]"
+								}
+							}
+
+							# Schooling-progress read-out (the heirs' schooling, folds into dynastic harmony)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_US_SCHOOLING_LABEL"
+									tooltip = "QING_US_SCHOOLING_TT"
+								}
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_upperstudy_schooling').GetValue|0]"
+								}
+							}
+						}
+
+						# --- CROWN-PRINCE (SCHOOLING TARGET) SECTION --------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_US_HEIR_TITLE"
+							}
+
+							# the crown prince the school schools (shown when a visible 皇太子 is in place)
+							flowcontainer = {
+								visible = "[GetScriptedGui('qing_upperstudy_has_crownprince').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								spacing = 8
+								cpt_button = {
+									size = { 50 77 }
+									datacontext = "[Player.MakeScope.Var('qing_office_crownprince_holder').GetCharacter]"
+								}
+								flowcontainer = {
+									direction = vertical
+									spacing = 4
+									textbox = {
+										size = { 380 24 }
+										using = BaseFontM
+										using = Default_FontColor
+										text = "[Player.MakeScope.Var('qing_office_crownprince_holder').GetCharacter.GetName]"
+									}
+									flowcontainer = {
+										datacontext = "[Player.MakeScope.Var('qing_office_crownprince_holder').GetCharacter]"
+										spacing = 10
+										icon_and_text = {
+											size = { 66 24 }
+											blockoverride "Icon" { using = icon_civic }
+											blockoverride "Text" { text = "[Character.GetFinesse]" }
+											tooltip = "[Character.GetFinesseToolTip]"
+										}
+										icon_and_text = {
+											size = { 66 24 }
+											blockoverride "Icon" { using = icon_military }
+											blockoverride "Text" { text = "[Character.GetMartial]" }
+											tooltip = "[Character.GetMartialToolTip]"
+										}
+									}
+								}
+							}
+
+							# no-visible-heir note (a sealed 密建 secret succession hides the heir)
+							textbox = {
+								visible = "[GetScriptedGui('qing_upperstudy_no_crownprince').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								size = { 460 46 }
+								multiline = yes
+								using = BaseFontS
+								using = Default_FontColor
+								text = "QING_US_HEIR_HIDDEN"
+							}
+						}
+
+						# --- ACTION LEVERS SECTION --------------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_US_ADMIN_TITLE"
+							}
+
+							# CHOOSE A MASTER (擇師)
+							text_button_square_highlighted = {
+								size = { 340 28 }
+								datacontext = "[GetScriptedGui('qing_upperstudy_choose')]"
+								blockoverride "Center_text" { text = "QING_US_CHOOSE_BTN"  max_width = 320 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_US_CHOOSE_TT"
+							}
+							# RECRUIT A RENOWNED MASTER
+							text_button_square_highlighted = {
+								size = { 340 28 }
+								datacontext = "[GetScriptedGui('qing_upperstudy_wildcard')]"
+								blockoverride "Center_text" { text = "QING_US_WILDCARD_BTN"  max_width = 320 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_US_WILDCARD_TT"
+							}
+							# INTENSIVE SCHOOLING (勤學不輟) — drill the crown prince
+							text_button_square_highlighted = {
+								size = { 340 28 }
+								datacontext = "[GetScriptedGui('qing_upperstudy_intensive')]"
+								blockoverride "Center_text" { text = "QING_US_INTENSIVE_BTN"  max_width = 320 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_US_INTENSIVE_TT"
+							}
+							# ELEVATE THE GRAND TUTOR (擢用)
+							text_button_square_highlighted = {
+								size = { 340 28 }
+								datacontext = "[GetScriptedGui('qing_upperstudy_elevate')]"
+								blockoverride "Center_text" { text = "QING_US_ELEVATE_BTN"  max_width = 320 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_US_ELEVATE_TT"
+							}
+						}
+
+						# --- TUTOR ROSTER SECTION ---------------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_US_ROSTER_TITLE"
+							}
+
+							# empty note when no tutor serves
+							textbox = {
+								visible = "[IsDataModelEmpty( Player.MakeScope.GetList('qing_upperstudy_tutors') )]"
+								size = { 460 46 }
+								multiline = yes
+								using = BaseFontS
+								using = Default_FontColor
+								text = "QING_US_ROSTER_EMPTY"
+							}
+
+							# the roster (dynamicgridbox over the tutor list — Scope.GetCharacter)
+							dynamicgridbox = {
+								datamodel = "[Player.MakeScope.GetList('qing_upperstudy_tutors')]"
+								datamodel_wrap = 1
+								item = {
+									widget = {
+										size = { 468 84 }
+										margin = { 2 3 }
+										datacontext = "[Scope.GetCharacter]"
+										using = background_widget
+										flowcontainer = {
+											spacing = 8
+											margin = { 8 6 }
+											cpt_button = { size = { 46 68 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = { text = "[Character.GetName]"  maximumsize = { 300 24 }  using = BaseFontM  using = Default_FontColor }
+												flowcontainer = {
+													spacing = 10
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_civic }
+														blockoverride "Text" { text = "[Character.GetFinesse]" }
+														tooltip = "[Character.GetFinesseToolTip]"
+													}
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_military }
+														blockoverride "Text" { text = "[Character.GetMartial]" }
+														tooltip = "[Character.GetMartialToolTip]"
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

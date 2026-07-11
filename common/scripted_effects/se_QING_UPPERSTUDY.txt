@@ -1,0 +1,425 @@
+########################################################################
+# se_QING_UPPERSTUDY.txt — the Upper Study (上書房), #337.
+#
+# The 上書房 ("Upper Study") was the palace school founded by the Yongzheng emperor
+# in 1725 in a hall just inside the 乾清門, where the imperial princes (皇子) were
+# schooled from dawn by hand-picked masters (師傅) in the Confucian classics, in
+# calligraphy and letters, and — the Manchu half of a Qing prince's education — in
+# the Manchu tongue, in mounted archery and the bow (國語騎射). Its head master, the
+# 上書房總師傅 ("Grand Tutor of the Upper Study"), answered to the throne for the
+# competence of the heirs. It is the twin of the Yongzheng emperor's OTHER great
+# innovation, 密建 (secret succession) — for the Upper Study schools ALL the princes,
+# so that whichever of them the sealed tablet in the 正大光明 frame names, the throne
+# passes to a man the palace school has made fit to reign.
+#
+# THIS FEATURE — a princely ACADEMY, NOT a Grand Council office (so, like the Southern
+# Study #336, it does NOT fold into any office-holder's council standing; the #358+
+# ministry-perf spine is untouched). Where the Southern Study serves the EMPEROR and
+# confers court LUSTER, the Upper Study serves the HEIRS and its benefit is dynastic:
+#   • it holds a CORPS of real 師傅 tutor characters (qing_upperstudy_tutors), drawn
+#     FIRST from the exam hiring pool (qing_scholar_pool, se_QING_EXAM.txt) — the most
+#     learned + martial of the 天子門生 — plus an optional renowned-master wildcard;
+#   • it is led by a 上書房總師傅 (Grand Tutor), the ablest serving master, re-derived
+#     each pulse; a seasoned Grand Tutor may be ELEVATED into a vacant great office
+#     (蔡新's arc — from prince's tutor to Grand Secretary), the Study's promotion role;
+#   • it SCHOOLS the succession: each pulse the corps' teaching strength lifts the
+#     realm's dynastic harmony (a well-taught house is a secure house) and, on an
+#     INTENSIVE-SCHOOLING lever, sharpens the reigning CROWN PRINCE (皇太子,
+#     qing_office_crownprince_holder) himself — his finesse + martial, bounded — so the
+#     heir the dynasty events reward for competence is one the player can cultivate.
+#
+# STATE (CHI country scope):
+#   qing_upperstudy_tutors        variable_list of the living 師傅
+#   qing_upperstudy_count         int, the corps size (GUI reads it)
+#   qing_upperstudy_quality       int, summed finesse+martial+charisma of the corps
+#   qing_upperstudy_chief         the 上書房總師傅 (Grand Tutor) — ablest serving master
+#   qing_upperstudy_schooling     int 0..100, the heirs' schooling progress (harmony fold)
+#   qing_upperstudy_initialized   init guard
+# Character-scope mark (on each tutor):
+#   qing_is_upperstudy            flag (roster membership + death-cleanup key)
+#
+# PREFIX: QING_upperstudy_ / sys = QING. CHI-only. Init from on_game_initialized;
+# drifts quarterly via QING_upperstudy_pulse (se_QING_GOVERNANCE.txt). All logged
+# sys = QING, STATIC msgs only (#253). Uses ONLY proven idioms: the exam-pool draw
+# (se_QING_EXAM.txt), the marked-courtier roster rebuild EXCLUDING office-holders
+# (#362-R2), the create_character roster mint (#90 rule), QING_office_appoint_first_vacant
+# (se_QING_COUNCIL.txt), the qing_dynastic_harmony nudge clamp (QING_dynasty_harmony_nudge),
+# and the crown-prince seat var (qing_office_crownprince_holder, se_QING_SEATS.txt).
+#
+#   ROOT / this = the Qing country (CHI, player); root.current_ruler = the emperor.
+########################################################################
+
+# ======================================================================
+# QING_upperstudy_init — seed the corps bookkeeping once + the 1725-founded school's
+# 1763 masters. Scope: COUNTRY (CHI). Idempotent (guards on a dedicated flag, not the
+# count var — the pulse recompute runs at game start BEFORE this and sets the count,
+# so guarding on the count would wrongly skip the opening seed; the harem #360 lesson).
+# ======================================================================
+QING_upperstudy_init = {
+	LOG_enter = { sys = QING  fn = "QING_upperstudy_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_upperstudy_initialized } }
+		set_variable = { name = qing_upperstudy_initialized  value = 1 }
+		set_variable = { name = qing_upperstudy_count  value = 0 }
+		set_variable = { name = qing_upperstudy_quality  value = 0 }
+		set_variable = { name = qing_upperstudy_schooling  value = 40 }
+		clear_variable_list = qing_upperstudy_tutors
+		# the 1763 school — the two halves of a Qing prince's education made flesh:
+		#   蔡新 (Cai Xin, 進士 1736 — a Fujianese classicist who tutored the Qianlong
+		#     princes in the Upper Study and rose from it to Grand Secretary, the
+		#     tutor-to-council arc the ELEVATE lever models), the HAN CLASSICS master; and
+		#   觀保 (Guanbao, a Manchu grandee and Minister of Rites) — the 國語騎射 master,
+		#     drilling the princes in the Manchu tongue, the bow and mounted archery.
+		if = {
+			limit = { exists = current_ruler }
+			QING_upperstudy_seed_tutor = { culture = han            nick = "NICKNAME_QING_US_CAIXIN"  degree = jinshi  fin = 9  mar = 4  cha = 7  aged = 56 }
+			QING_upperstudy_seed_tutor = { culture = root.primary_culture  nick = "NICKNAME_QING_US_GUANBAO"  degree = jinshi  fin = 6  mar = 8  cha = 6  aged = 55 }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_upperstudy_init"  result = OK }
+}
+
+# ======================================================================
+# QING_upperstudy_seed_tutor — create ONE named historical master and add him to the
+# corps. Scope: COUNTRY (CHI). $culture$ = culture, $nick$ = loc nickname key, $degree$
+# = status trait, $fin$/$mar$/$cha$ = stat line (a tutor's learning + martial drill +
+# bearing), $aged$ = age. Marked qing_is_upperstudy. Uses the proven named-roster mint
+# (#90 rule — no modifiers inside create_character; finalize in the saved scope).
+# ======================================================================
+QING_upperstudy_seed_tutor = {
+	# $culture$ culture, $nick$ loc nickname key, $degree$ status trait, $fin$/$mar$/$cha$ stats, $aged$ age.
+	create_character = {
+		age = $aged$
+		culture = $culture$
+		religion = root.religion
+		# a master of the Upper Study is learned (finesse), drills the princes in the bow
+		# (martial) and carries himself before them (charisma).
+		add_finesse = $fin$
+		add_martial = $mar$
+		add_charisma = $cha$
+		add_zeal = 3
+		add_trait = $degree$
+		save_scope_as = qing_new_tutor
+	}
+	scope:qing_new_tutor = {
+		set_home_country = ROOT
+		set_variable = { name = qing_is_upperstudy  value = 1 }
+		# a master at the princes' side is bound to the throne (師傅) + named.
+		QING_roster_finalize = { nick = $nick$ }
+	}
+	add_to_variable_list = { name = qing_upperstudy_tutors  target = scope:qing_new_tutor }
+	change_variable = { name = qing_upperstudy_count  add = 1 }
+	LOG_line = { sys = QING  msg = "upper-study: a historical master enters the Upper Study for" }
+}
+
+# ======================================================================
+# QING_upperstudy_mint_wildcard — mint a fresh renowned master STRAIGHT into the corps
+# (not via the exam ladder): a scholar-soldier of high learning and martial gift, the
+# ideal Upper-Study master. Scope: COUNTRY (CHI). Self-caps handled by the caller.
+# ======================================================================
+QING_upperstudy_mint_wildcard = {
+	create_character = {
+		age = 40
+		culture = root.primary_culture
+		religion = root.religion
+		# a scholar-soldier — learned AND a master of the bow, the model Upper-Study tutor.
+		add_finesse = 8
+		add_martial = 8
+		add_charisma = 6
+		add_zeal = 3
+		save_scope_as = qing_new_tutor
+	}
+	scope:qing_new_tutor = {
+		set_home_country = ROOT
+		set_variable = { name = qing_is_upperstudy  value = 1 }
+		QING_roster_finalize = { nick = "NICKNAME_QING_US_WILDCARD" }
+	}
+	add_to_variable_list = { name = qing_upperstudy_tutors  target = scope:qing_new_tutor }
+	change_variable = { name = qing_upperstudy_count  add = 1 }
+	LOG_line = { sys = QING  msg = "upper-study: a renowned master recruited into the Upper Study for" }
+}
+
+# ======================================================================
+# QING_upperstudy_recompute_roster — rebuild the tutor list fresh from the live
+# characters carrying the marker (alive + still in the household + NOT holding a great
+# office), tally the count + the teaching strength (summed finesse+martial+charisma),
+# and re-derive the 總師傅 Grand Tutor. Self-healing (prunes dead/departed/promoted).
+# EXCLUDES great-office holders (#362-R2: a master elevated to a great office LEAVES the
+# school — he is now on the council). Bounded O(characters); run quarterly + on panel
+# open. Scope: COUNTRY (CHI).
+# ======================================================================
+QING_upperstudy_recompute_roster = {
+	clear_variable_list = qing_upperstudy_tutors
+	set_variable = { name = qing_upperstudy_count  value = 0 }
+	set_variable = { name = qing_upperstudy_quality  value = 0 }
+	every_character = {
+		limit = {
+			has_variable = qing_is_upperstudy
+			is_alive = yes
+			employer = ROOT
+			# a master elevated to a great office LEAVES the corps (the promotion pipeline
+			# is real — 蔡新 rose to Grand Secretary). Excluding him mirrors #362-R2.
+			NOT = { has_variable = qing_office_held }
+		}
+		ROOT = {
+			add_to_variable_list = { name = qing_upperstudy_tutors  target = prev }
+			change_variable = { name = qing_upperstudy_count  add = 1 }
+			change_variable = { name = qing_upperstudy_quality  add = prev.finesse }
+			change_variable = { name = qing_upperstudy_quality  add = prev.martial }
+			change_variable = { name = qing_upperstudy_quality  add = prev.charisma }
+		}
+	}
+	# --- re-derive the 上書房總師傅 (Grand Tutor) — the ablest serving master, by the
+	# council-fitness sort. Cleared when the school stands empty.
+	if = {
+		limit = { var:qing_upperstudy_count > 0 }
+		ordered_in_list = {
+			variable = qing_upperstudy_tutors
+			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_us_chief_pick
+		}
+		if = {
+			limit = { exists = scope:qing_us_chief_pick }
+			set_variable = { name = qing_upperstudy_chief  value = scope:qing_us_chief_pick }
+		}
+	}
+	else = {
+		if = { limit = { has_variable = qing_upperstudy_chief }  remove_variable = qing_upperstudy_chief }
+	}
+	LOG_line = { sys = QING  msg = "upper-study: the tutor corps recomputed for" }
+}
+
+# ======================================================================
+# QING_upperstudy_school_the_heirs — the school's core dynastic work, run each pulse.
+# Scope: COUNTRY (CHI). The corps' teaching strength (qing_upperstudy_quality) sets a
+# schooling target; the schooling progress (qing_upperstudy_schooling, 0..100) drifts
+# toward it. A well-schooled house is a secure one — the schooling level nudges the
+# realm's dynastic harmony each pulse (the SAME meter the dowager/heir events move).
+# Purely passive; the sharper per-heir cultivation is the INTENSIVE-SCHOOLING lever.
+# ======================================================================
+QING_upperstudy_school_the_heirs = {
+	# schooling TARGET from the teaching strength: a bare school teaches little, a corps
+	# of able masters much. quality (summed fin+mar+cha, ~0..120 across the cap of 6) maps
+	# to a 0..100 target; drift the progress a step toward it (self-correcting, bounded).
+	set_variable = { name = qing_us_school_scratch  value = var:qing_upperstudy_quality }
+	if = { limit = { var:qing_us_school_scratch > 100 }  set_variable = { name = qing_us_school_scratch  value = 100 } }
+	# drift schooling ~1/4 of the gap toward the target each pulse (approach, never overshoot).
+	if = {
+		limit = { var:qing_upperstudy_schooling < var:qing_us_school_scratch }
+		QING_DECLINE_nudge = { var = qing_upperstudy_schooling  amount = 4 }
+	}
+	else_if = {
+		limit = { var:qing_upperstudy_schooling > var:qing_us_school_scratch }
+		QING_DECLINE_nudge = { var = qing_upperstudy_schooling  amount = -3 }
+	}
+	# a well-schooled house steadies the succession — nudge dynastic harmony by the tier
+	# the schooling has reached (a brilliant school knits the house, a hollow one lets it
+	# fray). Small per-pulse deltas so it is a steady background pressure, not a lurch.
+	if = {
+		limit = { var:qing_upperstudy_schooling >= 70 }
+		QING_dynasty_harmony_nudge = { amount = 2 }
+	}
+	else_if = {
+		limit = { var:qing_upperstudy_schooling < 30 }
+		QING_dynasty_harmony_nudge = { amount = -1 }
+	}
+}
+
+# ======================================================================
+# QING_upperstudy_draw_tutor (擇師) — draw the ablest waiting exam-pool scholar INTO the
+# Upper Study as a master. Scope: COUNTRY (CHI). The school's normal intake: the finest
+# 天子門生 the exam mints. Removes him from the hiring pool (he is placed now, so the exam
+# retirement tick + first-vacant fill must not also claim him) and marks him a tutor.
+# Guarded on a non-empty pool + a corps below its cap (6); the panel button mirrors this.
+# ======================================================================
+QING_upperstudy_draw_tutor = {
+	LOG_enter = { sys = QING  fn = "QING_upperstudy_draw_tutor" }
+	QING_upperstudy_init = yes
+	if = {
+		limit = {
+			var:qing_upperstudy_count < 6
+			has_variable_list = qing_scholar_pool
+			any_in_list = {
+				variable = qing_scholar_pool
+				is_alive = yes
+				employer = ROOT
+				NOT = { has_variable = qing_office_held }
+				NOT = { has_variable = qing_is_upperstudy }
+			}
+		}
+		ordered_in_list = {
+			variable = qing_scholar_pool
+			limit = {
+				is_alive = yes
+				employer = ROOT
+				NOT = { has_variable = qing_office_held }
+				NOT = { has_variable = qing_is_upperstudy }
+			}
+			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_us_draw_pick
+		}
+		if = {
+			limit = { exists = scope:qing_us_draw_pick }
+			# remove him from the exam hiring pool (placed now — the exam pool-exit path:
+			# strip the pool marker + delist + decrement, so nothing re-claims him).
+			scope:qing_us_draw_pick = {
+				if = { limit = { has_variable = qing_is_pool_scholar }  remove_variable = qing_is_pool_scholar }
+				set_variable = { name = qing_is_upperstudy  value = 1 }
+				QING_char_bind = yes
+			}
+			if = {
+				limit = { has_variable_list = qing_scholar_pool }
+				remove_list_variable = { name = qing_scholar_pool  target = scope:qing_us_draw_pick }
+				if = { limit = { var:qing_scholar_pool_count > 0 }  change_variable = { name = qing_scholar_pool_count  subtract = 1 } }
+			}
+			LOG_line = { sys = QING  msg = "upper-study: drew a pool scholar into the Upper Study for" }
+		}
+		QING_upperstudy_recompute_roster = yes
+	}
+	LOG_exit = { sys = QING  fn = "QING_upperstudy_draw_tutor"  result = OK }
+}
+
+# ======================================================================
+# QING_upperstudy_recruit_wildcard — mint + enrol a renowned scholar-soldier master.
+# Scope: COUNTRY (CHI). Guarded on the corps cap (6); the panel button mirrors this.
+# ======================================================================
+QING_upperstudy_recruit_wildcard = {
+	LOG_enter = { sys = QING  fn = "QING_upperstudy_recruit_wildcard" }
+	QING_upperstudy_init = yes
+	if = {
+		limit = { var:qing_upperstudy_count < 6 }
+		QING_upperstudy_mint_wildcard = yes
+		if = {
+			limit = { exists = scope:qing_new_tutor }
+			scope:qing_new_tutor = { QING_char_bind = yes }
+		}
+		QING_upperstudy_recompute_roster = yes
+		LOG_line = { sys = QING  msg = "upper-study: a renowned master recruited into the Upper Study for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_upperstudy_recruit_wildcard"  result = OK }
+}
+
+# ======================================================================
+# QING_upperstudy_intensive_schooling (勤學不輟) — the payoff lever: the masters drill the
+# reigning CROWN PRINCE (皇太子) intensively. Scope: COUNTRY (CHI). Sharpens the heir the
+# dynasty events reward for competence — a bounded gain in his finesse (classics) and
+# martial (國語騎射), gated on the tutor corps being able enough to teach him well, and a
+# lift in dynastic harmony (a diligent heir gladdens the house). Guarded on a VISIBLE
+# crown prince (a sealed secret succession hides the heir — then only the passive
+# house-schooling applies) + a corps of real teaching strength; the panel button mirrors
+# this. Caps the heir's stats so repeated schooling cannot inflate him without bound.
+# ======================================================================
+QING_upperstudy_intensive_schooling = {
+	LOG_enter = { sys = QING  fn = "QING_upperstudy_intensive_schooling" }
+	QING_upperstudy_recompute_roster = yes
+	if = {
+		limit = {
+			# a corps able enough to genuinely school a prince (teaching strength >= 24 —
+			# roughly two competent masters); the button mirrors this so it is not a dead click.
+			var:qing_upperstudy_quality >= 24
+			# a VISIBLE crown prince to school (a sealed 密建 succession hides the heir).
+			has_variable = qing_office_crownprince_holder
+			var:qing_office_crownprince_holder = { is_alive = yes  employer = ROOT }
+			NOT = { has_variable = qing_upperstudy_schooling_cooldown }
+		}
+		set_variable = { name = qing_upperstudy_schooling_cooldown  days = 365 }
+		var:qing_office_crownprince_holder = {
+			# classics — sharpen his finesse toward a competent ceiling (12).
+			if = { limit = { finesse < 12 }  add_finesse = 1 }
+			# 國語騎射 — sharpen his martial toward the same ceiling.
+			if = { limit = { martial < 12 }  add_martial = 1 }
+			# a diligent, well-taught heir gains standing at court.
+			add_prestige = 15
+		}
+		# a heir who applies himself gladdens the house.
+		QING_dynasty_harmony_nudge = { amount = 4 }
+		LOG_line = { sys = QING  msg = "upper-study: the crown prince schooled intensively for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_upperstudy_intensive_schooling"  result = OK }
+}
+
+# ======================================================================
+# QING_upperstudy_promote_chief (擢用) — elevate the Grand Tutor (總師傅) into the FIRST
+# vacant great office (蔡新's arc — prince's tutor to Grand Secretary). Scope: COUNTRY
+# (CHI). Reuses the proven QING_office_appoint_first_vacant (a no-op if no office is
+# vacant — the master then stays in the school). On seating, the roster rebuild drops him
+# (he now holds an office). Guarded on a present chief + a vacancy (the #358 dead-affordance).
+# ======================================================================
+QING_upperstudy_promote_chief = {
+	LOG_enter = { sys = QING  fn = "QING_upperstudy_promote_chief" }
+	QING_upperstudy_recompute_roster = yes
+	if = {
+		limit = {
+			has_variable = qing_upperstudy_chief
+			var:qing_upperstudy_chief = { is_alive = yes  employer = ROOT  NOT = { has_variable = qing_office_held } }
+			has_variable = qing_council_vacancy
+			var:qing_council_vacancy > 0
+		}
+		var:qing_upperstudy_chief = {
+			QING_office_appoint_first_vacant = yes
+		}
+		LOG_line = { sys = QING  msg = "upper-study: elevated the grand tutor to the first vacant office for" }
+		QING_upperstudy_recompute_roster = yes
+	}
+	LOG_exit = { sys = QING  fn = "QING_upperstudy_promote_chief"  result = OK }
+}
+
+# ======================================================================
+# QING_upperstudy_pulse — quarterly drift. Scope: COUNTRY (CHI). Called from the
+# governance pulse. Rebuilds the roster (self-heals dead/promoted), schools the heirs
+# (the passive harmony fold), then on a throttled roll the school draws a fresh pool
+# scholar on its own (AI-side too) if the pool has talent and the corps has room.
+# Self-guarded; a clean no-op with an empty pool / full corps.
+# ======================================================================
+QING_upperstudy_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_upperstudy_pulse" }
+	QING_upperstudy_init = yes
+	QING_upperstudy_recompute_roster = yes
+	QING_upperstudy_school_the_heirs = yes
+	if = {
+		limit = {
+			var:qing_upperstudy_count < 4
+			has_variable_list = qing_scholar_pool
+			any_in_list = {
+				variable = qing_scholar_pool
+				is_alive = yes
+				employer = ROOT
+				NOT = { has_variable = qing_office_held }
+				NOT = { has_variable = qing_is_upperstudy }
+			}
+		}
+		random = {
+			chance = 25
+			QING_upperstudy_draw_tutor = yes
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_upperstudy_pulse"  result = OK }
+}
+
+# ======================================================================
+# QING_upperstudy_remove_on_death — call in a DYING character's scope (hooked into
+# on_character_death). If the dead man was an Upper-Study master, drop him from his
+# employer's roster so no orphan reference survives + keep the count honest. Self-guards
+# on the marker. Mirrors QING_southernstudy_remove_on_death / QING_harem_remove_on_death.
+# ======================================================================
+QING_upperstudy_remove_on_death = {
+	if = {
+		limit = {
+			has_variable = qing_is_upperstudy
+			exists = employer
+		}
+		save_scope_as = qing_dead_tutor
+		employer = {
+			if = {
+				limit = { has_variable_list = qing_upperstudy_tutors }
+				remove_list_variable = { name = qing_upperstudy_tutors  target = scope:qing_dead_tutor }
+				if = { limit = { var:qing_upperstudy_count > 0 }  change_variable = { name = qing_upperstudy_count  subtract = 1 } }
+				LOG_line = { sys = QING  msg = "upper-study: a master died, removed from the Upper Study for" }
+			}
+		}
+	}
+}
