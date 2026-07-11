@@ -665,3 +665,22 @@ the throne's succession engine, not a new council seat. New se_QING_HAREM.txt + 
   proper fix needs NEW small-value loyalty keys (the existing keys are all ±12..±40, too coarse for the
   ±1/±3/±5 personnel sites) + per-site semantic mapping — genuine design, not a mechanical swap, and
   each site wants its own review. Logged as a standalone cleanup task rather than smuggled into #363.
+
+### #360 adversarial review (wt2gzn195) — 1 confirmed fix + 1 documented no-fix
+
+- **#360-R1 (minor, x3 duplicate reports) — harem init moved BEFORE the game-start perf fold.**
+  The chamberlain's HAREM term (e) is UNGATED (unlike the has_variable-guarded privy-purse term):
+  it always runs QING_harem_recompute_roster which SETS qing_harem_consort_count. QING_harem_init
+  used to mint the opening 3 consorts ~66 lines AFTER QING_ministry_recompute_all_perf, so the
+  game-start fold counted 0 → booked (0−4)×2 = −8 instead of the correct (3−4)×2 = −2, leaving the
+  chamberlain meter ~6 pts low until the first quarterly pulse self-healed it. FIX: moved
+  `QING_harem_init = yes` to right after QING_council_autofill, before the perf fold (harem_init
+  needs only current_ruler + culture/religion, all present at game start). Council-target impact
+  was tiny (~0.1 pt after the /12-office average /5), but the 內務府 panel meter read wrong.
+- **#360-R2 (minor perf, NO-FIX, documented) — the 3 QING_harem_recompute_roster sweeps/quarter.**
+  The roster sweep (O(court), one country) runs up to 3× per quarterly pulse: once in the chamberlain
+  perf term (e), once in QING_harem_pulse, once on the 20% favour roll. KEPT AS-IS: each sweep is
+  deliberately self-healing/self-contained (favour_consort + the panel both call it defensively so
+  they never operate on a stale roster regardless of call context), the cost is a few extra court
+  iterations for ONE country per quarter (negligible), and removing them would trade that for a
+  fragile hidden ordering dependency. Not worth the correctness risk.
