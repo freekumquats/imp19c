@@ -1,0 +1,384 @@
+########################################################################
+# se_QING_OPIUM.txt — [#366] Silver / Opium balance-of-trade monetary model (白銀外流 / 鴉片貿易).
+#
+# LAYER, DON'T DUPLICATE. This suite owns NO new currency-stress meter and NO new band
+# machinery. The mod already models the SYMPTOM — a `qing_currency_stress` 0..100 meter
+# (se_QING_DECLINE.txt, term A) that drifts off the live reserve ratio, bands onto the
+# country, and fires the decline/treaty events. #366 supplies the CAUSE: a quarterly
+# balance-of-trade assessment that computes a net silver flow (tea/silk/porcelain export
+# INFLOW minus an opium-import OUTFLOW) and nudges the EXISTING stress meter with it. The
+# existing QING_DECLINE_apply_currency_band then bands it for free; the existing
+# qing_treaty.1 Nanjing-moment (gated qing_currency_stress >= 40) fires off it unchanged.
+#
+# THE GRAND-COUNCIL FOLD IS ALREADY WIRED. QING_ministry_recompute_perf_revenue
+# (se_QING_MINISTRY.txt term d) subtracts qing_currency_stress/6 from the Board of Revenue
+# minister's performance meter, which folds into his Grand Council standing. So the opium
+# drain reaches the office-holder TRANSITIVELY: opium net-drain -> qing_currency_stress ->
+# qing_min_perf_revenue (d) -> qing_council_eff_target. #366 adds NO new fold; it makes the
+# existing silver-crisis-drag term reflect a real trade balance. The 戶部 owned the historical
+# response to the 19thC silver crisis (銀荒/銀貴錢賤), so this is the correct office.
+#
+# PROBE-DRIVEN DESIGN (both oracle probes returned NOT-PROVEN; both take the low-risk path):
+#   • cross-country trade-flow matrix DOES NOT EXIST -> opium-import intensity is a historical
+#     TIME RAMP (imports grew exponentially 1763->1838 as British Bengal "country trade", a
+#     process external to the Qing frontier spheres), MODULATED by treaty ports, player posture,
+#     and the domestic-production toggle. Export inflow uses the PROVEN, REAL country svalues
+#     GOODS_national_production_{tea,silk,porcelain}.
+#   • per-pop variables DO NOT EXIST -> addiction is an AGGREGATE 0..100 counter
+#     (qing_opium_addicted_share) + PROVINCE-MODIFIER bands (the proven corruption-band pattern).
+#
+# Calibrated to Dermigny/Hsü: 1763 net ~+19.5M taels (healthy), 1838 net ~+5M then negative
+# (crisis); baseline inflow ~20M, peak drain ~10M (40k chests x ~250 taels). Lin Zexu 1839 =
+# 20k chests; legalization = 1858 Tianjin; Yunnan/Sichuan domestic opium rises 1850s+.
+#
+#   ROOT / this = CHI (guarded). Prefix = QING_opium · sys tag = QING.
+#   Counters (all 0..100 unless noted):
+#     qing_opium_import_index      the historical opium-import intensity ramp (0=1763 trickle, 100=1838 flood)
+#     qing_opium_net_flow_tmp      scratch: this-quarter net silver flow (signed, taels/M units)
+#     qing_opium_addicted_share    aggregate addiction share of the population
+#     qing_opium_posture           policy: 0 = prohibit (default), 1 = tolerate-for-revenue, 2 = treaty-legalized
+#     qing_opium_domestic_unlocked flag var: Yunnan/Sichuan domestic opium production is on
+#     qing_lin_zexu_appointed      flag var: an Imperial Commissioner is enforcing interdiction
+########################################################################
+
+# ---- generic clamped-counter nudge (mirror of QING_DECLINE_nudge, sys=QING) --
+# Self-inits the counter to 0. Scope: country. $var$ = counter, $amount$ = signed int.
+QING_opium_nudge = {
+	if = {
+		limit = { NOT = { has_variable = $var$ } }
+		set_variable = { name = $var$  value = 0 }
+	}
+	change_variable = { name = $var$  add = $amount$ }
+	if = { limit = { var:$var$ > 100 }  set_variable = { name = $var$  value = 100 } }
+	if = { limit = { var:$var$ < 0 }    set_variable = { name = $var$  value = 0 } }
+	LOG_line = { sys = QING  msg = "opium counter $var$ nudged by $amount$ ->" }
+}
+
+# ======================================================================
+# INIT — seed the counters once on game start for CHI. High Qing (pre-1775) starts
+# at a near-zero import index (opium imports were a negligible <1k chests/yr trickle);
+# a post-1815 start seeds the index to a mid value (the drain already well underway).
+# ======================================================================
+QING_opium_init = {
+	LOG_enter = { sys = QING  fn = "QING_opium_init" }
+	if = { limit = { NOT = { has_variable = qing_opium_import_index } }
+		if = {
+			limit = { current_date < 1800.1.1 }
+			set_variable = { name = qing_opium_import_index  value = 3 }    # 1763 trickle
+		}
+		else_if = {
+			limit = { current_date < 1830.1.1 }
+			set_variable = { name = qing_opium_import_index  value = 30 }   # ~1815 the drain is on
+		}
+		else = {
+			set_variable = { name = qing_opium_import_index  value = 55 }   # a late start: crisis approaching
+		}
+	}
+	if = { limit = { NOT = { has_variable = qing_opium_addicted_share } } set_variable = { name = qing_opium_addicted_share  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_opium_posture } }        set_variable = { name = qing_opium_posture  value = 0 } }  # prohibit
+	LOG_exit = { sys = QING  fn = "QING_opium_init"  result = OK }
+}
+
+# ======================================================================
+# THE IMPORT-INDEX RAMP — the historical growth of opium imports toward the 1838 flood.
+# The index climbs toward a date-keyed CEILING (the British Bengal "country trade" expanded
+# on its own schedule, external to any Qing lever), then policy MODULATES the climb rate:
+#   • prohibition with a Lin Zexu commissioner suppresses the climb (interdiction);
+#   • tolerate-for-revenue lets it run;
+#   • treaty legalization removes all restraint (the flood is now legal);
+#   • domestic production substitutes for imports (the import index falls, but addiction
+#     keeps rising — see the addiction pulse).
+# Scope: country (CHI). O(1).
+# ======================================================================
+QING_opium_ramp_import_index = {
+	QING_opium_init = yes
+	# date-keyed ceiling: 1763 ~a trickle, 1800 rising, 1820 heavy, 1838+ the flood.
+	set_variable = { name = qing_opium_ceiling_tmp  value = 5 }
+	if = { limit = { current_date >= 1800.1.1 } set_variable = { name = qing_opium_ceiling_tmp  value = 25 } }
+	if = { limit = { current_date >= 1815.1.1 } set_variable = { name = qing_opium_ceiling_tmp  value = 45 } }
+	if = { limit = { current_date >= 1830.1.1 } set_variable = { name = qing_opium_ceiling_tmp  value = 75 } }
+	if = { limit = { current_date >= 1838.1.1 } set_variable = { name = qing_opium_ceiling_tmp  value = 95 } }
+	# treaty legalization lifts the ceiling to the rails (the trade is now unrestrained + legal).
+	if = { limit = { var:qing_opium_posture = 2 } set_variable = { name = qing_opium_ceiling_tmp  value = 100 } }
+	# climb rate toward the ceiling, modulated by posture. Default +3/quarter.
+	set_variable = { name = qing_opium_climb_tmp  value = 3 }
+	if = {
+		# a Lin Zexu commissioner + active prohibition suppresses the climb hard (interdiction).
+		limit = { var:qing_opium_posture = 0  has_variable = qing_lin_zexu_appointed }
+		set_variable = { name = qing_opium_climb_tmp  value = -4 }
+	}
+	else_if = {
+		# tolerate-for-revenue: the trade runs faster (customs winks at it).
+		limit = { var:qing_opium_posture = 1 }
+		set_variable = { name = qing_opium_climb_tmp  value = 5 }
+	}
+	else_if = {
+		# treaty-legalized: fastest of all.
+		limit = { var:qing_opium_posture = 2 }
+		set_variable = { name = qing_opium_climb_tmp  value = 6 }
+	}
+	# domestic Yunnan/Sichuan production substitutes for IMPORTS -> pull the import index down
+	# (home-grown opium is not a silver drain), even as the epidemic keeps spreading.
+	if = { limit = { has_variable = qing_opium_domestic_unlocked } change_variable = { name = qing_opium_climb_tmp  subtract = 5 } }
+	# drift toward the ceiling: climb only if below it, and never push past it on a positive climb.
+	if = {
+		limit = { var:qing_opium_import_index < var:qing_opium_ceiling_tmp }
+		QING_opium_nudge = { var = qing_opium_import_index  amount = var:qing_opium_climb_tmp }
+		if = {
+			limit = { var:qing_opium_import_index > var:qing_opium_ceiling_tmp }
+			set_variable = { name = qing_opium_import_index  value = var:qing_opium_ceiling_tmp }
+		}
+	}
+	else = {
+		# already at/above the ceiling: only a negative climb (interdiction/domestic-substitution) moves it.
+		if = {
+			limit = { var:qing_opium_climb_tmp < 0 }
+			QING_opium_nudge = { var = qing_opium_import_index  amount = var:qing_opium_climb_tmp }
+		}
+	}
+	remove_variable = qing_opium_ceiling_tmp
+	remove_variable = qing_opium_climb_tmp
+}
+
+# ======================================================================
+# THE TRADE-BALANCE ASSESSMENT — the quarterly heart of the model.
+# Computes net_silver_flow = export_inflow - opium_outflow, then NUDGES the existing
+# qing_currency_stress meter: a surplus bleeds stress DOWN (silver flowing in backs the
+# currency), a drain pushes it UP. Called from QING_DECLINE_pulse BEFORE
+# QING_DECLINE_update_currency_stress, so the trade-flow nudge and the reserve-ratio drift
+# compound in the same pulse. Scope: country (CHI). O(governorships) via the national svalues.
+# ======================================================================
+QING_opium_assess_trade_balance = {
+	LOG_enter = { sys = QING  fn = "QING_opium_assess_trade_balance" }
+	QING_opium_init = yes
+	# ramp the import index first so the outflow reads a fresh value.
+	QING_opium_ramp_import_index = yes
+
+	# --- EXPORT INFLOW: the real tea/silk/porcelain export economy (proven country svalues).
+	# Staged into a scratch var (the proven set_variable=value=<svalue> read). Divided down to
+	# the model's small-integer scale (production numbers are large); the constant is a scale
+	# factor, not a magic tael figure.
+	set_variable = { name = qing_opium_inflow_tmp  value = 0 }
+	change_variable = { name = qing_opium_inflow_tmp  add = GOODS_national_production_tea }
+	change_variable = { name = qing_opium_inflow_tmp  add = GOODS_national_production_silk }
+	change_variable = { name = qing_opium_inflow_tmp  add = GOODS_national_production_porcelain }
+	# scale to a 0..~40 export-strength figure (High-Qing China is the world's workshop).
+	change_variable = { name = qing_opium_inflow_tmp  divide = 4 }
+	if = { limit = { var:qing_opium_inflow_tmp > 40 } set_variable = { name = qing_opium_inflow_tmp  value = 40 } }
+
+	# --- OPIUM OUTFLOW: the import index scaled to the same units, amplified by addiction
+	# (addicts consume more -> a deeper drain) and eased by domestic substitution.
+	set_variable = { name = qing_opium_outflow_tmp  value = var:qing_opium_import_index }
+	change_variable = { name = qing_opium_outflow_tmp  divide = 2 }        # index 0..100 -> 0..50 outflow
+	# addiction amplifier: + up to a third of the addicted share (deeper habit, larger imports).
+	set_variable = { name = qing_opium_addamp_tmp  value = var:qing_opium_addicted_share }
+	change_variable = { name = qing_opium_addamp_tmp  divide = 3 }
+	change_variable = { name = qing_opium_outflow_tmp  add = var:qing_opium_addamp_tmp }
+	remove_variable = qing_opium_addamp_tmp
+
+	# --- NET FLOW (signed): inflow - outflow. Positive = silver in, negative = silver drained.
+	set_variable = { name = qing_opium_net_flow_tmp  value = var:qing_opium_inflow_tmp }
+	change_variable = { name = qing_opium_net_flow_tmp  subtract = var:qing_opium_outflow_tmp }
+
+	# --- FEED THE EXISTING STRESS METER. A surplus bleeds stress down; a drain pushes it up.
+	# The nudge is net_flow/-5 (a healthy +20 surplus => -4 stress/quarter; a -20 drain => +4/quarter),
+	# a smooth signal that compounds with the reserve-ratio drift already in the decline pulse.
+	set_variable = { name = qing_opium_stressnudge_tmp  value = var:qing_opium_net_flow_tmp }
+	change_variable = { name = qing_opium_stressnudge_tmp  divide = 5 }
+	# invert: surplus (positive net) -> negative stress nudge.
+	change_variable = { name = qing_opium_stressnudge_tmp  multiply = -1 }
+	QING_DECLINE_nudge = { var = qing_currency_stress  amount = var:qing_opium_stressnudge_tmp }
+	remove_variable = qing_opium_stressnudge_tmp
+	LOG_line = { sys = QING  msg = "opium: trade balance assessed; net silver flow (inflow-outflow) fed to currency stress for" }
+
+	remove_variable = qing_opium_inflow_tmp
+	remove_variable = qing_opium_outflow_tmp
+	LOG_exit = { sys = QING  fn = "QING_opium_assess_trade_balance"  result = OK }
+}
+
+# ======================================================================
+# THE ADDICTION PULSE — the aggregate epidemic. The addicted share climbs with the
+# opium availability (import index OR domestic production), decays slowly if the supply is
+# choked (Lin Zexu interdiction). Then bands the province-level social drag. Scope: country.
+# ======================================================================
+QING_opium_addiction_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_opium_addiction_pulse" }
+	QING_opium_init = yes
+	# supply pressure = the import index; domestic production adds a home-grown floor of supply.
+	set_variable = { name = qing_opium_supply_tmp  value = var:qing_opium_import_index }
+	if = { limit = { has_variable = qing_opium_domestic_unlocked } change_variable = { name = qing_opium_supply_tmp  add = 30 } }
+	# addiction drifts toward supply/2 (a heavy but not total-population ceiling), climbing +1/quarter
+	# while below, decaying -1 while above (habits fade when the drug is scarce).
+	set_variable = { name = qing_opium_addtarget_tmp  value = var:qing_opium_supply_tmp }
+	change_variable = { name = qing_opium_addtarget_tmp  divide = 2 }
+	if = { limit = { var:qing_opium_addtarget_tmp > 100 } set_variable = { name = qing_opium_addtarget_tmp  value = 100 } }
+	if = {
+		limit = { var:qing_opium_addicted_share < var:qing_opium_addtarget_tmp }
+		QING_opium_nudge = { var = qing_opium_addicted_share  amount = 1 }
+	}
+	else_if = {
+		limit = { var:qing_opium_addicted_share > var:qing_opium_addtarget_tmp }
+		QING_opium_nudge = { var = qing_opium_addicted_share  amount = -1 }
+	}
+	remove_variable = qing_opium_supply_tmp
+	remove_variable = qing_opium_addtarget_tmp
+	# --- ADDICTION FEEDS THE SECT PRESSURE (White Lotus / Taiping recruited among the addicted
+	# and the silver-crisis destitute). A high epidemic nudges qing_sect_pressure up gently.
+	if = {
+		limit = { var:qing_opium_addicted_share >= 40 }
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = 1 }
+	}
+	QING_opium_apply_epidemic_band = yes
+	LOG_exit = { sys = QING  fn = "QING_opium_addiction_pulse"  result = OK }
+}
+
+# ---- province-modifier bands for the local social drag (proven corruption-band pattern) ----
+# The aggregate share maps to a country-wide epidemic modifier (0 = none, low >=30, high >=60).
+# Country-scope modifier keeps it O(1) — no per-province sweep needed (the drag is empire-wide
+# productivity loss + unrest, which a country modifier models cleanly). Scope: country.
+QING_opium_apply_epidemic_band = {
+	remove_country_modifier = qing_opium_epidemic_low
+	remove_country_modifier = qing_opium_epidemic_high
+	if = {
+		limit = { var:qing_opium_addicted_share >= 60 }
+		add_country_modifier = { name = qing_opium_epidemic_high  duration = -1 }
+		LOG_line = { sys = QING  msg = "opium: epidemic band = HIGH for (addicted share=)" }
+	}
+	else_if = {
+		limit = { var:qing_opium_addicted_share >= 30 }
+		add_country_modifier = { name = qing_opium_epidemic_low  duration = -1 }
+		LOG_line = { sys = QING  msg = "opium: epidemic band = LOW for (addicted share=)" }
+	}
+}
+
+# ======================================================================
+# PLAYER LEVERS (also driven by events). All scope: country (CHI), all logged.
+# ======================================================================
+
+# --- set the prohibition posture. $posture$ = 0 prohibit | 1 tolerate | 2 legalized.
+QING_opium_set_posture = {
+	QING_opium_init = yes
+	set_variable = { name = qing_opium_posture  value = $posture$ }
+	LOG_line = { sys = QING  msg = "opium: posture set to $posture$ for" }
+}
+
+# --- appoint an Imperial Commissioner (Lin Zexu). Suppresses the import ramp while prohibition
+# holds. A one-shot flag; the crackdown event (qing_opium.2) does the dramatic silver-shock.
+QING_opium_appoint_commissioner = {
+	QING_opium_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_lin_zexu_appointed } }
+		set_variable = { name = qing_lin_zexu_appointed  value = 1 }
+		add_legitimacy = 5     # a resolute throne appointing a famed incorruptible commissioner
+		LOG_line = { sys = QING  msg = "opium: Imperial Commissioner (Lin Zexu) appointed for" }
+	}
+}
+
+# --- the crackdown SHOCK: destroy seized opium. A sharp one-time cut to the import index
+# (the 1839 Humen destruction) + legitimacy, at the cost of GBR fury (the road to war).
+# Called from qing_opium.2's DESTROY option. Scope: country (CHI).
+QING_opium_crackdown_destroy = {
+	QING_opium_appoint_commissioner = yes
+	QING_opium_nudge = { var = qing_opium_import_index  amount = -25 }   # 20k chests destroyed at Humen
+	add_legitimacy = 8
+	# GBR fury — the bold move that provoked the First Opium War. Proven GP-tension verb; grip-grace
+	# refunds it if Britain is not yet consolidated in the East (pre-1840 the RN is not yet on station).
+	QING_gp_react = { power = britain  tag = GBR  severity = 20 }
+	QING_gp_grip_grace = { power = britain  soft = 1830.1.1  hard = 1842.1.1 }
+	LOG_line = { sys = QING  msg = "opium: seized stock DESTROYED (Humen); import index shocked down, GBR enraged for" }
+}
+
+# --- release the seized opium (the timid path): the drain continues, no GBR provocation, but
+# the court loses face. Scope: country (CHI).
+QING_opium_crackdown_release = {
+	add_legitimacy = -5
+	QING_opium_nudge = { var = qing_currency_stress  amount = 4 }   # the drain rolls on
+	LOG_line = { sys = QING  msg = "opium: seized stock RELEASED; the silver drain continues, court loses face for" }
+}
+
+# --- treaty legalization (forced, post-Opium-War). Sets posture = legalized; the trade is now
+# legal + taxed, so the fisc gets a revenue offset (a modest treasury credit + a stress ease),
+# while the epidemic worsens (the ramp ceiling goes to the rails). Gated on the treaty system.
+# Scope: country (CHI).
+QING_opium_treaty_legalize = {
+	QING_opium_init = yes
+	QING_opium_set_posture = { posture = 2 }
+	add_treasury = 40                                        # the opium tariff (30 taels/chest, at scale)
+	QING_opium_nudge = { var = qing_currency_stress  amount = -6 }   # legal taxed trade eases the fisc
+	LOG_line = { sys = QING  msg = "opium: trade LEGALIZED by treaty (Tianjin); tariff revenue offsets the fisc, epidemic worsens for" }
+}
+
+# --- unlock domestic Yunnan/Sichuan production (1850s+). Pulls the import index down (home-grown
+# opium is not a silver drain) but deepens the epidemic (cheaper, closer supply). Scope: CHI.
+QING_opium_unlock_domestic = {
+	QING_opium_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_opium_domestic_unlocked } }
+		set_variable = { name = qing_opium_domestic_unlocked  value = 1 }
+		LOG_line = { sys = QING  msg = "opium: domestic Yunnan/Sichuan production unlocked; imports substitute home-grown for" }
+	}
+}
+
+# ======================================================================
+# THE PULSE — one throttled call from QING_DECLINE_pulse. The trade balance is assessed
+# separately (called earlier in the decline pulse, before update_currency_stress); this
+# runs the addiction epidemic + offers the opium event chain. Scope: country (CHI).
+# ======================================================================
+QING_opium_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_opium_pulse" }
+	QING_opium_addiction_pulse = yes
+	# --- offer the pre-crisis trade-balance WARNING once, when the drain first bites but the
+	# treaty order has not yet been forced (the memorial that a wise court heeds). The event
+	# re-checks its own state; a modest chance keeps it eventful, not spammy.
+	if = {
+		limit = {
+			var:qing_opium_import_index >= 40
+			var:qing_opium_posture = 0
+			NOT = { has_variable = qing_lin_zexu_appointed }
+			NOT = { has_variable = qing_opium_warning_seen }
+			is_ai = no
+		}
+		set_variable = { name = qing_opium_warning_seen  value = 1 }
+		trigger_event = { id = qing_opium.1  days = { 5 20 } }
+	}
+	# --- offer the Lin Zexu crackdown decision when the drain is severe + a commissioner is in
+	# place under prohibition (the 1839 Guangzhou moment). Player-only; event re-checks state.
+	else_if = {
+		limit = {
+			var:qing_opium_import_index >= 60
+			var:qing_opium_posture = 0
+			has_variable = qing_lin_zexu_appointed
+			NOT = { has_variable = qing_opium_crackdown_resolved }
+			is_ai = no
+		}
+		random = {
+			chance = 40
+			trigger_event = { id = qing_opium.2  days = { 5 20 } }
+		}
+	}
+	# --- the FORCED treaty-legalization demand: once the unequal-treaty order is imposed and opium
+	# is not yet legal, the victors demand the tariffed trade (the 1858 Tianjin settlement). Offered
+	# once; the event re-checks its own state. A separate offer (not part of the prohibition chain).
+	if = {
+		limit = {
+			has_variable = qing_treaty_system_imposed
+			NOT = { var:qing_opium_posture = 2 }
+			NOT = { has_variable = qing_opium_legalize_offered }
+			is_ai = no
+		}
+		set_variable = { name = qing_opium_legalize_offered  value = 1 }
+		trigger_event = { id = qing_opium.3  days = { 5 20 } }
+	}
+	# --- the EPIDEMIC crisis: when the addicted share is severe, the throne faces the social ruin
+	# itself. Offered once; the event re-checks its own state.
+	if = {
+		limit = {
+			var:qing_opium_addicted_share >= 55
+			NOT = { has_variable = qing_opium_epidemic_offered }
+			is_ai = no
+		}
+		set_variable = { name = qing_opium_epidemic_offered  value = 1 }
+		trigger_event = { id = qing_opium.4  days = { 5 20 } }
+	}
+	LOG_exit = { sys = QING  fn = "QING_opium_pulse"  result = OK }
+}

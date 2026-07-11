@@ -1152,3 +1152,89 @@ KEY DECISIONS:
   (80+ proven uses; xiexiang literally funded the western garrison, so semantically right too).
 - All create_character honour the #90 rule (no modifiers inside; set_as_minor_character + move_country +
   QING_char_bind in the saved scope). All LOG msgs STATIC (#253). GUI text wraps (multiline+fixed width).
+
+---
+
+## D75 — #367 XINJIANG review-fix (adversarial review wf_2531bd20-358, 3× CONFIRMED = 1 bug)
+
+The #367 adversarial review returned three CONFIRMED-major findings that are all the SAME defect: the
+`qing_xj_khoja_pending` guard flag leaks. It is set in `QING_xj_pulse` before queuing `qing_xinjiang.1`
+(days 10–40) and is cleared ONLY in that event's `immediate`. But the event re-checks its own trigger
+(`qing_xinjiang_control <= 30`) at fire time; if the player pushes grip back above 30 during the delay
+(via the panel's own xiexiang +6 / appoint-beg +4 levers — the *intended* response to the low-grip
+warning), the engine silently cancels the event, its immediate never runs, and the flag sticks at 1
+forever — permanently disabling every future khoja scare via the `NOT={has_variable}` re-queue guard.
+
+**FIX (se_QING_XINJIANG.txt, `QING_xj_pulse`, tagged [#367-R2 review-fix]):** added a defensive clear
+at the top of the pulse — if `qing_xj_khoja_pending` is set but grip has recovered above 30 (or the
+control var is gone), `remove_variable` it. Mirrors the proven `qing_amban_here` defensive-clear
+pattern (se_QING_AMBAN.txt). On the next quarterly pulse after grip recovers, the stale flag drops and
+future scares can queue again; while grip stays <=30 the flag persists correctly until the event fires.
+Braces 187/187.
+
+**#337 review (wf_c5982a4e-a56): 0 confirmed** — both findings refuted. The ratchet concern was already
+resolved by the D72 review-fix (the `var:qing_dynastic_harmony < 66` ceiling gate is present); the
+missing-LOG finding is style-only (the pulse wrapper QING_upperstudy_pulse already brackets it with
+LOG_enter/exit). No change.
+
+---
+
+## D76 — #366 SILVER/OPIUM BALANCE-OF-TRADE MONETARY MODEL (白銀外流 / 鴉片貿易): BUILT
+
+The collision that forced the D71 deferral (a live currency refactor) is resolved (git tree clean), so
+#366 is built. Full design + probe verdicts in **DESIGN_OPIUM_SILVER.md**.
+
+**THESIS — layer, don't duplicate (same archetype as #367).** The mod already models the SYMPTOM: a
+`qing_currency_stress` 0..100 meter (se_QING_DECLINE.txt term A) that drifts off the reserve ratio,
+bands onto the country, and fires the decline/treaty events. #366 supplies the CAUSE — a quarterly
+balance-of-trade assessment computing net silver flow (tea/silk/porcelain export INFLOW minus an
+opium-import OUTFLOW) and nudging that EXISTING meter. No new stress meter, no new band machinery.
+
+**THE GRAND-COUNCIL FOLD IS ALREADY WIRED (D3 satisfied transitively — NO new fold added).**
+`QING_ministry_recompute_perf_revenue` (se_QING_MINISTRY.txt term d) already subtracts
+`qing_currency_stress/6` from the Board of Revenue (戶部) minister's performance, which folds into his
+Grand Council standing. So: opium net-drain → qing_currency_stress → qing_min_perf_revenue (d) →
+qing_council_eff_target. The 戶部 is the historically correct office (it owned the 19thC silver-crisis
+response, 銀荒/銀貴錢賤).
+
+**BOTH ORACLE PROBES RETURNED NOT-PROVEN → both took the low-risk path:**
+- **Cross-country trade-flow matrix does not exist** → opium-import intensity is a historical TIME RAMP
+  (`qing_opium_import_index`, climbing toward a date-keyed ceiling: ~trickle 1763 → flood 1838; British
+  Bengal country-trade grew external to the Qing frontier spheres), MODULATED by posture / commissioner
+  / treaty / domestic-production. Export inflow uses the PROVEN, REAL country svalues
+  `GOODS_national_production_{tea,silk,porcelain}`. (Rejected `britain_influence` as a proxy: that sphere
+  ring is the Inner-Asian LAND frontier, geographically wrong for maritime Canton opium.)
+- **Per-pop variables do not exist** → addiction is an AGGREGATE counter `qing_opium_addicted_share`
+  (0..100) + country-modifier epidemic bands (proven corruption-band pattern), feeding qing_sect_pressure
+  (White Lotus/Taiping among the ruined) + a productivity/unrest drag.
+
+**FORMULA (calibrated Dermigny/Hsü):** net_flow = export_inflow (Σ tea+silk+porcelain ÷4, cap 40) −
+opium_outflow (import_index÷2 + addicted_share÷3). Stress nudge = net_flow ÷5 × −1 (a +20 surplus →
+−4 stress/quarter, a −20 drain → +4/quarter). 1763 zenith surplus bleeds stress DOWN; 1830s opium drain
+drives it UP.
+
+**POLICY LEVERS (L4 panel + events):** PROHIBIT (嚴禁) / TOLERATE-FOR-REVENUE (弛禁, +treasury +corruption)
+posture toggle; APPOINT AN IMPERIAL COMMISSIONER (欽差大臣, Lin Zexu — suppresses the ramp, +legitimacy);
+the Humen crackdown event DESTROY (−25 index, +8 legitimacy, GBR fury via QING_gp_react britain sev=20 +
+grip-grace soft=1830 hard=1842) vs RELEASE (−5 legitimacy, +4 stress); treaty LEGALIZE (posture=2,
++40 treasury, −6 stress, epidemic worsens); UNLOCK DOMESTIC (以土抵洋, Yunnan/Sichuan — pulls import index
+down, deepens epidemic).
+
+**FILES:** NEW se_QING_OPIUM.txt (engine, 185/185 braces), qing_opium_events.txt (.1 memorial / .2 Humen /
+.3 treaty legalization / .4 epidemic, 39/39), QING_opium_panel.txt (6 scripted-guis, 41/41), qing_opium.gui
+(L4 clone, 74/74), qing_opium_modifiers.txt (2 epidemic bands, all tokens grep-proven), qing_opium_l_english.yml.
+WIRING: QING_opium_init in qing_mechanics_on_actions.txt (after QING_xj_init); QING_opium_assess_trade_balance
+in QING_DECLINE_pulse BEFORE update_currency_stress (so the trade nudge + reserve-ratio drift compound);
+QING_opium_pulse after the concrete-object hangers; open button in government_view.gui (menu_trade.dds icon
+— menu_economy.dds does not exist).
+
+**KEY DECISIONS:**
+- No se_DEMAND.txt edit needed — opium demand is modelled by the import-index ramp, not a trade-goods
+  demand term (avoids re-touching the #279 crop-demand code that already carried unfixed bugs).
+- Events .3/.4 exist in the events file but were NOT initially queued by the pulse; added two separate
+  offer-blocks to QING_opium_pulse (treaty-legalize gated on qing_treaty_system_imposed; epidemic gated
+  on addicted_share>=55) so no authored event is orphaned/dead.
+- posture=2 (treaty-legalized) is IRREVERSIBLE by the panel (the treaty binds) — the PROHIBIT/TOLERATE
+  buttons hide once legalized; every is_valid mirrors its effect guard (no dead clicks).
+- All LOG msgs STATIC (#253). GUI text wraps (multiline + fixed width, #text-wrap rule). All modifier
+  tokens grep-verified proven. QING_gp_react/QING_gp_grip_grace param names verified against se_QING_DIPLO.
