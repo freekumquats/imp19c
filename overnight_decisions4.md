@@ -1238,3 +1238,60 @@ QING_opium_pulse after the concrete-object hangers; open button in government_vi
   buttons hide once legalized; every is_valid mirrors its effect guard (no dead clicks).
 - All LOG msgs STATIC (#253). GUI text wraps (multiline + fixed width, #text-wrap rule). All modifier
   tokens grep-verified proven. QING_gp_react/QING_gp_grip_grace param names verified against se_QING_DIPLO.
+
+---
+
+## D77 — #368 Court Intrigue + Succession Deep Sim (宮闈鬥爭 / 立儲之爭) — BUILT + #366-R fix (commit c2eedf450)
+
+**GOAL:** the concrete-over-abstract layer over the mod's EXISTING abstract succession. The mod already
+models the succession *contest* (qing_succession.1 九子奪嫡 raises qing_succession_jockeying + a strife
+modifier; qing_succession.2 resolves smooth-vs-disputed at accession off qing_secret_succession_sealed).
+What it LACKED = the PRINCES themselves. #368 supplies a live roster of the reigning emperor's adult sons,
+each with a court-backing score, and the teeth to seal the tablet on a SPECIFIC prince (秘密立儲).
+
+**ENGINE (se_QING_PRINCES.txt, 132/132 braces):** QING_princes_init (idempotent), QING_princes_recompute_roster
+(ordered_child over current_ruler's is_male/is_adult/is_alive sons → qing_princes variable_list on CHI +
+qing_prince_count; each prince self-inits qing_prince_backing = combined_stats_council_svalue + 20, one-time),
+QING_princes_compute_spread (top-minus-bottom backing = the factional-strife signal), QING_princes_pulse
+(quarterly: rebuild, drift the front-runner's backing up +3 while unsealed & ≥2 princes → DIVERGENCE, couple
+spread≥50 into qing_dynastic_harmony −1, offer events), + 4 levers.
+
+**LEVERS:** 培植 FAVOUR (ablest by combined stats: +20 prestige, +12 backing, −2 harmony while unsealed),
+秘密立儲 SEAL (nominated_heir_modifier + recalc_succession on the front-runner by backing + set
+qing_secret_succession_sealed + strip prior nominee + +8 legit +1 stab +6 harmony + QING_seat_refresh_all),
+查辦 INVESTIGATE (highest-backing prince: −15 prestige, −35 backing, −3 harmony; gated ≥70),
+廢儲 REOPEN (strip nominee + recalc + clear seal + set jockeying + −10 legit −8 harmony; gated on sealed).
+
+**FOLD (D3 satisfied transitively — no new fold):** the succession belongs to the EMPEROR, not an office, so
+it nudges the shared qing_dynastic_harmony meter (QING_council_recompute additively converts harmony into
+qing_council_eff_target — the SAME precedent as Harem #360 / Upper Study #337). A house at war over its
+succession drags every Grand Council office; a sealed house lets them work.
+
+**EVENTS (qing_princes_events.txt, 30/30):** .1 奪嫡之爭 THE PRINCES CONTEND (spread≥40, unsealed, ≥2 princes:
+SEAL / GROOM / STAND ALOOF); .2 儲位太盛 AN OVER-MIGHTY PRINCE (a prince ≥85 backing: CURB 查辦 / ELEVATE seal /
+WATCH). Both right_portrait = the saved front-runner/over-mighty prince.
+
+**PANEL:** QING_princes_panel.txt (7 scripted-guis, 39/39) + gui/qing_princes.gui (104/104, menu_trade.dds icon
+— menu_government.dds does not exist) — prince roster (dynamicgridbox, per-prince martial/finesse/charisma +
+backing bar), harmony read-out, sealed banner, 4 lever buttons (each is_valid mirrors its effect guard — no dead
+clicks). Open button in government_view.gui after the opium button.
+
+**KEY DECISIONS / PROVEN-CODE:**
+- NO create_character — princes are native family-graph children (born via the harem's make_pregnant #360),
+  sidesteps the #90 boot-crash rule entirely. All primitives grep-verified proven in-repo (no oracle needed).
+- ordered_child (NOT every_child) is the demonstrated effect iterator here (se_MARRIAGE.txt); every_child is
+  only named in comments → switched the roster rebuild to ordered_child order_by=age.
+- nominated_heir_modifier = a base-game vanilla triggered_character_modifier (used by anoint_heir_button.txt),
+  carries support_for_character_as_heir=50 → makes the named prince primary_heir. Only ONE nominee at a time
+  (strip prior before adding, mirrors the vanilla button).
+- #368-R (prophylactic, same class as #366-R below): the once-only offered flags
+  (qing_princes_contest_seen/_overmighty_seen) are set in the EVENT's own immediate, NOT the pulse — so a
+  re-check failure during the trigger delay never strands them.
+
+**#366-R (adversarial-review fix from wf_570e8e1f-9c8, MINOR — 1 confirmed):** QING_opium_pulse set the once-only
+offered flags (qing_opium_warning_seen/_legalize_offered/_epidemic_offered) BEFORE trigger_event, so if the
+event's own re-check trigger failed during the 5-20 day delay (e.g. the player switched posture), the flag stayed
+set and the one-time event never re-offered. FIXED by moving each set_variable into the event's own immediate
+(qing_opium.1/.3/.4 — fires only when the event actually fires). Same flag-leak class as the #367 khoja fix.
+
+**#368 adversarial review:** launched wf_e71fa6e0-64e (running).

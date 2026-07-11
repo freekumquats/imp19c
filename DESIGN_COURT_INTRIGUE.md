@@ -1,7 +1,11 @@
 # DESIGN — Court Intrigue + Succession Deep Sim (宮闈鬥爭 / 立儲之爭) — task #368
 
-**Branch:** merge-overnight. **Status:** BUILT. No oracle probe needed — every primitive is proven
-vanilla (see §3).
+**Branch:** merge-overnight. **Status:** BUILT + committed (c2eedf450); adversarial review wf_e71fa6e0-64e.
+No oracle probe needed — every primitive is proven vanilla (see §3). NOTE: the roster rebuild uses
+`ordered_child` (order_by=age), not `every_child` — `ordered_child` is the demonstrated effect iterator in
+this codebase (se_MARRIAGE.txt); `every_child` is only named in comments. The once-only event offered-flags
+(qing_princes_contest_seen/_overmighty_seen) are set in the event's own `immediate`, NOT the pulse, to avoid
+the flag-leak class the #366 review found.
 
 ## 1. Thesis — a CONCRETE roster of contending princes over the EXISTING abstract succession
 
