@@ -1,0 +1,255 @@
+########################################################################
+# se_QING_HAREM.txt — the imperial harem (後宮) under the Imperial Household
+# Department (內務府), #360.
+#
+# The Qing inner court was the throne's succession engine. Above the secondary
+# consorts stood the reigning empress (皇后, current_ruler.spouse — modelled by
+# the #272 empress helpers in se_QING_DYNASTY.txt); BELOW her a graded harem of
+# consorts (妃嬪), drafted from the banner families in the triennial draft
+# (八旗選秀). They were the emperor's household, run by the Neiwufu (the
+# chamberlain, 總管內務府大臣) — so the harem's health folds into HIS Grand Council
+# standing (qing_min_perf_chamberlain, se_QING_MINISTRY.txt), and their sons were
+# the realm's succession pool.
+#
+# CONCRETE-over-abstract (house rule): the harem is a LIST of real on-map consort
+# characters (qing_harem_consorts), not a counter. Favouring a consort gets her with
+# child by the emperor via make_pregnant (father = the emperor, known_bastard = no) —
+# a recognised imperial heir borne through the engine's OWN birth mechanic, so
+# legitimacy / dynasty / the family graph (and thus the succession) are all handled
+# natively. make_pregnant is the oracle-proven idiom (verbatim in Invictus
+# internal_politics_monarchy / flavour events); the father may be any character scope,
+# not only a spouse. No abstract "heir count" — the child enters the family concretely.
+#
+# STATE (CHI country scope):
+#   qing_harem_consorts        variable_list of the living secondary consorts
+#   qing_harem_consort_count   int, the roster size (GUI + perf read it)
+# Character-scope mark (on each consort):
+#   qing_is_harem_consort      flag (roster membership + death-cleanup key)
+#
+# PREFIX: QING_harem_ / sys = QING. CHI-only. Init from on_game_initialized;
+# drifts quarterly via QING_harem_pulse (se_QING_GOVERNANCE.txt).
+########################################################################
+
+# ======================================================================
+# INIT — seed the roster + a starting harem for the reigning emperor. Idempotent.
+# Called once at game start from on_game_initialized. A High-Qing emperor keeps a
+# populated inner court, so we mint a small opening harem (3) rather than start bare.
+# ======================================================================
+QING_harem_init = {
+	LOG_enter = { sys = QING  fn = "QING_harem_init" }
+	# guard on a DEDICATED flag, not the count var — the perf recompute (which runs at
+	# game-start BEFORE this init) calls QING_harem_recompute_roster, which sets the count
+	# var; guarding on the count would then wrongly skip minting the opening harem.
+	if = {
+		limit = { NOT = { has_variable = qing_harem_initialized } }
+		set_variable = { name = qing_harem_initialized  value = 1 }
+		set_variable = { name = qing_harem_consort_count  value = 0 }
+		clear_variable_list = qing_harem_consorts
+		# an opening inner court of three consorts (only if the throne is filled).
+		if = {
+			limit = { exists = current_ruler }
+			QING_harem_mint_consort = yes
+			QING_harem_mint_consort = yes
+			QING_harem_mint_consort = yes
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_init"  result = OK }
+}
+
+# ======================================================================
+# QING_harem_mint_consort — create ONE consort and add her to the harem roster.
+# Scope: COUNTRY (CHI). A banner woman of the emperor's own culture/faith (八旗選秀),
+# of some charm; bound to the throne's household. Marked qing_is_harem_consort so the
+# death-cleanup + roster rebuild recognise her. Uses the proven create_character
+# roster idiom (se_QING_EXAM.txt QING_exam_mint_scholar). #90 rule: no modifiers
+# granted to the character inside create_character; markers set in a follow-up scope.
+# ======================================================================
+QING_harem_mint_consort = {
+	create_character = {
+		age = 20
+		female = yes
+		culture = root.primary_culture
+		religion = root.religion
+		# a consort's gifts are social, not martial — charisma leads, with a spread so
+		# the harem is not identical clones.
+		add_charisma = 6
+		add_finesse = 3
+		add_zeal = 2
+		add_martial = 1
+		save_scope_as = qing_new_consort
+	}
+	scope:qing_new_consort = {
+		set_home_country = ROOT
+		set_variable = { name = qing_is_harem_consort  value = 1 }
+	}
+	add_to_variable_list = { name = qing_harem_consorts  target = scope:qing_new_consort }
+	change_variable = { name = qing_harem_consort_count  add = 1 }
+	LOG_line = { sys = QING  msg = "harem: a consort enters the inner court for" }
+}
+
+# ======================================================================
+# QING_harem_recompute_roster — rebuild the consort list fresh from the live
+# characters carrying the marker (alive + still in the household). Self-healing:
+# prunes the dead / departed without relying on the death hook alone, and keeps the
+# count var honest for the GUI + the chamberlain perf term. Bounded O(characters),
+# run quarterly (perf recompute) + on panel open. Scope: COUNTRY (CHI). Mirrors the
+# revenue-granary roster rebuild (se_QING_MINISTRY.txt QING_ministry_recompute_perf_revenue).
+# ======================================================================
+QING_harem_recompute_roster = {
+	clear_variable_list = qing_harem_consorts
+	set_variable = { name = qing_harem_consort_count  value = 0 }
+	every_character = {
+		limit = {
+			has_variable = qing_is_harem_consort
+			is_alive = yes
+			employer = ROOT
+		}
+		ROOT = {
+			add_to_variable_list = { name = qing_harem_consorts  target = prev }
+			change_variable = { name = qing_harem_consort_count  add = 1 }
+		}
+	}
+}
+
+# ======================================================================
+# QING_harem_hold_draft (選秀) — the triennial banner draft. Mints one or two new
+# consorts into the inner court. Scope: COUNTRY (CHI). The action lever + the pulse
+# both call this; it self-caps at a harem of 8 so the roster cannot balloon (the
+# GUI button also gates on the cap, but re-check here in case the pulse calls it).
+# ======================================================================
+QING_harem_hold_draft = {
+	LOG_enter = { sys = QING  fn = "QING_harem_hold_draft" }
+	QING_harem_recompute_roster = yes
+	if = {
+		limit = {
+			exists = current_ruler
+			var:qing_harem_consort_count < 8
+		}
+		QING_harem_mint_consort = yes
+		# a vigorous draft brings a second woman if the court is not yet crowded.
+		if = {
+			limit = { var:qing_harem_consort_count < 6 }
+			QING_harem_mint_consort = yes
+		}
+		# a full, content inner court steadies the house a little.
+		QING_dynasty_harmony_nudge = { amount = 2 }
+		LOG_line = { sys = QING  msg = "harem: a consort draft is held for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_hold_draft"  result = OK }
+}
+
+# ======================================================================
+# QING_harem_favour_consort (臨幸) — the emperor favours a consort, who conceives him a
+# child. Scope: COUNTRY (CHI). Picks a living consort at random from the roster and gets
+# her with child by the emperor via the PROVEN make_pregnant idiom (runs on the WOMAN;
+# father = any char scope; known_bastard = no so the child is a recognised imperial heir).
+# The child is borne through the engine's OWN birth mechanic — legitimacy, dynasty, and the
+# family graph (and thus the succession) are handled natively, no manual parentage. A
+# secured line lifts the dynastic harmony. Guarded on a male reigning emperor + a non-empty
+# harem (the caller also gates this).
+# ======================================================================
+QING_harem_favour_consort = {
+	LOG_enter = { sys = QING  fn = "QING_harem_favour_consort" }
+	QING_harem_recompute_roster = yes
+	if = {
+		limit = {
+			exists = current_ruler
+			current_ruler = { is_male = yes }
+			has_variable_list = qing_harem_consorts
+			# a consort who is alive AND not already carrying a child (so a single favouring
+			# does not double-conceive an already-pregnant woman).
+			any_in_list = { variable = qing_harem_consorts  is_alive = yes  is_pregnant = no }
+		}
+		current_ruler = { save_scope_as = qing_harem_father }
+		random_in_list = {
+			variable = qing_harem_consorts
+			limit = { is_alive = yes  is_pregnant = no }
+			save_scope_as = qing_favoured_consort
+		}
+		# the consort conceives a recognised child of the throne. make_pregnant runs on the
+		# WOMAN; father is the emperor; known_bastard = no marks the child a legitimate heir.
+		scope:qing_favoured_consort = {
+			make_pregnant = {
+				father = scope:qing_harem_father
+				known_bastard = no
+				number_of_children = 1
+			}
+		}
+		# a secured succession gladdens the house + lifts the consort's standing.
+		QING_dynasty_harmony_nudge = { amount = 4 }
+		scope:qing_favoured_consort = { add_prestige = 15 }
+		LOG_line = { sys = QING  msg = "harem: a favoured consort conceives the emperor a child for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_favour_consort"  result = OK }
+}
+
+# ======================================================================
+# QING_harem_pulse — quarterly drift. Scope: COUNTRY (CHI). Rebuilds the roster,
+# then on a throttled roll a favoured consort bears a child (the inner court doing
+# its dynastic work on its own, AI-side too). A capable, present chamberlain keeps
+# the harem well-ordered (a content court); a vacant/venal office lets the inner
+# court fray (a small harmony drift down, the neglected-household beat). Called from
+# the quarterly governance pulse AFTER QING_household_pulse.
+# ======================================================================
+QING_harem_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_harem_pulse" }
+	QING_harem_init = yes
+	QING_harem_recompute_roster = yes
+
+	# --- a favoured consort may bear a child (throttled), if the line can be got.
+	if = {
+		limit = {
+			exists = current_ruler
+			current_ruler = { is_male = yes }
+			var:qing_harem_consort_count >= 1
+		}
+		random = {
+			chance = 20
+			QING_harem_favour_consort = yes
+		}
+	}
+
+	# --- a vacant / venal chamberlain lets the inner court fray (harmony drift down).
+	if = {
+		limit = {
+			OR = {
+				NOT = { has_variable = qing_office_chamberlain_holder }
+				var:qing_office_chamberlain_holder = {
+					OR = {
+						NOT = { is_alive = yes }
+						NOT = { employer = ROOT }
+						has_trait = corrupt
+					}
+				}
+			}
+			var:qing_harem_consort_count >= 1
+		}
+		QING_dynasty_harmony_nudge = { amount = -1 }
+		LOG_line = { sys = QING  msg = "harem: the inner court frays under a neglectful household for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_pulse"  result = OK }
+}
+
+# ======================================================================
+# QING_harem_remove_on_death — call in a DYING character's scope (hooked into
+# on_character_death). If the dead woman was a harem consort, drop her from her
+# employer's roster so no orphan reference survives + keep the count honest.
+# Self-guards on the marker. Mirrors QING_exam_pool_remove_on_death.
+# ======================================================================
+QING_harem_remove_on_death = {
+	if = {
+		limit = {
+			has_variable = qing_is_harem_consort
+			exists = employer
+		}
+		save_scope_as = qing_dead_consort
+		employer = {
+			if = {
+				limit = { has_variable_list = qing_harem_consorts }
+				remove_list_variable = { name = qing_harem_consorts  target = scope:qing_dead_consort }
+				if = { limit = { var:qing_harem_consort_count > 0 }  change_variable = { name = qing_harem_consort_count  subtract = 1 } }
+				LOG_line = { sys = QING  msg = "harem: a consort died, removed from the inner court for" }
+			}
+		}
+	}
+}
