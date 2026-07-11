@@ -274,3 +274,43 @@ MARRIAGE_candidate_matches_filter_adult = {
 		current_ruler = { any_child = { is_alive = yes  is_adult = yes  is_married = no  prisoner = no  MARRIAGE_child_matches_gender_trigger = yes } }
 	}
 }
+
+
+# ======================================================================
+# [review-fix / R2-11/13] RELOCATED from common/scripted_guis/MARRIAGE_actions.txt.
+# A scripted_trigger defined in scripted_guis/ never registers as a trigger (the loader
+# keys off the folder). This is the MINOR-INCLUSIVE candidate filter (its adult-only
+# mirror MARRIAGE_candidate_matches_filter_adult already lives here); both are read inside
+# limit={} blocks by the candidate-list build + the propose/betroth action gates.
+# ======================================================================
+# ---- [#313] does this candidate country match the active FAMILY + GENDER filter? --------
+# Country scope = the candidate. Reads ROOT's filter vars. FAMILY: ruling => the candidate must field a
+# betrothable RULING-family child; other => a betrothable NON-ruling noble; any => either. GENDER filters
+# on the sex of OUR child sent, so the PARTNER must field the OPPOSITE sex: our son => partner needs a
+# daughter; our daughter => partner needs a son; any => partner needs any eligible child.
+MARRIAGE_candidate_matches_filter = {
+	# resolve the required partner sex from OUR gender filter (default any).
+	# our son -> partner female ; our daughter -> partner male ; any -> either.
+	trigger_if = {
+		limit = { ROOT = { has_variable = marriage_filter_family  var:marriage_filter_family = flag:other } }
+		# OTHER families only: a non-ruling noble, unwed, free, matching the gender requirement.
+		any_character = {
+			is_alive = yes  is_married = no  prisoner = no
+			from_ruler_family = no
+			NOT = { is_ruler = yes }
+			MARRIAGE_child_matches_gender_trigger = yes
+		}
+	}
+	trigger_else_if = {
+		limit = { ROOT = { has_variable = marriage_filter_family  var:marriage_filter_family = flag:any } }
+		# ANY family: a ruling child OR a noble, matching the gender requirement.
+		OR = {
+			current_ruler = { any_child = { is_alive = yes  is_married = no  prisoner = no  MARRIAGE_child_matches_gender_trigger = yes } }
+			any_character = { is_alive = yes  is_married = no  prisoner = no  from_ruler_family = no  NOT = { is_ruler = yes }  MARRIAGE_child_matches_gender_trigger = yes }
+		}
+	}
+	trigger_else = {
+		# RULING family (default): a ruling-family child matching the gender requirement.
+		current_ruler = { any_child = { is_alive = yes  is_married = no  prisoner = no  MARRIAGE_child_matches_gender_trigger = yes } }
+	}
+}

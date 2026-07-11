@@ -1205,3 +1205,142 @@ MARRIAGE_recompute_bloc_weight = {
 	}
 	LOG_line = { sys = MARRIAGE  msg = "dynastic bloc weight recomputed (own + wedded partners' cities) for" }
 }
+
+
+# ======================================================================
+# [review-fix / R2-11/13] RELOCATED from common/scripted_guis/MARRIAGE_actions.txt.
+# The Jomini loader parses a file by its FOLDER, so a scripted_effect defined in
+# scripted_guis/ never registers as a callable effect ("Unknown effect"). These three
+# effects (the candidate-list rebuild + its two per-house caches) back the marriage L4
+# window + the #313 filter/sort cycle buttons; they MUST live here to be callable.
+# ROOT/this = the viewing (player) country when called from the window/cycle GUIs.
+# ======================================================================
+# ---- [R2-11/13] rebuild the candidate variable-list from the active filter/sort vars ----
+# SCRIPTED EFFECT (callable by name from any effect block — unlike the scripted_gui above). ROOT/this
+# = the viewing country. Clears + repopulates marriage_candidates and the display-cache vars.
+MARRIAGE_rebuild_candidate_list = {
+	# [R2-10 probe] reached via the Royal-Marriages OPEN button + the #313 cycle buttons (all GUI onclick
+	# Execute). Stamp a country var so the CHI pulse can report whether any of those clicks fired (the
+	# debug_log inside this effect is invisible if it runs from a GUI-Execute context). Scope = viewer.
+	LOG_gui_probe_stamp = { probe = marriage_open }
+	clear_variable_list = marriage_candidates
+	# cache OUR own power + our own eligible-child count for the window header.
+	set_variable = { name = marriage_display_power  value = DIPLOMACY_power }
+	MARRIAGE_cache_child_counts = yes
+	# [#betrothal-rework] include every foreign eligible dynastic monarchy in range that fields at
+	# least one BETROTHABLE child (from the ruling family, alive, unwed, free) — NOT only houses
+	# with a marriageable ADULT. A minor child cannot marry yet but CAN be betrothed, so a house
+	# with only young children still belongs in the list (the betroth action lights up, propose does
+	# not). Per candidate we cache: power score, eligible ADULT-child count + total betrothable-child
+	# count, and whether we are already WED or BETROTHED to them (so the row can show status).
+	# [#313] the candidate loop is now ORDERED so the list is built pre-sorted (a GUI datamodel over
+	# countries cannot sort on a nested child attribute). ordered_country order_by = a script_value
+	# reading each candidate's cached display var is the proven idiom (se_DIPLOMACY order_by=svalue).
+	# The sort mode (marriage_sort_mode) selects which cached var MARRIAGE_sort_svalue returns; the
+	# FAMILY + GENDER filters (marriage_filter_family / _gender) narrow the inclusion limit.
+	# NOTE: caching (child counts, power, best-candidate age/skill) must happen BEFORE the ordered
+	# pass reads it. So we do a FIRST unordered pass to cache, then the ordered pass to build the list.
+	every_country = {
+		limit = {
+			NOT = { this = ROOT }
+			exists = current_ruler
+			# [#330 user / merged with #313] Use the WIDER candidate gate: a normal eligible realm OR
+			# ROOT's own subject monarchy (so Qing tributaries — Korea, Vietnam, the Central-Asian
+			# khanates — appear, to be bound into the imperial house). And DROP the in_diplomatic_range
+			# gate: for an isolationist 1763 Qing that gate excluded essentially every dynastic house,
+			# leaving the list empty (boot-test B12). A marriage overture is itself a reason to open
+			# relations, so the window shows out-of-range houses; the propose/betroth ACTIONS keep
+			# their own range check (MARRIAGE_actions below) so an unreachable match is shown-but-gated.
+			# The #313 family/gender filter still narrows inclusion (it also enforces a betrothable
+			# child of the right sex exists, subsuming the old bare any_child gate).
+			MARRIAGE_candidate_realm_trigger = yes
+			MARRIAGE_candidate_matches_filter = yes
+		}
+		set_variable = { name = marriage_display_power  value = DIPLOMACY_power }
+		MARRIAGE_cache_child_counts = yes
+		MARRIAGE_cache_best_candidate = yes
+		# status flags relative to ROOT (the viewing court), read per-row in the window.
+		if = {
+			limit = { ROOT = { is_target_in_variable_list = { name = marriage_partners  target = prev } } }
+			set_variable = { name = marriage_display_wed  value = 1 }
+		}
+		else = { set_variable = { name = marriage_display_wed  value = 0 } }
+		if = {
+			limit = { ROOT = { is_target_in_variable_list = { name = marriage_betrothed  target = prev } } }
+			set_variable = { name = marriage_display_betrothed  value = 1 }
+		}
+		else = { set_variable = { name = marriage_display_betrothed  value = 0 } }
+	}
+	# second pass: add to the list in sorted order (highest svalue first).
+	# [#330 user / B12] the ordered pass MUST use the same wider gate as the cache pass above
+	# (MARRIAGE_candidate_realm_trigger, no in_diplomatic_range) or the list rebuilds empty for an
+	# isolationist Qing even though the cache pass populated the display vars.
+	ordered_country = {
+		limit = {
+			NOT = { this = ROOT }
+			exists = current_ruler
+			MARRIAGE_candidate_realm_trigger = yes
+			MARRIAGE_candidate_matches_filter = yes
+		}
+		order_by = MARRIAGE_sort_svalue
+		ROOT = { add_to_variable_list = { name = marriage_candidates  target = prev } }
+	}
+}
+
+# ---- cache a house's eligible-child counts (country scope) -----------------------------
+# [#betrothal-rework] Two counts read by the marriage window rows: marriage_display_adult_children =
+# ruler's children who could MARRY now (adult, unwed, free); marriage_display_child_count = children
+# who could be BETROTHED (any age, unwed, free). Cheap ruler-children iteration; O(1) amortised.
+MARRIAGE_cache_child_counts = {
+	set_variable = { name = marriage_display_adult_children  value = 0 }
+	set_variable = { name = marriage_display_child_count  value = 0 }
+	save_scope_as = child_count_home
+	current_ruler = {
+		every_child = {
+			limit = { is_alive = yes  is_married = no  prisoner = no }
+			scope:child_count_home = { change_variable = { name = marriage_display_child_count  add = 1 } }
+			if = {
+				limit = { is_adult = yes }
+				scope:child_count_home = { change_variable = { name = marriage_display_adult_children  add = 1 } }
+			}
+		}
+	}
+}
+
+# ---- [#313] cache this candidate's BEST-child age + top-skill (country scope = candidate) ----
+# The window sorts on these cached display vars (a GUI datamodel can't sort on a nested child
+# attribute), so we pre-compute per candidate: marriage_display_best_age = the eldest eligible
+# ruling child's age; marriage_display_best_skill = the highest single attribute among eligible
+# ruling children. Eligible = ruling-family child, alive, unwed, free. Cheap ruler-children loop.
+MARRIAGE_cache_best_candidate = {
+	set_variable = { name = marriage_display_best_age    value = 0 }
+	set_variable = { name = marriage_display_best_skill  value = 0 }
+	save_scope_as = best_cand_home
+	# eldest eligible ruling child's AGE — pick it directly with ordered_child (proven idiom used
+	# throughout se_MARRIAGE) and read its age into the home country's display var.
+	current_ruler = {
+		ordered_child = {
+			limit = { is_alive = yes  is_married = no  prisoner = no }
+			order_by = age
+			max = 1
+			save_scope_as = best_cand_eldest
+		}
+	}
+	if = {
+		limit = { exists = scope:best_cand_eldest }
+		set_variable = { name = marriage_display_best_age  value = scope:best_cand_eldest.age }
+	}
+	# top single attribute among eligible ruling children — each child, if its attribute beats the
+	# running best, writes it. Uses save_temporary_scope_as so the child scope is explicit (no prev
+	# value-position read). Cheap ruler-children loop.
+	current_ruler = {
+		every_child = {
+			limit = { is_alive = yes  is_married = no  prisoner = no }
+			save_temporary_scope_as = best_cand_child
+			if = { limit = { scope:best_cand_home = { var:marriage_display_best_skill < scope:best_cand_child.martial } }   scope:best_cand_home = { set_variable = { name = marriage_display_best_skill  value = scope:best_cand_child.martial } } }
+			if = { limit = { scope:best_cand_home = { var:marriage_display_best_skill < scope:best_cand_child.finesse } }   scope:best_cand_home = { set_variable = { name = marriage_display_best_skill  value = scope:best_cand_child.finesse } } }
+			if = { limit = { scope:best_cand_home = { var:marriage_display_best_skill < scope:best_cand_child.charisma } }  scope:best_cand_home = { set_variable = { name = marriage_display_best_skill  value = scope:best_cand_child.charisma } } }
+			if = { limit = { scope:best_cand_home = { var:marriage_display_best_skill < scope:best_cand_child.zeal } }      scope:best_cand_home = { set_variable = { name = marriage_display_best_skill  value = scope:best_cand_child.zeal } } }
+		}
+	}
+}

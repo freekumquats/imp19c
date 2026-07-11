@@ -808,8 +808,20 @@ QING_council_refresh_candidates = {
 			employer = ROOT
 			is_adult = yes
 			is_alive = yes
-			# not already holding one of the great offices.
-			NOT = { has_variable = qing_office_held }
+			# [R2-7 fix] MUST match the inclusive eligibility of QING_council_refresh_candidates_by
+			# (the B7 fix): do NOT exclude ALL office-holders — autofill staffs every office at start,
+			# so `NOT has_variable qing_office_held` left the list EMPTY (the boot-test empty picker).
+			# This plain refresh runs from the pulse + autofill, so if the window happens to read a
+			# pulse-built list it must be populated too. Only the two dynastic FIGUREHEAD seats that
+			# ride on qing_office_held — Grand Regent (攝政) + Emperor Emeritus (太上皇) — stay excluded
+			# (they hold by regency/abdication, not appointment). Cross-office holders are valid
+			# reshuffle candidates (QING_office_appoint one-office-per-man relieves the prior seat).
+			NOT = {
+				AND = {
+					has_variable = qing_office_held
+					OR = { var:qing_office_held = flag:regent  var:qing_office_held = flag:emeritus }
+				}
+			}
 		}
 		order_by = combined_stats_council_svalue
 		check_range_bounds = no
@@ -836,6 +848,9 @@ QING_council_refresh_candidates = {
 QING_council_refresh_candidates_by = {
 	# Scope: country (CHI).
 	LOG_enter = { sys = QING  fn = "QING_council_refresh_candidates_by" }
+	# [R2-7 probe] this effect is reached ONLY via the Appoint/Replace button's onclick Execute; stamp a
+	# country var so the CHI pulse can report (on the reliable on_action log path) whether the click fired.
+	LOG_gui_probe_stamp = { probe = council_appoint }
 	QING_council_init = yes
 	clear_variable_list = qing_council_candidates
 	# [#314 B7 fix] The picker was EMPTY after game start: QING_council_autofill staffs EVERY
