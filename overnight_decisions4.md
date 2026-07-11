@@ -1037,3 +1037,63 @@ is: don't defer for size/complexity alone):
 
 (#368 Court Intrigue, #369 Population/Famine, #370 Silk Road caravan remain after; #371 add_loyalty
 audit is independent and can slot in any time.)
+
+## D72 — #336 + #337 ADVERSARIAL REVIEWS actioned (3 fixes committed)
+
+Both study-panel reviews ran (#336 completed cleanly via workflow; #337's workflow infra stalled at
+"started" with no results a second time, so I relaunched it fresh — wf_615d2605-aae). The #336
+verify-pass produced ONE refuted major + TWO confirmed minors; I fixed all real findings, and
+carried the structural ones across to #337 (identical idiom) proactively. Committed together:
+
+- **[MAJOR, confirmed→fixed] Elevate cap-bypass (se_QING_COUNCIL.txt QING_office_appoint).** The
+  appoint strip block cleared qing_is_imperial_guardsman/censor/zongli but NOT qing_is_southernstudy
+  or qing_is_upperstudy. So a 首席/總師傅 promoted out via the 擢用 Elevate lever kept his study
+  mark; when his great office was later vacated (QING_office_vacate drops qing_office_held only), the
+  next recompute re-added him — count → 9/7, past the hard cap of 8/6, since the enrol gate is only
+  checked on draw/mint. This is the exact #364-R2 pattern. FIX: strip both study marks in the same
+  block. (NB the #336 find-pass flagged this as unstripped; the verify-pass correctly noted my fix
+  was already in the working tree — real bug, now remediated + committed.)
+
+- **[minor, confirmed→fixed] monthly_prestige is a CK3 token, not Imperator.** grep of the reference
+  repos (Invictus vanilla_keys dump ~69k keys + Terra-Indomita) shows NO monthly_prestige country
+  modifier — only monthly_character_fam_prestige + the confirmed-valid monthly_legitimacy. Imperator
+  silently ignores unknown modifier tokens, so the Southern Study luster's prestige component was a
+  NO-OP (never accrued). Swapped monthly_prestige → ruler_popularity_gain (the proven Imperator
+  country-scope standing token, ~80 uses) in qing_southernstudy_modifiers.txt AND the two OTHER
+  pre-existing files carrying the same latent no-op (qing_household_modifiers.txt:9,
+  qing_pilgrimage_modifiers.txt:23 — both fixed too rather than left known-broken). CORRECTS the
+  stale [[imp19c summer palace tree]] note that had cited monthly_prestige as "proven."
+
+- **[minor, confirmed→fixed] init did not recompute → stale luster/quality at game start.** Both
+  inits seed the 1763 cabinet (count → 2) but never called recompute, so literary/quality stayed 0
+  and the luster/harmony effects did not apply until the first monthly pulse (unlike the harem, which
+  folds into a game-start QING_ministry_recompute_all_perf). FIX: both inits now call their
+  recompute at seed time (verified recompute does NOT call init back — no loop).
+
+- **[tidiness] chief-on-death.** remove_on_death now clears qing_southernstudy_chief /
+  qing_upperstudy_chief if the serving lead himself dies (every read-site already re-checks is_alive,
+  so this was transient staleness, not a crash — fixed for cleanliness).
+
+## D73 — #367 XINJIANG CONSOLIDATION ARC: design (1763 consolidation layer, NOT the late-Qing crisis)
+
+Research agent returned a sourced digest (Perdue/Millward/Newby via Wikipedia). KEY SCOPING FINDING:
+two Xinjiang systems ALREADY exist and #367 must LAYER, not duplicate:
+  1. **se_QING_ILI.txt** = the LATE-QING (1874-81) Ili *crisis* set-piece (海防塞防之爭 debate →
+     Yaqub-Beg reconquest → Chonghou/Zeng-Jize Ili diplomacy). It OWNS the qing_xinjiang_control
+     meter (0..100) + the Dzungaria/Tarim province bands (qing_xinjiang_prov_secured/contested) +
+     grip country-modifiers. Gated on qing_rebel_dungan (fires only after the 1860s Dungan revolt).
+  2. **se_QING_AMBAN.txt** = the 駐紮大臣 resident lifecycle (post/recall/evaluate, Lifan-Yuan
+     supervision, clash/gone-native events) on Inner-Asian subjects.
+  3. **se_QING_FRONTIER.txt** = the #346 frontier-garrison overlay (將軍 banner garrisons on
+     ILI/XNG/MKD/HLJ autonomous_governorship subjects, War-Ministry↔Lifan-Yuan turf war).
+
+DESIGN: #367 is the **1763 CONSOLIDATION** layer that FEEDS the same qing_xinjiang_control meter in
+the decades BEFORE the crisis — the historical "held it right → peaceful for 60 years, or bungled it
+→ Jahangir 1826" arc. It is the player-emperor's set of consolidation LEVERS, surfaced as a panel,
+that RAISE or ERODE qing_xinjiang_control and the province bands the Ili set-piece already reads. It
+does NOT touch se_QING_ILI's stage machinery (that is a discrete 1874 set-piece keyed off a rebellion
+flag that will not have fired in a well-run 1763 game). Concrete-over-abstract: real 屯田 tuntian
+colonies (buildings/pops), real begs (伯克, minted characters on the XNG/ILI subjects), the existing
+amban residents, real khoja-revolt risk. Levers historically: post tuntian colonies, appoint/discipline
+begs, subsidize with 協餉 xiexiang silver stipends, settle banner garrisons. Full build detail in the
+build commit + follow-on decision entry.
