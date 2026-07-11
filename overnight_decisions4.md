@@ -919,3 +919,34 @@ buttons only), so their `employer = ROOT` always resolves to CHI. Secretariat + 
 char-scoped panel refreshes MUST be root-independent — never rely on ROOT inside it. Capture the country
 via `save_scope_as` at the top and reference the saved scope, because a `scope:player = {}` wrapper around a
 scripted-effect call sets THIS but NOT ROOT.
+
+## D68 — #336 Southern Study (南書房): exam-fed inner-court literary cabinet [BUILT]
+
+The emperor's private cabinet of letters, built as a full Grand-Council-clone L4 panel. Files:
+`se_QING_SOUTHERNSTUDY.txt` (124/124), `QING_southernstudy_panel.txt` (40/40),
+`qing_southernstudy_modifiers.txt` (2/2), `gui/qing_southern_study.gui` (102/102),
+`qing_southern_study_l_english.yml`, + open-button in `government_view.gui` and wiring in the
+death hook / init on_action / governance pulse. Committed as freekumquats.
+
+**Key design decision — the Study is NOT a Grand Council office; it FEEDS the council.** So unlike
+every ministry panel (#349-#365) there is deliberately NO perf-fold into an office-holder and NO
+`qing_min_perf_*` term — the #358+ ministry-perf spine is untouched. The Study's benefit is instead
+COURT LUSTER (the `qing_southernstudy_luster_minor/major` country modifier: prestige + legitimacy,
+and at the major tier a small assimilation-speed bump), scaled to the corps' literary depth, plus a
+PROMOTION PIPELINE (the ELEVATE lever seats the chief in the first vacant great office).
+
+**Concrete-over-abstract:** the corps is real 南書房行走 characters, not a counter. Intake is either
+DRAW (掄才入直 — pull the ablest waiting exam-pool 天子門生, weighted by council-fitness svalue) or a
+WILDCARD mint (高士奇 precedent — Kangxi's commoner prodigy). 1763 opens with two real laureates:
+梁詩正 (探花 1730) and 于敏中 (狀元 1737); both `degree = jinshi` (探花/狀元 are palace-exam placements,
+NOT traits — carried in the loc nicknames instead). Lead seat = 首席南書房行走 / "Grand Preceptor of
+the Southern Study".
+
+**Idioms reused (all proven):** the exam-pool draw + pool-exit (se_QING_EXAM.txt), the marked-courtier
+roster rebuild EXCLUDING office-holders (#362-R2 double-count lesson — a promoted attendant leaves the
+corps), the create_character named-roster mint (#90 rule: no modifiers inside; culture=han;
+religion=root.religion; finalize in the saved scope), `QING_office_appoint_first_vacant`, and the
+`qing_council_vacancy > 0` dead-affordance gate (#358). All LOG msgs static (#253). Cap = 8 attendants;
+pulse self-replenishes at 25% when corps < 6 and the pool has talent.
+
+Adversarial review launched next.
