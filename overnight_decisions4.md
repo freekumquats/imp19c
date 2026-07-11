@@ -383,6 +383,35 @@ minister two levers. All fiscal logic reuses existing se_QING_REVENUE.txt — no
 - Header icon menu_trade.dds (fisc); window `qing_revenue_ministry_panel`; open button wired into
   the government_view col2 strip after Rites. All referenced vars/effects verified to exist.
 
+### #355 adversarial review (wqa00aa7e) — 2 MAJOR fixed + 1 systemic MINOR ruled-on
+
+- **R355-MAJOR-1 (granary treasury sink — FIXED).** `qing_revenue_ministry_stock_granary` charged
+  −60 treasury on EVERY click but `QING_revenue_stock_granary` could re-target an already-granaried
+  province (its `random_owned_province` limit lacked a NOT-has_building guard) → pure treasury sink
+  for zero coverage gain once all 5 Yellow-River cities were stocked. Fixed BOTH ends: (a) added
+  `NOT = { has_building = qing_granary_building }` to the panel button's any_owned_province is_valid
+  (disables the button once all covered — matches the works-build siblings); (b) changed the effect
+  to `ordered_owned_province` + `order_by = total_population` + `max = 1` + the same NOT-guard in the
+  limit, so it stocks the largest uncovered city and never lands on a granaried one.
+- **R355-MAJOR-2 (salt-reform money printer — FIXED).** The panel bypassed the AI pulse's 270-day
+  `qing_revenue_event_cooldown`, so a below-fitness minister could re-click `reform_salt` every 1–3
+  days and repeatedly take qing_revenue.1 Option B (+80 treasury, flag never set) — an unbounded coin
+  printer. Fixed: is_valid gained `NOT = { has_variable = qing_revenue_event_cooldown }`; effect now
+  stamps `set_variable = { name = qing_revenue_event_cooldown  days = 270 }`, mirroring the pulse gate.
+- **R355-MINOR-systemic (finesse double-fold — RULED DELIBERATE, comment corrected).** The reviewer
+  correctly noted the Revenue minister's finesse reaches `qing_council_eff_target` twice: once via
+  `QING_council_score_office{ office=revenue skill=finesse }` (se_QING_COUNCIL.txt:158) and again via
+  perf term (a) `(finesse−7)×4` folding through `QING_council_perf_accumulate`. This is the SHARED
+  spine across all ministries #349–#354, so any change is systemic. **Decision: keep term (a), do NOT
+  strip it.** Rationale: term (a) is what makes each panel's *performance bar* read sensibly (a skilled
+  minister with average fiscal OUTPUT must not display a flat neutral 50); its second path into
+  eff_target is negligible — `(finesse−7)×4` averaged across filled offices then /5 in the accumulate
+  → **<±0.5 pts of eff_target**, a mild competence reinforcement, not a real double-weighting. The
+  meter's true signal is the OUTPUT terms (b)–(e): granary coverage, salt reform, silver-crisis drag,
+  corruption drag. **The actual bug was the misleading header comment** ("…not the man again"), which
+  claimed the fold avoided re-scoring the skill — it doesn't. Corrected the comment (se_QING_MINISTRY.txt
+  lines 439–442) to document the deliberate, bounded double-contribution rather than deny it.
+
 ---
 
 ## #358 — Hanlin Academy panel (翰林院)

@@ -74,7 +74,11 @@ qing_revenue_ministry_stock_granary = {
 		has_variable = qing_office_revenue_holder
 		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT  finesse >= 7 }
 		treasury >= 60
-		# a suitable Yellow-River city province exists (the QING_revenue_stock_granary target set).
+		# a suitable Yellow-River city province exists that does NOT yet hold a granary.
+		# [#355 review fix] the NOT-has_building guard (which every works-panel build sibling
+		# carries) disables the button once all target provinces are covered — without it the
+		# add_treasury=-60 ran on every click as a pure treasury sink for zero coverage gain,
+		# since QING_revenue_stock_granary could re-target an already-granaried province.
 		any_owned_province = {
 			OR = {
 				province_id = 7229    # 北京
@@ -84,6 +88,7 @@ qing_revenue_ministry_stock_granary = {
 				province_id = 7235    # 濟南
 			}
 			has_city_status = yes
+			NOT = { has_building = qing_granary_building }
 		}
 	}
 	effect = {
@@ -104,10 +109,18 @@ qing_revenue_ministry_reform_salt = {
 		has_variable = qing_office_revenue_holder
 		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
 		NOT = { has_variable = qing_salt_gabelle_reformed }
+		# [#355 review fix] honor the SAME 270-day throttle the AI pulse uses (se_QING_REVENUE.txt).
+		# Without it a minister below the reform fitness threshold could re-click every 1-3 days and
+		# repeatedly pick qing_revenue.1 Option B (+80 treasury, flag never set) — an unbounded money
+		# printer, since the panel button bypassed the pulse cooldown entirely.
+		NOT = { has_variable = qing_revenue_event_cooldown }
 	}
 	effect = {
 		# the event assesses the minister's oversight fitness + offers the reform/milk choice.
 		trigger_event = { id = qing_revenue.1  days = { 1 3 } }
+		# stamp the throttle immediately so the reform question can't be re-opened for ~3 quarters,
+		# matching the AI pulse's qing_revenue_event_cooldown gate.
+		set_variable = { name = qing_revenue_event_cooldown  days = 270 }
 		LOG_line = { sys = QING  msg = "revenue panel: minister opened the salt-gabelle reform question for" }
 	}
 }
