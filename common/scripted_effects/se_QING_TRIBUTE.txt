@@ -1,0 +1,220 @@
+########################################################################
+# se_QING_TRIBUTE.txt — [#322 / overnight-build-#2] THE TRIBUTE-EMBASSY RHYTHM (朝貢體系).
+#
+# The mod already models the tributary order two ways: the abstract suzerain-prestige
+# meter (qing_suzerain_prestige, se_QING_VASSAL.txt) and the DEFENSIVE crises (defend/
+# abandon a vassal under foreign pressure). What was MISSING — and what this module
+# adds, per the concrete-over-abstract rule — is the POSITIVE ongoing RHYTHM of the
+# tributary system at its zenith: the periodic tribute EMBASSIES the vassals sent to
+# Peking (the Korean 燕行使, the Vietnamese and Ryukyu missions), each a concrete ENVOY
+# CHARACTER who arrives, presents tribute (a trade profit to the throne), and is
+# received — raising or, if snubbed, straining the suzerain's prestige. This turns the
+# tributary order from a defensive-only meter into a living court ceremony.
+#
+# CONCRETE OBJECTS (not a counter):
+#   • A real ENVOY create_character per mission (custom identity via add_nickname, the
+#     roster idiom), scoped into the arrival event so the player receives a PERSON.
+#   • The REAL subject tags at the 1763/1815 start (KOR / VIE / NEP / RYU / TNN — the
+#     dependency=tributary rows in setup/main/00_default.txt) drive it: a mission only
+#     comes from a tag that STILL exists AND is STILL our subject, so a lost tributary
+#     stops sending (concrete tie to the actual subject graph, not a hardcoded list).
+#
+# SCHEDULER (oracle-probe fallback baked in): rather than N self-requeuing dated
+# events (event-queue bloat over a long game), ONE shared check runs on the quarterly
+# mechanics pulse (QING_tribute_schedule_missions), iterating our tributary subjects
+# and firing an arrival for any whose per-vassal cooldown has lapsed. O(subjects),
+# cheap, no queue growth. Cadence differs by vassal (Korea most frequent, historically).
+#
+# WIRED:
+#   • QING_tribute_init — seed (idempotent), at game-start init.
+#   • QING_tribute_schedule_missions — quarterly, from qing_mechanics_pulse_on_action.
+#   • qing_tribute.1 — a tribute embassy arrives (the arrival event; envoy + choices).
+#   • QING_tribute_prestige_from_missions — fold recent-mission tempo into the
+#     suzerain-prestige drift (a vigorous embassy calendar sustains the order).
+#
+# CHI-only, player-facing (the pulse that drives it is CHI + is_ai=no gated). All
+# logged sys = QING, STATIC msgs only (#253). no-BOM/LF. Prefix = QING_tribute_.
+#
+#   ROOT / this = the Qing country (CHI, player); root.current_ruler = the emperor.
+#
+# Sources (feasibility only): John K. Fairbank (ed.), The Chinese World Order (1968);
+#   Takeshi Hamashita, China, East Asia and the Global Economy (2008); Kirk Larsen,
+#   Tradition, Treaties, and Trade (2008). Engine idioms cited inline.
+########################################################################
+
+# ======================================================================
+# QING_tribute_init — seed the embassy bookkeeping once. Scope: COUNTRY. Idempotent.
+# Per-vassal last-mission cooldowns are stamped lazily on first schedule, so the only
+# seed here is the missions-this-decade tempo counter the prestige drift reads.
+# ======================================================================
+QING_tribute_init = {
+	LOG_enter = { sys = QING  fn = "QING_tribute_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_tribute_initialized } }
+		set_variable = { name = qing_tribute_initialized  value = 1 }
+		set_variable = { name = qing_tribute_missions_recent  value = 0 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_tribute_init"  result = OK }
+}
+
+# ======================================================================
+# QING_tribute_schedule_missions — Scope: COUNTRY (CHI). The single shared scheduler,
+# run quarterly. For each of our tributary subjects whose per-vassal cooldown has
+# lapsed, mint an envoy and fire the arrival. Bounded to ONE mission per pulse (the
+# first eligible subject) so several tributaries never dogpile the player in one
+# quarter — the others come on later pulses. Cooldown cadence ~ historical tempo.
+# ======================================================================
+QING_tribute_schedule_missions = {
+	if = {
+		limit = {
+			tag = CHI
+			any_subject = { QING_tribute_is_tributary_trigger = yes }
+		}
+		LOG_enter = { sys = QING  fn = "QING_tribute_schedule_missions" }
+		QING_tribute_init = yes
+		# [#322 review-fix — CRITICAL] pick ONE due tributary and run ALL mission effects
+		# INSIDE random_subject, so a no-match pulse (every tributary still on cooldown) is
+		# a clean no-op. The previous structure saved the scope inside random_subject but ran
+		# the mint/fire OUTSIDE it guarded only on exists=scope — and a saved scope PERSISTS
+		# across pulses, so once all vassals were on cooldown the stale scope re-fired a bogus
+		# embassy + leaked an envoy every quarter. Keeping the effects inside is the proven
+		# AMBAN idiom (se_QING_AMBAN.txt:164-185): no match -> the block never executes.
+		# The per-subject cooldown var lives on the SUBJECT (this), so it is per-vassal by
+		# construction and re-gates correctly once the days= timer lapses.
+		random_subject = {
+			limit = {
+				QING_tribute_is_tributary_trigger = yes
+				NOT = { has_variable = qing_tribute_cooldown }
+			}
+			save_scope_as = trib_sender
+			# stamp the cooldown on the subject (cadence ~5y; a single band keeps it boot-safe).
+			set_variable = { name = qing_tribute_cooldown  days = 1825 }
+			# hop back to the overlord (ROOT = CHI is unchanged inside random_subject) to mint
+			# the envoy in Peking's court and fire the arrival country-event on the Qing.
+			ROOT = {
+				QING_tribute_mint_envoy = { sender = scope:trib_sender }
+				trigger_event = { id = qing_tribute.1  days = { 5 20 } }
+				LOG_line = { sys = QING  msg = "tribute: an embassy is dispatched to Peking for" }
+			}
+		}
+		LOG_exit = { sys = QING  fn = "QING_tribute_schedule_missions"  result = OK }
+	}
+}
+
+# ======================================================================
+# QING_tribute_expire_cooldowns — Scope: COUNTRY (CHI). Companion to the scheduler:
+# tick DOWN nothing (the engine expires the days= timer itself), but a subject that
+# LEAVES the tributary fold keeps a stale cooldown var forever — harmless (it just
+# never sends again while non-subject), and re-subjugation clears it here so the
+# rhythm resumes. Cheap; runs on the same pulse. Kept separate for clarity.
+# ======================================================================
+# (No body needed — the days= cooldown auto-expires and the schedule re-gates on
+#  QING_tribute_is_tributary_trigger every pulse, so a freed-then-resubjugated vassal
+#  simply resumes once its timer lapses. Documented here so the absence is intentional.)
+
+# ======================================================================
+# QING_tribute_mint_envoy — Scope: COUNTRY (CHI). $sender$ = the tributary COUNTRY.
+# Create the mission's envoy as a real character in the Qing court and scope him for
+# the arrival event. Culture follows the sender's primary culture so a Korean mission
+# looks Korean, a Vietnamese one Vietnamese (the proven scope-culture read). Marked so
+# he is a minor diplomatic figure, not an officeholder; QING_tribute_dismiss_envoy sends
+# him back home when the audience ends (both options of qing_tribute.1) so envoys never
+# accumulate in the Qing court. He holds no list membership, so a death leaves no orphan
+# reference (no on_character_death hook needed, unlike the amban/pilgrim/scholar features).
+# ======================================================================
+QING_tribute_mint_envoy = {
+	$sender$ = { save_scope_as = trib_envoy_home }
+	create_character = {
+		age = 45
+		culture = scope:trib_envoy_home.culture
+		religion = scope:trib_envoy_home.religion
+		add_finesse = 6
+		add_charisma = 6
+		add_martial = 1
+		add_zeal = 3
+		save_scope_as = trib_envoy
+	}
+	scope:trib_envoy = {
+		set_home_country = ROOT
+		set_as_minor_character = THIS
+		set_variable = { name = qing_is_tribute_envoy  value = 1 }
+		# record who sent him, so the dismissal can send him back home.
+		set_variable = { name = qing_tribute_envoy_home  value = scope:trib_envoy_home }
+	}
+	LOG_line = { sys = QING  msg = "tribute: minted an embassy envoy for" }
+}
+
+# ======================================================================
+# QING_tribute_dismiss_envoy — [#322 review-fix] Scope: COUNTRY (CHI). The mission is
+# received (either option of qing_tribute.1); the envoy's business is done, so send him
+# HOME to the tributary that sent him rather than let him accumulate in the Qing court
+# forever (each mission otherwise left a permanent minor character — a save/court-list
+# leak). Self-guards on the scope. He keeps his marker so the on_death hook (below)
+# still cleans any dangling reference if he dies abroad.
+# ======================================================================
+QING_tribute_dismiss_envoy = {
+	if = {
+		limit = { exists = scope:trib_envoy }
+		scope:trib_envoy = {
+			if = {
+				limit = { has_variable = qing_tribute_envoy_home  exists = var:qing_tribute_envoy_home }
+				set_home_country = var:qing_tribute_envoy_home
+				LOG_line = { sys = QING  msg = "tribute: envoy dismissed home after audience for" }
+			}
+		}
+	}
+}
+
+# ======================================================================
+# QING_tribute_receive — Scope: COUNTRY (CHI). $sender$ = the tributary. The payload of
+# a mission's TRIBUTE-TRADE PROFIT (a treasury haul scaled by the sender's income, the
+# historical asymmetric-gift trade) + the mission tempo counter. [#322 review-fix] the
+# suzerain-prestige change is NO LONGER applied here — it belongs entirely to the event
+# option (a full audience firms it, a curt dismissal strains it), so this shared helper
+# stays prestige-neutral and the option's own nudge is not silently cancelled.
+# ======================================================================
+QING_tribute_receive = {
+	LOG_enter = { sys = QING  fn = "QING_tribute_receive" }
+	# tribute-trade profit: a quarter's worth of ~25% of the sender's monthly income,
+	# clamped so a poor tributary cannot pay what it lacks. has_monthly_income is the
+	# proven country-income read (00_event_values.txt), as used by the B17 collector.
+	if = {
+		limit = { exists = $sender$ }
+		$sender$ = {
+			set_variable = { name = qing_trib_gift  value = has_monthly_income }
+			change_variable = { name = qing_trib_gift  multiply = 0.25 }
+			if = { limit = { var:qing_trib_gift < 0 }  set_variable = { name = qing_trib_gift  value = 0 } }
+		}
+		if = {
+			limit = { $sender$ = { var:qing_trib_gift > 0 } }
+			add_treasury = $sender$.var:qing_trib_gift
+		}
+		$sender$ = { remove_variable = qing_trib_gift }
+	}
+	change_variable = { name = qing_tribute_missions_recent  add = 1 }
+	LOG_exit = { sys = QING  fn = "QING_tribute_receive"  result = OK }
+}
+
+# ======================================================================
+# QING_tribute_prestige_from_missions — Scope: COUNTRY (CHI). Fold the recent-mission
+# tempo into the suzerain-prestige drift and decay the tempo counter, so a vigorous
+# embassy calendar sustains the order and a lapse lets it slip. Runs on the pulse
+# after the schedule. Self-guards on the counter.
+# ======================================================================
+QING_tribute_prestige_from_missions = {
+	if = {
+		limit = { has_variable = qing_tribute_missions_recent }
+		# a busy calendar (>=3 recent missions) affirms the order; a silent one lets it fade.
+		if = {
+			limit = { var:qing_tribute_missions_recent >= 3 }
+			QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = 1 }
+		}
+		else_if = {
+			limit = { var:qing_tribute_missions_recent = 0 }
+			QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = -1 }
+		}
+		# decay the tempo counter toward zero (one step per pulse) so it reflects a
+		# ROLLING window, not a lifetime total.
+		if = { limit = { var:qing_tribute_missions_recent > 0 }  change_variable = { name = qing_tribute_missions_recent  subtract = 1 } }
+	}
+}

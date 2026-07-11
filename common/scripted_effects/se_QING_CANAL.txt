@@ -1,0 +1,197 @@
+########################################################################
+# se_QING_CANAL.txt — [#323 / overnight-build-#3] THE GRAIN-TRIBUTE LOGISTICS (漕運).
+#
+# The Board of Works already maintains the Grand Canal as BUILDINGS (the canal-depot
+# 漕運倉, the Yellow River dikes) and stages silt/breach crises (se_QING_WORKS.txt).
+# What was MISSING — and what this module adds, per the concrete-over-abstract rule —
+# is the LOGISTICS the canal EXISTED FOR: the 漕運, the annual grain-tribute lifeline
+# that carried ~4 million 石 of Jiangnan rice north to feed the capital, the banner
+# garrisons, and the frontier armies. When it flowed, the north was fed and the
+# banners stood; when it silted, flooded, or was embezzled, the capital's granaries
+# emptied and the underfed garrisons rotted (a concrete driver of banner decay) and,
+# in the worst case, famine.
+#
+# THE MODEL (0..100 bands, the PROVEN qing_banner_decay idiom — NOT literal millions
+# of 石, which have no arithmetic precedent in this codebase and risk overflow):
+#   • qing_canal_condition   0..100  the physical state of the canal + dike system.
+#       Drifts DOWN with neglect (a vacant Works office, high corruption) and UP with
+#       the canal-depot buildings the Works minister raises — so the existing #121
+#       buildings now have a SYSTEMIC payoff, not just a flat modifier.
+#   • qing_grain_reserve     0..100  the capital granaries' fill. Each quarter the
+#       canal DELIVERS grain (scaled by condition, minus a loss from silt/corruption)
+#       and the capital CONSUMES it; the reserve rises or falls on the balance.
+#   • A LOW reserve (<40) underfeeds the banner garrisons -> qing_banner_decay climbs
+#       faster (the concrete governance/rebellion coupling the decomposition calls for),
+#       and a CRITICAL reserve (<20) can trigger the famine-response event (qing_canal.1).
+#
+# WIRED:
+#   • QING_canal_init — seed the two counters (idempotent), at game-start init.
+#   • QING_canal_quarterly_tick — from QING_works_pulse (the Works domain's own pulse):
+#       recompute condition from the depot buildings + neglect, run the delivery/
+#       consumption balance, apply the banner-decay coupling, and fire famine if critical.
+#   • qing_canal.1 — the famine-response dilemma (redirect tribute-grain to relief, or
+#       hoard it for the capital) when the reserve falls critical.
+#
+# CHI-only, player-facing (the Works pulse that drives it is CHI-gated). All logged
+# sys = QING, STATIC msgs only (#253). no-BOM/LF. Prefix = QING_canal_.
+#
+#   ROOT / this = the Qing country (CHI, player); root.current_ruler = the emperor.
+#
+# Sources (feasibility only): Jane Kate Leonard, Controlling from Afar: The Daoguang
+#   Emperor's Management of the Grand Canal Crisis, 1824-1826 (1996); Randall Dodgen,
+#   Controlling the Dragon (2001, Yellow River admin); Pierre-Étienne Will & R. Bin
+#   Wong, Nourish the People (1991, the ever-normal granary system). Idioms inline.
+########################################################################
+
+# ======================================================================
+# QING_canal_init — seed the grain-logistics counters once. Scope: COUNTRY. Idempotent.
+# 1763 zenith baselines: the canal was in good order and the granaries near-full; the
+# 19th-c. decline (silt, Yellow River shifts, 捐納 graft) erodes both over the game.
+# ======================================================================
+QING_canal_init = {
+	LOG_enter = { sys = QING  fn = "QING_canal_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_canal_condition } }
+		set_variable = { name = qing_canal_condition  value = 80 }
+	}
+	if = {
+		limit = { NOT = { has_variable = qing_grain_reserve } }
+		set_variable = { name = qing_grain_reserve  value = 75 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_canal_init"  result = OK }
+}
+
+# ======================================================================
+# QING_canal_update_condition — Scope: COUNTRY (CHI). Recompute the canal-system
+# condition from CONCRETE inputs: each canal-depot building (漕運倉, placed by the
+# Works minister) and each dike (河堤) shores the system UP; a vacant Works office and
+# high corruption drag it DOWN. Drifts one step toward the derived target per tick so
+# the meter moves smoothly (the proven target-drift idiom, cf. QING_GOV_update_exam_ladder).
+# ======================================================================
+QING_canal_update_condition = {
+	# derive the target from the works in place + the neglect factors.
+	set_variable = { name = qing_canal_cond_target  value = 40 }   # a bare, unmaintained baseline
+	# each depot/dike province lifts the target (bounded add via presence checks — cheap,
+	# no full province sweep; the depots are few and high-value).
+	if = { limit = { any_owned_province = { has_building = qing_canal_depot_building } }  change_variable = { name = qing_canal_cond_target  add = 25 } }
+	if = { limit = { any_owned_province = { has_building = qing_dike_building } }         change_variable = { name = qing_canal_cond_target  add = 20 } }
+	# a staffed Works office keeps the 河工 works in hand; a vacancy lets them slide.
+	if = { limit = { has_variable = qing_office_works_holder }  change_variable = { name = qing_canal_cond_target  add = 15 } }
+	# corruption siphons the hydraulic budget (the endemic 河工 graft).
+	if = { limit = { has_variable = qing_corruption_level }  set_variable = { name = qing_canal_cond_drag  value = var:qing_corruption_level }  change_variable = { name = qing_canal_cond_drag  divide = 4 }  change_variable = { name = qing_canal_cond_target  subtract = var:qing_canal_cond_drag } }
+	# clamp the target 0..100.
+	if = { limit = { var:qing_canal_cond_target > 100 } set_variable = { name = qing_canal_cond_target  value = 100 } }
+	if = { limit = { var:qing_canal_cond_target < 0 }   set_variable = { name = qing_canal_cond_target  value = 0 } }
+	# drift the live condition one step (±3) toward the target.
+	if = {
+		limit = { var:qing_canal_condition < var:qing_canal_cond_target }
+		QING_DECLINE_nudge = { var = qing_canal_condition  amount = 3 }
+	}
+	else_if = {
+		limit = { var:qing_canal_condition > var:qing_canal_cond_target }
+		QING_DECLINE_nudge = { var = qing_canal_condition  amount = -3 }
+	}
+	remove_variable = qing_canal_cond_target
+	remove_variable = qing_canal_cond_drag
+}
+
+# ======================================================================
+# QING_canal_run_grain_balance — Scope: COUNTRY (CHI). The quarterly delivery-vs-
+# consumption balance. DELIVERY scales with the canal condition (a sound canal moves
+# the grain; a silted one loses much of it to spoilage/banditry en route); CONSUMPTION
+# is the capital's steady draw. The reserve rises or falls on the net. All 0..100.
+# ======================================================================
+QING_canal_run_grain_balance = {
+	# delivery this quarter: condition/20 gives a 0..5 band; a sound canal (cond 80) delivers
+	# +4, a failed one (cond 20) only +1. This is the grain that actually reaches the granaries.
+	set_variable = { name = qing_grain_delivery  value = var:qing_canal_condition }
+	change_variable = { name = qing_grain_delivery  divide = 20 }
+	# consumption: the capital + banner garrisons + frontier armies draw a steady ~4/quarter.
+	set_variable = { name = qing_grain_draw  value = 4 }
+	# net onto the reserve.
+	change_variable = { name = qing_grain_reserve  add = var:qing_grain_delivery }
+	change_variable = { name = qing_grain_reserve  subtract = var:qing_grain_draw }
+	# clamp 0..100.
+	if = { limit = { var:qing_grain_reserve > 100 } set_variable = { name = qing_grain_reserve  value = 100 } }
+	if = { limit = { var:qing_grain_reserve < 0 }   set_variable = { name = qing_grain_reserve  value = 0 } }
+	remove_variable = qing_grain_delivery
+	remove_variable = qing_grain_draw
+	LOG_line = { sys = QING  msg = "canal: grain balance run (reserve now) for" }
+}
+
+# ======================================================================
+# QING_canal_quarterly_tick — Scope: COUNTRY (CHI). The public entry, called from
+# QING_works_pulse. Recompute condition, run the grain balance, apply the concrete
+# consequence: an underfed capital (low reserve) accelerates banner decay, and a
+# critical reserve can trigger the famine-response dilemma. Self-guards + throttles
+# the famine event on its own cooldown so it is a rare crisis, not spam.
+# ======================================================================
+QING_canal_quarterly_tick = {
+	if = {
+		limit = { tag = CHI }
+		LOG_enter = { sys = QING  fn = "QING_canal_quarterly_tick" }
+		QING_canal_init = yes
+		QING_canal_update_condition = yes
+		QING_canal_run_grain_balance = yes
+		# CONSEQUENCE: a low granary underfeeds the banner garrisons -> faster decay
+		# (the concrete coupling the decomposition specifies: capital-grain-shortage ->
+		# banner mutiny/rot). Layered on top of the base banner-decay creep. Gated OUT of
+		# the High Qing era (NOT qing_high_qing_era) to honour the same decay-suppression
+		# contract QING_DECLINE_pulse uses for the passive creep (se_QING_DECLINE.txt:820-835):
+		# at the 1763 zenith the canal is sound and the granaries full anyway, so this is
+		# belt-and-suspenders — the shortfall path simply cannot bite before the Heshen inflection.
+		if = {
+			limit = {
+				var:qing_grain_reserve < 40
+				NOT = { has_variable = qing_high_qing_era }
+			}
+			QING_DECLINE_nudge = { var = qing_banner_decay  amount = 2 }
+			LOG_line = { sys = QING  msg = "canal: capital granaries low -> banner garrisons underfed (+decay) for" }
+		}
+		# CRITICAL: the granaries are near-empty. Fire the famine-response dilemma, once
+		# per cooldown window (~3 years), player-only so the AI is never spammed.
+		if = {
+			limit = {
+				var:qing_grain_reserve < 20
+				is_ai = no
+				NOT = { has_variable = qing_canal_famine_cooldown }
+			}
+			set_variable = { name = qing_canal_famine_cooldown  days = 1095 }
+			trigger_event = { id = qing_canal.1  days = { 5 20 } }
+			LOG_line = { sys = QING  msg = "canal: granaries CRITICAL -> famine-response dilemma queued for" }
+		}
+		LOG_exit = { sys = QING  fn = "QING_canal_quarterly_tick"  result = OK }
+	}
+}
+
+# ======================================================================
+# QING_canal_relief_redirect — Scope: COUNTRY (CHI). The famine-response payload when
+# the throne REDIRECTS tribute-grain to relief: spend from the reserve to feed the
+# starving provinces — harmony/stability up, but the capital granaries fall further.
+# ======================================================================
+QING_canal_relief_redirect = {
+	LOG_enter = { sys = QING  fn = "QING_canal_relief_redirect" }
+	# draw down the reserve to feed the provinces (the ever-normal granary opened).
+	QING_DECLINE_nudge = { var = qing_grain_reserve  amount = -10 }
+	add_stability = 1
+	# relieving the famine calms sectarian unrest (a fed peasantry does not rebel).
+	if = { limit = { has_variable = qing_sect_pressure }  QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -5 } }
+	current_ruler = { add_prestige = 5 }
+	LOG_exit = { sys = QING  fn = "QING_canal_relief_redirect"  result = OK }
+}
+
+# ======================================================================
+# QING_canal_relief_hoard — Scope: COUNTRY (CHI). The famine-response payload when the
+# throne HOARDS the grain for the capital: the granaries hold, but the abandoned
+# provinces starve — sectarian unrest and reform pressure climb (the Taiping-recruiting-
+# ground the decomposition names as the canonical famine->rebellion causation).
+# ======================================================================
+QING_canal_relief_hoard = {
+	LOG_enter = { sys = QING  fn = "QING_canal_relief_hoard" }
+	# the capital is fed — a small reserve firming — but the countryside is abandoned.
+	QING_DECLINE_nudge = { var = qing_grain_reserve  amount = 4 }
+	if = { limit = { has_variable = qing_sect_pressure }  QING_DECLINE_nudge = { var = qing_sect_pressure  amount = 8 } }
+	if = { limit = { has_variable = qing_reform_pressure }  QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 } }
+	add_stability = -1
+	LOG_exit = { sys = QING  fn = "QING_canal_relief_hoard"  result = OK }
+}

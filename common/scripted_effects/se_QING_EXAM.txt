@@ -1,0 +1,251 @@
+########################################################################
+# se_QING_EXAM.txt — [#321 / overnight-build-#1] THE SCHOLAR HIRE-POOL (科舉).
+#
+# The keju (qing_keju_events.txt) already stages the examination CYCLE as a rich
+# flavour beat, and the abstract qing_exam_ladder (0..100, se_QING_GOVERNANCE.txt)
+# already summarises the ladder's health. What was MISSING — and what this module
+# adds, per the concrete-over-abstract rule — is a PERSISTENT product of the exam:
+# real graduate CHARACTERS who enter a HIRING POOL and are drawn on FIRST when a
+# great office falls vacant, before the engine conjures a stranger. The exam thus
+# stops being pure flavour and becomes the empire's actual talent pipeline.
+#
+# THE POOL (concrete objects, not a counter):
+#   • qing_scholar_pool — a variable_list of jinshi/juren graduate characters the
+#     realm has produced but not yet placed in office. Proven variable_list idiom
+#     (add_to_variable_list / ordered_in_list / remove_list_variable / variable_list_size —
+#     exactly as se_QING_COUNCIL tracks qing_council_members and se_QING_FACTION its
+#     lobby blocs). NOT a dynamic name@scope var (no precedent in this codebase).
+#   • Each graduate is a create_character with the degree status trait + a scholar
+#     marker var (qing_is_pool_scholar) so death-cleanup and the office-fill picker
+#     can recognise him. Bound to the throne via the affinity model (天子門生).
+#
+# WIRED:
+#   • QING_exam_graduate_cohort — called from the palace-exam event (qing_keju.2)
+#     to mint the cohort of graduates for the cycle (scaled by exam_ladder health).
+#   • QING_exam_fill_office_from_pool — the pool-first office-fill: pick the ablest
+#     matching scholar, remove him from the pool, seat him via QING_office_appoint.
+#   • QING_exam_pool_tick — quarterly maintenance (qing_mechanics_pulse_on_action):
+#     age out stale scholars (a graduate un-placed for ~15 years retires), keep the
+#     count var fresh for the GUI, and log.
+#   • on_character_death — a dying pool scholar is removed from the list (no orphan
+#     refs) — hooked in 00_specific_from_code.txt.
+#
+# CHI-only, player-facing (the keju cycle that feeds it is CHI + is_ai=no gated).
+# All logged sys = QING, STATIC msgs only (#253). no-BOM/LF. Prefix = QING_exam_.
+#
+#   ROOT / this = the Qing country (CHI, player); root.current_ruler = the emperor.
+#
+# Sources (feasibility only): Benjamin Elman, A Cultural History of Civil
+#   Examinations (2000); Ichisada Miyazaki, China's Examination Hell (tr. 1976);
+#   Chung-li Chang, The Chinese Gentry (1955). Engine idioms cited inline.
+########################################################################
+
+# ======================================================================
+# QING_exam_init — seed the pool bookkeeping once. Scope: COUNTRY. Idempotent.
+# ======================================================================
+QING_exam_init = {
+	LOG_enter = { sys = QING  fn = "QING_exam_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_exam_initialized } }
+		set_variable = { name = qing_exam_initialized  value = 1 }
+		set_variable = { name = qing_scholar_pool_count  value = 0 }
+	}
+	LOG_exit = { sys = QING  fn = "QING_exam_init"  result = OK }
+}
+
+# ======================================================================
+# QING_exam_mint_scholar — create ONE graduate character and add him to the pool.
+# Scope: COUNTRY (CHI). $degree$ = the status trait (jinshi | juren). The graduate
+# is a Han commoner of real ability (the gentry-scholar archetype), bound to the
+# throne. Marked qing_is_pool_scholar + stamped with his intake date so the tick
+# can retire the long-unplaced. Uses the proven create_character idiom (roster).
+# ======================================================================
+QING_exam_mint_scholar = {
+	create_character = {
+		age = 28
+		culture = han
+		religion = root.religion
+		# a fresh graduate is learned and eloquent, not martial — finesse/charisma
+		# lead, with a spread so the pool is not identical clones.
+		add_finesse = 7
+		add_charisma = 5
+		add_martial = 1
+		add_zeal = 4
+		add_trait = $degree$
+		save_scope_as = qing_new_scholar
+	}
+	scope:qing_new_scholar = {
+		set_home_country = ROOT
+		# mark him a pool scholar (death-cleanup + fill-picker + on-seating drop recognise
+		# this). The retirement tick keys on AGE (created 28, retired ~55 = decades un-placed),
+		# so no separate intake-date var is needed.
+		set_variable = { name = qing_is_pool_scholar  value = 1 }
+		# the degree is conferred under the throne's eye — score + bind (天子門生).
+		QING_char_bind = yes
+	}
+	# add to the pool list + keep the count var in step (GUI reads the count).
+	add_to_variable_list = { name = qing_scholar_pool  target = scope:qing_new_scholar }
+	change_variable = { name = qing_scholar_pool_count  add = 1 }
+	LOG_line = { sys = QING  msg = "exam: minted a $degree$ graduate into the hiring pool for" }
+}
+
+# ======================================================================
+# QING_exam_graduate_cohort — mint the cycle's graduate cohort. Scope: COUNTRY (CHI).
+# Called from the palace examination (qing_keju.2). The cohort SIZE scales with the
+# ladder's health (a vigorous ladder yields more jinshi; a clogged one, fewer), and
+# the degree mix follows suit (a healthy ladder promotes a top jinshi; a poor one
+# yields only lower juren). Bounded (at most 3 minted per cycle) so the pool cannot
+# balloon — the retirement tick + office draws keep it in a steady band.
+# ======================================================================
+QING_exam_graduate_cohort = {
+	LOG_enter = { sys = QING  fn = "QING_exam_graduate_cohort" }
+	QING_exam_init = yes
+	# a vigorous ladder (>=60): a full cohort — a top jinshi + two juren.
+	if = {
+		limit = { has_variable = qing_exam_ladder  var:qing_exam_ladder >= 60 }
+		QING_exam_mint_scholar = { degree = jinshi }
+		QING_exam_mint_scholar = { degree = juren }
+		QING_exam_mint_scholar = { degree = juren }
+		LOG_line = { sys = QING  msg = "exam: a vigorous cohort graduated (1 jinshi + 2 juren) for" }
+	}
+	# a middling ladder (30..59): a jinshi + a juren.
+	else_if = {
+		limit = { has_variable = qing_exam_ladder  var:qing_exam_ladder >= 30 }
+		QING_exam_mint_scholar = { degree = jinshi }
+		QING_exam_mint_scholar = { degree = juren }
+		LOG_line = { sys = QING  msg = "exam: a modest cohort graduated (1 jinshi + 1 juren) for" }
+	}
+	# a clogged ladder (<30): only a single juren scrapes through.
+	else = {
+		QING_exam_mint_scholar = { degree = juren }
+		LOG_line = { sys = QING  msg = "exam: a thin cohort graduated (1 juren, clogged ladder) for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_exam_graduate_cohort"  result = OK }
+}
+
+# ======================================================================
+# QING_exam_pool_drop_member — [#321 review-fix] call in a SEATED scholar's scope.
+# THE single pool-exit path for a man who takes office. Hooked into the tail of
+# QING_office_appoint so EVERY appointment route (the GC-panel autofill, the manual
+# per-office appoint, the keju laureate first-vacant, and keju.6's pool fill) drops
+# a pool scholar from qing_scholar_pool + decrements the count + strips his markers
+# the instant he is actually seated — closing the leak where an autofilled/manually-
+# appointed scholar stayed listed, marked, and counted (a phantom count that kept
+# keju.6 firing and let the fill-picker re-select a man already in office). Self-
+# guards on the qing_is_pool_scholar marker, so it is a safe no-op for the ~all
+# appointees who were never pool scholars. this = the just-seated appointee.
+# ======================================================================
+QING_exam_pool_drop_member = {
+	if = {
+		limit = {
+			has_variable = qing_is_pool_scholar
+			exists = employer
+		}
+		save_scope_as = qing_seated_scholar
+		remove_variable = qing_is_pool_scholar
+		employer = {
+			if = {
+				limit = { has_variable_list = qing_scholar_pool }
+				remove_list_variable = { name = qing_scholar_pool  target = scope:qing_seated_scholar }
+				if = { limit = { var:qing_scholar_pool_count > 0 }  change_variable = { name = qing_scholar_pool_count  subtract = 1 } }
+				LOG_line = { sys = QING  msg = "exam: a pool scholar took office, removed from the hiring pool for" }
+			}
+		}
+	}
+}
+
+# ======================================================================
+# QING_exam_fill_first_vacant_from_pool — Scope: COUNTRY (CHI). Draw the ablest
+# waiting pool scholar and seat him in the FIRST vacant great office (the canonical
+# order QING_office_appoint_first_vacant uses). Used by qing_keju.6 (the talent-
+# draw event). [#321 review-fix] pool-EXIT is NOT done here: QING_office_appoint's
+# tail (QING_exam_pool_drop_member) removes him only when he is ACTUALLY seated, so
+# if QING_office_appoint_first_vacant no-ops (every office's holder-var still set —
+# e.g. a stale var for a holder captured in war, so recompute reports a vacancy the
+# appoint picker does not see) the scholar STAYS in the pool rather than being
+# silently consumed. We also exclude sitting office-holders from the pick defensively.
+# ======================================================================
+QING_exam_fill_first_vacant_from_pool = {
+	LOG_enter = { sys = QING  fn = "QING_exam_fill_first_vacant_from_pool" }
+	QING_exam_init = yes
+	if = {
+		limit = {
+			has_variable_list = qing_scholar_pool
+			any_in_list = { variable = qing_scholar_pool  is_alive = yes  employer = ROOT  NOT = { has_variable = qing_office_held } }
+		}
+		ordered_in_list = {
+			variable = qing_scholar_pool
+			limit = { is_alive = yes  employer = ROOT  NOT = { has_variable = qing_office_held } }
+			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_pool_pick
+		}
+		if = {
+			limit = { exists = scope:qing_pool_pick }
+			scope:qing_pool_pick = {
+				# seat him in the first vacant office; QING_office_appoint's tail drops him
+				# from the pool iff he is actually seated (no consumption on a no-op).
+				QING_office_appoint_first_vacant = yes
+			}
+			LOG_line = { sys = QING  msg = "exam: raised a pool scholar to the first vacant office for" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_exam_fill_first_vacant_from_pool"  result = OK }
+}
+
+# ======================================================================
+# QING_exam_pool_tick — quarterly maintenance. Scope: COUNTRY (CHI). Called from
+# qing_mechanics_pulse_on_action. Retires scholars who have sat un-placed for ~15
+# years (a graduate who never gains office drifts back to the gentry), keeps the
+# count var honest against the live list, and logs. Self-guards on the list.
+# ======================================================================
+QING_exam_pool_tick = {
+	if = {
+		limit = { has_variable_list = qing_scholar_pool }
+		LOG_enter = { sys = QING  fn = "QING_exam_pool_tick" }
+		# retire the aged-out (age >= 55 — decades on the shelf, created at 28) or the
+		# dead-but-listed. Removing from the list while iterating it is the PROVEN idiom
+		# (Terra-Indomita COL_sguis.txt:37 every_in_list + remove_list_variable target=prev).
+		every_in_list = {
+			variable = qing_scholar_pool
+			limit = {
+				OR = {
+					is_alive = no
+					AND = { is_alive = yes  age >= 55 }
+				}
+			}
+			ROOT = {
+				remove_list_variable = { name = qing_scholar_pool  target = prev }
+				if = { limit = { var:qing_scholar_pool_count > 0 }  change_variable = { name = qing_scholar_pool_count  subtract = 1 } }
+			}
+			# a living retiree keeps his degree but loses the pool marker.
+			if = { limit = { is_alive = yes }  remove_variable = qing_is_pool_scholar }
+		}
+		LOG_line = { sys = QING  msg = "exam: pool tick (retired the aged/dead un-placed) for" }
+		LOG_exit = { sys = QING  fn = "QING_exam_pool_tick"  result = OK }
+	}
+}
+
+# ======================================================================
+# QING_exam_pool_remove_on_death — call in a DYING character's scope (hooked into
+# on_character_death). If the dead man was a pool scholar, drop him from his
+# employer's pool list so no orphan reference survives. Self-guards on the marker.
+# ======================================================================
+QING_exam_pool_remove_on_death = {
+	if = {
+		limit = {
+			has_variable = qing_is_pool_scholar
+			exists = employer
+		}
+		save_scope_as = qing_dead_scholar
+		employer = {
+			if = {
+				limit = { has_variable_list = qing_scholar_pool }
+				remove_list_variable = { name = qing_scholar_pool  target = scope:qing_dead_scholar }
+				if = { limit = { var:qing_scholar_pool_count > 0 }  change_variable = { name = qing_scholar_pool_count  subtract = 1 } }
+				LOG_line = { sys = QING  msg = "exam: a pool scholar died, removed from the hiring pool for" }
+			}
+		}
+	}
+}
