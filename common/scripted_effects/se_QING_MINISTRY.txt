@@ -30,7 +30,8 @@ QING_ministry_recompute_all_perf = {
 		QING_ministry_recompute_perf_lifanyuan = yes
 		QING_ministry_recompute_perf_zongli = yes
 		QING_ministry_recompute_perf_works = yes
-		# (Rites #353, Revenue #355, Personnel #365, Justice #363, Censorate #362,
+		QING_ministry_recompute_perf_rites = yes
+		# (Revenue #355, Personnel #365, Justice #363, Censorate #362,
 		#  Central Secretariat #361, Imperial Household #359, Imperial Guard #364 each append
 		#  their recompute call here as they ship.)
 	}
@@ -333,6 +334,77 @@ QING_ministry_recompute_perf_works = {
 	if = { limit = { var:qing_min_perf_works < 0 }   set_variable = { name = qing_min_perf_works  value = 0 } }
 	if = { limit = { var:qing_min_perf_works > 100 } set_variable = { name = qing_min_perf_works  value = 100 } }
 	LOG_line = { sys = QING  msg = "works-ministry performance recomputed" }
+}
+
+# ======================================================================
+# [#353] MINISTRY OF RITES (禮部) PERFORMANCE — qing_min_perf_rites (0..100, 50 = adequate).
+# The Board of Rites administered two great state functions this mod models concretely:
+#   • the TRIBUTARY ORDER (朝貢體系, se_QING_TRIBUTE.txt) — the periodic embassies from the
+#     Qing's tributary subjects (Korea/Ryukyu/Siam/...), the ceremony of empire; and
+#   • the IMPERIAL EXAMINATIONS (科舉, se_QING_EXAM.txt) — the triennial 會試/殿試 that
+#     recruited the scholar-officials, whose health is the qing_exam_pass_rate meter.
+# We build the ministry meter from concrete state both systems already track:
+#   • the Grand Minister of Rites' own ZEAL (禮部尚書 — zeal is its governing skill, x4),
+#   • TRIBUTARY COVERAGE — the number of tributary subjects sending embassies (a full court
+#     of vassals = the rites flourishing; an empty one = the ceremony hollow), and
+#   • EXAM HEALTH — the qing_exam_pass_rate deviation from a healthy 50 (a well-run
+#     examination ladder recruits talent; a corrupt/blocked one starves the bureaucracy).
+# A VACANT Rites office floors the meter low. Also rebuilds qing_rites_tributaries (the
+# tributary-subject roster the panel #353 renders). All reads guarded; O(subjects).
+# ======================================================================
+QING_ministry_recompute_perf_rites = {
+	# --- rebuild the tributary roster (panel datamodel) + tally coverage. Uses the proven
+	# tributary trigger (QING_tribute_is_tributary_trigger). Bounded O(subjects).
+	clear_variable_list = qing_rites_tributaries
+	set_variable = { name = qing_rites_tributary_count  value = 0 }
+	every_subject = {
+		limit = { QING_tribute_is_tributary_trigger = yes }
+		ROOT = {
+			add_to_variable_list = { name = qing_rites_tributaries  target = prev }
+			change_variable = { name = qing_rites_tributary_count  add = 1 }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_rites  value = 50 }
+	if = {
+		# office FILLED by a live employed minister — score on his zeal + tribute + exams.
+		limit = {
+			has_variable = qing_office_rites_holder
+			var:qing_office_rites_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the minister's zeal, deviation from a competent baseline of 7, x4 (zeal is the
+		# Board of Rites' governing skill — the ceremony + the examinations are its charge).
+		var:qing_office_rites_holder = { save_scope_as = qing_rites_minister }
+		set_variable = { name = qing_min_rites_scratch  value = 0 }
+		change_variable = { name = qing_min_rites_scratch  add = scope:qing_rites_minister.zeal }
+		change_variable = { name = qing_min_rites_scratch  subtract = 7 }
+		change_variable = { name = qing_min_rites_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_rites  add = var:qing_min_rites_scratch }
+		# (b) TRIBUTARY COVERAGE — count of tributary subjects vs a healthy ~4 court of vassals,
+		# x2 (the tributary embassies are the rites' most visible expression).
+		set_variable = { name = qing_min_rites_scratch  value = var:qing_rites_tributary_count }
+		change_variable = { name = qing_min_rites_scratch  subtract = 4 }
+		change_variable = { name = qing_min_rites_scratch  multiply = 2 }
+		change_variable = { name = qing_min_perf_rites  add = var:qing_min_rites_scratch }
+		# (c) EXAM HEALTH — the examination pass-rate meter's deviation from a healthy 50,
+		# divided down (0..±10 band): a flourishing exam ladder lifts the Board, a blocked one
+		# drags it. Guarded on the exam system being initialised.
+		if = {
+			limit = { has_variable = qing_exam_pass_rate }
+			set_variable = { name = qing_min_rites_scratch  value = var:qing_exam_pass_rate }
+			change_variable = { name = qing_min_rites_scratch  subtract = 50 }
+			change_variable = { name = qing_min_rites_scratch  divide = 5 }
+			change_variable = { name = qing_min_perf_rites  add = var:qing_min_rites_scratch }
+		}
+	}
+	else = {
+		# VACANT Board of Rites — the ceremony lapses, the examinations drift. Floor it low.
+		set_variable = { name = qing_min_perf_rites  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_rites < 0 }   set_variable = { name = qing_min_perf_rites  value = 0 } }
+	if = { limit = { var:qing_min_perf_rites > 100 } set_variable = { name = qing_min_perf_rites  value = 100 } }
+	LOG_line = { sys = QING  msg = "rites-ministry performance recomputed" }
 }
 
 # ======================================================================

@@ -296,3 +296,23 @@ Review this file when you're back. **Deferrals are called out at the very top.**
   stays on the diplomatic Subject tab (SUB_QING_amban); this panel is the central read-across.
   New files: QING_lifanyuan_panel.txt, gui/qing_lifanyuan.gui, qing_lifanyuan_l_english.yml;
   edited se_QING_MINISTRY.txt (+ perf + dispatcher call) + government_view.gui (button).
+
+### #353 Ministry of Rites (禮部) panel — BUILT (pending review)
+- **D33 (perf):** qing_min_perf_rites = Rites minister's ZEAL (dev-7 x4, the ceremony + the
+  examinations are the Board's charge, so zeal is its governing skill) + TRIBUTARY COVERAGE
+  (count of tributary subjects vs a healthy ~4 court, x2) + EXAM HEALTH ((qing_exam_pass_rate
+  −50)/5, a bounded ±10 band, guarded on the exam system being initialised). Vacant office →
+  25. Rebuilds qing_rites_tributaries (tributary-country list, via the proven
+  QING_tribute_is_tributary_trigger) + tallies qing_rites_tributary_count for the panel.
+  Folds into the Rites minister's council standing via the shared fold (office=rites already
+  enumerated at se_QING_COUNCIL — no council edit needed).
+- **D34 (read-only dashboard):** unlike the Works panel, Rites is a pure read-across — the
+  tribute embassies + exams run on their own pulses (se_QING_TRIBUTE / se_QING_EXAM); this
+  panel surfaces the minister card, perf meter, exam-pass-rate + tributary-count read-outs,
+  and the tributary-country roster (Scope.GetCountry + new_country_flag, the qing_lifanyuan.gui
+  idiom). No action buttons — nothing new to drive, so none invented.
+- **D35 (icons):** zeal read-out via the proven `icon_religious` template; header icon =
+  menu_religion.dds. Both verified in the shipped menu_buttons / shared_icons sets.
+- New files: QING_rites_ministry_panel.txt, gui/qing_rites_ministry.gui, qing_rites_ministry_
+  l_english.yml; edited se_QING_MINISTRY.txt (+perf +dispatcher) + government_view.gui (button,
+  in the col2 strip after Works).
