@@ -18,6 +18,21 @@ Review this file when you're back. **Deferrals are called out at the very top.**
 
 ---
 
+## ⚠️ REGRESSION FOUND + FIXED (read second)
+
+- **REG1 (#356 clobbered the Edicts button strip — FIXED in the #351 commit):** The committed
+  #356 (d837be39f) edit to gui/government_view.gui REPLACED the entire two-column Edicts button
+  strip with just the new marriage-proposal button — silently DROPPING the emperor
+  seclusion/resume-rule buttons, the four succession-law reform buttons + active-law indicator
+  (#312), the Great Game panel button (#108), the Reports hub button (#314 B26), and the War
+  (#349) / Lifan Yuan (#350) / Zongli Yamen (#354) ministry-panel open buttons. Those features
+  were all live but had NO WAY TO OPEN in-game after #356. RESTORED the full strip verbatim from
+  the be7e33888 baseline (col1 = seclusion/resume/succession, col2 = Great Game/Reports/War/
+  Lifan/Zongli), re-inserted the marriage-proposal button in col2, and ADDED the new #351 Works
+  button alongside. Brace balance verified 1868/1868 (baseline 1864 + one new button = +4). This
+  is why a post-task GUI-diff sanity check matters — the marriage-play review (still running) did
+  not have government_view.gui's pre-image to compare against; caught here by grep during #351.
+
 ## Cross-cutting decisions
 
 - **D0 (priority reorder, user):** #347 then #346 moved to the TOP of the queue ahead
@@ -156,6 +171,26 @@ Review this file when you're back. **Deferrals are called out at the very top.**
   edited qing_amban_modifiers.txt (+occupied modifier), imp19c_opinions.txt (+occupation
   opinion), 00_monthly_country.txt (scan hook). Panels #349/#350 surface it via the subject's
   qing_frontier_occupied modifier + qing_frontier_garrisoned var (visible on the amban roster).
+
+### #351 Ministry of Works (工部) panel — BUILT (pending review)
+- **D30 (perf):** qing_min_perf_works = Works minister's FINESSE (dev-7 x4, the same stat
+  se_QING_WORKS gates its build effects on) + WORKS COVERAGE (count of standing dikes/canal-
+  depots/wall-sections/state-manufactories vs a healthy ~8, x2) − CORRUPTION drag (河工 graft,
+  corruption/10, 0..-10). Vacant office → 25. Rebuilds qing_works_provinces (every province
+  holding a Board-of-Works building) + tallies qing_works_building_count for the panel. Folds
+  into the Works minister's council standing via the shared fold (already wired at
+  se_QING_COUNCIL.txt:1389 QING_council_perf_accumulate office=works — no council edit needed).
+- **D31 (interactive panel, not just a dashboard):** unlike the read-only War/Lifan panels, the
+  Works panel has COMMISSION BUTTONS (dike/canal-depot/Great-Wall) that call the EXISTING proven
+  se_QING_WORKS build effects on the capable route (cheap=no), each is_valid-gated on a filled
+  Works office of finesse≥7 + the treasury/stability the effect needs + a province lacking that
+  building. Reuses se_QING_WORKS entirely — no new build logic. Province roster uses the proven
+  Scope.GetProvince datamodel idiom (qing_province_reports.gui:50) with a goto_button.
+- **D32 (icons):** finesse read-out via the proven `icon_civic` template; header icon =
+  menu_trade.dds (menu_technology.dds does NOT ship — verified the menu_buttons set). 
+- New files: QING_works_ministry_panel.txt, gui/qing_works_ministry.gui, qing_works_ministry_
+  l_english.yml; edited se_QING_MINISTRY.txt (+perf +dispatcher) + government_view.gui (button,
+  in the strip restored by REG1).
 
 ### Shared infrastructure — ministry-performance fold (the D3 spine)
 - **D7 (canonical perf var):** each ministry panel sets ONE country var `qing_min_perf_<office>`

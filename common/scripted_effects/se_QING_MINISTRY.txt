@@ -29,7 +29,8 @@ QING_ministry_recompute_all_perf = {
 		QING_ministry_recompute_perf_war = yes
 		QING_ministry_recompute_perf_lifanyuan = yes
 		QING_ministry_recompute_perf_zongli = yes
-		# (Works #351, Rites #353, Revenue #355, Personnel #365, Justice #363, Censorate #362,
+		QING_ministry_recompute_perf_works = yes
+		# (Rites #353, Revenue #355, Personnel #365, Justice #363, Censorate #362,
 		#  Central Secretariat #361, Imperial Household #359, Imperial Guard #364 each append
 		#  their recompute call here as they ship.)
 	}
@@ -251,6 +252,87 @@ QING_ministry_recompute_perf_zongli = {
 	if = { limit = { var:qing_min_perf_zongli < 0 }   set_variable = { name = qing_min_perf_zongli  value = 0 } }
 	if = { limit = { var:qing_min_perf_zongli > 100 } set_variable = { name = qing_min_perf_zongli  value = 100 } }
 	LOG_line = { sys = QING  msg = "zongli-yamen performance recomputed" }
+}
+
+# ======================================================================
+# [#351] MINISTRY OF WORKS (工部) PERFORMANCE — qing_min_perf_works (0..100, 50 = adequate).
+# The Board of Works maintained the empire's hydraulic + monumental infrastructure: the
+# Yellow River dikes (黃河河堤), the Grand Canal grain-tribute depots (漕運倉), the Great
+# Wall (長城), and — in this mod — the state specialty manufactories (織造/御窯/茶廠/棉紡/鹽場,
+# se_QING_WORKS.txt). We build the meter from concrete on-map state:
+#   • the Grand Minister of Works' own FINESSE (工部尚書 — finesse is its governing skill,
+#     the same stat se_QING_WORKS gates the build effects on, x4), and
+#   • WORKS COVERAGE — how many public-works buildings actually stand across the realm vs a
+#     healthy establishment of ~8 (a Board that has built little = neglected infrastructure),
+#   • less a CORRUPTION drag — the 河工 graft that plagued river-works budgets: high realm
+#     corruption saps the Board's real output no matter how it looks on paper.
+# A VACANT Works office floors the meter low (no one maintains the works). Also (re)builds
+# the roster list qing_works_provinces (every province holding a works building — the panel
+# #351 datamodel) + tallies qing_works_building_count. All reads guarded; O(owned provinces).
+# ======================================================================
+QING_ministry_recompute_perf_works = {
+	# --- rebuild the works-province roster (panel datamodel) + tally the count. A province
+	# is on the roster if it holds ANY Board-of-Works building. Bounded O(owned provinces).
+	clear_variable_list = qing_works_provinces
+	set_variable = { name = qing_works_building_count  value = 0 }
+	every_owned_province = {
+		limit = {
+			OR = {
+				has_building = qing_dike_building
+				has_building = qing_canal_depot_building
+				has_building = qing_wall_section_building
+				has_building = qing_silk_filature_building
+				has_building = qing_porcelain_kiln_building
+				has_building = qing_tea_workshop_building
+				has_building = qing_cotton_workshop_building
+				has_building = qing_salt_yard_building
+			}
+		}
+		ROOT = {
+			add_to_variable_list = { name = qing_works_provinces  target = prev }
+			change_variable = { name = qing_works_building_count  add = 1 }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_works  value = 50 }
+	if = {
+		# office FILLED by a live employed minister — score on his finesse + works coverage.
+		limit = {
+			has_variable = qing_office_works_holder
+			var:qing_office_works_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the minister's finesse, deviation from a competent baseline of 7, x4 (finesse is
+		# the Board's governing skill — the stat se_QING_WORKS gates its build routes on).
+		var:qing_office_works_holder = { save_scope_as = qing_works_minister }
+		set_variable = { name = qing_min_works_scratch  value = 0 }
+		change_variable = { name = qing_min_works_scratch  add = scope:qing_works_minister.finesse }
+		change_variable = { name = qing_min_works_scratch  subtract = 7 }
+		change_variable = { name = qing_min_works_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_works  add = var:qing_min_works_scratch }
+		# (b) WORKS COVERAGE — count of standing works vs a healthy establishment of ~8, x2.
+		# A Board that has raised few dikes/depots/manufactories has neglected the realm's
+		# infrastructure. Count, not any skill re-use, so nothing is double-folded.
+		set_variable = { name = qing_min_works_scratch  value = var:qing_works_building_count }
+		change_variable = { name = qing_min_works_scratch  subtract = 8 }   # deviation from a healthy establishment
+		change_variable = { name = qing_min_works_scratch  multiply = 2 }
+		change_variable = { name = qing_min_perf_works  add = var:qing_min_works_scratch }
+		# (c) CORRUPTION DRAG — the 河工 graft. High realm corruption saps real output.
+		# subtract corruption/10 (0..-10 at the corruption rails), guarded on the var existing.
+		if = {
+			limit = { has_variable = qing_corruption_level }
+			set_variable = { name = qing_min_works_scratch  value = var:qing_corruption_level }
+			change_variable = { name = qing_min_works_scratch  divide = 10 }
+			change_variable = { name = qing_min_perf_works  subtract = var:qing_min_works_scratch }
+		}
+	}
+	else = {
+		# VACANT Board of Works — the dikes silt, the canal chokes. Floor it low.
+		set_variable = { name = qing_min_perf_works  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_works < 0 }   set_variable = { name = qing_min_perf_works  value = 0 } }
+	if = { limit = { var:qing_min_perf_works > 100 } set_variable = { name = qing_min_perf_works  value = 100 } }
+	LOG_line = { sys = QING  msg = "works-ministry performance recomputed" }
 }
 
 # ======================================================================
