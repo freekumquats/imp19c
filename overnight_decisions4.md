@@ -975,3 +975,40 @@ The #365 (Board of Personnel 吏部) adversarial review raised two findings:
 NOTE: the #365 review run appeared to stall (started 6 agents, journal recorded only 2 results, no
 progress after ~09:53) — I read the journal find-pass findings directly and self-verified both
 against the on-disk code rather than waiting on the orphaned run.
+
+## D70 — #337 Upper Study (上書房): palace school tutoring the imperial princes [BUILT]
+
+The Yongzheng-founded (1725) palace school, built as a full Grand-Council-clone L4 panel — the
+TWIN of the Southern Study (#336). Files: `se_QING_UPPERSTUDY.txt` (147/147),
+`QING_upperstudy_panel.txt` (57/57), `gui/qing_upper_study.gui` (131/131),
+`qing_upper_study_l_english.yml`, + open-button in `government_view.gui` and wiring in the
+death hook / init on_action / governance pulse (17e). Committed as freekumquats.
+
+**Key design decision — like the Southern Study it is NOT a Grand Council office (no perf-fold),
+but its benefit differs.** Where the Southern Study serves the EMPEROR (court luster modifier), the
+Upper Study serves the HEIRS: its benefit is DYNASTIC. The corps of 師傅 tutors has a teaching
+strength (qing_upperstudy_quality = summed finesse+martial+charisma); each pulse the schooling
+progress (qing_upperstudy_schooling, 0..100) drifts toward it and nudges the EXISTING
+qing_dynastic_harmony meter (>=70 → +2, <30 → −1 per pulse; a well-schooled house is secure).
+
+**Concrete on-map coupling (concrete-over-abstract):** ties to the existing crown-prince seat
+(qing_office_crownprince_holder, se_QING_SEATS.txt) — the INTENSIVE SCHOOLING (勤學不輟) lever
+sharpens the reigning 皇太子's finesse (classics) + martial (國語騎射) toward a ceiling of 12,
++15 prestige, +4 harmony, once/year, gated on teaching-strength>=24. It is HIDDEN while a 密建
+secret succession seals the heir (var:qing_office_crownprince_holder is cleared when
+qing_secret_succession_sealed — QING_seat_refresh_crownprince) — so the lever mirrors that
+(qing_upperstudy_no_crownprince inverse scripted_gui shows a "heir hidden" note instead).
+
+**1763 masters (the two halves of a Qing prince's education):** 蔡新 (Cai Xin, 進士 1736, Han
+classics master — rose from the schoolroom to Grand Secretary, the tutor-to-council arc the
+ELEVATE lever models) + 觀保 (Guanbao, Manchu, the 國語騎射 master). Both degree=jinshi.
+
+**Idioms reused (all proven):** the exam-pool draw + pool-exit, the roster rebuild EXCLUDING
+office-holders (#362-R2), the create_character named-roster mint (#90), QING_office_appoint_first_vacant,
+the qing_council_vacancy>0 dead-affordance gate (#358), the clamped QING_dynasty_harmony_nudge /
+QING_DECLINE_nudge, and add_finesse/add_martial on live chars (proven Invictus
+00_character_traits_effects.txt). Corrected 2 GUI issues pre-commit: icon_martial (nonexistent)
+→ icon_military; IsFalse() wrap (unproven) → a dedicated qing_upperstudy_no_crownprince inverse
+scripted_gui (the proven negation idiom). All LOG msgs static (#253). Cap = 6 masters.
+
+Adversarial review launched next.
