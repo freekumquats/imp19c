@@ -58,6 +58,30 @@ Review this file when you're back. **Deferrals are called out at the very top.**
 
 ## Per-task decisions
 
+### #346 Frontier-garrison overlay + War↔Lifan-Yuan turf war — BUILT (pending review)
+- **D18 (overlay, not re-architecture):** the setup OOB deliberately raises subject-soil
+  frontier garrisons UNDER the subject for engine placement-validity (#338/B21). #346 does
+  NOT change that — it LAYERS on the #347 detection idiom: a Qing pulse (QING_fgar_scan, hooked
+  into 00_monthly_country after QING_GOV_pulse) finds every settled army whose COMMANDER is
+  c:CHI-employed sitting on an autonomous-governorship subject's province, and applies the
+  occupation consequences to that dependency.
+- **D19 (consequences):** per garrison, throttled ~180d/subject: (1) TIGHTEN integration
+  (SUBJ_QING_advance_integration steps=1); (2) chafe — a subject-facing loyalty_to_overlord
+  drag (qing_frontier_occupied modifier) + qing_frontier_occupation_opinion; (3) if the Lifan
+  Yuan office is filled AND a resident Amban shares the ground AND a War Minister sits, roll a
+  turf-war event (qing_frontier.1, ~1/yr): govern-by-army (integration presses, Lifan affronted)
+  / govern-by-resident (dependency soothed, garrison reined) / divide authority.
+- **D20 (prefix rename):** effects renamed QING_fgar_* to avoid confusion with the existing
+  QING_frontier_flavour_roll decline dispatcher; vars/event/modifiers keep the clear
+  qing_frontier_* namespace.
+- **D21 (LESSON — same as the #347 blocker #2, applied here):** scripted EFFECTS must live in
+  common/scripted_effects/ (se_QING_FRONTIER.txt), CALLED from the on_action; the on_action file
+  holds only on_action blocks. Confirmed my new effect files obey this.
+- New files: se_QING_FRONTIER.txt, qing_frontier_events.txt, qing_frontier_l_english.yml;
+  edited qing_amban_modifiers.txt (+occupied modifier), imp19c_opinions.txt (+occupation
+  opinion), 00_monthly_country.txt (scan hook). Panels #349/#350 surface it via the subject's
+  qing_frontier_occupied modifier + qing_frontier_garrisoned var (visible on the amban roster).
+
 ### Shared infrastructure — ministry-performance fold (the D3 spine)
 - **D7 (canonical perf var):** each ministry panel sets ONE country var `qing_min_perf_<office>`
   (0..100, 50 = neutral/adequate), where `<office>` is the Grand Council office key
