@@ -447,3 +447,30 @@ se_QING_HOUSEHOLD.txt substrate (privy purse, eunuchs, workshops) + its 4 events
   after Hanlin. All referenced vars/effects/events verified to exist.
 - **D49 — #360 (Harem 後宮) sits under this Neiwufu.** The harem mechanic will hook into the same
   chamberlain office / household substrate (consorts as household characters). Not built here.
+
+---
+
+## Review fixes — #351 & #353 (from adversarial-review workflows)
+
+- **#351 fix (review whzuingvk, MAJOR).** `qing_works_building_count` in
+  `QING_ministry_recompute_perf_works` added only +1 per province holding any works building, but
+  the three commission routes (dike/canal/wall) all site into the single highest-population province
+  (`ordered_owned_province order_by total_population max=1`), so several works stack in one province
+  and read as 1 — depressing qing_min_perf_works below its true value. FIX: keep the province joining
+  the roster once, but tally EACH of the 8 works-building types it holds via per-type guarded `if`
+  increments. Commit 26d7acf49.
+- **#353 fix (review w0i9921w4, minor, cross-cutting).** In qing_mechanics_on_actions.txt the
+  game-start seed ran `QING_ministry_recompute_all_perf` BEFORE `QING_council_autofill`, so every
+  ministry computed its vacant floor (25); the offices then autofilled and folded that stale vacant
+  value into council effectiveness until the first quarterly pulse (~90d) self-healed it. FIX:
+  reorder to `QING_council_autofill` → `QING_ministry_recompute_all_perf` → `QING_council_recompute`
+  so the council reads real filled-office perf from game start. Affects ALL ministries, not just
+  Rites. Commit 26d7acf49.
+- **#351 fix (review whzuingvk, minor — wrap).** All 8 ministry panels' vacant-post and
+  empty-roster notes used `size={460 26}` with no `multiline`, clipping their ~90-char loc strings
+  to one line (violates the text-wrap standing rule). FIX: `multiline=yes` + `size={460 46}` on all
+  15 such notes across qing_household/lifanyuan/hanlin/revenue/war/rites/zongli/works. Commit 15b45c7d5.
+- **#353 review — BOM findings REJECTED (real=false).** The verify pass rejected the "loc file
+  missing UTF-8 BOM breaks CJK rendering" finding: 5 sibling CJK panels already ship BOM-less on
+  master (user-verified-in-game) and render fine; the loader decodes valid UTF-8 without a BOM. No
+  action. (Recorded so the deferrals section doesn't re-surface it.)
