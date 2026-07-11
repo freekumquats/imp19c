@@ -1,0 +1,167 @@
+########################################################################
+# QING_personnel_panel.txt — scripted GUIs for the Board of Personnel panel (#365).
+#
+# The Board of Personnel (吏部) bureaucracy: a Grand-Council-clone L4 window headed by the
+# Grand Minister of Personnel (吏部尚書), surfacing the ministry-performance meter
+# qing_min_perf_personnel (which folds into his Grand Council standing — a fold that had NEVER
+# been computed before #365, the same latent bug censor #362 / justice #363 / guard #364 fixed),
+# and the concrete GOVERNOR CORPS (the provincial officialdom) as a central roster. The governors
+# are real is_governor = yes engine objects — the same corps QING_personnel_evaluate_governors and
+# the 大計 (Great Reckoning) review iterate. Levers:
+#   • CONVENE THE 大計 (Great Reckoning) — run the triennial review of the whole corps now
+#     (QING_personnel_daji_review), gated on the ~3-year cooldown so it cannot be spammed;
+#   • per-governor CULTIVATE (培養) — a strong minister rewards an able governor (loyalty + standing);
+#   • per-governor DISCIPLINE (懲處) — the Board cashiers a venal governor (taint + loyalty penalty).
+#
+# Scoped to the Qing player (ROOT = CHI); AI never evaluates these (ai_is_valid = no). Opened by
+# qing_personnel_open_panel_button (a button in government_view.gui). Window: gui/qing_personnel.gui.
+# Prefix = qing_personnel_. se_LOG sys = QING. Mirrors gui/qing_lifanyuan.gui (roster-of-engine-objects).
+########################################################################
+
+# ---- OPEN THE BOARD OF PERSONNEL PANEL (button in the government view) ------
+qing_personnel_open_panel_button = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		# recompute so the meter + governor roster are fresh the moment the panel opens.
+		QING_ministry_recompute_perf_personnel = yes
+		LOG_line = { sys = QING  msg = "EVENT qing_personnel_open_panel_button fired; opening the Board of Personnel panel for" }
+	}
+}
+
+# ---- MINISTER-OF-PERSONNEL HOLDER INDICATOR --------------------------------
+qing_personnel_filled = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_office_personnel_holder
+		var:qing_office_personnel_holder = { is_alive = yes  employer = ROOT }
+	}
+}
+
+qing_personnel_vacant = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		NOR = {
+			AND = {
+				has_variable = qing_office_personnel_holder
+				var:qing_office_personnel_holder = { is_alive = yes  employer = ROOT }
+			}
+		}
+	}
+}
+
+# ---- CONVENE THE 大計 (GREAT RECKONING) — run the triennial review of the whole
+# governor corps now. Reuses the proven QING_personnel_daji_review (the same effect the
+# qing_personnel.1 event calls). Gated on the ~3-year cooldown (qing_personnel_daji_cooldown,
+# stamped days=1095 by the event/this lever) so the reckoning cannot be spammed, and on the
+# corps being non-empty. Country scope. Stamps the cooldown itself so the panel lever and the
+# flavour event share one throttle.
+# ----------------------------------------------------------------------
+qing_personnel_convene_daji = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		# there must be governors to review...
+		any_character = { count >= 1  employer = ROOT  is_governor = yes  is_alive = yes }
+		# ...and the triennial reckoning must not be on cooldown (pure read; no dead-affordance
+		# spam — the cooldown is a day-expiry variable, absent once it lapses).
+		NOT = { has_variable = qing_personnel_daji_cooldown }
+	}
+	effect = {
+		QING_personnel_daji_review = yes
+		# stamp the ~3-year throttle (shared with the qing_personnel.1 flavour event).
+		set_variable = { name = qing_personnel_daji_cooldown  days = 1095  value = 1 }
+		LOG_line = { sys = QING  msg = "personnel: the 大計 Great Reckoning convened from the panel for" }
+		# refresh so the meter + corps integrity reflect the reckoning's outcomes.
+		QING_ministry_recompute_perf_personnel = yes
+	}
+}
+
+# ---- CULTIVATE A GOVERNOR (培養) — a strong Board rewards an able governor. Row action on
+# the governor roster; the governor comes via datacontext (GuiScope char + player). Requires a
+# seated, capable Minister of Personnel (finesse >= 9 — the same threshold the 大計 rewards use).
+# Raises the governor's loyalty (named modifier) + standing. Mirrors the char+player row shape.
+# ----------------------------------------------------------------------
+qing_personnel_cultivate_governor = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		is_governor = yes
+	}
+	is_valid = {
+		is_governor = yes
+		is_alive = yes
+		employer = scope:player
+		# only a seated, capable Minister of Personnel may cultivate the corps.
+		scope:player = {
+			has_variable = qing_office_personnel_holder
+			var:qing_office_personnel_holder = { is_alive = yes  employer = scope:player  finesse >= 9 }
+		}
+		# a governor may be cultivated once per interval (no spam).
+		NOT = { has_variable = qing_personnel_cultivate_cooldown }
+	}
+	effect = {
+		# reward the able governor: a loyalty grant (NAMED modifier) + a lift in standing.
+		add_loyalty = loyalty_qing_commended
+		QING_char_promote_standing = { pop = 2  prom = 2 }
+		set_variable = { name = qing_personnel_cultivate_cooldown  days = 365 }
+		LOG_line = { sys = QING  msg = "personnel: a governor cultivated from the panel for" }
+		scope:player = { QING_ministry_recompute_perf_personnel = yes }
+	}
+}
+
+# ---- DISCIPLINE A GOVERNOR (懲處) — the Board cashiers a venal governor. Row action. Requires
+# a seated Minister of Personnel and a genuinely venal target (corrupt trait OR corruption>=40 OR
+# loyalty<40 — so the lever is dead on a clean, loyal governor). Taints/penalises, mirrors the
+# 大計 cashiering branch. ----------------------------------------------------------------------
+qing_personnel_discipline_governor = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		is_governor = yes
+	}
+	is_valid = {
+		is_governor = yes
+		is_alive = yes
+		employer = scope:player
+		# only a seated Minister of Personnel may discipline the corps...
+		scope:player = {
+			has_variable = qing_office_personnel_holder
+			var:qing_office_personnel_holder = { is_alive = yes  employer = scope:player }
+		}
+		# ...and only a genuinely venal/disloyal governor is a valid target.
+		OR = {
+			has_trait = corrupt
+			corruption >= 40
+			loyalty < 40
+		}
+		# a governor may be disciplined once per interval (no spam — a venal governor stays
+		# venal, so without a cooldown the lever would be infinitely re-clickable [#362-R1 lesson]).
+		NOT = { has_variable = qing_personnel_discipline_cooldown }
+	}
+	effect = {
+		# cashier the venal governor: disgrace (NAMED modifier) + a standing cut.
+		add_loyalty = loyalty_qing_disgraced
+		add_prominence = -5
+		set_variable = { name = qing_personnel_discipline_cooldown  days = 365 }
+		LOG_line = { sys = QING  msg = "personnel: a venal governor disciplined from the panel for" }
+		scope:player = { QING_ministry_recompute_perf_personnel = yes }
+	}
+}
+
+# ---- CLOSE ------------------------------------------------------------------
+qing_personnel_close_panel = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_valid = { always = yes }
+	effect = { }
+}

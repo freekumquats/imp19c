@@ -37,8 +37,8 @@ QING_ministry_recompute_all_perf = {
 		QING_ministry_recompute_perf_censor = yes
 		QING_ministry_recompute_perf_justice = yes
 		QING_ministry_recompute_perf_guard_commandant = yes
-		# (Personnel #365 appends its recompute call here as it ships.
-		#  Central Secretariat #361 reuses the grand_secretariat compute already
+		QING_ministry_recompute_perf_personnel = yes
+		# (Central Secretariat #361 reuses the grand_secretariat compute already
 		#  registered here for the Hanlin Academy #358.)
 	}
 }
@@ -970,4 +970,83 @@ QING_ministry_recompute_perf_guard_commandant = {
 	if = { limit = { var:qing_min_perf_guard_commandant < 0 }   set_variable = { name = qing_min_perf_guard_commandant  value = 0 } }
 	if = { limit = { var:qing_min_perf_guard_commandant > 100 } set_variable = { name = qing_min_perf_guard_commandant  value = 100 } }
 	LOG_line = { sys = QING  msg = "imperial-guard performance recomputed" }
+}
+
+# ======================================================================
+# [#365] BOARD OF PERSONNEL (吏部) PERFORMANCE — qing_min_perf_personnel (0..100, 50 = adequate).
+# The Board of Personnel answered for the whole provincial officialdom: the appointment,
+# evaluation (考課), and triennial reckoning (大計) of the governor corps. We build the meter
+# from the concrete governor corps the mod already tracks (is_governor = yes chars in CHI's
+# employ — the same real engine objects QING_personnel_evaluate_governors / _daji_review iterate):
+#   • the Minister of Personnel's own finesse (the Board president 吏部尚書, x4),
+#   • GOVERNOR-CORPS INTEGRITY — the fraction of the governor corps that is CLEAN (not corrupt),
+#     deviation from a fully-clean corps, scaled: a rotten officialdom (sale of offices, 捐納)
+#     is the Board's signature failure and drags the meter down.
+# A VACANT Personnel office floors the meter low (no one runs the Board — the governorate drifts,
+# exactly the "no minister" branch of QING_personnel_evaluate_governors). All reads guarded.
+#
+# The council fold has always enumerated `office = personnel` (QING_council_perf_accumulate,
+# se_QING_COUNCIL.txt:1385) but NO effect ever SET qing_min_perf_personnel — so the self-guarding
+# fold silently DROPPED the Grand Minister of Personnel from the council average (the same latent
+# bug censor #362 / justice #363 / guard_commandant #364 fixed). #365 closes it.
+#
+# Rebuilds the qing_personnel_governor_corps roster (the panel datamodel) each pulse.
+# ======================================================================
+QING_ministry_recompute_perf_personnel = {
+	# --- rebuild the GOVERNOR-CORPS ROSTER (the concrete governors the #365 panel renders) +
+	# tally the corps size and the clean-count. is_governor = yes are real engine objects; no
+	# marked-var needed. Bounded O(governors).
+	clear_variable_list = qing_personnel_governor_corps
+	set_variable = { name = qing_personnel_gov_count  value = 0 }   # governors in the corps
+	set_variable = { name = qing_personnel_gov_clean  value = 0 }   # of those, the CLEAN ones
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_governor = yes
+			is_alive = yes
+		}
+		ROOT = {
+			change_variable = { name = qing_personnel_gov_count  add = 1 }
+			add_to_variable_list = { name = qing_personnel_governor_corps  target = prev }
+		}
+		if = {
+			limit = { NOT = { has_trait = corrupt }  corruption < 40 }
+			ROOT = { change_variable = { name = qing_personnel_gov_clean  add = 1 } }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_personnel  value = 50 }
+	if = {
+		# office FILLED by a live employed Minister — score on his finesse + corps integrity.
+		limit = {
+			has_variable = qing_office_personnel_holder
+			var:qing_office_personnel_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the Minister's finesse, deviation from a competent baseline of 7, x4.
+		var:qing_office_personnel_holder = { save_scope_as = qing_personnel_minister_s }
+		set_variable = { name = qing_min_personnel_scratch  value = 0 }
+		change_variable = { name = qing_min_personnel_scratch  add = scope:qing_personnel_minister_s.finesse }
+		change_variable = { name = qing_min_personnel_scratch  subtract = 7 }
+		change_variable = { name = qing_min_personnel_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_personnel  add = var:qing_min_personnel_scratch }
+		# (b) GOVERNOR-CORPS INTEGRITY — clean% of the corps, deviation from a fully-clean
+		# corps (target 100%), scaled down so a corrupt officialdom is a real but bounded drag.
+		if = {
+			limit = { var:qing_personnel_gov_count > 0 }
+			set_variable = { name = qing_min_personnel_scratch  value = var:qing_personnel_gov_clean }
+			change_variable = { name = qing_min_personnel_scratch  multiply = 100 }
+			change_variable = { name = qing_min_personnel_scratch  divide = var:qing_personnel_gov_count }  # clean %
+			change_variable = { name = qing_min_personnel_scratch  subtract = 100 }   # deviation from fully clean (<=0)
+			change_variable = { name = qing_min_personnel_scratch  divide = 4 }        # scale (0..-25)
+			change_variable = { name = qing_min_perf_personnel  add = var:qing_min_personnel_scratch }
+		}
+	}
+	else = {
+		# VACANT Board of Personnel — the governorate drifts leaderless. Floor it low.
+		set_variable = { name = qing_min_perf_personnel  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_personnel < 0 }   set_variable = { name = qing_min_perf_personnel  value = 0 } }
+	if = { limit = { var:qing_min_perf_personnel > 100 } set_variable = { name = qing_min_perf_personnel  value = 100 } }
+	LOG_line = { sys = QING  msg = "board-of-personnel performance recomputed" }
 }
