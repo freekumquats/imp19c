@@ -1,0 +1,308 @@
+########################################################################
+# qing_southern_study.gui — the Southern Study (南書房) panel window (#336).
+#
+# A Grand-Council-clone dashboard for the emperor's private literary cabinet: the
+# 首席南書房行走 (Grand Preceptor, qing_southernstudy_chief) in the summit-card slot, the
+# corps of 南書房行走 attendants (qing_southernstudy_attendants, rebuilt each pulse in
+# se_QING_SOUTHERNSTUDY.txt) as a scrolling CHARACTER roster, the corps depth
+# (qing_southernstudy_count) + the literary luster tier (qing_southernstudy_literary) as
+# read-outs, and THREE action levers — DRAW A SCHOLAR (掄才入直), RECRUIT A TALENT WILDCARD
+# (高士奇), and ELEVATE THE CHIEF (擢用) into the first vacant great office.
+#
+# Unlike the ministry panels the Study is NOT a Grand Council office — it FEEDS the council
+# rather than sitting on it, so there is no ministry-performance meter here; the luster
+# read-out stands in its place. Opened by qing_southernstudy_open_panel_button
+# (QING_southernstudy_panel.txt), wired to a button in gui/government_view.gui. Mirrors
+# gui/qing_hanlin.gui (the character-roster panel). TAB indentation throughout.
+########################################################################
+
+base_window = {
+	name = "qing_southern_study_panel"
+	size = { 520 760 }
+	allow_outside = yes
+	movable = yes
+
+	using = main_window_template
+
+	state = {
+		name = _show
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+	state = {
+		name = _hide
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+
+	flowcontainer = {
+		direction = vertical
+
+		# HEADER
+		widget = {
+			size = { 520 48 }
+			using = MainWindowHeaderBox
+			blockoverride "Title_text" { text = "QING_SS_PANEL_TITLE" }
+			blockoverride "FlagOrIcon" {
+				icon = {
+					texture = "gfx/interface/base_parts/yellow_button_color_200fs.dds"
+					framesize = { 100 100 }
+					frame = 6
+					position = { -2 -2 }
+					size = { 32 32 }
+					modify_texture = {
+						texture = "gfx/interface/icons/menu_buttons/menu_religion.dds"
+						blend_mode = alphamultiply
+					}
+				}
+			}
+			blockoverride "White_buttons" {
+				button_close = {
+					onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_southern_study_panel')]"
+					tooltip = "CLOSE"
+					shortcut = "close_window"
+				}
+			}
+		}
+
+		# BODY
+		margin_widget = {
+			size = { 520 700 }
+			margin = { 10 10 }
+
+			scrollarea = {
+				size = { 500 680 }
+				scrollbarpolicy_horizontal = always_off
+				scrollbar_vertical = { using = VerticalScrollBar }
+				using = VerticalScrollAreaCutOff
+				scrollwidget = {
+					flowcontainer = {
+						direction = vertical
+						spacing = 12
+
+						# DESCRIPTION (wraps)
+						textbox = {
+							size = { 480 96 }
+							multiline = yes
+							using = BaseFontM
+							using = Default_FontColor
+							text = "QING_SS_PANEL_DESC"
+						}
+
+						# --- GRAND PRECEPTOR + LUSTER SECTION ---------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_SS_CHIEF_TITLE"
+							}
+
+							# Grand Preceptor card (shown when the chief is present)
+							flowcontainer = {
+								visible = "[GetScriptedGui('qing_southernstudy_has_chief').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								spacing = 8
+								cpt_button = {
+									size = { 50 77 }
+									datacontext = "[Player.MakeScope.Var('qing_southernstudy_chief').GetCharacter]"
+								}
+								flowcontainer = {
+									direction = vertical
+									spacing = 4
+									textbox = {
+										size = { 380 24 }
+										using = BaseFontM
+										using = Default_FontColor
+										text = "[Player.MakeScope.Var('qing_southernstudy_chief').GetCharacter.GetName]"
+									}
+									# finesse + charisma read-out (the Preceptor's literary gifts)
+									flowcontainer = {
+										datacontext = "[Player.MakeScope.Var('qing_southernstudy_chief').GetCharacter]"
+										spacing = 10
+										icon_and_text = {
+											size = { 66 24 }
+											blockoverride "Icon" { using = icon_civic }
+											blockoverride "Text" { text = "[Character.GetFinesse]" }
+											tooltip = "[Character.GetFinesseToolTip]"
+										}
+										icon_and_text = {
+											size = { 66 24 }
+											blockoverride "Icon" { using = icon_oratory }
+											blockoverride "Text" { text = "[Character.GetCharisma]" }
+											tooltip = "[Character.GetCharismaToolTip]"
+										}
+									}
+								}
+							}
+
+							# Empty-Study note
+							textbox = {
+								visible = "[GetScriptedGui('qing_southernstudy_no_chief').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								size = { 460 46 }
+								multiline = yes
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_SS_EMPTY"
+							}
+
+							# Corps-depth read-out (南書房行走 serving)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_SS_DEPTH_LABEL"
+									tooltip = "QING_SS_DEPTH_TT"
+								}
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_southernstudy_count').GetValue|0]"
+								}
+							}
+
+							# Literary-luster read-out (summed finesse+charisma of the corps)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_SS_LUSTER_LABEL"
+									tooltip = "QING_SS_LUSTER_TT"
+								}
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_southernstudy_literary').GetValue|0]"
+								}
+							}
+						}
+
+						# --- ACTION LEVERS SECTION --------------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_SS_ADMIN_TITLE"
+							}
+
+							# DRAW A SCHOLAR (掄才入直) — take the ablest waiting pool scholar into the Study
+							text_button_square_highlighted = {
+								size = { 320 28 }
+								datacontext = "[GetScriptedGui('qing_southernstudy_draw')]"
+								blockoverride "Center_text" { text = "QING_SS_DRAW_BTN"  max_width = 300 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_SS_DRAW_TT"
+							}
+							# RECRUIT A TALENT WILDCARD (高士奇) — mint a fresh prodigy into the corps
+							text_button_square_highlighted = {
+								size = { 320 28 }
+								datacontext = "[GetScriptedGui('qing_southernstudy_wildcard')]"
+								blockoverride "Center_text" { text = "QING_SS_WILDCARD_BTN"  max_width = 300 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_SS_WILDCARD_TT"
+							}
+							# ELEVATE THE CHIEF (擢用) — promote the Grand Preceptor to the first vacant office
+							text_button_square_highlighted = {
+								size = { 320 28 }
+								datacontext = "[GetScriptedGui('qing_southernstudy_elevate')]"
+								blockoverride "Center_text" { text = "QING_SS_ELEVATE_BTN"  max_width = 300 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_SS_ELEVATE_TT"
+							}
+						}
+
+						# --- ATTENDANT ROSTER SECTION -----------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_SS_ROSTER_TITLE"
+							}
+
+							# empty note when no attendant serves
+							textbox = {
+								visible = "[IsDataModelEmpty( Player.MakeScope.GetList('qing_southernstudy_attendants') )]"
+								size = { 460 46 }
+								multiline = yes
+								using = BaseFontS
+								using = Default_FontColor
+								text = "QING_SS_ROSTER_EMPTY"
+							}
+
+							# the roster (dynamicgridbox over the attendant list — Scope.GetCharacter)
+							dynamicgridbox = {
+								datamodel = "[Player.MakeScope.GetList('qing_southernstudy_attendants')]"
+								datamodel_wrap = 1
+								item = {
+									widget = {
+										size = { 468 84 }
+										margin = { 2 3 }
+										datacontext = "[Scope.GetCharacter]"
+										using = background_widget
+										flowcontainer = {
+											spacing = 8
+											margin = { 8 6 }
+											cpt_button = { size = { 46 68 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = { text = "[Character.GetName]"  maximumsize = { 300 24 }  using = BaseFontM  using = Default_FontColor }
+												flowcontainer = {
+													spacing = 10
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_civic }
+														blockoverride "Text" { text = "[Character.GetFinesse]" }
+														tooltip = "[Character.GetFinesseToolTip]"
+													}
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_oratory }
+														blockoverride "Text" { text = "[Character.GetCharisma]" }
+														tooltip = "[Character.GetCharismaToolTip]"
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
