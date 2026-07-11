@@ -1360,3 +1360,57 @@ government_view.gui after the court-intrigue (#368) button.
 
 **#368 adversarial review (wf_e71fa6e0-64e) result:** found the #368-R2 bare-order_by bug + #368-R3 per-reign
 flag bug — BOTH already fixed (commits cefe2f99e, 6e713560f) before this session resumed.
+
+## D79 — #370 Silk Road / Central Asian Caravan Trade-Node System (絲路商道 / 回疆貿易) — BUILT (commit 871322c4e)
+
+**What:** the ECONOMIC twin of the #367 Xinjiang consolidation arc. Where #367 models the GRIP on the New
+Dominion (garrisons, begs, tuntian, the 協餉 subsidy), #370 models the COMMERCE that ran alongside it: the
+Kashgar–Yarkand caravan trade with the Central Asian khanates (tea/rhubarb/silk/silver west; horses/jade/
+cotton/dried-fruit east), funnelled through the oasis entrepôts. The great historical crisis was commercial
+— the Khanate of Kokand's escalating demands for the aqsaqal (阿奇木伯克) consul + its own customs, culminating
+in the 1832 settlement (the first "unequal treaty" the Qing granted, a decade before Nanking; Kokand
+weaponised the White-Mountain khoja pretenders when rebuffed).
+
+**Layer-don't-duplicate:** owns ONE meter `qing_caravan_prosperity` (0..100, 商道繁榮) joining the shared
+se_QING_DECLINE.txt counter family (QING_DECLINE_nudge clamped-nudge; band-swap `QING_DECLINE_apply_caravan_band`,
+boom >=70 / depression <=25). Eases 1/4 toward a recomputed target (hysteresis, per #369/#367/currency).
+COUPLES bidirectionally to #367 (does not duplicate): the target reads qing_xinjiang_control (grip /4, up to
++25) and qing_xj_khoja_pending (route-cut −15); prosperity nudges the grip back (>=70 → +1, <30 → −1). The
+Kokand-concession lever reuses the SAME qing_xj_kokand_emboldened opinion + khoja-scare #367 owns
+(separatism-backer rule satisfied — KOK is the neighbouring Turkic power).
+
+**Grand-Council fold (the wiring rule):** term (d) inside `QING_ministry_recompute_perf_lifanyuan`
+(se_QING_MINISTRY.txt) — additive-inside, deviation-from-50 /5 (~±10), alongside the #367 grip term (c)
+which folds qing_xj_consolidation /3. Cloned term (c)'s template exactly. Verified the onward path: the term
+writes qing_min_perf_lifanyuan (clamped 0..100 at recompute end), which se_QING_COUNCIL.txt's generic
+qing_min_perf_$office$ loop folds (dev-from-50 /5) into qing_council_eff_target — so caravan prosperity
+flows into the Lifan Yuan Director's Grand Council standing. c scores the GRIP, d the COMMERCE — complementary,
+not double-counted.
+
+**Levers (se_QING_CARAVAN.txt):** set_customs{0/1/2} (heavy sours KOK via add_opinion, unguarded-refresh);
+invest_market (treasury −40, +8 prosperity, +1 XNG integration via SUBJ_QING_advance_integration steps=1 with
+save_scope_as=target — the commercial mirror of the tuntian lever); grant_aqsaqal (set-once: +10 prosperity,
+clear KOK emboldened + goodwill, defuse khoja, add_legitimacy −6 COUNTRY-scope, ruler add_prestige −15
+CHAR-scope, + a permanent customs haircut the pulse applies by halving the take); revoke_aqsaqal (add_legitimacy
++3, re-arm KOK, grip −6); military_escort (treasury −30, +8 prosperity, +4 grip, defuse khoja).
+
+**Revenue:** quarterly customs trickle = prosperity × rate-factor[light 1 / mod 2 / heavy 3] / 40, HALVED if
+the aqsaqal is granted (Kokand skims third-party duties); add_treasury=var: guarded on >0 (so integer-floor to
+0 no-ops cleanly, never a negative/zero add).
+
+**Events (qing_caravan.1/.2):** .1 浩罕之求 the Kokand ultimatum (grant the 1832 settlement / refuse & garrison /
+temporise) offered when prosperity >=55, aqsaqal not granted, KOK opinion value<0 (the PROVEN opinion value-test,
+NOT the unavailable has_opinion); .2 商道斷絕 route cut (escort / negotiate / lapse) offered when a khoja scare is
+pending. Once-only flags qing_caravan_ultimatum_seen / _routecut_seen set in each event's OWN immediate
+(#366/#368 flag-leak fix); "temporise"/"lapse" clear their flag so the crisis can recur.
+
+**Panel:** gui/qing_caravan.gui + QING_caravan_panel.txt (3 customs setters each valid-when-not-current-rate;
+invest gated treasury>=40 & market<4; grant shown-when-not-granted / revoke shown-when-granted, mutually
+exclusive; aqsaqal_active shown-indicator drives a banner) + government_view.gui open button after the #369
+population button. menu_trade.dds icon (verified present). qing_caravan_modifiers.txt = boom/depression bands.
+picture=trade_port (the undefined `trade` was swapped out). All LOG msgs STATIC. GUI text wraps. No
+create_character (no #90 risk — pure counter/lever model). All files brace-balanced (+0).
+
+**#370 adversarial review:** launched wf_d3352c2a-a5c (running).
+
+**#369 adversarial review (wf_9371b193-50a):** result still owed — check when it lands.
