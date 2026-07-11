@@ -382,3 +382,37 @@ minister two levers. All fiscal logic reuses existing se_QING_REVENUE.txt — no
   finesse minister card (icon_civic/GetFinesse), and the shared council-contrib line.
 - Header icon menu_trade.dds (fisc); window `qing_revenue_ministry_panel`; open button wired into
   the government_view col2 strip after Rites. All referenced vars/effects verified to exist.
+
+---
+
+## #358 — Hanlin Academy panel (翰林院)
+
+Built the Hanlin Academy as an INTERACTIVE Grand-Council-clone L4 panel (the War/character-roster
+pattern). All talent logic reuses the existing se_QING_EXAM.txt scholar-pool substrate — no new
+appointment code.
+
+- **D40 — Office mapping: Hanlin → grand_secretariat (NOT a 14th council seat).** Historically the
+  Hanlin Academy is the scholar corps from which the Grand Secretaries (大學士) were drawn; the
+  Academy's leader for Grand Council purposes IS the grand_secretariat office-holder. So #358 does
+  NOT add a new council office (the locked GC spec is unchanged) — it builds the CANONICAL
+  `QING_ministry_recompute_perf_grand_secretariat` compute and registers it in the ministry
+  dispatcher. The council fold already enumerates the `grand_secretariat` office key, so the perf
+  auto-folds with NO se_QING_COUNCIL edit.
+- **D41 — Perf formula (folds into the Grand Council).** base 50; filled → (finesse−7)×4
+  [大學士's drafting/administration skill] + (hanlin_scholar_count−4)×3 [waiting laureate bench vs
+  a healthy ~4] + (exam_pass_rate−50)/5 [examination vigour net of 捐納/corruption drag]
+  − corruption/10; vacant floor = 25; clamp 0..100. Scratch reads use var:X.
+- **D42 — Concrete roster.** The compute rebuilds `qing_hanlin_scholars` + `qing_hanlin_scholar_count`
+  each pulse from the live exam pool (qing_scholar_pool, living + employed) — the panel renders it
+  as a character roster (finesse + charisma cards). Concrete-over-abstract: the bench IS the pool
+  of real jinshi/juren characters se_QING_EXAM.txt already mints.
+- **D43 — One action lever.** DRAW A LAUREATE (掄才): `qing_hanlin_draw_scholar` calls the proven
+  `QING_exam_fill_first_vacant_from_pool` (seats the ablest waiting scholar in the first vacant
+  great office; a no-op if every office is manned, leaving him in the pool). Gated on a non-empty,
+  un-officed bench.
+- **D44 — #361 SCOPE COLLAPSE.** #361 (Central Secretariat 內閣 = the grand_secretariat office
+  bureaucracy) now overlaps almost entirely with #358: the perf var + council fold are done here.
+  #361 will be re-scoped to a THIN follow-on (an 內閣-flavoured second view / edict-drafting lever)
+  or folded into #358 outright — flagged for the deferrals section rather than duplicating the perf
+  spine. Header icon menu_religion.dds (scholarship); window `qing_hanlin_panel`; open button wired
+  into government_view after Revenue. All referenced vars/effects verified to exist.

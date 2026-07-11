@@ -32,9 +32,11 @@ QING_ministry_recompute_all_perf = {
 		QING_ministry_recompute_perf_works = yes
 		QING_ministry_recompute_perf_rites = yes
 		QING_ministry_recompute_perf_revenue = yes
+		QING_ministry_recompute_perf_grand_secretariat = yes
 		# (Personnel #365, Justice #363, Censorate #362,
-		#  Central Secretariat #361, Imperial Household #359, Imperial Guard #364 each append
-		#  their recompute call here as they ship.)
+		#  Imperial Household #359, Imperial Guard #364 each append
+		#  their recompute call here as they ship. Central Secretariat #361 reuses the
+		#  grand_secretariat compute already registered here for the Hanlin Academy #358.)
 	}
 }
 
@@ -519,4 +521,91 @@ QING_zongli_play_boost = {
 	change_variable = { name = qing_zongli_play_delta  divide = 25 }   # ~ +/-2 at the rails
 	DIPLOMACY_modify_play_success = { amt = var:qing_zongli_play_delta }
 	remove_variable = qing_zongli_play_delta
+}
+
+# ======================================================================
+# [#358] HANLIN ACADEMY (翰林院) → GRAND SECRETARIAT PERFORMANCE —
+# qing_min_perf_grand_secretariat (0..100, 50 = adequate).
+#
+# The Hanlin Academy is the elite scholar corps drawn from the top of the examination
+# ladder (the jinshi 進士), from which the Grand Secretaries (大學士) and the inner-court
+# drafters were always chosen — so for Grand Council purposes the Academy's leader IS the
+# grand_secretariat office-holder, and the Academy's scholarly health is his performance.
+# This is the CANONICAL grand_secretariat compute; the Central Secretariat panel (#361)
+# reads the same var rather than redefining it.
+#
+# The meter folds concrete state the mod already tracks:
+#   • the Grand Secretary's own FINESSE (the 大學士's gift for drafting/administration, x4),
+#   • HANLIN CORPS DEPTH — the size of the waiting jinshi/juren scholar pool vs a healthy
+#     bench of ~4 (a deep bench of exam laureates = a vigorous Academy that can staff the
+#     drafting offices; an empty one = a hollow Academy). Concrete count, not skill re-use.
+#   • EXAMINATION VIGOUR — the pass-rate metric (qing_exam_pass_rate, ladder health net of
+#     the 捐納/corruption drag) deviation from 50, /5 (a healthy ladder feeds the Academy),
+#   • CORRUPTION DRAG — subtract corruption/10 (graft in the drafting offices).
+# A VACANT Grand Secretariat floors the meter low (no one heads the Academy). Reads guarded;
+# scratch reads use var:X (bare name = 0). Clamp 0..100. Rebuilds the qing_hanlin_scholars
+# roster + qing_hanlin_scholar_count the panel renders (mirrors the scholar pool, jinshi/juren).
+# ======================================================================
+QING_ministry_recompute_perf_grand_secretariat = {
+	# --- rebuild the HANLIN scholar roster (the panel datamodel) from the exam pool. Every
+	# living pool scholar in CHI's employ is a Hanlin man awaiting a drafting post. Bounded
+	# O(pool). The list mirrors qing_scholar_pool but is panel-owned so the roster is stable.
+	clear_variable_list = qing_hanlin_scholars
+	set_variable = { name = qing_hanlin_scholar_count  value = 0 }
+	if = {
+		limit = { has_variable_list = qing_scholar_pool }
+		every_in_list = {
+			variable = qing_scholar_pool
+			limit = { is_alive = yes  employer = ROOT }
+			ROOT = {
+				add_to_variable_list = { name = qing_hanlin_scholars  target = prev }
+				change_variable = { name = qing_hanlin_scholar_count  add = 1 }
+			}
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_grand_secretariat  value = 50 }
+	if = {
+		# office FILLED by a live employed Grand Secretary — score on his finesse + the Academy.
+		limit = {
+			has_variable = qing_office_grand_secretariat_holder
+			var:qing_office_grand_secretariat_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the Grand Secretary's finesse, deviation from a competent baseline of 7, x4.
+		var:qing_office_grand_secretariat_holder = { save_scope_as = qing_gsec_holder }
+		set_variable = { name = qing_min_gsec_scratch  value = 0 }
+		change_variable = { name = qing_min_gsec_scratch  add = scope:qing_gsec_holder.finesse }
+		change_variable = { name = qing_min_gsec_scratch  subtract = 7 }
+		change_variable = { name = qing_min_gsec_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_grand_secretariat  add = var:qing_min_gsec_scratch }
+		# (b) HANLIN CORPS DEPTH — the waiting scholar bench vs a healthy establishment of ~4, x3.
+		set_variable = { name = qing_min_gsec_scratch  value = var:qing_hanlin_scholar_count }
+		change_variable = { name = qing_min_gsec_scratch  subtract = 4 }
+		change_variable = { name = qing_min_gsec_scratch  multiply = 3 }
+		change_variable = { name = qing_min_perf_grand_secretariat  add = var:qing_min_gsec_scratch }
+		# (c) EXAMINATION VIGOUR — the pass-rate metric deviation from 50, /5 (a healthy ladder
+		# feeds fresh talent into the Academy; a choked one starves it). Guarded on the var.
+		if = {
+			limit = { has_variable = qing_exam_pass_rate }
+			set_variable = { name = qing_min_gsec_scratch  value = var:qing_exam_pass_rate }
+			change_variable = { name = qing_min_gsec_scratch  subtract = 50 }
+			change_variable = { name = qing_min_gsec_scratch  divide = 5 }
+			change_variable = { name = qing_min_perf_grand_secretariat  add = var:qing_min_gsec_scratch }
+		}
+		# (d) CORRUPTION DRAG — the graft in the drafting offices. subtract corruption/10.
+		if = {
+			limit = { has_variable = qing_corruption_level }
+			set_variable = { name = qing_min_gsec_scratch  value = var:qing_corruption_level }
+			change_variable = { name = qing_min_gsec_scratch  divide = 10 }
+			change_variable = { name = qing_min_perf_grand_secretariat  subtract = var:qing_min_gsec_scratch }
+		}
+	}
+	else = {
+		# VACANT Grand Secretariat — the Academy heads no drafting office. Floor it low.
+		set_variable = { name = qing_min_perf_grand_secretariat  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_grand_secretariat < 0 }   set_variable = { name = qing_min_perf_grand_secretariat  value = 0 } }
+	if = { limit = { var:qing_min_perf_grand_secretariat > 100 } set_variable = { name = qing_min_perf_grand_secretariat  value = 100 } }
+	LOG_line = { sys = QING  msg = "grand-secretariat (Hanlin) performance recomputed" }
 }
