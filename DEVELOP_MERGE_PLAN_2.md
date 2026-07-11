@@ -69,6 +69,7 @@ classified below by whether it is a pure mechanic (port), pure world-surgery (sk
 | `fee34fbeb` | Bug 7: office modifiers into hover tooltips | government_view.gui, office loc | pure GUI |
 | `6bd7f126b` | #315 Qing colonization arc Australia/PNG | qing colonization mission/events/loc | mission-tree, self-gated |
 | `d57c2da0c`+`c7cc248d4` | #331 1763 commander roster + War-Minister feed | **[MIXED]** — see A-MIXED | roster is DATE, the War-Minister-competence *wiring* is MECH |
+| `1921f3b06` | #291 ROW specialty production buildings (rest-of-world half) | `common/buildings/row_production_buildings.txt`, `common/scripted_effects/se_ROW_BUILDINGS.txt`, `localization/english/row_buildings_l_english.yml` | **AUDIT-ADDED 2026-07-11.** These 3 files are ABSENT on develop-mech-port and were NOT in the batch-1 port; the effect is self-described branch-agnostic ("the 1763/1815 world opens with a plausible spread"). Batch 1 carried the Qing companion `se_QING_BUILDINGS.txt` but not the ROW half. **Port these 3 net-new files.** (The commit also touches `00_Yunnan.txt` = world-surgery, skip; and shared GUI templates already present on dmp.) |
 
 ### A-MIXED — hunk-by-hunk
 
@@ -87,8 +88,17 @@ classified below by whether it is a pure mechanic (port), pure world-surgery (sk
 
 ### A-DATE / A-BOOTTEST — do NOT port to develop (1763-only or already-on-develop)
 
-- **All world-surgery** (`6b3cf4d27`, `#229`–`#240`, `#278`, `#282a-g`, `#283`, `#284`, `#286`, `#287`,
+- **All world-surgery** (`6b3cf4d27`, `#229`–`#240`, `#278`, `#282a-g`, `#284`, `#286`, `#287`,
   `bd5098dd`, the bookmark commits) — pure 1763 [DATE], never merge (same rule as plan 1 §2).
+- **The 1763→1815 AI-catch-up arcs (`#283` `ab6cb9c57`, `#302` `imp19c_setup_events.txt`, `#303`
+  `6d121dc90`) — AUDIT-NAMED 2026-07-11, do NOT port.** These are the six great-power historical arcs
+  (`{aus,fra,gbr,pru,rus,spa}_*_on_actions.txt` + matching events + loc) plus `imp19c_setup_events.txt`
+  and the American/French/Napoleonic dated-war scheduler. **Every one is offset off the 1763 START_DATE**
+  (e.g. fra: "Day-offsets computed from 1763.2.16 … 1774.5.10 accession Louis XVI → 4101") to walk the AI
+  world forward to 1815. They are pure **[DATE]** scaffolding — at develop's genuine 1815 start these beats
+  are past-dated (fire immediately or expired) and the world already sits at that state, so they are
+  redundant AND wrong-dated. **Skip all of them.** (This supersedes the tentative "open decision" on `#303`
+  formerly in §4.3 — it is now a firm skip alongside its siblings `#283`/`#302`.)
 - **The `#314`/`#329`/`dadbf3283`/`a9f3b6aa0` boot-test fixes** — these fix bugs *in the 1763 setup*
   (wrong start rulers from setup `death_date`, out-of-range setup char IDs, unit-placement at the 1763
   bookmark, Supranational window). **Most are 1763-setup-specific and do NOT apply to develop's 1815
@@ -240,9 +250,9 @@ the overnight batch. Diff those against the port target FIRST (3-way reconcile, 
    They're harmless flavour/rationale but clutter develop. Recommendation: **include the DESIGN/RESEARCH
    docs** (they document shipping mechanics) **but leave `overnight_decisions*.md` / `overnight_design*.md`
    on the build branches** (pure process log).
-3. **`#303` dated wars (Am/Fr/Napoleonic)** — flagged in plan 1 §4.2 as past-dated at 1815, likely leave
-   1763-only. Still open; unaffected by this batch. Recommendation: **leave 1763-only** unless develop
-   wants them as historical flavour (they'd fire immediately/expired at 1815).
+3. **`#303`/`#283`/`#302` dated 1763→1815 AI-catch-up arcs** — RESOLVED 2026-07-11 (was "open"): firm
+   **skip**, now documented in §1 A-DATE. All offset off the 1763 START_DATE, so past-dated/redundant at
+   develop's 1815 start. No longer an open question.
 4. **`#332` non-Chinese-polity relocation** — port the char-scope error fix only, or is develop already
    clean? **Needs a develop-side diff to decide** (§1 A-MIXED).
 
@@ -256,8 +266,10 @@ the overnight batch. Diff those against the port target FIRST (3-way reconcile, 
 | A | #313 marriage families/filters | [MECH] enhance | ✅ diff-port onto batch-1 |
 | A | #321/#322/#323 exam/tributary/canal BASE | [MECH] | ✅ (or defer to Layer B's final version — §4.2) |
 | A | #324 heiress-claim, #330 marry-into-subject, #315 colonisation | [MECH] | ✅ checkout-port |
+| A | #291 ROW specialty buildings (row_production_buildings + se_ROW_BUILDINGS + loc) | [MECH] NEW | ✅ checkout-port (3 files, AUDIT-ADDED) |
 | A | #331 War-Minister competence wiring | [MECH] hunks | ✅ port wiring, skip roster |
 | A | #331 commander roster, all world-surgery, #314/#329 setup boot-fixes | [DATE] | ❌ never |
+| A | #283/#302/#303 six-power 1763→1815 AI-catch-up arcs + dated-war scheduler | [DATE] | ❌ never (START_DATE-offset, AUDIT-NAMED) |
 | A | multiline fix / throne-picker layout / Supranational guard / #348 land-transfer parse | [MECH] | ✅ port |
 | A | #332 polity relocation | [MIXED] | ⚠️ char-scope fix only, §4.4 |
 | B | 13 ministry panels (#349–#365) | [MECH] NEW | ✅ checkout-port (99 new files) |
