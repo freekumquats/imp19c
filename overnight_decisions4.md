@@ -1793,3 +1793,32 @@ code-review confirmed all correct, bounded, no defects.
 
 Brace balance 0 on all three files; BOM/CRLF preserved. No new vars, events, GUI, or loc — pure
 couplings between existing systems.
+
+## D93 — Qing enhancement pass WAVE 4 (merge-overnight, autonomous)
+
+A focused assessment of the tributary/canton/missionary/diplomacy/caravan subsystems (deliberately
+steered AWAY from the heavily-mined decline-meter cluster) produced 5 candidates. Verify-before-build
+pruned three: #2 tribute -> silver reserve (UNIT MISMATCH — qing_trib_amt is treasury gold, single
+digits/qtr, while qing_silver_reserve is in 萬兩 ~6200-8182; adding raw would be ~inert/nonsensical),
+#3 missionary friction -> integration (would need a NEW event = more risk than a pure coupling),
+#5 legation -> techtransfer discount (low value, optimization-only). Shipped the two clean CONCRETE
+on-map couplings; independent code-review confirmed both correct (directions/scopes right, matches the
+proven amban/kokand opinion idioms), no defects.
+
+- **Treaty burden -> tributary restiveness** (#4, se_QING_TREATIES QING_treaty_pulse): a heavy burden
+  (qing_treaty_burden >= 65) is the court kowtowing to the barbarian powers; each sinosphere_tributary
+  (Korea/Vietnam/Ryukyu) now takes a decaying qing_overlord_weakness_opinion (-6, yearly_decay 4)
+  toward the overlord — the 1882 Korea / 1884 Sino-French strain, radiating the humiliation out to the
+  朝貢 order. every_subject + add_opinion{target=ROOT} is the proven se_QING_AMBAN idiom.
+
+- **Caravan health -> Kokand's disposition** (#1, se_QING_CARAVAN QING_caravan_pulse): a booming Yarkand
+  trade (prosperity >= 70) warms c:KOK (qing_caravan_thriving_opinion +8) — a concrete diplomatic reward
+  for investing in the oasis market; a collapsed route (< 30) chafes it (qing_caravan_disrupted_opinion
+  -8), feeding the emboldened-grievance the Kokand ultimatum already runs on. Reuses the c:KOK on-map
+  actor + add_opinion idiom ALREADY in this file (line 243). Previously the caravan meter only touched
+  internal grip/prosperity/revenue — no subject/neighbour-facing consequence.
+
+Three new opinion_modifier defs added to common/opinions/imp19c_opinions.txt (qing_overlord_weakness_
+opinion, qing_caravan_thriving_opinion, qing_caravan_disrupted_opinion), matching the existing value +
+yearly_decay format. Opinions refresh each pulse while the extreme holds, bounded by yearly_decay (same
+assumption the existing amban/kokand code relies on). Brace balance 0 on all three files; BOM/CRLF kept.
