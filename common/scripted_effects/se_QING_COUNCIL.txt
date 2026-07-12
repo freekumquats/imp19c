@@ -99,6 +99,24 @@ QING_council_prune_seat = {
 		}
 		remove_variable = qing_office_$office$_holder
 	}
+	# [BT-50 / #396] also RELIEVE a seat whose holder has taken a CONFLICTING role — become an
+	# army/navy commander or a provincial governor since he was seated. This is the reported
+	# symptom's cure at the START STATE: the 1763 OOB attach (qing_force_setup.1, day 30) makes
+	# commanders AFTER the game-start autofill already seated the ablest men, so those councillors
+	# are also commanders until this prune (run each recompute + right after the OOB attach) relieves
+	# them. Vacated cleanly via the shared dispatch (office var + officeholder modifier + power base
+	# all torn down); a following autofill re-fills the seat with an eligible man.
+	if = {
+		limit = {
+			has_variable = qing_office_$office$_holder
+			var:qing_office_$office$_holder = {
+				is_alive = yes
+				employer = ROOT
+				OR = { is_general = yes  is_admiral = yes  is_governor = yes }
+			}
+		}
+		var:qing_office_$office$_holder = { QING_office_vacate_dispatch = yes }
+	}
 }
 
 # Prune ALL thirteen appointable office seats in one call. Country scope. Cheap: O(13)
@@ -133,12 +151,11 @@ QING_council_autofill_office = {
 	if = {
 		limit = { NOT = { has_variable = qing_office_$office$_holder } }
 		ordered_character = {
-			limit = {
-				employer = ROOT
-				is_adult = yes
-				is_alive = yes
-				NOT = { has_variable = qing_office_held }
-			}
+			# [BT-50 / #396] the shared eligibility gate — excludes the ruler, the heir, serving
+			# governors, army/navy commanders, and vanilla office-holders (as well as sitting GC
+			# members), so autofill never seats a man who already holds a conflicting role. Was an
+			# inline (employer + adult + alive + NOT qing_office_held) that let commanders in.
+			limit = { QING_office_eligible_candidate = yes }
 			order_by = combined_stats_council_svalue
 			check_range_bounds = no
 			max = 1

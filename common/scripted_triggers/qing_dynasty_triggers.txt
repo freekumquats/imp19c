@@ -137,3 +137,55 @@ QING_amban_warrants_resident_trigger = {
 		is_subject_type = autonomous_governorship
 	}
 }
+
+# ======================================================================
+# [BT-50 / #396] ELIGIBLE FOR A GRAND COUNCIL OFFICE? — the shared candidate gate.
+# The Qing Grand Council is a home-grown flag layer (qing_office_*_holder + the
+# qing_office_held char flag) invisible to the engine's native office system, so the
+# engine never stopped a serving minister from ALSO being the ruler, the heir, a
+# provincial governor, a vanilla office-holder, or — the reported BT-50 symptom — an
+# ARMY / NAVY COMMANDER. This trigger adds, in ONE place, the mutual-exclusivity the
+# engine would give a real office, and is applied at every appointment chokepoint
+# (autofill candidate limit, the row-click picker is_valid, the auto-promote cascade).
+#
+# A courtier is eligible iff he is an employed adult of ROOT who holds NO conflicting
+# role: not already on the Council (qing_office_held), not the reigning ruler, not the
+# primary heir, not a serving governor, not commanding an army or navy (is_general /
+# is_admiral — the proven Invictus commander triggers), and not sitting in a vanilla
+# government office (the great-office system the engine DOES enforce). Evaluated in the
+# CANDIDATE's scope with ROOT = the Qing. Country's own offices are checked via the
+# native has_office set the mod already leans on (se_DIPLOMACY.txt).
+# ======================================================================
+QING_office_eligible_candidate = {
+	employer = ROOT
+	is_adult = yes
+	is_alive = yes
+	# not already holding a Grand Council seat (the existing one-office-per-man flag)
+	NOT = { has_variable = qing_office_held }
+	# not the reigning sovereign, and not the designated heir (the throne's own line)
+	is_ruler = no
+	# [BT-50 review-fix] guard the dynastic scope refs with exists — for the Qing the no-heir
+	# state is NORMAL (a live succession crisis, or 秘密立儲 secret succession that HIDES the heir),
+	# and an unguarded `this = <nonexistent primary_heir>` is the exact class of bug that crashed
+	# New Game on the motherless-ruler scope (#157). is_ruler=no already excludes the reigning
+	# sovereign; the exists-guarded heir clause is the one that matters. (SEATS `exists=primary_heir` idiom.)
+	NOT = { AND = { exists = ROOT.current_ruler  this = ROOT.current_ruler } }
+	NOT = { AND = { exists = ROOT.primary_heir   this = ROOT.primary_heir } }
+	# not a serving provincial governor (a post of its own)
+	is_governor = no
+	# [BT-50 core] not commanding an army or navy — the reported symptom. is_general /
+	# is_admiral are the proven commander triggers (Invictus ai_characters_triggers.txt).
+	is_general = no
+	is_admiral = no
+	# not sitting in a vanilla MONARCHY government office (the native office system the engine
+	# enforces — the Qing is an imperial_monarchy, so only the 00_monarchy.txt office set applies;
+	# keys verified against common/offices/00_monarchy.txt).
+	NOT = { has_office = office_foreign_minister }
+	NOT = { has_office = office_royal_tutor }
+	NOT = { has_office = office_marshal }
+	NOT = { has_office = office_master_of_the_guard }
+	NOT = { has_office = office_high_priest_monarchy }
+	NOT = { has_office = office_philosopher }
+	NOT = { has_office = office_steward }
+	NOT = { has_office = office_physician }
+}
