@@ -144,6 +144,13 @@ qing_report_open_migration = {
 		LOG_line = { sys = QING  msg = "migration report opened by" }
 		clear_variable_list = qing_migration_report_provinces
 
+		# [BT-55] Order the listed provinces by population, highest -> lowest. The innermost
+		# every_state_province walk cannot itself sort AND the list must keep the SAME membership
+		# (only governorship provinces — capital-domain provinces are not under a governorship, so
+		# a bare ordered_owned_province over ALL owned provinces would change WHICH provinces show).
+		# So: PASS 1 marks each qualifying governorship province with qing_migr_report_pick; PASS 2
+		# emits them via ordered_owned_province( order_by = total_population ) filtered on that mark,
+		# giving a global high-pop-first order with membership unchanged; then clear the marker.
 		every_governorships = {
 			every_governorship_state = {
 				every_state_province = {
@@ -159,15 +166,24 @@ qing_report_open_migration = {
 								}
 							}
 						}
-						root = {
-							add_to_variable_list = {
-								name = qing_migration_report_provinces
-								target = scope:this_prov
-							}
-						}
+						scope:this_prov = { set_variable = { name = qing_migr_report_pick  value = 1 } }
 					}
 				}
 			}
+		}
+		# PASS 2: emit in descending-population order (global sort across all marked provinces).
+		ordered_owned_province = {
+			limit = { has_variable = qing_migr_report_pick }
+			order_by = total_population
+			add_to_variable_list = {
+				name = qing_migration_report_provinces
+				target = this
+			}
+		}
+		# clear the transient marker so it never leaks to the next open.
+		every_owned_province = {
+			limit = { has_variable = qing_migr_report_pick }
+			remove_variable = qing_migr_report_pick
 		}
 	}
 }
