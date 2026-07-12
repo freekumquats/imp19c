@@ -1822,3 +1822,34 @@ Three new opinion_modifier defs added to common/opinions/imp19c_opinions.txt (qi
 opinion, qing_caravan_thriving_opinion, qing_caravan_disrupted_opinion), matching the existing value +
 yearly_decay format. Opinions refresh each pulse while the extreme holds, bounded by yearly_decay (same
 assumption the existing amban/kokand code relies on). Brace balance 0 on all three files; BOM/CRLF kept.
+
+## D94 — Cross-wave emergent-interaction audit + fixes (merge-overnight, autonomous)
+
+After shipping four enhancement waves, ran a holistic audit for emergent problems that per-diff reviews
+(each blind to the others) could miss — meters now written by 2+ new couplings in the same pulse,
+feedback loops, stacked estrangement. The audit confirmed everything is numerically BOUNDED (all Qing
+0..100 meters mutate through the QING_DECLINE_nudge [0,100] clamp; loyalty via the modifier's min=-35;
+the harem fertility<->harmony loop does NOT close because make_pregnant produces an heir, never a new
+consort, and the draft self-caps at 8). It surfaced ONE genuine regression I had introduced + one tidy-up:
+
+- **FIX (real regression): harem harmony ratchet** (se_QING_HAREM ~255). My wave-1 `consort_count>=4 ->
+  dynastic_harmony +1/qtr` term LACKED the `< 66` guard that the Upper Study schooling term
+  (se_QING_UPPERSTUDY:234) was DELIBERATELY given in the #337 review-fix. Since qing_dynastic_harmony has
+  NO restoring drift and count>=4 is the normal state (the draft fills to 6-8), the ungated +1/qtr was a
+  one-way ratchet pinning harmony at 100 — permanently maxing the council harmony fold and neutering the
+  -6/-12 dynasty-crisis nudges (the exact anti-pattern #337 documented). Added the matching
+  `var:qing_dynastic_harmony < 66` guard to the positive leg; the negative leg stays ungated (a strain
+  should always bite). Now schooling+harem both raise harmony only toward the "secure house" band, leaving
+  crisis events their downward headroom.
+
+- **TIDY-UP: redundant vacant-branch commander term** (se_QING_WAR). My wave-3 "both central armies
+  rotting -> extra loyalty_qing_estranged" was added to BOTH the War-office-filled and vacant iterators.
+  In the vacant branch the commander is ALREADY estranged unconditionally the line above, so the second
+  identical modifier was redundant (floored by min=-35 regardless). Removed it from the vacant branch;
+  kept it in the filled branch where it has real bite (compounds the friction/affinity scoring).
+
+ACCEPTED AS-IS (bounded, intended): harmony worst-case -3/qtr (chamberlain -1 + thin-court -1 + Upper
+Study -1, all requiring count==1 + vacant chamberlain + low schooling); currency_stress +2/qtr same-pulse
+(reserve<1000 backfeed + vacant-office arm) — strongly asymmetric vs the -10/qtr stress->reserve drain,
+self-corrects in the High Qing era; greenstandard_decay +2/qtr (base +1 + MO-ENH >=40 +1), single-file
+clamped. Brace balance 0 on both edited files.
