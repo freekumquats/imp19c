@@ -1152,10 +1152,13 @@ QING_office_appoint = {
 	# so the GUI updates immediately: the just-appointed man drops out of the Eligible
 	# Courtiers list (its filter is NOT has_variable=qing_office_held, now set on him)
 	# and appears in his office slot, without waiting for the next tab-open / pulse.
-	employer = {
-		QING_council_recompute = yes
-		QING_council_refresh_candidates = yes
-	}
+	# [logfix BT-13/#373] MUST run the recompute with ROOT = CHI, not ROOT = the appointee.
+	# This effect is called from the character-scope GUI verbs (QING_governance_actions.txt),
+	# so ROOT = the clicked courtier; the recompute machinery is written for ROOT = CHI and
+	# its employer=ROOT guards otherwise compared country-vs-character (2072 err/boot) AND
+	# mis-pruned live seats (the mass-vacate). Fire it through the hidden CHI country_event
+	# qing_office.40 (re-roots to CHI), exactly as the pulse / event callers root it.
+	employer = { trigger_event = { id = qing_office.40 } }
 	LOG_exit = { sys = QING  fn = "QING_office_appoint"  result = OK }
 }
 
@@ -1208,8 +1211,12 @@ QING_office_vacate = {
 	# [#175 fix] rebuild roster + eligible-candidate cache so the relieved man
 	# reappears in the Eligible Courtiers list immediately (his qing_office_held was
 	# just removed above) rather than only after the next tab-open / quarterly pulse.
-	QING_council_recompute = yes
-	QING_council_refresh_candidates = yes
+	# [logfix BT-13/#373] this effect runs in country scope (this = CHI, reached via
+	# `employer = {}` from the char-scope vacate GUI), but ROOT is still the clicked
+	# courtier on that path — and the recompute machinery is written for ROOT = CHI.
+	# Fire it through the hidden CHI country_event qing_office.40 (trigger_event targets
+	# `this` = CHI here) so the recompute always roots on the country, never a character.
+	trigger_event = { id = qing_office.40 }
 	LOG_exit = { sys = QING  fn = "QING_office_vacate"  result = OK }
 }
 
