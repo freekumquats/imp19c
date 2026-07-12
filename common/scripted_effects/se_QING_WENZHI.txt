@@ -1,0 +1,183 @@
+########################################################################
+# se_QING_WENZHI.txt — IMPERIAL CULTURAL PATRONAGE (文治), task #390.
+#
+# The 武功 (martial achievement) of the High Qing is modelled by the Ten Great
+# Campaigns tree (#63); this is its 文治 (civil / cultural governance) counterpart —
+# the emperor as patron of arts, letters, and craft. Qianlong is the archetype and
+# the 1763 start sits squarely in his cultural golden age, so the track begins ALIVE
+# (patronage seeded to 40, not 0).
+#
+# WHAT THIS ADDS vs WHAT ALREADY EXISTS. The random cultural-happening roster
+# (qing_culture.1-.10, events/imp19c_mod_events/qing_culture_events.txt, #15) and its
+# lasting modifiers (qing_culture_modifiers.txt: siku_quanshu, court_painting, jade,
+# porcelain, ...) already exist but fire only as UNBIDDEN flavour from QING_culture_roll.
+# This module is the missing PLAYER-AGENCY spine: a patronage METER + LAUNCHABLE
+# initiatives the throne funds deliberately (spending treasury / the privy purse 內帑),
+# each raising patronage AND dispatching the matching existing culture event, so the
+# monuments become acts of will, not luck. It also gives patronage an AMBIENT payoff
+# (a full patronage court radiates legitimacy) and a slow decay (glory must be renewed).
+#
+# HISTORY (sources: Chuimei Ho & Bennet Bronson, Splendors of China's Forbidden City:
+# The Glorious Reign of Emperor Qianlong; Evelyn Rawski, The Last Emperors):
+#   • 造辦處 Imperial Workshops (under the 內務府): jade, Jingdezhen imperial-kiln 御窯廠
+#     porcelain, cloisonné, clocks, lacquer — craftsmen drawn to Peking.
+#   • 如意館 Ruyiguan painting studio: Jesuit painters at court, above all Giuseppe
+#     Castiglione (郎世寧), the Sino-European court style.
+#   • 四庫全書 Complete Library of the Four Treasuries (1772-82) — with the 文字獄
+#     literary inquisition as its dark side (order and orthodoxy bought with fear).
+#   • 南巡 Southern Inspection Tours — cultural/patronage display down the Jiangnan.
+#
+# COUPLING: the workshops belong to the Imperial Household (內務府, #359) and are funded
+# from the privy purse (內帑, qing_privy_purse); the literary projects draw on the Hanlin
+# Academy (#358) / Southern Study (#336) scholar corps. Payoffs land in the stats that
+# matter in a monarchy — legitimacy (country standing), ruler popularity (personal glory),
+# stability — per BT-5/6, NEVER add_prestige (a silent no-op / family stat here).
+#
+# State (all on CHI):
+#   qing_wenzhi_patronage    0..100  the standing of imperial patronage (init 40)
+#   qing_wenzhi_*_done       one-shot flags mirroring the culture events' own guards
+#
+# CHI-only, player-only. Init at game start; drift quarterly from QING_GOV_pulse.
+# Prefix = QING_wenzhi_ / sys = QING
+########################################################################
+
+# ======================================================================
+# INIT — seed the patronage meter. Called once at game start (after QING_DECLINE_init
+# so the era flag is available). The 1763 zenith begins mid-high (Qianlong's golden
+# age); a later start begins lower. Idempotent. Scope: country (CHI).
+# ======================================================================
+QING_wenzhi_init = {
+	LOG_enter = { sys = QING  fn = "QING_wenzhi_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_wenzhi_patronage } }
+		if = {
+			limit = { has_variable = qing_high_qing_era }
+			set_variable = { name = qing_wenzhi_patronage  value = 40 }
+		}
+		else = {
+			set_variable = { name = qing_wenzhi_patronage  value = 20 }
+		}
+	}
+	LOG_line = { sys = QING  msg = "wenzhi: patronage meter seeded for" }
+	LOG_exit = { sys = QING  fn = "QING_wenzhi_init"  result = OK }
+}
+
+# ======================================================================
+# QUARTERLY PULSE — called from QING_GOV_pulse. Patronage decays slowly (the glory of
+# the court must be renewed by fresh commissions), and a HIGH standing radiates ambient
+# legitimacy (a court famed for its splendour affirms the Mandate). Bounded [0, 100].
+# Scope: country (CHI).
+# ======================================================================
+QING_wenzhi_pulse = {
+	if = {
+		limit = { has_variable = qing_wenzhi_patronage }
+		# slow decay: -1/quarter (a still court's lustre fades)
+		QING_DECLINE_nudge = { var = qing_wenzhi_patronage  amount = -1 }
+		# ambient legitimacy while the court's patronage stands high (>= 60): the splendour
+		# of the reign is itself an argument for the Mandate. Small, so it rewards sustained
+		# patronage without being a dominant lever.
+		if = {
+			limit = { var:qing_wenzhi_patronage >= 60 }
+			add_legitimacy = 1
+		}
+	}
+}
+
+# ======================================================================
+# ADVANCE — raise the patronage meter by $amount$, clamped [0, 100]. Scope: country (CHI).
+# ======================================================================
+QING_wenzhi_advance = {
+	QING_wenzhi_init = yes
+	QING_DECLINE_nudge = { var = qing_wenzhi_patronage  amount = $amount$ }
+	LOG_line = { sys = QING  msg = "wenzhi: patronage advanced for" }
+}
+
+# ======================================================================
+# INITIATIVE: FUND THE IMPERIAL WORKSHOPS (造辦處). The 內務府's ateliers — jade,
+# Jingdezhen porcelain, cloisonné — funded from the privy purse (內帑). Grants a lasting
+# craft modifier (jade + porcelain, if not already held) and raises patronage. Spends
+# treasury + a slice of the privy purse. Scope: country (CHI); called from the panel.
+# ======================================================================
+QING_wenzhi_fund_workshops = {
+	LOG_enter = { sys = QING  fn = "QING_wenzhi_fund_workshops" }
+	add_treasury = -40
+	QING_DECLINE_nudge = { var = qing_privy_purse  amount = -8 }
+	QING_wenzhi_advance = { amount = 12 }
+	if = {
+		limit = { NOT = { has_variable = qing_wenzhi_workshops_done } }
+		set_variable = qing_wenzhi_workshops_done
+		add_country_modifier = { name = qing_culture_imperial_jade  duration = -1 }
+		add_country_modifier = { name = qing_culture_porcelain  duration = -1 }
+		LOG_line = { sys = QING  msg = "wenzhi: imperial workshops endowed (jade + porcelain) for" }
+	}
+	else = {
+		# already endowed — a fresh commission is a one-off glory, not a new standing modifier.
+		current_ruler = { add_popularity = 5 }
+		LOG_line = { sys = QING  msg = "wenzhi: a fresh workshop commission (already endowed) for" }
+	}
+	add_legitimacy = 2
+	LOG_exit = { sys = QING  fn = "QING_wenzhi_fund_workshops"  result = OK }
+}
+
+# ======================================================================
+# INITIATIVE: COMMISSION THE PAINTING ACADEMY (如意館). The court atelier where even
+# the Jesuit Castiglione (郎世寧) serves, fusing Chinese and Western brush. Grants the
+# court-painting modifier once + raises patronage + ruler glory. Scope: country (CHI).
+# ======================================================================
+QING_wenzhi_commission_painting = {
+	LOG_enter = { sys = QING  fn = "QING_wenzhi_commission_painting" }
+	add_treasury = -30
+	QING_wenzhi_advance = { amount = 10 }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_culture_court_painting } }
+		add_country_modifier = { name = qing_culture_court_painting  duration = -1 }
+		LOG_line = { sys = QING  msg = "wenzhi: the Ruyiguan painting academy is commissioned for" }
+	}
+	current_ruler = { add_popularity = 8 }
+	LOG_exit = { sys = QING  fn = "QING_wenzhi_commission_painting"  result = OK }
+}
+
+# ======================================================================
+# INITIATIVE: LAUNCH THE COMPLETE LIBRARY (四庫全書). The greatest compilation of the
+# age — and its shadow, the literary inquisition (文字獄). Raises patronage, then hands
+# off to the EXISTING qing_culture.5 event, which presents the compile-with-inquisition
+# vs compile-without choice (do not duplicate that dilemma here). Guarded on the same
+# one-shot the event uses (qing_culture_siku_done) so the library is founded only once.
+# Scope: country (CHI). Draws on the Hanlin (#358) / Southern Study (#336) scholar corps.
+# ======================================================================
+QING_wenzhi_launch_siku = {
+	LOG_enter = { sys = QING  fn = "QING_wenzhi_launch_siku" }
+	# [#390 review-fix] the +15 patronage lands ONCE per convening and only while no
+	# convening is already pending: mark qing_wenzhi_siku_pending here (the button's is_shown
+	# requires it ABSENT), so the lever cannot be spammed for free patronage + a permanent
+	# ambient-legitimacy engine before the library is ever founded. The pending flag is cleared
+	# by every option of qing_culture.5 (incl. the "cannot afford" decline), so a player who
+	# declines may try again later — but never bank repeat patronage from one open dilemma.
+	if = {
+		limit = { NOT = { has_variable = qing_wenzhi_siku_pending } }
+		set_variable = qing_wenzhi_siku_pending
+		QING_wenzhi_advance = { amount = 15 }
+		# the scholar corps is stirred; hand off to the existing Siku dilemma event, which
+		# self-guards on qing_culture_siku_done and applies the modifiers + the 文字獄 choice.
+		trigger_event = { id = qing_culture.5  days = { 3 10 } }
+		LOG_line = { sys = QING  msg = "wenzhi: the Complete Library (四庫全書) is convened for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_wenzhi_launch_siku"  result = OK }
+}
+
+# ======================================================================
+# INITIATIVE: THE SOUTHERN INSPECTION TOUR (南巡). The emperor progresses down the
+# Jiangnan — a display of patronage and majesty that binds the wealthy south to the
+# throne, at great cost to the treasury. Raises patronage + ruler glory + stability;
+# a one-off grand occasion (no permanent modifier). Scope: country (CHI).
+# ======================================================================
+QING_wenzhi_southern_tour = {
+	LOG_enter = { sys = QING  fn = "QING_wenzhi_southern_tour" }
+	add_treasury = -60
+	QING_wenzhi_advance = { amount = 14 }
+	current_ruler = { add_popularity = 12 }
+	add_legitimacy = 4
+	add_stability = 1
+	LOG_line = { sys = QING  msg = "wenzhi: the emperor makes a Southern Tour (南巡) for" }
+	LOG_exit = { sys = QING  fn = "QING_wenzhi_southern_tour"  result = OK }
+}
