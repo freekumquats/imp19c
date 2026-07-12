@@ -554,6 +554,37 @@ qing_gc_set_picker_office_guard_commandant = {
 	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:guard_commandant } }
 }
 
+# [T1-A review-fix] The THREE MINISTRY CORPS (Censorate inspectors 御史, Imperial Guardsmen 侍衛,
+# Zongli diplomats 駐外使臣) share the SAME candidate-picker window as the Grand Council offices, but
+# they are NOT great offices — they are capped rank-and-file corps with their own stamp flags. Their
+# panel buttons formerly set ONLY the GUI var qing_gc_picker_office (never the SCRIPT var the row-
+# click handler dispatches off), so the shared handler qing_gov_office_appoint_selected saw no
+# selected office and the click was dead (or, worse, dispatched off a STALE council flag left from an
+# earlier appoint — mis-seating the candidate on a real office + spending PI). These bridges stamp
+# the corps token into the same qing_gc_picker_office_var the handler reads; the handler now branches
+# on them to run the corps enrolment (no PI, cap <6) instead of an office appointment.
+qing_gc_set_picker_office_censor_inspector = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:censor_inspector } }
+}
+qing_gc_set_picker_office_imperial_guardsman = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:imperial_guardsman } }
+}
+qing_gc_set_picker_office_zongli_diplomat = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:zongli_diplomat } }
+}
+
 # ======================================================================
 # [BT-4 fix] CHARACTER-SCOPE: generic appoint verb that reads the selected office
 # from qing_gc_picker_office_var and dispatches to the correct QING_office_appoint
@@ -569,105 +600,166 @@ qing_gov_office_appoint_selected = {
 		employer = scope:player
 	}
 	is_valid = {
-		custom_tooltip = {
-			text = qing_gov_office_valid_tt
-			is_adult = yes
-			is_alive = yes
-			# [BT-4] Don't re-appoint to the same seat the candidate holds.
-			NOT = {
-				AND = {
-					has_variable = qing_office_held
-					var:qing_office_held = scope:player.var:qing_gc_picker_office_var
+		is_adult = yes
+		is_alive = yes
+		# [T1-A review-fix] The picker window is SHARED between the 13 Grand Council great offices and
+		# the three capped ministry CORPS (censor inspectors 御史 / imperial guardsmen 侍衛 / Zongli
+		# diplomats 駐外使臣). A corps enrolment is NOT an office appointment: it costs no PI, admits a
+		# man who already sits elsewhere is barred only by the corps' own rules, and is capped at 6.
+		# Branch the validity on which the picker selected.
+		trigger_if = {
+			limit = {
+			OR = {
+				scope:player.var:qing_gc_picker_office_var = flag:censor_inspector
+				scope:player.var:qing_gc_picker_office_var = flag:imperial_guardsman
+				scope:player.var:qing_gc_picker_office_var = flag:zongli_diplomat
+			}
+			}
+			custom_tooltip = {
+				text = qing_gov_corps_valid_tt
+				# a great-office holder cannot also serve rank-and-file (mirrors the corps effects).
+				NOT = { has_variable = qing_office_held }
+				# not already in THIS corps, and the corps is not full (<6) — matches the dedicated
+				# qing_censorate_appoint_inspector / qing_guard_enrol_guardsman / qing_zongli_appoint_diplomat.
+				trigger_if = {
+					limit = { scope:player.var:qing_gc_picker_office_var = flag:censor_inspector }
+					NOT = { has_variable = qing_is_censor_inspector }
+					scope:player = { OR = { NOT = { has_variable = qing_censor_inspector_count }  var:qing_censor_inspector_count < 6 } }
+				}
+				trigger_else_if = {
+					limit = { scope:player.var:qing_gc_picker_office_var = flag:imperial_guardsman }
+					NOT = { has_variable = qing_is_imperial_guardsman }
+					scope:player = { OR = { NOT = { has_variable = qing_guard_corps_count }  var:qing_guard_corps_count < 6 } }
+				}
+				trigger_else = {
+					NOT = { has_variable = qing_zongli_diplomat }
+					scope:player = { OR = { NOT = { has_variable = qing_zongli_diplomat_count }  var:qing_zongli_diplomat_count < 6 } }
 				}
 			}
 		}
-		# [BT-50 / #396] the candidate must hold no conflicting role. Mirrors the shared
-		# QING_office_eligible_candidate trigger, but inlined because this is CHARACTER scope
-		# (scope:player = CHI, not ROOT): a serving commander / governor / vanilla office-holder,
-		# the ruler, or the heir cannot be seated on the Grand Council. This is the picker face of
-		# the reported symptom (ministers who were also commanders).
-		custom_tooltip = {
-			text = qing_gov_office_not_conflicting_tt
-			is_ruler = no
-			is_general = no
-			is_admiral = no
-			is_governor = no
-			NOT = { AND = { exists = scope:player.current_ruler  this = scope:player.current_ruler } }
-			NOT = { AND = { exists = scope:player.primary_heir   this = scope:player.primary_heir } }
-			NOT = { has_office = office_foreign_minister }
-			NOT = { has_office = office_royal_tutor }
-			NOT = { has_office = office_marshal }
-			NOT = { has_office = office_master_of_the_guard }
-			NOT = { has_office = office_high_priest_monarchy }
-			NOT = { has_office = office_philosopher }
-			NOT = { has_office = office_steward }
-			NOT = { has_office = office_physician }
+		# ---- OFFICE tokens (the 13 Grand Council great offices): the existing council rules.
+		trigger_else = {
+			custom_tooltip = {
+				text = qing_gov_office_valid_tt
+				# [BT-4] Don't re-appoint to the same seat the candidate holds.
+				NOT = {
+					AND = {
+						has_variable = qing_office_held
+						var:qing_office_held = scope:player.var:qing_gc_picker_office_var
+					}
+				}
+			}
+			# [BT-50 / #396] the candidate must hold no conflicting role. Mirrors the shared
+			# QING_office_eligible_candidate trigger, but inlined because this is CHARACTER scope
+			# (scope:player = CHI, not ROOT): a serving commander / governor / vanilla office-holder,
+			# the ruler, or the heir cannot be seated on the Grand Council. This is the picker face of
+			# the reported symptom (ministers who were also commanders).
+			custom_tooltip = {
+				text = qing_gov_office_not_conflicting_tt
+				is_ruler = no
+				is_general = no
+				is_admiral = no
+				is_governor = no
+				NOT = { AND = { exists = scope:player.current_ruler  this = scope:player.current_ruler } }
+				NOT = { AND = { exists = scope:player.primary_heir   this = scope:player.primary_heir } }
+				NOT = { has_office = office_foreign_minister }
+				NOT = { has_office = office_royal_tutor }
+				NOT = { has_office = office_marshal }
+				NOT = { has_office = office_master_of_the_guard }
+				NOT = { has_office = office_high_priest_monarchy }
+				NOT = { has_office = office_philosopher }
+				NOT = { has_office = office_steward }
+				NOT = { has_office = office_physician }
+			}
+			# Chancellor costs 20 PI, all others 15 — guard against the higher bound.
+			custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 20 } }
 		}
-		# Chancellor costs 20 PI, all others 15 — guard against the higher bound.
-		custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 20 } }
 	}
 	effect = {
 		scope:player = {
-			# Deduct PI: chancellor=20, all others=15. Check chancellor first.
+			# [T1-A review-fix] CORPS enrolment (no PI): stamp the corps flag on the appointee (prev)
+			# and recompute the ministry so the panel roster + count gate refresh immediately — exactly
+			# what the dedicated qing_*_appoint_* GUIs do, routed here through the shared picker.
 			if = {
-				limit = { var:qing_gc_picker_office_var = flag:chancellor }
-				add_political_influence = -20
-			}
-			else = { add_political_influence = -15 }
-			# 13-way dispatch to the correct QING_office_appoint call.
-			if = {
-				limit = { var:qing_gc_picker_office_var = flag:chancellor }
-				prev = { QING_office_appoint = { office = chancellor } }
+				limit = { var:qing_gc_picker_office_var = flag:censor_inspector }
+				prev = { set_variable = { name = qing_is_censor_inspector  value = 1 } }
+				QING_ministry_recompute_perf_censor = yes
+				LOG_line = { sys = QING  msg = "corps: censor inspector commissioned via row-click picker" }
 			}
 			else_if = {
-				limit = { var:qing_gc_picker_office_var = flag:personnel }
-				prev = { QING_office_appoint = { office = personnel } }
+				limit = { var:qing_gc_picker_office_var = flag:imperial_guardsman }
+				prev = { set_variable = { name = qing_is_imperial_guardsman  value = 1 } }
+				QING_ministry_recompute_perf_guard_commandant = yes
+				LOG_line = { sys = QING  msg = "corps: imperial guardsman enrolled via row-click picker" }
 			}
 			else_if = {
-				limit = { var:qing_gc_picker_office_var = flag:revenue }
-				prev = { QING_office_appoint = { office = revenue } }
+				limit = { var:qing_gc_picker_office_var = flag:zongli_diplomat }
+				prev = { set_variable = { name = qing_zongli_diplomat  value = 1 } }
+				QING_ministry_recompute_perf_zongli = yes
+				LOG_line = { sys = QING  msg = "corps: zongli diplomat appointed via row-click picker" }
 			}
-			else_if = {
-				limit = { var:qing_gc_picker_office_var = flag:rites }
-				prev = { QING_office_appoint = { office = rites } }
-			}
-			else_if = {
-				limit = { var:qing_gc_picker_office_var = flag:war }
-				prev = { QING_office_appoint = { office = war } }
-			}
-			else_if = {
-				limit = { var:qing_gc_picker_office_var = flag:justice }
-				prev = { QING_office_appoint = { office = justice } }
-			}
-			else_if = {
-				limit = { var:qing_gc_picker_office_var = flag:works }
-				prev = { QING_office_appoint = { office = works } }
-			}
-			else_if = {
-				limit = { var:qing_gc_picker_office_var = flag:censor }
-				prev = { QING_office_appoint = { office = censor } }
-			}
-			else_if = {
-				limit = { var:qing_gc_picker_office_var = flag:lifanyuan }
-				prev = { QING_office_appoint = { office = lifanyuan } }
-			}
-			else_if = {
-				limit = { var:qing_gc_picker_office_var = flag:chamberlain }
-				prev = { QING_office_appoint = { office = chamberlain } }
-			}
-			else_if = {
-				limit = { var:qing_gc_picker_office_var = flag:zongli }
-				prev = { QING_office_appoint = { office = zongli } }
-			}
-			else_if = {
-				limit = { var:qing_gc_picker_office_var = flag:grand_secretariat }
-				prev = { QING_office_appoint = { office = grand_secretariat } }
-			}
-			else_if = {
-				limit = { var:qing_gc_picker_office_var = flag:guard_commandant }
-				prev = { QING_office_appoint = { office = guard_commandant } }
+			# ---- GREAT OFFICES: deduct PI (chancellor 20, others 15) + dispatch to QING_office_appoint.
+			else = {
+				if = {
+					limit = { var:qing_gc_picker_office_var = flag:chancellor }
+					add_political_influence = -20
+				}
+				else = { add_political_influence = -15 }
+				# 13-way dispatch to the correct QING_office_appoint call.
+				if = {
+					limit = { var:qing_gc_picker_office_var = flag:chancellor }
+					prev = { QING_office_appoint = { office = chancellor } }
+				}
+				else_if = {
+					limit = { var:qing_gc_picker_office_var = flag:personnel }
+					prev = { QING_office_appoint = { office = personnel } }
+				}
+				else_if = {
+					limit = { var:qing_gc_picker_office_var = flag:revenue }
+					prev = { QING_office_appoint = { office = revenue } }
+				}
+				else_if = {
+					limit = { var:qing_gc_picker_office_var = flag:rites }
+					prev = { QING_office_appoint = { office = rites } }
+				}
+				else_if = {
+					limit = { var:qing_gc_picker_office_var = flag:war }
+					prev = { QING_office_appoint = { office = war } }
+				}
+				else_if = {
+					limit = { var:qing_gc_picker_office_var = flag:justice }
+					prev = { QING_office_appoint = { office = justice } }
+				}
+				else_if = {
+					limit = { var:qing_gc_picker_office_var = flag:works }
+					prev = { QING_office_appoint = { office = works } }
+				}
+				else_if = {
+					limit = { var:qing_gc_picker_office_var = flag:censor }
+					prev = { QING_office_appoint = { office = censor } }
+				}
+				else_if = {
+					limit = { var:qing_gc_picker_office_var = flag:lifanyuan }
+					prev = { QING_office_appoint = { office = lifanyuan } }
+				}
+				else_if = {
+					limit = { var:qing_gc_picker_office_var = flag:chamberlain }
+					prev = { QING_office_appoint = { office = chamberlain } }
+				}
+				else_if = {
+					limit = { var:qing_gc_picker_office_var = flag:zongli }
+					prev = { QING_office_appoint = { office = zongli } }
+				}
+				else_if = {
+					limit = { var:qing_gc_picker_office_var = flag:grand_secretariat }
+					prev = { QING_office_appoint = { office = grand_secretariat } }
+				}
+				else_if = {
+					limit = { var:qing_gc_picker_office_var = flag:guard_commandant }
+					prev = { QING_office_appoint = { office = guard_commandant } }
+				}
+				LOG_line = { sys = QING  msg = "office appointed via row-click picker" }
 			}
 		}
-		LOG_line = { sys = QING  msg = "office appointed via row-click picker" }
 	}
 }

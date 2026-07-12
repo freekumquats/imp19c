@@ -1565,3 +1565,129 @@ FULL 6a31f077..fbd1c073 range (62 commits), not just the ee44b72a9-onward slice 
   were only an "open decision". All START_DATE-offset [DATE] → firm **skip**; now named in A-DATE, §4.3
   RESOLVED. Commit ef0adf352.
 All other absent-from-dmp files in the range = world-surgery (skip) or process/research docs (§4.2).
+
+## D87 — merge-overnight 8-task batch (2026-07-12): major decisions + deferrals
+The user-approved smallest-first batch on `merge-overnight` (all committed as freekumquats, each
+independently code-reviewed pre-commit; boot-test-owed, NOT promoted to master). Commits f1bc120f7,
+caf55db04, 3f6731fbe, 23fee8be6, e68354aa1, 2ccf6696e, edb703ee3, ee6cd56da.
+
+### Decisions made
+- **#392 amban game-start seed** — post historical 1763 residents (TIB 輔鼐 Funai / ILI 明瑞 Mingrui /
+  ULS 成衮札布 Chenggünjab). DECISION: seed only the 3 DIRECT CHI frontier subjects (nested XNG-under-ILI,
+  MGA-under-ULS are unreachable by every_subject → seeding them = invisible chars). Extracted a SHARED
+  `QING_office`... no — `QING_amban_warrants_resident_trigger` (union: ruler mongolic/bodish OR
+  is_subject_type=autonomous_governorship) so the Lifan Yuan panel roster == the auto-post-sweep gate
+  (broadened to include the Manchu-ruled 將軍 governorates ILI/ULS the culture-only test missed).
+- **#388 BT-11 tributary default** — there is NO literal vanilla "cannot afford tribute" event; the
+  mod's realization is the affordability clamp in QING_subject_collect_tribute. DECISION: detect a
+  MEANINGFUL shortfall (owed ≥5), route through the Lifan Yuan (suzerain-prestige ding + mark
+  supervising amban ineffective), fire qing_tribute.5 PUNISH/FORGIVE. Defaulter PERSISTED as a CHI var
+  (qing_trib5_defaulter) re-saved in the event immediate (BT-7 stale-scope idiom). BT-28 external slot.
+- **#372 戶部銀庫 silver reserve** — concrete balance in 萬兩, seeded 6200 at 1763 (3100 at an 1815 start),
+  climbs to the documented 8182 peak (乾隆42/1777) then drains. DECISION (review fix): base accumulation
+  gates ONLY on the office being FILLED (not finesse≥6) so the peak milestone reliably fires — council
+  autofill sorts by combined stats, so a low-finesse general can hold Revenue; +10 finesse bonus kept as
+  reward. Distinct from the abstract qing_currency_stress meter. Figures → memory imp19c-silver-reserve-figures.
+- **#384 NW-crop diffusion** — two-pass snapshot→adopt (sphere idiom), staple-safe (livestock/wood only,
+  never grain), ≤3 adoptions/yr, gated on qing_newworld_crops=1. DECISION: adoption chance wrapped in a
+  script_value (qing_nwcrop_flip_chance_svalue) — oracle-confirmed `chance = <svalue>` is proven,
+  `chance = var:X` / `chance = scope:X.var:Y` is NOT. Always adopts sweet_potato (spec's "dominant adjacent
+  crop" simplified, matching the existing accelerator).
+- **#390 文治 cultural patronage** — NEW player-agency spine (qing_wenzhi_patronage meter + 4 launchable
+  initiatives in the 內務府 panel: 造辦處 workshops / 如意館 painting / 四庫全書 / 南巡) on TOP of the
+  pre-existing random qing_culture.* flavour events (reused, not rebuilt). Payoffs = legitimacy /
+  ruler popularity / stability, NEVER add_prestige. Siku lever guarded by qing_wenzhi_siku_pending
+  (cleared by all 3 qing_culture.5 options) to kill a free-patronage spam exploit.
+- **#389 Canton System 粵海關** — DECISION (the historical hook): Canton customs are the EMPEROR'S money.
+  Quarterly QING_canton_pulse splits the yield 70% to the privy purse (內帑, bypassing the 戶部) + 30%
+  state quota (add_treasury); yield scales with Guangzhou (p:9298) port_building + Hoppo competence + the
+  regime being open AND CHI holding Guangzhou. Hoppo = a Neiwufu-appointee marker (QING_canton_rotate_hoppo,
+  the player's proactive squeeze lever) — NOT a Grand Council office. Did NOT rewrite the region-trade
+  balance loop (reads the sim, doesn't mutate it). Cohong debt crisis qing_canton.1 at high squeeze.
+- **#396 BT-50 GC exclusivity** — user picked MINIMAL exclusion guards (NOT a full engine-office
+  migration). Shared QING_office_eligible_candidate trigger (excludes ruler/heir/governor/is_general/
+  is_admiral/vanilla-monarchy-office-holder + existing GC-seat) applied at autofill + the row-click picker;
+  prune_seat now also relieves a councillor who BECAME a commander/governor; qing_force_setup.1 (day-30
+  OOB attach) runs a prune+autofill reconcile so the game-start overlap self-heals. Heir/ruler refs
+  exists-guarded. Dead per-office appoint verbs left as harmless orphans.
+- **#397 BT-60/61 borders** — user picked "leave stripped provinces UNOWNED". Full 1763 border AUDIT run
+  first (see D88 below): world already largely correct. USA trimmed 236→172 Atlantic-seaboard provs (10
+  subject tags MIC/ILL/MSI/MSP/IND + CHT/CHC/CHE/MSG/MIA emptied + their deps removed; 64 western + 21
+  RUA Alaska provs → unowned). Freed tags left INERT via the proven QNG empty-core+capital pattern.
+
+### DEFERRED / explicitly NOT done in this batch
+- **#397 USA western provinces: a dedicated GBR "Crown Reserve" tag was REJECTED** in favour of leaving
+  the trans-Appalachian interior UNOWNED (the user's pick) — the more-precise Crown-Reserve tag +
+  province transfers was the deferred alternative.
+- **Full world border rebase DEFERRED / closed as unneeded (#394)** — the audit found only USA + Alaska
+  genuinely wrong; Poland-Lithuania-as-RUS-protectorate (18mo early, Poniatowski 1764) ACCEPTED as an
+  already-documented defensible simplification, NOT changed. No country-by-country rebase warranted for a
+  Qing-focused mod.
+- **#393 quickrank trade wire-in — DEFERRED to the trade_fix branch** (not merge-overnight); still pending.
+- **#391 BT-25→BT-46 boot-test findings — DEFERRED to 1763_bookmark** (still pending); this batch was
+  the merge-overnight-scoped features + BT-11/50/60/61, not the 1763_bookmark bug list.
+- **#389 Canton did NOT wire into the region-trade balance sim** — the task's "wire into se_TRADE_income"
+  option was deferred as high-risk; the pulse reads the sim (port level) but routes its own yield, so the
+  deeper trade-loop integration remains open if ever wanted.
+- **BT-53 religion-panel empty body** — instrumented with a diagnostic sentinel on 1763_bookmark, awaiting
+  the user's next boot-test read; NOT resolved.
+
+## D88 — 1763 border audit verdict (2026-07-12): world largely correct
+Full country-by-country audit (read-only agent) for #397/#394. FINDING: the #289/#296/#297/#298
+territorial-accuracy batch MOSTLY SURVIVED on merge-overnight (the earlier "a later merge clobbered #289"
+fear was WRONG): SPA→LSA + LSA's 14-province core intact (incl. New Orleans 3967), SFB New Granada
+hierarchy intact, Crimea-under-Ottoman / Persia-Zand / Bengal-Nawab / Mexico-as-New-Spain / Florida-to-GBR
+/ Haiti-French / New-France-ceded all correct. ONLY genuine anachronisms = USA-at-1815-extent (BT-60) +
+Russian-Alaska (BT-61), both fixed under #397. Validation idiom for the setup edit: Python scan of every
+own_control_core block for a province appearing in >1 owner = double-ownership = load error (confirmed 0).
+Detail → memory imp19c-1763-border-audit-done.
+
+## D89 — Deep-adversarial-review fix batch (23 confirmed findings, merge-overnight)
+
+After the 72-agent adversarial review of the whole merge-overnight branch (verdict: "do NOT merge as-is"),
+the user said "fix all bugs". All 23 confirmed findings fixed in one batch; 9 review false-positives were
+correctly left alone (single-token $macro$ in LOG is fine; ordered_subject defaults descending; global
+every_character heir-strip can't manifest; setup char-ID contiguity OK).
+
+TIER 1 (block-merge):
+- **A. Ministry corps picker dispatch** (QING_governance_actions.txt + 3 .gui). The 3 corps panels
+  (Censorate 御史 / Imperial Guard 侍衛 / Zongli 駐外使臣) set only the GUI string var, never the SCRIPT var
+  the shared row-click handler dispatches off → dead button OR stale-flag mis-appointment charging PI.
+  Fix: 3 bridge GUIs (qing_gc_set_picker_office_{censor_inspector,imperial_guardsman,zongli_diplomat}) +
+  corps branches in qing_gov_office_appoint_selected (NO PI, cap<6, stamp corps flag + recompute) +
+  wired bridge Execute calls into the panel buttons. Office path kept byte-identical. New loc key
+  qing_gov_corps_valid_tt.
+- **B. Sphere illegal operator** (se_QING_SPHERE.txt). `var:X > local_var:top_val` engine-rejected —
+  four-power Great Game silently dead. Ported the ALREADY-COMMITTED BT-64 fix (02ce33b78, which lived on
+  another branch, NOT merge-overnight) verbatim: promote top_val to persistent qing_sphere_top_val,
+  remove at end.
+- **C. Tribute income read** (se_SUBJECT_QING.txt:657). `set_variable value = has_monthly_income` parsed
+  as a nonexistent variable name → 0 + "Failed to fetch variable" flood, tribute-gold transfer dead. Fix:
+  read via new script_value three_months_income_svalue (00_event_values.txt); dropped the now-redundant x3.
+
+TIER 2:
+- Liberate double-overlord (se_DIPLOMACY.txt:~1406): the flag:dynamic-released nation is already the
+  releaser's subject; added release_subject-first before FUNC_make_subject (proven idiom from the
+  subjugate-transfer path at 1085).
+- Investiture dead else_if (qing_mechanics_on_actions.txt): on_character_death ROOT = dying char, so
+  is_subject_type/overlord (country triggers) never fired; hop through `employer` like the first branch.
+- Tribute .2/.3/.4 stale-scope: persisted qing_trib2_vassal/qing_trib3_restless/qing_trib4_meddled at
+  dispatch sites + guard-on-var/re-save-in-immediate in the events, matching the BT-7 idiom .1/.5 use.
+- Siku free-patronage farm (se_QING_WENZHI.txt): option-c decline cleared pending WITHOUT setting _done,
+  so relaunch banked +15 patronage each cycle. Gated the +15 on a NEVER-cleared one-shot
+  qing_wenzhi_siku_patronised; pending stays the dilemma-open guard.
+
+TIER 3:
+- add_prestige no-op sweep: converted 9 CHARACTER-scope add_prestige (POPULATION/CARAVAN/HAREM/MARRIAGE/
+  UPPERSTUDY/PRINCES + tribute/caravan events) to add_popularity per BT-5/6. DELIBERATELY LEFT: the GP-arc
+  events (aus/pru/gbr/fra/rus/spa) use COUNTRY-scope add_prestige (a valid country stat), and
+  se_QING_AFFINITY's `family = { add_prestige }` is a deliberate family-honours grant.
+- Zand double family_name+family (00_Persian Empire.txt:185, R2-18 anti-pattern): dropped family_name,
+  kept the fam: object (matches his household 599/600/601).
+- Cherokee province 89 trade_goods rifles→tobacco (stray industrial good on a 1763 tribesmen settlement).
+- Sticky pending_play_goal (EE_scripted_guis.txt): cleared after a play begins so the next play doesn't
+  inherit the stale goal.
+
+DEFERRED / not fixed: nothing from the confirmed list. The recommended grep gate `grep -rn add_prestige
+common/ events/` was run — only the intentional country-scope + family-scope sites remain. Independent
+code-review agent run on the Tier-1-A picker rewrite BEFORE commit (STRICT PRE-COMMIT REVIEW rule).
