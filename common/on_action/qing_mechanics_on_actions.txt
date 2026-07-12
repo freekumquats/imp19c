@@ -22,6 +22,32 @@ imp19c_qing_on_game_initialized = {
 	effect = {
 		if = {
 			limit = { tag = CHI }
+			# [BT-9/BT-20 detector] CHARACTER-POSITION INTEGRITY SELF-CHECK. A gap in the global
+			# setup character-id space silently COMPACTS runtime ids (runtime = written − missing_below),
+			# so a hardcoded `set_as_ruler=char:N` (and every father=/mother=/spouse=/commander=char:N)
+			# binds to the WRONG character. That is exactly how the "wrong emperor" bug happened
+			# (Qianlong char:214 → runtime 205; the throne got a toddler's kin, Yongrong). This is a
+			# PURE DIAGNOSTIC (no ruler mutation — the real fix is keeping the id space contiguous,
+			# see memory imp19c-setup-char-id-rule): if CHI's seated ruler is not an adult holder of
+			# the chinese_emperor trait, scream a loud, greppable FAIL line + scope dump so the id-gap
+			# regression surfaces on the very next boot instead of only in a playtest.
+			#   grep "IMP19C FAIL QING : QING_boot_ruler_integrity" debug.log
+			if = {
+				limit = {
+					OR = {
+						NOT = { current_ruler = { has_trait = chinese_emperor } }
+						current_ruler = { is_adult = no }
+					}
+				}
+				LOG_fail = {
+					sys = QING
+					fn = "QING_boot_ruler_integrity"
+					reason = "CHI seated ruler is NOT an adult chinese_emperor — likely a setup character-id GAP compacting runtime ids and mis-binding set_as_ruler=char:214 (see memory imp19c-setup-char-id-rule; check global id contiguity)"
+				}
+			}
+			else = {
+				LOG_line = { sys = QING  msg = "boot ruler integrity OK: CHI seated an adult chinese_emperor" }
+			}
 			QING_DECLINE_init = yes
 			# [#92] Global diplomatic reach: the engine gates real diplomacy on
 			# in_diplomatic_range, leaving the trans-Pacific USA (and other far
