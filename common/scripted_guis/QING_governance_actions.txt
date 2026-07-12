@@ -455,3 +455,197 @@ qing_action_emperor_resume_rule = {
 	is_valid = { always = yes }
 	effect = { QING_emperor_resume_rule = yes }
 }
+
+# ======================================================================
+# [BT-4 fix] COUNTRY-SCOPE: trivial helper GUIs to set the picker office as a
+# COUNTRY variable (not just a GUI var) so script can read it. One per office;
+# each is invoked at the picker open-site in government_view.gui to stamp the
+# flag before the refresh runs + before the window opens. No cost / no side effects.
+# ======================================================================
+qing_gc_set_picker_office_chancellor = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:chancellor } }
+}
+qing_gc_set_picker_office_personnel = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:personnel } }
+}
+qing_gc_set_picker_office_revenue = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:revenue } }
+}
+qing_gc_set_picker_office_rites = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:rites } }
+}
+qing_gc_set_picker_office_war = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:war } }
+}
+qing_gc_set_picker_office_justice = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:justice } }
+}
+qing_gc_set_picker_office_works = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:works } }
+}
+qing_gc_set_picker_office_censor = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:censor } }
+}
+qing_gc_set_picker_office_lifanyuan = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:lifanyuan } }
+}
+qing_gc_set_picker_office_chamberlain = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:chamberlain } }
+}
+qing_gc_set_picker_office_zongli = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:zongli } }
+}
+qing_gc_set_picker_office_grand_secretariat = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:grand_secretariat } }
+}
+qing_gc_set_picker_office_guard_commandant = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = { set_variable = { name = qing_gc_picker_office_var  value = flag:guard_commandant } }
+}
+
+# ======================================================================
+# [BT-4 fix] CHARACTER-SCOPE: generic appoint verb that reads the selected office
+# from qing_gc_picker_office_var and dispatches to the correct QING_office_appoint
+# call. This replaces the 13 individual appoint buttons with ONE row-click handler.
+# this = the appointee; scope:player = CHI.
+# ======================================================================
+qing_gov_office_appoint_selected = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI  has_variable = qing_gc_picker_office_var }
+		employer = scope:player
+	}
+	is_valid = {
+		custom_tooltip = {
+			text = qing_gov_office_valid_tt
+			is_adult = yes
+			is_alive = yes
+			# [BT-4] Don't re-appoint to the same seat the candidate holds.
+			NOT = {
+				AND = {
+					has_variable = qing_office_held
+					var:qing_office_held = scope:player.var:qing_gc_picker_office_var
+				}
+			}
+		}
+		# Chancellor costs 20 PI, all others 15 — guard against the higher bound.
+		custom_tooltip = { text = qing_gov_council_needs_pi_tt  scope:player = { political_influence >= 20 } }
+	}
+	effect = {
+		scope:player = {
+			# Deduct PI: chancellor=20, all others=15. Check chancellor first.
+			if = {
+				limit = { var:qing_gc_picker_office_var = flag:chancellor }
+				add_political_influence = -20
+			}
+			else = { add_political_influence = -15 }
+			# 13-way dispatch to the correct QING_office_appoint call.
+			if = {
+				limit = { var:qing_gc_picker_office_var = flag:chancellor }
+				prev = { QING_office_appoint = { office = chancellor } }
+			}
+			else_if = {
+				limit = { var:qing_gc_picker_office_var = flag:personnel }
+				prev = { QING_office_appoint = { office = personnel } }
+			}
+			else_if = {
+				limit = { var:qing_gc_picker_office_var = flag:revenue }
+				prev = { QING_office_appoint = { office = revenue } }
+			}
+			else_if = {
+				limit = { var:qing_gc_picker_office_var = flag:rites }
+				prev = { QING_office_appoint = { office = rites } }
+			}
+			else_if = {
+				limit = { var:qing_gc_picker_office_var = flag:war }
+				prev = { QING_office_appoint = { office = war } }
+			}
+			else_if = {
+				limit = { var:qing_gc_picker_office_var = flag:justice }
+				prev = { QING_office_appoint = { office = justice } }
+			}
+			else_if = {
+				limit = { var:qing_gc_picker_office_var = flag:works }
+				prev = { QING_office_appoint = { office = works } }
+			}
+			else_if = {
+				limit = { var:qing_gc_picker_office_var = flag:censor }
+				prev = { QING_office_appoint = { office = censor } }
+			}
+			else_if = {
+				limit = { var:qing_gc_picker_office_var = flag:lifanyuan }
+				prev = { QING_office_appoint = { office = lifanyuan } }
+			}
+			else_if = {
+				limit = { var:qing_gc_picker_office_var = flag:chamberlain }
+				prev = { QING_office_appoint = { office = chamberlain } }
+			}
+			else_if = {
+				limit = { var:qing_gc_picker_office_var = flag:zongli }
+				prev = { QING_office_appoint = { office = zongli } }
+			}
+			else_if = {
+				limit = { var:qing_gc_picker_office_var = flag:grand_secretariat }
+				prev = { QING_office_appoint = { office = grand_secretariat } }
+			}
+			else_if = {
+				limit = { var:qing_gc_picker_office_var = flag:guard_commandant }
+				prev = { QING_office_appoint = { office = guard_commandant } }
+			}
+		}
+		LOG_line = { sys = QING  msg = "office appointed via row-click picker" }
+	}
+}
