@@ -124,3 +124,49 @@ Branch: **overnight-312-315-audits** (off `1763_bookmark`). Autonomous run.
 
 ## Run summary
 All mandated tasks COMPLETE on branch `overnight-312-315-audits` (unpushed, per branch policy — develop is the push target, but this is a dedicated overnight branch): #312, #313, #315 (pre-existing commit), plus the Top-3 build candidates #321 (Exam hire-pool), #322 (Tributary embassies), #323 (Canal grain logistics). Each was built as a reviewed vertical slice, ran a deep adversarial Workflow review after completion, and had every CONFIRMED finding fixed before commit. All standing rules honoured (freekumquats identity, byte conventions, se_LOG wiring, oracle-verified idioms, concrete-over-abstract). DEFERRED pieces are logged per-task above. Boot-test still OWED (no in-game verification performed this run).
+
+## D-BT-live-fixes (2026-07-12, 1763_bookmark — in-game test-driven + log-driven)
+User boot-tested 1763_bookmark and reported issues live; fixed in one batch, independently
+code-reviewed (all batch fixes CONFIRMED correct), then committed. Major decisions:
+
+LOG-DRIVEN PARSE-ERROR CLASS (from fresh 1763 error.log, 14:43-14:49):
+- **Macro-in-trigger anti-pattern, swept mod-wide.** Two variants, both load-time fatal to the
+  whole effect definition:
+  (1) QUOTED bool: `"$cheap$" = yes` → "Badly read script value / Illegal use of operator". Fix =
+      DROP the quotes (`$cheap$ = yes`); unquoted `$macro$ = yes` is valid because yes/no are engine
+      tokens (proven se_MARRIAGE `$from_ruler$ = yes`). Sites: se_QING_WORKS (8), se_MOBILIZATION (1).
+  (2) BAREWORD dispatch: `limit = { $power$ = britain }` → expands to `britain = britain` → "Unknown
+      trigger type: britain". Fix = seed a flag scratch var at the effect top
+      (`set_variable = { name = X value = flag:$power$ }`) then compare `var:X = flag:britain`
+      (proven idiom: QING_techtransfer_dispatch). Sites: LEGATIONS, MISSIONARY (x2 effects),
+      VASSAL (free_real_subject + encroacher), COUNCIL score_figurehead ($skill$), TECHTRANSFER
+      (warm_partner + spike_tension + fire_track), TREATIES (treaty_revise tariff+extrality),
+      USA_SECTION (spawn_firebrand $side$). Reviewer caught 3 I initially missed (techtransfer
+      fire_track/warm_partner, treaties extrality) — folded in. Final sweep: 0 remain mod-wide.
+- **Tribute embassy ERROR:[scope:trib_envoy.GetName]** (qing_tribute.1): root cause = `right_portrait
+  = scope:trib_envoy` resolves at event FIRE time, BEFORE immediate saves the scope. Fix = point
+  portrait at the persisted var (`right_portrait = var:qing_trib1_envoy`), proven idiom. desc still
+  reads scope:, which immediate re-saves before body render.
+- **Migration report empty** (qing_province_reports): BT-55's ordered_owned_province PASS 2 dropped
+  the `root` wrapper → list built on province scope not the country the GUI reads. Restored root-wrap.
+
+IN-GAME TEST-DRIVEN (GUI/layout, user-directed):
+- **Religion panel (Faith & Sedition) rebuilt from scratch** off the proven-rendering qing_greatgame
+  scaffold. The BT-53 sentinel proved the body container itself wasn't painting despite matching
+  greatgame structurally; rather than keep patching, cloned greatgame's window byte-for-byte and
+  dropped religion content into its body. Decision: clone-the-working-panel > patch-the-broken-one.
+- **BT-49 Taizi not showing**: gate used `culture = manchu` (CHARACTER scope) which silently never
+  matches; the emperor is has_culture=manchu (jurchen group). Fix = `has_culture = manchu` +
+  `has_culture_group = chinese_group` (proven char triggers). Manchu is NOT in chinese_group.
+- **Throne cards**: loyalty read-out moved OUT of the 82px portrait column (which forced a gap before
+  the favor/faction/name chips) to sit left of the statesmanship bar; portrait→chip spacing 6→8 to
+  match the Grand Chancellor. Applied to all 3 cards (Emperor/Crown Prince/Empress).
+- **Subject pane reorder** (diplomatic_view): S/M/L tiers → tribute figures+Decisions → Type →
+  loyalty(bar/opinion/breakdown). Removed the BT-58b expanding spacer that floated tribute off-screen.
+- **Dynastic Harmony / Suzerain Prestige**: label green, number white (was reversed); dropped the
+  Chinese-name parentheticals.
+- **PI-cost on Appoint/Replace button hover** (not the candidate row): 20 for Grand Chancellor
+  (new *_CHANCELLOR_TT loc keys), 15 for ministers (appended to shared keys).
+
+STILL OWED: in-game re-test of this batch. NOTE: overnight_decisions4.md lives on merge-overnight;
+this session's 1763_bookmark work is logged here in decisions3 (the branch's existing file).
