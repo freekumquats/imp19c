@@ -85,3 +85,34 @@ LOG_ok = {
 	# Scope:    any
 	debug_log = "IMP19C $sys$: OK $fn$ : $detail$"
 }
+
+# ---- GUI-click observability probe -----------------------------------
+# [R2-7/R2-10 diagnosis] debug_log emitted from INSIDE a scripted_gui invoked by a
+# button's onclick Execute() did NOT appear in the boot debug.log (all 35k IMP19C
+# lines came from on_action/event paths, none from GUI clicks). That left it
+# unprovable whether the Appoint/Dynastic-Match buttons' Execute actually ran, or
+# whether debug_log simply cannot fire from the GUI-Execute context. This probe
+# sidesteps the question: the GUI effect STAMPS a country variable (no logging), and
+# the CHI quarterly pulse — an on_action path we KNOW logs reliably — READS the stamp
+# and logs it. A stamp that advances between boots proves the button's Execute fired.
+#
+# LOG_gui_probe_stamp: call at the top of a GUI-invoked scripted_gui effect. $probe$ =
+# a short kebab id (e.g. council_appoint, marriage_open). Increments gui_probe_$probe$
+# on the country scope so the count survives to the next pulse. Scope: country.
+LOG_gui_probe_stamp = {
+	if = { limit = { NOT = { has_variable = gui_probe_$probe$ } }  set_variable = { name = gui_probe_$probe$  value = 0 } }
+	change_variable = { name = gui_probe_$probe$  add = 1 }
+}
+
+# LOG_gui_probe_report: call from an on_action (the CHI pulse). Logs the current stamp
+# count for $probe$ (0 = the GUI effect has never run since game start → its Execute
+# never fired; >0 = it fired that many times). Runs on the reliable on_action log path.
+LOG_gui_probe_report = {
+	if = {
+		limit = { has_variable = gui_probe_$probe$ }
+		LOG_line = { sys = PROBE  msg = "GUI probe $probe$ has fired (count in scope var gui_probe_$probe$)" }
+	}
+	else = {
+		LOG_line = { sys = PROBE  msg = "GUI probe $probe$ has NEVER fired since game start (button Execute not reaching the effect)" }
+	}
+}

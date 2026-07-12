@@ -670,7 +670,11 @@ QING_DECLINE_civic_assimilation = {
 			limit = {
 				is_sea = no
 				total_population > 0
-				dominant_province_culture.culture_group = chinese_group
+				# [F6 boot-test fix] was `dominant_province_culture.culture_group = chinese_group` — that
+				# province-level dot-chain fails to parse ("Illegal use of operator ="); the proven province
+				# idiom is the dedicated keyword dominant_province_culture_group (oracle: Invictus
+				# 00_steppe_inv.txt:247). This is the ordered_owned_province scope (a province), so it applies directly.
+				dominant_province_culture_group = chinese_group
 				# a genuine majority of the province is already Sinitic (>= 50%).
 				# (any_pops_in_province takes its match conditions FLAT beside
 				# percent/count — NO limit = {} wrapper; proven decentralize_realm_button.)
@@ -990,6 +994,12 @@ QING_frontier_flavour_roll = {
 	LOG_enter = { sys = QING  fn = "QING_frontier_flavour_roll" }
 	random = {
 		chance = 30
+		# [BT-28] claim the shared COURT event slot for this pulse: once this 30% roll passes we are
+		# about to schedule a frontier/justice reaction, so no OTHER court roller (dynasty/faction/
+		# spouse/officer) should also fire this quarter. Claimed here (not per-branch) — in the rare
+		# case the inner random_list finds no eligible branch it slightly over-suppresses, which is the
+		# safe direction for an anti-spam throttle. ROOT = CHI.
+		set_variable = { name = qing_gc_event_slot_used  value = 1 }
 		random_list = {
 			# --- #65 THE EMPEROR EMERITUS: NAPOLEON AT THE QING COURT --------
 			# The chain is no longer offered by this roll. It is KICKED OFF instead by
@@ -1177,6 +1187,11 @@ QING_frontier_flavour_roll = {
 					limit = { NOT = { primary_culture = ROOT.primary_culture } }
 					save_scope_as = target
 				}
+				# [BT-1 logfix] persist the subject as a country var so the DELAYED event (3-12d) can
+				# re-save it to scope:target in its own immediate — a raw saved scope can go stale across
+				# the delay window (annex/release/integrate) -> ERROR:[scope:target.GetName] at render.
+				# Proven country-scope re-save idiom (var-held scope -> save_scope_as).
+				set_variable = { name = qing_frontier10_target  value = scope:target }
 				trigger_event = { id = qing_frontier.10  days = { 3 12 } }
 			}
 			# --- #7 Golden Urn (needs a Tibetan-Buddhist subject) ---
@@ -1202,10 +1217,10 @@ QING_frontier_flavour_roll = {
 			# --- #8 sinicization: a Han-marriage prompt for a Manchu grandee ---
 			10 = {
 				trigger = {
-					any_character = { employer = ROOT  is_ruler = no  is_adult = yes  culture = ROOT.primary_culture }
+					any_character = { employer = ROOT  is_ruler = no  is_adult = yes  culture = ROOT.current_ruler.culture }  # [logfix] was culture=ROOT.primary_culture (invalid on char scope)
 				}
 				random_character = {
-					limit = { employer = ROOT  is_ruler = no  is_adult = yes  culture = ROOT.primary_culture }
+					limit = { employer = ROOT  is_ruler = no  is_adult = yes  culture = ROOT.current_ruler.culture }  # [logfix] was culture=ROOT.primary_culture
 					save_scope_as = qing_char
 				}
 				trigger_event = { id = qing_char.10  days = { 3 12 } }
@@ -1971,7 +1986,7 @@ QING_DECLINE_spawn_sect_leader = {
 			save_scope_as = qing_sect_leader
 		}
 		scope:qing_sect_leader = {
-			QING_roster_finalize = { nick = "NICKNAME_QING_SECT_LEADER" }
+			QING_roster_finalize = { nick = NICKNAME_QING_SECT_LEADER }
 			# a heterodox ringleader is no friend of the dynasty.
 			add_loyalty = loyalty_qing_estranged
 			LOG_line = { sys = QING  msg = "sect: real secret-society leader (白蓮教/天地會 archetype) arisen for (sect_pressure=)" }

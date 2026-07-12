@@ -72,6 +72,13 @@ qing_mechanics_pulse_on_action = {
 	}
 	effect = {
 		set_variable = { name = qing_mechanics_pulse_cooldown  days = 90 }
+		# [BT-28] TWO-SLOT EVENT BUDGET, cleared at the TOP of the pulse (before ANY roller runs, incl. the
+		# ministry pulses inside QING_GOV_pulse). At most ONE court event (dynasty / faction / justice-via-
+		# frontier / industry-via-works / foreign-spouse / officer) and ONE external event (tribute) fire per
+		# quarterly pulse. Each roller CLAIMS its slot only on the branch that actually schedules an event
+		# (BT-10 pattern); a no-op roll leaves the slot free. Stops the game-start + steady-state pile-up.
+		remove_variable = qing_gc_event_slot_used
+		remove_variable = qing_ext_event_slot_used
 		QING_DECLINE_pulse = yes
 		QING_ethnic_stance_drift = yes
 		# Great-Game diplomatic-play pressure (#52): scan the Qing's live plays and
@@ -94,23 +101,42 @@ qing_mechanics_pulse_on_action = {
 		# Amban shares the ground) triggers a War-Ministry vs Lifan-Yuan turf war.
 		# (se_QING_FRONTIER.txt)
 		QING_fgar_scan = yes
-		QING_frontier_flavour_roll = yes
+		# [#385] Sinicization rate-of-change: refresh the live Han-dominant province
+		# count (via the same governorship descent the report list uses, so the figure
+		# matches the listed rows) and roll the year-old baseline annually, so the
+		# Sinicization report can show a year-over-year trend, not just a static list.
+		# Cheap count every quarter; baseline rolls once a year. (se_QING_SINICIZATION.txt)
+		QING_sinic_pulse = yes
+		# [BT-28] frontier/justice flavour reactions now share the court slot (was ungated -> justice.1
+		# fired alongside dynasty/tribute/industry). Gated on the slot being free; the roll claims it when it fires.
+		if = {
+			limit = { NOT = { has_variable = qing_gc_event_slot_used } }
+			QING_frontier_flavour_roll = yes
+		}
 		# [#157] Family dynamics of the imperial house (emperor / crown prince /
 		# empress dowager). Low chance so the court's private life is an occasional
 		# beat, not spam; each branch re-checks its own trigger. Runs AFTER the
 		# governance pulse so the harmony meter it moves is read fresh next quarter.
-		random = {
-			chance = 25
-			QING_dynasty_flavour_roll = yes
+		# [BT-10] gated on the shared quarterly GC-event slot; the roll claims it when it fires.
+		if = {
+			limit = { NOT = { has_variable = qing_gc_event_slot_used } }
+			random = {
+				chance = 25
+				QING_dynasty_flavour_roll = yes
+			}
 		}
 		# [#158] Conservative-vs-reformist council politics (the faction layer that
 		# overlays the Grand Council + the three dynastic figureheads). Same low
 		# chance as the family beat; each branch re-checks its own trigger. Runs
 		# after the governance pulse so the stance/lean/polarization meters it reads
 		# were refreshed this quarter by QING_council_recompute. (se_QING_FACTION.txt)
-		random = {
-			chance = 25
-			QING_faction_flavour_roll = yes
+		# [BT-10] gated on the shared quarterly GC-event slot; the roll claims it when it fires.
+		if = {
+			limit = { NOT = { has_variable = qing_gc_event_slot_used } }
+			random = {
+				chance = 25
+				QING_faction_flavour_roll = yes
+			}
 		}
 		# #65 Emperor Emeritus: re-score Napoleon's conditional loyalty (HIGH while
 		# his revenge project is served — reforms advancing AND GBR/RUS tension held
@@ -133,18 +159,26 @@ qing_mechanics_pulse_on_action = {
 		# occasionally reach the council table (qing_office.30). Low chance so it is an
 		# occasional court intrigue, not spam; the check self-guards on an eligible member
 		# existing, so it is a clean no-op when no foreign spouse sits. (se_QING_COUNCIL.txt)
-		random = {
-			chance = 20
-			QING_council_foreign_spouse_check = yes
+		# [BT-10] gated on the shared quarterly GC-event slot; the check claims it when it fires.
+		if = {
+			limit = { NOT = { has_variable = qing_gc_event_slot_used } }
+			random = {
+				chance = 20
+				QING_council_foreign_spouse_check = yes
+			}
 		}
 		# [#331 user] War Minister's Report: the Grand Minister of War (兵部尚書) — or the
 		# Grand Commandant of the Imperial Guard (領侍衛內大臣) for the metropolitan garrison —
 		# periodically reports on a serving garrison commander (qing_office.31). Low chance so
 		# it is an occasional court dilemma; self-guards on a seated War minister and a living
 		# legion commander, a clean no-op otherwise. (se_QING_COUNCIL.txt)
-		random = {
-			chance = 12
-			QING_council_officer_report_check = yes
+		# [BT-10] gated on the shared quarterly GC-event slot; the check claims it when it fires.
+		if = {
+			limit = { NOT = { has_variable = qing_gc_event_slot_used } }
+			random = {
+				chance = 12
+				QING_council_officer_report_check = yes
+			}
 		}
 		# [#321] Maintain the examination hiring pool: retire the aged/dead un-placed
 		# graduates and keep the count var honest. Cheap, self-guards on the list.

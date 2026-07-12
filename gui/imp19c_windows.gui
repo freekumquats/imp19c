@@ -55,7 +55,7 @@ base_window = {
 						using = BaseFontS
 						using = Default_FontColor
 						size = { 590 44 }
-						multi_line = yes
+						multiline = yes
 						alpha = 0.75
 						fontsize_min = 11
 						text = "QING_GC_PICKER_INSTR"
@@ -69,16 +69,30 @@ base_window = {
 						text = "QING_GC_NO_CANDIDATES"
 					}
 					dynamicgridbox = {
+						# [#352 F2 fix] A plain `vbox` does NOT iterate a datamodel — only grid boxes do
+						# (dynamicgridbox/fixedgridbox). The B7 change swapped the working dynamicgridbox for a vbox,
+						# so the candidate list stopped rendering (the 'Appoint shows no candidates' boot-test bug).
+						# Revert to dynamicgridbox — the PROVEN list idiom of every working report
+						# (qing_province_reports.gui:49). With NO datamodel_wrap and a full-width (588px in a 620px
+						# scrollarea) item, exactly one fits per row, so it stacks VERTICALLY without the horizontal
+						# clipping datamodel_wrap=1 caused. `margin` belongs on an inner widget, not the item root.
 						datamodel = "[Player.MakeScope.GetList('qing_council_candidates')]"
-						datamodel_wrap = 1
 						item = {
-							widget = {
+							button = {
 								size = { 588 92 }
 								margin = { 2 3 }
 								datacontext = "[Scope.GetCharacter]"
 								using = background_widget
 								blockoverride "Margin" { margin = { 2 2 } }
-								flowcontainer = {
+								# [BT-4] Row-click appointment. The Execute/IsValid build their OWN scope
+								# (GuiScope.SetRoot Character + player) so the button keeps the CHARACTER datacontext
+								# above — child [Character.Get*] reads in the row body still resolve. Do NOT put a
+								# GetScriptedGui datacontext on this button (it would override the character and blank the row).
+								enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+								onclick = "[GetScriptedGui('qing_gov_office_appoint_selected').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+								onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
+								tooltip = "QING_GC_APPOINT_ROW_TT"
+							flowcontainer = {
 									spacing = 8
 									margin = { 8 6 }
 									cpt_button = { size = { 50 74 } }
@@ -86,28 +100,38 @@ base_window = {
 										direction = vertical
 										spacing = 3
 										tag = { text = "[Character.GetName]"  maximumsize = { 240 26 }  using = BaseFontM  using = Default_FontColor }
+										# [BT-37] incumbent marker under the name (was a clipped 120px column to the right); names the office held.
+										textbox = {
+											size = { 300 22 }
+											using = BaseFontS
+											using = Default_FontColor
+											alpha = 0.7
+											text = "qing_picker_on_council_marker"
+											visible = "[Character.MakeScope.Var('qing_office_held').IsSet]"
+											tooltip = "QING_PICKER_COUNCIL_SITTER_TT"
+										}
 										flowcontainer = {
 											spacing = 10
 											icon_and_text = {
-												size = { 70 26 }
+												size = { 82 26 }
 												blockoverride "Icon" { using = icon_military }
 												blockoverride "Text" { text = "[Character.GetMartial]" }
 												tooltip = "[Character.GetMartialToolTip]"
 											}
 											icon_and_text = {
-												size = { 70 26 }
+												size = { 82 26 }
 												blockoverride "Icon" { using = icon_civic }
 												blockoverride "Text" { text = "[Character.GetFinesse]" }
 												tooltip = "[Character.GetFinesseToolTip]"
 											}
 											icon_and_text = {
-												size = { 70 26 }
+												size = { 82 26 }
 												blockoverride "Icon" { using = icon_oratory }
 												blockoverride "Text" { text = "[Character.GetCharisma]" }
 												tooltip = "[Character.GetCharismaToolTip]"
 											}
 											icon_and_text = {
-												size = { 70 26 }
+												size = { 82 26 }
 												blockoverride "Icon" { using = icon_religious }
 												blockoverride "Text" { text = "[Character.GetZeal]" }
 												tooltip = "[Character.GetZealToolTip]"
@@ -118,247 +142,7 @@ base_window = {
 												blockoverride "Text" { text = "[Character.GetLoyalty|0]" }
 												tooltipwidget = { using = character_loyalty_tooltip }
 											}
-										}
-									}
-									widget = {
-										size = { 160 74 }
-										flowcontainer = {
-											parentanchor = vcenter
-											ignoreinvisible = yes
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_gov_office_appoint_chancellor')]"
-										# [#220] Only the button for the office the player clicked is shown, keyed on the
-										# qing_gc_picker_office GUI var; the underlying appoint verb still gates on eligibility.
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'chancellor'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GC_APPOINT"  max_width = 140 }
-										tooltip = "QING_GOV_OFFICE_CHANCELLOR_BTN_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											# appointment done — close the picker.
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_gov_office_appoint_personnel')]"
-										# [#220] Only the button for the office the player clicked is shown, keyed on the
-										# qing_gc_picker_office GUI var; the underlying appoint verb still gates on eligibility.
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'personnel'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GC_APPOINT"  max_width = 140 }
-										tooltip = "QING_GOV_OFFICE_PERSONNEL_BTN_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											# appointment done — close the picker.
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_gov_office_appoint_revenue')]"
-										# [#220] Only the button for the office the player clicked is shown, keyed on the
-										# qing_gc_picker_office GUI var; the underlying appoint verb still gates on eligibility.
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'revenue'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GC_APPOINT"  max_width = 140 }
-										tooltip = "QING_GOV_OFFICE_REVENUE_BTN_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											# appointment done — close the picker.
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_gov_office_appoint_rites')]"
-										# [#220] Only the button for the office the player clicked is shown, keyed on the
-										# qing_gc_picker_office GUI var; the underlying appoint verb still gates on eligibility.
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'rites'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GC_APPOINT"  max_width = 140 }
-										tooltip = "QING_GOV_OFFICE_RITES_BTN_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											# appointment done — close the picker.
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_gov_office_appoint_war')]"
-										# [#220] Only the button for the office the player clicked is shown, keyed on the
-										# qing_gc_picker_office GUI var; the underlying appoint verb still gates on eligibility.
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'war'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GC_APPOINT"  max_width = 140 }
-										tooltip = "QING_GOV_OFFICE_WAR_BTN_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											# appointment done — close the picker.
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_gov_office_appoint_justice')]"
-										# [#220] Only the button for the office the player clicked is shown, keyed on the
-										# qing_gc_picker_office GUI var; the underlying appoint verb still gates on eligibility.
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'justice'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GC_APPOINT"  max_width = 140 }
-										tooltip = "QING_GOV_OFFICE_JUSTICE_BTN_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											# appointment done — close the picker.
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_gov_office_appoint_works')]"
-										# [#220] Only the button for the office the player clicked is shown, keyed on the
-										# qing_gc_picker_office GUI var; the underlying appoint verb still gates on eligibility.
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'works'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GC_APPOINT"  max_width = 140 }
-										tooltip = "QING_GOV_OFFICE_WORKS_BTN_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											# appointment done — close the picker.
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_gov_office_appoint_censor')]"
-										# [#220] Only the button for the office the player clicked is shown, keyed on the
-										# qing_gc_picker_office GUI var; the underlying appoint verb still gates on eligibility.
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'censor'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GC_APPOINT"  max_width = 140 }
-										tooltip = "QING_GOV_OFFICE_CENSOR_BTN_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											# appointment done — close the picker.
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_gov_office_appoint_lifanyuan')]"
-										# [#220] Only the button for the office the player clicked is shown, keyed on the
-										# qing_gc_picker_office GUI var; the underlying appoint verb still gates on eligibility.
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'lifanyuan'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GC_APPOINT"  max_width = 140 }
-										tooltip = "QING_GOV_OFFICE_LIFANYUAN_BTN_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											# appointment done — close the picker.
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_gov_office_appoint_chamberlain')]"
-										# [#220] Only the button for the office the player clicked is shown, keyed on the
-										# qing_gc_picker_office GUI var; the underlying appoint verb still gates on eligibility.
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'chamberlain'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GC_APPOINT"  max_width = 140 }
-										tooltip = "QING_GOV_OFFICE_CHAMBERLAIN_BTN_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											# appointment done — close the picker.
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_gov_office_appoint_zongli')]"
-										# [#220] Only the button for the office the player clicked is shown, keyed on the
-										# qing_gc_picker_office GUI var; the underlying appoint verb still gates on eligibility.
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'zongli'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GC_APPOINT"  max_width = 140 }
-										tooltip = "QING_GOV_OFFICE_ZONGLI_BTN_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											# appointment done — close the picker.
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_gov_office_appoint_grand_secretariat')]"
-										# [#220] Only the button for the office the player clicked is shown, keyed on the
-										# qing_gc_picker_office GUI var; the underlying appoint verb still gates on eligibility.
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'grand_secretariat'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GC_APPOINT"  max_width = 140 }
-										tooltip = "QING_GOV_OFFICE_GRAND_SECRETARIAT_BTN_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											# appointment done — close the picker.
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_gov_office_appoint_guard_commandant')]"
-										# [#220] Only the button for the office the player clicked is shown, keyed on the
-										# qing_gc_picker_office GUI var; the underlying appoint verb still gates on eligibility.
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'guard_commandant'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GC_APPOINT"  max_width = 140 }
-										tooltip = "QING_GOV_OFFICE_GUARD_COMMANDANT_BTN_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											# appointment done — close the picker.
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									# [#354] ZONGLI diplomat corps — appoint the shown courtier as a diplomat (駐外使臣).
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_zongli_appoint_diplomat')]"
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'zongli_diplomat'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_ZONGLI_APPOINT"  max_width = 140 }
-										tooltip = "QING_ZONGLI_APPOINT_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									# [#362] CENSORATE inspector corps — commission the shown courtier as an investigating censor (御史).
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_censorate_appoint_inspector')]"
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'censor_inspector'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_CENSORATE_APPOINT"  max_width = 140 }
-										tooltip = "QING_CENSORATE_APPOINT_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
-									# [#364] IMPERIAL GUARD corps — enrol the shown courtier as a 侍衛 guardsman.
-									text_button_square_highlighted = {
-										size = { 150 30 }
-										datacontext = "[GetScriptedGui('qing_guard_enrol_guardsman')]"
-										visible = "[And( GetVariableSystem.HasValue('qing_gc_picker_office', 'imperial_guardsman'), ScriptedGui.IsShown( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End ) )]"
-										blockoverride "Center_text" { text = "QING_GUARD_ENROL_PICK"  max_width = 140 }
-										tooltip = "QING_GUARD_ENROL_PICK_TT"
-										blockoverride "On_click" {
-											enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-											onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_office_picker_window')]"
-										}
-									}
+
 										}
 									}
 								}

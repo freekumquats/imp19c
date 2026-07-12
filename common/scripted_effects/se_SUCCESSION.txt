@@ -1,51 +1,25 @@
 ########################################################################
-# se_SUCCESSION.txt — [#312] female-line succession-law reform effects.
+# se_SUCCESSION.txt — [#312] female-line succession Pragmatic-Sanction contest.
 #
-# The ONLY engine-supported succession change is change_law = <succession_law>
-# (oracle-verified; no set_succession / designate_heir effect exists). These effects
-# wrap change_law with the mod's cost + the Pragmatic-Sanction contest, and are
-# invoked from the SUCCESSION_* scripted_guis (the mod's "decision" idiom).
+# [R2-8] The three succession tiers are now REAL LAWS (00_succession_laws.txt:
+# agnatic / cognatic / absolute_cognatic_succession_law), changed by the player
+# directly in the vanilla Laws tab. The old scripted "reform decision" idiom
+# (SUCCESSION_set_* effects + SUCCESSION_actions.txt scripted_guis + the
+# absolute_cognatic_succession country-modifier) is RETIRED and deleted — the law
+# tier carries its own modifier block, so no wrapper effect is needed.
 #
-# ROOT = the reforming country in every effect here.
-# Prefix = SUCCESSION_
+# What remains is the one thing a bare change_law CANNOT model: the Pragmatic-Sanction
+# contest. There is NO on_law_change on_action in the engine, so the contest cannot ride
+# the law change itself. It is EVENT-DRIVEN, not polled: an heir does not change monthly,
+# so SUCCESSION_pragmatic_contest is called only at the two moments the heir line can
+# actually shift — on_ruler_change (a new accession) and on_character_death of a ruling-
+# family member (an elder heir dies, a daughter moves up). Both hooks live in
+# qing_mechanics_on_actions.txt. The effect self-gates (female heir at the head of an
+# open female line) and is idempotent while already contested, so firing it on either
+# hook is safe.
+#
+# ROOT = the reforming country. Prefix = SUCCESSION_
 ########################################################################
-
-# ---- set AGNATIC (male-line only) ------------------------------------
-# The most conservative tier; reverting to it is uncontested (no power objects to a
-# realm RESTRICTING its succession) but costs legitimacy for the upheaval.
-SUCCESSION_set_agnatic = {
-	LOG_enter = { sys = QING  fn = "SUCCESSION_set_agnatic" }
-	# strip the absolute-cognatic dressing if it was on
-	if = { limit = { has_country_modifier = absolute_cognatic_succession }  remove_country_modifier = absolute_cognatic_succession }
-	change_law = agnatic_succession_law
-	add_legitimacy = -10
-	LOG_exit = { sys = QING  fn = "SUCCESSION_set_agnatic"  result = OK }
-}
-
-# ---- set AGNATIC-COGNATIC (males preferred, daughters if no male line) ----
-# A liberalisation: opens the female line. Triggers the Pragmatic-Sanction contest
-# (other powers may refuse to recognise the altered succession).
-SUCCESSION_set_agnatic_cognatic = {
-	LOG_enter = { sys = QING  fn = "SUCCESSION_set_agnatic_cognatic" }
-	if = { limit = { has_country_modifier = absolute_cognatic_succession }  remove_country_modifier = absolute_cognatic_succession }
-	change_law = cognatic_succession_law
-	add_legitimacy = -15
-	SUCCESSION_pragmatic_contest = yes
-	LOG_exit = { sys = QING  fn = "SUCCESSION_set_agnatic_cognatic"  result = OK }
-}
-
-# ---- set ABSOLUTE-COGNATIC (presented as gender-equal) ---------------
-# Engine limitation: no true gender-equal succession type exists, so this is the
-# cognatic law PLUS the absolute_cognatic_succession modifier (flavour + a small
-# legitimacy nod). Also triggers the contest — the most radical break with tradition.
-SUCCESSION_set_absolute_cognatic = {
-	LOG_enter = { sys = QING  fn = "SUCCESSION_set_absolute_cognatic" }
-	change_law = cognatic_succession_law
-	if = { limit = { NOT = { has_country_modifier = absolute_cognatic_succession } }  add_country_modifier = { name = absolute_cognatic_succession  duration = -1 } }
-	add_legitimacy = -20
-	SUCCESSION_pragmatic_contest = yes
-	LOG_exit = { sys = QING  fn = "SUCCESSION_set_absolute_cognatic"  result = OK }
-}
 
 # ---- the PRAGMATIC SANCTION contest ----------------------------------
 # When a realm opens its female line, the other great powers may refuse to recognise
@@ -57,37 +31,66 @@ SUCCESSION_set_absolute_cognatic = {
 # recognition is more likely (fewer contests). ROOT = reforming country.
 SUCCESSION_pragmatic_contest = {
 	LOG_enter = { sys = QING  fn = "SUCCESSION_pragmatic_contest" }
-	# A rival great-power NEIGHBOUR that dislikes us (opinion < 25) contests the sanction;
-	# a friendly or distant power recognises it. is_neighbor is NOT a country-scope trigger in
-	# Imperator (oracle-verified: no country->country border trigger exists — it is valid only at
-	# province/state/sea-zone scope). Country adjacency is a province-adjacency walk: a foreign
-	# country counts as our neighbour if any province it owns borders a province we own. Proven
-	# idiom: any_owned_province = { any_neighbor_province = { owner = ROOT } } (00_ambitions.txt:2078,
-	# governor_policies/00_default.txt:326). opinion = { target value } is the proven opinion form.
+	# [R2-8 user] GATE: the sanction is contested only once the opened female line has actually
+	# PRODUCED a female PRIMARY HEIR. An agnatic-cognatic / absolute-cognatic law that still has a
+	# male heir at its head provokes no one (the succession still looks male — the Habsburgs faced no
+	# War of the Austrian Succession until a daughter, Maria Theresa, was the heir). The whole contest
+	# body therefore sits INSIDE a positive gate: the female line must be open (cognatic or
+	# absolute-cognatic law) AND there must be a primary heir AND she must be female. If not, we log
+	# and do nothing. Proven idioms only: `exists = primary_heir` + `primary_heir = { <trigger> }`
+	# (upstream oaths_of_allegiance_button.txt:38-40, RubenZurburan); `is_female = yes` in char scope
+	# (upstream 01_schemes.txt:691 / 00_custom_on_actions.txt:219, battenberger1919); `has_law = X`
+	# (vanilla laws). No early-exit `return` is used (that verb is not attested in this codebase).
+	# The gate makes the effect safe to call from either heir-changing hook (on_ruler_change /
+	# on_character_death); there is NO on_law_change on_action, so a law change made mid-reign
+	# takes effect at the next accession or heir shift rather than the instant it is passed.
 	if = {
 		limit = {
-			any_country = {
-				NOT = { this = ROOT }
-				rank = great_power
-				opinion = { target = ROOT  value < 25 }
-				any_owned_province = { any_neighbor_province = { owner = ROOT } }
-			}
+			OR = { has_law = cognatic_succession_law  has_law = absolute_cognatic_succession_law }
+			exists = primary_heir
+			primary_heir = { is_female = yes }
+			# IDEMPOTENT: on_ruler_change AND on_character_death can both fire this, and a reign
+			# can see several ruling-family deaths — so do NOT re-stack. While the realm is ALREADY
+			# contested the 10-year modifier is on and the opinion penalties are live; skip until it
+			# lapses (then, if a female heir still heads an open line and rivals still object, it
+			# re-contests once). This one guard makes the body safe to fire on every hook.
+			NOT = { has_country_modifier = pragmatic_sanction_contested }
 		}
-		# at least one rival great-power neighbour objects
-		if = { limit = { NOT = { has_country_modifier = pragmatic_sanction_contested } }  add_country_modifier = { name = pragmatic_sanction_contested  duration = 3650 } }
-		every_country = {
+		# A rival great-power NEIGHBOUR that dislikes us (opinion < 25) contests the sanction;
+		# a friendly or distant power recognises it. is_neighbor is NOT a country-scope trigger in
+		# Imperator (oracle-verified: no country->country border trigger exists — it is valid only at
+		# province/state/sea-zone scope). Country adjacency is a province-adjacency walk: a foreign
+		# country counts as our neighbour if any province it owns borders a province we own. Proven
+		# idiom: any_owned_province = { any_neighbor_province = { owner = ROOT } } (00_ambitions.txt:2078,
+		# governor_policies/00_default.txt:326). opinion = { target value } is the proven opinion form.
+		if = {
 			limit = {
-				NOT = { this = ROOT }
-				rank = great_power
-				opinion = { target = ROOT  value < 25 }
-				any_owned_province = { any_neighbor_province = { owner = ROOT } }
+				any_country = {
+					NOT = { this = ROOT }
+					rank = great_power
+					opinion = { target = ROOT  value < 25 }
+					any_owned_province = { any_neighbor_province = { owner = ROOT } }
+				}
 			}
-			add_opinion = { modifier = opinion_disputed_succession  target = ROOT }
+			# at least one rival great-power neighbour objects
+			if = { limit = { NOT = { has_country_modifier = pragmatic_sanction_contested } }  add_country_modifier = { name = pragmatic_sanction_contested  duration = 3650 } }
+			every_country = {
+				limit = {
+					NOT = { this = ROOT }
+					rank = great_power
+					opinion = { target = ROOT  value < 25 }
+					any_owned_province = { any_neighbor_province = { owner = ROOT } }
+				}
+				add_opinion = { modifier = opinion_disputed_succession  target = ROOT }
+			}
+			LOG_line = { sys = QING  msg = "pragmatic sanction CONTESTED by rival great powers for" }
 		}
-		LOG_line = { sys = QING  msg = "pragmatic sanction CONTESTED by rival great powers for" }
+		else = {
+			LOG_line = { sys = QING  msg = "pragmatic sanction recognised (no rival great-power neighbour objects) for" }
+		}
 	}
 	else = {
-		LOG_line = { sys = QING  msg = "pragmatic sanction recognised (no rival great-power neighbour objects) for" }
+		LOG_line = { sys = QING  msg = "no female primary heir yet — pragmatic sanction not in question for" }
 	}
 	LOG_exit = { sys = QING  fn = "SUCCESSION_pragmatic_contest"  result = OK }
 }

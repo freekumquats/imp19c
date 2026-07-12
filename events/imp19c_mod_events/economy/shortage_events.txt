@@ -12,21 +12,44 @@ shortage.1 = { # General food shortage
 	goto_location = scope:famine_province
 
 	trigger = {
+		# [logfix] require a governorship that is BOTH short of food AND still has an
+		# eligible province (populated + not already under recent_famine). The immediate
+		# block saves scope:famine_province only from such a province; without this guard
+		# the event could fire with every candidate already famine-flagged, leaving the
+		# scope unsaved and every scope:famine_province read below throwing "Undefined
+		# event target 'famine_province'" (245/session).
 		any_governorships = {
 			ECON_governorship_food_shortage > 0.3
+			any_governorship_state = {
+				any_state_province = {
+					total_population > 1
+					NOT = { has_province_modifier = recent_famine }
+				}
+			}
 		}
 	}
 
 	immediate = {
 		add_stability = -2
 		random_governorships = {
+			# [logfix] the limits must guarantee a save-able province at EVERY level, or the
+			# random pick can land on a shortage-governorship/state with no eligible province
+			# and famine_province is never saved (Undefined event target below). Each level now
+			# requires a descendant province that is populated AND not already famine-flagged.
 			limit = {
 				ECON_governorship_food_shortage > 0.3
+				any_governorship_state = {
+					any_state_province = {
+						total_population > 1
+						NOT = { has_province_modifier = recent_famine }
+					}
+				}
 			}
 			random_governorship_state = {
 				limit = {
 					any_state_province = {
 						total_population > 1
+						NOT = { has_province_modifier = recent_famine }
 					}
 				}
 				random_state_province = {

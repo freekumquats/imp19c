@@ -22,6 +22,32 @@ imp19c_qing_on_game_initialized = {
 	effect = {
 		if = {
 			limit = { tag = CHI }
+			# [BT-9/BT-20 detector] CHARACTER-POSITION INTEGRITY SELF-CHECK. A gap in the global
+			# setup character-id space silently COMPACTS runtime ids (runtime = written − missing_below),
+			# so a hardcoded `set_as_ruler=char:N` (and every father=/mother=/spouse=/commander=char:N)
+			# binds to the WRONG character. That is exactly how the "wrong emperor" bug happened
+			# (Qianlong char:214 → runtime 205; the throne got a toddler's kin, Yongrong). This is a
+			# PURE DIAGNOSTIC (no ruler mutation — the real fix is keeping the id space contiguous,
+			# see memory imp19c-setup-char-id-rule): if CHI's seated ruler is not an adult holder of
+			# the chinese_emperor trait, scream a loud, greppable FAIL line + scope dump so the id-gap
+			# regression surfaces on the very next boot instead of only in a playtest.
+			#   grep "IMP19C FAIL QING : QING_boot_ruler_integrity" debug.log
+			if = {
+				limit = {
+					OR = {
+						NOT = { current_ruler = { has_trait = chinese_emperor } }
+						current_ruler = { is_adult = no }
+					}
+				}
+				LOG_fail = {
+					sys = QING
+					fn = "QING_boot_ruler_integrity"
+					reason = "CHI seated ruler is NOT an adult chinese_emperor — likely a setup character-id GAP compacting runtime ids and mis-binding set_as_ruler=char:214 (see memory imp19c-setup-char-id-rule; check global id contiguity)"
+				}
+			}
+			else = {
+				LOG_line = { sys = QING  msg = "boot ruler integrity OK: CHI seated an adult chinese_emperor" }
+			}
 			QING_DECLINE_init = yes
 			# [#92] Global diplomatic reach: the engine gates real diplomacy on
 			# in_diplomatic_range, leaving the trans-Pacific USA (and other far
@@ -98,6 +124,15 @@ imp19c_qing_on_game_initialized = {
 			# [#323] The grain-tribute logistics (漕運): seed the canal-condition + capital
 			# grain-reserve counters so the quarterly canal tick can run. (se_QING_CANAL.txt)
 			QING_canal_init = yes
+			# [#352 F11] Seed the Canton trade-regime marker. The 一口通商 single-port
+			# Canton System was decreed 1757, so the 1763 start is OPEN. Without this the
+			# var is unset at game-start, so BOTH the Open and Close buttons show at once
+			# (each gates on NOT var:qing_canton_regime = flag:<other>, so an unset var
+			# satisfies both). Idempotent: only seed if not already set.
+			if = {
+				limit = { NOT = { has_variable = qing_canton_regime } }
+				set_variable = { name = qing_canton_regime  value = flag:open }
+			}
 			# Missionary incidents (教案, New#8): seed the anti-Christian sentiment meter.
 			QING_missionary_init = yes
 			# [#321] The examination hiring pool (科舉): seed the pool bookkeeping so the
@@ -204,6 +239,35 @@ on_ruler_change = {
 			limit = { tag = CHI }
 			QING_seat_refresh_all = yes
 			trigger_event = { id = qing_succession.2  days = { 1 3 } }
+			# [#312/R2-8] PRAGMATIC-SANCTION contest. The heir line is (re)defined at an
+			# accession, so this is where the "does a female heir now head an open female
+			# line?" question is settled — NOT on a monthly poll (an heir does not change
+			# monthly). The effect self-gates on the female-heir conditions and is idempotent
+			# while already contested, so it is safe to fire on every accession. There is no
+			# on_law_change on_action, so a law change made mid-reign takes effect at the next
+			# accession (or the next heir shift, below).
+			SUCCESSION_pragmatic_contest = yes
+		}
+	}
+}
+
+# [#312/R2-8] HEIR-SHIFT HOOK. A death mid-reign can change who the primary heir is
+# (e.g. an elder son dies and a daughter becomes next in line), which is the other
+# moment the Pragmatic-Sanction question can newly arise without a change of ruler.
+# on_character_death scope is ROOT = the DYING CHARACTER (like the betrothal / office
+# hooks in 00_specific_from_code.txt); the country is reached via `employer`. Fires
+# only for a death within the CHI ruling family (from_ruler_family — proven, upstream
+# oaths_of_allegiance_button.txt:40) — the only deaths that can reshuffle the heir line.
+# The contest self-gates + is idempotent, so this is a cheap no-op the rest of the time.
+on_character_death = {
+	effect = {
+		if = {
+			limit = {
+				from_ruler_family = yes
+				exists = employer
+				employer = { tag = CHI }
+			}
+			employer = { SUCCESSION_pragmatic_contest = yes }
 		}
 		# [#322 deferred] THE INVESTITURE (冊封). If the country whose ruler just changed is
 		# a Qing TRIBUTARY, its new sovereign awaits the imperial patent of investiture that
