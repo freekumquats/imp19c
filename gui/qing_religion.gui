@@ -39,43 +39,49 @@ base_window = {
 		}
 	}
 
+	# [#352 F9 fix] The body rendered EMPTY (only the header showed). ROOT CAUSE: the body was a
+	# SIBLING margin_widget of the header inside a plain vertical flowcontainer with NO layoutpolicy,
+	# so the body had no height anchor and collapsed. The R2-20 "match greatgame sizes" attempt did
+	# not fix it because greatgame has the same latent structure. The PROVEN working idiom is
+	# Terra-Indomita gui/religion_view.gui:27-70 (dementive): the HEADER is a `vbox using
+	# MainWindowHeaderBox` and the BODY is NESTED INSIDE that same vbox with
+	# layoutpolicy_vertical/horizontal = expanding at each level, so the body fills the window.
 	flowcontainer = {
 		direction = vertical
 
-		# HEADER
+		# HEADER — fixed-size widget (proven-working greatgame idiom, gui/qing_greatgame.gui:40).
 		widget = {
-			size = { 480 48 }
-			using = MainWindowHeaderBox
-			blockoverride "Title_text" { text = "QING_RELIGION_PANEL_TITLE" }
-			blockoverride "FlagOrIcon" {
-				icon = {
-					texture = "gfx/interface/base_parts/yellow_button_color_200fs.dds"
-					framesize = { 100 100 }
-					frame = 6
-					position = { -2 -2 }
-					size = { 32 32 }
-					modify_texture = {
-						texture = "gfx/interface/icons/menu_buttons/menu_religion.dds"
-						blend_mode = alphamultiply
-					}
-				}
-			}
-			blockoverride "White_buttons" {
-				button_close = {
-					onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_religion_panel')]"
-					tooltip = "CLOSE"
-					shortcut = "close_window"
+		size = { 480 48 }
+		using = MainWindowHeaderBox
+		blockoverride "Title_text" { text = "QING_RELIGION_PANEL_TITLE" }
+		blockoverride "FlagOrIcon" {
+			icon = {
+				texture = "gfx/interface/base_parts/yellow_button_color_200fs.dds"
+				framesize = { 100 100 }
+				frame = 6
+				position = { -2 -2 }
+				size = { 32 32 }
+				modify_texture = {
+					texture = "gfx/interface/icons/menu_buttons/menu_religion.dds"
+					blend_mode = alphamultiply
 				}
 			}
 		}
+		blockoverride "White_buttons" {
+			button_close = {
+				onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_religion_panel')]"
+				tooltip = "CLOSE"
+				shortcut = "close_window"
+			}
+		}
+		}
 
-		# BODY
-		# [#314 Bug6 / R2-20 fix] Match the proven-rendering qing_greatgame.gui EXACTLY: window 480x680,
-		# margin_widget 480x620, scrollarea 460x600. The earlier attempt used a shorter window (620) +
-		# margin_widget (560) + scrollarea (540); with the vertical flowcontainer shrink-to-fit, the
-		# smaller body did not fill the window and the content collapsed, leaving only the header visible
-		# mid-panel. Aligning the sizes to greatgame's (which renders correctly) supplies the height +
-		# width anchors the scrollarea needs. error.log confirms NO parse error — pure layout.
+		# BODY — fixed-size margin_widget sibling of the header (proven-working greatgame idiom,
+		# gui/qing_greatgame.gui:70). [BT-14] The prior F9 "nest the body INSIDE the header vbox with
+		# layoutpolicy = expanding" (TI religion_view idiom) collapsed to an empty body on this build —
+		# only the header rendered. Reverted to the fixed-size sibling layout the confirmed-working
+		# greatgame / ministry panels use: header widget { 480 48 } + margin_widget { 480 620 } holding
+		# a scrollarea { 460 600 }. No expanding-policy dependence.
 		margin_widget = {
 			size = { 480 620 }
 			margin = { 10 10 }
@@ -89,6 +95,16 @@ base_window = {
 					flowcontainer = {
 						direction = vertical
 						spacing = 12
+						# [BT-14 ROOT CAUSE — do NOT re-add layoutpolicy_horizontal here] This flowcontainer is the
+						# DIRECT child of scrollwidget. The proven-rendering twin gui/qing_greatgame.gui:80 gives its
+						# equivalent top flowcontainer NO layoutpolicy at all — it shrinks to its content width and lets
+						# the scrollwidget size to it. Putting layoutpolicy_horizontal = expanding HERE (on the
+						# scrollwidget's DIRECT child) makes it try to expand into a scrollwidget with no intrinsic width,
+						# so the whole body collapses to zero and the panel shows only the header. This is why the
+						# empty-body bug survived THREE prior layout rewrites (greatgame-mirror / TI-nested / sibling-
+						# margin): each shuffled the OUTER scaffold but left this expanding policy on the inner top
+						# flowcontainer, so the body kept collapsing. The `expanding` policy belongs ONLY on the nested
+						# SECTION flowcontainers below (which have a defined-width ancestor), exactly as greatgame does.
 
 				# DESCRIPTION
 				# [#314 Bug6/B20] drop autoresize (it overrides the fixed width and spills the text);

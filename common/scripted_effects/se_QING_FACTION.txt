@@ -138,7 +138,10 @@ QING_char_stance_shift = {
 	if = { limit = { var:qing_stance_drift < -60 } set_variable = { name = qing_stance_drift  value = -60 } }
 	# re-score so the change takes effect (and the GC office-name colour updates) at once.
 	QING_char_stance = yes
-	LOG_line = { sys = QING  msg = "char stance shift: drift += $amount$ for" }
+	# [logfix] a $amount$ macro inside a LOG/debug string triggers mass "unknown arguments"
+	# load errors (the string is scanned for macro params at parse-time) — keep the message
+	# STATIC. The signed shift is already observable via the qing_stance_drift var trace.
+	LOG_line = { sys = QING  msg = "char stance shift applied to drift for" }
 }
 
 # ======================================================================
@@ -207,8 +210,16 @@ QING_faction_tally = {
 	# weighted stance -> a character-scope scratch, then read into the country total
 	set_variable = { name = qing_char_stance_wtd  value = var:qing_char_stance }
 	change_variable = { name = qing_char_stance_wtd  multiply = $weight$ }
+	# [logfix] `prev` is NOT preserved across the ABSOLUTE `ROOT =` jump, so
+	# `prev.var:qing_char_stance_wtd` inside the ROOT block resolved to an EMPTY scope
+	# -> change_variable threw "Variable not of the 'value' scope type. Type: empty"
+	# (~152 lines/session). The working precedent (se_SELL.txt:1124) reads prev.var after a
+	# RELATIVE link (owner={}), where prev = the child scope; an absolute root/ROOT jump does
+	# not carry prev. Save this character as a scope first, then read it back inside ROOT via
+	# the proven scope:x.var: value-read idiom (se_SELL.txt:1569).
+	save_scope_as = qing_faction_tally_char
 	ROOT = {
-		change_variable = { name = qing_faction_stance_total  add = prev.var:qing_char_stance_wtd }
+		change_variable = { name = qing_faction_stance_total  add = scope:qing_faction_tally_char.var:qing_char_stance_wtd }
 		change_variable = { name = qing_faction_weight_sum  add = $weight$ }
 		change_variable = { name = qing_faction_head_count  add = 1 }
 	}
@@ -757,6 +768,7 @@ QING_faction_flavour_roll = {
 				any_in_list = { variable = qing_council_members  is_alive = yes  employer = ROOT  has_variable = qing_char_stance  var:qing_char_stance <= -20 }
 			}
 			trigger_event = { id = qing_faction.1  days = { 3 12 } }
+				set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [BT-10] claim the pulse slot ONLY on a branch that actually fires (a no-op random_list must not suppress later rolls)
 		}
 		# the dowager's veto — needs a reformist council + a conservative dowager
 		7 = {
@@ -767,6 +779,7 @@ QING_faction_flavour_roll = {
 				current_ruler.mother = { has_variable = qing_char_stance  var:qing_char_stance <= -20 }
 			}
 			trigger_event = { id = qing_faction.2  days = { 3 12 } }
+				set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [BT-10] claim the pulse slot ONLY on a branch that actually fires (a no-op random_list must not suppress later rolls)
 		}
 		# the deadlock crisis — needs the blocs near parity
 		7 = {
@@ -775,6 +788,7 @@ QING_faction_flavour_roll = {
 				var:qing_council_polarization >= 2
 			}
 			trigger_event = { id = qing_faction.3  days = { 3 12 } }
+				set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [BT-10] claim the pulse slot ONLY on a branch that actually fires (a no-op random_list must not suppress later rolls)
 		}
 		# [#308/user] a COLLECTIVE LOBBY — needs a bloc of >=2 like-minded members to band
 		# together (the event's immediate forms the bloc + picks its kind/leader).
@@ -787,6 +801,7 @@ QING_faction_flavour_roll = {
 				}
 			}
 			trigger_event = { id = qing_faction.4  days = { 3 12 } }
+				set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [BT-10] claim the pulse slot ONLY on a branch that actually fires (a no-op random_list must not suppress later rolls)
 		}
 	}
 	LOG_exit = { sys = QING  fn = "QING_faction_flavour_roll"  result = OK }

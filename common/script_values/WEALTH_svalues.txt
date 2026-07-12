@@ -227,8 +227,14 @@ WEALTH_starting_indentured_province = {
 WEALTH_governorship_upper_strata = { # Amount of wealth owned by the local upper strata. Pulls from the variable.
 	value = 0
 	if = {
+		# [logfix] guard on THIS governorship actually having the var, not on the global
+		# wealth_setup_done flag: a governorship created / gaining a stratum after setup (or
+		# any gov the setup loop hasn't stamped) has the global flag SET but no local
+		# upper_strata_wealth, so `value = var:upper_strata_wealth` threw "Failed to fetch
+		# variable 'upper_strata_wealth'" (142/session). Mirror the middle/lower_strata
+		# siblings just below, which correctly guard on has_variable of their own var.
 		limit = {
-			has_global_variable = wealth_setup_done
+			has_variable = upper_strata_wealth
 		}
 		value = var:upper_strata_wealth
 	}
@@ -1256,12 +1262,26 @@ WEALTH_total_last_quarter_governorship = {
 		limit = {
 			has_variable = WEALTH_new_generated_production_governorship
 		}
-		subtract = var:WEALTH_new_generated_production_governorship
-		subtract = var:WEALTH_new_generated_services_governorship
-		subtract = var:final_quarterly_trade_income_due_resource_extraction
-		subtract = var:final_quarterly_trade_income_due_manufacturing
-		subtract = var:final_quarterly_trade_expenses_due_resource_extraction
-		subtract = var:final_quarterly_trade_expenses_due_manufacturing
+			subtract = var:WEALTH_new_generated_production_governorship
+			subtract = var:WEALTH_new_generated_services_governorship
+			# [logfix] the four final_quarterly_trade_* vars are NEVER set anywhere in the
+			# codebase (only read here + in TRADE_svalues.txt, which correctly has_variable-
+			# guards them). Unguarded here they threw "Failed to fetch variable ... due to not
+			# being set" + "returned an unset scope" (part of the 3802 empty-scope cluster) and,
+			# being never-set, contributed nothing anyway. Guard so the subtracts stay the same
+			# runtime no-op WITHOUT the error (proven guard idiom, TRADE_svalues.txt:4154).
+			if = {
+				limit = {
+					has_variable = final_quarterly_trade_income_due_resource_extraction
+					has_variable = final_quarterly_trade_income_due_manufacturing
+					has_variable = final_quarterly_trade_expenses_due_resource_extraction
+					has_variable = final_quarterly_trade_expenses_due_manufacturing
+				}
+				subtract = var:final_quarterly_trade_income_due_resource_extraction
+				subtract = var:final_quarterly_trade_income_due_manufacturing
+				subtract = var:final_quarterly_trade_expenses_due_resource_extraction
+				subtract = var:final_quarterly_trade_expenses_due_manufacturing
+			}
 		if = {
 			limit = {
 				has_variable = WEALTH_cached_last_quarter_trade_income_due_shipping
@@ -1271,8 +1291,21 @@ WEALTH_total_last_quarter_governorship = {
 			subtract = var:WEALTH_cached_last_quarter_trade_expenses_due_shipping # Negative value
 		}
 		else = {
-			subtract = var:trade_income_due_shipping
-			subtract = var:trade_expenses_due_shipping
+			# [BT-15 follow-up / logfix] Guard the live-shipping fallback. trade_income_due_shipping /
+			# trade_expenses_due_shipping are 0-initialised as a PAIR only in GT_reset_trade_transaction_totals
+			# (once per quarter); before the first quarterly reset they are unset, so reading them here threw
+			# "Failed to fetch variable ... due to not being set" on the first tick. Every other reader
+			# (SHIPPING_svalues.txt:291, se_ECON_wealth.txt:1118) has_variable-guards them; match that idiom.
+			# They are always set together, so one paired guard covers both; unset => contribute nothing
+			# (same runtime result, no error).
+			if = {
+				limit = {
+					has_variable = trade_income_due_shipping
+					has_variable = trade_expenses_due_shipping
+				}
+				subtract = var:trade_income_due_shipping
+				subtract = var:trade_expenses_due_shipping
+			}
 		}
 		subtract = var:WEALTH_empire_pool_owed_governorship
 		add = WEALTH_cost_of_living_upper_strata

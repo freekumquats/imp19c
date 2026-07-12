@@ -193,31 +193,136 @@ qing_report_open_sinicization = {
 		# [#314 B26] wired to the Reports hub window (qing_reports_window).
 		LOG_line = { sys = QING  msg = "sinicization report opened by" }
 		clear_variable_list = qing_sinicization_report_provinces
+		# [#385] refresh the live Han-dominant count during THIS walk so the footer figure
+		# agrees with the rows just built and is current even before the first quarterly
+		# QING_sinic_pulse runs. Only the present count is recomputed here; the ANNUAL ROLL of
+		# _prev is pulse-only (recompute_delta below may SEED _prev on first touch, never rolls it).
+		set_variable = { name = qing_sinic_count  value = 0 }
 
 		every_governorships = {
 			every_governorship_state = {
 				every_state_province = {
 					save_scope_as = this_prov
-					# list provinces whose dominant culture is Han (chinese_group). Uses the
-					# proven dot-accessor form dominant_province_culture.culture_group = X
-					# (mirrors chinese_language_culture_trigger: this.culture.culture_group =
-					# chinese_group, 00_language_groups.txt:227) — a scope-block
-					# has_culture_group form on a province culture is unattested/invalid.
+					# [F6 boot-test fix] list provinces whose dominant culture is Han. The old form
+					# `dominant_province_culture.culture_group = chinese_group` FAILED to parse at load (error.log:
+					# 'Badly read script value chinese_group / Illegal use of operator =', qing_province_reports.txt:208)
+					# — you cannot chain `.culture_group = <group>` off dominant_province_culture in a province limit.
+					# PROVEN province idiom = keyword dominant_province_culture_group = <group> (oracle: Invictus
+					# 00_steppe_inv.txt:247 / 00_persian.txt:57). Tested directly in every_state_province (no re-wrapper).
+					# [logfix] the RIGHT side must be a culture-group SCOPE, not a bare key: every Invictus use
+					# passes a scope (`= root.culture_group`), so a bare `= chinese_group` threw "Failed to compare
+					# scopes" at runtime (609/session). Use the scope literal `culture_group:chinese_group` (the same
+					# form the mod uses in 00_language_groups.txt: `culture.culture_group = culture_group:german`).
 					if = {
 						limit = {
-							scope:this_prov = {
-								dominant_province_culture.culture_group = chinese_group
-							}
+							dominant_province_culture.culture_group = culture_group:chinese_group
 						}
 						root = {
 							add_to_variable_list = {
 								name = qing_sinicization_report_provinces
 								target = scope:this_prov
 							}
+						change_variable = { name = qing_sinic_count  add = 1 }  # [#385] tally the Han-dominant count alongside the displayed list
 						}
 					}
 				}
 			}
 		}
+		# [#385] the count is now current for this open; recompute the year-over-year
+		# delta so the footer trend line (rising / steady / receding) reads a fresh
+		# figure immediately, without waiting for the next quarterly pulse. The pulse
+		# still owns the annual _prev baseline roll; this only refreshes the delta.
+		QING_sinic_recompute_delta = yes
 	}
 }
+
+# ======================================================================
+# EMPTY-STATE gates (BT-23/BT-24/BT-22). Each report's effect runs
+# clear_variable_list then only add_to_variable_list when a province
+# qualifies, so an empty report leaves the list variable UNSET. These
+# is_shown triggers drive an empty-state textbox in the window (visible
+# only when the list is empty), so a legitimately-empty report reads as
+# informative ("no provinces qualify") instead of looking broken.
+#   - New World crops: genuinely empty at a fresh 1763 start (no setup
+#     province carries maize/sweet_potato/potato as trade_goods; the
+#     crop-spread mechanic stamps them over time).
+#   - Ethnic tension: qing_prov_ethnic_tension seeds at 0 and climbs, so
+#     >= 30 matches nothing early game.
+#   - Sinicization: China-proper provinces DO qualify, so this normally
+#     shows the list; the gate is a safety net only.
+# PROVEN idiom: has_variable_list negation (WAR_scripted_guis.txt:1220
+# guards a report list the same way). A list built by add_to_variable_list
+# and never added to is simply not present -> has_variable_list = no.
+# ======================================================================
+qing_report_crops_empty = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { NOT = { has_variable_list = qing_crop_report_provinces } }
+}
+
+qing_report_tension_empty = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { NOT = { has_variable_list = qing_tension_report_provinces } }
+}
+
+qing_report_sinicization_empty = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { NOT = { has_variable_list = qing_sinicization_report_provinces } }
+}
+
+# ======================================================================
+# [#385] Sinicization TREND gates — drive the mutually-exclusive year-over-year
+# trend line in the report footer (rising / receding / steady). Read the delta
+# maintained by se_QING_SINICIZATION.txt (qing_sinic_delta = current count minus
+# the year-old baseline; refreshed on report-open + every quarterly pulse). The
+# "steady" gate also covers the first-year case where the delta var is not yet set
+# (baseline seeded == count, so no meaningful trend yet). Same is_shown idiom as
+# the empty-state gate above; read-only.
+# ======================================================================
+qing_report_sinic_rising = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_sinic_delta
+		var:qing_sinic_delta > 0
+	}
+}
+
+qing_report_sinic_receding = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_sinic_delta
+		var:qing_sinic_delta < 0
+	}
+}
+
+qing_report_sinic_steady = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		OR = {
+			NOT = { has_variable = qing_sinic_delta }
+			var:qing_sinic_delta = 0
+		}
+	}
+}
+
+# ======================================================================
+# [BT-39] Per-province "newly sinicized this year" gate — drives the per-row
+# indicator in the sinicization report. Reads the province var qing_prov_sinicized_new
+# (set by se_QING_SINICIZATION.txt's annual roll: province is Han-dominant NOW but was
+# NOT at the last annual snapshot). PROVINCE scope — evaluated per list row with the
+# row's province as root. Read-only.
+# ======================================================================
+qing_report_prov_newly_sinicized = {
+	scope = province
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_prov_sinicized_new
+		var:qing_prov_sinicized_new = 1
+	}
+}
+

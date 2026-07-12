@@ -83,12 +83,53 @@ QING_council_autofill = {
 	LOG_exit = { sys = QING  fn = "QING_council_autofill"  result = OK }
 }
 
+# ======================================================================
+# [#352 F3/F8] STALE-SEAT PRUNE — one office. A seat var (qing_office_$office$_holder)
+# can outlive its holder when a minister dies without the on_character_death handler
+# resolving him, or simply LEAVES CHI employ (a departure fires no death event). The
+# var then stays SET but points at a dead / foreign character: the GUI renders a filled
+# card off the raw .IsSet, while recompute's is_alive+employer guard counts the seat
+# vacant — the "13 shown / 12 counted / 1 Unassigned" the boot-test surfaced. Clear the
+# var whenever its holder is no longer a living CHI employee. Country scope.
+QING_council_prune_seat = {
+	if = {
+		limit = {
+			has_variable = qing_office_$office$_holder
+			NOT = { var:qing_office_$office$_holder = { is_alive = yes  employer = ROOT } }
+		}
+		remove_variable = qing_office_$office$_holder
+	}
+}
+
+# Prune ALL thirteen appointable office seats in one call. Country scope. Cheap: O(13)
+# var checks. Called at the top of QING_council_recompute so a seat whose holder died /
+# departed this tick is cleared BEFORE the GUI and the count read it.
+QING_council_prune_all_seats = {
+	QING_council_prune_seat = { office = chancellor }
+	QING_council_prune_seat = { office = personnel }
+	QING_council_prune_seat = { office = revenue }
+	QING_council_prune_seat = { office = rites }
+	QING_council_prune_seat = { office = war }
+	QING_council_prune_seat = { office = justice }
+	QING_council_prune_seat = { office = works }
+	QING_council_prune_seat = { office = censor }
+	QING_council_prune_seat = { office = lifanyuan }
+	QING_council_prune_seat = { office = chamberlain }
+	QING_council_prune_seat = { office = zongli }
+	QING_council_prune_seat = { office = grand_secretariat }
+	QING_council_prune_seat = { office = guard_commandant }
+}
+
 # Fill ONE office if vacant with the ablest unassigned courtier. Country scope.
 # $office$ = the office key. Reuses combined_stats_council_svalue as the ranking
 # (the same overall-worth measure the old pool used); the office's own governing
 # skill is what then MATTERS for effectiveness (QING_council_recompute), but a
 # well-rounded man is the sensible default pick when the throne fills a post.
 QING_council_autofill_office = {
+	# [#352 F3/F8] prune a stale-set seat (holder dead / left CHI employ) before filling,
+	# so a var pointing at an invalid character does not read as "already filled" and block
+	# the autofill (the "1 Unassigned that Convene never cleared" boot-test bug).
+	QING_council_prune_seat = { office = $office$ }
 	if = {
 		limit = { NOT = { has_variable = qing_office_$office$_holder } }
 		ordered_character = {
@@ -123,6 +164,10 @@ QING_council_recompute = {
 	# [#103] se_LOG enter/exit wiring (council-is-offices rewrite)
 	LOG_enter = { sys = QING  fn = "QING_council_recompute" }
 	QING_council_init = yes
+
+	# [#352 F3/F8] prune any seat whose holder died / left CHI employ this tick, so the
+	# GUI (raw .IsSet) and the count (is_alive+employer guard) agree — no phantom filled card.
+	QING_council_prune_all_seats = yes
 
 	# --- reset accumulators + rebuild the DERIVED office-holder roster
 	set_variable = { name = qing_council_skill_total  value = 0 }
@@ -876,6 +921,17 @@ QING_council_refresh_candidates_by = {
 					OR = { var:qing_office_held = flag:regent  var:qing_office_held = flag:emeritus }
 				}
 			}
+				# [BT-12 fix] Also exclude the CURRENT HOLDER of the target office being filled
+				# (read from qing_gc_picker_office_var), so the man in that seat doesn't appear as
+				# a candidate for his own post. Holders of OTHER offices remain (for reshuffle).
+				# Guarded: only filter if the var is set (harmless no-op if not).
+				NOT = {
+					AND = {
+						ROOT = { has_variable = qing_gc_picker_office_var }
+						has_variable = qing_office_held
+						var:qing_office_held = ROOT.var:qing_gc_picker_office_var
+					}
+				}
 		}
 		order_by = $sortval$
 		check_range_bounds = no
@@ -1107,10 +1163,13 @@ QING_office_appoint = {
 	# so the GUI updates immediately: the just-appointed man drops out of the Eligible
 	# Courtiers list (its filter is NOT has_variable=qing_office_held, now set on him)
 	# and appears in his office slot, without waiting for the next tab-open / pulse.
-	employer = {
-		QING_council_recompute = yes
-		QING_council_refresh_candidates = yes
-	}
+	# [logfix BT-13/#373] MUST run the recompute with ROOT = CHI, not ROOT = the appointee.
+	# This effect is called from the character-scope GUI verbs (QING_governance_actions.txt),
+	# so ROOT = the clicked courtier; the recompute machinery is written for ROOT = CHI and
+	# its employer=ROOT guards otherwise compared country-vs-character (2072 err/boot) AND
+	# mis-pruned live seats (the mass-vacate). Fire it through the hidden CHI country_event
+	# qing_office.40 (re-roots to CHI), exactly as the pulse / event callers root it.
+	employer = { trigger_event = { id = qing_office.40 } }
 	LOG_exit = { sys = QING  fn = "QING_office_appoint"  result = OK }
 }
 
@@ -1163,8 +1222,12 @@ QING_office_vacate = {
 	# [#175 fix] rebuild roster + eligible-candidate cache so the relieved man
 	# reappears in the Eligible Courtiers list immediately (his qing_office_held was
 	# just removed above) rather than only after the next tab-open / quarterly pulse.
-	QING_council_recompute = yes
-	QING_council_refresh_candidates = yes
+	# [logfix BT-13/#373] this effect runs in country scope (this = CHI, reached via
+	# `employer = {}` from the char-scope vacate GUI), but ROOT is still the clicked
+	# courtier on that path — and the recompute machinery is written for ROOT = CHI.
+	# Fire it through the hidden CHI country_event qing_office.40 (trigger_event targets
+	# `this` = CHI here) so the recompute always roots on the country, never a character.
+	trigger_event = { id = qing_office.40 }
 	LOG_exit = { sys = QING  fn = "QING_office_vacate"  result = OK }
 }
 
@@ -1264,6 +1327,7 @@ QING_council_foreign_spouse_check = {
 		}
 		if = {
 			limit = { exists = scope:qing_lobby_councillor  exists = scope:qing_lobby_homeland }
+			ROOT = { set_variable = { name = qing_gc_event_slot_used  value = 1 } }  # [BT-10] claim the quarterly GC-event slot on the fire path only (this check self-guards, so a no-op pulse leaves the slot free for another GC event)
 			trigger_event = { id = qing_office.30 }
 			LOG_line = { sys = QING  msg = "foreign-spouse council lobby fired (a councillor petitions for her homeland)" }
 		}
@@ -1287,16 +1351,25 @@ QING_council_officer_report_check = {
 	if = {
 		limit = {
 			has_variable = qing_office_war_holder
-			any_unit = { has_commander = yes  commander = { is_alive = yes  employer = ROOT } }
+			any_character = { is_general = yes  is_alive = yes  employer = ROOT }
 		}
-		# pick one serving unit to report on (codebase-proven country-scope army walk: every_unit /
-		# has_commander / commander = { ... }, per QING_army_apply_decay_debuffs + military_colonies.txt).
-		random_unit = {
-			limit = { has_commander = yes  commander = { is_alive = yes  employer = ROOT } }
-			commander = { save_scope_as = officer_report_commander }
-			# is this the CAPITAL garrison? (a unit stationed on the Qing capital province)
+		# [logfix] pick the reporting officer as a CHARACTER, not via random_unit -> commander.
+		# A scope saved off a unit's `commander` LINK (the prior `random_unit = { commander =
+		# { save_scope_as } }`) resolves in script triggers/effects (exists/portrait/add_loyalty
+		# all worked) but is NOT promotable by pdx_data_factory for a loc/LOG `.GetName` read:
+		# `[scope:officer_report_commander.GetName]` threw "Failed to find type ... Could not find
+		# promote" ~79k/session (in the desc, both tooltips, and the immediate LOG), while the
+		# minister — saved from a COUNTRY VARIABLE — resolved fine. A character saved via
+		# random_character IS promotable (proven: qing_war.1's able_commander, 0 loc errors;
+		# is_general is a valid random_character filter, internal_politics_monarchy.txt). A general
+		# is by definition a live unit commander, so this picks the same population.
+		random_character = {
+			limit = { is_general = yes  is_alive = yes  employer = ROOT }
+			save_scope_as = officer_report_commander
+			# is this the CAPITAL garrison? (his unit stationed on the Qing capital province) —
+			# a character's `.location` is his unit's province (proven, recruit_general.txt:85).
 			if = {
-				limit = { exists = ROOT.capital_scope  unit_location = { this = ROOT.capital_scope } }
+				limit = { exists = ROOT.capital_scope  exists = location  location = { this = ROOT.capital_scope } }
 				ROOT = { set_variable = { name = officer_report_is_capital  value = 1 } }
 			}
 		}
@@ -1319,6 +1392,7 @@ QING_council_officer_report_check = {
 			}
 			if = {
 				limit = { exists = scope:officer_report_minister }
+				ROOT = { set_variable = { name = qing_gc_event_slot_used  value = 1 } }  # [BT-10] claim the quarterly GC-event slot on the fire path only (this check self-guards, so a no-op pulse leaves the slot free for another GC event)
 				trigger_event = { id = qing_office.31 }
 				LOG_line = { sys = QING  msg = "War-minister officer report fired on [scope:officer_report_commander.GetName]" }
 			}

@@ -38,15 +38,23 @@ qing_tribute.1 = {
 
 	is_triggered_only = yes
 
-	# self-guard: only fire if the mission's scopes survived (a subject freed between
-	# dispatch and arrival, or the envoy died, cancels it cleanly).
+	# [BT-7 logfix] self-guard on the PERSISTED vars, not raw saved scopes: a scope
+	# saved at the scheduler site can go stale across the 5-20d delay, so the arrival
+	# rendered ERROR:[scope:trib_sender.GetName]/[scope:trib_envoy.GetName]. Guard that
+	# the subject is still ours and the envoy still exists; else cancel cleanly.
 	trigger = {
 		tag = CHI
-		exists = scope:trib_sender
-		exists = scope:trib_envoy
+		has_variable = qing_trib1_sender
+		has_variable = qing_trib1_envoy
+		var:qing_trib1_sender = { is_subject_of = ROOT }
+		exists = var:qing_trib1_envoy
 	}
 
 	immediate = {
+		# [BT-7 logfix] re-save the persisted vars into the named scopes the desc/portraits
+		# and options read (scope:trib_sender / scope:trib_envoy) BEFORE render.
+		var:qing_trib1_sender = { save_scope_as = trib_sender }
+		var:qing_trib1_envoy  = { save_scope_as = trib_envoy }
 		LOG_line = { sys = QING  msg = "EVENT qing_tribute.1 (a tribute embassy arrives at Peking) [ROOT.GetTag]" }
 	}
 
@@ -62,7 +70,7 @@ qing_tribute.1 = {
 		# a full audience firms the order (receive is prestige-neutral now, so this is
 		# the whole prestige gain — #322 review-fix).
 		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = 7 }
-		current_ruler = { add_prestige = 8 }
+		current_ruler = { add_popularity = 8 }
 		add_stability = 1
 		# [#322 review-fix] the envoy's mission is done — dismiss him home so he does not
 		# accumulate in the Qing court over the game.

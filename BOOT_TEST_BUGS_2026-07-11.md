@@ -294,6 +294,12 @@ Legend: **REGRESSION-N** = a bug from the prior (2026-07-10) batch that was thou
 ---
 
 ## N-RULER-NO-FAMILY — RESOLVED for the genuine dynasts (IDs 598-608)
+> **STALE IDs (annotated 2026-07-11):** the ids 598-608 (and RUS char:147) named below were RENUMBERED
+> during the BT-20 global-contiguity fix — those slots were the 18 holes that compacted the runtime id
+> space and mis-seated the CHI throne. New mapping: 598→153, 599→164, 600→165, 601→354, 602→355, 603→356,
+> 604→357, 605→358, 606→425, 607→426, 608→459 (CHI naval cmds 592-597,609→147-152,460). See BT-20 in
+> BOOT_TEST_NOTES_1763. The genealogy links below are unchanged in meaning; only the numbers moved.
+
 - Scope (user): full families ONLY for genuine HEREDITARY dynasts; appointed governors / Pope Pius VII / EIC+RAC company officials correctly keep NO hereditary heir.
 - ID rule (oracle-confirmed vs Invictus/TI): new setup id = contiguous from global max (was 597 → used 598-608). IDs are EXPLICIT + globally unique, NOT load-order-assigned (proven: chars 581-597 live in early-loading 00_Qing.txt while lower 573-580 live in later files). Added the kin DIRECTLY into each existing country block (no new file / repeated-tag wrapper, which is unproven).
 - BUILT (genealogy EN+native, alive-Feb-1763 filter, no fabrication):

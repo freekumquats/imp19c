@@ -68,6 +68,9 @@ QING_tribute_schedule_missions = {
 	if = {
 		limit = {
 			tag = CHI
+			# [BT-28] external event slot: at most one tribute embassy per pulse; shares the single external
+			# slot so tribute never dogpiles other external beats. Court events use a separate slot (qing_gc_event_slot_used).
+			NOT = { has_variable = qing_ext_event_slot_used }
 			any_subject = { QING_tribute_is_tributary_trigger = yes }
 		}
 		LOG_enter = { sys = QING  fn = "QING_tribute_schedule_missions" }
@@ -89,10 +92,17 @@ QING_tribute_schedule_missions = {
 			save_scope_as = trib_sender
 			# stamp the cooldown on the subject (cadence ~5y; a single band keeps it boot-safe).
 			set_variable = { name = qing_tribute_cooldown  days = 1825 }
+			ROOT = { set_variable = { name = qing_ext_event_slot_used  value = 1 } }  # [BT-28] claim external slot on the fire path
 			# hop back to the overlord (ROOT = CHI is unchanged inside random_subject) to mint
 			# the envoy in Peking's court and fire the arrival country-event on the Qing.
 			ROOT = {
 				QING_tribute_mint_envoy = { sender = scope:trib_sender }
+				# [BT-7 logfix] persist both mission scopes as country vars so the DELAYED
+				# arrival (5-20d later) can re-save them in its own immediate — a raw saved
+				# scope can go stale across the delay window, so scope:trib_sender/trib_envoy
+				# rendered ERROR:[scope:...GetName] in qing_tribute.1. Same class as BT-1.
+				set_variable = { name = qing_trib1_sender  value = scope:trib_sender }
+				set_variable = { name = qing_trib1_envoy   value = scope:trib_envoy }
 				trigger_event = { id = qing_tribute.1  days = { 5 20 } }
 				LOG_line = { sys = QING  msg = "tribute: an embassy is dispatched to Peking for" }
 			}
@@ -181,7 +191,18 @@ QING_tribute_receive = {
 	if = {
 		limit = { exists = $sender$ }
 		$sender$ = {
-			set_variable = { name = qing_trib_gift  value = has_monthly_income }
+			# [logfix] INITIALIZE-BEFORE-READ: seed the var to 0 so it ALWAYS exists before
+			# any read. The prior `set_variable = { value = has_monthly_income }` was not
+			# persisting the var (60k/session "Failed to fetch variable 'qing_trib_gift' due
+			# to not being set" at the two reads below), so the `< 0` and `> 0` comparisons
+			# hit an unset var. Seeding first, then accumulating income via `add =` (the
+			# proven form, event_values 00_event_values.txt:23 `add = root.has_monthly_income`),
+			# guarantees the var is a real value type before it is ever compared.
+			set_variable = { name = qing_trib_gift  value = 0 }
+			if = {
+				limit = { has_monthly_income >= 0 }
+				change_variable = { name = qing_trib_gift  add = has_monthly_income }
+			}
 			change_variable = { name = qing_trib_gift  multiply = 0.25 }
 			if = { limit = { var:qing_trib_gift < 0 }  set_variable = { name = qing_trib_gift  value = 0 } }
 		}
