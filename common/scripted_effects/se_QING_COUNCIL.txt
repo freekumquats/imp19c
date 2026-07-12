@@ -225,26 +225,26 @@ QING_council_recompute = {
 	# DYNASTY code guards them, so an absent figurehead is a clean no-op.
 	if = {
 		limit = { exists = current_ruler }
-		QING_council_score_figurehead = { who = current_ruler  weight = 3 }
+		QING_council_score_figurehead = { who = current_ruler  weight = 3  skill = all }
 	}
 	if = {
 		limit = { QING_dynasty_has_dowager = yes }
-		QING_council_score_figurehead = { who = current_ruler.mother  weight = 1 }
+		QING_council_score_figurehead = { who = current_ruler.mother  weight = 1  skill = all }
 	}
 	if = {
 		limit = { QING_dynasty_has_crownprince = yes }
-		QING_council_score_figurehead = { who = var:qing_office_crownprince_holder  weight = 1 }
+		QING_council_score_figurehead = { who = var:qing_office_crownprince_holder  weight = 1  skill = all }
 	}
 	if = {
 		limit = {
 			has_variable = qing_office_regent_holder
 			var:qing_office_regent_holder = { is_alive = yes  employer = ROOT }
 		}
-		QING_council_score_figurehead = { who = var:qing_office_regent_holder  weight = 3 }
+		QING_council_score_figurehead = { who = var:qing_office_regent_holder  weight = 3  skill = all }
 	}
-	# [#272 develop] EMPRESS 皇后 (current_ruler.spouse) — the consort sits on the
-	# throne row and shapes the court, judged on all four skills averaged at weight 1
-	# (same as the Crown Prince). Guarded on the spouse existing + alive exactly as the
+	# [#272 develop / BT-48] EMPRESS 皇后 (current_ruler.spouse) — the consort sits on the
+	# throne row and shapes the court, judged on CHARISMA at weight 1 (a consort's influence is
+	# her court sway, not a martial/finesse average). Guarded on the spouse existing + alive as the
 	# SEATS code guards her; an unmarried or widowed emperor is a clean no-op.
 	if = {
 		limit = {
@@ -252,7 +252,7 @@ QING_council_recompute = {
 			exists = current_ruler.spouse
 			current_ruler.spouse = { is_alive = yes }
 		}
-		QING_council_score_figurehead = { who = current_ruler.spouse  weight = 1 }
+		QING_council_score_figurehead = { who = current_ruler.spouse  weight = 1  skill = charisma }  # [BT-48] Empress judged on charisma (a consort's court sway), not the 4-skill average
 	}
 
 	# --- [#270/#271 develop] KEEP EACH SEATED MEMBER'S IMPERIAL-FAVOUR SCORE LIVE.
@@ -670,15 +670,38 @@ QING_council_score_chancellor = {
 # ======================================================================
 QING_council_score_figurehead = {
 	set_variable = { name = qing_council_tmp  value = 0 }
-	$who$ = {
-		ROOT = {
-			change_variable = { name = qing_council_tmp  add = prev.martial }
-			change_variable = { name = qing_council_tmp  add = prev.finesse }
-			change_variable = { name = qing_council_tmp  add = prev.charisma }
-			change_variable = { name = qing_council_tmp  add = prev.zeal }
-		}
+	# [BT-48] OPTIONAL $skill$ = a single governing attribute (e.g. charisma for the Empress —
+	# a consort's sway over the court is her charisma, not a martial/finesse/zeal average). When
+	# passed, score that one skill; otherwise fall back to the all-four-skill average used by the
+	# Emperor / Crown Prince / Regent / Dowager (they are judged on every competence).
+	if = {
+		limit = { exists = $who$  "$skill$" = charisma }
+		$who$ = { ROOT = { change_variable = { name = qing_council_tmp  add = prev.charisma } } }
 	}
-	change_variable = { name = qing_council_tmp  divide = 4 }
+	else_if = {
+		limit = { exists = $who$  "$skill$" = finesse }
+		$who$ = { ROOT = { change_variable = { name = qing_council_tmp  add = prev.finesse } } }
+	}
+	else_if = {
+		limit = { exists = $who$  "$skill$" = martial }
+		$who$ = { ROOT = { change_variable = { name = qing_council_tmp  add = prev.martial } } }
+	}
+	else_if = {
+		limit = { exists = $who$  "$skill$" = zeal }
+		$who$ = { ROOT = { change_variable = { name = qing_council_tmp  add = prev.zeal } } }
+	}
+	else = {
+		# default: the all-four-skill average
+		$who$ = {
+			ROOT = {
+				change_variable = { name = qing_council_tmp  add = prev.martial }
+				change_variable = { name = qing_council_tmp  add = prev.finesse }
+				change_variable = { name = qing_council_tmp  add = prev.charisma }
+				change_variable = { name = qing_council_tmp  add = prev.zeal }
+			}
+		}
+		change_variable = { name = qing_council_tmp  divide = 4 }
+	}
 	# apply the seat-weight (both to the skill total and the count, so the average
 	# is a true weighted mean over offices + figureheads).
 	change_variable = { name = qing_council_tmp  multiply = $weight$ }
