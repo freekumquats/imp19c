@@ -45,6 +45,11 @@ QING_sinic_pulse = {
 
 	# STEP 1: recount Han-dominant provinces via the report's own descent so the
 	# figure matches the listed rows. Accumulate into a temp, then commit.
+	# [#385/BT-39] Also maintain a PER-PROVINCE Han-dominant flag (qing_prov_sinicized)
+	# so the report can flag provinces that NEWLY turned Han this year. The annual roll
+	# in STEP 2 snapshots this into qing_prov_sinicized_prev; a province that is Han now
+	# but was NOT at the last annual snapshot gets qing_prov_sinicized_new (the report's
+	# per-row "newly sinicized" indicator). Same snapshot->delta idiom as the count.
 	set_variable = { name = qing_sinic_count_tmp  value = 0 }
 	every_governorships = {
 		every_governorship_state = {
@@ -53,8 +58,29 @@ QING_sinic_pulse = {
 					limit = {
 						dominant_province_culture.culture_group = culture_group:chinese_group
 					}
+					set_variable = { name = qing_prov_sinicized  value = 1 }  # [BT-39] per-province Han-dominant flag
+					# [BT-39 review] OPENING-PULSE BASELINE SEED: on the very first pulse only, anchor
+					# _prev to the current flag so the first annual roll (which fires on that same opening
+					# pulse, before qing_sinic_year_cd exists) does NOT mass-flag every already-Han province
+					# as "newly sinicized". Gated on ROOT lacking qing_sinic_count_prev — that country var
+					# is unset ONLY on the opening pulse (it is seeded a few lines below, after this walk),
+					# so this seed fires once at game start and never catches a genuine LATER conversion
+					# (by then count_prev exists, this branch is skipped, and STEP 2's roll flags the convert
+					# as New correctly). Mirrors the count-baseline first-touch seed at lines ~85-88.
+					if = {
+						limit = { ROOT = { NOT = { has_variable = qing_sinic_count_prev } } }
+						set_variable = { name = qing_prov_sinicized_prev  value = 1 }
+					}
 					ROOT = {
 						change_variable = { name = qing_sinic_count_tmp  add = 1 }
+					}
+				}
+				else = {
+					# no longer Han-dominant (or never was): clear the live flag so a province
+					# that reverts is not left stale-flagged.
+					if = {
+						limit = { has_variable = qing_prov_sinicized }
+						set_variable = { name = qing_prov_sinicized  value = 0 }
 					}
 				}
 			}
@@ -87,6 +113,43 @@ QING_sinic_pulse = {
 		set_variable = { name = qing_sinic_year_cd  days = 365 }
 		set_variable = { name = qing_sinic_count_prev  value = var:qing_sinic_count }
 		LOG_line = { sys = QING  msg = "sinicization baseline rolled (annual)" }
+		# [BT-39] per-province annual roll: mark provinces that turned Han-dominant since
+		# the LAST annual snapshot (current flag set, prev snapshot unset/0) as "newly
+		# sinicized", then snapshot the current flag into _prev for next year. Runs on the
+		# same governorship descent so it only touches the report's provinces.
+		every_governorships = {
+			every_governorship_state = {
+				every_state_province = {
+					# newly Han this year = sinicized now AND not at the last snapshot
+					if = {
+						limit = {
+							has_variable = qing_prov_sinicized
+							var:qing_prov_sinicized = 1
+							OR = {
+								NOT = { has_variable = qing_prov_sinicized_prev }
+								var:qing_prov_sinicized_prev = 0
+							}
+						}
+						set_variable = { name = qing_prov_sinicized_new  value = 1 }
+					}
+					else = {
+						# not newly-Han (either not Han, or already Han a year ago): clear the marker
+						if = {
+							limit = { has_variable = qing_prov_sinicized_new }
+							set_variable = { name = qing_prov_sinicized_new  value = 0 }
+						}
+					}
+					# snapshot the live flag into _prev for next year's comparison
+					if = {
+						limit = { has_variable = qing_prov_sinicized }
+						set_variable = { name = qing_prov_sinicized_prev  value = var:qing_prov_sinicized }
+					}
+					else = {
+						set_variable = { name = qing_prov_sinicized_prev  value = 0 }
+					}
+				}
+			}
+		}
 	}
 
 	LOG_exit = { sys = QING  fn = "QING_sinic_pulse"  result = OK }
