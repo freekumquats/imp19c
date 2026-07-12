@@ -1691,3 +1691,43 @@ TIER 3:
 DEFERRED / not fixed: nothing from the confirmed list. The recommended grep gate `grep -rn add_prestige
 common/ events/` was run — only the intentional country-scope + family-scope sites remain. Independent
 code-review agent run on the Tier-1-A picker rewrite BEFORE commit (STRICT PRE-COMMIT REVIEW rule).
+
+## D90 — Qing feature-suite enhancement pass (merge-overnight, autonomous)
+
+User directed a deep assessment of merge-overnight Qing features + autonomous implementation of
+improvements. A general-purpose agent produced a ranked 15-item value/risk backlog; I implemented the
+low-risk coupling + content items as reviewed additive changes. An independent code-review of the first
+5 confirmed "all correct, ship it — no runaway, bounded loops". Implemented:
+
+SYSTEM COUPLINGS (additive nudges via the clamped QING_DECLINE_nudge wrapper, quarterly pulse):
+- **Opium addiction -> pop pressure** (#5, se_QING_OPIUM): addiction >=50 adds +1/qtr to
+  qing_pop_pressure — the Malthusian multiplier beyond the silver drain. One-way (verified no feedback).
+- **Silver reserve -> currency stress backfeed** (se_QING_REVENUE): a near-empty 戶部銀庫 (<1000萬兩,
+  ~1799 level) adds +1/qtr to currency_stress, completing the bidirectional loop (stress already bled
+  the reserve). Reviewer confirmed it converges to a BOUNDED, recoverable fiscal-collapse attractor,
+  not a runaway — High-Qing accumulation (+25/35) overpowers it and switches it off above 1000.
+- **Civic identity -> exam pass-rate** (#6, se_QING_EXAM): civic >=50 boosts the metropolitan pass-rate
+  by (civic-50)/4 (0..12.5) — modern schools widening the talent pool. Was ignored by the formula.
+- **Harem depth -> dynastic harmony** (#3, se_QING_HAREM pulse): consort_count >=4 => harmony +1;
+  <=1 => -1 (succession security/anxiety). Stacks with the existing chamberlain-neglect term (max
+  -2/qtr at count==1, intended + bounded).
+
+CONTENT FILLS:
+- **Boxer dual ignition** (#9, se_QING_DECLINE): the 義和團 trigger now fires on reform_pressure>=35
+  AND (currency_stress>=40 OR qing_antichristian_sentiment>=50) — the historical dual cause (fiscal/
+  foreign crisis OR anti-Christian fury). Formerly ignored the sentiment meter. Only BROADENS ignition;
+  one-shot flag intact.
+- **Green Standard decay asymmetry** (#12, se_QING_DECLINE): implemented the "rots slightly faster"
+  the comment had long PROMISED but never coded — an extra +1/qtr once greenstandard_decay >=40, so
+  the 綠營 collapse accelerates in the late decline (the 勇營->湘軍/淮軍 arc). Lockstep early (no
+  premature warlord spike); divergence only bites once hollow.
+- **Cultural zenith milestone event** (#13, NEW qing_wenzhi_events.txt + se_QING_WENZHI pulse +
+  loc): patronage first >=80 fires a one-shot qing_wenzhi.1 capstone (endow-institutions vs
+  personal-glory), mirroring the proven silver-peak qing_revenue.5. Court-slot + one-shot gated.
+
+ASSESSMENT CORRECTION: the backlog's "surface hidden state" items (#1 silver reserve, #4 wenzhi, #11
+opium net-flow) were found ALREADY displayed in their panels; #15 hollow-modernization is already an
+outliner modifier (qing_selfstr_hollow, loc'd). So those were skipped as redundant — verify-before-build
+paid off. DEFERRED (medium-risk / larger): #8 selfstr-velocity->civic drift rate, #10 harem->succession
+event frequency, #2 exam-pool cross-panel display, #7 ethnic-tension province map, #14 accountability
+trait grants. All additive; brace balance 0; BOM/CRLF preserved; se_LOG wired on the new event.
