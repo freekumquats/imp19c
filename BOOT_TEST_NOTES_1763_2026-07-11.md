@@ -380,11 +380,42 @@ body is empty. This is a RE-REGRESSION — was filed + "fixed" as #328 / R2-20 (
 **File:** the religion panel GUI (grep "Faith & Sedition" / faith_sedition / qing_religion window). The
 prior fix (#345) populated the body; it is empty AGAIN on this branch → either the fix didn't land on
 merge-overnight, or a later edit reverted/renamed the datacontext the body binds to.
-**FIX-PHASE:** locate the window, confirm the body widgets' datamodel/datacontext resolves on merge-overnight
-(vs the 1763_bookmark where #345 was fixed) — likely a merge casualty. Cross-ref task #345 / #328 for the
-original fix so it isn't re-derived from scratch. 🔴 (a whole panel dead).
+**✅ ROOT CAUSE FOUND + FIXED (2026-07-11, NOT layout — the real bug at last).** The panel is
+gui/qing_religion.gui window `qing_religion_panel`; it opens fine (header renders) and error.log (Downloads)
+has NO parse error on it. THREE prior "fixes" (#328/#345 greatgame-mirror, then TI-nested, then sibling-
+margin) all rewrote the OUTER scaffold and all failed — because layout was never the cause. A byte-level
+structural diff vs the proven-rendering twin gui/qing_greatgame.gui showed the scaffolds were byte-identical
+through scrollarea>scrollwidget EXCEPT ONE line: religion put `layoutpolicy_horizontal = expanding` on the
+flowcontainer that is the DIRECT child of `scrollwidget` (line 98). The working twin gives its equivalent top
+flowcontainer NO layoutpolicy at all — it shrinks to content width and the scrollwidget sizes to it. A
+scrollwidget's direct child sized by `expanding` tries to expand into a scrollwidget with no intrinsic width,
+collapsing the whole body to zero → only the header shows (and floats mid-panel, the collapsed-body symptom).
+Every prior rewrite carried this same offending line on the inner flowcontainer while shuffling the outer
+scaffold, so the body kept collapsing. **FIX:** removed the `layoutpolicy_horizontal = expanding` from the
+scrollwidget's direct-child flowcontainer (the `expanding` policy stays ONLY on the nested SECTION
+flowcontainers, which have a defined-width ancestor — exactly as greatgame does). Left a loud
+do-NOT-re-add comment at that line. Braces 97/97. Pending in-game verify.
+NOTE on the F9 diagnostic: the `debug_log = "QING F9: religion panel open."` in QING_religion_panel.txt did
+NOT fire in the boot log — because the button opens the window via `gui.createwidget` (a console command),
+which BYPASSES the scripted_gui `effect` block entirely. A panel-open LOG can't be captured this way; that's
+a dead diagnostic, not evidence the panel failed to open.
 
-## BT-15 🔴🔴 BLOCKER (RECURRING — user flags as MOST serious) — army & navy setup spawn
+<!-- BT-15 REVIEW-FIX (2026-07-11, post adversarial review of the uncommitted diff):
+  Finding 1 (HIGH) RESOLVED: my BT-15 edit had wrapped the land create_unit in `c:CHI = { }`.
+  That is a REDUNDANT re-entry (SE_qing_armies already runs in c:CHI via qing_force_setup.1) AND
+  it is the exact idiom the navy fix (SE_qing_navy_guangdong ~L408) recorded as re-resolving the
+  absolute location to inland Beijing — the recurring #224 blocker. Changed all 3 land sites
+  (SE_qing_raise_garrison + both _cmd branches) to a BARE create_unit in the ambient c:CHI scope:
+  still CHI-controlled, no Beijing re-resolution, matches this file's header idiom #1 and the bare
+  navy squadrons. Brace-balanced, LF preserved.
+  Findings 2 & 3 = BOOT-TEST VERIFY items (not code defects): (2) confirm the 4 subject-owned
+  frontier garrisons (Ili p:3534, Ürümqi p:2930, Kashgar p:2700, Heilongjiang p:43) actually spawn
+  as CHI units on subject soil — bare-create-in-CHI-scope on another country's province is the
+  untested case; if any vanish in debug.log, the owner-scope form was the working one for those.
+  (3) Kashgar p:2700 owner XNG is a SUB-subject (overlord ILI, not CHI) — confirm is_subject_of=c:CHI
+  is transitive; if not, that garrison's guard fails regardless (pre-existing #331 line, not a regression).
+-->
+## BT-15 🔴🔴 BLOCKER (RECURRING — user flags as MOST serious) — army & navy setup spawn — FIXED (uncommitted, pending in-game verify: navy is_port swap + garrison CHI-control flip; see the CONFIRMED ROOT CAUSE + LAND blocks below)
 **User note:** "I don't see the army or navy bugs on the list, which are the most serious and recurring."
 These are tracked in `BOOT_TEST_BUGS_2026-07-11.md` (REGRESSION-B21 / B22) + tasks #338/#331; logging here
 so the boot-test list is COMPLETE.
@@ -397,13 +428,37 @@ so the boot-test list is COMPLETE.
   Guangdong + Zhejiang squadrons still missing, despite the B22-v3 fix (all 3 in a bare c:CHI scope,
   Invictus me_tasm.13 idiom). So either the fix didn't land on the tested branch, or the bare-c:CHI
   three-in-one-tick spawn STILL culls to one on THIS engine/build.
-- **COMMANDER assignment (user, 2026-07-11):**
-  - LAND garrisons: SOME have commanders, SOME do NOT — inconsistent. SE_qing_raise_garrison (no
-    commander) vs SE_qing_raise_garrison_cmd (commander=) are two separate raise verbs; the mix suggests
-    the roster (imp19c_1763_commander_roster memory) assigns commanders to only PART of the OOB, or the
-    _cmd path's commander= is silently dropping for some (recall the setup death_date breaks
-    create_unit commander= — memory imp19c-1763-commander-roster). CHECK which garrisons got the _cmd
-    path and whether their commander char is alive/valid at 1763.2.16.
+- **COMMANDER assignment (user, 2026-07-11) — ROOT CAUSE FOUND + resolved by the BT-15 CHI-control flip:**
+  There were TWO distinct reasons for the "some have commanders, some don't" mix:
+  (1) Was DELIBERATE (9 of 27 pre-1772 garrisons used the bare no-cmd verb) → NOW FILLED per user
+      direction "all garrisons should have commanders, use plausible minor officials if you can't find
+      exact historical names." Added 9 new setup characters and converted all 9 bare raises to `_cmd`.
+      [BT-20 CLEAN-REDO 2026-07-11] The FIRST attempt appended them at ids 592-600 AND renumbered the
+      existing Qing 601-609 chars onto ids 354-358/425-426/459-460 believing those were free gaps — they
+      were NOT (occupied by Japan's Tokugawa shogun 356 / Emperor Kōkaku 459 / Ayahito 460, plus India /
+      Italy / North America / Persia chars), creating 9 cross-file DUPLICATE ids that re-created the exact
+      silent-misbinding hazard BT-20 fixes. That renumber was fully REVERTED. The clean redo places the 9
+      new commanders into the 9 REAL pre-existing gap ids in 00_Qing.txt (147-153, 164, 165) — NO existing
+      character moves, so no char:N ref shifts. Global space is now contiguous 0..609, zero gaps, zero
+      cross-file dupes. Mapping: Fuzhou→Cangbao 蒼保 (147), Ningxia→Deltai 德爾泰 (148), Liangzhou→Fusen 富森
+      (149), Kaifeng→Bujantai 布占泰 (150), Taiyuan→Yehetu 葉赫圖 (151), Suiyuan→Chinggeltei 青格勒圖 (152,
+      Mongol), Heilongjiang→Fusengge 傅森格 (153), Fujian Green Std→Wu Bida 吳必達 (164, Han/min), Taiwan
+      Green Std→Lin Jun 林俊 (165, Han/min). Banner posts = Manchu/Mongol generals; Green Standard = Han.
+      All marked "(plausible)"
+      — representative period officers where the exact 1763 post-holder isn't firmly attested. All
+      CHI-employed (default block), no death_date. So the pre-1772 OOB is now 27/27 commanded. NOTE: the
+      1815-start branch (else) keeps its bare raises by design (user chose 1763-only; 1815 needs a separate
+      roster).
+  (2) A REAL DROP that BT-15 fixed — the 3 FRONTIER `_cmd` garrisons (Ili p:3534 / Urumqi p:2930 /
+      Kashgar p:2700) sit on provinces owned by the **ILI subject** (00_default.txt:36018 ILI own_control_core),
+      but their commanders (Mingrui char:582 / Šuhede 583 / Hailancha 584) are CHI-employed. The OLD code
+      raised the unit in `scope:garrison_owner` (= ILI) and gated the commander on `employer = scope:garrison_owner`
+      (= ILI) — so those 3 CHI officers FAILED the guard and the garrisons mustered commander-less. The BT-15
+      flip (create in c:CHI, guard on `employer = c:CHI`) now PASSES for all 18 `_cmd` garrisons including the
+      3 frontier ones, so they attach their historical commander AND are Qing-controlled. All 18 `_cmd`
+      officers verified CHI-employed (no employer override → default 00_Qing.txt CHI block); all death_date
+      stripped so none age out in the 31-day setup→raise gap. Net: after BT-15, exactly the 9 intended
+      bare-raise garrisons are commander-less; every `_cmd` garrison has its commander. Pending in-game verify.
   - FUJIAN navy: has NO commander. The one navy that DOES spawn (B22) is commanderless. Per memory the
     Fujian navy commander should be Gan Guobao (甘國寶). Either the navy raise verb uses the no-commander
     form, or the assigned commander char failed to attach (death_date / invalid at setup). Note:
@@ -441,23 +496,23 @@ from a merely river-coastal one. Fuzhou p:3651 (which succeeded) is `is_port`; Z
    robust. (merge-overnight primary IDs = Canton 9298 / Fuzhou 3651 / Ningbo 2893; tested-branch = Zhuhai
    7190 / Fuzhou 3651 / Xiangshan 2968. Fuzhou is the only proven-good one; the other four need the
    is_port fallback to relocate them.)
-3. Fujian navy commanderless: char:596 (Gan Guobao 甘國寶) attach — check debug.log for the commander=
+3. Fujian navy commanderless: char:596 (Gan Guobao 甘國寶; PRE-EXISTING #331 navy commander, unchanged by the clean BT-20 fix) attach — check debug.log for the commander=
    drop (setup death_date breaks create_unit commander=, memory imp19c-1763-commander-roster). The
    two-step save_scope_as + set_as_commander form (proven) is more robust than inline commander=.
 
-**LAND (B21) — DIAGNOSED, NOT a crash; a coverage gap.** The garrison OOB list `SE_qing_armies` names
-ONLY CHI-proper province IDs (54 raise-calls, all core provinces: 8363/7129/3534/1087/5005/... — verified
-by grepping the prov= tokens). It never names a single ILI/XNG/frontier SUBJECT-owned province, so "no
-subject garrisons spawned" is simply that the OOB was never authored to place any there. The
-subject-accepting logic in SE_qing_raise_garrison_cmd/_raise_garrison (OR = { owner = c:CHI  owner = {
-is_subject_of = c:CHI } } + commander guard on employer = scope:garrison_owner) is CORRECT and present —
-it just has no subject province IDs fed to it. FIX = add frontier subject province IDs (Ili, Xinjiang
-begs, Tibet amban seats, Mongol leagues) to the OOB with the _cmd verb, OR add a subject-iterating branch
-that raises a token garrison in each subject capital. Design choice for the batch — NOT a blocker.
-Commander mix (some garrisons have commanders, some don't) is the _cmd vs no-cmd verb split in the OOB,
-compounded by roster chars possibly aged-out in the 31-day setup->raise gap (death_date-strip must have
-landed; guard is_alive=yes is_ruler=no employer=c:CHI). Confirm in debug.log which _cmd calls logged the
-commander attach vs skipped.
+**LAND (B21) — CORRECTED (user 2026-07-11) → FIXED.** Earlier note said "no subject garrisons spawned; a
+coverage gap." The USER corrected this: subject garrisons DID spawn — but under the SUBJECT's control, when
+they should be QING-controlled (the Son of Heaven garrisons the marches). ROOT CAUSE: both raise helpers
+(SE_qing_raise_garrison / _cmd) saved `$prov$.owner` as scope:garrison_owner and issued `create_unit` in
+THAT scope, so a subject-owned frontier province (Ili/Xinjiang/Tibet) produced a subject-owned garrison.
+FIX APPLIED (this session): issue `create_unit` in the **c:CHI** scope ALWAYS. The absolute `location = $prov$`
+token resolves globally regardless of the creating scope (proven by TI galatian_invasion — the issuing
+country places its OWN unit on a non-owned province — and se_QING_ILI raising at frontier provinces the
+same way), so every garrison is now CHI-owned while still standing on its intended frontier province. The
+`_cmd` commander guard changed from `employer = scope:garrison_owner` to `employer = c:CHI` (a CHI-owned
+legion cannot be led by a subject's officer); a non-CHI-employed frontier commander now musters the CHI
+garrison commanderless (engine-valid). scope:garrison_owner is fully removed. Braces 311/311. Pending
+in-game verify that frontier garrisons now show under Qing control.
 
 ## BT-16 🟡 — "Type: Autonomous Governorship" label too small + misaligned vs the other subject types
 **Observed (user):** in the Qing diplomatic view Subjects tab, "Type: Autonomous Governorship" renders
@@ -509,26 +564,28 @@ setup ids (284/223) — suspect the NEW-B27 renumber (commit dadbf3283) left a d
 death_date-strip on 214 didn't fully land in the tested build. NEEDS root-cause: confirm char:214 loads
 as alive at 1763.2.16 and no competing assignment. HIGH — wrong monarch is the most visible possible bug.
 
-### BT-20 CONFIRMED ROOT CAUSE (error.log 2026-07-11) — CHI character RENUMBER, not death_date
-The engine renumbers ALL of CHI's setup character IDs by a constant **−9** at load
-(character_setup.cpp:134 "Character N in country CHI should have id N-9"): setup 214
-Qianlong→runtime 205; setup 223 Xiaoshurui→runtime 214; setup 284 Yongrong→runtime 275 —
-EXACTLY the in-game IDs the user reported (emperor "Yongrong" id 275, "mother" id 214).
-So `set_as_ruler=char:214` binds POST-renumber to runtime-214 = **Xiaoshurui** (a 2yo girl);
-the engine then seats her adult kin **Yongrong** as acting ruler, and his `father="char:214"`
-link ALSO resolves to runtime-214 = Xiaoshurui → the nonsensical "2-year-old mother."
-The #329 death_date strip was correct but is NOT the CHI cause (unlike RUS). ROOT = the
-−9 renumber, triggered by non-contiguous CHI IDs: the block has a 59-ID gap (123→183) and
-others (setup char-ID rule memory: Invictus tolerates gaps, but the engine here is COMPACTING
-CHI's ids so all char: references shift). FIX OPTIONS (verify against setup char-ID rule memory):
-  (a) Make CHI ids contiguous from the country's first-expected id so no renumber occurs
-      (matches the "should have id" target sequence) — large, touches every char: ref.
-  (b) Convert the ruler seat to a RUNTIME set_as_ruler by PROPERTY not id: in an on_action /
-      the country_event that already runs at 1763 setup, scope to the living chinese_emperor-trait
-      adult Aisin Gioro and set_as_ruler that saved scope (id-agnostic, survives renumber).
-  (c) Author the CHI ruler via create_character (the engine's own suggested remedy in the log
-      "or use create_character") so no fixed id is consumed/renumbered.
-RECOMMEND (b) or (c) — id-agnostic, robust to the renumber; (a) is fragile and huge.
+### BT-20 ROOT CAUSE — GLOBAL char-id GAP compaction (CORRECTED 2026-07-11) → FIXED
+The earlier "constant −9 renumber triggered by CHI's internal 123→183 gap" write-up was WRONG
+(that gap pre-dated the bug, and a uniform per-country shift would be self-consistent and wouldn't
+mis-bind). CONFIRMED mechanism: the engine COMPACTS the **GLOBAL** setup character-id space at load —
+a character's runtime id = its written id − (count of missing ids anywhere below it across ALL
+setup/characters/*.txt). The global space had 18 missing slots (gaps 147-153, 164-165, 354-358,
+425-426, 459-460); **9 of them below 214**, so setup-214 Qianlong→runtime 205, setup-223
+Xiaoshurui→runtime 214, setup-284 Yongrong→runtime 275 — reproducing the user's exact reported ids
+(emperor 275, "mother" 214). `set_as_ruler=char:214` thus seated Xiaoshurui (2yo); the engine
+promoted her adult kin Yongrong; his `father="char:214"`→runtime-214=Xiaoshurui = the "2-year-old
+mother." This breaks EVERY character above a gap, not just Qianlong — a whole-space integrity bug.
+Introduced by recent char add/remove/move churn (#332 move-out etc.) that left holes after NEW-B27
+had made the space contiguous. **FIX APPLIED (this session):** closed all 18 gaps by moving the 18
+highest ids (592-609) into the holes and updating every char:N reference (18 def-headers + 23 refs,
+across 00_Qing/Poland/Italy/Persia/India + imp19c_effects_legion_setup.txt). Global id space is now
+contiguous 0..591, so runtime id == written id and set_as_ruler=char:214 correctly seats Qianlong.
+Added: a contiguity-invariant header in 00_Qing.txt and a boot self-check (QING_boot_ruler_integrity
+in qing_mechanics_on_actions.txt) that logs `IMP19C FAIL QING : QING_boot_ruler_integrity` if the
+seated CHI ruler is ever not an adult chinese_emperor again. A runtime set_as_ruler-by-trait
+workaround was considered and REJECTED — it would mask the one visible victim while leaving every
+other gap-displaced character (genealogy, OOB commanders) silently wrong. Fix the cause: keep ids
+contiguous. Pending in-game verification.
 
 ## BT-21 🟡 — F1 statesmanship bar: correct on X, still BELOW the box on Y
 **Observed (user):** the F1 fix placed the statesmanship bar correctly on the X axis but it sits BELOW
@@ -582,6 +639,22 @@ works). The three empty reports each fail at their FILTER:
 
 COMMON RECOMMENDATION for all three: add a "no provinces currently qualify" empty-state row so an empty
 list reads as informative, not broken. Fixes HELD pending the fresh debug.log the user is producing.
+
+### BT-22/23/24 RESOLUTION (implemented, uncommitted)
+- **BT-22** already fixed+committed (fa1364e13): dominant_province_culture_group = culture_group:chinese_group.
+  The empty-window log lines were all from the pre-fix 13:28-14:36 run (log predates the 17:20 fix).
+- **BT-23 + BT-24 + BT-22 safety-net**: added a proven empty-state line to each report window. Three
+  is_shown scripted_guis (qing_report_crops_empty / _tension_empty / _sinicization_empty) test
+  `NOT = { has_variable_list = <list> }` — a list built by clear+conditional add_to_variable_list reads
+  as ABSENT when nothing qualified (proven WAR_scripted_guis.txt:1220 gate). Each window shows an
+  informative empty-state textbox (loc qing_*_report_empty) bound to that gate via the IsShown idiom
+  (qing_religion.gui:265). Files: common/scripted_guis/qing_province_reports.txt (+3 guis),
+  gui/qing_province_reports.gui (+3 textboxes), loc qing_province_reports + qing_governance.
+- **BT-23 crop-seeding follow-up (DEFERRED, optional design)**: maize/sweet potato were historically
+  widespread in SW China (Yunnan/Guizhou/Sichuan) by 1763. Seeding a handful of setup provinces with
+  those trade_goods would make the report non-empty at start AND improve historical fidelity — but it
+  changes province economics (a balance decision), so it is NOT part of this bug fix. Left as an
+  optional enhancement, not a defect.
 
 ## FIXES ALREADY APPLIED THIS SESSION (fix-as-reported mode, on merge-overnight, UNCOMMITTED)
 These are review-confirmed findings the user directed me to fix now (NOT the BT-N boot-test items, which
