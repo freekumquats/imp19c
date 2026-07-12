@@ -1731,3 +1731,33 @@ outliner modifier (qing_selfstr_hollow, loc'd). So those were skipped as redunda
 paid off. DEFERRED (medium-risk / larger): #8 selfstr-velocity->civic drift rate, #10 harem->succession
 event frequency, #2 exam-pool cross-panel display, #7 ethnic-tension province map, #14 accountability
 trait grants. All additive; brace balance 0; BOM/CRLF preserved; se_LOG wired on the new event.
+
+## D91 — Qing enhancement pass WAVE 2 (merge-overnight, autonomous)
+
+Continued the deep-assessment enhancement pass with the deferred-but-viable wave-2 items.
+Independent code-review confirmed both changes correct, bounded, and ready to ship (no defects).
+
+- **Harem depth -> succession event frequency** (#10, se_QING_DECLINE ~1262): the succession-edict
+  weight (the `8 =` random_list entry firing qing_char.20) now carries two weight modifiers keyed on
+  the harem roster — `factor = 2` when qing_harem_consort_count >= 5 (a deep harem seethes with
+  candidates), `factor = 0.5` when <= 1 (a thin line is a quiet matter). Multiplicative on the existing
+  weight; the event's own age/health trigger + one-shot qing_secret_succession flag still gate the fire.
+  `modifier = { factor N <trigger> }` verified as a proven in-file random_list idiom (lines 1362/1388/1843).
+
+- **Sustained excellence -> a durable character mark** (#14, se_QING_ACCOUNTABILITY QING_acc_reward):
+  transient standing (pop/prom) fades as the accountability pulse re-scores each quarter, so a minister
+  who runs a THRIVING domain year after year now leaves a permanent stamp. Concrete-over-abstract: a
+  per-character streak counter (qing_acc_streak, incremented each thriving verdict) and, on the 4th
+  such verdict (~a full year of good government), a ONE-TIME grant of the `just` personality trait
+  (賢能之臣). Guarded: fires once (qing_acc_lauded flag) and only if the man holds neither `just` nor
+  its opposite `arbitrary` (never fights the trait system). add_trait=just on an employed char is a
+  proven idiom (se_QING_STUDENTS, se_QING_JAPAN_PREPERRY). Vars are per-CHARACTER (inside
+  scope:qing_acc_holder), no country-scope collision.
+
+SKIPPED as redundant: #2 (exam scholar-pool cross-panel display) — the Hanlin Academy panel ALREADY
+shows qing_hanlin_scholar_count PLUS a full scrolling scholar roster; that is the semantically correct
+home for the exam-fed corps, so a duplicate count on the Rites panel would be clutter (verify-before-build).
+
+STILL DEFERRED (needs prev-value state / medium-risk, not shipped unreviewed): #8 selfstr-velocity ->
+civic drift-rate coupling (would need per-pulse delta tracking; reviewer flagged oscillation risk),
+#7 ethnic-tension province map (large GUI effort). Brace balance 0 on both files; BOM/CRLF preserved.
