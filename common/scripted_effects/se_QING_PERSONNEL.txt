@@ -130,15 +130,24 @@ QING_personnel_evaluate_governors = {
 					else = {
 						# neither congenial with minister nor loyal to throne = drift risk
 						add_loyalty = loyalty_qing_delta_n2
-						# chance to queue a recall/clash event (10% per quarter when friction is high)
-						random = {
-							chance = 10
-							ROOT = {
-								trigger_event = {
-									id = qing_personnel.2
-									days = { 30 90 }
+						# chance to queue a recall/clash event (10% per quarter when friction is high).
+						# [BT-57] Share the quarterly COURT event slot so the per-GOVERNOR loop cannot fire
+						# several "Clash between Ministers" (qing_personnel.2) events in one pulse. Gate on the
+						# slot being free (checked EACH governor iteration, so once one governor claims it no
+						# further governor fires this pulse) and CLAIM it on the fire path only (after the chance
+						# succeeds) — the BT-28 court-slot pattern. Slot cleared at pulse top (00_monthly_country.txt).
+						if = {
+							limit = { ROOT = { NOT = { has_variable = qing_gc_event_slot_used } } }
+							random = {
+								chance = 10
+								ROOT = {
+									set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [BT-57] claim court slot after the chance succeeds (mirrors frontier/works rolls)
+									trigger_event = {
+										id = qing_personnel.2
+										days = { 30 90 }
+									}
+									LOG_line = { sys = QING  msg = "personnel: clash event queued (governor vs minister) for" }
 								}
-								LOG_line = { sys = QING  msg = "personnel: clash event queued (governor vs minister) for" }
 							}
 						}
 						ROOT = {
