@@ -32,6 +32,103 @@
 ########################################################################
 
 # ======================================================================
+# [#372] SILVER-RESERVE CONSTANTS + INIT. The 戶部銀庫 (Board of Revenue central silver
+# treasury) held a CONCRETE balance in 萬兩 (10k-tael units) that is well documented across
+# the Qing: ~6200 at the 1763 zenith, climbing to its all-time peak of 8182 in 乾隆42 (1777)
+# under sound administration, then draining in the decline (6939 by 1795, ~2000 by 1799 as
+# the Heshen fortune was seized and the White Lotus war bled it). This is a REAL balance,
+# distinct from the abstract qing_currency_stress meter (0 = sound) the decline engine keeps.
+# Seeded once at game start (idempotent). qing_silver_reserve_peak = 8182 is the historic high
+# the accumulation targets; qing_silver_reserve_peaked marks the one-shot milestone event.
+# Sources in memory imp19c-silver-reserve-figures. Scope: country (CHI).
+# ======================================================================
+QING_revenue_init = {
+	LOG_enter = { sys = QING  fn = "QING_revenue_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_silver_reserve } }
+		# 1763 zenith balance (~6200 萬兩); an 1815 start begins lower (post-decline), reflecting
+		# the drained treasury of the late Jiaqing — the High Qing era flag distinguishes them.
+		if = {
+			limit = { has_variable = qing_high_qing_era }
+			set_variable = { name = qing_silver_reserve  value = 6200 }
+		}
+		else = {
+			set_variable = { name = qing_silver_reserve  value = 3100 }  # ~嘉慶末 (1820) level
+		}
+	}
+	if = { limit = { NOT = { has_variable = qing_silver_reserve_peak } }   set_variable = { name = qing_silver_reserve_peak  value = 8182 } }
+	LOG_line = { sys = QING  msg = "revenue: silver reserve seeded (萬兩) for" }
+	LOG_exit = { sys = QING  fn = "QING_revenue_init"  result = OK }
+}
+
+# ======================================================================
+# [#372] SILVER-RESERVE DRIFT — called each quarter from QING_revenue_pulse. During the High
+# Qing era, a seated + capable Revenue minister (戶部尚書) accumulates the treasury toward its
+# historic 8182萬兩 peak; a middling minister climbs slowly; a vacant/venal office or the
+# post-Heshen decline era draws it DOWN. A high silver-crisis reading (qing_currency_stress)
+# also bleeds the reserve (the 銀荒 drain). Bounded [0, peak]. Fires the peak-milestone event
+# (qing_revenue.5) ONCE when the treasury first nears its all-time high. Scope: country (CHI).
+# ======================================================================
+QING_revenue_reserve_drift = {
+	if = {
+		limit = { has_variable = qing_silver_reserve }
+		# --- accumulation vs drain -------------------------------------------------
+		if = {
+			# High Qing era + a seated minister: strong accumulation toward the peak
+			# (historically ~150萬兩/yr 1755-1777 ≈ ~35/quarter). [#372 review-fix] the base
+			# accumulation is gated ONLY on the office being FILLED, not on finesse >= 6 — the
+			# era + a seated minister already implies the fisc is being run competently, and the
+			# council autofill sorts by COMBINED stats (not finesse), so a low-finesse general
+			# can hold the Revenue chair on some seeds; gating the strong branch on finesse would
+			# then stall accumulation below the 8000 milestone and the peak event would silently
+			# never fire. A high-finesse minister still earns an EXTRA +10 (the competence reward)
+			# just below, so skill is rewarded without being a hard gate on the historic peak.
+			limit = {
+				has_variable = qing_high_qing_era
+				has_variable = qing_office_revenue_holder
+				var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+				var:qing_silver_reserve < var:qing_silver_reserve_peak
+			}
+			change_variable = { name = qing_silver_reserve  add = 25 }
+			# competence reward: a high-finesse Grand Minister accumulates faster still.
+			if = {
+				limit = { var:qing_office_revenue_holder = { finesse >= 6 } }
+				change_variable = { name = qing_silver_reserve  add = 10 }
+			}
+		}
+		else = {
+			# vacant office OR the post-era decline: the treasury drains.
+			change_variable = { name = qing_silver_reserve  subtract = 15 }
+		}
+		# --- the silver crisis (銀荒) bleeds the reserve on top of the above --------
+		if = {
+			limit = {
+				has_variable = qing_currency_stress
+				var:qing_currency_stress >= 40
+			}
+			change_variable = { name = qing_silver_reserve  subtract = 10 }
+		}
+		# --- clamp [0, peak] -------------------------------------------------------
+		if = { limit = { var:qing_silver_reserve > var:qing_silver_reserve_peak }  set_variable = { name = qing_silver_reserve  value = var:qing_silver_reserve_peak } }
+		if = { limit = { var:qing_silver_reserve < 0 }  set_variable = { name = qing_silver_reserve  value = 0 } }
+		# --- peak milestone (盈庫之盛): fire once when the treasury first nears its high.
+		# Gated on the shared court event slot (BT-28) + a one-shot flag, so it is a single
+		# memorable beat, never spam. 8000 (~98% of 8182) counts as "reached the peak".
+		if = {
+			limit = {
+				var:qing_silver_reserve >= 8000
+				NOT = { has_variable = qing_silver_reserve_peaked }
+				NOT = { has_variable = qing_gc_event_slot_used }
+			}
+			set_variable = { name = qing_silver_reserve_peaked  value = 1 }
+			set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [BT-28] claim court slot
+			trigger_event = { id = qing_revenue.5  days = { 5 20 } }
+			LOG_line = { sys = QING  msg = "revenue: silver reserve reached its historic peak for" }
+		}
+	}
+}
+
+# ======================================================================
 # QUARTERLY REVENUE PULSE — called from QING_GOV_pulse (quarterly cadence).
 # Checks the Revenue holder's state and offers the domain events (salt gabelle,
 # granary, silver crisis, treasury audit) on a throttled roll. A vacant office
@@ -39,6 +136,9 @@
 # ======================================================================
 QING_revenue_pulse = {
 	LOG_enter = { sys = QING  fn = "QING_revenue_pulse" }
+	# [#372] drift the concrete silver reserve toward / away from its historic peak first,
+	# so the panel read-out + any milestone reflect this quarter before the event roll below.
+	QING_revenue_reserve_drift = yes
 
 	# If the office is VACANT, let the domain drift negatively.
 	if = {
