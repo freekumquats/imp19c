@@ -1291,8 +1291,21 @@ WEALTH_total_last_quarter_governorship = {
 			subtract = var:WEALTH_cached_last_quarter_trade_expenses_due_shipping # Negative value
 		}
 		else = {
-			subtract = var:trade_income_due_shipping
-			subtract = var:trade_expenses_due_shipping
+			# [BT-15 follow-up / logfix] Guard the live-shipping fallback. trade_income_due_shipping /
+			# trade_expenses_due_shipping are 0-initialised as a PAIR only in GT_reset_trade_transaction_totals
+			# (once per quarter); before the first quarterly reset they are unset, so reading them here threw
+			# "Failed to fetch variable ... due to not being set" on the first tick. Every other reader
+			# (SHIPPING_svalues.txt:291, se_ECON_wealth.txt:1118) has_variable-guards them; match that idiom.
+			# They are always set together, so one paired guard covers both; unset => contribute nothing
+			# (same runtime result, no error).
+			if = {
+				limit = {
+					has_variable = trade_income_due_shipping
+					has_variable = trade_expenses_due_shipping
+				}
+				subtract = var:trade_income_due_shipping
+				subtract = var:trade_expenses_due_shipping
+			}
 		}
 		subtract = var:WEALTH_empire_pool_owed_governorship
 		add = WEALTH_cost_of_living_upper_strata

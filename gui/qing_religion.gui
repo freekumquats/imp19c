@@ -46,7 +46,12 @@ base_window = {
 	# Terra-Indomita gui/religion_view.gui:27-70 (dementive): the HEADER is a `vbox using
 	# MainWindowHeaderBox` and the BODY is NESTED INSIDE that same vbox with
 	# layoutpolicy_vertical/horizontal = expanding at each level, so the body fills the window.
-	vbox = {
+	flowcontainer = {
+		direction = vertical
+
+		# HEADER — fixed-size widget (proven-working greatgame idiom, gui/qing_greatgame.gui:40).
+		widget = {
+		size = { 480 48 }
 		using = MainWindowHeaderBox
 		blockoverride "Title_text" { text = "QING_RELIGION_PANEL_TITLE" }
 		blockoverride "FlagOrIcon" {
@@ -69,17 +74,20 @@ base_window = {
 				shortcut = "close_window"
 			}
 		}
+		}
 
-		# BODY — nested inside the header vbox, expanding to fill (TI religion_view.gui idiom).
-		vbox = {
-			layoutpolicy_vertical = expanding
-			layoutpolicy_horizontal = expanding
-			margin_left = 10
-			margin_right = 10
+		# BODY — fixed-size margin_widget sibling of the header (proven-working greatgame idiom,
+		# gui/qing_greatgame.gui:70). [BT-14] The prior F9 "nest the body INSIDE the header vbox with
+		# layoutpolicy = expanding" (TI religion_view idiom) collapsed to an empty body on this build —
+		# only the header rendered. Reverted to the fixed-size sibling layout the confirmed-working
+		# greatgame / ministry panels use: header widget { 480 48 } + margin_widget { 480 620 } holding
+		# a scrollarea { 460 600 }. No expanding-policy dependence.
+		margin_widget = {
+			size = { 480 620 }
+			margin = { 10 10 }
 
 			scrollarea = {
-				layoutpolicy_vertical = expanding
-				layoutpolicy_horizontal = expanding
+				size = { 460 600 }
 				scrollbarpolicy_horizontal = always_off
 				scrollbar_vertical = { using = VerticalScrollBar }
 				using = VerticalScrollAreaCutOff
@@ -87,7 +95,16 @@ base_window = {
 					flowcontainer = {
 						direction = vertical
 						spacing = 12
-						layoutpolicy_horizontal = expanding
+						# [BT-14 ROOT CAUSE — do NOT re-add layoutpolicy_horizontal here] This flowcontainer is the
+						# DIRECT child of scrollwidget. The proven-rendering twin gui/qing_greatgame.gui:80 gives its
+						# equivalent top flowcontainer NO layoutpolicy at all — it shrinks to its content width and lets
+						# the scrollwidget size to it. Putting layoutpolicy_horizontal = expanding HERE (on the
+						# scrollwidget's DIRECT child) makes it try to expand into a scrollwidget with no intrinsic width,
+						# so the whole body collapses to zero and the panel shows only the header. This is why the
+						# empty-body bug survived THREE prior layout rewrites (greatgame-mirror / TI-nested / sibling-
+						# margin): each shuffled the OUTER scaffold but left this expanding policy on the inner top
+						# flowcontainer, so the body kept collapsing. The `expanding` policy belongs ONLY on the nested
+						# SECTION flowcontainers below (which have a defined-width ancestor), exactly as greatgame does.
 
 				# DESCRIPTION
 				# [#314 Bug6/B20] drop autoresize (it overrides the fixed width and spills the text);
