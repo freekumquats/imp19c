@@ -1761,3 +1761,35 @@ home for the exam-fed corps, so a duplicate count on the Rites panel would be cl
 STILL DEFERRED (needs prev-value state / medium-risk, not shipped unreviewed): #8 selfstr-velocity ->
 civic drift-rate coupling (would need per-pulse delta tracking; reviewer flagged oscillation risk),
 #7 ethnic-tension province map (large GUI effort). Brace balance 0 on both files; BOM/CRLF preserved.
+
+## D92 — Qing enhancement pass WAVE 3 (merge-overnight, autonomous)
+
+A fresh deep-assessment agent produced 6 new candidate couplings; verify-before-build pruned two
+(assessment error: #1 "Council -> Exam ladder" is ALREADY wired — qing_council_effectiveness is
+literally a 50% weight in QING_GOV_update_exam_ladder at se_QING_GOVERNANCE:162-163; #5 caravan ->
+Xinjiang loyalty overlaps the existing caravan -> qing_xinjiang_control grip coupling AND would need
+two new opinion_modifier defs, so deferred). Shipped the three clean high/med-value items; independent
+code-review confirmed all correct, bounded, no defects.
+
+- **Dynastic harmony <-> harem fertility** (#2, se_QING_HAREM QING_harem_pulse): the quarterly
+  conception roll was a flat 20%; it now branches on qing_dynastic_harmony — 30% when the house is
+  united (>= 60), 10% when split (<= 40), else 20%. Closes the loop with the wave-1 succession-security
+  term (consort_count -> harmony): harmony now ALSO feeds back into how readily the line is got. Uses
+  the proven `random = { chance = N  <effect> }` idiom in explicit branches (a `modifier` block inside
+  `random` is used NOWHERE in the mod, so avoided).
+
+- **Central-army collapse -> commander loyalty drift** (#3, se_QING_WAR QING_war_review_commanders):
+  when BOTH central hosts rot (qing_banner_decay >= 60 AND qing_greenstandard_decay >= 60) each
+  provincial commander takes an extra add_loyalty = loyalty_qing_estranged, in BOTH the War-office-filled
+  and vacant iterators. Concretizes the abstract decay counters onto real on-map commanders (the
+  湘軍/淮軍 regionalism seed). Bounded by the ladder's min=-35; compounds the existing friction/affinity
+  drift; the warlord-event roll still gates the actual crisis.
+
+- **Civic identity -> cultural-flowering frequency** (#4, se_QING_DECLINE culture roll weight ~1403):
+  the `12 = { QING_culture_roll }` random_list entry gained two weight modifiers on qing_civic_identity —
+  factor 1.5 in [50,85), factor 2 at >= 85, kept MUTUALLY EXCLUSIVE (upper-bound guard on the first) so
+  they don't stack to 3x. Gives the wave-1 civic meter a visible qualitative payoff (more Kangxi
+  Dictionary / Red Chamber / jubilee beats when the nation is united). Proven random_list modifier idiom.
+
+Brace balance 0 on all three files; BOM/CRLF preserved. No new vars, events, GUI, or loc — pure
+couplings between existing systems.
