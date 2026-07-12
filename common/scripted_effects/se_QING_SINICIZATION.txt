@@ -1,0 +1,121 @@
+########################################################################
+# se_QING_SINICIZATION.txt — [#385] Sinicization RATE-OF-CHANGE tracker.
+#
+# The Sinicization report (#314 B26, qing_report_open_sinicization) lists the
+# provinces whose dominant culture belongs to the Han (chinese_group) family —
+# the on-map footprint of 漢化. That list answers "which provinces are Han-
+# dominant NOW"; it does NOT answer "which WAY is the process heading". This
+# feature adds that trend: a running count of Han-dominant provinces plus a
+# year-old baseline, so the report can show the year-over-year DELTA (是否漢化
+# 中 — rising, steady, or receding).
+#
+# MODEL: the same snapshot-prev -> delta idiom feature #109 uses for the ethnic-
+# tension report (se_QING_ETHNIC_TENSION.txt:121-127 snapshots qing_prov_ethnic_
+# tension into _prev before drift, so the report reads a fresh delta). Here the
+# snapshot is at COUNTRY scope and rolled ANNUALLY (a year is the meaningful
+# cadence for cultural conversion; a per-quarter delta would be mostly zero).
+#
+# COUNTING AUTHORITY: counts via the SAME descent the report list uses
+# (every_governorships -> every_governorship_state -> every_state_province, with
+# the proven Han-majority limit dominant_province_culture.culture_group =
+# culture_group:chinese_group), so the count the report footer shows AGREES with
+# the number of rows in the list above it. (Using every_owned_province would
+# over-count — the capital domain provinces are not under a governorship and so
+# are absent from the displayed list.)
+#
+# STORAGE (COUNTRY / CHI):
+#   qing_sinic_count       — Han-dominant province count, refreshed each pulse.
+#   qing_sinic_count_prev  — the count one year ago (rolled when the yearly
+#                            throttle fires); the report delta = count - prev.
+#   qing_sinic_year_cd     — 365-day throttle var for the annual baseline roll.
+#
+# Self-throttled: the COUNT is cheap and refreshed every quarterly pulse (so the
+# live figure is current); the BASELINE only rolls once a year. CHI player-only.
+# All lines logged sys = QING with STATIC msgs (no macro $param$ / # in strings).
+# Prefix = QING_sinic_
+########################################################################
+
+# ======================================================================
+# QING_sinic_pulse — refresh the live Han-dominant count every quarterly pulse,
+# and roll the year-old baseline once a year. Scope: COUNTRY (CHI).
+# Called from qing_mechanics_pulse_on_action (00_monthly_country.txt).
+# ======================================================================
+QING_sinic_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_sinic_pulse" }
+
+	# STEP 1: recount Han-dominant provinces via the report's own descent so the
+	# figure matches the listed rows. Accumulate into a temp, then commit.
+	set_variable = { name = qing_sinic_count_tmp  value = 0 }
+	every_governorships = {
+		every_governorship_state = {
+			every_state_province = {
+				if = {
+					limit = {
+						dominant_province_culture.culture_group = culture_group:chinese_group
+					}
+					ROOT = {
+						change_variable = { name = qing_sinic_count_tmp  add = 1 }
+					}
+				}
+			}
+		}
+	}
+	set_variable = { name = qing_sinic_count  value = var:qing_sinic_count_tmp }
+	remove_variable = qing_sinic_count_tmp
+
+	# Seed the baseline on the very first touch so the delta reads 0 until the first
+	# annual roll (no phantom jump from an unset prev). Until that first roll fires,
+	# _prev is anchored to the first-touch count, so the delta measures change since
+	# game-start rather than a true rolling year; it becomes a true year-over-year
+	# figure once STEP 2 has rolled the baseline at least once. Thereafter annual.
+	if = {
+		limit = { NOT = { has_variable = qing_sinic_count_prev } }
+		set_variable = { name = qing_sinic_count_prev  value = var:qing_sinic_count }
+	}
+
+	# Recompute the live delta (present vs the year-old baseline) so the report's
+	# trend line + up/steady/down gates read a fresh figure every pulse. Done BEFORE
+	# STEP 2 rolls the baseline, so within the pulse that rolls it the delta still
+	# reflects the FULL year just closed (after the roll prev==count so it would read
+	# 0). qing_sinic_delta may be negative (Sinicization can recede on the frontier).
+	QING_sinic_recompute_delta = yes
+
+	# STEP 2: once a year, roll the year-old baseline forward to the current count,
+	# so the report delta always compares the present against ~12 months ago.
+	if = {
+		limit = { NOT = { has_variable = qing_sinic_year_cd } }
+		set_variable = { name = qing_sinic_year_cd  days = 365 }
+		set_variable = { name = qing_sinic_count_prev  value = var:qing_sinic_count }
+		LOG_line = { sys = QING  msg = "sinicization baseline rolled (annual)" }
+	}
+
+	LOG_exit = { sys = QING  fn = "QING_sinic_pulse"  result = OK }
+}
+
+# ======================================================================
+# QING_sinic_recompute_delta — set qing_sinic_delta = count - count_prev.
+# Shared by the pulse and the report-open effect so the report's trend line and
+# its up/steady/down scripted_gui gates always read a consistent, current delta.
+# Scope: COUNTRY (CHI). Both count + prev are guaranteed set by their callers
+# (the pulse seeds prev on first run; the report seeds count during its walk).
+# ======================================================================
+QING_sinic_recompute_delta = {
+	if = {
+		limit = { NOT = { has_variable = qing_sinic_count_prev } }
+		set_variable = { name = qing_sinic_count_prev  value = var:qing_sinic_count }
+	}
+	set_variable = { name = qing_sinic_delta  value = var:qing_sinic_count }
+	change_variable = { name = qing_sinic_delta  subtract = var:qing_sinic_count_prev }
+
+	# Also store the magnitude of a DROP as a positive number, so the "receding"
+	# report line can read a clean "N fewer" without a double-negative "-N fewer".
+	# (The rising line reads qing_sinic_delta directly, which is already positive.)
+	if = {
+		limit = { var:qing_sinic_delta < 0 }
+		set_variable = { name = qing_sinic_drop  value = var:qing_sinic_delta }
+		change_variable = { name = qing_sinic_drop  multiply = -1 }
+	}
+	else = {
+		set_variable = { name = qing_sinic_drop  value = 0 }
+	}
+}
