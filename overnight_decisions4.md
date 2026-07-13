@@ -133,14 +133,15 @@ Review this file when you're back. **Deferrals are called out at the very top.**
 
 ### #346 Frontier-garrison overlay + War↔Lifan-Yuan turf war — BUILT + REVIEWED (fixes applied)
 - **REVIEW — 1 BLOCKER + 3 real findings fixed:**
-  1. (BLOCKER) `QING_fgar_scan` iterated c:CHI's OWN `every_army` with `commander={employer=ROOT}`
-     — but subject-soil frontier garrisons are RAISED IN THE SUBJECT'S SCOPE with a subject-employed
-     commander (#338/B21), so CHI's own armies never see them: the scan could NEVER match. FIX:
-     rewrote the scan to iterate `every_subject` (autonomous_governorship) and detect a garrison the
-     SUBJECT itself fields on its own soil (`any_army { is_moving=no in_combat=no unit_size>=3 }`) —
-     THAT is the frontier banner host. Dropped the `commander=employer=ROOT` filter + the dead
-     commander-scope save. Proven idioms: `every_subject` (INCOME_svalues), `any_army` (agadir_crisis
-     naval sibling `any_navy`), `is_subject_type=autonomous_governorship` (00_monthly_country).
+  1. (BLOCKER) `QING_fgar_scan` — **SUPERSEDED; this entry's rationale was WRONG** (corrected commit
+     47f06e69b, user-flagged 2026-07-12). It claimed frontier garrisons are raised in the SUBJECT'S scope
+     (subject-owned/commanded) and rewrote the scan to `every_subject { any_army }`. But BT-15 (later)
+     changed SE_qing_raise_garrison[_cmd] to raise them as **CHI-OWNED, CHI-COMMANDED** armies (bare
+     create_unit in c:CHI scope) standing on subject soil — so `every_subject { any_army }` looked for a
+     subject-fielded garrison that does NOT exist and could never match (overlay dead). CORRECTED: reverted
+     to the proven `every_army` / `unit_location = { owner = { is_subject_of=ROOT  is_subject_type=
+     autonomous_governorship } }` idiom (se_ARMY.txt) — iterate CHI's OWN settled armies, occupy the subject
+     whose province the host stands on. Frontier garrisons ARE Qing-owned and Qing-commanded.
   2. (major) occupation-modifier FLICKER — duration 200 under a `NOT has_country_modifier` add-guard +
      180-day throttle meant the modifier lapsed at T200 and wasn't re-added until T360 (~44% of every
      cycle the -10 loyalty_to_overlord vanished though the garrison stayed). FIX: unconditional
