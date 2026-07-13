@@ -124,6 +124,9 @@ MARRIAGE_pulse = {
 		MARRIAGE_check_betrothals = yes
 		# --- L2: escalate any standing bond whose junior house is now heirless.
 		MARRIAGE_check_unions = yes
+		# --- L2a: escalate any standing bond whose crown now shares OUR sovereign (a personal
+		# union born of the marriage's line inheriting both thrones).
+		MARRIAGE_check_shared_ruler_union = yes
 		# --- [#324] L2b: the FEMALE-LINE claim — a wedded house whose only heir is a
 		# daughter its own agnatic law bars breeds a pressable inheritance claim for our
 		# line (the #312 succession-law × marriage coupling; a cognatic realm lets her
@@ -470,6 +473,59 @@ MARRIAGE_check_unions = {
 			}
 			scope:union_junior = { set_variable = { name = marriage_union_junior  value = 1 } }
 			LOG_line = { sys = MARRIAGE  msg = "heirless wedded house bound as a royal union" }
+		}
+	}
+}
+
+# ======================================================================
+# MARRIAGE_check_shared_ruler_union — L2a. Scope: COUNTRY (our house). The PERSONAL-UNION
+# path the user asked for: when a marriage's line bears fruit and the SAME character comes
+# to sit BOTH thrones — our ruler is ALSO the ruler of a realm we are wedded to — the two
+# crowns are joined in one person. Bind the JUNIOR crown to us as a royal_union (the senior
+# = the larger dynastic claim, per the same minnow-vs-whale guard as MARRIAGE_check_unions).
+# Distinct from the heirless escalation above: here the junior is NOT extinct — it simply
+# shares our sovereign, the classic Habsburg/Stuart personal union. Bounded to one escalation
+# per pulse. The junior keeps its seat until succession diverges; inheritance handled at L3.
+# ======================================================================
+MARRIAGE_check_shared_ruler_union = {
+	if = {
+		limit = {
+			var:marriage_bond_count > 0
+			exists = current_ruler
+		}
+		save_scope_as = union_senior
+		current_ruler = { save_scope_as = union_shared_ruler }
+		random_country = {
+			limit = {
+				NOT = { this = scope:union_senior }
+				# wedded to us (proven variable_list membership on the senior)
+				scope:union_senior = {
+					is_target_in_variable_list = { name = marriage_partners  target = prev }
+				}
+				# still an independent realm (not already someone's subject)
+				is_subject = no
+				exists = current_ruler
+				# THE SAME CHARACTER now rules this realm too — the crowns have merged in one
+				# person (proven char-equality idiom, se_QING_COUNCIL.txt:515).
+				current_ruler = { this = scope:union_shared_ruler }
+				# the JUNIOR must not outweigh the senior — the crown passes to the bigger
+				# dynastic claim (same guard + num_of_cities proxy as MARRIAGE_check_unions).
+				num_of_cities <= scope:union_senior.num_of_cities
+				# a union is a settlement, not a conquest — both at peace.
+				NOT = { at_war = yes }
+			}
+			save_scope_as = union_junior
+		}
+		if = {
+			limit = { exists = scope:union_junior }
+			FUNC_make_subject = {
+				overlord = scope:union_senior
+				target = scope:union_junior
+				type = royal_union
+			}
+			# mark it a marriage-made union (so the L3 inheritance-on-death path owns it too).
+			scope:union_junior = { set_variable = { name = marriage_union_junior  value = 1 } }
+			LOG_line = { sys = MARRIAGE  msg = "a shared sovereign joins two crowns — wedded house bound as a royal union" }
 		}
 	}
 }
