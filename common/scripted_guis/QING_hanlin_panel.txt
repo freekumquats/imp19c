@@ -1,0 +1,98 @@
+########################################################################
+# QING_hanlin_panel.txt — scripted GUIs for the Hanlin Academy panel (#358).
+#
+# The Hanlin Academy (翰林院) is the elite scholar corps drawn from the top of the imperial
+# examination ladder (the jinshi 進士) — the reservoir from which the Grand Secretaries
+# (大學士) and the inner-court drafters were always chosen. For Grand Council purposes the
+# Academy's leader IS the grand_secretariat office-holder (大學士), and the Academy's
+# scholarly health folds into his standing via qing_min_perf_grand_secretariat
+# (se_QING_MINISTRY.txt / QING_council_fold_ministry_perf — no council edit needed, the
+# grand_secretariat office key is already enumerated there).
+#
+# A Grand-Council-clone L4 window headed by the Grand Secretary, surfacing the WAITING
+# SCHOLAR CORPS (the exam pool, qing_hanlin_scholars) as a central character roster, the
+# EXAMINATION VIGOUR (qing_exam_pass_rate) + the corps depth (qing_hanlin_scholar_count) as
+# read-outs, and the performance meter. Like the Works/Revenue panels it has an ACTION LEVER:
+# DRAW A SCHOLAR — raise the ablest waiting Hanlin man into the first vacant great office (the
+# proven QING_exam_fill_first_vacant_from_pool; no new appointment code).
+#
+# Scoped to the Qing player (ROOT = CHI). AI never evaluates these (ai_is_valid = no).
+# Opened by qing_hanlin_open_panel_button (a button in government_view.gui).
+# The window itself is gui/qing_hanlin.gui. Prefix = qing_hanlin_.
+########################################################################
+
+# ---- OPEN THE HANLIN ACADEMY PANEL (button in the government view) ---------
+qing_hanlin_open_panel_button = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		# The window reads the scholar roster + qing_min_perf_grand_secretariat directly from ROOT.
+		LOG_line = { sys = QING  msg = "EVENT qing_hanlin_open_panel_button fired; opening the Hanlin Academy panel for" }
+	}
+}
+
+# ---- GRAND SECRETARY HOLDER INDICATOR (the GUI reveals his card when filled) -
+qing_hanlin_filled = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_office_grand_secretariat_holder
+		var:qing_office_grand_secretariat_holder = { is_alive = yes  employer = ROOT }
+	}
+}
+
+# ---- VACANT indicator (the GUI shows a "post vacant" note) ------------------
+qing_hanlin_vacant = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		NOR = {
+			AND = {
+				has_variable = qing_office_grand_secretariat_holder
+				var:qing_office_grand_secretariat_holder = { is_alive = yes  employer = ROOT }
+			}
+		}
+	}
+}
+
+# ---- DRAW A SCHOLAR (掄才) — raise the ablest waiting Hanlin man into the first vacant
+# great office. Reuses the proven QING_exam_fill_first_vacant_from_pool (which itself only
+# seats him if an office is genuinely vacant — a no-op leaves him in the pool). Requires a
+# non-empty scholar bench AND at least one vacant great office to fill.
+qing_hanlin_draw_scholar = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		# a living, employed, un-officed scholar is waiting in the pool.
+		has_variable_list = qing_scholar_pool
+		any_in_list = {
+			variable = qing_scholar_pool
+			is_alive = yes
+			employer = ROOT
+			NOT = { has_variable = qing_office_held }
+		}
+		# [#358 review fix] AND a great office is genuinely vacant. QING_exam_fill_first_vacant_from_pool
+		# -> QING_office_appoint_first_vacant is a no-op when all 13 offices are manned (the scholar
+		# stays in the pool) — so without this gate the button stayed live-but-inert once the council
+		# was full and logged a false "drew a scholar" success. qing_council_vacancy (= 13 −
+		# qing_council_filled_count) is maintained in QING_council_recompute and refreshed on every
+		# appoint/vacate; its 13-office scope exactly matches the picker's branch list.
+		has_variable = qing_council_vacancy
+		var:qing_council_vacancy > 0
+	}
+	effect = {
+		QING_exam_fill_first_vacant_from_pool = yes
+		LOG_line = { sys = QING  msg = "hanlin panel: drew a waiting scholar toward the first vacant office for" }
+	}
+}
+
+# ---- CLOSE (button in the panel window) ------------------------------------
+qing_hanlin_close_panel = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_valid = { always = yes }
+	effect = { }
+}

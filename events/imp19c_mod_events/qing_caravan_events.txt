@@ -1,0 +1,184 @@
+########################################################################
+# qing_caravan_events.txt — [#370] Silk Road / Central Asian Caravan Trade (絲路商道 / 回疆貿易).
+#
+# The player-facing surface of the caravan trade-node model (se_QING_CARAVAN.txt): the Kokand
+# ultimatum that dramatises the escalating khanate demands (the road to the 1832 settlement) and
+# the route-cut crisis when a khoja scare severs the caravan road. CHI-only, player-focused,
+# logged sys = QING.
+#
+#   .1  THE KOKAND ULTIMATUM (浩罕之求) — offered by QING_caravan_pulse when the trade is worth
+#       extorting (prosperity >= 55), the aqsaqal is NOT yet granted, and Kokand is already ill-
+#       disposed (a festering grievance). GRANT (許阿奇木, the 1832 settlement) vs REFUSE & GARRISON
+#       (拒而設防, hold sovereignty, arm the khoja scare) vs TEMPORISE (羈縻拖延, buy time, re-offers).
+#   .2  THE ROUTE IS CUT (商道斷絕) — offered when a khoja scare is pending and the route was worth
+#       something. MILITARY ESCORT (護商, spend treasury to force it open) vs NEGOTIATE VIA KOKAND
+#       (許阿奇木, grant the concession to reopen) vs LET IT LAPSE (聽其斷絕, the trade collapses).
+#
+# These do NOT own the prosperity meter — they act on it through the se_QING_CARAVAN.txt levers,
+# which drive the SAME qing_caravan_prosperity counter the pulse reads, so the panel, the pulse, and
+# the events all interlock. They also couple to the #367 Xinjiang state (qing_xinjiang_control grip,
+# qing_xj_khoja_pending scare, the KOK opinion) that the caravan model shares.
+#
+# The once-only offered flags (qing_caravan_ultimatum_seen / _routecut_seen) are set in each event's
+# OWN immediate (only when the event actually fires), NOT in the pulse — the #366/#368 flag-leak fix.
+#
+# HISTORY (Millward, Beyond the Pass / Eurasian Crossroads; Newby, The Empire and the Khanate;
+# Fletcher, Cambridge History of China vol. 10): after 1759 the Khanate of Kokand pressed the Qing
+# for the aqsaqal (阿奇木伯克) consul at Kashgar, the right to levy its OWN customs on third-party
+# Andijani traders, and extraterritoriality — leverage it exercised by sheltering the White-Mountain
+# khoja pretenders (Jahangir 1826; Yusuf 1830; the Seven Khojas 1847). The 1832 settlement conceded
+# most of these demands, and is often called the first "unequal treaty" the Qing granted, a decade
+# before Nanking. The alternative — the costly military reopening of the road (護商 / 進剿) — is the
+# one Qianlong and the 善後 administrators had used, covered by the 協餉 subsidy.
+########################################################################
+
+namespace = qing_caravan
+
+########################################################################
+# .1  THE KOKAND ULTIMATUM (浩罕之求)
+# Offered by QING_caravan_pulse when the Altishahr trade is prosperous, the aqsaqal concession is not
+# yet granted, and Kokand is already emboldened. The khanate presses its demands.
+########################################################################
+qing_caravan.1 = {
+	type = country_event
+	title = "qing_caravan.1.t"
+	desc = "qing_caravan.1.desc"
+	picture = trade_port
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_caravan_prosperity
+		var:qing_caravan_prosperity >= 55
+		NOT = { has_variable = qing_caravan_aqsaqal_granted }
+	}
+
+	immediate = {
+		# [#370] set the once-only offered flag HERE (only when the event actually fires), not in the
+		# pulse — so a re-check failure during the 5-20 day delay never strands it set (#366/#368 fix).
+		set_variable = { name = qing_caravan_ultimatum_seen  value = 1 }
+		LOG_line = { sys = QING  msg = "EVENT qing_caravan.1 (浩罕之求 Kokand ultimatum) for [ROOT.GetTag]" }
+	}
+
+	# --- GRANT THE CONCESSION (許阿奇木) — the 1832 settlement: recognise the consul, mend relations,
+	# defuse the pretenders, but swallow the humiliation and the revenue haircut. -----
+	option = {
+		name = "qing_caravan.1.grant"
+		custom_tooltip = "qing_caravan.1.grant.tt"
+		QING_caravan_grant_aqsaqal = yes
+		# [#370-R2] clear the once-only flag on resolution — the aqsaqal_granted gate suppresses
+		# re-offer while the concession stands, but a later QING_caravan_revoke_aqsaqal re-provokes
+		# Kokand; if this flag stayed set forever the ultimatum could never re-fire post-revoke.
+		if = {
+			limit = { has_variable = qing_caravan_ultimatum_seen }
+			remove_variable = qing_caravan_ultimatum_seen
+		}
+	}
+
+	# --- REFUSE & GARRISON (拒而設防) — hold sovereignty, brace the frontier; but Kokand arms the
+	# khoja pretenders and the road frays. The costly proud answer. -----
+	option = {
+		name = "qing_caravan.1.refuse"
+		custom_tooltip = "qing_caravan.1.refuse.tt"
+		# the affronted khanate looses its pretenders — set the #367 khoja scare and dent the grip.
+		set_variable = { name = qing_xj_khoja_pending  value = 1 }
+		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = -4 }
+		current_ruler = { add_popularity = 10 }  # [T3 BT-5/6] was add_prestige (inert on a character)
+		# [#370-R2] DELIBERATELY leave qing_caravan_ultimatum_seen SET here. REFUSE does not drop
+		# prosperity, so clearing it would re-fire the .1 if-branch next quarter and PREEMPT the .2
+		# route-cut (else_if) that this refusal is meant to provoke via the khoja scare just set.
+		# Renewed Kokand hostility after a refusal expresses as the route-cut crisis, not a repeat
+		# ultimatum — so the flag must stay set to let .2 fire. (The GRANT path clears it because
+		# aqsaqal_granted independently gates .1 while the concession stands.)
+	}
+
+	# --- TEMPORISE (羈縻拖延) — the old loose-rein evasion: neither grant nor refuse. Buys time at a
+	# little prestige, and the demand returns. -----
+	option = {
+		name = "qing_caravan.1.temporise"
+		custom_tooltip = "qing_caravan.1.temporise.tt"
+		current_ruler = { add_popularity = -5 }  # [T3 BT-5/6] was add_prestige (inert on a character)
+		# the demand festers — clear the seen flag so the pulse re-offers while the pressure stands.
+		if = {
+			limit = { has_variable = qing_caravan_ultimatum_seen }
+			remove_variable = qing_caravan_ultimatum_seen
+		}
+	}
+}
+
+########################################################################
+# .2  THE ROUTE IS CUT (商道斷絕)
+# Offered by QING_caravan_pulse when a khoja scare is pending (#367) and the caravan trade was worth
+# something — the pretenders' raids sever the Kashgar–Yarkand road and the trade collapses.
+########################################################################
+qing_caravan.2 = {
+	type = country_event
+	title = "qing_caravan.2.t"
+	desc = "qing_caravan.2.desc"
+	picture = revolt
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_xj_khoja_pending
+		has_variable = qing_caravan_prosperity
+		var:qing_caravan_prosperity >= 40
+	}
+
+	immediate = {
+		# [#370] set the once-only offered flag HERE (only when the event fires).
+		set_variable = { name = qing_caravan_routecut_seen  value = 1 }
+		LOG_line = { sys = QING  msg = "EVENT qing_caravan.2 (商道斷絕 route cut) for [ROOT.GetTag]" }
+	}
+
+	# --- MILITARY ESCORT (護商) — force the road open with a garrison column; costly, firms the grip. --
+	option = {
+		name = "qing_caravan.2.escort"
+		custom_tooltip = "qing_caravan.2.escort.tt"
+		trigger = { treasury >= 30 }
+		QING_caravan_military_escort = yes
+		# [#370-R] clear the once-only flag on RESOLUTION too, not only on lapse — the crisis is
+		# over, and a FUTURE khoja scare (se_QING_XINJIANG re-raises qing_xj_khoja_pending) must be
+		# able to re-fire .2. Leaving it set permanently suppressed the recurring crisis after the
+		# first escort/negotiate, dragging prosperity -15 with no player choice (the #366/#368 class).
+		if = {
+			limit = { has_variable = qing_caravan_routecut_seen }
+			remove_variable = qing_caravan_routecut_seen
+		}
+	}
+
+	# --- NEGOTIATE VIA KOKAND (許阿奇木) — grant the concession to have Kokand call off its pretenders
+	# and reopen the road. The commercial surrender. -----
+	option = {
+		name = "qing_caravan.2.negotiate"
+		custom_tooltip = "qing_caravan.2.negotiate.tt"
+		QING_caravan_grant_aqsaqal = yes
+		# [#370-R2] clear the once-only flag on THIS resolution too (escort + lapse already do).
+		# Granting the aqsaqal ends THIS crisis; a FUTURE khoja scare after a later revoke must be
+		# able to re-fire .2. Leaving it set permanently suppressed the recurring crisis on the
+		# grant-then-revoke path (the #366/#368 flag-leak class the escort option was fixed against).
+		if = {
+			limit = { has_variable = qing_caravan_routecut_seen }
+			remove_variable = qing_caravan_routecut_seen
+		}
+	}
+
+	# --- LET IT LAPSE (聽其斷絕) — the trade collapses; prosperity crashes and the oases sour. ---
+	option = {
+		name = "qing_caravan.2.lapse"
+		custom_tooltip = "qing_caravan.2.lapse.tt"
+		QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = -20 }
+		QING_DECLINE_nudge = { var = qing_xinjiang_control    amount = -3 }
+		# the crisis can recur — clear the seen flag so the pulse re-offers while the scare stands.
+		if = {
+			limit = { has_variable = qing_caravan_routecut_seen }
+			remove_variable = qing_caravan_routecut_seen
+		}
+	}
+}

@@ -167,6 +167,129 @@ QING_justice_vindicate_appeal = {
 	LOG_exit = { sys = QING  fn = "QING_justice_vindicate_appeal"  result = OK }
 }
 
+# ======================================================================
+# [#363] THE DOCKET (待審) — the Board of Punishments' concrete work: a roster of
+# accused officials it HOLDS and TRIES. Distinct from the Censorate's instant impeach
+# (都察院, #362 — surveillance + one-blow disgrace): the 刑部 is the high COURT, so it
+# CHARGES a suspect onto its docket first (qing_justice_accused), then convicts or
+# acquits him at trial. These verbs back the #363 panel; se_LOG throughout.
+# ======================================================================
+
+# FIND AN ACCUSABLE OFFICIAL — the most corrupt courtier NOT already on the docket,
+# saved as scope:qing_justice_target. Mirrors QING_censorate_find_corrupt's limit but
+# excludes men already charged (so ACCUSE never re-charges a docketed suspect). Country scope.
+QING_justice_find_accusable = {
+	LOG_enter = { sys = QING  fn = "QING_justice_find_accusable" }
+	# [#363, mirrors #362 review-fix R2] save the sitting Minister of Justice so the search can
+	# EXCLUDE him: he cannot be charged onto his OWN docket (that would double-role him — scored
+	# as the presiding minister in perf term (a) AND tallied in the docket-backlog term (c)). A
+	# corrupt Justice minister is dealt with by removing him from office, not by self-indictment.
+	# `this = scope:X` char-equality is the proven exclusion idiom (se_QING_COLON.txt:185).
+	if = {
+		limit = {
+			has_variable = qing_office_justice_holder
+			var:qing_office_justice_holder = { is_alive = yes  employer = ROOT }
+		}
+		var:qing_office_justice_holder = { save_scope_as = qing_justice_sitting_minister }
+	}
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_ruler = no
+			is_adult = yes
+			is_alive = yes
+			NOT = { has_variable = qing_rebel_foil }
+			NOT = { has_variable = qing_justice_accused }
+			# [#363-R2 review-fix] exclude ALL seated great-office holders (not just the sitting
+			# Minister of Justice). The docket rebuild (QING_ministry_recompute_perf_justice) filters
+			# NOT={has_variable=qing_office_held}, so charging an office-holder produced an accused man
+			# who never appeared on the docket — the ACCUSE lever visibly no-op'd and left a permanent,
+			# un-triable qing_justice_accused mark (and a phantom docket entry once he lost office). This
+			# broader guard subsumes the old sitting-Justice-minister-only exclusion (he holds an office).
+			NOT = { has_variable = qing_office_held }
+			# [#419] the convict is JAILED at trial via the vanilla `imprison` effect, whose allowed
+			# targets EXCLUDE serving commanders / governors / the heir / co-ruler / family & clan heads /
+			# legion commanders (TI imprison.txt allowed_trigger). Match that here so ACCUSE never docks a
+			# man CONVICT then cannot actually jail (the trial would disgrace him but the imprison would
+			# silently no-op). is_ruler is already excluded above; add the rest of imprison's bars.
+			is_general = no
+			is_admiral = no
+			is_governor = no
+			is_co_ruler = no
+			is_primary_heir = no
+			is_head_of_family = no
+			is_clan_chief = no
+			# [#419] BROADENED the accusable pool: the 刑部 tried the whole span of official misconduct
+			# (贓/酷/怠/叛 — graft, cruelty, dereliction, disloyalty), not only outright corruption. Was
+			# only { corruption>=30 OR corrupt OR loyalty<40 }; now also catches a moderately-corrupt
+			# official (>=20), the cruel/arbitrary magistrate (酷吏 — a real 刑部 charge), and the openly
+			# disloyal (loyalty<50). Widens who the docket can reach without making everyone chargeable.
+			OR = {
+				corruption >= 20
+				has_trait = corrupt
+				has_trait = cruel
+				has_trait = arbitrary
+				loyalty < 50
+			}
+		}
+		order_by = corruption
+		check_range_bounds = no
+		max = 1
+		save_scope_as = qing_justice_target
+	}
+	if = {
+		limit = { exists = scope:qing_justice_target }
+		LOG_line = { sys = QING  msg = "justice: an accusable official found for the docket for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_justice_find_accusable"  reason = "no accusable official found for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_justice_find_accusable"  result = OK }
+}
+
+# CONVICT AN ACCUSED (定罪) — the trial goes against the accused. Disgrace + strip office + reduce
+# corruption, and (the concrete 刑部 penalty) IMPRISON the convict via the ENGINE's own prison mechanic
+# (下獄). Scope: the accused CHARACTER (ROOT); scope:player = CHI. Uses only proven idioms: QING_char_taint,
+# QING_office_vacate_dispatch, and the vanilla `imprison = { target = <char> }` run at country scope (TI
+# imprison.txt:84 — scope:actor = { imprison = { target = scope:target } }). [#419] REPLACES the former
+# set_pop_type = slaves household-enslavement hook (the design pivoted off the slave-class mechanic): a
+# convicted official is now JAILED as a real prisoner of the throne, not modelled by enslaving a capital pop.
+QING_justice_convict_accused = {
+	LOG_enter = { sys = QING  fn = "QING_justice_convict_accused" }
+	# the code falls on the convict: tainted (corrupt trait + corruption up), disgraced,
+	# and stripped of any great office he held.
+	QING_char_taint = yes
+	add_loyalty = loyalty_qing_disgraced
+	add_popularity = -20
+	if = { limit = { has_variable = qing_office_held }  QING_office_vacate_dispatch = yes }
+	remove_variable = qing_justice_accused
+	# [#419] IMPRISONMENT (下獄): the convict is jailed by the throne through the engine's OWN prison
+	# mechanic. `imprison` runs at COUNTRY scope with target = the character (TI imprison.txt:84); guarded
+	# on `prisoner = no` (the proven already-imprisoned test, imprison.txt:16/25) so it never errors on a
+	# re-conviction. ROOT = the convict, scope:player = CHI.
+	if = {
+		limit = { prisoner = no }
+		save_scope_as = qing_justice_convict
+		scope:player = { imprison = { target = scope:qing_justice_convict } }
+	}
+	scope:player = {
+		# a conviction cleans a little rot out of the system.
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -5 }
+	}
+	LOG_line = { sys = QING  msg = "justice: an accused convicted — disgraced, stripped of office, and imprisoned for" }
+	LOG_exit = { sys = QING  fn = "QING_justice_convict_accused"  result = OK }
+}
+
+# ACQUIT AN ACCUSED (開釋) — the trial clears him. Struck from the docket; a wrongly-held
+# man's loyalty is soothed a touch. Scope: the accused CHARACTER (ROOT); scope:player = CHI.
+QING_justice_acquit_accused = {
+	LOG_enter = { sys = QING  fn = "QING_justice_acquit_accused" }
+	remove_variable = qing_justice_accused
+	add_loyalty = loyalty_qing_commended
+	LOG_line = { sys = QING  msg = "justice: an accused acquitted and struck from the docket for" }
+	LOG_exit = { sys = QING  fn = "QING_justice_acquit_accused"  result = OK }
+}
+
 # Protect the official (京控 denied) — shield the magistrate, suppress the appeal.
 QING_justice_deny_appeal = {
 	LOG_enter = { sys = QING  fn = "QING_justice_deny_appeal" }

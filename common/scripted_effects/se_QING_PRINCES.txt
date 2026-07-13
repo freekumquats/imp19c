@@ -1,0 +1,370 @@
+########################################################################
+# se_QING_PRINCES.txt — [#368] Court Intrigue + Succession Deep Sim (宮闈鬥爭 / 立儲之爭).
+#
+# CONCRETE princes over the EXISTING abstract succession. The mod already models the
+# succession CONTEST abstractly — qing_succession.1 (九子奪嫡) raises a bool
+# qing_succession_jockeying + a qing_succession_faction_strife modifier; qing_succession.2
+# resolves it smooth-or-disputed at accession off qing_secret_succession_sealed. #368 supplies
+# the PRINCES THEMSELVES (the concrete-over-abstract house rule): a live roster of the reigning
+# emperor's adult sons (皇子), each carrying a court-backing score, plus the teeth to seal the
+# tablet on a SPECIFIC prince (Yongzheng's 秘密立儲, which broke the open 九子奪嫡 bloodbath).
+#
+# LAYER, DON'T DUPLICATE. #368 drives the SAME flags the existing accession event already
+# consumes — qing_secret_succession_sealed (smooth transfer) + qing_succession_jockeying — so
+# the two layers interlock. It owns NO new accession machinery.
+#
+# THE GRAND-COUNCIL FOLD IS ALREADY WIRED (transitively, like the Harem #360 / Upper Study #337,
+# which are dynastic institutions, not council offices). The succession contest nudges the shared
+# qing_dynastic_harmony meter, which QING_council_recompute additively converts into
+# qing_council_eff_target. A house torn by a succession war gums up the council; a sealed, secure
+# succession lets the great offices work. #368 adds NO new fold — the succession belongs to the
+# EMPEROR, not an office, so the harmony coupling (not a per-office perf term) is the correct one.
+#
+# ALL PRIMITIVES PROVEN (no oracle needed): princes are born through the engine's OWN birth
+# mechanic (the harem's make_pregnant, #360), so they are real family-graph children — NO
+# create_character is used (sidesteps the #90 boot-crash rule). every_child/ordered_child +
+# is_male/is_adult (se_MARRIAGE.txt), nominated_heir_modifier + recalc_succession (the vanilla
+# anoint_heir designate-heir mechanic, common/scripted_guis/anoint_heir_button.txt), per-char
+# set_variable, combined_stats_council_svalue (QING_governance_svalues.txt).
+#
+#   ROOT / this = CHI (guarded). Prefix = QING_princes · sys tag = QING.
+#   State:
+#     qing_princes             variable_list on CHI: the reigning emperor's living adult sons
+#     qing_prince_count        int, roster size (GUI + gates read it)
+#     qing_prince_backing      char var (0..100): a prince's court support (the faction behind him)
+#     qing_prince_spread_tmp   scratch: the top-minus-bottom backing spread (the strife signal)
+#   Existing flags it drives: qing_secret_succession_sealed, qing_succession_jockeying (regency events)
+########################################################################
+
+# ---- per-PRINCE backing nudge (char scope), clamped 0..100, self-init ----
+# Called inside a prince (character) scope. $amount$ = signed int.
+QING_prince_backing_nudge = {
+	if = {
+		limit = { NOT = { has_variable = qing_prince_backing } }
+		set_variable = { name = qing_prince_backing  value = 0 }
+	}
+	change_variable = { name = qing_prince_backing  add = $amount$ }
+	if = { limit = { var:qing_prince_backing > 100 } set_variable = { name = qing_prince_backing  value = 100 } }
+	if = { limit = { var:qing_prince_backing < 0 }   set_variable = { name = qing_prince_backing  value = 0 } }
+}
+
+# ======================================================================
+# INIT — seed the succession-contest bookkeeping once at game start. Idempotent.
+# The roster itself is (re)built by the recompute; init only clears the list + count so
+# the first recompute has a clean slate. Scope: COUNTRY (CHI).
+# ======================================================================
+QING_princes_init = {
+	LOG_enter = { sys = QING  fn = "QING_princes_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_princes_initialized } }
+		set_variable = { name = qing_princes_initialized  value = 1 }
+		set_variable = { name = qing_prince_count  value = 0 }
+		clear_variable_list = qing_princes
+	}
+	QING_princes_recompute_roster = yes
+	LOG_exit = { sys = QING  fn = "QING_princes_init"  result = OK }
+}
+
+# ======================================================================
+# ROSTER RECOMPUTE — rebuild qing_princes = the reigning emperor's LIVING ADULT SONS, and
+# seed each prince's backing on first entry (from his combined-stats worth + a base, so an
+# abler son starts with more court support — the historical pattern). Self-healing: a dead or
+# departed prince simply is not re-added; his stale backing var is harmless. Bounded
+# O(emperor's children). Run quarterly + on panel open. Scope: COUNTRY (CHI). Mirrors the
+# harem roster rebuild (QING_harem_recompute_roster).
+# ======================================================================
+QING_princes_recompute_roster = {
+	clear_variable_list = qing_princes
+	set_variable = { name = qing_prince_count  value = 0 }
+	if = {
+		limit = { exists = current_ruler }
+		current_ruler = {
+			# ordered_child (no max) iterates ALL matching children in age order — the proven
+			# effect-iterator form (se_MARRIAGE.txt uses ordered_child; every_child is not a
+			# demonstrated effect iterator in this codebase). order_by = age = eldest first.
+			ordered_child = {
+				limit = {
+					is_male = yes
+					is_adult = yes
+					is_alive = yes
+				}
+				order_by = age
+				# seed backing on first sighting: base 20 + combined-stats worth (so a prince of
+				# 40 combined skills opens at ~60 support, a dullard at ~25). One-time.
+				if = {
+					limit = { NOT = { has_variable = qing_prince_backing } }
+					set_variable = { name = qing_prince_backing  value = combined_stats_council_svalue }
+					change_variable = { name = qing_prince_backing  add = 20 }
+					# [#427] 嫡庶之別 — a prince's court backing turns hard on his MOTHER's standing, the
+					# decisive fact in a Qing succession. An 嫡子 (the empress's own son, mother =
+					# current_ruler.spouse) opens with a commanding +25; a 貴子 born of a senior harem rank
+					# (皇貴妃/貴妃, qing_consort_rank >= 3) opens +12; a low consort's 庶子 gets nothing extra.
+					# This couples #427 directly to the #438 harem-rank establishment — who the emperor
+					# raises in the harem shapes which son the court will back.
+					if = {
+						limit = {
+							exists = mother
+							exists = ROOT.current_ruler.spouse
+							mother = { this = ROOT.current_ruler.spouse }
+						}
+						change_variable = { name = qing_prince_backing  add = 25 }
+					}
+					else_if = {
+						limit = { exists = mother  mother = { has_variable = qing_consort_rank  var:qing_consort_rank >= 3 } }
+						change_variable = { name = qing_prince_backing  add = 12 }
+					}
+					if = { limit = { var:qing_prince_backing > 100 } set_variable = { name = qing_prince_backing  value = 100 } }
+				}
+				ROOT = {
+					add_to_variable_list = { name = qing_princes  target = prev }
+					change_variable = { name = qing_prince_count  add = 1 }
+				}
+			}
+		}
+	}
+}
+
+# ======================================================================
+# COMPUTE THE BACKING SPREAD — the top-minus-bottom backing across the roster, the factional
+# strife signal (a wide spread = a court split between princely cliques; a narrow one = a
+# settled field). Writes qing_prince_spread_tmp on CHI. Scope: COUNTRY. Uses ordered_in_list
+# max-pick (proven ranking idiom). A roster below 2 princes has no contest -> spread 0.
+# ======================================================================
+QING_princes_compute_spread = {
+	set_variable = { name = qing_prince_spread_tmp  value = 0 }
+	if = {
+		limit = { var:qing_prince_count >= 2  has_variable_list = qing_princes }
+		# top backing
+		# [proven-idiom fix] read the list element's var back via the PROVEN scope:X.var:Y idiom
+		# (save_scope_as + scope:...var:); the bare prev.var: form is NOT attested upstream.
+		set_variable = { name = qing_prince_top_tmp  value = 0 }
+		every_in_list = {
+			variable = qing_princes
+			limit = { var:qing_prince_backing > ROOT.var:qing_prince_top_tmp }
+			save_scope_as = qing_prince_scan
+			ROOT = { set_variable = { name = qing_prince_top_tmp  value = scope:qing_prince_scan.var:qing_prince_backing } }
+		}
+		# bottom backing (seed high, then take the min)
+		set_variable = { name = qing_prince_bot_tmp  value = 100 }
+		every_in_list = {
+			variable = qing_princes
+			limit = { var:qing_prince_backing < ROOT.var:qing_prince_bot_tmp }
+			save_scope_as = qing_prince_scan
+			ROOT = { set_variable = { name = qing_prince_bot_tmp  value = scope:qing_prince_scan.var:qing_prince_backing } }
+		}
+		set_variable = { name = qing_prince_spread_tmp  value = var:qing_prince_top_tmp }
+		change_variable = { name = qing_prince_spread_tmp  subtract = var:qing_prince_bot_tmp }
+		remove_variable = qing_prince_top_tmp
+		remove_variable = qing_prince_bot_tmp
+	}
+}
+
+# ======================================================================
+# THE PULSE — quarterly. Rebuilds the roster, drifts backing (DIVERGING while the succession
+# is unsealed and contested), couples the strife spread into dynastic harmony, and offers the
+# contest events. Scope: COUNTRY (CHI). Called from QING_GOV_pulse after QING_upperstudy_pulse.
+# ======================================================================
+QING_princes_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_princes_pulse" }
+	QING_princes_init = yes
+	QING_princes_recompute_roster = yes
+
+	# --- backing drift: only while the succession is UNSEALED and ≥2 adult princes contend
+	# (the 九子奪嫡 condition). The ablest gains support, the rest hold — so a contest with no
+	# named heir grows more polarised over time. A sealed succession freezes the drift (the
+	# object of the jockeying is gone).
+	if = {
+		limit = {
+			var:qing_prince_count >= 2
+			NOT = { has_variable = qing_secret_succession_sealed }
+		}
+		# lift only the front-runner (highest backing) — ordered_in_list max = 1 picks him.
+		ordered_in_list = {
+			variable = qing_princes
+			order_by = var:qing_prince_backing
+			max = 1
+			QING_prince_backing_nudge = { amount = 3 }
+		}
+		# the jockeying is now live (drives the existing accession-event read).
+		if = {
+			limit = { NOT = { has_variable = qing_succession_jockeying } }
+			set_variable = { name = qing_succession_jockeying  value = 1 }
+		}
+	}
+
+	# --- couple the strife spread into dynastic harmony: a wide backing spread (a polarised
+	# court) drags the house down; a narrow or sealed field is calm.
+	QING_princes_compute_spread = yes
+	if = {
+		limit = {
+			var:qing_prince_spread_tmp >= 50
+			NOT = { has_variable = qing_secret_succession_sealed }
+		}
+		QING_dynasty_harmony_nudge = { amount = -1 }
+		LOG_line = { sys = QING  msg = "princes: a polarised succession contest drags the house for" }
+	}
+	remove_variable = qing_prince_spread_tmp
+
+	# --- offer the contest event once the spread first turns dangerous under an unsealed
+	# succession (player-only; the event re-checks its own state). NOTE: the once-only "seen"
+	# flag is set in the EVENT's own immediate (qing_princes.1), NOT here — so that if the
+	# event's re-check trigger fails during the 5-20 day delay (e.g. the player seals the
+	# succession first), the flag is never stuck set and the offer can recur when warranted.
+	# [#368-R] mirrors the #366/#367 flag-leak fix.
+	if = {
+		limit = {
+			var:qing_prince_count >= 2
+			NOT = { has_variable = qing_secret_succession_sealed }
+			NOT = { has_variable = qing_princes_contest_seen }
+			NOT = { has_variable = qing_gc_event_slot_used }  # [court-slot] share the quarterly court-event slot
+			is_ai = no
+		}
+		QING_princes_compute_spread = yes
+		if = {
+			limit = { var:qing_prince_spread_tmp >= 40 }
+			trigger_event = { id = qing_princes.1  days = { 5 20 } }
+			set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [court-slot] claim only on the fire path
+		}
+		remove_variable = qing_prince_spread_tmp
+	}
+	# --- offer the over-mighty-prince event when a single prince's backing grows alarming.
+	# The "seen" flag is likewise set in qing_princes.2's own immediate (see note above).
+	else_if = {
+		limit = {
+			var:qing_prince_count >= 2
+			NOT = { has_variable = qing_secret_succession_sealed }
+			NOT = { has_variable = qing_princes_overmighty_seen }
+			NOT = { has_variable = qing_gc_event_slot_used }  # [court-slot] share the quarterly court-event slot
+			is_ai = no
+			any_in_list = { variable = qing_princes  var:qing_prince_backing >= 85 }
+		}
+		trigger_event = { id = qing_princes.2  days = { 5 20 } }
+		set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [court-slot] claim on the fire path
+	}
+	LOG_exit = { sys = QING  fn = "QING_princes_pulse"  result = OK }
+}
+
+# ======================================================================
+# LEVER: FAVOUR A PRINCE (培植) — groom the ablest prince: +prestige, +backing. Advances a
+# clear front-runner (good if you mean to seal on him), but while unsealed it inflames the
+# losers (a small harmony hit — open favour is what fed the 九子奪嫡). Picks the ablest prince
+# by combined stats. Scope: COUNTRY (CHI).
+# ======================================================================
+QING_princes_favour = {
+	LOG_enter = { sys = QING  fn = "QING_princes_favour" }
+	QING_princes_recompute_roster = yes
+	if = {
+		limit = { var:qing_prince_count >= 1  has_variable_list = qing_princes }
+		ordered_in_list = {
+			variable = qing_princes
+			order_by = combined_stats_council_svalue
+			max = 1
+			# [T3 BT-5/6] was add_prestige (inert on a character) -> the favoured prince's court popularity.
+			add_popularity = 20
+			QING_prince_backing_nudge = { amount = 12 }
+			save_scope_as = qing_favoured_prince
+		}
+		# open favour under an unsealed succession inflames the losing cliques.
+		if = {
+			limit = { NOT = { has_variable = qing_secret_succession_sealed } }
+			QING_dynasty_harmony_nudge = { amount = -2 }
+		}
+		LOG_line = { sys = QING  msg = "princes: the throne grooms a favoured prince for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_princes_favour"  result = OK }
+}
+
+# ======================================================================
+# LEVER: SECRETLY DESIGNATE THE HEIR (秘密立儲) — the teeth. Name the ablest prince the sealed
+# heir: apply the vanilla nominated_heir_modifier (support_for_character_as_heir = 50 -> he
+# becomes primary_heir) + recalc_succession, and set qing_secret_succession_sealed so the
+# existing qing_succession.2 accession delivers a smooth transfer. Ends the jockeying, lifts
+# harmony, +legitimacy. Only ONE nominee — strip any prior first (mirrors the vanilla button).
+# Scope: COUNTRY (CHI).
+# ======================================================================
+QING_princes_seal_succession = {
+	LOG_enter = { sys = QING  fn = "QING_princes_seal_succession" }
+	QING_princes_recompute_roster = yes
+	if = {
+		limit = { var:qing_prince_count >= 1  has_variable_list = qing_princes }
+		# strip any existing nominee (only one heir apparent at a time — vanilla anoint_heir rule).
+		every_character = {
+			limit = { has_triggered_character_modifier = nominated_heir_modifier }
+			remove_triggered_character_modifier = nominated_heir_modifier
+		}
+		# name the ablest prince the sealed heir.
+		ordered_in_list = {
+			variable = qing_princes
+			order_by = var:qing_prince_backing
+			max = 1
+			add_triggered_character_modifier = { name = nominated_heir_modifier  duration = -1 }
+			save_scope_as = qing_sealed_heir
+		}
+		recalc_succession = yes
+		set_variable = { name = qing_secret_succession_sealed  value = 1 }
+		if = { limit = { has_variable = qing_succession_jockeying } remove_variable = qing_succession_jockeying }
+		add_legitimacy = 8
+		add_stability = 1
+		QING_dynasty_harmony_nudge = { amount = 6 }
+		# the crown-prince seat goes deliberately vacant (the heir is now secret) — refresh so
+		# the throne row reflects it (QING_seat_refresh_crownprince hides the heir while sealed).
+		QING_seat_refresh_all = yes
+		LOG_line = { sys = QING  msg = "princes: 秘密立儲 sealed on the front-runner for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_princes_seal_succession"  result = OK }
+}
+
+# ======================================================================
+# LEVER: INVESTIGATE AN OVER-MIGHTY PRINCE (查辦) — a prince whose backing has grown dangerously
+# high (an over-mighty son building his own faction — the Yinreng/Yinsi pattern) is investigated
+# by the Censorate: his backing is stripped hard, at a cost in prestige and a harmony risk (moving
+# against a son is ugly). Picks the highest-backing prince. Scope: COUNTRY (CHI). Gated by the
+# caller on an over-mighty prince existing.
+# ======================================================================
+QING_princes_investigate = {
+	LOG_enter = { sys = QING  fn = "QING_princes_investigate" }
+	QING_princes_recompute_roster = yes
+	if = {
+		limit = {
+			has_variable_list = qing_princes
+			any_in_list = { variable = qing_princes  var:qing_prince_backing >= 70 }
+		}
+		ordered_in_list = {
+			variable = qing_princes
+			order_by = var:qing_prince_backing
+			max = 1
+			# [T3 BT-5/6] was add_prestige (inert on a character) -> the curbed prince's court popularity.
+			add_popularity = -15
+			QING_prince_backing_nudge = { amount = -35 }
+			save_scope_as = qing_curbed_prince
+		}
+		# moving against a son unsettles the house.
+		QING_dynasty_harmony_nudge = { amount = -3 }
+		LOG_line = { sys = QING  msg = "princes: an over-mighty prince is investigated and curbed for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_princes_investigate"  result = OK }
+}
+
+# ======================================================================
+# LEVER: REOPEN THE SUCCESSION (廢儲) — depose the sealed heir (the historical Kangxi deposition
+# of Yinreng). Clears the seal + the nominee modifier, reopens the jockeying, costs legitimacy +
+# harmony. High-risk. Scope: COUNTRY (CHI). Gated by the caller on a sealed succession.
+# ======================================================================
+QING_princes_reopen = {
+	LOG_enter = { sys = QING  fn = "QING_princes_reopen" }
+	if = {
+		limit = { has_variable = qing_secret_succession_sealed }
+		every_character = {
+			limit = { has_triggered_character_modifier = nominated_heir_modifier }
+			remove_triggered_character_modifier = nominated_heir_modifier
+		}
+		recalc_succession = yes
+		remove_variable = qing_secret_succession_sealed
+		set_variable = { name = qing_succession_jockeying  value = 1 }
+		add_legitimacy = -10
+		QING_dynasty_harmony_nudge = { amount = -8 }
+		QING_seat_refresh_all = yes
+		LOG_line = { sys = QING  msg = "princes: 廢儲 — the sealed succession is reopened for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_princes_reopen"  result = OK }
+}

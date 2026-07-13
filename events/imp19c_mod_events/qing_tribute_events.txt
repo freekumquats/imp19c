@@ -13,6 +13,10 @@
 #
 # Namespace = qing_tribute
 #   .1  a tribute embassy arrives at Peking (audience-with-gifts vs perfunctory-dismiss)
+#   .2  a tributary's new ruler awaits investiture (冊封)  [#322 deferred]
+#   .3  a restless tributary tests the bond (breakaway crisis, low prestige)  [#322 deferred]
+#   .4  a great power meddles in a Qing tributary (以夷制夷)  [#322 deferred]
+#   .5  a tributary defaults on its tribute — punish or forgive (理藩院)  [BT-11]
 #
 # Sources: Fairbank (ed.), The Chinese World Order (1968); Hamashita, China, East
 #   Asia and the Global Economy (2008); Larsen, Tradition, Treaties, and Trade (2008).
@@ -91,5 +95,256 @@ qing_tribute.1 = {
 		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = -3 }
 		add_political_influence = 5
 		QING_tribute_dismiss_envoy = yes
+	}
+}
+
+########################################################################
+# .2  A TRIBUTARY'S NEW RULER AWAITS INVESTITURE  (冊封)
+# [#322 deferred] Fired from QING_tribute_invest_new_ruler off the tributary-side
+# on_ruler_change: a Qing tributary's throne has passed to a new sovereign, who awaits
+# the imperial patent + seal that renewed the tributary bond each reign. The throne may
+# invest him promptly (affirms the order), sell the recognition dear (a price for the
+# patent), or withhold it (a snub that strains the tie — and invites a rival's meddling).
+########################################################################
+qing_tribute.2 = {
+	type = country_event
+	title = "qing_tribute.2.t"
+	desc = "qing_tribute.2.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:trib_invest_vassal.current_ruler
+
+	is_triggered_only = yes
+
+	# [T2 review-fix / BT-7 idiom] guard on the PERSISTED var, not the raw saved scope (which goes
+	# stale across the 10-40d delay); re-save it into scope:trib_invest_vassal in immediate.
+	trigger = {
+		tag = CHI
+		has_variable = qing_trib2_vassal
+		var:qing_trib2_vassal = { is_subject_of = ROOT }
+	}
+
+	immediate = {
+		var:qing_trib2_vassal = { save_scope_as = trib_invest_vassal }
+		LOG_line = { sys = QING  msg = "EVENT qing_tribute.2 (a tributary's new ruler awaits investiture) [ROOT.GetTag]" }
+	}
+
+	# --- Invest him promptly — confer the patent and seal (affirm the order) ---------
+	option = {
+		name = "qing_tribute.2.a"
+		custom_tooltip = "qing_tribute.2.a.tt"
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = 6 }
+		current_ruler = { add_popularity = 5 }  # [T3 BT-5/6] was add_prestige (inert on a character)
+		add_stability = 1
+		# the confirmed vassal is bound the tighter to Peking (subject-facing loyalty).
+		scope:trib_invest_vassal = { add_country_modifier = { name = qing_tributary_invested  duration = 3650 } }
+	}
+
+	# --- Confer it, but extract a price for the recognition --------------------------
+	option = {
+		name = "qing_tribute.2.b"
+		custom_tooltip = "qing_tribute.2.b.tt"
+		# a lesser affirmation, but a fee for the patent (the recognition sold dear).
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = 2 }
+		if = {
+			limit = { scope:trib_invest_vassal = { exists = current_ruler } }
+			QING_tribute_receive = { sender = scope:trib_invest_vassal }
+		}
+	}
+
+	# --- Withhold recognition — let him prove his submission first (a snub) ----------
+	option = {
+		name = "qing_tribute.2.c"
+		custom_tooltip = "qing_tribute.2.c.tt"
+		# the unrecognised sovereign is slighted; the tie strains and reform pressure ticks.
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = -5 }
+		add_political_influence = 10
+	}
+}
+
+########################################################################
+# .3  A RESTLESS TRIBUTARY TESTS THE BOND  (breakaway crisis)
+# [#322 deferred] Fired from QING_tribute_breakaway_check when suzerain prestige has
+# fallen low: a tributary, sensing the centre weaken, hangs back from its obligations
+# and tests whether the bond still holds. The throne must overawe it (a costly show of
+# strength), buy its loyalty back, or let it drift toward independence.
+########################################################################
+qing_tribute.3 = {
+	type = country_event
+	title = "qing_tribute.3.t"
+	desc = "qing_tribute.3.desc"
+	picture = senate_debate
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	# [T2 review-fix / BT-7 idiom] guard on the PERSISTED var, not the raw saved scope (stale across
+	# the 5-20d delay); re-save it into scope:trib_restless in immediate.
+	trigger = {
+		tag = CHI
+		has_variable = qing_trib3_restless
+		var:qing_trib3_restless = { is_subject_of = ROOT }
+	}
+
+	immediate = {
+		var:qing_trib3_restless = { save_scope_as = trib_restless }
+		LOG_line = { sys = QING  msg = "EVENT qing_tribute.3 (a restless tributary tests the bond) [ROOT.GetTag]" }
+	}
+
+	# --- Overawe it — a show of strength on the marches (reassert suzerainty) ---------
+	option = {
+		name = "qing_tribute.3.a"
+		custom_tooltip = "qing_tribute.3.a.tt"
+		trigger = { treasury >= 60 }
+		add_treasury = -60
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = 12 }
+		add_stability = 1
+		scope:trib_restless = { add_country_modifier = { name = qing_tributary_invested  duration = 3650 } }
+	}
+
+	# --- Buy its loyalty back — largesse and remitted tribute -------------------------
+	option = {
+		name = "qing_tribute.3.b"
+		custom_tooltip = "qing_tribute.3.b.tt"
+		trigger = { treasury >= 30 }
+		add_treasury = -30
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = 5 }
+		scope:trib_restless = { add_country_modifier = { name = qing_tributary_invested  duration = 3650 } }
+	}
+
+	# --- Let it drift — the empire cannot answer every insolence (the order frays) ----
+	option = {
+		name = "qing_tribute.3.c"
+		custom_tooltip = "qing_tribute.3.c.tt"
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = -8 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
+	}
+}
+
+########################################################################
+# .4  A GREAT POWER MEDDLES IN A QING TRIBUTARY  (以夷制夷)
+# [#322 deferred] Fired from QING_tribute_gp_interference_check when a great power's
+# China tension has risen: the meddling power (named in qing_tribute_meddler) presses
+# into a Qing tributary's affairs — the historical arc of Western/Japanese encroachment
+# on the Sinocentric order (France in Vietnam, Britain on the Burmese/Nepalese marches).
+# The throne answers with a firm warning (raises tension with that power but holds the
+# tributary), a diplomatic bargain (eases tension, cedes influence), or acquiescence.
+########################################################################
+qing_tribute.4 = {
+	type = country_event
+	title = "qing_tribute.4.t"
+	desc = "qing_tribute.4.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	# [T2 review-fix / BT-7 idiom] guard on the PERSISTED var, not the raw saved scope (stale across
+	# the 5-20d delay); re-save it into scope:trib_meddled in immediate.
+	trigger = {
+		tag = CHI
+		has_variable = qing_trib4_meddled
+		var:qing_trib4_meddled = { is_subject_of = ROOT }
+	}
+
+	immediate = {
+		var:qing_trib4_meddled = { save_scope_as = trib_meddled }
+		LOG_line = { sys = QING  msg = "EVENT qing_tribute.4 (a great power meddles in a Qing tributary) [ROOT.GetTag]" }
+	}
+
+	# --- Warn the meddling power off — reassert the tributary is ours -----------------
+	option = {
+		name = "qing_tribute.4.a"
+		custom_tooltip = "qing_tribute.4.a.tt"
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = 6 }
+		# the warning raises tension with the named meddler (以夷制夷 pushback).
+		if = { limit = { var:qing_tribute_meddler = flag:britain } QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = 8 } }
+		else_if = { limit = { var:qing_tribute_meddler = flag:france } QING_DECLINE_nudge = { var = qing_gp_tension_france  amount = 8 } }
+		else = { QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = 8 } }
+		scope:trib_meddled = { add_country_modifier = { name = qing_tributary_invested  duration = 3650 } }
+	}
+
+	# --- Strike a bargain — cede a measure of influence to ease the tension -----------
+	option = {
+		name = "qing_tribute.4.b"
+		custom_tooltip = "qing_tribute.4.b.tt"
+		# a face-saving accommodation: tension with the meddler eases, but the order slips.
+		if = { limit = { var:qing_tribute_meddler = flag:britain } QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = -6 } }
+		else_if = { limit = { var:qing_tribute_meddler = flag:france } QING_DECLINE_nudge = { var = qing_gp_tension_france  amount = -6 } }
+		else = { QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = -6 } }
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = -4 }
+		add_political_influence = 10
+	}
+
+	# --- Acquiesce — the empire cannot contest the barbarians here (the order frays) --
+	option = {
+		name = "qing_tribute.4.c"
+		custom_tooltip = "qing_tribute.4.c.tt"
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = -10 }
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 6 }
+	}
+}
+
+########################################################################
+# .5  A TRIBUTARY DEFAULTS ON ITS TRIBUTE — PUNISH OR FORGIVE  (理藩院裁決)  [BT-11]
+# Fired from QING_tribute_default_check when a tributary's treasury could not cover its
+# owed tribute this quarter (a real default). The matter comes before the Lifan Yuan
+# (理藩院): the throne may PUNISH the defaulter — tighten the grip, dock its loyalty and
+# goodwill, and reassert the order's prestige — or FORGIVE the arrears as an act of
+# imperial grace (懷柔遠人), winning goodwill and legitimacy but letting the order's
+# standing slip. scope:trib_defaulter = the defaulting tributary country.
+########################################################################
+qing_tribute.5 = {
+	type = country_event
+	title = "qing_tribute.5.t"
+	desc = "qing_tribute.5.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	# [BT-11 / BT-7 idiom] guard on the PERSISTED var (qing_trib5_defaulter), not the raw saved
+	# scope: a scope saved at the check site can go stale across the 5-20d delay. Re-save it into
+	# scope:trib_defaulter in immediate so the desc/options read a live scope.
+	trigger = {
+		tag = CHI
+		has_variable = qing_trib5_defaulter
+		var:qing_trib5_defaulter = { is_subject_of = ROOT }
+	}
+
+	immediate = {
+		var:qing_trib5_defaulter = { save_scope_as = trib_defaulter }
+		LOG_line = { sys = QING  msg = "EVENT qing_tribute.5 (a tributary has defaulted on its tribute) [ROOT.GetTag]" }
+	}
+
+	# --- Punish — tighten the grip and dock the defaulter's standing -------------------
+	option = {
+		name = "qing_tribute.5.a"
+		custom_tooltip = "qing_tribute.5.a.tt"
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = 6 }
+		scope:trib_defaulter = {
+			# [idiom-audit BUG-9] add_loyalty is a CHARACTER effect (no-op on a subject COUNTRY);
+			# a subject's loyalty to its overlord is a country modifier carrying loyalty_to_overlord.
+			add_country_modifier = { name = subject_loyalty_undermined  duration = 3650 }
+			add_opinion = { modifier = qing_overbearing_opinion  target = ROOT }
+		}
+	}
+
+	# --- Forgive — remit the arrears as an act of imperial grace (懷柔遠人) --------------
+	option = {
+		name = "qing_tribute.5.b"
+		custom_tooltip = "qing_tribute.5.b.tt"
+		add_legitimacy = 3
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = -3 }
+		scope:trib_defaulter = {
+			# [idiom-audit BUG-9] add_loyalty is a CHARACTER effect (no-op on a subject COUNTRY);
+			# the subject-loyalty reward is the shipping loyalty_to_overlord=20 country modifier.
+			add_country_modifier = { name = qing_tributary_invested  duration = 3650 }
+			add_opinion = { modifier = qing_investiture_opinion  target = ROOT }
+		}
 	}
 }

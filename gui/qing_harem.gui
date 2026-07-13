@@ -1,0 +1,369 @@
+########################################################################
+# qing_harem.gui — the Imperial Harem panel window (#360).
+#
+# A Grand-Council-clone dashboard for the inner court (後宮), a facet of the Imperial
+# Household Department (內務府) run by the chamberlain — so the harem's depth folds into HIS
+# Grand Council standing (qing_min_perf_chamberlain term (e), se_QING_MINISTRY.txt). Surfaces
+# the LIVING CONSORTS (qing_harem_consorts) as a scrolling CHARACTER roster + the inner-court
+# depth (qing_harem_consort_count) as a read-out, with two ACTION LEVERS (選秀 hold a draft,
+# 臨幸 favour a consort) each firing a proven se_QING_HAREM effect.
+#
+# Opened by qing_harem_open_panel_button (QING_harem_panel.txt), wired to a button in
+# gui/qing_household.gui (the harem sits under the Household). Mirrors gui/qing_hanlin.gui
+# (the character-roster panel pattern).
+#
+# TAB indentation throughout (Paradox house style for .gui files).
+########################################################################
+
+base_window = {
+	name = "qing_harem_panel"
+	size = { 520 640 }
+	allow_outside = yes
+	movable = yes
+
+	using = main_window_template
+
+	state = {
+		name = _show
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+	state = {
+		name = _hide
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+
+	flowcontainer = {
+		direction = vertical
+
+		# HEADER
+		widget = {
+			size = { 520 48 }
+			using = MainWindowHeaderBox
+			blockoverride "Title_text" { text = "QING_HAREM_PANEL_TITLE" }
+			blockoverride "FlagOrIcon" {
+				icon = {
+					texture = "gfx/interface/base_parts/yellow_button_color_200fs.dds"
+					framesize = { 100 100 }
+					frame = 6
+					position = { -2 -2 }
+					size = { 32 32 }
+					modify_texture = {
+						texture = "gfx/interface/icons/menu_buttons/menu_trade.dds"
+						blend_mode = alphamultiply
+					}
+				}
+			}
+			blockoverride "White_buttons" {
+				button_close = {
+					onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_harem_panel')]"
+					tooltip = "CLOSE"
+					shortcut = "close_window"
+				}
+			}
+		}
+
+		# BODY
+		margin_widget = {
+			size = { 520 580 }
+			margin = { 10 10 }
+
+			scrollarea = {
+				size = { 500 560 }
+				scrollbarpolicy_horizontal = always_off
+				scrollbar_vertical = { using = VerticalScrollBar }
+				using = VerticalScrollAreaCutOff
+				scrollwidget = {
+					flowcontainer = {
+						direction = vertical
+						spacing = 12
+
+						# DESCRIPTION (wraps)
+						textbox = {
+							size = { 480 110 }
+							multiline = yes
+							using = BaseFontM
+							using = Default_FontColor
+							text = "QING_HAREM_PANEL_DESC"
+						}
+
+						# --- INNER-COURT STANDING SECTION -------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_HAREM_STANDING_TITLE"
+							}
+
+							# inner-court depth (qing_harem_consort_count)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_HAREM_COUNT_LABEL"
+									tooltip = "QING_HAREM_COUNT_TT"
+								}
+								textbox = {
+									size = { 60 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_harem_consort_count').GetValue|0]"
+								}
+							}
+
+							# [#438] the graded establishment (位號): 皇貴妃 1 / 貴妃 2 / 妃 4 / entry uncapped.
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_HAREM_RANKS_LABEL"
+									tooltip = "QING_HAREM_RANKS_TT"
+								}
+								textbox = {
+									size = { 210 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "皇貴妃 [Player.MakeScope.GetVariable('qing_harem_rank4_count').GetValue|0]/1 · 貴妃 [Player.MakeScope.GetVariable('qing_harem_rank3_count').GetValue|0]/2 · 妃 [Player.MakeScope.GetVariable('qing_harem_rank2_count').GetValue|0]/4"
+									tooltip = "QING_HAREM_RANKS_TT"
+								}
+							}
+
+							# the harem folds into the chamberlain's Grand Council standing
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_HAREM_PERF_LABEL"
+									tooltip = "QING_HAREM_PERF_TT"
+								}
+								textbox = {
+									size = { 40 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_min_perf_chamberlain').GetValue|0]"
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 180 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_min_perf_chamberlain').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
+							}
+						}
+
+						# --- ACTION LEVERS ----------------------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_HAREM_ADMIN_TITLE"
+							}
+
+							# hold a draft (選秀)
+							text_button_square_highlighted = {
+								size = { 300 28 }
+								datacontext = "[GetScriptedGui('qing_harem_hold_draft')]"
+								blockoverride "Center_text" { text = "QING_HAREM_DRAFT_BTN"  max_width = 280 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_HAREM_DRAFT_TT"
+							}
+							# favour a consort (臨幸)
+							text_button_square_highlighted = {
+								size = { 300 28 }
+								datacontext = "[GetScriptedGui('qing_harem_favour_consort')]"
+								blockoverride "Center_text" { text = "QING_HAREM_FAVOUR_BTN"  max_width = 280 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_HAREM_FAVOUR_TT"
+							}
+							# [#438] promote a consort (晉封) — elevate the ablest eligible consort one rank.
+							text_button_square_highlighted = {
+								size = { 300 28 }
+								datacontext = "[GetScriptedGui('qing_harem_promote_consort')]"
+								blockoverride "Center_text" { text = "QING_HAREM_PROMOTE_BTN"  max_width = 280 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_HAREM_PROMOTE_TT"
+							}
+						}
+
+						# --- CONSORT ROSTER ---------------------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_HAREM_ROSTER_TITLE"
+							}
+
+							# empty note when the inner court stands empty
+							textbox = {
+								visible = "[IsDataModelEmpty( Player.MakeScope.GetList('qing_harem_consorts') )]"
+								size = { 460 46 }
+								multiline = yes
+								using = BaseFontS
+								using = Default_FontColor
+								text = "QING_HAREM_ROSTER_EMPTY"
+							}
+
+							# the roster (dynamicgridbox over the consort list — Scope.GetCharacter)
+							dynamicgridbox = {
+								datamodel = "[Player.MakeScope.GetList('qing_harem_consorts')]"
+								datamodel_wrap = 1
+								item = {
+									widget = {
+										size = { 468 84 }
+										margin = { 2 3 }
+										datacontext = "[Scope.GetCharacter]"
+										using = background_widget
+										flowcontainer = {
+											spacing = 8
+											margin = { 8 6 }
+											cpt_button = { size = { 46 68 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = { text = "[Character.GetName]"  maximumsize = { 300 24 }  using = BaseFontM  using = Default_FontColor }
+												# [#438] the consort's rank in the graded establishment (皇貴妃 / 貴妃 / 妃 / 嬪).
+												textbox = {
+													size = { 300 20 }
+													using = BaseFontS
+													using = Default_FontColor
+													text = "[Character.Custom('qing_consort_rank_name')]"
+													tooltip = "QING_HAREM_RANK_TT"
+												}
+												flowcontainer = {
+													spacing = 10
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_oratory }
+														blockoverride "Text" { text = "[Character.GetCharisma]" }
+														tooltip = "[Character.GetCharismaToolTip]"
+													}
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_civic }
+														blockoverride "Text" { text = "[Character.GetFinesse]" }
+														tooltip = "[Character.GetFinesseToolTip]"
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+
+						# --- [#418] TAKE AS CONSORT (納為妃嬪) — court women eligible to enter the inner court.
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_HAREM_TAKE_TITLE"
+								tooltip = "QING_HAREM_TAKE_TT"
+							}
+
+							# empty note when no eligible court women stand
+							textbox = {
+								visible = "[IsDataModelEmpty( Player.MakeScope.GetList('qing_harem_candidates') )]"
+								size = { 460 46 }
+								multiline = yes
+								using = BaseFontS
+								using = Default_FontColor
+								text = "QING_HAREM_TAKE_EMPTY"
+							}
+
+							# the candidate list (eligible unmarried adult court women) with a per-row take button
+							dynamicgridbox = {
+								datamodel = "[Player.MakeScope.GetList('qing_harem_candidates')]"
+								datamodel_wrap = 1
+								item = {
+									widget = {
+										size = { 468 84 }
+										margin = { 2 3 }
+										datacontext = "[Scope.GetCharacter]"
+										using = background_widget
+										flowcontainer = {
+											spacing = 8
+											margin = { 8 6 }
+											cpt_button = { size = { 46 68 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = { text = "[Character.GetName]"  maximumsize = { 300 24 }  using = BaseFontM  using = Default_FontColor }
+												flowcontainer = {
+													spacing = 10
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_oratory }
+														blockoverride "Text" { text = "[Character.GetCharisma]" }
+														tooltip = "[Character.GetCharismaToolTip]"
+													}
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_civic }
+														blockoverride "Text" { text = "[Character.GetFinesse]" }
+														tooltip = "[Character.GetFinesseToolTip]"
+													}
+												}
+											}
+											# TAKE AS CONSORT button — runs the scripted_gui at CHARACTER scope with the
+											# player scope added (mirrors the office picker row-click, imp19c_windows.gui:92).
+											text_button_square_highlighted = {
+												size = { 120 28 }
+												blockoverride "Center_text" { text = "QING_HAREM_TAKE_BTN"  max_width = 110 }
+												blockoverride "On_click" {
+													enabled = "[GetScriptedGui('qing_harem_take_consort').IsValid( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+													onclick = "[GetScriptedGui('qing_harem_take_consort').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+												}
+												tooltip = "QING_HAREM_TAKE_BTN_TT"
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

@@ -225,8 +225,8 @@ MARRIAGE_apply_marriage_bond = {
 	else_if = {
 		limit = {
 			NOT = { scope:bond_senior = { alliance_with = scope:bond_junior } }
-			scope:bond_senior = { NOT = { at_war = yes } }
-			scope:bond_junior = { NOT = { at_war = yes } }
+			scope:bond_senior = { NOT = { war = yes } }
+			scope:bond_junior = { NOT = { war = yes } }
 		}
 		if = {
 			# neither party a great power → a real formal alliance is allowed.
@@ -455,7 +455,7 @@ MARRIAGE_check_unions = {
 				# cheap available size proxy.
 				num_of_cities <= scope:union_senior.num_of_cities
 				# both still at peace with each other (a union is a settlement, not a conquest)
-				NOT = { at_war = yes }
+				NOT = { war = yes }
 			}
 			save_scope_as = union_junior
 		}
@@ -473,6 +473,18 @@ MARRIAGE_check_unions = {
 		}
 	}
 }
+
+# ======================================================================
+# [#412 REPURPOSED — dead-code removed] The former MARRIAGE_check_shared_ruler_union tested for a
+# character who is current_ruler of TWO INDEPENDENT (is_subject=no) countries at once — a state the
+# engine never spontaneously creates (oracle-confirmed: royal_union's has_overlords_ruler=yes means
+# the junior SHARES the overlord's ruler as a CONSEQUENCE of already being subordinated; it is not a
+# cause that arises on its own). So that pulse check could never match and was inert. The real
+# personal-union moment is at a wedded INDEPENDENT realm's SUCCESSION, handled in
+# MARRIAGE_on_ruler_death_union (L3) below: when such a realm's ruler dies and a marriage-linked
+# FOREIGN ruler is the strongest dynastic claimant, either a player event offers to form the union
+# (accept -> royal_union) or, if that claimant is passed over, his realm gets a pressable annex CB.
+# ======================================================================
 
 # ======================================================================
 # [#324 / #312+#313 heiress-claim coupling] MARRIAGE_check_heiress_claim — L2b.
@@ -674,6 +686,109 @@ MARRIAGE_on_ruler_death_union = {
 					}
 				}
 			}
+		}
+	}
+}
+
+# ======================================================================
+# [#412/#413] MARRIAGE_on_ruler_death_succession — the SUCCESSION-DIVERGENCE dynastic beat.
+# Scope: CHARACTER (a ruler who just died). Called from on_character_death AFTER
+# MARRIAGE_on_ruler_death_union. Where that handles an already-subordinated royal_union junior,
+# THIS handles the death of the ruler of an INDEPENDENT realm that is wedded to others: a dynastic
+# claimant arises among its marriage partners.
+#
+# The engine has no true cross-country "rightful foreign heir" (oracle-confirmed), so we model the
+# claimant as the HIGHEST-FAMILY-PRESTIGE wedded partner of the dead ruler's realm (marriage_partners
+# + family={prestige}, both proven). Then:
+#   • claimant realm OUTWEIGHS the vacant realm (num_of_cities >=) AND both at peace  -> the crowns
+#     would UNITE: fire a PLAYER event (qing_marriage.1) offering the claimant to press for union
+#     (accept -> royal_union) or decline (take an annex CB). AI claimant: auto-declines to the CB path.
+#   • claimant realm is the LESSER / passed over  -> it simply gains a pressable annex CB on the
+#     vacant realm (MARRIAGE_press_succession_claim), to press by war if it wishes.
+# Guards: the dead man ruled an independent (is_subject=no) realm with >=1 marriage bond; the realm
+# survives his death (a fresh ruler sits); one claimant per death. Self-guards throughout.
+# ======================================================================
+MARRIAGE_on_ruler_death_succession = {
+	if = {
+		limit = {
+			is_ruler = yes
+			exists = employer
+			employer = {
+				is_subject = no
+				has_variable = marriage_bond_count
+				var:marriage_bond_count > 0
+				has_variable_list = marriage_partners
+				exists = current_ruler   # the realm did not vanish with him — a successor sits
+			}
+		}
+		employer = {
+			save_scope_as = succ_vacant_realm
+			# pick the ablest dynastic claimant: the wedded partner whose HOUSE stands highest
+			# (family prestige), still independent, at peace with us. NOTE: a nested
+			# `order_by = current_ruler.family.prestige` is UNPROVEN in this engine (only flat single-
+			# token order_by keys are attested), so we do a PROVEN max-scan instead — walk the partner
+			# list, track the highest family prestige into a scratch var, and save the best partner.
+			set_variable = { name = succ_best_prestige  value = -1 }
+			every_in_list = {
+				variable = marriage_partners
+				limit = {
+					exists = current_ruler
+					is_subject = no
+					NOT = { this = scope:succ_vacant_realm }
+					NOT = { war = yes }
+					current_ruler = { exists = family }
+				}
+				# read this partner's house prestige into a temp (nested read is fine in set_variable).
+				save_temporary_scope_as = succ_partner
+				set_variable = { name = succ_partner_prestige  value = current_ruler.family.prestige }
+				if = {
+					limit = { var:succ_partner_prestige > scope:succ_vacant_realm.var:succ_best_prestige }
+					scope:succ_vacant_realm = {
+						# [proven-idiom fix] read the partner's var via the PROVEN scope:X.var:Y idiom
+						# (succ_partner saved above); the bare prev.var: form is NOT attested upstream.
+						set_variable = { name = succ_best_prestige  value = scope:succ_partner.var:succ_partner_prestige }
+						set_variable = { name = succ_claimant_realm  value = scope:succ_partner }
+					}
+				}
+				remove_variable = succ_partner_prestige
+			}
+			# resolve the saved best claimant into a scope (guarded on the var being set).
+			if = {
+				limit = { has_variable = succ_claimant_realm }
+				var:succ_claimant_realm = { save_scope_as = succ_claimant }
+			}
+			if = {
+				limit = { exists = scope:succ_claimant }
+				if = {
+					# the claimant OUTWEIGHS the vacant realm -> the crowns would unite.
+					limit = {
+						scope:succ_claimant = { num_of_cities >= scope:succ_vacant_realm.num_of_cities }
+						NOT = { war = yes }
+					}
+					if = {
+						# a human claimant is ASKED (accept union / decline to a CB); an AI one takes
+						# the CB path directly (no auto-subjugation of an independent realm AI-side).
+						limit = { scope:succ_claimant = { is_ai = no } }
+						scope:succ_claimant = {
+							set_variable = { name = succ_union_target  value = scope:succ_vacant_realm }
+							trigger_event = { id = qing_marriage.1  days = { 3 10 } }
+						}
+						LOG_line = { sys = MARRIAGE  msg = "succession divergence: a dynastic claimant is offered the union (player)" }
+					}
+					else = {
+						scope:succ_claimant = { MARRIAGE_press_succession_claim = { realm = scope:succ_vacant_realm } }
+						LOG_line = { sys = MARRIAGE  msg = "succession divergence: AI claimant presses its dynastic claim by right of marriage" }
+					}
+				}
+				else = {
+					# passed over — the lesser house merely gains a pressable annex CB.
+					scope:succ_claimant = { MARRIAGE_press_succession_claim = { realm = scope:succ_vacant_realm } }
+					LOG_line = { sys = MARRIAGE  msg = "succession divergence: a passed-over wedded house gains an annex claim" }
+				}
+			}
+			# teardown the scratch selection vars on the vacant realm (no stale carry to next death).
+			if = { limit = { has_variable = succ_best_prestige }   remove_variable = succ_best_prestige }
+			if = { limit = { has_variable = succ_claimant_realm }  remove_variable = succ_claimant_realm }
 		}
 	}
 }
@@ -1064,7 +1179,8 @@ MARRIAGE_repudiate = {
 		}
 	}
 	# the affront also costs the repudiator standing at the courts of Europe.
-	current_ruler = { add_prestige = -30 }
+	# [T3 BT-5/6] was current_ruler add_prestige (inert on a character) -> ruler popularity.
+	current_ruler = { add_popularity = -30 }
 	LOG_line = { sys = MARRIAGE  msg = "a betrothal was REPUDIATED — a grave insult to the jilted house" }
 	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_repudiate"  result = OK }
 }

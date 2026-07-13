@@ -1,0 +1,164 @@
+########################################################################
+# se_QING_BURMA.txt — the scripted half of the Qing invasion of Burma
+# (清緬戰爭, the Sino-Burmese War of 1765-69), #421.
+#
+# The mission tree (common/missions/qing_burma_war_missions.txt) makes the PLAYER
+# wage the war: its task goals gate on the Qing actually CONTROLLING the Burmese
+# heartland provinces (p:X = { controller = ROOT }), so the fighting is the player's
+# to do on the map. This file scripts only the things the player cannot — the two
+# forces that made the historical campaign a "disguised defeat":
+#
+#   • THE MIASMA (瘴疫) — the malarial Irrawaddy lowlands that annihilated the banner
+#     columns. Stamped as the qing_burma_miasma province modifier on the Burmese
+#     heartland when the campaign opens (heavy hostile attrition + a countryside that
+#     starves an invader). Finite duration, so a province recovers once secured.
+#   • THE KONBAUNG RALLY — the Burmese defenders' resilience: at the campaign's height
+#     a fresh Konbaung host is mustered for c:BUR at its capital (the elephant-and-
+#     stockade army that fought the Qing to a standstill), so the war is not a
+#     walkover. Uses the proven BARE create_unit idiom (SE_qing_raise_garrison), issued
+#     in c:BUR's scope with an absolute location token.
+#
+# PREFIX: QING_burma_ / sys = QING. CHI-only, driven by the mission tasks (no pulse).
+# Proven idioms only: bare create_unit in a country scope + absolute location
+# (SE_qing_raise_garrison / TI galatian_invasion), add_province_modifier { duration }
+# (se_QING_XINJIANG QING_ili_apply_prov_band), add/remove_country_modifier.
+#
+# Sources: Dai Yingcong, "A Disguised Defeat: The Myanmar Campaign of the Qing
+#   Dynasty" (Modern Asian Studies, 2004); Yingcong Dai, The Sichuan Frontier and
+#   Tibet; Charney, Southeast Asian Warfare 1300-1900 (2004, Konbaung armies).
+#
+#   ROOT / this = the Qing country (CHI, the player).
+########################################################################
+
+# The Burmese heartland the campaign is fought over — BUR's own core (00_default.txt):
+#   7675 Rangoon (capital)  6562 Mandalay  9052 Namtu  7657 Kyaikkhami
+#   7245 Thayetmyo          4012            6908       8745            7177
+# Kept as an explicit list (no clean single area covers the Konbaung heartland) so the
+# stamp + the goal checks describe exactly the same ground.
+
+# ======================================================================
+# QING_burma_stamp_miasma — lay the pestilential-lowland modifier over the Burmese
+# heartland as the invasion opens. Scope: COUNTRY (CHI). Each province guarded on
+# existence; finite duration (5 years) so a province that is taken and held recovers
+# once the campaign season passes. Called by the mission's opening task.
+# ======================================================================
+QING_burma_stamp_miasma = {
+	LOG_enter = { sys = QING  fn = "QING_burma_stamp_miasma" }
+	if = { limit = { exists = p:7675  NOT = { p:7675 = { has_province_modifier = qing_burma_miasma } } }  p:7675 = { add_province_modifier = { name = qing_burma_miasma  duration = 1825 } } }
+	if = { limit = { exists = p:6562  NOT = { p:6562 = { has_province_modifier = qing_burma_miasma } } }  p:6562 = { add_province_modifier = { name = qing_burma_miasma  duration = 1825 } } }
+	if = { limit = { exists = p:9052  NOT = { p:9052 = { has_province_modifier = qing_burma_miasma } } }  p:9052 = { add_province_modifier = { name = qing_burma_miasma  duration = 1825 } } }
+	if = { limit = { exists = p:7657  NOT = { p:7657 = { has_province_modifier = qing_burma_miasma } } }  p:7657 = { add_province_modifier = { name = qing_burma_miasma  duration = 1825 } } }
+	if = { limit = { exists = p:7245  NOT = { p:7245 = { has_province_modifier = qing_burma_miasma } } }  p:7245 = { add_province_modifier = { name = qing_burma_miasma  duration = 1825 } } }
+	LOG_line = { sys = QING  msg = "burma: the pestilential lowlands (瘴疫) laid over the Konbaung heartland for" }
+	LOG_exit = { sys = QING  fn = "QING_burma_stamp_miasma"  result = OK }
+}
+
+# ======================================================================
+# QING_burma_rally_konbaung — at the campaign's height, muster a fresh Konbaung host
+# for c:BUR so the war is a hard fight, not a walkover. Scope: COUNTRY (CHI, but the
+# unit is created in c:BUR's scope). The Konbaung army was infantry + war-elephants
+# behind palisades; modelled as 4 line battalions raised at the Burmese capital.
+# BARE create_unit in the defender's country scope with an absolute location token —
+# the proven idiom (SE_qing_raise_garrison; TI galatian_invasion). Guarded on BUR
+# still existing with a capital and not already rallied once.
+# ======================================================================
+QING_burma_rally_konbaung = {
+	LOG_enter = { sys = QING  fn = "QING_burma_rally_konbaung" }
+	if = {
+		limit = {
+			exists = c:BUR
+			NOT = { has_variable = qing_burma_konbaung_rallied }
+			c:BUR = { exists = capital_scope }
+		}
+		set_variable = { name = qing_burma_konbaung_rallied  value = 1 }
+		c:BUR = {
+			create_unit = {
+				navy = no
+				name = "Konbaung Host"
+				location = capital_scope
+				sub_unit = regular_infantry
+				add_subunit = regular_infantry
+				add_subunit = regular_infantry
+				add_subunit = regular_infantry
+			}
+		}
+		LOG_line = { sys = QING  msg = "burma: the Konbaung host is mustered against the invasion for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_burma_rally_konbaung"  reason = "BUR absent/capital-less or already rallied; no Konbaung host mustered" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_burma_rally_konbaung"  result = OK }
+}
+
+# ======================================================================
+# QING_burma_open_campaign — the opening bookkeeping: lay the miasma, take on the
+# campaign strain, mark the war begun. Scope: COUNTRY (CHI). Called by the root task.
+# ======================================================================
+QING_burma_open_campaign = {
+	LOG_enter = { sys = QING  fn = "QING_burma_open_campaign" }
+	set_variable = { name = qing_burma_campaign_open  value = 1 }
+	QING_burma_stamp_miasma = yes
+	if = {
+		limit = { NOT = { has_country_modifier = qing_burma_campaign_strain } }
+		add_country_modifier = { name = qing_burma_campaign_strain  duration = -1 }
+	}
+	LOG_line = { sys = QING  msg = "burma: the southern campaign (南征) opens for" }
+	LOG_exit = { sys = QING  fn = "QING_burma_open_campaign"  result = OK }
+}
+
+# ======================================================================
+# QING_burma_close_campaign — lift the campaign strain (war broken off or won).
+# Scope: COUNTRY (CHI). Called by the capstone (victory) and available to an abort.
+# ======================================================================
+QING_burma_close_campaign = {
+	LOG_enter = { sys = QING  fn = "QING_burma_close_campaign" }
+	if = {
+		limit = { has_country_modifier = qing_burma_campaign_strain }
+		remove_country_modifier = qing_burma_campaign_strain
+	}
+	LOG_line = { sys = QING  msg = "burma: the southern campaign strain lifts for" }
+	LOG_exit = { sys = QING  fn = "QING_burma_close_campaign"  result = OK }
+}
+
+# ======================================================================
+# [#423 tie-in] QING_burma_annex_and_plant_poppy — the pacified Irrawaddy is made real Qing
+# soil, then turned to poppy. Scope: COUNTRY (CHI). The capstone gates on CONTROLLING the
+# heartland, but control ≠ ownership (annexation would come with a peace deal). So the
+# "Pacification of Burma" capstone here ANNEXES the Burma/Pegu ground the Qing actually hold
+# (controller = ROOT → owner = ROOT, the proven province-transfer idiom, se_QING_ILI) — making
+# the conquest real — and THEN turns the Shan uplands + upper Irrawaddy (the Golden-Triangle
+# opium belt) to poppy, joining the empire's own supply (feeding GOODS_national_production_opium,
+# so the #423 balance-of-trade model counts Burmese opium against the import drain). Two passes:
+#   1) annex every CHI-CONTROLLED Burma/Pegu province (the conquered heartland);
+#   2) turn the now-OWNED SHAN HILL provinces (the named eastern hill states, #432) to opium —
+#      NOT the Irrawaddy/Pegu rice delta (idempotent; skips any province already growing opium).
+# set_owned_by = ROOT (the settable province->country transfer effect; owner = is a read-only
+# trigger, NOT an effect — idiom-audit BUG-5) + set_trade_goods + is_in_area are all proven
+# (set_owned_by: sell_province_events / se_FUNC; set_trade_goods/is_in_area: se_QING_COLON /
+# se_QING_XINJIANG). Called from the Burma capstone on_completion (#421).
+# ======================================================================
+QING_burma_annex_and_plant_poppy = {
+	LOG_enter = { sys = QING  fn = "QING_burma_annex_and_plant_poppy" }
+	# 1) make the conquest real: the heartland the Qing CONTROL becomes Qing soil.
+	every_province = {
+		limit = {
+			controller = ROOT
+			NOT = { owner = ROOT }
+			OR = { is_in_area = Burma  is_in_area = Pegu }
+		}
+		set_owned_by = ROOT
+		LOG_line = { sys = QING  msg = "burma: a controlled Irrawaddy/Pegu province annexed to the empire for" }
+	}
+	# 2) [#432] turn the SHAN HILL provinces to poppy (the Golden-Triangle opium belt). HISTORICAL
+	# GEOGRAPHY: the poppy country was the eastern hill states — Lashio (6908), Namtu (9052),
+	# Hsipaw/Thibaw (1552), Kalewa (7177), Lonkeng (9456) — NOT the Irrawaddy/Pegu wet-rice delta
+	# (Rangoon, Bassein, the lowlands grew rice, not poppy). So the conversion targets the named
+	# Shan-hill provinces specifically, each guarded on CHI ownership + not-already-opium.
+	if = { limit = { exists = p:6908  p:6908 = { owner = ROOT }  NOT = { p:6908 = { trade_goods = opium } } }  p:6908 = { set_trade_goods = opium } }
+	if = { limit = { exists = p:9052  p:9052 = { owner = ROOT }  NOT = { p:9052 = { trade_goods = opium } } }  p:9052 = { set_trade_goods = opium } }
+	if = { limit = { exists = p:1552  p:1552 = { owner = ROOT }  NOT = { p:1552 = { trade_goods = opium } } }  p:1552 = { set_trade_goods = opium } }
+	if = { limit = { exists = p:7177  p:7177 = { owner = ROOT }  NOT = { p:7177 = { trade_goods = opium } } }  p:7177 = { set_trade_goods = opium } }
+	if = { limit = { exists = p:9456  p:9456 = { owner = ROOT }  NOT = { p:9456 = { trade_goods = opium } } }  p:9456 = { set_trade_goods = opium } }
+	LOG_line = { sys = QING  msg = "burma: the conquered Shan hills turned to poppy for" }
+	LOG_exit = { sys = QING  fn = "QING_burma_annex_and_plant_poppy"  result = OK }
+}

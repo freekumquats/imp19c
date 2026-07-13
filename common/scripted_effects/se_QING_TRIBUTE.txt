@@ -90,8 +90,13 @@ QING_tribute_schedule_missions = {
 				NOT = { has_variable = qing_tribute_cooldown }
 			}
 			save_scope_as = trib_sender
-			# stamp the cooldown on the subject (cadence ~5y; a single band keeps it boot-safe).
-			set_variable = { name = qing_tribute_cooldown  days = 1825 }
+			# [#322 deferred] PER-VASSAL CADENCE. The tributaries did NOT send on one clock:
+			# Korea (the model tributary, the 燕行使) sent most often — several missions a
+			# decade — while the lesser courts (Vietnam, Nepal, Ryukyu, Taiwan-aborigine)
+			# came more rarely. Stamp the cooldown by the sender's tag so Korea's rhythm is
+			# tighter (~3y) and the others slower (~6y), keeping the historical asymmetry.
+			# The var lives on the SUBJECT (this), so it is per-vassal by construction.
+			QING_tribute_stamp_cadence = yes
 			ROOT = { set_variable = { name = qing_ext_event_slot_used  value = 1 } }  # [BT-28] claim external slot on the fire path
 			# hop back to the overlord (ROOT = CHI is unchanged inside random_subject) to mint
 			# the envoy in Peking's court and fire the arrival country-event on the Qing.
@@ -237,5 +242,229 @@ QING_tribute_prestige_from_missions = {
 		# decay the tempo counter toward zero (one step per pulse) so it reflects a
 		# ROLLING window, not a lifetime total.
 		if = { limit = { var:qing_tribute_missions_recent > 0 }  change_variable = { name = qing_tribute_missions_recent  subtract = 1 } }
+	}
+}
+
+# ======================================================================
+# [#322 deferred] QING_tribute_stamp_cadence — Scope: the SUBJECT tributary (this),
+# called inside the scheduler's random_subject. Stamp the per-vassal send cooldown by
+# tag: Korea's embassy calendar was the densest (the 燕行使 came several times a decade),
+# so it re-gates fastest; the lesser courts send more rarely. All still a single band
+# each (boot-safe, no arithmetic). A tributary with no special case gets the middle
+# cadence. The var is per-subject by construction (stamped on `this`).
+# ======================================================================
+QING_tribute_stamp_cadence = {
+	if = {
+		# Korea — the model tributary, most frequent missions (~3y).
+		limit = { tag = KOR }
+		set_variable = { name = qing_tribute_cooldown  days = 1095 }
+	}
+	else_if = {
+		# Vietnam / Ryukyu — regular but less frequent (~5y).
+		limit = { OR = { tag = VIE  tag = RYU } }
+		set_variable = { name = qing_tribute_cooldown  days = 1825 }
+	}
+	else = {
+		# the outer courts (Nepal, Taiwan-aborigine, any other) — the rarest (~6y).
+		set_variable = { name = qing_tribute_cooldown  days = 2190 }
+	}
+}
+
+# ======================================================================
+# [#322 deferred] QING_tribute_invest_new_ruler — Scope: COUNTRY (CHI), called from the
+# tributary-side on_ruler_change hook. THE INVESTITURE (冊封): when a tributary's throne
+# passed to a new ruler, the Qing court confirmed him with a patent of investiture and a
+# seal — the ritual that RENEWED the tributary bond each reign. $vassal$ = the tributary
+# COUNTRY (its new ruler already seated). Fires the investiture dilemma country-event on
+# the Qing so the player chooses whether to invest promptly (affirms the order), extract a
+# price, or withhold recognition (a snub that strains the tie). Self-guards on the tie
+# still holding. The event carries the vassal via a saved scope.
+# ======================================================================
+QING_tribute_invest_new_ruler = {
+	# this = the Qing overlord (CHI). Save it as an explicit scope so the tributary test
+	# does NOT depend on ROOT (this helper is reached from the tributary-side on_ruler_change,
+	# where ROOT is the TRIBUTARY, not CHI — so QING_tribute_is_tributary_trigger's `is_subject_of
+	# = ROOT` would be wrong here). We test the tie against the saved overlord scope instead.
+	save_scope_as = trib_overlord
+	if = {
+		limit = {
+			tag = CHI
+			exists = $vassal$
+			$vassal$ = {
+				is_subject_of = scope:trib_overlord
+				is_subject_type = tributary
+				exists = current_ruler
+			}
+		}
+		LOG_enter = { sys = QING  fn = "QING_tribute_invest_new_ruler" }
+		# [T2 review-fix / BT-7 idiom] persist the vassal as a var — the raw saved scope can go stale
+		# across the 10-40d trigger_event delay (.2 re-saves it in immediate). ROOT here = CHI (the
+		# overlord hop), so the var lives on the country that fires + reads .2.
+		set_variable = { name = qing_trib2_vassal  value = $vassal$ }
+		$vassal$ = { save_scope_as = trib_invest_vassal }
+		trigger_event = { id = qing_tribute.2  days = { 10 40 } }
+		LOG_line = { sys = QING  msg = "tribute: a tributary's new ruler awaits investiture for" }
+		LOG_exit = { sys = QING  fn = "QING_tribute_invest_new_ruler"  result = OK }
+	}
+}
+
+# ======================================================================
+# [#322 deferred] QING_tribute_breakaway_check — Scope: COUNTRY (CHI). Run on the quarterly
+# pulse. When suzerain-prestige has fallen LOW, the tributary order frays and a restless
+# vassal may test the bond. Picks one tributary and fires the breakaway-crisis dilemma
+# (throne must overawe it, buy it back, or let it drift), throttled on its own cooldown so
+# it is a rare crisis, not spam. Self-guards on having a tributary AND low prestige, so it
+# is a clean no-op at the High Qing zenith (prestige seeds at 70; the crisis needs <35).
+# ======================================================================
+QING_tribute_breakaway_check = {
+	if = {
+		limit = {
+			tag = CHI
+			has_variable = qing_suzerain_prestige
+			var:qing_suzerain_prestige < 35
+			NOT = { has_variable = qing_tribute_breakaway_cooldown }
+			any_subject = { QING_tribute_is_tributary_trigger = yes }
+		}
+		LOG_enter = { sys = QING  fn = "QING_tribute_breakaway_check" }
+		set_variable = { name = qing_tribute_breakaway_cooldown  days = 1095 }   # ~3y throttle
+		random_subject = {
+			limit = { QING_tribute_is_tributary_trigger = yes }
+			save_scope_as = trib_restless
+			ROOT = {
+				# [T2 review-fix / BT-7 idiom] persist the tributary as a var on CHI — the raw saved scope
+				# goes stale across the 5-20d delay; .3 re-saves it in immediate.
+				set_variable = { name = qing_trib3_restless  value = scope:trib_restless }
+				trigger_event = { id = qing_tribute.3  days = { 5 20 } }
+				LOG_line = { sys = QING  msg = "tribute: a restless tributary tests the bond (low suzerain prestige) for" }
+			}
+		}
+		LOG_exit = { sys = QING  fn = "QING_tribute_breakaway_check"  result = OK }
+	}
+}
+
+# ======================================================================
+# [#322 deferred] QING_tribute_gp_interference_check — Scope: COUNTRY (CHI). Run on the
+# quarterly pulse. As the Western powers pressed into East Asia, a great power whose China
+# tension has risen may meddle in a Qing tributary (the historical arc: France in Vietnam,
+# Britain in Burma/Nepal's marches, Japan later in Korea/Ryukyu). Picks the highest-tension
+# power and fires the interference dilemma on one tributary. Throttled + self-guards on a
+# tributary existing AND some GP tension having built, so it is inert at the isolated zenith.
+# ======================================================================
+QING_tribute_gp_interference_check = {
+	if = {
+		limit = {
+			tag = CHI
+			NOT = { has_variable = qing_tribute_gp_cooldown }
+			any_subject = { QING_tribute_is_tributary_trigger = yes }
+			OR = {
+				var:qing_gp_tension_britain >= 40
+				var:qing_gp_tension_france >= 40
+				var:qing_gp_tension_russia >= 40
+			}
+		}
+		LOG_enter = { sys = QING  fn = "QING_tribute_gp_interference_check" }
+		set_variable = { name = qing_tribute_gp_cooldown  days = 1460 }   # ~4y throttle
+		# name the meddling power = the highest China-tension of the three (proven ordered
+		# read cf. the sphere max-pick; here a simple cascade keeps it boot-safe).
+		QING_tribute_pick_meddler = yes
+		random_subject = {
+			limit = { QING_tribute_is_tributary_trigger = yes }
+			save_scope_as = trib_meddled
+			ROOT = {
+				# [T2 review-fix / BT-7 idiom] persist the tributary as a var on CHI — the raw saved scope
+				# goes stale across the 5-20d delay; .4 re-saves it in immediate.
+				set_variable = { name = qing_trib4_meddled  value = scope:trib_meddled }
+				trigger_event = { id = qing_tribute.4  days = { 5 20 } }
+				LOG_line = { sys = QING  msg = "tribute: a great power meddles in a Qing tributary for" }
+			}
+		}
+		LOG_exit = { sys = QING  fn = "QING_tribute_gp_interference_check"  result = OK }
+	}
+}
+
+# ======================================================================
+# [#322 deferred] QING_tribute_pick_meddler — Scope: COUNTRY (CHI). Store the meddling
+# power's identity as a flag var (qing_tribute_meddler = flag:britain|france|russia) for
+# the interference event to read + display. Highest tension wins; ties resolve
+# Britain > France > Russia (the order of Western pressure on the Qing sphere).
+# ======================================================================
+QING_tribute_pick_meddler = {
+	if = {
+		limit = {
+			var:qing_gp_tension_britain >= var:qing_gp_tension_france
+			var:qing_gp_tension_britain >= var:qing_gp_tension_russia
+		}
+		set_variable = { name = qing_tribute_meddler  value = flag:britain }
+	}
+	else_if = {
+		limit = { var:qing_gp_tension_france >= var:qing_gp_tension_russia }
+		set_variable = { name = qing_tribute_meddler  value = flag:france }
+	}
+	else = {
+		set_variable = { name = qing_tribute_meddler  value = flag:russia }
+	}
+}
+
+# ======================================================================
+# [BT-11] QING_tribute_default_check — Scope: COUNTRY (CHI). Run on the quarterly pulse.
+# Reads the qing_tribute_defaulted marker that QING_subject_collect_tribute stamps on any
+# subject whose treasury could not cover its owed tribute this quarter (a real default,
+# not the customary light rendering). Routes the shortfall through the LIFAN YUAN (理藩院):
+#   • dings the tributary-order meter (qing_suzerain_prestige) — an unanswered default
+#     erodes the standing of the whole order;
+#   • if a resident amban supervises the defaulter, marks him ineffective (the resident is
+#     the throne's man on the ground and shares the blame for a dependency slipping);
+# then fires the PUNISH/FORGIVE dilemma (qing_tribute.5) on ONE defaulting subject. Honours
+# the BT-28 external event slot (counts as the quarter's one external/tribute event) and its
+# own ~2y cooldown, so it never stacks with the embassy scheduler (which also claims the slot).
+# (The breakaway/interference checks predate BT-28 and do not claim the slot, so they are not
+# mutually exclusive with this one; collisions are rare given the 2-4y cooldowns.) Self-guards
+# on a defaulter existing, a clean no-op at the solvent High Qing zenith.
+# ======================================================================
+QING_tribute_default_check = {
+	if = {
+		limit = {
+			tag = CHI
+			NOT = { has_variable = qing_ext_event_slot_used }
+			NOT = { has_variable = qing_tribute_default_cooldown }
+			any_subject = {
+				QING_tribute_is_tributary_trigger = yes
+				has_variable = qing_tribute_defaulted
+			}
+		}
+		LOG_enter = { sys = QING  fn = "QING_tribute_default_check" }
+		set_variable = { name = qing_tribute_default_cooldown  days = 730 }   # ~2y throttle
+		# route the default through the tributary order (the whole order's standing slips)
+		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = -4 }
+		random_subject = {
+			limit = {
+				QING_tribute_is_tributary_trigger = yes
+				has_variable = qing_tribute_defaulted
+			}
+			save_scope_as = trib_defaulter
+			# clear the marker now so a single default is judged once (the dilemma resolves it)
+			remove_variable = qing_tribute_defaulted
+			# if a resident amban supervises this dependency, he shares the blame — mark him
+			# ineffective in the throne's eyes (the same opinion the amban evaluator uses for a
+			# resident who lets a dependency slip). Guarded on a live posted amban being present.
+			if = {
+				limit = {
+					has_variable = qing_amban_here
+					var:qing_amban_here = { is_alive = yes  employer = prev }
+				}
+				add_opinion = { modifier = qing_amban_ineffective_opinion  target = ROOT }
+			}
+			ROOT = {
+				set_variable = { name = qing_ext_event_slot_used  value = 1 }  # [BT-28] claim external slot on the fire path
+				# [BT-11 / BT-7 idiom] PERSIST the defaulter as a CHI var, not just a raw saved scope:
+				# a scope saved here can go stale across the 5-20d event delay (exactly the BT-7 failure
+				# qing_tribute.1 hit with scope:trib_sender). qing_tribute.5 re-saves it from this var in
+				# its immediate + guards on it, so the dilemma never silently cancels on a stale scope.
+				set_variable = { name = qing_trib5_defaulter  value = scope:trib_defaulter }
+				trigger_event = { id = qing_tribute.5  days = { 5 20 } }
+				LOG_line = { sys = QING  msg = "tribute: a tributary has defaulted; the Lifan Yuan must answer for" }
+			}
+		}
+		LOG_exit = { sys = QING  fn = "QING_tribute_default_check"  result = OK }
 	}
 }

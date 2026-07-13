@@ -1,0 +1,132 @@
+########################################################################
+# MARRIAGE_PLAY_actions.txt — [#356] the two-step marriage-proposal picker.
+#
+# Replaces the old Dynastic Match builder. The flow:
+#   0. OPEN — build the list of eligible TARGET REALMS (marriage_play_realms) + our own
+#      unmarried characters (marriage_play_own_candidates), open the window.
+#   1. pick a TARGET REALM  -> store marriage_play_target (a country var) + build that realm's
+#      opposite-gender unmarried characters into marriage_play_their_candidates.
+#   2. pick OUR character    -> store scope-var marriage_play_our_pick + (re)build the target
+#      list filtered to the OPPOSITE gender of our pick.
+#   3. pick THEIR character  -> store marriage_play_their_pick.
+#   4. LAUNCH — with both picks set, open the proposal play (MARRIAGE_PLAY_begin).
+# In BOTH character lists the ruling family sorts to the TOP (an is_close_relative-of-ruler
+# display key drives the ordered pass). Minors are INCLUDED (betrothal path).
+#
+# Scope: COUNTRY (ROOT = CHI, the player). se_LOG sys = MARRIAGE. Prefix = marriage_play_.
+########################################################################
+
+# ---- OPEN THE PROPOSAL PICKER ----------------------------------------------
+marriage_play_open = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		LOG_line = { sys = MARRIAGE  msg = "marriage-proposal picker opened by" }
+		# clear any stale selection from a prior open.
+		if = { limit = { has_variable = marriage_play_target }      remove_variable = marriage_play_target }
+		if = { limit = { has_variable = marriage_play_our_pick }    remove_variable = marriage_play_our_pick }
+		if = { limit = { has_variable = marriage_play_their_pick }  remove_variable = marriage_play_their_pick }
+		MARRIAGE_PLAY_build_realms = yes
+		MARRIAGE_PLAY_build_own = yes
+		clear_variable_list = marriage_play_their_candidates
+	}
+}
+
+# ---- STEP 1: pick a TARGET REALM -------------------------------------------
+# Row action on the realms list (scope:target = the clicked realm, via the row datacontext).
+marriage_play_pick_realm = {
+	scope = country
+	saved_scopes = { target }
+	ai_is_valid = { always = no }
+	is_shown = { scope:target = { exists = current_ruler } }
+	is_valid = { NOT = { scope:target = { this = ROOT } } }
+	effect = {
+		set_variable = { name = marriage_play_target  value = scope:target }
+		# a fresh realm pick invalidates any prior their-char pick.
+		if = { limit = { has_variable = marriage_play_their_pick }  remove_variable = marriage_play_their_pick }
+		MARRIAGE_PLAY_build_their = yes
+		LOG_line = { sys = MARRIAGE  msg = "marriage picker: target realm chosen" }
+	}
+}
+
+# ---- STEP 2: pick OUR character --------------------------------------------
+marriage_play_pick_own = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = { scope:player = { tag = CHI } }
+	is_valid = { is_alive = yes  is_married = no  employer = scope:player }
+	effect = {
+		scope:player = {
+			set_variable = { name = marriage_play_our_pick  value = prev }
+			# our pick's sex fixes the opposite-gender filter for the target list; rebuild it.
+			if = { limit = { has_variable = marriage_play_target }  MARRIAGE_PLAY_build_their = yes }
+			# [#356 review-fix, MAJOR] a re-picked own character may now be the SAME sex as an
+			# already-chosen their_pick (which is no longer on the rebuilt opposite-sex list). Drop
+			# a now-invalid their_pick so the player must re-choose from the correctly-sexed column.
+			if = {
+				limit = {
+					has_variable = marriage_play_their_pick
+					OR = {
+						AND = { var:marriage_play_our_pick = { is_female = yes }  var:marriage_play_their_pick = { is_female = yes } }
+						AND = { var:marriage_play_our_pick = { is_male = yes }    var:marriage_play_their_pick = { is_male = yes } }
+					}
+				}
+				remove_variable = marriage_play_their_pick
+			}
+		}
+		LOG_line = { sys = MARRIAGE  msg = "marriage picker: our character chosen" }
+	}
+}
+
+# ---- STEP 3: pick THEIR character ------------------------------------------
+marriage_play_pick_their = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = { scope:player = { tag = CHI } }
+	is_valid = {
+		is_alive = yes  is_married = no
+		scope:player = { has_variable = marriage_play_target }
+		employer = scope:player.var:marriage_play_target
+	}
+	effect = {
+		scope:player = { set_variable = { name = marriage_play_their_pick  value = prev } }
+		LOG_line = { sys = MARRIAGE  msg = "marriage picker: their character chosen" }
+	}
+}
+
+# ---- STEP 4: LAUNCH the proposal play --------------------------------------
+marriage_play_launch = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		# both characters chosen, both still unmarried + alive, and a target realm set.
+		has_variable = marriage_play_our_pick
+		has_variable = marriage_play_their_pick
+		var:marriage_play_our_pick = { is_alive = yes  is_married = no }
+		var:marriage_play_their_pick = { is_alive = yes  is_married = no }
+		# [#356 review-fix] neither pick already betrothed. The builders now exclude the betrothed,
+		# but a betrothal could form (AI, or a prior play resolving) AFTER the picker was populated;
+		# without this a stale pick would let MARRIAGE_PLAY_betroth_pair orphan the existing betrothal.
+		var:marriage_play_our_pick = { NOT = { has_variable = betrothed_to_char } }
+		var:marriage_play_their_pick = { NOT = { has_variable = betrothed_to_char } }
+		# [#356 review-fix, MAJOR] the pair MUST be opposite sex — marry_character requires it, and
+		# the columns are clickable in any order, so a stale same-sex their_pick can survive a re-pick.
+		# Without this guard a same-sex pair could launch, pay the begin price, and resolve to a silent
+		# no-op (the engine rejects same-sex marry_character).
+		OR = {
+			AND = { var:marriage_play_our_pick = { is_female = yes }  var:marriage_play_their_pick = { is_male = yes } }
+			AND = { var:marriage_play_our_pick = { is_male = yes }    var:marriage_play_their_pick = { is_female = yes } }
+		}
+	}
+	effect = {
+		var:marriage_play_our_pick   = { save_scope_as = marriage_play_our_char }
+		var:marriage_play_their_pick = { save_scope_as = marriage_play_their_char }
+		MARRIAGE_PLAY_begin = yes
+		LOG_line = { sys = MARRIAGE  msg = "marriage picker: proposal play launched" }
+	}
+}

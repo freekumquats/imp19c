@@ -1,0 +1,213 @@
+########################################################################
+# marriage_play_window.gui — [#356] the two-step marriage-proposal picker window.
+#
+# Replaces the old Dynastic Match window (gui/marriage_window.gui, deleted). Three columns:
+#   1. TARGET REALM      — the eligible realms (marriage_play_realms); click to select.
+#   2. OUR CHARACTER     — our unmarried characters (marriage_play_own_candidates), ruling
+#                          family first; click to select.
+#   3. THEIR CHARACTER   — the target realm's opposite-gender unmarried characters
+#                          (marriage_play_their_candidates), ruling family first; click.
+# A LAUNCH bar at the bottom opens the proposal play once both characters are chosen.
+#
+# Opened by marriage_play_open (MARRIAGE_PLAY_actions.txt) from a government_view button.
+# Row datamodels use the proven Scope.GetCountry / Scope.GetCharacter idiom
+# (diplomatic_view.gui:2318 / imp19c_windows.gui:71). TAB indentation throughout.
+########################################################################
+
+base_window = {
+	name = "marriage_play_window"
+	size = { 900 640 }
+	allow_outside = yes
+	movable = yes
+
+	using = main_window_template
+
+	state = {
+		name = _show
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+	state = {
+		name = _hide
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+
+	vbox = {
+		using = MainWindowHeaderBoxCentered
+		blockoverride "Title_text" { text = "MARRIAGE_PLAY_TITLE" }
+
+		# INSTRUCTIONS
+		textbox = {
+			size = { 880 40 }
+			multiline = yes
+			using = BaseFontS
+			using = Default_FontColor
+			margin = { 8 4 }
+			text = "MARRIAGE_PLAY_INSTR"
+		}
+
+		# THREE COLUMNS
+		flowcontainer = {
+			direction = horizontal
+			spacing = 6
+			margin = { 6 4 }
+
+			# --- COLUMN 1: TARGET REALM -------------------------------------
+			vbox = {
+				using = background_widget
+				margin = { 6 6 }
+				textbox = { size = { 280 24 }  using = BaseFontM  using = Default_FontColor  text = "MARRIAGE_PLAY_COL_REALM" }
+				scrollarea = {
+					size = { 280 480 }
+					scrollbarpolicy_horizontal = always_off
+					scrollbar_vertical = { using = VerticalScrollBar }
+					scrollwidget = {
+						flowcontainer = {
+							direction = vertical
+							spacing = 2
+							datamodel = "[Player.MakeScope.GetList('marriage_play_realms')]"
+							item = {
+								widget = {
+									size = { 262 44 }
+									datacontext = "[Scope.GetCountry]"
+									using = background_widget
+									list_button = {
+										size = { 100% 100% }
+										datacontext = "[GetScriptedGui('marriage_play_pick_realm')]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', Country.MakeScope ).End )]"
+										down = "[And( Player.MakeScope.GetVariable('marriage_play_target').IsSet, EqualTo_int32( Country.GetId, Player.MakeScope.GetVariable('marriage_play_target').GetCountry.GetId ) )]"
+										tooltip = "MARRIAGE_PLAY_PICK_REALM_TT"
+									}
+									flowcontainer = {
+										parentanchor = vcenter
+										spacing = 6
+										margin = { 6 0 }
+										new_country_flag = {
+											parentanchor = vcenter
+											blockoverride "Size" { size = { 32 32 } }
+										}
+										textbox = { size = { 210 40 }  parentanchor = vcenter  using = BaseFontS  using = Default_FontColor  text = "[Country.GetName]" }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			# --- COLUMN 2: OUR CHARACTER ------------------------------------
+			vbox = {
+				using = background_widget
+				margin = { 6 6 }
+				textbox = { size = { 280 24 }  using = BaseFontM  using = Default_FontColor  text = "MARRIAGE_PLAY_COL_OWN" }
+				scrollarea = {
+					size = { 280 480 }
+					scrollbarpolicy_horizontal = always_off
+					scrollbar_vertical = { using = VerticalScrollBar }
+					scrollwidget = {
+						flowcontainer = {
+							direction = vertical
+							spacing = 2
+							datamodel = "[Player.MakeScope.GetList('marriage_play_own_candidates')]"
+							item = {
+								widget = {
+									size = { 262 56 }
+									datacontext = "[Scope.GetCharacter]"
+									using = background_widget
+									list_button = {
+										size = { 100% 100% }
+										datacontext = "[GetScriptedGui('marriage_play_pick_own')]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+										down = "[And( Player.MakeScope.GetVariable('marriage_play_our_pick').IsSet, EqualTo_int32( Character.GetId, Player.MakeScope.GetVariable('marriage_play_our_pick').GetCharacter.GetId ) )]"
+										tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
+									}
+									flowcontainer = {
+										parentanchor = vcenter
+										spacing = 6
+										margin = { 6 0 }
+										cpt_button = { parentanchor = vcenter  size = { 34 50 } }
+										textbox = { size = { 210 52 }  parentanchor = vcenter  multiline = yes  using = BaseFontS  using = Default_FontColor  text = "[Character.GetName]" }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			# --- COLUMN 3: THEIR CHARACTER ----------------------------------
+			vbox = {
+				using = background_widget
+				margin = { 6 6 }
+				textbox = { size = { 280 24 }  using = BaseFontM  using = Default_FontColor  text = "MARRIAGE_PLAY_COL_THEIR" }
+				# prompt to pick a realm first (shown when no target realm chosen)
+				textbox = {
+					visible = "[Not( Player.MakeScope.GetVariable('marriage_play_target').IsSet )]"
+					size = { 280 40 }
+					multiline = yes
+					using = BaseFontS
+					using = Default_FontColor
+					text = "MARRIAGE_PLAY_PICK_REALM_FIRST"
+				}
+				scrollarea = {
+					size = { 280 460 }
+					scrollbarpolicy_horizontal = always_off
+					scrollbar_vertical = { using = VerticalScrollBar }
+					scrollwidget = {
+						flowcontainer = {
+							direction = vertical
+							spacing = 2
+							datamodel = "[Player.MakeScope.GetList('marriage_play_their_candidates')]"
+							item = {
+								widget = {
+									size = { 262 56 }
+									datacontext = "[Scope.GetCharacter]"
+									using = background_widget
+									list_button = {
+										size = { 100% 100% }
+										datacontext = "[GetScriptedGui('marriage_play_pick_their')]"
+										onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+										down = "[And( Player.MakeScope.GetVariable('marriage_play_their_pick').IsSet, EqualTo_int32( Character.GetId, Player.MakeScope.GetVariable('marriage_play_their_pick').GetCharacter.GetId ) )]"
+										tooltip = "MARRIAGE_PLAY_PICK_THEIR_TT"
+									}
+									flowcontainer = {
+										parentanchor = vcenter
+										spacing = 6
+										margin = { 6 0 }
+										cpt_button = { parentanchor = vcenter  size = { 34 50 } }
+										textbox = { size = { 210 52 }  parentanchor = vcenter  multiline = yes  using = BaseFontS  using = Default_FontColor  text = "[Character.GetName]" }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		# LAUNCH BAR
+		flowcontainer = {
+			direction = horizontal
+			spacing = 10
+			margin = { 8 6 }
+			text_button_square_highlighted = {
+				size = { 260 32 }
+				datacontext = "[GetScriptedGui('marriage_play_launch')]"
+				blockoverride "Center_text" { text = "MARRIAGE_PLAY_LAUNCH_BTN"  max_width = 240 }
+				blockoverride "On_click" {
+					enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+					onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+					onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_window')]"
+				}
+				tooltip = "MARRIAGE_PLAY_LAUNCH_TT"
+			}
+			text_button_square_highlighted = {
+				size = { 160 32 }
+				blockoverride "Center_text" { text = "MARRIAGE_PLAY_CANCEL_BTN"  max_width = 150 }
+				blockoverride "On_click" {
+					onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_window')]"
+				}
+				tooltip = "MARRIAGE_PLAY_CANCEL_TT"
+			}
+		}
+	}
+}

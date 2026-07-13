@@ -1,0 +1,414 @@
+########################################################################
+# se_QING_CARAVAN.txt — [#370] Silk Road / Central Asian Caravan Trade-Node System (絲路商道 / 回疆貿易).
+#
+# The ECONOMIC twin of the Xinjiang Consolidation arc (#367). Where se_QING_XINJIANG.txt models the
+# GRIP on the New Dominion (garrisons, begs, tuntian, the 協餉 subsidy), this models the COMMERCE that
+# ran alongside it: the caravan trade between Qing Altishahr (回疆, the Tarim Basin) and the Central
+# Asian khanates — tea / rhubarb / silk / silver west, horses / jade / cotton / dried fruit east —
+# funnelled through the oasis entrepôts of Kashgar (喀什噶爾), Yarkand (葉爾羌), Aksu and Khotan (和闐).
+#
+# HISTORY (Millward, Beyond the Pass / Eurasian Crossroads; Newby, The Empire and the Khanate;
+# Fletcher): after the 1759 conquest the Qing taxed the caravans lightly (~5-10% ad valorem, levied
+# chiefly at Yarkand), ran the frontier at a fiscal LOSS covered by the 協餉 inter-provincial subsidy,
+# and used commerce as a PACIFICATION instrument — a prosperous oasis rebels less. The great crisis
+# was COMMERCIAL: the Khanate of Kokand's escalating demands — the aqsaqal (阿奇木伯克) consul, the
+# right to levy its OWN customs on third-party traders, extraterritoriality — culminated in the 1832
+# settlement, often called the first "unequal treaty" the Qing granted, a decade before Nanking. Kokand
+# weaponised the White-Mountain khoja pretenders (Jahangir 1826, the Seven Khojas 1847) whenever its
+# demands were rebuffed.
+#
+# LAYER, DON'T DUPLICATE:
+#   • OWNS one new meter: qing_caravan_prosperity (0..100, 商道繁榮). Joins the EXISTING shared counter
+#     family (se_QING_DECLINE.txt) — same clamped-nudge idiom (QING_DECLINE_nudge), same init, same
+#     band-swap (QING_DECLINE_apply_caravan_band). No new counter machinery.
+#   • COUPLES to #367 (does not duplicate): the target reads the #367 grip meter qing_xinjiang_control
+#     and the pending khoja-scare flag qing_xj_khoja_pending; prosperity nudges the grip back (a
+#     thriving trade eases the hold, a cut route frays it). The Kokand-concession lever couples to the
+#     SAME qing_xj_kokand_emboldened opinion #367 already owns.
+#   • GRAND-COUNCIL FOLD is the SAME office, a SECOND additive term: caravan prosperity folds into the
+#     LIFAN YUAN (理藩院) Director — the Court that historically governed Xinjiang trade relations — as
+#     term (d) inside QING_ministry_recompute_perf_lifanyuan, alongside the #367 consolidation term (c).
+#     Additive-inside (that recompute SETS the meter fresh each pulse), scaled small (/5), so the two
+#     frontier terms are complementary, not double-counted.
+#   • REVENUE: the caravan customs pay a quarterly treasury trickle scaled by prosperity x the customs
+#     rate — the historically-small-but-real fiscal contribution (the 協餉 cost side lives in #367).
+#
+# STATE (CHI country scope):
+#   qing_caravan_prosperity        0..100  the trade-node health/volume (商道繁榮). Eases toward target.
+#   qing_caravan_prosperity_target scratch: the recomputed target the meter eases toward (hysteresis)
+#   qing_caravan_customs_rate      0/1/2   輕稅 light / 中稅 moderate / 重稅 heavy
+#   qing_caravan_aqsaqal_granted   flag    the Kokand aqsaqal concession is in force (1832-style)
+#   qing_caravan_yarkand_market    int     count of oasis market investments (bazaar/caravanserai), cap 4
+#   qing_caravan_initialized       init guard
+# Reads/drives EXISTING state: qing_xinjiang_control (#367 grip), qing_xj_consolidation (#367),
+#   qing_xj_khoja_pending (#367 scare), the KOK opinion qing_xj_kokand_emboldened.
+#
+# PREFIX: QING_caravan_ / sys = QING. CHI-only. Init from on_game_initialized (after QING_xj_init, whose
+# grip meter the target reads). Drifts quarterly via QING_caravan_pulse (se_QING_GOVERNANCE.txt, AFTER
+# QING_xj_pulse so it reads that pulse's fresh grip/scare state). All logged sys = QING, STATIC msgs only.
+# Proven idioms only: QING_DECLINE_nudge clamped meter (amount=var:), add_treasury=var:
+# (se_QING_MECHANICS:675), SUBJ_QING_advance_integration (se_QING_XINJIANG tuntian lever), the KOK
+# opinion + khoja-scare vars (#367), banded country modifiers. NO create_character (#90 rule N/A — this
+# is a pure counter/lever model). Kokand is the NEIGHBOURING Turkic power (separatism-backer rule
+# satisfied — reuses #367's KOK coupling, not a far-flung power).
+#
+#   ROOT / this = the Qing country (CHI, player); root.current_ruler = the emperor.
+########################################################################
+
+# ======================================================================
+# QING_caravan_init — seed the caravan bookkeeping once. Scope: COUNTRY (CHI). Idempotent (guards on a
+# dedicated flag, not a count — the #336 init-recompute lesson). Seeds prosperity 45 (a going concern in
+# the 1763 zenith, the routes open and the oases prosperous), customs_rate 1 (moderate, the historical
+# default), market 0. Then recomputes so the target + the Lifan fold read a real value from turn 1.
+# ======================================================================
+QING_caravan_init = {
+	LOG_enter = { sys = QING  fn = "QING_caravan_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_caravan_initialized } }
+		set_variable = { name = qing_caravan_initialized      value = 1 }
+		set_variable = { name = qing_caravan_prosperity        value = 45 }
+		set_variable = { name = qing_caravan_customs_rate      value = 1 }
+		set_variable = { name = qing_caravan_yarkand_market    value = 0 }
+		# recompute at once so the target is tallied and the Lifan fold reads a real value FROM TURN 1
+		# (nothing folds this into a game-start dispatcher, so init must recompute itself — #336 lesson).
+		QING_caravan_recompute_target = yes
+	}
+	LOG_exit = { sys = QING  fn = "QING_caravan_init"  result = OK }
+}
+
+# ======================================================================
+# QING_caravan_recompute_target — write qing_caravan_prosperity_target on CHI from the frontier grip,
+# the oasis market infrastructure, the Kokand concession, the customs burden, and any active route
+# disruption. The meter (in the pulse) EASES toward this (hysteresis), matching the #367 / currency /
+# population designs. All O(1) cached reads. Scope: COUNTRY (CHI).
+# ======================================================================
+QING_caravan_recompute_target = {
+	# --- BASE: a going trade in a held frontier.
+	set_variable = { name = qing_caravan_prosperity_target  value = 40 }
+
+	# --- + GRIP: a firmly-held frontier trades safely (qing_xinjiang_control /4 -> up to +25). The
+	# caravans need the roads policed and the oases pacified — the #367 grip is the spine here too.
+	if = {
+		limit = { has_variable = qing_xinjiang_control }
+		set_variable = { name = qing_caravan_grip_tmp  value = var:qing_xinjiang_control }
+		change_variable = { name = qing_caravan_grip_tmp  divide = 4 }
+		change_variable = { name = qing_caravan_prosperity_target  add = var:qing_caravan_grip_tmp }
+		remove_variable = qing_caravan_grip_tmp
+	}
+
+	# --- + MARKET INFRASTRUCTURE: each bazaar/caravanserai investment at the oases +5 (cap 4 -> +20).
+	set_variable = { name = qing_caravan_mkt_tmp  value = var:qing_caravan_yarkand_market }
+	change_variable = { name = qing_caravan_mkt_tmp  multiply = 5 }
+	change_variable = { name = qing_caravan_prosperity_target  add = var:qing_caravan_mkt_tmp }
+	remove_variable = qing_caravan_mkt_tmp
+
+	# --- + AQSAQAL CONCESSION: with the Kokand consul recognised, the Andijani merchants flock to
+	# Kashgar and the volume swells (+8) — the commercial upside of the 1832 surrender.
+	if = {
+		limit = { has_variable = qing_caravan_aqsaqal_granted }
+		change_variable = { name = qing_caravan_prosperity_target  add = 8 }
+	}
+
+	# --- - CUSTOMS DRAG: heavy tariffs depress volume and breed smuggling. light 0 / moderate -5 /
+	# heavy -15 (the historical trade-off — more revenue per unit, less trade).
+	if = {
+		limit = { has_variable = qing_caravan_customs_rate  var:qing_caravan_customs_rate = 2 }
+		change_variable = { name = qing_caravan_prosperity_target  subtract = 15 }
+	}
+	else_if = {
+		limit = { has_variable = qing_caravan_customs_rate  var:qing_caravan_customs_rate = 1 }
+		change_variable = { name = qing_caravan_prosperity_target  subtract = 5 }
+	}
+
+	# --- - ROUTE DISRUPTION: a pending khoja scare (#367) cuts the caravan road (-15).
+	if = {
+		limit = { has_variable = qing_xj_khoja_pending }
+		change_variable = { name = qing_caravan_prosperity_target  subtract = 15 }
+	}
+
+	# clamp 0..100.
+	if = { limit = { var:qing_caravan_prosperity_target > 100 } set_variable = { name = qing_caravan_prosperity_target  value = 100 } }
+	if = { limit = { var:qing_caravan_prosperity_target < 0 }   set_variable = { name = qing_caravan_prosperity_target  value = 0 } }
+}
+
+# ======================================================================
+# QING_caravan_pulse — quarterly, from QING_GOV_pulse AFTER QING_xj_pulse (so it reads that pulse's
+# fresh grip + scare state). Recomputes the target, eases the meter toward it, pays the quarterly
+# customs, couples prosperity back into the grip, and offers the crisis events. Scope: COUNTRY (CHI).
+# Cheap: O(1). Self-guarded; a clean no-op at a quiet frontier.
+# ======================================================================
+QING_caravan_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_caravan_pulse" }
+	QING_caravan_init = yes   # idempotent — ensures the meter exists
+
+	# --- recompute the target and EASE the meter 1/4 of the way toward it (hysteresis).
+	QING_caravan_recompute_target = yes
+	set_variable = { name = qing_caravan_ease_tmp  value = var:qing_caravan_prosperity_target }
+	change_variable = { name = qing_caravan_ease_tmp  subtract = var:qing_caravan_prosperity }
+	change_variable = { name = qing_caravan_ease_tmp  divide = 4 }
+	QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = var:qing_caravan_ease_tmp }
+	remove_variable = qing_caravan_ease_tmp
+
+	# --- PAY THE CUSTOMS: a quarterly treasury trickle = prosperity x a rate-factor, scaled down. The
+	# historically-small-but-real caravan revenue. rate-factor: light 1 / moderate 2 / heavy 3 (heavy
+	# skims more per unit even as it shrinks the base). income = prosperity * factor / 40 (so a thriving
+	# route at moderate rate pays ~ 80*2/40 = 4/quarter — a modest frontier income, not a windfall).
+	# BUT if the aqsaqal concession is granted, Kokand skims the third-party duties: halve the take.
+	set_variable = { name = qing_caravan_income_tmp  value = var:qing_caravan_prosperity }
+	if = {
+		limit = { var:qing_caravan_customs_rate = 2 }
+		change_variable = { name = qing_caravan_income_tmp  multiply = 3 }
+	}
+	else_if = {
+		limit = { var:qing_caravan_customs_rate = 1 }
+		change_variable = { name = qing_caravan_income_tmp  multiply = 2 }
+	}
+	# light rate (0): factor 1 — leave income_tmp as prosperity.
+	change_variable = { name = qing_caravan_income_tmp  divide = 40 }
+	if = {
+		limit = { has_variable = qing_caravan_aqsaqal_granted }
+		change_variable = { name = qing_caravan_income_tmp  divide = 2 }   # Kokand skims the third-party customs
+	}
+	if = {
+		limit = { var:qing_caravan_income_tmp > 0 }
+		add_treasury = var:qing_caravan_income_tmp
+		LOG_line = { sys = QING  msg = "caravan: the Yarkand customs pay their quarterly take for" }
+	}
+	# [#430] publish the quarterly caravan take for the Revenue panel 回疆貿易 ledger line AND the Board of
+	# Revenue inflow term (#431 reads qing_caravan_income_last). A real on-books treasury stream, so the 戶部
+	# gets credit — a Yarkand trade that pays well lifts the minister even if the land tax lags. Published
+	# even at 0 so a dead route reads 0, not a stale prior value.
+	set_variable = { name = qing_caravan_income_last  value = var:qing_caravan_income_tmp }
+	remove_variable = qing_caravan_income_tmp
+
+	# --- COUPLE BACK INTO THE GRIP: a thriving trade pacifies the oases (>=70 -> grip +1); a collapsed
+	# route unsettles them (<30 -> grip -1). Small, so it is a background pressure, not a driver.
+	if = {
+		limit = {
+			var:qing_caravan_prosperity >= 70
+			has_variable = qing_xinjiang_control
+		}
+		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 1 }
+	}
+	else_if = {
+		limit = {
+			var:qing_caravan_prosperity < 30
+			has_variable = qing_xinjiang_control
+		}
+		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = -1 }
+	}
+
+	# --- [MO-ENH #1] CARAVAN HEALTH -> KOKAND'S DISPOSITION. The Silk Road's fortunes colour how the
+	# khanate regards Peking: a booming Yarkand trade profits Kokand (it warms — a concrete diplomatic
+	# reward for investing in the oasis market), a collapsed route starves it of the customs it skims
+	# (it chafes, feeding the emboldened-grievance the ultimatum below runs on). Applied to the c:KOK
+	# on-map actor already used throughout this file; decaying opinions, refreshed while the extreme
+	# holds. Guarded on KOK existing.
+	if = {
+		limit = { exists = c:KOK }
+		if = {
+			limit = { var:qing_caravan_prosperity >= 70 }
+			c:KOK = { add_opinion = { modifier = qing_caravan_thriving_opinion  target = ROOT } }
+		}
+		else_if = {
+			limit = { var:qing_caravan_prosperity < 30 }
+			c:KOK = { add_opinion = { modifier = qing_caravan_disrupted_opinion  target = ROOT } }
+		}
+	}
+
+	# --- OFFER THE KOKAND ULTIMATUM once the trade is worth extorting AND Kokand is already emboldened
+	# (a festering khoja scare) AND the concession is not yet granted. Player-only; the event re-checks
+	# its own state; the once-only flag is set in qing_caravan.1's OWN immediate (the #366/#368 fix).
+	if = {
+		limit = {
+			var:qing_caravan_prosperity >= 55
+			NOT = { has_variable = qing_caravan_aqsaqal_granted }
+			exists = c:KOK
+			# Kokand is ill-disposed (the emboldened grievance, or any hostility) — it now makes demands.
+			# The proven opinion trigger (value test), NOT the unavailable has_opinion.
+			c:KOK = { opinion = { target = ROOT  value < 0 } }
+			NOT = { has_variable = qing_caravan_ultimatum_seen }
+			is_ai = no
+		}
+		trigger_event = { id = qing_caravan.1  days = { 5 20 } }
+	}
+	# --- OFFER THE ROUTE-CUT crisis when a khoja scare is pending AND the route was worth something.
+	else_if = {
+		limit = {
+			has_variable = qing_xj_khoja_pending
+			var:qing_caravan_prosperity >= 40
+			NOT = { has_variable = qing_caravan_routecut_seen }
+			is_ai = no
+		}
+		trigger_event = { id = qing_caravan.2  days = { 5 20 } }
+	}
+	LOG_exit = { sys = QING  fn = "QING_caravan_pulse"  result = OK }
+}
+
+# ======================================================================
+# LEVER: SET THE CUSTOMS RATE (定稅則) — 輕稅 light (0) / 中稅 moderate (1) / 重稅 heavy (2). Scope:
+# COUNTRY (CHI). $rate$ = 0/1/2. Heavier rates raise revenue-per-unit but drag prosperity and, at the
+# heavy tier, sour the Kokandi merchants (a nudge toward the emboldened grievance). The panel offers
+# whichever two rates are not the current one; the recompute picks up the drag next pulse.
+# ======================================================================
+QING_caravan_set_customs = {
+	LOG_enter = { sys = QING  fn = "QING_caravan_set_customs" }
+	QING_caravan_init = yes
+	set_variable = { name = qing_caravan_customs_rate  value = $rate$ }
+	# heavy tariffs anger the Kokandi merchants (a small push toward the emboldened grievance, which
+	# the ultimatum event reads). Only if Kokand is on the map and not already emboldened.
+	if = {
+		limit = {
+			$rate$ = 2
+			exists = c:KOK
+		}
+		# add_opinion refreshes if already present (proven unguarded in se_QING_DIPLO) — no has_opinion needed.
+		c:KOK = { add_opinion = { modifier = qing_xj_kokand_emboldened  target = ROOT } }
+		LOG_line = { sys = QING  msg = "caravan: heavy tariffs sour the Kokandi merchants for" }
+	}
+	QING_caravan_recompute_target = yes
+	LOG_line = { sys = QING  msg = "caravan: the customs rate is reset for" }
+	LOG_exit = { sys = QING  fn = "QING_caravan_set_customs"  result = OK }
+}
+
+# ======================================================================
+# LEVER: INVEST IN THE OASIS MARKET (興市) — build a bazaar / caravanserai at Kashgar or Yarkand.
+# Scope: COUNTRY (CHI). Spends treasury (-40); +1 market (cap 4); lifts prosperity at once; advances
+# the Kashgaria/Yili subject's integration a step (a thriving bazaar knits the oasis into the empire —
+# the commercial mirror of the #367 tuntian lever). Guarded on treasury + the cap; the panel mirrors it.
+# ======================================================================
+QING_caravan_invest_market = {
+	LOG_enter = { sys = QING  fn = "QING_caravan_invest_market" }
+	QING_caravan_init = yes
+	if = {
+		limit = {
+			treasury >= 40
+			var:qing_caravan_yarkand_market < 4
+		}
+		add_treasury = -40
+		change_variable = { name = qing_caravan_yarkand_market  add = 1 }
+		QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = 8 }
+		# a thriving oasis market tightens the Inner-Asian dependency's integration into the empire.
+		# [review-fix] advance c:ILI — the DIRECT autonomous_governorship subject of CHI (setup
+		# 00_default.txt:870) — NOT c:XNG, which is a client_state SUB-subject OF ILI (line 868),
+		# so it is not a direct subject of CHI. Advancing XNG toward CHI integration set the wrong
+		# overlord and, at the progress==5 threshold, SUBJ_QING_advance_integration's absorb-fallback
+		# would LAND_transfer XNG's provinces straight to CHI, rupturing the ILI→XNG chain. Match the
+		# sibling #367 tuntian lever (se_QING_XINJIANG.txt:257-259), which correctly targets c:ILI.
+		if = {
+			limit = { exists = c:ILI  c:ILI = { is_subject = yes } }
+			c:ILI = { save_scope_as = target }
+			SUBJ_QING_advance_integration = { steps = 1 }
+		}
+		QING_caravan_recompute_target = yes
+		LOG_line = { sys = QING  msg = "caravan: a bazaar is endowed at the oasis for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_caravan_invest_market"  reason = "treasury below 40 or market cap reached" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_caravan_invest_market"  result = OK }
+}
+
+# ======================================================================
+# LEVER: GRANT THE AQSAQAL CONCESSION (許阿奇木) — recognise the Kokand consul and its right to levy its
+# own customs on third-party traders (the 1832 settlement). Scope: COUNTRY (CHI). Set-once. The
+# commercial upside: prosperity swells, Kokand relations mend (clear the emboldened grievance + goodwill),
+# and any pending khoja scare is defused (Kokand calls off its pretenders). The cost: the "unequal treaty"
+# humiliation (prestige + legitimacy hit) and a permanent customs-revenue haircut (Kokand skims the
+# third-party duties — the pulse halves the take while the concession stands).
+# ======================================================================
+QING_caravan_grant_aqsaqal = {
+	LOG_enter = { sys = QING  fn = "QING_caravan_grant_aqsaqal" }
+	QING_caravan_init = yes
+	if = {
+		limit = { NOT = { has_variable = qing_caravan_aqsaqal_granted } }
+		set_variable = { name = qing_caravan_aqsaqal_granted  value = 1 }
+		QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = 10 }
+		# Kokand is mollified — clear the grievance and lay in real goodwill.
+		if = {
+			limit = { exists = c:KOK }
+			c:KOK = {
+				# remove_opinion no-ops if the grievance is absent (proven unguarded in se_QING_DIPLO).
+				remove_opinion = { modifier = qing_xj_kokand_emboldened  target = ROOT }
+				add_opinion = { modifier = qing_gp_relation_opinion  target = ROOT }
+			}
+		}
+		# a granted concession calls off the pending khoja pretenders — defuse the scare.
+		if = {
+			limit = { has_variable = qing_xj_khoja_pending }
+			remove_variable = qing_xj_khoja_pending
+		}
+		# the humiliation of the first "unequal" concession.
+		add_legitimacy = -6
+		# [T3 BT-5/6] was current_ruler add_prestige (inert on a character) -> ruler popularity.
+		current_ruler = { add_popularity = -15 }
+		LOG_line = { sys = QING  msg = "caravan: the Kokand aqsaqal concession is granted for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_caravan_grant_aqsaqal"  reason = "aqsaqal concession already in force" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_caravan_grant_aqsaqal"  result = OK }
+}
+
+# ======================================================================
+# LEVER: REVOKE THE AQSAQAL CONCESSION (罷阿奇木) — reassert Qing fiscal sovereignty over the oasis
+# trade. Scope: COUNTRY (CHI). Restores the full customs take (the pulse stops halving it) and firms
+# legitimacy, BUT provokes Kokand (the emboldened grievance returns) and frays the frontier grip (an
+# affronted Kokand backs the khoja pretenders). Guarded on the concession actually being in force.
+# ======================================================================
+QING_caravan_revoke_aqsaqal = {
+	LOG_enter = { sys = QING  fn = "QING_caravan_revoke_aqsaqal" }
+	QING_caravan_init = yes
+	if = {
+		limit = { has_variable = qing_caravan_aqsaqal_granted }
+		remove_variable = qing_caravan_aqsaqal_granted
+		# the throne recovers its dignity and its revenue.
+		add_legitimacy = 3
+		# but Kokand is affronted — the grievance returns and the frontier grip frays.
+		if = {
+			limit = { exists = c:KOK }
+			# add_opinion refreshes if already present (proven unguarded in se_QING_DIPLO).
+			c:KOK = { add_opinion = { modifier = qing_xj_kokand_emboldened  target = ROOT } }
+		}
+		if = {
+			limit = { has_variable = qing_xinjiang_control }
+			QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = -6 }
+		}
+		QING_caravan_recompute_target = yes
+		LOG_line = { sys = QING  msg = "caravan: the Kokand aqsaqal concession is revoked for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_caravan_revoke_aqsaqal"  reason = "no aqsaqal concession in force" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_caravan_revoke_aqsaqal"  result = OK }
+}
+
+# ======================================================================
+# LEVER: MILITARY ESCORT (護商) — send a garrison column to reopen a cut caravan road. Scope: COUNTRY
+# (CHI). Spends treasury (-30); firms the grip; and if a khoja scare is pending it clears it (the road
+# is forced open). The costly sovereignty answer to the route-cut crisis (vs granting the concession).
+# ======================================================================
+QING_caravan_military_escort = {
+	LOG_enter = { sys = QING  fn = "QING_caravan_military_escort" }
+	QING_caravan_init = yes
+	if = {
+		limit = { treasury >= 30 }
+		add_treasury = -30
+		QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = 8 }
+		if = {
+			limit = { has_variable = qing_xinjiang_control }
+			QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 4 }
+		}
+		# the column forces the road open — defuse the pending scare.
+		if = {
+			limit = { has_variable = qing_xj_khoja_pending }
+			remove_variable = qing_xj_khoja_pending
+		}
+		QING_caravan_recompute_target = yes
+		LOG_line = { sys = QING  msg = "caravan: a military escort reopens the road for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_caravan_military_escort"  reason = "treasury below 30 — cannot fund the escort" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_caravan_military_escort"  result = OK }
+}

@@ -1,0 +1,75 @@
+########################################################################
+# qing_marriage_events.txt — dynastic-marriage succession events. [#412/#413]
+#
+# namespace qing_marriage
+#   .1  THE DYNASTIC CLAIM (繼統之議) — a wedded realm's throne has fallen vacant and OUR house
+#       stands the strongest dynastic claimant. Fired to a HUMAN claimant from
+#       MARRIAGE_on_ruler_death_succession (se_MARRIAGE.txt) when our realm outweighs the vacant
+#       one (the crowns would unite). We may press for the union (bind it as a royal_union) or
+#       stand off and merely take the pressable claim (a casus belli to war for it later).
+#
+#   ROOT / this = the CLAIMANT country (the player). scope-persisted:
+#     var:succ_union_target  = the vacant realm (the crown in question)
+########################################################################
+
+namespace = qing_marriage
+
+# ======================================================================
+# qing_marriage.1 — THE DYNASTIC CLAIM (繼統之議)
+# ======================================================================
+qing_marriage.1 = {
+	type = country_event
+	title = "qing_marriage.1.t"
+	desc = "qing_marriage.1.desc"
+	picture = senate
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		has_variable = succ_union_target
+		# the vacant realm must still exist and still be independent for a union to form.
+		var:succ_union_target = { exists = current_ruler  is_subject = no }
+	}
+
+	immediate = {
+		LOG_line = { sys = MARRIAGE  msg = "EVENT qing_marriage.1 (the dynastic claim) [ROOT.GetTag]" }
+		var:succ_union_target = { save_scope_as = claim_realm }
+	}
+
+	# --- PRESS FOR THE UNION — bind the vacant crown to ours as a royal_union (垂統) ---------
+	# The two crowns are joined: the vacant realm becomes our royal_union subject (which then
+	# shares our sovereign via the engine's has_overlords_ruler). Marked marriage_union_junior so
+	# the L3 inheritance-on-death path owns it too.
+	option = {
+		name = "qing_marriage.1.a"
+		custom_tooltip = "qing_marriage.1.a.tt"
+		trigger = {
+			# still able: the target independent + at peace with us.
+			scope:claim_realm = { is_subject = no  exists = current_ruler }
+			NOT = { war = yes }
+		}
+		FUNC_make_subject = {
+			overlord = root
+			target = scope:claim_realm
+			type = royal_union
+		}
+		scope:claim_realm = { set_variable = { name = marriage_union_junior  value = 1 } }
+		add_legitimacy = 5
+		LOG_line = { sys = MARRIAGE  msg = "marriage: the claimant presses the union — a wedded crown bound as a royal union for [ROOT.GetTag]" }
+	}
+
+	# --- STAND OFF — take the pressable claim only, press it by arms in your own time (待時) ---
+	option = {
+		name = "qing_marriage.1.b"
+		custom_tooltip = "qing_marriage.1.b.tt"
+		MARRIAGE_press_succession_claim = { realm = scope:claim_realm }
+		LOG_line = { sys = MARRIAGE  msg = "marriage: the claimant stands off, taking the claim to press by arms for [ROOT.GetTag]" }
+	}
+
+	# clean up the target var either way (the option scopes have run).
+	after = {
+		if = { limit = { has_variable = succ_union_target }  remove_variable = succ_union_target }
+	}
+}

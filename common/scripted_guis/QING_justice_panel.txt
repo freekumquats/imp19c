@@ -1,0 +1,180 @@
+########################################################################
+# QING_justice_panel.txt — scripted GUIs for the Board of Punishments panel (#363).
+#
+# The Board of Punishments (刑部) bureaucracy: a Grand-Council-clone L4 window headed by the
+# Grand Minister of Justice (刑部尚書), surfacing the ministry-performance meter
+# qing_min_perf_justice (which folds into his Grand Council standing — a fold that had NEVER
+# been computed before #363, the same latent bug the Censorate #362 fixed), the realm's
+# corruption level, and the concrete DOCKET (待審) of accused officials the Board holds and
+# tries. Three action levers: ACCUSE AN OFFICIAL (charge the most corrupt courtier onto the
+# docket), CONVICT (定罪 — disgrace + penal servitude) and ACQUIT (開釋) each docketed man.
+#
+# Distinct from the Censorate (都察院, #362) which impeaches in one blow: the 刑部 is the high
+# COURT — it CHARGES first, then TRIES. Scoped to the Qing player (ROOT = CHI); AI never
+# evaluates these (ai_is_valid = no). Opened by qing_justice_open_panel_button (a button in
+# government_view.gui). Window: gui/qing_justice.gui. Prefix = qing_justice_. se_LOG sys = QING.
+########################################################################
+
+# ---- OPEN THE BOARD OF PUNISHMENTS PANEL (button in the government view) ----
+qing_justice_open_panel_button = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		# recompute so the meter + docket roster are fresh the moment the panel opens.
+		QING_ministry_recompute_perf_justice = yes
+		LOG_line = { sys = QING  msg = "EVENT qing_justice_open_panel_button fired; opening the Board of Punishments panel for" }
+	}
+}
+
+# ---- MINISTER-OF-JUSTICE HOLDER INDICATOR ----------------------------------
+qing_justice_filled = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_office_justice_holder
+		var:qing_office_justice_holder = { is_alive = yes  employer = ROOT }
+	}
+}
+
+qing_justice_vacant = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		NOR = {
+			AND = {
+				has_variable = qing_office_justice_holder
+				var:qing_office_justice_holder = { is_alive = yes  employer = ROOT }
+			}
+		}
+	}
+}
+
+# ---- ACCUSE AN OFFICIAL — charge the most corrupt courtier onto the docket.
+# The 刑部 lays a case (待審): find the venal courtier (QING_justice_find_accusable) and
+# mark him qing_justice_accused so he appears on the docket awaiting trial. Gated on a
+# present Minister of Justice AND the existence of an accusable target (mirrors the find
+# limit, so the lever is dead when there is no one to charge). Country scope.
+# ----------------------------------------------------------------------
+qing_justice_accuse_official = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		# a present Minister of Justice must be seated to lay a charge...
+		has_variable = qing_office_justice_holder
+		var:qing_office_justice_holder = { is_alive = yes  employer = ROOT }
+		# ...and there must BE an accusable official not already on the docket (mirror
+		# find_accusable's limit, so no dead-affordance click).
+		any_character = {
+			employer = ROOT
+			is_ruler = no
+			is_adult = yes
+			is_alive = yes
+			NOT = { has_variable = qing_rebel_foil }
+			NOT = { has_variable = qing_justice_accused }
+			# [#363-R2 review-fix] exclude ALL seated great-office holders (mirrors the widened
+			# find-limit + the docket rebuild's NOT={has_variable=qing_office_held} guard), so the
+			# lever is dead unless there is an accusable man who will actually reach the docket —
+			# charging an office-holder used to no-op (he was filtered out of the docket) and strand
+			# a permanent un-triable mark. Subsumes the old sitting-Justice-minister-only exclusion.
+			NOT = { has_variable = qing_office_held }
+			# [#419] MUST stay byte-identical to QING_justice_find_accusable's limit (se_QING_JUSTICE.txt)
+			# so the button is never a dead affordance: the imprison-target bars (a convict is jailed via
+			# vanilla `imprison`, which refuses commanders/governors/heir/co-ruler/family & clan heads) and
+			# the broadened misconduct OR (moderate corruption / cruel / arbitrary / disloyal) both mirror it.
+			is_general = no
+			is_admiral = no
+			is_governor = no
+			is_co_ruler = no
+			is_primary_heir = no
+			is_head_of_family = no
+			is_clan_chief = no
+			OR = {
+				corruption >= 20
+				has_trait = corrupt
+				has_trait = cruel
+				has_trait = arbitrary
+				loyalty < 50
+			}
+		}
+	}
+	effect = {
+		QING_justice_find_accusable = yes
+		if = {
+			limit = { exists = scope:qing_justice_target }
+			scope:qing_justice_target = {
+				set_variable = { name = qing_justice_accused  value = 1 }
+			}
+			LOG_line = { sys = QING  msg = "justice: an official charged onto the docket from the panel for" }
+		}
+		# refresh so the docket roster + meter reflect the new charge.
+		QING_ministry_recompute_perf_justice = yes
+	}
+}
+
+# ---- CONVICT AN ACCUSED (定罪) — the trial goes against a docketed man. Row action
+# on the docket roster; the accused comes via datacontext (GuiScope char + player).
+# Disgrace + strip office + imprison (下獄) via QING_justice_convict_accused. Mirrors
+# qing_censorate_recall_inspector's char+player scope shape.
+# ----------------------------------------------------------------------
+qing_justice_convict = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		has_variable = qing_justice_accused
+	}
+	is_valid = {
+		has_variable = qing_justice_accused
+		employer = scope:player
+		# only a seated Minister of Justice may bring a case to judgement.
+		scope:player = {
+			has_variable = qing_office_justice_holder
+			var:qing_office_justice_holder = { is_alive = yes  employer = scope:player }
+		}
+	}
+	effect = {
+		QING_justice_convict_accused = yes
+		LOG_line = { sys = QING  msg = "justice: an accused convicted from the panel for" }
+		scope:player = { QING_ministry_recompute_perf_justice = yes }
+	}
+}
+
+# ---- ACQUIT AN ACCUSED (開釋) — the trial clears a docketed man. Row action. ----
+qing_justice_acquit = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		has_variable = qing_justice_accused
+	}
+	is_valid = {
+		has_variable = qing_justice_accused
+		employer = scope:player
+		# [#363-R2 review-fix] acquittal (開釋) is a trial outcome, so it too requires a seated
+		# Minister of Justice — mirrors the convict gate. Without this, a docket populated while a
+		# minister was seated could be cleared by clemency during a later vacancy (a headless Board
+		# dispensing pardons + free loyalty_qing_commended), an asymmetry with the convict lever.
+		scope:player = {
+			has_variable = qing_office_justice_holder
+			var:qing_office_justice_holder = { is_alive = yes  employer = scope:player }
+		}
+	}
+	effect = {
+		QING_justice_acquit_accused = yes
+		LOG_line = { sys = QING  msg = "justice: an accused acquitted from the panel for" }
+		scope:player = { QING_ministry_recompute_perf_justice = yes }
+	}
+}
+
+# ---- CLOSE ------------------------------------------------------------------
+qing_justice_close_panel = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_valid = { always = yes }
+	effect = { }
+}

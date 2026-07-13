@@ -1,0 +1,84 @@
+########################################################################
+# qing_canton_events.txt — THE CANTON SYSTEM (粵海關 / 一口通商), task #389.
+#
+# Fired from se_QING_CANTON.txt's quarterly customs pulse. The Cohong (公行) — the
+# licensed Hong-merchant guild that alone was permitted to trade with the Westerners —
+# buckled recurrently under the levies and "squeeze" the Hoppo and the officials exacted;
+# bankruptcies were frequent (hence the 1781 Consoo Fund, a 3% levy to cover failed hongs).
+# When the Hoppo's over-exaction (qing_hoppo_squeeze) grows punishing, the merchants'
+# debts come due and the throne must choose: bail out the guild from the customs surplus,
+# rein in the Hoppo, or let the failures fall on the traders.
+#
+#   ROOT / this = the Qing (CHI, player)
+#
+# Namespace = qing_canton
+#   .1  the Cohong debt crisis (public bailout / rein in the Hoppo / let it fall)
+#
+# Sources: Van Dyke, The Canton Trade (2005) on the Cohong + Consoo fund; H.B. Morse on
+#   the Hoppo's squeeze; Chang Te-Ch'ang (JAS 1972) on the Neiwufu revenue routing.
+########################################################################
+
+namespace = qing_canton
+
+########################################################################
+# .1  THE COHONG DEBT CRISIS  (公行商欠)
+# The Hong merchants, bled by the Hoppo's exactions, cannot meet their debts. The
+# system that funnels the emperor's Canton silver is at risk of seizing up.
+########################################################################
+qing_canton.1 = {
+	type = country_event
+	title = "qing_canton.1.t"
+	desc = "qing_canton.1.desc"
+	picture = trade_port
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_hoppo_squeeze
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_canton.1 (the Cohong debt crisis) [ROOT.GetTag]" }
+	}
+
+	# --- Bail the guild out from the customs surplus (公所 Consoo relief) ---------------
+	option = {
+		name = "qing_canton.1.a"
+		custom_tooltip = "qing_canton.1.a.tt"
+		# the relief comes out of the emperor's Canton haul (the money is HIS), not the 戶部.
+		# [#389 review-fix] the privy-purse hit is gated on the SAME >= 30 condition as the
+		# customs drawdown, so the tooltip's "spends ~30萬兩" is honest — a broke haul pays neither.
+		if = {
+			limit = { has_variable = qing_canton_customs  var:qing_canton_customs >= 30 }
+			change_variable = { name = qing_canton_customs  subtract = 30 }
+			if = { limit = { exists = current_ruler }  current_ruler = { add_gold = -24 } }
+		}
+		# the trade steadies and the squeeze eases as the throne signals restraint.
+		QING_DECLINE_nudge = { var = qing_hoppo_squeeze  amount = -15 }
+		add_stability = 1
+	}
+
+	# --- Rein in the Hoppo — an investigation into the over-exaction --------------------
+	option = {
+		name = "qing_canton.1.b"
+		custom_tooltip = "qing_canton.1.b.tt"
+		# a hard crackdown on the squeeze: it falls sharply, corruption eases, but the throne
+		# forgoes the inflated take (the Hoppo was funnelling extra silver up the line too).
+		QING_DECLINE_nudge = { var = qing_hoppo_squeeze  amount = -25 }
+		if = { limit = { has_variable = qing_corruption_level }  QING_DECLINE_nudge = { var = qing_corruption_level  amount = -5 } }
+		add_legitimacy = 3
+	}
+
+	# --- Let the failures fall on the merchants (the guild absorbs its own) -------------
+	option = {
+		name = "qing_canton.1.c"
+		custom_tooltip = "qing_canton.1.c.tt"
+		# the throne is unmoved; the bankruptcies ripple and the trade sours, but no silver
+		# is spent. The squeeze festers and the merchants' resentment simmers.
+		QING_DECLINE_nudge = { var = qing_hoppo_squeeze  amount = 5 }
+		QING_DECLINE_nudge = { var = qing_currency_stress  amount = 4 }
+	}
+}

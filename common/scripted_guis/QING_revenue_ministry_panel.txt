@@ -1,0 +1,134 @@
+########################################################################
+# QING_revenue_ministry_panel.txt — scripted GUIs for the Ministry of Revenue panel (#355).
+#
+# The Board of Revenue (戶部) bureaucracy: a Grand-Council-clone L4 window headed by the
+# Grand Minister of Revenue (戶部尚書), surfacing the imperial fisc he answers for — the
+# EVER-NORMAL GRANARIES (常平倉, the price-stabilising grain reserves) as a central roster,
+# the SALT GABELLE (鹽政) reform state + the SILVER CRISIS (銀荒, qing_currency_stress) as
+# read-outs, and the ministry-performance meter qing_min_perf_revenue (which folds into his
+# Grand Council standing — se_QING_MINISTRY.txt / QING_council_fold_ministry_perf). Unlike
+# the read-only Rites/War/Lifan panels, this one — like the Works panel — has ACTION BUTTONS
+# that let the Revenue minister STOCK A GRANARY (常平倉, the proven QING_revenue_stock_granary
+# concrete build) and REFORM THE SALT GABELLE (鹽政, the proven qing_revenue.1 event with its
+# fitness-gated choices). Both reuse existing se_QING_REVENUE logic — no new fiscal code.
+#
+# Scoped to the Qing player (ROOT = CHI). AI never evaluates these (ai_is_valid = no).
+# Opened by qing_revenue_ministry_open_panel_button (a button in government_view.gui).
+# The window itself is gui/qing_revenue_ministry.gui. Prefix = qing_revenue_ministry_.
+########################################################################
+
+# ---- OPEN THE REVENUE MINISTRY PANEL (button in the government view) --------
+qing_revenue_ministry_open_panel_button = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		# The window reads the granary roster + qing_min_perf_revenue directly from ROOT.
+		LOG_line = { sys = QING  msg = "EVENT qing_revenue_ministry_open_panel_button fired; opening the Board of Revenue panel for" }
+	}
+}
+
+# ---- REVENUE MINISTER HOLDER INDICATOR (the GUI reveals his card when filled) -
+qing_revenue_ministry_filled = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_office_revenue_holder
+		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+	}
+}
+
+# ---- VACANT indicator (the GUI shows a "post vacant" note) ------------------
+qing_revenue_ministry_vacant = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		NOR = {
+			AND = {
+				has_variable = qing_office_revenue_holder
+				var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+			}
+		}
+	}
+}
+
+# ---- SALT-GABELLE-REFORMED indicator (the GUI shows the 鹽政 as reformed) ----
+qing_revenue_ministry_salt_reformed = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_salt_gabelle_reformed
+		var:qing_salt_gabelle_reformed = 1
+	}
+}
+
+# ---- STOCK A GRANARY (常平倉) — reuse the proven concrete build. Requires a filled
+# Revenue office with adequate finesse, treasury for the grain purchase, and a Yellow-River
+# province that can hold a granary (city-status). QING_revenue_stock_granary does the pick.
+qing_revenue_ministry_stock_granary = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		has_variable = qing_office_revenue_holder
+		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT  finesse >= 7 }
+		treasury >= 60
+		# a suitable Yellow-River city province exists that does NOT yet hold a granary.
+		# [#355 review fix] the NOT-has_building guard (which every works-panel build sibling
+		# carries) disables the button once all target provinces are covered — without it the
+		# add_treasury=-60 ran on every click as a pure treasury sink for zero coverage gain,
+		# since QING_revenue_stock_granary could re-target an already-granaried province.
+		any_owned_province = {
+			OR = {
+				province_id = 7229    # 北京
+				province_id = 7230    # 天津
+				province_id = 7234    # 保定
+				province_id = 1       # 開封
+				province_id = 7235    # 濟南
+			}
+			has_city_status = yes
+			NOT = { has_building = qing_granary_building }
+		}
+	}
+	effect = {
+		# grain costs coin; then stock the reserve (the concrete qing_granary_building).
+		add_treasury = -60
+		QING_revenue_stock_granary = yes
+		LOG_line = { sys = QING  msg = "revenue panel: minister commissioned a granary stocking for" }
+	}
+}
+
+# ---- REFORM THE SALT GABELLE (鹽政) — fire the proven salt-reform event with its
+# fitness-gated choices. Requires a filled Revenue office and an as-yet-unreformed gabelle.
+qing_revenue_ministry_reform_salt = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		has_variable = qing_office_revenue_holder
+		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+		NOT = { has_variable = qing_salt_gabelle_reformed }
+		# [#355 review fix] honor the SAME 270-day throttle the AI pulse uses (se_QING_REVENUE.txt).
+		# Without it a minister below the reform fitness threshold could re-click every 1-3 days and
+		# repeatedly pick qing_revenue.1 Option B (+80 treasury, flag never set) — an unbounded money
+		# printer, since the panel button bypassed the pulse cooldown entirely.
+		NOT = { has_variable = qing_revenue_event_cooldown }
+	}
+	effect = {
+		# the event assesses the minister's oversight fitness + offers the reform/milk choice.
+		trigger_event = { id = qing_revenue.1  days = { 1 3 } }
+		# stamp the throttle immediately so the reform question can't be re-opened for ~3 quarters,
+		# matching the AI pulse's qing_revenue_event_cooldown gate.
+		set_variable = { name = qing_revenue_event_cooldown  days = 270 }
+		LOG_line = { sys = QING  msg = "revenue panel: minister opened the salt-gabelle reform question for" }
+	}
+}
+
+# ---- CLOSE (button in the panel window) ------------------------------------
+qing_revenue_ministry_close_panel = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_valid = { always = yes }
+	effect = { }
+}

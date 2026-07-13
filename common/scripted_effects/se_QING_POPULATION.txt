@@ -1,0 +1,272 @@
+########################################################################
+# se_QING_POPULATION.txt — [#369] Population Pressure / Famine Deep Model (人口壓力 / 人地矛盾 / 饑荒).
+#
+# A STANDING Malthusian population-pressure driver over the mod's EXISTING one-shot demographic
+# pieces. The suite already models the story in fragments — the New World crop boom fires ONCE
+# and forks ONCE (qing_migration.20-.23), qing_granary_stock drifts as a famine reserve, and
+# se_MIGRATION.txt is a full bottom-up migration engine with migr_gov_push/pull government levers
+# — but NOTHING continuously drives them off the realm's crowding. #369 supplies that: a live
+# qing_pop_pressure meter (0..100, 人口壓力) that MOUNTS with the population boom and involution
+# (內卷), RELAXES with New World crops / frontier resettlement / granary relief, and continuously
+# COUPLES the existing pieces — driving the migration heartland-push, feeding qing_sect_pressure
+# (the famine->rebellion linkage: White Lotus 1794, Taiping 1850), and dragging the Board of
+# Revenue's performance.
+#
+# This is Hong Liangji's 洪亮吉 治平篇 (c.1793) thesis — "China's Malthus", predating Malthus by
+# five years — made into a live meter: 戶口 (households) outrun 田廬 (fields and dwellings).
+#
+# LAYER, DON'T DUPLICATE. qing_pop_pressure joins the EXISTING shared counter family
+# (se_QING_DECLINE.txt: corruption/sect/currency/granary) — same clamped-nudge idiom
+# (QING_DECLINE_nudge), same band-swap (QING_DECLINE_apply_bands), same init. It owns no new
+# meter machinery. The migration coupling reuses QING_COLON_heartland_push/clear (se_QING_COLON.txt)
+# and QING_COLON_frontier_pull; the famine reserve is the existing qing_granary_stock.
+#
+# THE GRAND-COUNCIL FOLD IS A REAL PER-OFFICE DRAG (not the transitive harmony fold): population
+# pressure is a matter of STATE ADMINISTRATION, so it folds into the Board of Revenue (戶部),
+# whose QING_ministry_recompute_perf_revenue already scores granary coverage / salt / currency /
+# corruption. The 戶部 historically held the 黃冊 (Yellow Registers, the census) and the 常平倉
+# (ever-normal granaries) — the two instruments of demographic management — so a realm buckling
+# under 人地矛盾 IS a Board of Revenue failure. #369 adds ONE drag term (f) there (see
+# se_QING_MINISTRY.txt), the same shape as the currency-stress (d) and corruption (e) drags.
+#
+# ALL PRIMITIVES PROVEN (no oracle needed): the clamped counter idiom (QING_DECLINE_nudge),
+# total_population at country scope (slave_revolt_svalue 00_event_values.txt:113; DIPLOMACY_svalues
+# .txt:527), banded country modifiers, the migration levers (migr_gov_push/pull, se_QING_COLON.txt),
+# the frontier regions (Turkestan/Yunnan/Guizhou/Sichuan_Kham/Gansu/Qinghai — the historically-OPEN
+# valves; NOT Manchuria, which was legally closed by the 柳條邊 Willow Palisade until ~1860).
+#
+#   ROOT / this = CHI (guarded). Prefix = QING_pop · sys tag = QING.
+#   State (on CHI):
+#     qing_pop_pressure          0..100  the standing Malthusian meter (人口壓力). Eases toward target.
+#     qing_pop_pressure_target   scratch: the recomputed target the meter eases toward (hysteresis)
+#     qing_frontier_resettlement flag: a standing 移民實邊 policy is open (a relief valve the target reads)
+#   Existing state it drives/reads: qing_sect_pressure, qing_granary_stock, qing_newworld_crops,
+#     qing_migr_crop_boom_golden (modifier), migr_gov_push/pull (se_MIGRATION coupling).
+########################################################################
+
+# ======================================================================
+# TARGET RECOMPUTE — write qing_pop_pressure_target on CHI from the realm's crowding and the
+# relief valves. The meter (below) EASES toward this target (hysteresis), so a shock does not
+# snap the band — it matches the currency-stress design. All O(1) cached reads. Scope: COUNTRY.
+# ======================================================================
+QING_pop_recompute_target = {
+	# --- CROWDING (the core driver): total_population vs a carrying baseline. High Qing China
+	# is already crowded; the target rises as population grows past the baseline. total_population
+	# reads at country scope as the COUNT of pop objects (proven: slave_revolt_svalue subtracts
+	# num_of_slaves; housing_svalues total_population_tenth = total_population*0.1). CHI ships ~40k
+	# pop objects at the 1763 start, so /1200 lands the base crowding term at ~34 — a sane High-Qing
+	# baseline that the involution (+18) and thin-granary (+15) offsets push into the strain (>=45),
+	# crisis (>=75) and event bands. [#371-R: was /12000, which pinned the target to ~4 so the meter
+	# could NEVER cross any band and the whole Malthusian dynamic was inert — a 10x scale error.]
+	set_variable = { name = qing_pop_pressure_target  value = total_population }
+	change_variable = { name = qing_pop_pressure_target  divide = 1200 }
+	# floor at 0 (a tiny realm has no man-land crisis).
+	if = { limit = { var:qing_pop_pressure_target < 0 } set_variable = { name = qing_pop_pressure_target  value = 0 } }
+
+	# --- + INVOLUTION (內卷): the New World crop boom has fired but NOT resolved to the golden
+	# path — more mouths on the same marginal hill land (maize/sweet-potato involution). +18.
+	if = {
+		limit = {
+			has_variable = qing_newworld_crops
+			NOT = { has_country_modifier = qing_migr_crop_boom_golden }
+		}
+		change_variable = { name = qing_pop_pressure_target  add = 18 }
+	}
+
+	# --- + FAMINE STRESS: a thin granary reserve is no buffer against the next bad harvest.
+	# qing_granary_stock is the existing 0..100 famine reserve (se_QING_DECLINE.txt).
+	if = {
+		limit = { has_variable = qing_granary_stock  var:qing_granary_stock < 30 }
+		change_variable = { name = qing_pop_pressure_target  add = 15 }
+	}
+	# a well-stocked reserve lets the state feed the crowd — ease the target a little.
+	if = {
+		limit = { has_variable = qing_granary_stock  var:qing_granary_stock >= 60 }
+		change_variable = { name = qing_pop_pressure_target  subtract = 8 }
+	}
+
+	# --- - RELIEF VALVES: a standing frontier-resettlement policy (移民實邊) and the golden crop
+	# path (the safety valves working) both bleed off pressure.
+	if = {
+		limit = { has_variable = qing_frontier_resettlement }
+		change_variable = { name = qing_pop_pressure_target  subtract = 12 }
+	}
+	if = {
+		limit = { has_country_modifier = qing_migr_crop_boom_golden }
+		change_variable = { name = qing_pop_pressure_target  subtract = 10 }
+	}
+
+	# clamp target 0..100.
+	if = { limit = { var:qing_pop_pressure_target > 100 } set_variable = { name = qing_pop_pressure_target  value = 100 } }
+	if = { limit = { var:qing_pop_pressure_target < 0 }   set_variable = { name = qing_pop_pressure_target  value = 0 } }
+}
+
+# ======================================================================
+# THE PULSE — quarterly, from QING_GOV_pulse after QING_princes_pulse. Recomputes the target,
+# eases the meter toward it, couples pressure into migration + sects, and offers the crisis events.
+# Scope: COUNTRY (CHI). Cheap: O(1) reads + the O(owned) heartland-push (already used by the boom).
+# ======================================================================
+QING_pop_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_pop_pulse" }
+	QING_DECLINE_init = yes   # idempotent — ensures qing_pop_pressure exists (see se_QING_DECLINE.txt init)
+
+	# --- recompute the target and EASE the meter 1/4 of the way toward it (hysteresis) ---
+	QING_pop_recompute_target = yes
+	# delta = (target - current) / 4, applied via the clamped nudge.
+	set_variable = { name = qing_pop_ease_tmp  value = var:qing_pop_pressure_target }
+	change_variable = { name = qing_pop_ease_tmp  subtract = var:qing_pop_pressure }
+	change_variable = { name = qing_pop_ease_tmp  divide = 4 }
+	QING_DECLINE_nudge = { var = qing_pop_pressure  amount = var:qing_pop_ease_tmp }
+	remove_variable = qing_pop_ease_tmp
+
+	# --- COUPLE INTO MIGRATION: a crowded core sheds people to the frontier; a relieved one
+	# settles back. Reuses the existing COLON levers (migr_gov_push, read by MIGRATION_push_province).
+	if = {
+		limit = { var:qing_pop_pressure >= 60 }
+		QING_COLON_heartland_push = { count = 3 }
+		LOG_line = { sys = QING  msg = "population: the crowded heartland sheds its surplus to the frontier for" }
+	}
+	else_if = {
+		# [#371-R] clear the heartland push ONLY when no crop-boom-driven migration is meant to be
+		# live. QING_COLON_clear_heartland_push strips migr_gov_push from EVERY owned province, and
+		# the crop-boom events (qing_migration.20/.23.b) set that SAME variable on the top provinces
+		# to drive the boom's out-migration over the decade migration pulse. Without this guard the
+		# quarterly clear wiped the boom's push within one quarter (in the common low-pressure state),
+		# silently defeating the boom's frontier settlement. The golden path (.22) clears its own push.
+		limit = {
+			var:qing_pop_pressure < 35
+			NOR = {
+				has_country_modifier = qing_migr_crop_boom
+				has_country_modifier = qing_migr_overpopulation
+			}
+		}
+		QING_COLON_clear_heartland_push = yes
+	}
+
+	# --- COUPLE INTO SECTS: severe pressure feeds the landless into the millenarian sects (the
+	# historical White Lotus / Taiping recruiting ground — 棚民 shack-people on the hill margins).
+	if = {
+		limit = { var:qing_pop_pressure >= 70 }
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = 2 }
+		LOG_line = { sys = QING  msg = "population: the landless swell the millenarian sects for" }
+	}
+
+	# --- OFFER THE MEMORIAL once pressure first crosses the danger band (player-only; the event
+	# re-checks its own state). The once-only "seen" flag is set in qing_population.1's own
+	# immediate, NOT here — the #366/#368 flag-leak fix, so a re-check failure during the delay
+	# never strands it.
+	if = {
+		limit = {
+			var:qing_pop_pressure >= 65
+			NOT = { has_variable = qing_population_memorial_seen }
+			is_ai = no
+		}
+		trigger_event = { id = qing_population.1  days = { 5 20 } }
+	}
+	# --- OFFER THE FAMINE when pressure is high AND the granary reserve is exhausted.
+	else_if = {
+		limit = {
+			var:qing_pop_pressure >= 60
+			has_variable = qing_granary_stock
+			var:qing_granary_stock <= 15
+			NOT = { has_variable = qing_population_famine_seen }
+			is_ai = no
+		}
+		trigger_event = { id = qing_population.2  days = { 5 20 } }
+	}
+	# [#429] NOTE: real famine deaths are NOT handled here — the vanilla shortage.1 event fires monthly
+	# for CHI (player AND AI) off the engine's real food shortage and does the killing (weighted pops +
+	# recent_famine). The Qing side reacts via QING_pop_famine_feedback (called from shortage.1). The
+	# qing_population.2 event above is the player-facing Malthusian memorial/choice layered on top.
+	LOG_exit = { sys = QING  fn = "QING_pop_pulse"  result = OK }
+}
+
+# ======================================================================
+# LEVER: RELIEF & RESETTLEMENT (賑濟移墾) — relieve a famine and resettle the surplus. Tops up the
+# granary reserve, cuts pressure + sect pressure, and opens a frontier pull so the crowd resettles
+# (以工代賑 work-relief + 移民實邊). Treasury cost. Scope: COUNTRY (CHI). Gated by the caller/panel.
+# ======================================================================
+QING_pop_relief_resettle = {
+	LOG_enter = { sys = QING  fn = "QING_pop_relief_resettle" }
+	if = {
+		limit = { treasury >= 60 }
+		add_treasury = -60
+		QING_DECLINE_nudge = { var = qing_granary_stock   amount = 20 }
+		QING_DECLINE_nudge = { var = qing_pop_pressure    amount = -15 }
+		QING_DECLINE_nudge = { var = qing_sect_pressure   amount = -6 }
+		# open the frontier valve so the relieved surplus actually resettles.
+		QING_pop_open_frontier_valve = yes
+		add_stability = 1
+		LOG_line = { sys = QING  msg = "population: 賑濟移墾 relief and resettlement mounted for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_pop_relief_resettle"  reason = "treasury below 60 — cannot fund relief" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_pop_relief_resettle"  result = OK }
+}
+
+# ======================================================================
+# LEVER: TAX REMISSION (蠲免) — the classic imperial mercy: forgive the land tax in the stricken
+# provinces. Eases pressure + a stability lift, at a treasury cost (forgone revenue). Immediate
+# relief, nothing structural. Scope: COUNTRY (CHI).
+# ======================================================================
+QING_pop_tax_remission = {
+	LOG_enter = { sys = QING  fn = "QING_pop_tax_remission" }
+	if = {
+		limit = { treasury >= 30 }
+		add_treasury = -30
+		QING_DECLINE_nudge = { var = qing_pop_pressure  amount = -8 }
+		add_stability = 1
+		LOG_line = { sys = QING  msg = "population: 蠲免 tax remission proclaimed for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_pop_tax_remission"  reason = "treasury below 30" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_pop_tax_remission"  result = OK }
+}
+
+# ======================================================================
+# LEVER: PROMOTE FRONTIER SETTLEMENT (移民實邊) — a STANDING policy (vs the one-shot relief): open
+# and hold the frontier resettlement valve, and set qing_frontier_resettlement (a relief valve the
+# target recompute reads, so it durably lowers the pressure ceiling). Prestige cost (the throne
+# commits to peopling the marches). Scope: COUNTRY (CHI).
+# ======================================================================
+QING_pop_promote_resettlement = {
+	LOG_enter = { sys = QING  fn = "QING_pop_promote_resettlement" }
+	if = {
+		limit = { NOT = { has_variable = qing_frontier_resettlement } }
+		set_variable = { name = qing_frontier_resettlement  value = 1 }
+	}
+	QING_pop_open_frontier_valve = yes
+	# [T3 BT-5/6] was current_ruler add_prestige (FAMILY prestige — a near-inert no-op on a character);
+	# the throne's political cost of the resettlement policy lands as ruler popularity instead.
+	current_ruler = { add_popularity = -8 }
+	QING_DECLINE_nudge = { var = qing_pop_pressure  amount = -5 }
+	LOG_line = { sys = QING  msg = "population: 移民實邊 frontier resettlement promoted for" }
+	LOG_exit = { sys = QING  fn = "QING_pop_promote_resettlement"  result = OK }
+}
+
+# ======================================================================
+# OPEN THE FRONTIER VALVE — mark the Qing's HELD frontier provinces as settlement draws
+# (migr_gov_pull, read by MIGRATION_pull_province). Uses the historically-OPEN valves: Xinjiang
+# 屯田 (Turkestan), the southwest 改土歸流 (Yunnan / Guizhou / Sichuan_Kham), and Gansu / Qinghai.
+# NOT Manchuria — the 柳條邊 Willow Palisade kept it legally closed to Han settlement until ~1860.
+# Bounded O(owned frontier provinces). Scope: COUNTRY (CHI).
+# ======================================================================
+QING_pop_open_frontier_valve = {
+	every_owned_province = {
+		limit = {
+			OR = {
+				is_in_region = Turkestan
+				is_in_region = Yunnan
+				is_in_region = Guizhou
+				is_in_region = Sichuan_Kham
+				is_in_region = Gansu
+				is_in_region = Qinghai
+			}
+		}
+		set_variable = { name = migr_gov_pull  value = 12 }
+	}
+	LOG_line = { sys = QING  msg = "population: frontier resettlement valve opened (Xinjiang/southwest/Gansu) for" }
+}
+

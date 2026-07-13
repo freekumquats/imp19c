@@ -99,6 +99,24 @@ QING_council_prune_seat = {
 		}
 		remove_variable = qing_office_$office$_holder
 	}
+	# [BT-50 / #396] also RELIEVE a seat whose holder has taken a CONFLICTING role — become an
+	# army/navy commander or a provincial governor since he was seated. This is the reported
+	# symptom's cure at the START STATE: the 1763 OOB attach (qing_force_setup.1, day 30) makes
+	# commanders AFTER the game-start autofill already seated the ablest men, so those councillors
+	# are also commanders until this prune (run each recompute + right after the OOB attach) relieves
+	# them. Vacated cleanly via the shared dispatch (office var + officeholder modifier + power base
+	# all torn down); a following autofill re-fills the seat with an eligible man.
+	if = {
+		limit = {
+			has_variable = qing_office_$office$_holder
+			var:qing_office_$office$_holder = {
+				is_alive = yes
+				employer = ROOT
+				OR = { is_general = yes  is_admiral = yes  is_governor = yes }
+			}
+		}
+		var:qing_office_$office$_holder = { QING_office_vacate_dispatch = yes }
+	}
 }
 
 # Prune ALL thirteen appointable office seats in one call. Country scope. Cheap: O(13)
@@ -133,12 +151,11 @@ QING_council_autofill_office = {
 	if = {
 		limit = { NOT = { has_variable = qing_office_$office$_holder } }
 		ordered_character = {
-			limit = {
-				employer = ROOT
-				is_adult = yes
-				is_alive = yes
-				NOT = { has_variable = qing_office_held }
-			}
+			# [BT-50 / #396] the shared eligibility gate — excludes the ruler, the heir, serving
+			# governors, army/navy commanders, and vanilla office-holders (as well as sitting GC
+			# members), so autofill never seats a man who already holds a conflicting role. Was an
+			# inline (employer + adult + alive + NOT qing_office_held) that let commanders in.
+			limit = { QING_office_eligible_candidate = yes }
 			order_by = combined_stats_council_svalue
 			check_range_bounds = no
 			max = 1
@@ -452,6 +469,17 @@ QING_council_recompute = {
 		change_variable = { name = qing_officer_corps_mod  divide = 1.2 }    # scale to ~+/-6 band
 		change_variable = { name = qing_council_eff_target  add = var:qing_officer_corps_mod }
 	}
+
+	# --- [#347+ / D8] MINISTRY-PERFORMANCE FOLD. Each ministry bureaucracy panel (War #349,
+	# Lifan Yuan #350, Works #351, Rites #353, Zongli #354, Revenue #355, Personnel #365,
+	# Justice #363, Censorate #362, Central Secretariat #361, Imperial Household #359, Imperial
+	# Guard #364) drives one country var qing_min_perf_<office> (0..100, 50 = adequate). A
+	# well-run ministry raises its Minister's council standing; a poorly-run one drags it. This
+	# single helper averages the deviation-from-50 across every office that BOTH reports a perf
+	# var AND has a live filled holder, so the term stays bounded no matter how many panels ship
+	# — panels can be added incrementally without destabilising the band. A clean no-op until at
+	# least one ministry reports (n=0), so pre-panel saves are unchanged.
+	QING_council_fold_ministry_perf = yes
 
 	# --- clamp target 0..100
 	if = { limit = { var:qing_council_eff_target < 0 }   set_variable = { name = qing_council_eff_target  value = 0 } }
@@ -1175,6 +1203,22 @@ QING_office_appoint = {
 	}
 	add_character_modifier = { name = qing_officeholder  duration = -1 }
 	set_variable = { name = qing_office_held  value = flag:$office$ }
+	# [#364-R2 review-fix] a man seated in a great office leaves any inner-court CORPS he served
+	# in — the corps rosters (QING_ministry_recompute_perf_*) all exclude office-holders
+	# (NOT has_variable=qing_office_held), so a lingering corps mark would let an ex-officer
+	# silently rejoin the corps on dismissal WITHOUT passing its enrol gate, bypassing the
+	# Imperial Guard's hard cap of 6 (enrol-count excludes office-holders, so an officed guardsman
+	# is a hidden 7th). Strip all three corps marks here so the enrol caps stay exact. Self-guarded
+	# no-ops for the ~all appointees who were never in a corps.
+	if = { limit = { has_variable = qing_is_imperial_guardsman } remove_variable = qing_is_imperial_guardsman }
+	if = { limit = { has_variable = qing_is_censor_inspector }   remove_variable = qing_is_censor_inspector }
+	if = { limit = { has_variable = qing_zongli_diplomat }       remove_variable = qing_zongli_diplomat }
+	# [#336/#337 review-fix] the inner-court ACADEMIES (南書房 Southern Study #336, 上書房 Upper
+	# Study #337) are the same shape: their rosters exclude office-holders + enrol under a hard cap
+	# (8 / 6), so an elevated 首席/總師傅 who kept his study mark would silently rejoin the corps on
+	# a later dismissal, bypassing the cap (the 擢用 Elevate lever is exactly that promote-out path).
+	if = { limit = { has_variable = qing_is_southernstudy }      remove_variable = qing_is_southernstudy }
+	if = { limit = { has_variable = qing_is_upperstudy }         remove_variable = qing_is_upperstudy }
 	# heading a great office of state builds the holder a power base of his own —
 	# the board or yamen brings a staff, clients, and clout (power_base). Grant it
 	# here; QING_office_vacate strips it symmetrically when he is relieved.
@@ -1463,5 +1507,83 @@ QING_council_on_commander_death = {
 			trigger_event = { id = qing_office.32 }
 			LOG_line = { sys = QING  msg = "a serving garrison commander died; War-minister replacement recommendation fired" }
 		}
+	}
+}
+
+# ======================================================================
+# [#347+ / D8] QING_council_fold_ministry_perf — the MINISTRY-PERFORMANCE FOLD.
+# Scope: COUNTRY (ROOT = CHI), called from QING_council_recompute after the officer-
+# corps fold. Each ministry bureaucracy panel drives one 0..100 var qing_min_perf_<office>
+# (50 = adequate). This folds the NET average deviation-from-50 across all reporting
+# offices into qing_council_eff_target, so a well-run set of ministries lifts the
+# council and a poorly-run set drags it — and each Minister answers on the Grand
+# Council for how his own ministry is run (the D3 coupling).
+#
+# BOUNDED BY AVERAGING: we sum (perf-50) only over offices that BOTH have the perf var
+# set AND a live, employed office-holder, count them, and add avg/5 (so the whole fold
+# stays within ~[-10,+10] however many ministries report). n=0 -> clean no-op (pre-panel
+# saves unchanged). The applied term is stored in qing_min_perf_council_mod so the GC
+# tooltip + each panel can surface "this ministry's contribution to the council".
+# All O(offices) counter maths; no pop/province sweeps.
+# ======================================================================
+QING_council_fold_ministry_perf = {
+	set_variable = { name = qing_min_perf_sum    value = 0 }
+	set_variable = { name = qing_min_perf_count  value = 0 }
+	# accumulate each reporting office's deviation-from-50 (guarded on a live holder).
+	QING_council_perf_accumulate = { office = war }
+	QING_council_perf_accumulate = { office = personnel }
+	QING_council_perf_accumulate = { office = revenue }
+	QING_council_perf_accumulate = { office = rites }
+	QING_council_perf_accumulate = { office = justice }
+	QING_council_perf_accumulate = { office = works }
+	QING_council_perf_accumulate = { office = censor }
+	QING_council_perf_accumulate = { office = lifanyuan }
+	QING_council_perf_accumulate = { office = chamberlain }
+	QING_council_perf_accumulate = { office = zongli }
+	QING_council_perf_accumulate = { office = grand_secretariat }
+	QING_council_perf_accumulate = { office = guard_commandant }
+	# fold the bounded average into the effectiveness target.
+	if = {
+		limit = { var:qing_min_perf_count > 0 }
+		set_variable = { name = qing_min_perf_council_mod  value = var:qing_min_perf_sum }
+		change_variable = { name = qing_min_perf_council_mod  divide = var:qing_min_perf_count }  # average deviation
+		change_variable = { name = qing_min_perf_council_mod  divide = 5 }                        # scale to ~+/-10 band
+		change_variable = { name = qing_council_eff_target  add = var:qing_min_perf_council_mod }
+		LOG_line = { sys = QING  msg = "ministry-performance fold applied to council effectiveness target" }
+	}
+	else = {
+		# no ministry has reported a performance var yet: the fold contributes nothing.
+		set_variable = { name = qing_min_perf_council_mod  value = 0 }
+	}
+}
+
+# ----------------------------------------------------------------------
+# QING_council_perf_accumulate — add ONE office's (perf-50) to the running sum + count,
+# but ONLY when that office both reports a perf var AND has a live, employed holder (an
+# unstaffed or unreported ministry contributes nothing). Scope: COUNTRY. $office$ = key.
+# ----------------------------------------------------------------------
+QING_council_perf_accumulate = {
+	if = {
+		limit = {
+			has_variable = qing_min_perf_$office$
+			has_variable = qing_office_$office$_holder
+			var:qing_office_$office$_holder = { is_alive = yes  employer = ROOT }
+		}
+		change_variable = { name = qing_min_perf_sum   add = var:qing_min_perf_$office$ }
+		change_variable = { name = qing_min_perf_sum   subtract = 50 }
+		change_variable = { name = qing_min_perf_count add = 1 }
+		# [council-contribution truthful per-office display] Store THIS office's OWN scaled
+		# deviation-from-adequate: qing_min_perf_council_mod_<office> = (perf-50)/5, a ±10 signed
+		# term the office's own ministry panel surfaces as "this ministry's contribution to the
+		# council" — the realm-wide qing_min_perf_council_mod is the AVERAGE of these, so a single
+		# office's share is exactly this figure before the /count averaging. (Dividing by count too
+		# would round to 0 under integer maths, so the per-office read is the pre-average pull.)
+		set_variable = { name = qing_min_perf_council_mod_$office$  value = var:qing_min_perf_$office$ }
+		change_variable = { name = qing_min_perf_council_mod_$office$  subtract = 50 }
+		change_variable = { name = qing_min_perf_council_mod_$office$  divide = 5 }
+	}
+	else = {
+		# unreported / unstaffed office contributes nothing — keep its display term at 0.
+		set_variable = { name = qing_min_perf_council_mod_$office$  value = 0 }
 	}
 }

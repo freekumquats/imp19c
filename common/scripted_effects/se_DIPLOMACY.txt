@@ -726,6 +726,16 @@ DIPLOMACY_trigger_diplomatic_play_event = {
 	# Events are triggered by a combination of success chance and progress
 	# The war willingness and play attitude are also taken into account
 
+	# [#356 review-fix, MAJOR] a marriage-proposal play (#356) has NO territorial locus — its
+	# play_target_area is the proposer's OWN capital (a play requires a target area). The generic
+	# territorial-crisis events below (send_settlers / agitator_sponsorship / Fashoda / Agadir)
+	# would then fire AT the proposer's own capital (loyalty damage) and can escalate to a
+	# conquer-wargoal war on it. Skip the whole territorial dispatcher for a marriage play; its
+	# progression is driven purely by the seeded success + the Zongli-Yamen factor (#357) and it
+	# resolves via the goal-guarded finale branch (MARRIAGE_PLAY_resolve).
+	if = {
+		limit = { NOT = { var:play_goal = flag:marriage_proposal } }
+
 	# EARLY EVENTS
 	if = {
 		limit = {
@@ -814,6 +824,7 @@ DIPLOMACY_trigger_diplomatic_play_event = {
 			}
 		}
 	}
+	}  # [#356 review-fix] close the marriage-proposal goal-guard
 }
 
 DIPLOMACY_trigger_diplomatic_play_finale_event = {
@@ -883,6 +894,14 @@ DIPLOMACY_trigger_diplomatic_play_finale_event = {
 	else_if = {
 		limit = { var:play_goal = flag:colonise_area }
 		DIPLOMACY_resolve_colonise = yes
+	}
+	# --- MARRIAGE PROPOSAL (#356): wed (or betroth) the two chosen characters stored on
+	# the play provobj (marriage_play_groom / marriage_play_bride). NO land/subject change —
+	# reuses the existing marriage machinery (se_MARRIAGE_PLAY.txt): marries if both adult,
+	# betroths if either is a minor, and (decisive) seals the state bond.
+	else_if = {
+		limit = { var:play_goal = flag:marriage_proposal }
+		MARRIAGE_PLAY_resolve = yes
 	}
 	# --- FALLBACK: an unhandled goal — treat as a territorial claim so the win is
 	# not silently dropped, and surface it so the gap is visible in the trace.
@@ -1386,6 +1405,15 @@ DIPLOMACY_resolve_liberate = {
 			# is left set by the wrapper.
 			if = {
 				limit = { exists = scope:new_country_scope }
+				# [T2 review-fix] the fresh nation is ALREADY a subject of its releaser (flag:dynamic
+				# binds it to the former owner). make_subject on an already-subordinate country leaves a
+				# stale bond / double-overlord, so free it from the releaser FIRST — the same proven
+				# release-then-rebind idiom used by the subjugate-transfer path above (release_subject,
+				# se_FUNC.txt:349-352). Guarded on it still being a subject (defensive).
+				if = {
+					limit = { scope:new_country_scope = { is_subject = yes } }
+					scope:new_country_scope = { overlord = { release_subject = scope:new_country_scope } }
+				}
 				FUNC_make_subject = {
 					overlord = scope:play_instigator
 					target = scope:new_country_scope
@@ -1454,7 +1482,7 @@ DIPLOMACY_resolve_colonise = {
 		every_country = {
 			limit = {
 				NOT = { this = scope:play_instigator }
-				any_owned_province = { is_in_list = { list = play_colony_candidates } }
+				any_owned_province = { is_in_list = play_colony_candidates }
 			}
 			add_opinion = { modifier = bitter_over_occupation  target = scope:play_instigator }
 		}

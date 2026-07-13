@@ -96,6 +96,14 @@ QING_DECLINE_init = {
 	if = { limit = { NOT = { has_variable = qing_currency_stress } }   set_variable = { name = qing_currency_stress  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_reform_pressure } }   set_variable = { name = qing_reform_pressure  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_granary_stock } }     set_variable = { name = qing_granary_stock  value = 30 } }
+	# [#369] Population pressure (人口壓力 / 人地矛盾) — the standing Malthusian meter. Starts LOW
+	# in the High Qing zenith (the land can still feed the boom); seeded 20 so the strain band
+	# (>=45) is a few pulses away, and driven up by the target recompute (se_QING_POPULATION.txt).
+	if = { limit = { NOT = { has_variable = qing_pop_pressure } }      set_variable = { name = qing_pop_pressure  value = 20 } }
+	# [#370] Caravan prosperity (商道繁榮) — the Central Asian trade-node health. Starts at a going 45
+	# in the 1763 zenith (routes open, oases prosperous); driven by the target recompute (se_QING_CARAVAN.txt)
+	# off the Xinjiang grip + market investment + the Kokand concession.
+	if = { limit = { NOT = { has_variable = qing_caravan_prosperity } } set_variable = { name = qing_caravan_prosperity  value = 45 } }
 	# Civic (national) identity — the POSITIVE nation-building meter (§11 L4 ext).
 	# A shared "Chinese"/中華 civic identity that can transcend the empire's ethnic
 	# fault lines. Starts at 0: in 1815 the realm is a dynastic-ethnic order, not a
@@ -172,6 +180,46 @@ QING_DECLINE_apply_sect_band = {
 		limit = { var:qing_sect_pressure >= 50 }
 		add_country_modifier = { name = qing_sect_infiltration  duration = -1 }
 		LOG_line = { sys = QING  msg = "band sect = infiltration for (pressure=)" }
+	}
+}
+
+# [#369] POPULATION-PRESSURE band (人口壓力 / 人地矛盾). Two tiers over the standing
+# qing_pop_pressure meter (se_QING_POPULATION.txt): mounting strain (>= 45) and Malthusian
+# crisis (>= 75). Same band-swap idiom as the sect/currency bands (remove the family first,
+# add the current one). The crisis modifier is the visible face of involution: population
+# unhappiness and a growth brake as the land hits its ceiling.
+QING_DECLINE_apply_pop_pressure_band = {
+	remove_country_modifier = qing_pop_pressure_strain
+	remove_country_modifier = qing_pop_pressure_crisis
+	if = {
+		limit = { has_variable = qing_pop_pressure  var:qing_pop_pressure >= 75 }
+		add_country_modifier = { name = qing_pop_pressure_crisis  duration = -1 }
+		LOG_line = { sys = QING  msg = "band population = crisis for (pressure=)" }
+	}
+	else_if = {
+		limit = { has_variable = qing_pop_pressure  var:qing_pop_pressure >= 45 }
+		add_country_modifier = { name = qing_pop_pressure_strain  duration = -1 }
+		LOG_line = { sys = QING  msg = "band population = strain for (pressure=)" }
+	}
+}
+
+# [#370] CARAVAN-PROSPERITY band (商道繁榮 / 回疆貿易). Two tiers over the qing_caravan_prosperity
+# meter (se_QING_CARAVAN.txt): a thriving trade node (>= 70) that bankrolls the frontier and eases
+# the Xinjiang grip, and a collapsed route (<= 25) that starves the treasury and breeds the smuggling
+# and banditry a cut trade route brings. Same band-swap idiom as the pop-pressure/sect/currency bands
+# (remove the family first, add the current one). Only meaningful once the caravan model has seeded.
+QING_DECLINE_apply_caravan_band = {
+	remove_country_modifier = qing_caravan_boom
+	remove_country_modifier = qing_caravan_depression
+	if = {
+		limit = { has_variable = qing_caravan_prosperity  var:qing_caravan_prosperity >= 70 }
+		add_country_modifier = { name = qing_caravan_boom  duration = -1 }
+		LOG_line = { sys = QING  msg = "band caravan = boom for (prosperity=)" }
+	}
+	else_if = {
+		limit = { has_variable = qing_caravan_prosperity  var:qing_caravan_prosperity <= 25 }
+		add_country_modifier = { name = qing_caravan_depression  duration = -1 }
+		LOG_line = { sys = QING  msg = "band caravan = depression for (prosperity=)" }
 	}
 }
 
@@ -632,7 +680,7 @@ QING_DECLINE_civic_assimilation = {
 				# percent/count — NO limit = {} wrapper; proven decentralize_realm_button.)
 				any_pops_in_province = {
 					percent >= 0.5
-					pop_culture.culture_group = chinese_group
+					pop_culture_group = chinese_group
 				}
 				# and at least one ELIGIBLE non-Sinitic pop remains to assimilate. This
 				# must match QING_civic_assimilate_one_pop's own eligibility (non-slave,
@@ -642,7 +690,7 @@ QING_DECLINE_civic_assimilation = {
 					count >= 1
 					NOT = { pop_type = slaves }
 					NOT = { pop_type = nobles }
-					NOT = { pop_culture.culture_group = chinese_group }
+					NOT = { pop_culture_group = chinese_group }
 				}
 			}
 			save_scope_as = civic_sinic_province
@@ -659,7 +707,7 @@ QING_DECLINE_civic_assimilation = {
 					scope:civic_sinic_province = {
 						any_pops_in_province = {
 							percent >= 0.75
-							pop_culture.culture_group = chinese_group
+							pop_culture_group = chinese_group
 						}
 					}
 				}
@@ -835,6 +883,15 @@ QING_DECLINE_pulse = {
 		# task #88 — the Green Standard rots in parallel, and slightly faster: the more
 		# neglected, garrison-bound Han standing army. Green-standard drills push back.
 		QING_DECLINE_nudge = { var = qing_greenstandard_decay  amount = 1 }
+		# [MO-ENH #12] make the promised asymmetry REAL, gently: an EXTRA +1 only ONCE the neglect has
+		# compounded (decay >= 40), so the Green Standard's rot ACCELERATES in the late decline — the
+		# historical arc by which the 綠營 collapse opened the door to the gentry armies (勇營 -> 湘軍/淮軍).
+		# Early game the two central armies rot in lockstep (no premature warlord spike); the divergence
+		# only bites once the force is already hollow. Clamped by QING_DECLINE_nudge.
+		if = {
+			limit = { has_variable = qing_greenstandard_decay  var:qing_greenstandard_decay >= 40 }
+			QING_DECLINE_nudge = { var = qing_greenstandard_decay  amount = 1 }
+		}
 	}
 
 	# task #88 — the modern national-army share drifts toward its self-strengthening
@@ -847,6 +904,13 @@ QING_DECLINE_pulse = {
 	# both inputs are fresh this pulse.
 	QING_DECLINE_drift_han_provincial_power = yes
 
+	# [#366] The Silver/Opium trade-balance assessment runs BEFORE update_currency_stress, so
+	# the net-silver-flow nudge (tea/silk/porcelain export inflow minus the opium-import drain)
+	# and the reserve-ratio drift below COMPOUND into qing_currency_stress in the same pulse.
+	# A High-Qing trade surplus bleeds stress down; the 19thC opium drain drives it up — and via
+	# the existing term (d) of QING_ministry_recompute_perf_revenue that stress folds straight
+	# into the Board of Revenue minister's Grand Council standing. (se_QING_OPIUM.txt)
+	QING_opium_assess_trade_balance = yes
 	QING_DECLINE_update_currency_stress = yes
 	# Civic identity drifts toward its self-strengthening-gated target FIRST, so
 	# the ethnic-tension drift that follows reads a fresh civic-relief value (§11
@@ -867,6 +931,8 @@ QING_DECLINE_pulse = {
 	QING_DECLINE_apply_han_provincial_band = yes   # task #88
 	QING_DECLINE_apply_ethnic_band = yes
 	QING_DECLINE_apply_civic_band = yes
+	QING_DECLINE_apply_pop_pressure_band = yes     # [#369] population pressure (人口壓力)
+	QING_DECLINE_apply_caravan_band = yes          # [#370] caravan prosperity (商道繁榮)
 
 	# [#91 item G] Hang the CONCRETE army consequence off the #88 decay counters:
 	# stamp real morale/discipline debuffs on the standing legions while a central
@@ -883,12 +949,22 @@ QING_DECLINE_pulse = {
 	#   M  ethnic_tension -> spawn a real named separatist revolt-leader character
 	#   O  currency_stress-> spawn a foreign smuggler pop in a Canton treaty port
 	# Each is once/rarity-guarded so it never runs away. Counters stay intact.
+	# [#429] the ever-normal granary POOL runs FIRST: it moves REAL food between states (fill from
+	# maxed-surplus states, ship to real-shortage states) and DERIVES qing_granary_stock from the
+	# pooled quantity, so granary_concrete below (which reads the stock band) sees a real-food value.
+	QING_DECLINE_granary_pool = yes
 	QING_DECLINE_granary_concrete = yes
 	QING_DECLINE_spawn_sect_leader = yes
 	# item M lives in se_SEPARATISM.txt (sys=SEPAR): a real named revolt-leader
 	# backed only from the ethnicity that actually lives on the restive land.
 	SEPARATISM_qing_spawn_revolt_leader = yes
 	QING_DECLINE_spawn_smuggler = yes
+
+	# [#366] The Silver/Opium pulse: runs the addiction epidemic (aggregate share + province
+	# bands) and offers the opium event chain (the silver-drain memorial, the Lin Zexu Humen
+	# reckoning, the treaty-legalization demand, the epidemic crisis). The trade balance itself
+	# was already assessed earlier in this pulse (before update_currency_stress). (se_QING_OPIUM.txt)
+	QING_opium_pulse = yes
 
 	# Unlock the reform track once pressure is high enough (and not already on).
 	if = {
@@ -911,9 +987,13 @@ QING_DECLINE_pulse = {
 		limit = {
 			NOT = { has_variable = qing_fully_modernized }
 			NOT = { has_variable = qing_high_qing_era }
+			NOT = { has_variable = qing_gc_event_slot_used }  # [court-slot] share the quarterly court-event throttle
 		}
 		random = {
 			chance = 35
+			# [court-slot] claim the shared court slot once this roll passes (mirrors QING_frontier_flavour_roll):
+			# a decline reaction is a modal court event, so no other court roller should also fire this quarter.
+			set_variable = { name = qing_gc_event_slot_used  value = 1 }
 			QING_DECLINE_roll_reaction = yes
 		}
 	}
@@ -1104,7 +1184,7 @@ QING_frontier_flavour_roll = {
 					trigger = {
 						has_variable = qing_sp_diverted_navy
 						current_date >= 1894.1.1
-						is_at_war = no
+						war = no
 						has_country_modifier = qing_sp_starved_fleet
 						NOT = { has_variable = qing_sp_marble_boat_blame_done }
 					}
@@ -1188,6 +1268,13 @@ QING_frontier_flavour_roll = {
 			}
 			# --- #4/#5 succession: only while the ruler is in decline ---
 			8 = {
+				# [MO-ENH #10] a DEEP harem (many sons by different mothers) makes succession jockeying
+				# more likely — the palace seethes with candidates; a thin line makes it a quiet matter.
+				# Weight modifier keyed on the harem roster (se_QING_HAREM qing_harem_consort_count), so
+				# the succession-edict prompt fires more often when the inner court is full. Multiplicative
+				# on the existing weight; the event's own trigger + one-shot flag still gate the fire.
+				modifier = { factor = 2  has_variable = qing_harem_consort_count  var:qing_harem_consort_count >= 5 }
+				modifier = { factor = 0.5  has_variable = qing_harem_consort_count  var:qing_harem_consort_count <= 1 }
 				trigger = {
 					current_ruler = { OR = { age >= 60  health < 0.4 } }
 					NOT = { has_variable = qing_secret_succession }
@@ -1269,8 +1356,10 @@ QING_frontier_flavour_roll = {
 				trigger_event = { id = qing_succession.1  days = { 3 12 } }
 			}
 			# --- #9 THE IMPERIAL EXAMINATION (qing_keju_events.txt) ---
-			# the triennial examination convenes (the keju's spine; fires readily)
-			14 = { trigger_event = { id = qing_keju.1  days = { 3 12 } } }
+			# [#321 deferred] the triennial examination (qing_keju.1) is NO LONGER convened
+			# stochastically here — the fixed 3-year clock (QING_exam_schedule_triennial, on
+			# the quarterly pulse) owns it now, matching the historical 子/卯/午/酉 cadence.
+			# The stochastic beats below (scandal / passed-over / grace / pool draw) remain.
 			# an examination scandal — only in a corrupt court
 			8 = {
 				trigger = { var:qing_corruption_level >= 45 }
@@ -1296,6 +1385,17 @@ QING_frontier_flavour_roll = {
 				}
 				trigger_event = { id = qing_keju.6  days = { 3 12 } }
 			}
+			# [#321 deferred] the abolition of 捐納 pressed — only when purchased office is
+			# entrenched (self-gated in the event trigger on the modifier) and weightier the
+			# more reform pressure has built. Inert until the throne has actually sold offices.
+			6 = {
+				trigger = {
+					has_country_modifier = qing_office_purchased_ranks
+					var:qing_reform_pressure >= 30
+				}
+				modifier = { factor = 2  var:qing_reform_pressure >= 55 }
+				trigger_event = { id = qing_keju.7  days = { 3 12 } }
+			}
 			# --- #13 ANACHRONISTIC HISTORICAL-CHARACTER ROSTER ----------
 			# a famous figure of the age steps onto the stage, keyed to the
 			# realm's present state (the roll self-guards each figure once).
@@ -1308,7 +1408,20 @@ QING_frontier_flavour_roll = {
 			# a monument of letters or a masterwork of craft is offered to the
 			# throne (the roll self-guards each monument once). The bright
 			# counterweight to the decline and rebellion families.
-			12 = { QING_culture_roll = yes }
+			# [MO-ENH #4] CIVIC IDENTITY -> CULTURAL FLOWERING FREQUENCY. A coalescing
+			# civic nation drives patronage — a shared identity makes the arts and letters
+			# bloom more often. The civic meter (wave-1 addition) had only quiet band
+			# modifiers; this gives it a visible qualitative face (more Kangxi-Dictionary /
+			# Red-Chamber / jubilee beats when the realm is united). Weight modifiers keyed
+			# on qing_civic_identity, the proven random_list modifier idiom (see 1362/1388).
+			# Two bands, kept MUTUALLY EXCLUSIVE (the >=50 modifier carries a <85 upper
+			# guard) so the factors do not stack multiplicatively: 1.5x in [50,85), 2x at
+			# >=85 — not 3x.
+			12 = {
+				modifier = { factor = 1.5  has_variable = qing_civic_identity  var:qing_civic_identity >= 50  var:qing_civic_identity < 85 }
+				modifier = { factor = 2    has_variable = qing_civic_identity  var:qing_civic_identity >= 85 }
+				QING_culture_roll = yes
+			}
 
 			# ============================================================
 			# [OVERNIGHT WAVE] OFFICE-COUPLING FLAVOUR ENTRIES. Each great office's
@@ -1448,7 +1561,7 @@ QING_frontier_flavour_roll = {
 			}
 			# --- #126 Household: privy purse (內帑) + eunuch faction
 			8 = {
-				trigger = { has_variable = qing_privy_purse  var:qing_privy_purse < 35 }
+				trigger = { exists = current_ruler  current_ruler = { wealth < 140 } }   # [#424] privy purse (內帑) = ruler wealth; 35 meter -> 140
 				trigger_event = { id = qing_household.1  days = { 3 12 } }
 			}
 			6 = {
@@ -1701,12 +1814,22 @@ QING_rebellion_roll = {
 				}
 				trigger_event = { id = qing_rebellion.8  days = { 3 12 } }
 			}
-			# --- 義和團 Boxers: currency/foreign stress + reform pressure ----
+			# --- 義和團 Boxers: reform-era crisis IGNITED BY fiscal strain OR anti-Christian fury ----
+			# [MO-ENH #9] The Boxers had a DUAL ignition: the fiscal/foreign-humiliation crisis AND the
+			# accumulated anti-missionary grievance (qing_antichristian_sentiment, se_QING_MISSIONARY.txt —
+			# "the unresolved accumulation that boiled over into the Boxers"). Formerly gated on currency
+			# stress alone; now the sentiment meter is a co-equal ignition path, so a realm that let
+			# missionary grievance fester (high sentiment) can see the Boxers rise even without an acute
+			# silver crisis. Both paths still require the reform-era pressure floor (the movement is a
+			# late-decline phenomenon), and the one-shot flag prevents any double-fire.
 			7 = {
 				trigger = {
 					NOT = { has_variable = qing_rebel_boxer_rose }
-					var:qing_currency_stress >= 40
 					var:qing_reform_pressure >= 35
+					OR = {
+						var:qing_currency_stress >= 40
+						var:qing_antichristian_sentiment >= 50
+					}
 				}
 				trigger_event = { id = qing_rebellion.9  days = { 3 12 } }
 			}
@@ -1815,6 +1938,143 @@ QING_DECLINE_roll_reaction = {
 }
 
 # ======================================================================
+# [#429] THE EVER-NORMAL GRANARY POOL (常平倉) — the reserve as a REAL grain quantity that MOVES
+# REAL FOOD between states. This is the thing the vanilla per-governorship food sim cannot do:
+# pool surplus grain nationally and ship it to a deficit region to mitigate a LOCALIZED famine,
+# while a NATIONAL famine overwhelms the pool. All food reads/writes are proven engine primitives:
+#   has_state_food          — a state's CURRENT stored food (governor_policies:154; TI svalues)
+#   has_state_food_capacity — a state's MAX food storage        (00_governor_policies:140; TI)
+#   add_state_food = <v>    — move food into (+) / out of (-) a state (TI christianity/disasters_inv)
+#   every_country_state     — iterate the country's states       (TI, 128 uses)
+#
+# State (on CHI):
+#   qing_granary_food  — the pooled grain in REAL food units. Capped at qing_granary_count*200 (the
+#                        summed local_food_capacity of the actual ever-normal granary BUILDINGS —
+#                        qing_granary_count is kept fresh by the Works sweep, se_QING_MINISTRY:497).
+#   qing_granary_stock — KEPT: now DERIVED = qing_granary_food / cap * 100 (a 0..100 fill-ratio), so
+#                        every existing consumer (pop-pressure target, famine gate, ministry perf,
+#                        canal) keeps working — the number is now a real fill %, not a free counter.
+#
+# FILL: skim 1/20 of capacity from each NEAR-MAXED state (has_state_food >= 90% of capacity — a
+#   near-max test, NOT exact ==, since vanilla food may plateau just below the ceiling and never
+#   hit it exactly). The skimmed food leaves the province (add_state_food = -skim) and enters the
+#   pool (up to the cap — grain the granaries cannot hold is left in the province, not conjured).
+# SHIP: to each state in real shortage (has_state_food < 1/5 capacity) while the pool holds grain,
+#   send a relief shipment (add_state_food = +ship), drain the pool, and stamp qing_grain_relief.
+#   The pool drains as it ships, so a widespread (national) famine empties it before covering all
+#   the stricken states — only a localized dearth is fully relieved (the historical 常平倉 limit).
+# Scope: COUNTRY (CHI). One every_country_state sweep (fill+ship in the same pass). ROOT = CHI.
+# ======================================================================
+QING_DECLINE_granary_pool = {
+	LOG_enter = { sys = QING  fn = "QING_DECLINE_granary_pool" }
+	# the reserve CAP = the real ever-normal granary capacity: count * the building's 200 food_capacity.
+	# qing_granary_count is maintained by the Works sweep (se_QING_MINISTRY:497). [review-fix] that sweep
+	# runs in QING_GOV_pulse, which fires AFTER QING_DECLINE_pulse in 00_monthly_country.txt — so this
+	# reads LAST quarter's count (a harmless one-quarter lag; the count changes at most by the ~1 granary
+	# the Revenue path builds per quarter). Default 0 until the count first exists / no granaries built.
+	set_variable = { name = qing_granary_cap_tmp  value = 0 }
+	if = {
+		limit = { has_variable = qing_granary_count }
+		set_variable = { name = qing_granary_cap_tmp  value = var:qing_granary_count }
+		change_variable = { name = qing_granary_cap_tmp  multiply = 200 }
+	}
+	# init the pooled grain ONCE to EMPTY. [review-fix] no game-start granaries exist in any setup file,
+	# so the ever-normal reserve genuinely begins empty and fills only as granaries are built and skim
+	# real surplus (the old "half-full bootstrap" was dead anyway — cap is 0 on the first pulse before
+	# any granary). While cap==0 the derive-block below LEAVES qing_granary_stock at its DECLINE_init
+	# baseline (30), so an as-yet-granaryless realm is NOT false-flagged into famine.
+	if = { limit = { NOT = { has_variable = qing_granary_food } }  set_variable = { name = qing_granary_food  value = 0 } }
+
+	# --- FILL from near-maxed surplus states + SHIP to shortage states, one real-food sweep. ------
+	every_country_state = {
+		# save the state so the pool write below reads the skim/ship amount back via the PROVEN
+		# scope:X.var:Y idiom (upstream TI/Invictus use scope:X.var: heavily; prev.var: is NOT attested).
+		save_scope_as = qing_gran_state
+		# FILL: this state's stores are near-max (>= 90% capacity), so its surplus would be wasted —
+		# skim 1/20 of capacity into the national pool, but only while the pool has room under the cap.
+		if = {
+			limit = {
+				has_state_food_capacity > 0
+				has_state_food >= { value = has_state_food_capacity  multiply = 0.9 }
+				ROOT.var:qing_granary_food < ROOT.var:qing_granary_cap_tmp
+			}
+			set_variable = { name = qing_gran_skim_tmp  value = has_state_food_capacity }
+			change_variable = { name = qing_gran_skim_tmp  divide = 20 }
+			# do not overfill the pool past its cap: clamp the skim to the remaining headroom.
+			set_variable = { name = qing_gran_room_tmp  value = ROOT.var:qing_granary_cap_tmp }
+			change_variable = { name = qing_gran_room_tmp  subtract = ROOT.var:qing_granary_food }
+			if = { limit = { var:qing_gran_skim_tmp > var:qing_gran_room_tmp }  set_variable = { name = qing_gran_skim_tmp  value = var:qing_gran_room_tmp } }
+			if = {
+				limit = { var:qing_gran_skim_tmp > 0 }
+				add_state_food = { value = var:qing_gran_skim_tmp  multiply = -1 }   # leaves the province
+				ROOT = { change_variable = { name = qing_granary_food  add = scope:qing_gran_state.var:qing_gran_skim_tmp } }   # into the pool
+			}
+			remove_variable = qing_gran_skim_tmp
+			remove_variable = qing_gran_room_tmp
+		}
+		# SHIP: this state is in real shortage (< 1/5 capacity) — if the pool holds grain, send relief.
+		else_if = {
+			limit = {
+				has_state_food_capacity > 0
+				has_state_food < { value = has_state_food_capacity  multiply = 0.2 }
+				ROOT.var:qing_granary_food > 0
+			}
+			# ship up to 1/10 of the state's capacity, bounded by what the pool actually holds.
+			set_variable = { name = qing_gran_ship_tmp  value = has_state_food_capacity }
+			change_variable = { name = qing_gran_ship_tmp  divide = 10 }
+			if = { limit = { var:qing_gran_ship_tmp > ROOT.var:qing_granary_food }  set_variable = { name = qing_gran_ship_tmp  value = ROOT.var:qing_granary_food } }
+			if = {
+				limit = { var:qing_gran_ship_tmp > 0 }
+				add_state_food = { value = var:qing_gran_ship_tmp }                            # grain arrives (block form for parity with the FILL leg; bare = var:X is unattested)
+				ROOT = { change_variable = { name = qing_granary_food  subtract = scope:qing_gran_state.var:qing_gran_ship_tmp } }   # drawn from the pool
+				# stamp the relief on the state's provinces (real food + province loyalty + happiness +
+				# unrest reduction for the duration — see the qing_grain_relief modifier). Only on a FRESH
+				# grant (the NOT guard) so it does not re-stack while the shipment stands. Count fresh grants
+				# into a state var for the one-time governor-loyalty bump below.
+				set_variable = { name = qing_gran_fresh_tmp  value = 0 }
+				every_state_province = {
+					limit = { NOT = { has_province_modifier = qing_grain_relief } }
+					add_province_modifier = { name = qing_grain_relief  duration = 365 }
+					scope:qing_gran_state = { change_variable = { name = qing_gran_fresh_tmp  add = 1 } }
+				}
+				# GOVERNOR LOYALTY: governor_loyalty is a COUNTRY-scope modifier key (not valid on a
+				# province modifier), so the fed region's governor is thanked with a one-time loyalty
+				# bump instead — the throne's grain kept his province quiet. Fires ONLY on a fresh grant
+				# (qing_gran_fresh_tmp > 0). [review-fix] the governor is reached THROUGH A PROVINCE
+				# (province.governor is the PROVEN link — imp19c se_ARMY:60 scope:arm_province.governor,
+				# TI syracuse_province.governor; `governor` from STATE scope is NOT attested). Take the
+				# first owned province and bump its governor once (all provinces in a state share one).
+				if = {
+					limit = { var:qing_gran_fresh_tmp > 0 }
+					random_state_province = {
+						limit = { exists = governor }
+						governor = { add_loyalty = loyalty_qing_commended }
+					}
+				}
+				remove_variable = qing_gran_fresh_tmp
+			}
+			remove_variable = qing_gran_ship_tmp
+		}
+	}
+
+	# --- clamp the pool [0, cap] and DERIVE the 0..100 stock ratio every consumer reads. ----------
+	if = { limit = { var:qing_granary_food > var:qing_granary_cap_tmp }  set_variable = { name = qing_granary_food  value = var:qing_granary_cap_tmp } }
+	if = { limit = { var:qing_granary_food < 0 }  set_variable = { name = qing_granary_food  value = 0 } }
+	if = {
+		limit = { var:qing_granary_cap_tmp > 0 }
+		set_variable = { name = qing_granary_stock  value = var:qing_granary_food }
+		change_variable = { name = qing_granary_stock  multiply = 100 }
+		change_variable = { name = qing_granary_stock  divide = var:qing_granary_cap_tmp }
+	}
+	# [review-fix] when cap==0 (no granaries built / count not yet tallied) DO NOT overwrite
+	# qing_granary_stock — leave it at the DECLINE_init baseline (30). Zeroing it here would
+	# false-flag an as-yet-granaryless realm straight into the famine / pop-pressure bands.
+	remove_variable = qing_granary_cap_tmp
+	LOG_line = { sys = QING  msg = "granary: ever-normal pool moved real food; stock derived from pooled grain / capacity for" }
+	LOG_exit = { sys = QING  fn = "QING_DECLINE_granary_pool"  result = OK }
+}
+
+# ======================================================================
 # [#91 item K]  GRANARY STOCK -> REAL 糧倉 BUILDINGS in the Yellow River basin.
 # The abstract qing_granary_stock counter (se_QING_DECLINE.txt:25,66) is KEPT as
 # the summary/AI layer; this hangs the CONCRETE object off it. In a good year with
@@ -1851,29 +2111,40 @@ QING_DECLINE_granary_concrete = {
 			add_building_level = qing_granary_building
 			LOG_line = { sys = QING  msg = "granary: real 糧倉 built in (Yellow River basin) for (stock=)" }
 		}
+		# [#429] reserves are healthy again — RESTOCK the drained granaries: lift the empty flag from
+		# every basin granary that carries it (the stores are refilled; the building was never lost).
+		every_owned_province = {
+			limit = { has_province_modifier = qing_granary_empty }
+			remove_province_modifier = qing_granary_empty
+			LOG_line = { sys = QING  msg = "granary: 糧倉 restocked, stores refilled in for (stock=)" }
+		}
 	}
 	else_if = {
-		# FAMINE, reserves exhausted: the granaries are eaten — tear one down.
+		# FAMINE, reserves exhausted: the granaries are EMPTIED — but NOT razed. [#429 fix] an empty
+		# warehouse does not collapse; the physical 常平倉 building stands, its stores just run dry. Flag
+		# every stocked-basin granary province with qing_granary_empty (negates the food + stabilisation
+		# bonus while the reserve is drained) instead of remove_building_level (the old #435-era model
+		# wrongly destroyed the institution). The modifier is cleared on the good-year restock branch above.
 		limit = {
 			var:qing_granary_stock <= 15
 			any_owned_province = {
 				has_building = qing_granary_building
+				NOT = { has_province_modifier = qing_granary_empty }
 				OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Henan }
 			}
 		}
-		ordered_owned_province = {
-			order_by = total_population
-			max = 1
+		every_owned_province = {
 			limit = {
 				has_building = qing_granary_building
+				NOT = { has_province_modifier = qing_granary_empty }
 				OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Henan }
 			}
-			remove_building_level = qing_granary_building
-			LOG_line = { sys = QING  msg = "granary: 糧倉 in emptied and razed in famine for (stock=)" }
+			add_province_modifier = { name = qing_granary_empty  duration = -1 }
+			LOG_line = { sys = QING  msg = "granary: 糧倉 stores run dry in famine (building stands, empty) in for (stock=)" }
 		}
 	}
 	else = {
-		LOG_fail = { sys = QING  fn = "QING_DECLINE_granary_concrete"  reason = "no granary object change: stock in the middle band, or no eligible Yellow River province to build in / raze" }
+		LOG_fail = { sys = QING  fn = "QING_DECLINE_granary_concrete"  reason = "no granary object change: stock in the middle band, or no eligible Yellow River province to build/empty/restock" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_DECLINE_granary_concrete"  result = OK }
 }

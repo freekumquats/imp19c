@@ -1,0 +1,210 @@
+########################################################################
+# qing_xinjiang_missions.txt — THE SETTLEMENT OF THE NEW DOMINION (新疆善後), #422.
+#
+# A CONSOLIDATION mission tree for the newly-conquered Xinjiang (post-1759). Where the
+# Burma tree is a war of conquest, this is the long, unglamorous WORK of turning a
+# pacified frontier into a governed, self-sustaining, integrated part of the empire —
+# the historical 善後 ("settling the aftermath") the Qianlong court faced after the
+# Dzungar genocide and the taking of Altishahr.
+#
+# It layers directly on the EXISTING #367 Xinjiang machinery (se_QING_XINJIANG.txt):
+# the task goals gate on the REAL STATE that system tracks, so the player must actually
+# build the frontier up rather than click through scripted outcomes —
+#   • FORTIFY: a fortress actually standing in the Dzungaria/Tarim ground;
+#   • SETTLE: military-agricultural colonies (屯田) planted — qing_xj_tuntian count;
+#   • GOVERN: a capable Lifan Yuan Director seated (the office that governed Xinjiang);
+#   • PACIFY: the composite consolidation score (qing_xj_consolidation) climbing, which
+#     itself folds in the grip meter, the loyal beg corps, the colonies and the subsidy.
+#
+# CAPSTONE — 新疆一體, full integration: the New Dominion ceases to be a garrisoned
+# frontier under a special regime and becomes a NORMAL province. QING_xj_integrate_fully
+# pegs the grip to the top, STRIPS every negative Xinjiang/ethnic modifier off the
+# ground, zeroes the province ethnic-tension counters, and absorbs the Ili governorship
+# a step further — exactly the "treated as a normal province" end-state.
+#
+# Gating: CHI-only, player-only. Icons reuse stock test1/2/3 (the Qing suite convention).
+#
+# Sources: Peter Perdue, China Marches West (2005); James Millward, Beyond the Pass:
+#   Economy, Ethnicity and Empire in Qing Central Asia 1759-1864 (1998); Millward,
+#   Eurasian Crossroads: A History of Xinjiang (2007); Joanna Waley-Cohen, Exile in
+#   Mid-Qing China (1991, the frontier garrison-and-colony system).
+########################################################################
+
+qing_xinjiang_mission = {
+	icon = test2
+	header = mission_image_test
+
+	repeatable = no
+
+	chance = { }
+	ai_chance = { factor = 0 }   # player-only
+
+	potential = {
+		tag = CHI
+		is_ai = no
+	}
+
+	abort = {
+		NOT = { tag = CHI }
+	}
+
+	on_start = {
+		LOG_line = { sys = QING  msg = "MISSION settlement of the New Dominion (新疆善後) started for" }
+		QING_xj_init = yes
+	}
+
+	on_completion = {
+		LOG_line = { sys = QING  msg = "MISSION settlement of the New Dominion COMPLETED for" }
+	}
+
+	# ==================================================================
+	# ROOT — ESTABLISH THE MILITARY GOVERNORSHIP (伊犁將軍). The General of Ili is set
+	# over the New Dominion and the frontier administration is stood up. Opens the arc.
+	# ==================================================================
+	qing_xj_governorship = {
+		icon = test1
+		allow = {
+			treasury >= 60
+		}
+		on_start = {
+			add_treasury = -60
+		}
+		on_completion = {
+			custom_tooltip = qing_xj_governorship_tt
+			# make sure the frontier machinery is initialised + the score is fresh.
+			QING_xj_init = yes
+			QING_xj_recompute_consolidation = yes
+			LOG_line = { sys = QING  msg = "MISSION task Xinjiang governorship for" }
+		}
+	}
+
+	# ==================================================================
+	# FORTIFY THE FRONTIER (築城設卡) — raise a fortress in the New Dominion. The goal
+	# gates on a fortress actually STANDING in the Dzungaria/Tarim ground (the player
+	# builds it — the mission only recognises it once built). The task's own reward
+	# stocks the frontier defences a little further.
+	# ==================================================================
+	qing_xj_fortify = {
+		icon = test2
+		requires = { qing_xj_governorship }
+		allow = {
+			custom_tooltip = {
+				text = qing_xj_needs_fortress_tt
+				OR = {
+					area:Dzungaria = { any_area_province = { fort_level >= 1 } }
+					area:Tarim = { any_area_province = { fort_level >= 1 } }
+				}
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_xj_fortify_tt
+			# a firmer grip on the ground the forts command.
+			QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 6 }
+			QING_xj_recompute_consolidation = yes
+			LOG_line = { sys = QING  msg = "MISSION task Xinjiang fortify for" }
+		}
+	}
+
+	# ==================================================================
+	# PLANT THE MILITARY COLONIES (屯田實邊) — settle the emptied north with state
+	# farms. Gates on colonies actually planted (qing_xj_tuntian, the #367 count). The
+	# player plants them from the Lifan Yuan panel; the goal wants at least three.
+	# ==================================================================
+	qing_xj_colonies = {
+		icon = test3
+		requires = { qing_xj_governorship }
+		allow = {
+			custom_tooltip = {
+				text = qing_xj_needs_tuntian_tt
+				has_variable = qing_xj_tuntian
+				var:qing_xj_tuntian >= 3
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_xj_colonies_tt
+			# settlement knits the north in; sustain the subsidy that keeps it solvent.
+			QING_xj_xiexiang_on = yes
+			QING_xj_recompute_consolidation = yes
+			LOG_line = { sys = QING  msg = "MISSION task Xinjiang colonies for" }
+		}
+	}
+
+	# ==================================================================
+	# INSTALL A CAPABLE GOVERNOR (簡任能員) — the frontier needs an able hand. Gates on
+	# a seated, capable Lifan Yuan Director (the office that historically governed
+	# Xinjiang) — high finesse, loyal, present. The player appoints him on the Grand
+	# Council; the mission checks the man is genuinely able.
+	# ==================================================================
+	qing_xj_governor = {
+		icon = test1
+		requires = { qing_xj_fortify }
+		allow = {
+			custom_tooltip = {
+				text = qing_xj_needs_governor_tt
+				has_variable = qing_office_lifanyuan_holder
+				var:qing_office_lifanyuan_holder = {
+					is_alive = yes
+					employer = ROOT
+					finesse >= 9
+				}
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_xj_governor_tt
+			QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 8 }
+			QING_xj_recompute_consolidation = yes
+			LOG_line = { sys = QING  msg = "MISSION task Xinjiang capable governor for" }
+		}
+	}
+
+	# ==================================================================
+	# PACIFY THE OASES (綏靖回疆) — the composite frontier health must be genuinely high.
+	# Gates on the consolidation score (qing_xj_consolidation >= 75), which already folds
+	# in the grip, the loyal beg corps, the colonies and the subsidy — so this cannot be
+	# reached without real work on all fronts. Raising the civilization of the frontier
+	# is part of that settled prosperity.
+	# ==================================================================
+	qing_xj_pacify = {
+		icon = test2
+		requires = { qing_xj_colonies  qing_xj_governor }
+		allow = {
+			custom_tooltip = {
+				text = qing_xj_needs_consolidation_tt
+				has_variable = qing_xj_consolidation
+				var:qing_xj_consolidation >= 75
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_xj_pacify_tt
+			QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 6 }
+			QING_xj_recompute_consolidation = yes
+			current_ruler = { add_popularity = 15 }
+			LOG_line = { sys = QING  msg = "MISSION task Xinjiang pacify for" }
+		}
+	}
+
+	# ==================================================================
+	# CAPSTONE — THE NEW DOMINION MADE ONE WITH THE EMPIRE (新疆一體). The grip is total:
+	# every negative frontier modifier is struck from the ground, the ethnic tension is
+	# settled, and Xinjiang is henceforth a normal province like any interior one.
+	# ==================================================================
+	qing_xj_integrate = {
+		icon = test1
+		requires = { qing_xj_pacify }
+		allow = {
+			custom_tooltip = {
+				text = qing_xj_needs_integration_tt
+				has_variable = qing_xj_consolidation
+				var:qing_xj_consolidation >= 85
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_xj_integrate_tt
+			# strip every negative, peg the grip, treat the ground as a normal province.
+			QING_xj_integrate_fully = yes
+			current_ruler = { add_popularity = 40 }
+			add_stability = 1
+			LOG_line = { sys = QING  msg = "MISSION settlement of the New Dominion CAPSTONE (fully integrated) for" }
+		}
+	}
+}

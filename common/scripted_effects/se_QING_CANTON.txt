@@ -1,0 +1,254 @@
+########################################################################
+# se_QING_CANTON.txt — THE CANTON SYSTEM (粵海關 / 一口通商), task #389.
+#
+# From 1757 to 1842 all Western maritime trade was funnelled through Guangzhou
+# (廣州) under the 一口通商 single-port decree — in full force at the 1763 start.
+# This replaces the display-only open/close regime stub (#386) with the real
+# mechanic, whose HISTORICAL HOOK is the money's routing:
+#
+#   THE CANTON CUSTOMS WERE THE EMPEROR'S MONEY, NOT THE STATE'S. The 粵海關監督
+#   (Hoppo, Superintendent of Maritime Customs) was NOT a civil-service post — he
+#   was an Imperial Household Department (內務府) appointee, a Manchu bondservant
+#   (包衣 booi) personally chosen by the throne for a 3-year term. The Canton customs
+#   SURPLUS flowed as "tribute" straight to the emperor's privy purse (內帑) via the
+#   Neiwufu, BYPASSING the regular Board of Revenue (戶部) state treasury. Only a
+#   fixed quota (~1 million taels/yr) went to Beijing as ordinary revenue; the
+#   surplus — and the Hoppo's vast personal squeeze — was off the fiscal state's books.
+#
+# So this module splits the Canton yield each quarter:
+#   • the bulk accrues to the EMPEROR (qing_privy_purse 內帑 + qing_canton_customs, the
+#     running privy haul) — the money the 戶部 fisc cannot touch;
+#   • a smaller quota reaches the STATE treasury (add_treasury);
+#   • the Hoppo's squeeze (qing_hoppo_squeeze) climbs as he "milks the trade" (Morse),
+#     feeding corruption — the post was the most lucrative in the empire and its holder
+#     paid bribes to win it, keep it, and leave it.
+# The Cohong (公行) merchant monopoly carries the merchant-debt / bankruptcy risk that a
+# high squeeze eventually triggers (qing_canton.1).
+#
+# Yield scales with the regime being OPEN + Guangzhou's port development (the concrete
+# on-map trade capacity, port_building on province 9298) + the Hoppo's competence, so a
+# richer, better-run port pays the throne more. All figures in 萬兩 (10k-tael units), the
+# same scale as the #372 戶部銀庫 reserve, so the bypass is numerically legible.
+#
+# Sources: Van Dyke, The Canton Trade (2005); Chang Te-Ch'ang, "The Economic Role of the
+# Imperial Household in the Ch'ing Dynasty" (JAS 1972); Torbert, The Ch'ing Imperial
+# Household Department; H.B. Morse on the Hoppo.
+#
+# State (all on CHI):
+#   qing_canton_regime      flag:open|closed  (seeded open at 1763, se_MECHANICS)
+#   qing_canton_customs     running privy-purse haul from Canton, 萬兩 (display)
+#   qing_canton_last_yield  the last quarter's total customs yield, 萬兩 (display)
+#   qing_hoppo_squeeze      0..100 the Hoppo's corruption / over-exaction
+#   qing_hoppo_holder       the character serving as Hoppo (a Neiwufu appointee), if any
+#   qing_canton_cohong_cooldown  throttle on the Cohong-debt crisis event
+#
+# CHI-only, player-only. Init at game start; pulse quarterly from QING_GOV_pulse.
+# Prefix = QING_canton_ / sys = QING
+########################################################################
+
+# ======================================================================
+# INIT — seed the Canton bookkeeping. Called once at game start. Scope: country (CHI).
+# ======================================================================
+QING_canton_init = {
+	LOG_enter = { sys = QING  fn = "QING_canton_init" }
+	if = { limit = { NOT = { has_variable = qing_canton_customs } }     set_variable = { name = qing_canton_customs  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_canton_last_yield } }  set_variable = { name = qing_canton_last_yield  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_canton_last_state } }  set_variable = { name = qing_canton_last_state  value = 0 } }   # [#426] state share of the yield (Revenue ledger)
+	# the Hoppo's post ran on squeeze even at the zenith — seed a moderate baseline.
+	if = { limit = { NOT = { has_variable = qing_hoppo_squeeze } }      set_variable = { name = qing_hoppo_squeeze  value = 30 } }
+	# [#426] the Canton revenue split (percent of the yield to the emperor's privy purse 內帑 vs the
+	# state treasury 戶部). Player-set via the Canton window toggle: 0 / 50 / 100. Default 50.
+	if = { limit = { NOT = { has_variable = qing_canton_purse_share } } set_variable = { name = qing_canton_purse_share  value = 50 } }
+	LOG_line = { sys = QING  msg = "canton: bookkeeping seeded for" }
+	LOG_exit = { sys = QING  fn = "QING_canton_init"  result = OK }
+}
+
+# ======================================================================
+# QUARTERLY PULSE — the Canton customs collection. Called from QING_GOV_pulse. When the
+# regime is OPEN, compute the quarter's yield and split it emperor / state; drift the
+# Hoppo's squeeze; on a high squeeze, roll the Cohong-debt crisis. A CLOSED regime yields
+# nothing (the whole point of 閉關 is that the silver stops). Scope: country (CHI).
+# ======================================================================
+QING_canton_pulse = {
+	if = {
+		limit = {
+			has_variable = qing_canton_regime
+			var:qing_canton_regime = flag:open
+			# [#389 review-fix] the customs only flow while the Qing actually HOLDS Guangzhou (9298);
+			# a regime flag left open after the port is lost yields nothing.
+			exists = p:9298
+			p:9298 = { owner = ROOT }
+		}
+		LOG_enter = { sys = QING  fn = "QING_canton_pulse" }
+		# --- [#436] base quarterly yield DERIVED FROM REAL EXPORT GOODS, not a flat 30萬兩 constant.
+		# The 粵海關 customs were an ad-valorem levy on the tea / silk / porcelain (茶/絲/瓷) the empire
+		# shipped out through Canton — the very goods the Western traders came for. Read the empire's
+		# real production of those three via the proven country-scope aggregates (GOODS_national_production_*,
+		# the same family #423's opium model reads: GOODS_svalues.txt:195). A larger export economy = a
+		# richer customs house; a shrunken one (goods provinces lost or converted away) = a thinner take.
+		# Scaled /8 to the model's 萬兩 figure (production numbers are large) and floored at 8 so the
+		# customs house always yields a baseline while any export trade remains — the scale constant is a
+		# conversion factor, NOT a magic tael figure. At the 1763 zenith (China the world's workshop) this
+		# lands near the historical ~30萬兩/quarter, but now MOVES with the real export base.
+		set_variable = { name = qing_canton_yield_tmp  value = 0 }
+		change_variable = { name = qing_canton_yield_tmp  add = GOODS_national_production_tea }
+		change_variable = { name = qing_canton_yield_tmp  add = GOODS_national_production_silk }
+		change_variable = { name = qing_canton_yield_tmp  add = GOODS_national_production_porcelain }
+		change_variable = { name = qing_canton_yield_tmp  divide = 8 }
+		if = { limit = { var:qing_canton_yield_tmp < 8 }  set_variable = { name = qing_canton_yield_tmp  value = 8 } }
+		# a runaway export boom must not balloon the customs beyond the port's throughput — cap the raw
+		# goods-basis at 45萬兩/quarter (before the port/squeeze multipliers below), the ceiling of what
+		# the single Canton entrepôt could clear under the 一口通商 single-port system.
+		if = { limit = { var:qing_canton_yield_tmp > 45 }  set_variable = { name = qing_canton_yield_tmp  value = 45 } }
+		# scale by Guangzhou's (province 9298) port development — a bigger port, more trade.
+		# port_building levels run 0..3 at 1763; each level above 1 adds a fifth again.
+		if = {
+			limit = { exists = p:9298  p:9298 = { num_of_port_building >= 3 } }
+			change_variable = { name = qing_canton_yield_tmp  multiply = 1.4 }
+		}
+		else_if = {
+			limit = { exists = p:9298  p:9298 = { num_of_port_building >= 2 } }
+			change_variable = { name = qing_canton_yield_tmp  multiply = 1.2 }
+		}
+		# a capable, honest Hoppo delivers more of the trade's worth to the throne; a venal one
+		# lets his squeeze swallow it (high squeeze shaves the yield that actually reaches Peking).
+		if = {
+			limit = { var:qing_hoppo_squeeze >= 60 }
+			change_variable = { name = qing_canton_yield_tmp  multiply = 0.7 }
+		}
+		# --- SPLIT [#426]: the player sets (via the Canton window) what SHARE of the yield goes to
+		# the emperor's privy purse (內帑) vs the state treasury (戶部): qing_canton_purse_share = 0 / 50
+		# / 100 (percent to the purse). The state gets the remainder — 0% routes the whole Canton haul
+		# onto the 戶部 books (shown as the Revenue panel's Canton Contribution); 100% keeps it private.
+		set_variable = { name = qing_canton_emperor_tmp  value = var:qing_canton_yield_tmp }
+		change_variable = { name = qing_canton_emperor_tmp  multiply = var:qing_canton_purse_share }
+		change_variable = { name = qing_canton_emperor_tmp  divide = 100 }
+		# accrue the emperor's Canton silver (the running privy haul the panel shows)...
+		change_variable = { name = qing_canton_customs  add = var:qing_canton_emperor_tmp }
+		# ...and lift the emperor's own privy purse (內帑 = current_ruler.wealth, #424), scaled by share.
+		if = {
+			limit = { exists = current_ruler  var:qing_canton_purse_share > 0 }
+			set_variable = { name = qing_canton_purse_gain_tmp  value = 12 }
+			change_variable = { name = qing_canton_purse_gain_tmp  multiply = var:qing_canton_purse_share }
+			change_variable = { name = qing_canton_purse_gain_tmp  divide = 100 }
+			current_ruler = { add_gold = { value = ROOT.var:qing_canton_purse_gain_tmp } }
+			remove_variable = qing_canton_purse_gain_tmp
+		}
+		# the state's share reaches the 戶部 treasury (the on-books Canton Contribution).
+		set_variable = { name = qing_canton_state_tmp  value = var:qing_canton_yield_tmp }
+		change_variable = { name = qing_canton_state_tmp  subtract = var:qing_canton_emperor_tmp }
+		add_treasury = var:qing_canton_state_tmp
+		# record the total yield + the state share for the panel read-outs (the Revenue panel's
+		# Canton Contribution line reads qing_canton_last_state).
+		set_variable = { name = qing_canton_last_yield  value = var:qing_canton_yield_tmp }
+		set_variable = { name = qing_canton_last_state  value = var:qing_canton_state_tmp }
+
+		# --- the Hoppo milks the trade: squeeze drifts UP while the port is open, faster if the
+		# post is vacant (no accountable holder) — feeding the empire's corruption meter.
+		if = {
+			limit = { NOT = { has_variable = qing_hoppo_holder } }
+			QING_DECLINE_nudge = { var = qing_hoppo_squeeze  amount = 3 }
+		}
+		else = {
+			QING_DECLINE_nudge = { var = qing_hoppo_squeeze  amount = 1 }
+		}
+		# a high squeeze leaks into the empire-wide corruption counter (guarded — it may be unset
+		# very early, though QING_DECLINE_init seeds it at game start).
+		if = {
+			limit = {
+				var:qing_hoppo_squeeze >= 55
+				has_variable = qing_corruption_level
+			}
+			QING_DECLINE_nudge = { var = qing_corruption_level  amount = 1 }
+		}
+
+		# --- the Cohong (公行) debt crisis: at a punishing squeeze the Hong merchants buckle
+		# under levies and bankruptcy looms. Throttled + gated on the court event slot (BT-28),
+		# self-guards on high squeeze, so it is a rare crisis, inert at the well-run zenith.
+		if = {
+			limit = {
+				var:qing_hoppo_squeeze >= 65
+				NOT = { has_variable = qing_canton_cohong_cooldown }
+				NOT = { has_variable = qing_gc_event_slot_used }
+			}
+			set_variable = { name = qing_canton_cohong_cooldown  days = 1095 }   # ~3y throttle
+			set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [BT-28] claim court slot
+			trigger_event = { id = qing_canton.1  days = { 5 20 } }
+			LOG_line = { sys = QING  msg = "canton: Cohong debt crisis brews (high Hoppo squeeze) for" }
+		}
+
+		# clear the per-pulse scratch vars
+		remove_variable = qing_canton_yield_tmp
+		remove_variable = qing_canton_emperor_tmp
+		remove_variable = qing_canton_state_tmp
+		LOG_line = { sys = QING  msg = "canton: customs collected (emperor 內帑 + state quota) for" }
+		LOG_exit = { sys = QING  fn = "QING_canton_pulse"  result = OK }
+	}
+}
+
+# ======================================================================
+# ROTATE THE HOPPO (粵海關監督). The player's proactive lever on the squeeze: send a fresh
+# Neiwufu man to Canton on the historical 3-year cycle. Not a Grand Council office (the
+# Hoppo is a bondservant appointee, outside the great-office roster) — a lightweight
+# character marker. Self-contained (picks a capable courtier itself, so it needs no runtime
+# GUI picker): a fresh, accountable appointee steadies the squeeze; a higher-finesse man
+# steadies it more. Country-scope (ROOT = CHI); called from the Canton window button.
+# [#389 review-fix] REPLACES the button-less QING_canton_appoint_hoppo, whose absence made
+# the squeeze a one-way ratchet with no player agency (the Cohong crisis was inevitable).
+# ======================================================================
+QING_canton_rotate_hoppo = {
+	LOG_enter = { sys = QING  fn = "QING_canton_rotate_hoppo" }
+	# relieve any prior Hoppo first (the post turns over on a 3-year cycle).
+	if = {
+		limit = { has_variable = qing_hoppo_holder }
+		if = {
+			limit = { var:qing_hoppo_holder = { is_alive = yes } }
+			var:qing_hoppo_holder = { if = { limit = { has_variable = qing_hoppo_marker }  remove_variable = qing_hoppo_marker } }
+		}
+		remove_variable = qing_hoppo_holder
+	}
+	# pick a capable adult courtier (highest finesse — the fiscal administrator's gift) as the
+	# new Hoppo. ordered_owned so the pick is deterministic; excludes the ruler + office-holders.
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_adult = yes
+			is_alive = yes
+			is_ruler = no
+			NOT = { has_variable = qing_office_held }
+		}
+		order_by = finesse
+		max = 1
+		save_scope_as = qing_hoppo_pick
+		ROOT = {
+			set_variable = { name = qing_hoppo_holder  value = scope:qing_hoppo_pick }
+		}
+		set_variable = { name = qing_hoppo_marker  value = 1 }
+	}
+	# a fresh, accountable appointee steadies the squeeze (a new broom, and the bribes to win
+	# the post are paid — he has room to run it straight for a while).
+	QING_DECLINE_nudge = { var = qing_hoppo_squeeze  amount = -12 }
+	# a high-finesse man polices the exactions harder still.
+	if = {
+		limit = {
+			has_variable = qing_hoppo_holder
+			var:qing_hoppo_holder = { finesse >= 7 }
+		}
+		QING_DECLINE_nudge = { var = qing_hoppo_squeeze  amount = -6 }
+	}
+	LOG_line = { sys = QING  msg = "canton: a new Hoppo (粵海關監督) is sent to milk the trade for" }
+	LOG_exit = { sys = QING  fn = "QING_canton_rotate_hoppo"  result = OK }
+}
+
+# ======================================================================
+# [#426] QING_canton_set_purse_share — set what SHARE of the Canton yield accrues to the
+# emperor's privy purse (內帑) vs the state treasury (戶部). $share$ = 0 | 50 | 100 (percent
+# to the purse). The quarterly Canton pulse reads qing_canton_purse_share and splits the
+# yield accordingly; a lower share routes more onto the 戶部 books (the Revenue panel's
+# Canton Contribution line). Scope: COUNTRY (CHI). Called from the three Canton-window toggles.
+# ======================================================================
+QING_canton_set_purse_share = {
+	QING_canton_init = yes
+	set_variable = { name = qing_canton_purse_share  value = $share$ }
+	LOG_line = { sys = QING  msg = "canton: privy-purse share set (percent to 內帑) for" }
+}

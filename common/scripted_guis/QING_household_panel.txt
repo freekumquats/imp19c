@@ -1,0 +1,199 @@
+########################################################################
+# QING_household_panel.txt — scripted GUIs for the Imperial Household panel (#359).
+#
+# The Imperial Household Department (內務府) bureaucracy: a Grand-Council-clone L4 window
+# headed by the chamberlain (總管內務府大臣), the closest man to the sovereign. It surfaces
+# the throne's PERSONAL establishment that se_QING_HOUSEHOLD.txt already models — the privy
+# purse (內帑), the palace eunuchs (太監), and the imperial workshops (造辦處) — and the
+# ministry-performance meter qing_min_perf_chamberlain (which folds into his Grand Council
+# standing; se_QING_MINISTRY.txt / QING_council_fold_ministry_perf, office key 'chamberlain'
+# already enumerated there — no council edit).
+#
+# Like the Works/Revenue panels it has ACTION LEVERS, each firing a PROVEN household event
+# (qing_household_events.txt) — no new household code:
+#   • MANAGE THE PRIVY PURSE (內帑): fire qing_household.1 (replenish / tap / drain choices),
+#   • CHECK THE EUNUCHS (太監): fire qing_household.2 (check / indulge / instrument), shown
+#     only when a eunuch faction leader actually stalks the court,
+#   • COMMISSION THE WORKSHOPS (造辦處): fire qing_household.3 (great work / modest / idle),
+#     gated on a capable chamberlain (charisma >= 8, the event's own gate).
+#
+# Scoped to the Qing player (ROOT = CHI). AI never evaluates these (ai_is_valid = no).
+# Opened by qing_household_open_panel_button (a button in government_view.gui).
+# The window itself is gui/qing_household.gui. Prefix = qing_household_.
+########################################################################
+
+# ---- OPEN THE IMPERIAL HOUSEHOLD PANEL (button in the government view) ------
+qing_household_open_panel_button = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		# The window reads the privy purse + qing_min_perf_chamberlain directly from ROOT.
+		LOG_line = { sys = QING  msg = "EVENT qing_household_open_panel_button fired; opening the Imperial Household panel for" }
+	}
+}
+
+# ---- CHAMBERLAIN HOLDER INDICATOR (the GUI reveals his card when filled) ----
+qing_household_filled = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_office_chamberlain_holder
+		var:qing_office_chamberlain_holder = { is_alive = yes  employer = ROOT }
+	}
+}
+
+# ---- VACANT indicator (the GUI shows a "post vacant" note) ------------------
+qing_household_vacant = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		NOR = {
+			AND = {
+				has_variable = qing_office_chamberlain_holder
+				var:qing_office_chamberlain_holder = { is_alive = yes  employer = ROOT }
+			}
+		}
+	}
+}
+
+# ---- EUNUCH-DANGER indicator (the GUI shows a warning when a eunuch faction exists) --
+qing_household_eunuch_danger = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		any_character = { employer = ROOT  has_variable = qing_eunuch_faction_leader  is_alive = yes }
+	}
+}
+
+# ---- MANAGE THE PRIVY PURSE (內帑) — fire the proven privy-purse event with its
+# replenish/tap/drain choices. Available to the Qing player whenever the purse is tracked.
+qing_household_manage_purse = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		# [#359 review fix / #424] MIRROR qing_household.1's own trigger (the privy purse is now
+		# current_ruler.wealth; the event fires when wealth < 140, the 35-meter threshold ×4). The
+		# event is is_triggered_only and re-checks this at fire time, so gate the lever on the same
+		# condition, the button/event-agreement the eunuch + workshop levers already keep.
+		exists = current_ruler
+		current_ruler = { wealth < 140 }
+	}
+	effect = {
+		trigger_event = { id = qing_household.1  days = { 1 3 } }
+		LOG_line = { sys = QING  msg = "household panel: chamberlain opened the privy-purse question for" }
+	}
+}
+
+# ---- CHECK THE EUNUCHS (太監) — fire the proven eunuch-overreach event (check / indulge /
+# instrument). Shown ONLY when a eunuch faction leader actually stalks the court.
+qing_household_check_eunuchs = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		tag = CHI
+		any_character = { employer = ROOT  has_variable = qing_eunuch_faction_leader  is_alive = yes }
+	}
+	is_valid = {
+		any_character = { employer = ROOT  has_variable = qing_eunuch_faction_leader  is_alive = yes }
+	}
+	effect = {
+		trigger_event = { id = qing_household.2  days = { 1 3 } }
+		LOG_line = { sys = QING  msg = "household panel: chamberlain moved against the eunuch faction for" }
+	}
+}
+
+# ---- COMMISSION THE WORKSHOPS (造辦處) — fire the proven workshop-commission event with its
+# great-work / modest / idle choices. Requires a capable seated chamberlain (charisma >= 8,
+# the event's own gate) so the button and the event agree.
+qing_household_commission_workshop = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		has_variable = qing_office_chamberlain_holder
+		var:qing_office_chamberlain_holder = { is_alive = yes  employer = ROOT  charisma >= 8 }
+	}
+	effect = {
+		trigger_event = { id = qing_household.3  days = { 1 3 } }
+		LOG_line = { sys = QING  msg = "household panel: chamberlain opened a workshop commission for" }
+	}
+}
+
+# ---- CLOSE (button in the panel window) ------------------------------------
+qing_household_close_panel = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_valid = { always = yes }
+	effect = { }
+}
+
+# ======================================================================
+# [#390] 文治 IMPERIAL CULTURAL PATRONAGE — launchable initiatives. The Imperial
+# Household (內務府) is the historic home of the 造辦處 workshops, so the patronage
+# levers live in this panel. Each spends treasury (+ the privy purse for the workshops),
+# raises the qing_wenzhi_patronage meter, and grants a lasting culture modifier or a
+# one-off glory. All CHI-only + ai_is_valid no; costs gated via custom_tooltip so the
+# button greys out until affordable (the proven qing_gov_council_convene idiom).
+# Effects in se_QING_WENZHI.txt.
+# ======================================================================
+
+# ---- FUND THE IMPERIAL WORKSHOPS (造辦處) — jade + porcelain, from the privy purse ----
+qing_wenzhi_fund_workshops = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_wenzhi_needs_treasury_40_tt
+			treasury >= 40
+		}
+	}
+	effect = { QING_wenzhi_fund_workshops = yes }
+}
+
+# ---- COMMISSION THE PAINTING ACADEMY (如意館) — the Castiglione court style ----------
+qing_wenzhi_commission_painting = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_wenzhi_needs_treasury_30_tt
+			treasury >= 30
+		}
+	}
+	effect = { QING_wenzhi_commission_painting = yes }
+}
+
+# ---- LAUNCH THE COMPLETE LIBRARY (四庫全書) — hands off to the Siku dilemma event.
+# Shown only until the library is founded (the event's own one-shot guard).
+qing_wenzhi_launch_siku = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		tag = CHI
+		NOT = { has_variable = qing_culture_siku_done }
+		# [#390 review-fix] hide while a convening is already pending, so the +15 patronage
+		# lever cannot be spammed for free before the library is founded or the dilemma declined.
+		NOT = { has_variable = qing_wenzhi_siku_pending }
+	}
+	is_valid = { always = yes }
+	effect = { QING_wenzhi_launch_siku = yes }
+}
+
+# ---- THE SOUTHERN INSPECTION TOUR (南巡) — a grand progress down the Jiangnan --------
+qing_wenzhi_southern_tour = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		custom_tooltip = {
+			text = qing_wenzhi_needs_treasury_60_tt
+			treasury >= 60
+		}
+	}
+	effect = { QING_wenzhi_southern_tour = yes }
+}

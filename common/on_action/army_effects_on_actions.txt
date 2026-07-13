@@ -1,0 +1,74 @@
+########################################################################
+# army_effects_on_actions.txt — [#347] STANDING-ARMY PROVINCE EFFECTS.
+#
+# A stationed field army has consequences for the province it sits on:
+#   1. PACIFICATION — soldiers on the ground deter unrest (a local_unrest modifier
+#      scaled to the garrison's size), refreshed while the army stays, lapsing on
+#      its own when it leaves (short timed modifier + a per-pulse re-stamp).
+#   2. BILLETING STRAIN — a LARGE host quartered on a province frets the population
+#      (foraging/requisition), a happiness cost that balances heavy pacification.
+#   3. GOVERNOR FRICTION — a big garrison sitting on a governor's land, especially
+#      under a low-discipline/disloyal commander, breeds billeting disputes with the
+#      provincial governor (a friction event, competence-gated).
+#
+# FOOD is ALREADY engine-driven: unit food_consumption vs the province's local food
+# capacity produces attrition without any scripting — documented here, not scripted.
+#
+# GENERIC layer: this fires for EVERY country with a stationed army, so any realm's
+# garrisons pacify their ground. The Qing-frontier overlay (#346, War-Ministry
+# reporting + Lifan-Yuan turf war) LAYERS on this same detection idiom.
+#
+# DETECTION IDIOM (proven, Invictus): every_army from the COUNTRY scope, gated
+# is_moving = no + exists = commander + unit_size threshold (02_blemmia_missions.txt:974
+# any_army { exists=commander is_moving=no unit_size>=10 in_combat=no }); the army's
+# province is army.location, and a province's governor is <prov>.governor
+# (egypt_mission_3_empire.txt:664 p:3360.governor, guarded exists = <prov>.governor).
+#
+# Hooked to monthly_country_pulse (per-country, so every_army stays in-country and
+# O(own armies)); the friction event is throttled per country by a cooldown var.
+# se_LOG sys = ARMY, STATIC msgs only. Prefix = ARMY_.
+########################################################################
+
+# ---- REGISTRATION: append to the monthly country pulse ---------------------
+# (monthly_country_pulse itself lives in 00_monthly_country.txt; on_actions there
+# are listed by name, and the engine merges same-named on_action blocks across
+# files, so this registration is additive.)
+monthly_country_pulse = {
+	on_actions = {
+		army_standing_effects_on_action
+	}
+}
+
+# ---- THE PULSE: stamp/refresh standing-army province effects ---------------
+# Scope: COUNTRY. Runs monthly for every country. Guards on the country actually
+# fielding a stationed army before iterating, so a country with no armies is a
+# cheap early-out. Each qualifying army stamps its province; a large host under a
+# poor commander may additionally queue a governor-friction event (throttled).
+army_standing_effects_on_action = {
+	trigger = {
+		# only bother for a country that HAS a settled (non-moving) army with a size
+		# worth modelling — a token escort or a marching column does not garrison.
+		any_army = {
+			is_moving = no
+			in_combat = no
+			unit_size >= 3
+		}
+	}
+	effect = {
+		LOG_line = { sys = ARMY  msg = "standing-army province pulse firing for country" }
+		every_army = {
+			limit = {
+				is_moving = no
+				in_combat = no
+				unit_size >= 3
+				exists = unit_location
+			}
+			ARMY_apply_garrison_effects = yes
+		}
+	}
+}
+
+# The per-army effect body ARMY_apply_garrison_effects lives in
+# common/scripted_effects/se_ARMY.txt (scripted effects load ONLY from that folder;
+# a callable effect placed here would not be registered). This file holds only the
+# on_action registration + the pulse on_action above.

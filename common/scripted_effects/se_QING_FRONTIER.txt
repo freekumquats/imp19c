@@ -1,0 +1,140 @@
+########################################################################
+# se_QING_FRONTIER.txt — [#346] FRONTIER-GARRISON OVERLAY: direct Qing military
+# presence on Inner-Asian subject soil, and the War-Ministry ↔ Lifan-Yuan turf war.
+#
+# The 1815/1763 frontier banner garrisons (Ili 伊犁, Ürümqi 烏魯木齊, Kashgar 喀什噶爾,
+# Mukden 盛京, Heilongjiang 黑龍江) sit in provinces owned by CHI's autonomous-
+# governorship SUBJECTS (ILI/XNG/MKD/HLJ). [BT-15] The setup OOB raises them as
+# CHI-OWNED, CHI-COMMANDED armies standing on that subject soil (bare create_unit in the
+# c:CHI scope; the Son of Heaven garrisons the marches directly) — exactly the historical
+# QING FRONTIER COMMANDS (將軍) answering to Beijing, not the local dependency. This
+# overlay expresses that: a garrison COMMANDED BY A QING (c:CHI-employed) officer sitting
+# on a subject's frontier province is a direct imperial military occupation, which:
+#   • TIGHTENS integration of that dependency (the army is the spine of 改土歸流), and
+#   • lowers the subject's loyalty/autonomy sentiment (occupation chafes), and
+#   • steps on the LIFAN YUAN's indirect-rule remit (理藩院 governs by resident Amban,
+#     NOT by bayonet) — a turf war between the Grand Minister of War (兵部) and the Grand
+#     Director of the Lifan Yuan (理藩院) that this layer surfaces as an event.
+#
+# This LAYERS on the #347 detection idiom (every_army, unit_location, unit_owner) rather
+# than re-architecting the setup OOB. Runs on the Qing governance pulse (CHI player).
+# Scope: COUNTRY (ROOT = CHI). se_LOG sys = QING. Prefix = QING_frontier_.
+########################################################################
+
+# ======================================================================
+# QING_fgar_scan — once per Qing pulse. Find every settled army COMMANDED BY a
+# CHI officer that sits on a province owned by a CHI autonomous-governorship SUBJECT
+# (not by CHI itself), and apply the occupation consequences to that subject. Bounded
+# O(own armies). Throttled per subject by a timed var so the integration push +
+# loyalty drop come at a measured cadence, not every pulse.
+# ======================================================================
+QING_fgar_scan = {
+	if = {
+		limit = { tag = CHI }
+		LOG_line = { sys = QING  msg = "frontier-garrison overlay scan firing for" }
+		# [BT-15 correction — supersedes the #346 every_subject rewrite] The frontier garrisons are
+		# NOT fielded by the subject: BT-15 changed SE_qing_raise_garrison[_cmd] to issue a BARE
+		# create_unit in the c:CHI scope with a CHI-employed commander, so a subject-owned frontier
+		# province now carries a CHI-CONTROLLED garrison (imp19c_effects_legion_setup.txt:103-113/150-156,
+		# "the Son of Heaven garrisons the marches directly"). The intervening every_subject { any_army }
+		# scan looked for a garrison the DEPENDENCY fields on its own soil — which no longer exists — so it
+		# could never match. Reverted to the correct idiom: iterate the QING's OWN settled armies
+		# (every_army), reach the province via unit_location (the proven se_ARMY.txt:27 idiom), and when the
+		# host stands on a province OWNED BY a CHI autonomous-governorship SUBJECT (not by CHI itself), that
+		# subject is under direct imperial occupation. Bounded O(own armies). Throttled per subject downstream.
+		every_army = {
+			limit = {
+				is_moving = no
+				in_combat = no
+				unit_size >= 3
+				exists = unit_location
+				unit_location = {
+					exists = owner
+					owner = {
+						is_subject_of = ROOT
+						is_subject_type = autonomous_governorship
+					}
+				}
+			}
+			# reach the garrison's province (proven se_ARMY.txt:27 idiom), save it, then save the
+			# occupied dependency (the province owner) as the subject scope the occupation reads
+			# (dot-access off a saved scope = proven se_ARMY.txt:69 / se_TRADE_new.txt:390). Apply
+			# the consequences in the CHI (ROOT) scope.
+			unit_location = { save_scope_as = qing_frontier_prov }
+			scope:qing_frontier_prov.owner = { save_scope_as = qing_frontier_subject }
+			ROOT = { QING_fgar_apply_occupation = yes }
+		}
+	}
+}
+
+# ----------------------------------------------------------------------
+# QING_fgar_apply_occupation — the per-garrison consequence. Scope: COUNTRY (ROOT
+# = CHI); expects scope:qing_frontier_subject (the occupied dependency). Throttled per
+# subject via a timed var on the subject so it fires ~twice a year, not every pulse.
+# ----------------------------------------------------------------------
+QING_fgar_apply_occupation = {
+	if = {
+		limit = {
+			exists = scope:qing_frontier_subject
+			scope:qing_frontier_subject = { NOT = { has_variable = qing_frontier_occupation_cd } }
+		}
+		scope:qing_frontier_subject = { set_variable = { name = qing_frontier_occupation_cd  days = 180 } }
+		# mark the subject as garrisoned by Beijing (read by the War + Lifan Yuan panels).
+		scope:qing_frontier_subject = {
+			set_variable = { name = qing_frontier_garrisoned  value = 1  days = 200 }
+		}
+		# (1) TIGHTEN integration — the garrison is the spine of direct rule (改土歸流).
+		# Reuse the proven integration verb (scope:target = the subject).
+		scope:qing_frontier_subject = { save_scope_as = target }
+		SUBJ_QING_advance_integration = { steps = 1 }
+		# (2) OCCUPATION CHAFES — the dependency's loyalty toward Beijing dips (a bayonet
+		# is not a bond). The subject's opinion of the overlord is the loyalty driver
+		# (se_SUBJECT_QING model); nudge it down with a standing occupation modifier.
+		scope:qing_frontier_subject = {
+			# ONSET DETECTION: the standing occupation modifier absent means the garrison just
+			# arrived this cycle — the moment to fire the one-time diplomatic shock (opinion),
+			# which then decays on its own. On subsequent re-fires the modifier is already
+			# present, so the opinion is NOT re-added (no unbounded stacking — the #346 review
+			# stacking finding). The CONTINUOUS loyalty drag is carried by the modifier itself.
+			if = {
+				limit = { NOT = { has_country_modifier = qing_frontier_occupied } }
+				add_opinion = { modifier = qing_frontier_occupation_opinion  target = ROOT }
+			}
+			# remove-then-add each cycle (proven refresh idiom, #347 fix): exactly one instance,
+			# fresh ~200-day timer that outlives the ~180-day re-fire cadence, so the occupation
+			# modifier stays continuously present while a garrison sits — no expiry flicker.
+			if = {
+				limit = { has_country_modifier = qing_frontier_occupied }
+				remove_country_modifier = qing_frontier_occupied
+			}
+			add_country_modifier = { name = qing_frontier_occupied  duration = 200 }
+		}
+		# (3) LIFAN-YUAN TURF WAR — direct military occupation steps on the Court of
+		# Colonial Affairs' indirect-rule remit. If the Lifan Yuan office is filled AND a
+		# resident Amban sits in this very dependency, the resident and the garrison
+		# commander clash over who governs; roll a friction event (throttled by the
+		# same occupation cooldown above). The War Minister backs his general; the Lifan
+		# Director backs his Amban.
+		if = {
+			limit = {
+				has_variable = qing_office_lifanyuan_holder
+				var:qing_office_lifanyuan_holder = { is_alive = yes  employer = ROOT }
+				scope:qing_frontier_subject = {
+					has_variable = qing_amban_here
+					var:qing_amban_here = { is_alive = yes }
+				}
+				# only a real turf war when a War Minister ALSO sits (someone to back the army)
+				has_variable = qing_office_war_holder
+				var:qing_office_war_holder = { is_alive = yes  employer = ROOT }
+				# don't spam: at most one turf-war event per realm per ~year
+				NOT = { has_variable = qing_frontier_turfwar_cd }
+			}
+			set_variable = { name = qing_frontier_turfwar_cd  days = 365 }
+			var:qing_office_war_holder = { save_scope_as = qing_frontier_war_min }
+			var:qing_office_lifanyuan_holder = { save_scope_as = qing_frontier_lifan_dir }
+			scope:qing_frontier_subject.var:qing_amban_here = { save_scope_as = qing_frontier_amban }
+			trigger_event = { id = qing_frontier.1  days = { 5 20 } }
+			LOG_line = { sys = QING  msg = "frontier turf war: War Ministry garrison vs Lifan Yuan Amban queued" }
+		}
+	}
+}

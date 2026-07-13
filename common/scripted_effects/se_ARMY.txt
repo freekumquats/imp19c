@@ -1,0 +1,76 @@
+########################################################################
+# se_ARMY.txt — [#347] STANDING-ARMY PROVINCE-EFFECT scripted effects.
+#
+# The per-army effect body for the standing-army province-effects feature. The pulse
+# ON_ACTION that calls this (army_standing_effects_on_action) + its registration live in
+# common/on_action/army_effects_on_actions.txt — but the CALLABLE EFFECT must live here
+# under common/scripted_effects/ (Imperator loads scripted effects ONLY from this folder;
+# a helper body placed in common/on_action/ is parsed as an on_action, not registered as
+# an effect, so an `X = yes` call would resolve to nothing). This is the mod convention:
+# every QING_*/SUBJ_* helper lives in scripted_effects and is merely CALLED from on_action.
+#
+# See army_effects_on_actions.txt for the feature overview + the proven detection idiom.
+# se_LOG sys = ARMY. Prefix = ARMY_.
+########################################################################
+
+# ---- PER-ARMY: stamp the province + maybe breed governor friction ----------
+# Scope: ARMY (a settled army; called from every_army). Reaches its province via
+# unit_location, refreshes the pacification (+ billeting-strain for a large host), then
+# rolls the governor-friction beat. All province modifiers are RE-STAMPED each pulse
+# (short timed duration), so a departed army's effect lapses within one window without an
+# explicit teardown.
+ARMY_apply_garrison_effects = {
+	# capture the army's strength into a LOCAL var (persists across the scope push into
+	# unit_location; set_local_variable is the proven cross-scope carry, se_DIPLOMACY.txt:105 —
+	# and armies are transient objects, so a persistent set_variable on them is avoided).
+	set_local_variable = { name = arm_size_here  value = unit_size }
+	unit_location = {
+		save_scope_as = arm_province
+		# 1+2. PACIFICATION (scaled by size) + BILLETING STRAIN (large host only).
+		# RE-STAMP FRESH EACH PULSE via REMOVE-then-ADD (the proven refresh idiom — see the
+		# remove_province_modifier/add pairs in Invictus mission files). We do NOT gate the add
+		# on "NOT has_province_modifier": that would leave the modifier un-refreshed while it
+		# sits (30-day pulse < 40-day duration), so it would EXPIRE at day 40 and flicker off
+		# until day 60 (a ~20-day gap every cycle). Unconditional remove-then-add guarantees
+		# exactly one instance carrying a fresh 40-day timer each pulse — no flicker, no stack.
+		# The remove is a no-op when absent. 40 days > the monthly cadence, so while the army
+		# stays the modifier never lapses; once it leaves, the last stamp expires ~40 days on.
+		remove_province_modifier = army_garrison_pacified
+		remove_province_modifier = army_garrison_pacified_heavy
+		remove_province_modifier = army_garrison_billeting_strain
+		if = {
+			limit = { local_var:arm_size_here >= 12 }
+			# a field host: heavy pacification, but it strains the province it eats off.
+			add_province_modifier = { name = army_garrison_pacified_heavy  duration = 40 }
+			add_province_modifier = { name = army_garrison_billeting_strain  duration = 40 }
+		}
+		else = {
+			# an ordinary standing garrison: light pacification, no billeting strain.
+			add_province_modifier = { name = army_garrison_pacified  duration = 40 }
+		}
+	}
+	# 3. GOVERNOR FRICTION — a LARGE host on a governor's province, under a
+	# low-loyalty commander, breeds a billeting dispute. Guard on: the province has a
+	# governor distinct from the army's commander, the host is large, the commander
+	# is disloyal/low-martial, and the owning country is not already on cooldown.
+	if = {
+		limit = {
+			unit_size >= 12
+			exists = commander
+			exists = scope:arm_province.governor
+			unit_owner = { NOT = { has_variable = army_gov_friction_cd } }
+			# the commander and the governor are different people (a general billeting
+			# on his OWN governorate does not quarrel with himself).
+			NOT = { commander = { this = scope:arm_province.governor } }
+			# friction springs from an ill-disciplined / disaffected host.
+			commander = { OR = { loyalty < 40  martial < 6 } }
+		}
+		commander = { save_scope_as = arm_commander }
+		scope:arm_province.governor = { save_scope_as = arm_governor }
+		unit_owner = {
+			set_variable = { name = army_gov_friction_cd  days = 200 }
+			LOG_line = { sys = ARMY  msg = "billeting friction between a stationed host and the provincial governor for" }
+			trigger_event = { id = army_governor_friction.1  days = { 5 30 } }
+		}
+	}
+}

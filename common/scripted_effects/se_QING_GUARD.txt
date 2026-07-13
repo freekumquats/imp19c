@@ -1,0 +1,107 @@
+########################################################################
+# se_QING_GUARD.txt — the Imperial Guard's concrete objects (#364).
+#
+# The Commandant of the Imperial Guard (領侍衛內大臣) commanded the elite Manchu palace
+# guard drawn from the Upper Three Banners (上三旗): the 侍衛 guardsmen who warded the
+# emperor's person, and the Bayara braves (巴牙喇) — the banner armies' elite shock troops.
+# This gives the guard_commandant office (already wired into the Grand Council with the
+# emperor-power-base + sovereign-vitality mechanics in se_QING_COUNCIL.txt, unchanged) two
+# CONCRETE player-managed objects surfaced by the #364 panel:
+#   • a CORPS of 侍衛 guardsmen — real courtiers enrolled into the guard (marked
+#     qing_is_imperial_guardsman), rebuilt into qing_guard_corps each pulse by
+#     QING_ministry_recompute_perf_guard_commandant (se_QING_MINISTRY.txt);
+#   • the BAYARA GUARD (巴牙喇) — a real elite legion the player musters at the capital
+#     (a raise-once standing institution; readiness flag qing_bayara_guard_raised).
+#
+# The corps depth + Bayara readiness fold into qing_min_perf_guard_commandant, which folds
+# into the Commandant's Grand Council standing (the fold that had NEVER been computed before
+# #364 — the same latent bug censor #362 / justice #363 fixed).
+#
+# PREFIX: QING_guard_ / sys = QING. CHI-only. Enrolment + raise from the #364 panel.
+# Uses ONLY proven idioms: the raise_legion / capital_scope.state.governorship muster
+# (se_QING_ILI.txt:430, se_QING_SELFSTR.txt:340) and the marked-courtier roster archetype
+# (the Censorate #362 inspector corps).
+########################################################################
+
+# ======================================================================
+# QING_guard_raise_bayara — muster the elite Bayara Guard (巴牙喇) at the capital. A
+# raise-once standing institution: 4 line battalions + 1 field-gun piece (the guard was
+# an elite shock force, not an artillery train). Scope: COUNTRY (ROOT = CHI). Guarded on
+# NOT already raised so it cannot be double-mustered; sets the readiness flag the perf
+# compute reads. Mirrors QING_ili_raise_reconquest_legion (capital muster fallback).
+# ======================================================================
+QING_guard_raise_bayara = {
+	LOG_enter = { sys = QING  fn = "QING_guard_raise_bayara" }
+	if = {
+		limit = {
+			NOT = { has_variable = qing_bayara_guard_raised }
+			exists = capital_scope
+		}
+		# [#364-R2 review-fix] create a MARKED founding commander for the Bayara Guard, so the
+		# perf recompute can RE-DERIVE the guard's existence each pulse from any_legion_commander
+		# (a proven country-scope check) rather than trusting a set-once flag. This closes the
+		# leak the adversarial review found: previously qing_bayara_guard_raised was set once and
+		# never cleared, so a Bayara wiped in battle kept its +10 readiness forever AND left the
+		# raise-once muster permanently spent. Marking the commander re-couples the flag to the
+		# concrete legion's lifetime. create_character at country scope + attributes inside is the
+		# proven idiom (QING_napoleon_spawn); NO modifiers inside create_character (the #90 rule).
+		create_character = {
+			culture = ROOT.primary_culture
+			religion = ROOT.religion
+			add_martial = 8
+			add_trait = tactician
+			save_scope_as = bayara_commander
+		}
+		scope:bayara_commander = {
+			set_home_country = ROOT
+			add_nickname = "NICKNAME_QING_BAYARA_COMMANDER"
+			# the durable mark the perf recompute reads to re-derive Bayara readiness.
+			set_variable = qing_is_bayara_commander
+		}
+		capital_scope = { state.governorship = { QING_guard_raise_bayara_at = { loc = ROOT.capital_scope } } }
+		# immediate feedback: mark the guard under arms so the muster gate closes at once. The
+		# perf recompute then AUTHORITATIVELY re-derives this flag from the live legion each pulse
+		# (set if a marked commander still leads a legion; cleared otherwise), so the flag can
+		# never leak past the legion's destruction.
+		set_variable = { name = qing_bayara_guard_raised  value = 1 }
+		LOG_line = { sys = QING  msg = "guard: the Bayara Guard is mustered at the capital for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_guard_raise_bayara"  reason = "already raised or no capital to muster the Bayara Guard for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_guard_raise_bayara"  result = OK }
+}
+
+# Raise one Bayara Guard legion at $loc$ (a province scope). Called in governorship scope.
+# An elite shock host: 4 line battalions + 1 field gun. Mirrors QING_ili_raise_reconquest_legion_at.
+# Attaches scope:bayara_commander (the marked founding commander) via the proven add_to_legion=PREV
+# + random_legion_unit set_as_commander idiom (se_QING_SELFSTR.txt:364), so the legion stands under
+# a marked head the perf recompute can re-derive it from.
+QING_guard_raise_bayara_at = {
+	# $loc$ = province scope for the legion's muster point
+	raise_legion = {
+		create_unit = {
+			name = "Bayara Guard"
+			location = $loc$
+			sub_unit = regular_infantry
+			add_subunit = regular_infantry
+			add_subunit = regular_infantry
+			add_subunit = regular_infantry
+			add_subunit = artillery
+		}
+		if = {
+			limit = { exists = scope:bayara_commander }
+			scope:bayara_commander = { add_to_legion = PREV }
+			random_legion_unit = { set_as_commander = scope:bayara_commander }
+		}
+		# [#420] mark the Bayara out as ELITE: a standing (duration = -1, proven upstream — TI
+		# mac_01_3_umod / Invictus bythinia_missions) unit modifier lifting morale/discipline and
+		# the line-infantry + field-gun combat stats on every battalion of the guard. Permanent, so
+		# it lives and dies WITH the legion — no remove_unit_modifier (unproven here). every_legion_unit
+		# is a legion-scope iterator (proven upstream, TI AGE_svalues.txt), and this block is legion
+		# scope (the sibling random_legion_unit above already iterates it).
+		every_legion_unit = {
+			add_unit_modifier = { name = qing_bayara_elite  duration = -1 }
+		}
+	}
+}

@@ -1,0 +1,167 @@
+########################################################################
+# QING_upperstudy_panel.txt — scripted GUIs for the Upper Study panel (#337).
+#
+# The Upper Study (上書房) is the palace school (founded 1725 by Yongzheng) that tutors
+# the imperial princes — an inner-court ACADEMY, NOT a Grand Council office (so, like the
+# Southern Study #336, there is no perf-fold-into-an-office-holder here). Where the
+# Southern Study serves the emperor and confers court luster, the Upper Study serves the
+# HEIRS: its benefit is dynastic — schooling the succession + sharpening the crown prince.
+# A Grand-Council-clone L4 window surfacing:
+#   • the 上書房總師傅 (Grand Tutor, qing_upperstudy_chief) in the summit-card slot,
+#   • the CORPS of 師傅 tutors (qing_upperstudy_tutors) as a character roster,
+#   • the corps depth (qing_upperstudy_count) + the schooling progress (qing_upperstudy_schooling),
+# and FOUR action levers:
+#   • CHOOSE A MASTER (擇師) — take the ablest waiting exam-pool 天子門生 into the school,
+#   • RECRUIT A RENOWNED MASTER — mint a fresh scholar-soldier straight into the corps,
+#   • INTENSIVE SCHOOLING (勤學不輟) — drill the reigning crown prince (finesse/martial + harmony),
+#   • ELEVATE THE GRAND TUTOR (擢用) — promote the head master into the first vacant great office.
+#
+# Scoped to the Qing player (ROOT = CHI). AI never evaluates these (ai_is_valid = no).
+# Opened by qing_upperstudy_open_panel_button (a button in government_view.gui).
+# Window: gui/qing_upper_study.gui. Prefix = qing_upperstudy_. se_LOG sys = QING.
+########################################################################
+
+# ---- OPEN THE UPPER STUDY PANEL (button in the government view) -------------
+qing_upperstudy_open_panel_button = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		# recompute so the roster + chief are fresh the moment the panel opens.
+		QING_upperstudy_recompute_roster = yes
+		LOG_line = { sys = QING  msg = "EVENT qing_upperstudy_open_panel_button fired; opening the Upper Study panel for" }
+	}
+}
+
+# ---- GRAND TUTOR (總師傅) HOLDER INDICATOR — the GUI reveals his card when present ----
+qing_upperstudy_has_chief = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_upperstudy_chief
+		var:qing_upperstudy_chief = { is_alive = yes  employer = ROOT }
+	}
+}
+
+# ---- NO-CHIEF indicator (the GUI shows an "empty school" note) --------------
+qing_upperstudy_no_chief = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		NOR = {
+			AND = {
+				has_variable = qing_upperstudy_chief
+				var:qing_upperstudy_chief = { is_alive = yes  employer = ROOT }
+			}
+		}
+	}
+}
+
+# ---- CROWN-PRINCE indicator — the GUI reveals the schooling-target card when a
+# visible 皇太子 is in place (a sealed 密建 secret succession hides the heir). ------
+qing_upperstudy_has_crownprince = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_office_crownprince_holder
+		var:qing_office_crownprince_holder = { is_alive = yes  employer = ROOT }
+	}
+}
+
+# ---- NO-VISIBLE-CROWN-PRINCE indicator (the GUI shows a "heir hidden" note — a sealed
+# 密建 secret succession, or no designated heir at all). The proven inverse idiom
+# (mirrors qing_upperstudy_no_chief), NOT an IsFalse() wrap. --------------------------
+qing_upperstudy_no_crownprince = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		NOR = {
+			AND = {
+				has_variable = qing_office_crownprince_holder
+				var:qing_office_crownprince_holder = { is_alive = yes  employer = ROOT }
+			}
+		}
+	}
+}
+
+# ---- CHOOSE A MASTER (擇師) — take the ablest waiting exam-pool scholar into the
+# school. Gated on a corps below cap (6) AND an eligible pool scholar (mirrors the effect
+# guard, so the lever is dead when there is no one to draw / the corps is full). --------
+qing_upperstudy_choose = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		var:qing_upperstudy_count < 6
+		has_variable_list = qing_scholar_pool
+		any_in_list = {
+			variable = qing_scholar_pool
+			is_alive = yes
+			employer = ROOT
+			NOT = { has_variable = qing_office_held }
+			NOT = { has_variable = qing_is_upperstudy }
+		}
+	}
+	effect = {
+		QING_upperstudy_draw_tutor = yes
+	}
+}
+
+# ---- RECRUIT A RENOWNED MASTER — mint a fresh scholar-soldier into the corps. Gated
+# only on the corps cap (the master is minted, not drawn from a pool). ------------------
+qing_upperstudy_wildcard = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		var:qing_upperstudy_count < 6
+	}
+	effect = {
+		QING_upperstudy_recruit_wildcard = yes
+	}
+}
+
+# ---- INTENSIVE SCHOOLING (勤學不輟) — drill the reigning crown prince. Gated on a
+# corps of real teaching strength AND a VISIBLE crown prince AND no cooldown (mirrors
+# the effect guard — no dead click when the heir is hidden / the school is too weak). ---
+qing_upperstudy_intensive = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		var:qing_upperstudy_quality >= 24
+		has_variable = qing_office_crownprince_holder
+		var:qing_office_crownprince_holder = { is_alive = yes  employer = ROOT }
+		NOT = { has_variable = qing_upperstudy_schooling_cooldown }
+	}
+	effect = {
+		QING_upperstudy_intensive_schooling = yes
+	}
+}
+
+# ---- ELEVATE THE GRAND TUTOR (擢用) — promote the head master into the first vacant
+# great office. Gated on a present chief AND a genuinely vacant office (mirrors the
+# effect's qing_council_vacancy gate — the #358 dead-affordance). ----------------------
+qing_upperstudy_elevate = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		has_variable = qing_upperstudy_chief
+		var:qing_upperstudy_chief = { is_alive = yes  employer = ROOT  NOT = { has_variable = qing_office_held } }
+		has_variable = qing_council_vacancy
+		var:qing_council_vacancy > 0
+	}
+	effect = {
+		QING_upperstudy_promote_chief = yes
+	}
+}
+
+# ---- CLOSE (button in the panel window) ------------------------------------
+qing_upperstudy_close_panel = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_valid = { always = yes }
+	effect = { }
+}

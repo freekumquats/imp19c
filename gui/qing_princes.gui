@@ -1,0 +1,313 @@
+########################################################################
+# qing_princes.gui — the Court Intrigue + Succession panel window (#368).
+#
+# A Grand-Council-clone dashboard for the succession contest (宮闈鬥爭 / 立儲之爭). The contest is
+# the emperor's charge, not a council office — so it folds into the Grand Council transitively via
+# the shared qing_dynastic_harmony meter (like the Harem #360 / Upper Study #337). Surfaces the
+# reigning emperor's ADULT PRINCES (qing_princes) as a scrolling CHARACTER roster, each with his
+# court backing (qing_prince_backing), the sealed/unsealed banner, and the four action levers
+# (培植 favour, 秘密立儲 seal, 查辦 investigate, 廢儲 reopen) each firing a proven se_QING_PRINCES effect.
+#
+# Opened by qing_princes_open_panel_button (QING_princes_panel.txt), wired to a button in
+# gui/government_view.gui. Mirrors gui/qing_harem.gui (the character-roster panel pattern).
+#
+# TAB indentation throughout (Paradox house style for .gui files).
+########################################################################
+
+base_window = {
+	name = "qing_princes_panel"
+	size = { 520 700 }
+	allow_outside = yes
+	movable = yes
+
+	using = main_window_template
+
+	state = {
+		name = _show
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+	state = {
+		name = _hide
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+
+	flowcontainer = {
+		direction = vertical
+
+		# HEADER
+		widget = {
+			size = { 520 48 }
+			using = MainWindowHeaderBox
+			blockoverride "Title_text" { text = "QING_PRINCES_PANEL_TITLE" }
+			blockoverride "FlagOrIcon" {
+				icon = {
+					texture = "gfx/interface/base_parts/yellow_button_color_200fs.dds"
+					framesize = { 100 100 }
+					frame = 6
+					position = { -2 -2 }
+					size = { 32 32 }
+					modify_texture = {
+						texture = "gfx/interface/icons/menu_buttons/menu_trade.dds"
+						blend_mode = alphamultiply
+					}
+				}
+			}
+			blockoverride "White_buttons" {
+				button_close = {
+					onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_princes_panel')]"
+					tooltip = "CLOSE"
+					shortcut = "close_window"
+				}
+			}
+		}
+
+		# BODY
+		margin_widget = {
+			size = { 520 640 }
+			margin = { 10 10 }
+
+			scrollarea = {
+				size = { 500 620 }
+				scrollbarpolicy_horizontal = always_off
+				scrollbar_vertical = { using = VerticalScrollBar }
+				using = VerticalScrollAreaCutOff
+				scrollwidget = {
+					flowcontainer = {
+						direction = vertical
+						spacing = 12
+
+						# DESCRIPTION (wraps)
+						textbox = {
+							size = { 480 110 }
+							multiline = yes
+							using = BaseFontM
+							using = Default_FontColor
+							text = "QING_PRINCES_PANEL_DESC"
+						}
+
+						# --- SUCCESSION STANDING SECTION --------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_PRINCES_STANDING_TITLE"
+							}
+
+							# number of contending princes (qing_prince_count)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 300 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_PRINCES_COUNT_LABEL"
+									tooltip = "QING_PRINCES_COUNT_TT"
+								}
+								textbox = {
+									size = { 60 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_prince_count').GetValue|0]"
+								}
+							}
+
+							# the succession contest folds into dynastic harmony (the council fold)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 300 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_PRINCES_HARMONY_LABEL"
+									tooltip = "QING_PRINCES_HARMONY_TT"
+								}
+								textbox = {
+									size = { 40 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_dynastic_harmony').GetValue|0]"
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 160 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_dynastic_harmony').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
+							}
+
+							# sealed banner (秘密立儲) — shown only when the succession is sealed
+							textbox = {
+								visible = "[GetScriptedGui('qing_princes_is_sealed').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								size = { 460 40 }
+								multiline = yes
+								using = BaseFontS
+								using = Default_FontColor
+								text = "QING_PRINCES_SEALED_BANNER"
+							}
+						}
+
+						# --- ACTION LEVERS ----------------------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_PRINCES_ADMIN_TITLE"
+							}
+
+							# favour a prince (培植)
+							text_button_square_highlighted = {
+								size = { 340 28 }
+								datacontext = "[GetScriptedGui('qing_princes_favour')]"
+								blockoverride "Center_text" { text = "QING_PRINCES_FAVOUR_BTN"  max_width = 320 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_PRINCES_FAVOUR_TT"
+							}
+							# secretly designate the heir (秘密立儲)
+							text_button_square_highlighted = {
+								size = { 340 28 }
+								datacontext = "[GetScriptedGui('qing_princes_seal_succession')]"
+								blockoverride "Center_text" { text = "QING_PRINCES_SEAL_BTN"  max_width = 320 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_PRINCES_SEAL_TT"
+							}
+							# investigate an over-mighty prince (查辦)
+							text_button_square_highlighted = {
+								size = { 340 28 }
+								datacontext = "[GetScriptedGui('qing_princes_investigate')]"
+								blockoverride "Center_text" { text = "QING_PRINCES_INVESTIGATE_BTN"  max_width = 320 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_PRINCES_INVESTIGATE_TT"
+							}
+							# reopen the succession (廢儲)
+							text_button_square_highlighted = {
+								size = { 340 28 }
+								datacontext = "[GetScriptedGui('qing_princes_reopen')]"
+								blockoverride "Center_text" { text = "QING_PRINCES_REOPEN_BTN"  max_width = 320 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_PRINCES_REOPEN_TT"
+							}
+						}
+
+						# --- PRINCE ROSTER ----------------------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_PRINCES_ROSTER_TITLE"
+							}
+
+							# empty note when no adult princes contend
+							textbox = {
+								visible = "[IsDataModelEmpty( Player.MakeScope.GetList('qing_princes') )]"
+								size = { 460 46 }
+								multiline = yes
+								using = BaseFontS
+								using = Default_FontColor
+								text = "QING_PRINCES_ROSTER_EMPTY"
+							}
+
+							# the roster (dynamicgridbox over the prince list — Scope.GetCharacter)
+							dynamicgridbox = {
+								datamodel = "[Player.MakeScope.GetList('qing_princes')]"
+								datamodel_wrap = 1
+								item = {
+									widget = {
+										size = { 468 84 }
+										margin = { 2 3 }
+										datacontext = "[Scope.GetCharacter]"
+										using = background_widget
+										flowcontainer = {
+											spacing = 8
+											margin = { 8 6 }
+											cpt_button = { size = { 46 68 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												tag = { text = "[Character.GetName]"  maximumsize = { 300 24 }  using = BaseFontM  using = Default_FontColor }
+												flowcontainer = {
+													spacing = 10
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_martial }
+														blockoverride "Text" { text = "[Character.GetMartial]" }
+														tooltip = "[Character.GetMartialToolTip]"
+													}
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_civic }
+														blockoverride "Text" { text = "[Character.GetFinesse]" }
+														tooltip = "[Character.GetFinesseToolTip]"
+													}
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_oratory }
+														blockoverride "Text" { text = "[Character.GetCharisma]" }
+														tooltip = "[Character.GetCharismaToolTip]"
+													}
+												}
+												# court backing (qing_prince_backing) read from the character's own scope
+												flowcontainer = {
+													spacing = 8
+													textbox = {
+														size = { 120 20 }
+														using = BaseFontS
+														using = Default_FontColor
+														text = "QING_PRINCES_BACKING_LABEL"
+														tooltip = "QING_PRINCES_BACKING_TT"
+													}
+													textbox = {
+														size = { 44 20 }
+														using = BaseFontS
+														using = Default_FontColor
+														text = "[Character.MakeScope.GetVariable('qing_prince_backing').GetValue|0]"
+													}
+													progressbar = {
+														using = progressbar_flat_green
+														size = { 140 12 }
+														value = "[FixedPointToFloat( Multiply_CFixedPoint( Character.MakeScope.GetVariable('qing_prince_backing').GetValue, '(CFixedPoint)0.01' ) )]"
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

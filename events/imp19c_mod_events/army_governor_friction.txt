@@ -1,0 +1,84 @@
+########################################################################
+# army_governor_friction.txt — [#347] STANDING-ARMY ↔ GOVERNOR FRICTION.
+#
+# A large field host quartered on a province quarrels with that province's
+# governor over billeting, foraging and requisition — the classic army-on-
+# civilian-administration friction. Queued by ARMY_apply_garrison_effects
+# (army_effects_on_actions.txt) when a large host (army_size >= 12) under a
+# disaffected / ill-disciplined commander (loyalty < 40 OR martial < 6) sits on a
+# governed province whose governor is someone other than the commander.
+#
+# Fires in the OWNING COUNTRY scope with:
+#   scope:arm_commander — the host's commander (a character)
+#   scope:arm_governor  — the province's governor (a character)
+#   scope:arm_province  — the garrisoned province
+# GENERIC: any country whose army meets the gate; the Qing-frontier overlay (#346)
+# adds its own Lifan-Yuan turf-war beat separately.
+#
+# Namespace: army_governor_friction. country_event, is_triggered_only = yes.
+# se_LOG sys = ARMY, STATIC msgs only.
+########################################################################
+
+namespace = army_governor_friction
+
+# ======================================================================
+# army_governor_friction.1 — the billeting dispute. The ruler chooses whether to
+# back the general (discipline strained, the governor resents it) or the governor
+# (the host is reined in, its commander grumbles). Either way SOMEONE's loyalty
+# takes the strain — the point is that an idle host on civil ground is a liability
+# the state must manage.
+# ======================================================================
+army_governor_friction.1 = {
+	type = country_event
+	title = "army_governor_friction.1.t"
+	desc = "army_governor_friction.1.desc"
+	picture = romans_marching   # a soldiery-on-the-move scene (vanilla event picture)
+	left_portrait = scope:arm_commander
+	right_portrait = scope:arm_governor
+	is_triggered_only = yes
+
+	trigger = {
+		exists = scope:arm_commander
+		exists = scope:arm_governor
+		exists = scope:arm_province
+	}
+
+	immediate = {
+		LOG_line = { sys = ARMY  msg = "EVENT army_governor_friction.1 (billeting dispute) firing" }
+	}
+
+	# OPTION A: back the general — the host stays, the governor bears the burden.
+	# Discipline holds (commander loyalty up) but the governor's province suffers
+	# (governor loyalty down, a lingering resentment on the province).
+	option = {
+		name = "army_governor_friction.1.a"
+		scope:arm_commander = { add_loyalty = loyalty_qing_delta_p5 }
+		scope:arm_governor = { add_loyalty = loyalty_qing_delta_n8 }
+		scope:arm_province = {
+			if = {
+				limit = { NOT = { has_province_modifier = army_garrison_billeting_strain } }
+				add_province_modifier = { name = army_garrison_billeting_strain  duration = 365 }
+			}
+		}
+		LOG_line = { sys = ARMY  msg = "billeting friction resolved: ruler backed the general" }
+	}
+
+	# OPTION B: back the governor — the host is reined in and made to pay its way.
+	# The province is spared (governor loyalty up) but the commander chafes at the
+	# curb (commander loyalty down).
+	option = {
+		name = "army_governor_friction.1.b"
+		scope:arm_governor = { add_loyalty = loyalty_qing_delta_p5 }
+		scope:arm_commander = { add_loyalty = loyalty_qing_delta_n8 }
+		LOG_line = { sys = ARMY  msg = "billeting friction resolved: ruler backed the governor" }
+	}
+
+	# OPTION C: split the difference — a billeting compact. Neither is satisfied
+	# (both lose a little loyalty) but no province scar; the cheap middle road.
+	option = {
+		name = "army_governor_friction.1.c"
+		scope:arm_commander = { add_loyalty = loyalty_qing_delta_n2 }
+		scope:arm_governor = { add_loyalty = loyalty_qing_delta_n2 }
+		LOG_line = { sys = ARMY  msg = "billeting friction resolved: a billeting compact split the difference" }
+	}
+}

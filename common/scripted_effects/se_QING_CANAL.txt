@@ -71,12 +71,57 @@ QING_canal_init = {
 QING_canal_update_condition = {
 	# derive the target from the works in place + the neglect factors.
 	set_variable = { name = qing_canal_cond_target  value = 40 }   # a bare, unmaintained baseline
-	# each depot/dike province lifts the target (bounded add via presence checks — cheap,
-	# no full province sweep; the depots are few and high-value).
-	if = { limit = { any_owned_province = { has_building = qing_canal_depot_building } }  change_variable = { name = qing_canal_cond_target  add = 25 } }
-	if = { limit = { any_owned_province = { has_building = qing_dike_building } }         change_variable = { name = qing_canal_cond_target  add = 20 } }
-	# a staffed Works office keeps the 河工 works in hand; a vacancy lets them slide.
-	if = { limit = { has_variable = qing_office_works_holder }  change_variable = { name = qing_canal_cond_target  add = 15 } }
+	# [#335] CONCRETE BUILDING COUNTS drive the target, not binary presence. The per-type tallies
+	# qing_depot_count (漕運倉) and qing_dike_count (河堤) are computed each gov pulse by
+	# QING_ministry_recompute_perf_works's owned-province sweep (which runs BEFORE this canal tick
+	# in the same pulse, so they are fresh). Each depot lifts the canal target +8 (cap +24 at 3),
+	# each dike +6 (cap +18 at 3) — so raising a SECOND/THIRD depot has a real, diminishing payoff
+	# rather than the old flat +25 for merely owning one. Guarded on the tally existing (the sweep
+	# always sets it, but belt-and-suspenders for an out-of-order call).
+	if = {
+		limit = { has_variable = qing_depot_count  var:qing_depot_count > 0 }
+		set_variable = { name = qing_canal_cond_scratch  value = var:qing_depot_count }
+		change_variable = { name = qing_canal_cond_scratch  multiply = 8 }
+		if = { limit = { var:qing_canal_cond_scratch > 24 } set_variable = { name = qing_canal_cond_scratch  value = 24 } }
+		change_variable = { name = qing_canal_cond_target  add = var:qing_canal_cond_scratch }
+		remove_variable = qing_canal_cond_scratch
+	}
+	if = {
+		limit = { has_variable = qing_dike_count  var:qing_dike_count > 0 }
+		set_variable = { name = qing_canal_cond_scratch  value = var:qing_dike_count }
+		change_variable = { name = qing_canal_cond_scratch  multiply = 6 }
+		if = { limit = { var:qing_canal_cond_scratch > 18 } set_variable = { name = qing_canal_cond_scratch  value = 18 } }
+		change_variable = { name = qing_canal_cond_target  add = var:qing_canal_cond_scratch }
+		remove_variable = qing_canal_cond_scratch
+	}
+	# [#335] a staffed Works office keeps the 河工 works in hand, and a CAPABLE minister keeps them
+	# in BETTER hand: +10 for a filled office, plus the minister's finesse deviation from 7 (±,
+	# ~±5) so a master hydraulic administrator (a 靳輔/高斌 figure) shores the canal further and a
+	# dolt lets it slide. A VACANT office is a real drag (−12), not merely a missing bonus — the
+	# 河道總督 seat empty means no one drives the dredging and the silt wins (deepens the old
+	# "missing +15").
+	if = {
+		limit = {
+			has_variable = qing_office_works_holder
+			var:qing_office_works_holder = { is_alive = yes  employer = ROOT }
+		}
+		change_variable = { name = qing_canal_cond_target  add = 10 }
+		# [review-fix] read the minister's finesse via the PROVEN save_scope_as -> scope:X.attr idiom
+		# (every sibling ministry compute uses it, e.g. se_QING_MINISTRY.txt:176-178). The old
+		# `set_variable value = var:qing_office_works_holder.finesse` chained an attribute off a
+		# var-held scope in an effect-context VALUE field — an idiom with no precedent in the mod or
+		# in Invictus/TI; if the effect parser fails to resolve it the scratch reads 0 and the
+		# capable-minister bonus (this feature's centrepiece) silently vanishes.
+		var:qing_office_works_holder = { save_scope_as = qing_canal_works_min }
+		set_variable = { name = qing_canal_cond_scratch  value = 0 }
+		change_variable = { name = qing_canal_cond_scratch  add = scope:qing_canal_works_min.finesse }
+		change_variable = { name = qing_canal_cond_scratch  subtract = 7 }
+		change_variable = { name = qing_canal_cond_target  add = var:qing_canal_cond_scratch }
+		remove_variable = qing_canal_cond_scratch
+	}
+	else = {
+		change_variable = { name = qing_canal_cond_target  subtract = 12 }
+	}
 	# corruption siphons the hydraulic budget (the endemic 河工 graft).
 	if = { limit = { has_variable = qing_corruption_level }  set_variable = { name = qing_canal_cond_drag  value = var:qing_corruption_level }  change_variable = { name = qing_canal_cond_drag  divide = 4 }  change_variable = { name = qing_canal_cond_target  subtract = var:qing_canal_cond_drag } }
 	# clamp the target 0..100.
@@ -106,8 +151,39 @@ QING_canal_run_grain_balance = {
 	# +4, a failed one (cond 20) only +1. This is the grain that actually reaches the granaries.
 	set_variable = { name = qing_grain_delivery  value = var:qing_canal_condition }
 	change_variable = { name = qing_grain_delivery  divide = 20 }
+	# [#323 deferred] JIANGNAN GRAIN-QUOTA LAYER (concrete geography). The grain-tribute was
+	# raised almost entirely from the Lower Yangtze — the 江南 heartland (Jiangsu / Zhejiang /
+	# Anhui). Scale the delivery by how much of that heartland the Qing actually HOLD and farm:
+	# a throne that has lost the grain provinces (to rebellion, cession, a Taiping) cannot ship
+	# what it no longer grows. This makes the abstract band answer to the live map, per the
+	# concrete-over-abstract rule. QING_canal_jiangnan_quota sets a 0.5..1.0 factor.
+	QING_canal_compute_jiangnan_quota = yes
+	change_variable = { name = qing_grain_delivery  multiply = var:qing_canal_jiangnan_quota }
+	# [#323 deferred] SEA-ROUTE (海運) SUPPLEMENT. If the throne has opened the coastal grain
+	# route (Daoguang's 1826 expedient, unlocked via qing_canal.2), a portion of the tribute
+	# ships by sea and PARTLY bypasses the silted canal — a flat +1 delivery floor that does
+	# not depend on canal condition. Historically the sea route proved the canal was not
+	# indispensable, but the entrenched canal interest (boatmen, officials) resisted it.
+	if = {
+		limit = { has_variable = qing_sea_route_open }
+		change_variable = { name = qing_grain_delivery  add = 1 }
+	}
 	# consumption: the capital + banner garrisons + frontier armies draw a steady ~4/quarter.
 	set_variable = { name = qing_grain_draw  value = 4 }
+	# [#335] CONCRETE GRANARY BUFFER (常平倉/糧倉): the ever-normal granaries stored grain locally
+	# against the lean quarter, so a realm that has raised them draws LESS on the canal-borne
+	# tribute (the stored stock covers part of the consumption). Each qing_granary_building shaves
+	# the draw by 1, to a floor of 2 (two granaries fully halve the shortfall pressure; the capital
+	# still consumes). qing_granary_count is tallied by the works sweep earlier this pulse. This
+	# makes the granary — currently spawned by the decline engine but read by NOTHING in the grain
+	# balance — a concrete lever on the reserve, per the concrete-over-abstract rule.
+	if = {
+		limit = { has_variable = qing_granary_count  var:qing_granary_count > 0 }
+		set_variable = { name = qing_grain_draw_relief  value = var:qing_granary_count }
+		if = { limit = { var:qing_grain_draw_relief > 2 } set_variable = { name = qing_grain_draw_relief  value = 2 } }
+		change_variable = { name = qing_grain_draw  subtract = var:qing_grain_draw_relief }
+		remove_variable = qing_grain_draw_relief
+	}
 	# net onto the reserve.
 	change_variable = { name = qing_grain_reserve  add = var:qing_grain_delivery }
 	change_variable = { name = qing_grain_reserve  subtract = var:qing_grain_draw }
@@ -117,6 +193,40 @@ QING_canal_run_grain_balance = {
 	remove_variable = qing_grain_delivery
 	remove_variable = qing_grain_draw
 	LOG_line = { sys = QING  msg = "canal: grain balance run (reserve now) for" }
+}
+
+# ======================================================================
+# [#323 deferred] QING_canal_compute_jiangnan_quota — Scope: COUNTRY (CHI). Derive the
+# Jiangnan grain-quota factor (0.5..1.0) from how much of the Lower Yangtze grain heartland
+# the Qing still hold. Full holding of the 江南 regions = the full historical quota (1.0);
+# losing them (to rebellion, the Taiping, cession) cuts the deliverable grain toward a 0.5
+# floor (the north was never wholly dependent — some grain came from Huguang/Sichuan). Reads
+# the LIVE map via any_owned_province region membership (the proven geography idiom, cf.
+# se_QING_WORKS has_building sweeps). Stored in qing_canal_jiangnan_quota for the balance.
+# ======================================================================
+QING_canal_compute_jiangnan_quota = {
+	# start at the 0.5 floor, then add for each held slice of the grain heartland.
+	set_variable = { name = qing_canal_jiangnan_quota  value = 0.5 }
+	# Jiangsu (the Suzhou/Songjiang core — the densest grain tribute). is_in_region is the
+	# PROVEN province-scope region test (00_tradezone_triggers.txt:388), keyed by the
+	# capitalized region name from map_data/regions.txt.
+	if = {
+		limit = { any_owned_province = { is_in_region = Jiangsu } }
+		change_variable = { name = qing_canal_jiangnan_quota  add = 0.25 }
+	}
+	# Zhejiang (Hangzhou — the second pillar of the tribute).
+	if = {
+		limit = { any_owned_province = { is_in_region = Zhejiang } }
+		change_variable = { name = qing_canal_jiangnan_quota  add = 0.15 }
+	}
+	# Anhui (the up-river supplement).
+	if = {
+		limit = { any_owned_province = { is_in_region = Anhui } }
+		change_variable = { name = qing_canal_jiangnan_quota  add = 0.10 }
+	}
+	# clamp to the 0.5..1.0 band (belt-and-suspenders; the adds sum to exactly 1.0).
+	if = { limit = { var:qing_canal_jiangnan_quota > 1.0 } set_variable = { name = qing_canal_jiangnan_quota  value = 1.0 } }
+	if = { limit = { var:qing_canal_jiangnan_quota < 0.5 } set_variable = { name = qing_canal_jiangnan_quota  value = 0.5 } }
 }
 
 # ======================================================================
@@ -159,6 +269,24 @@ QING_canal_quarterly_tick = {
 			set_variable = { name = qing_canal_famine_cooldown  days = 1095 }
 			trigger_event = { id = qing_canal.1  days = { 5 20 } }
 			LOG_line = { sys = QING  msg = "canal: granaries CRITICAL -> famine-response dilemma queued for" }
+		}
+		# [#323 deferred] SEA-ROUTE OPPORTUNITY: when the canal has silted badly (condition
+		# low) and the reform-minded press for a remedy, offer the coastal-shipping expedient
+		# (海運, qing_canal.2). Player-only, self-gated so it cannot fire once the route is
+		# already open, and throttled on its own ~4y cooldown. Gated OUT of the High Qing era
+		# (the canal is sound then, so this simply cannot arise before the decline sets in).
+		if = {
+			limit = {
+				var:qing_canal_condition < 45
+				var:qing_reform_pressure >= 25
+				is_ai = no
+				NOT = { has_variable = qing_sea_route_open }
+				NOT = { has_variable = qing_sea_route_cooldown }
+				NOT = { has_variable = qing_high_qing_era }
+			}
+			set_variable = { name = qing_sea_route_cooldown  days = 1460 }
+			trigger_event = { id = qing_canal.2  days = { 5 20 } }
+			LOG_line = { sys = QING  msg = "canal: silted badly -> coastal grain-route (海運) opportunity queued for" }
 		}
 		LOG_exit = { sys = QING  fn = "QING_canal_quarterly_tick"  result = OK }
 	}

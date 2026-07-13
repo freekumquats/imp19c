@@ -1,0 +1,1391 @@
+########################################################################
+# se_QING_MINISTRY.txt — [#349+] the MINISTRY-PERFORMANCE backbone.
+#
+# The Grand Council IS the set of filled great offices (se_QING_COUNCIL.txt). This
+# file makes each office a working BUREAUCRACY: it computes a per-ministry 0..100
+# performance meter qing_min_perf_<office> (50 = adequate) from that ministry's own
+# concrete sub-state (the officer corps + garrisons for War, the Amban roster for the
+# Lifan Yuan, the special buildings for Works, ...). Those meters are then FOLDED into
+# the council's effectiveness target by QING_council_fold_ministry_perf (se_QING_COUNCIL.txt),
+# so a well-run ministry raises its Minister's standing on the Grand Council and a
+# poorly-run one drags it down — the leader answers for how his ministry is run.
+#
+# CADENCE: QING_ministry_recompute_all_perf is called at the TOP of QING_GOV_pulse
+# (se_QING_GOVERNANCE.txt), before QING_council_recompute, so the fold reads fresh
+# values. Each ministry adds ONE compute effect + its call here. All O(offices/roster)
+# counter maths; no unbounded pop/province sweeps.
+#
+# Scope: COUNTRY (ROOT = CHI) throughout. se_LOG sys = QING. Prefix = QING_ministry_.
+########################################################################
+
+# ======================================================================
+# DISPATCHER — recompute every ministry-performance meter. Each ministry-panel
+# feature appends its own QING_ministry_recompute_perf_<office> call below. Gated
+# to CHI (the meters only matter for the Qing player's Grand Council).
+# ======================================================================
+QING_ministry_recompute_all_perf = {
+	if = {
+		limit = { tag = CHI }
+		QING_ministry_recompute_perf_war = yes
+		QING_ministry_recompute_perf_lifanyuan = yes
+		QING_ministry_recompute_perf_zongli = yes
+		QING_ministry_recompute_perf_works = yes
+		QING_ministry_recompute_perf_rites = yes
+		QING_ministry_recompute_perf_revenue = yes
+		QING_ministry_recompute_perf_grand_secretariat = yes
+		QING_ministry_recompute_perf_chamberlain = yes
+		QING_ministry_recompute_perf_censor = yes
+		QING_ministry_recompute_perf_justice = yes
+		QING_ministry_recompute_perf_guard_commandant = yes
+		QING_ministry_recompute_perf_personnel = yes
+		# (Central Secretariat #361 reuses the grand_secretariat compute already
+		#  registered here for the Hanlin Academy #358.)
+	}
+}
+
+# ======================================================================
+# [#349] WAR MINISTRY (兵部) PERFORMANCE — qing_min_perf_war (0..100, 50 = adequate).
+# The Board of War answered for the standing army: the officer corps and the
+# garrisons that hold the realm. We build the meter from concrete state the mod
+# already tracks:
+#   • the Minister of War's own martial competence (the Board president 兵部尚書, x4),
+#   • OFFICER-CORPS COVERAGE — the SIZE of the officer corps vs a healthy establishment
+#     (a shrunken corps = posts unfilled = a weaker army). Deliberately NOT the corps'
+#     average martial — that is already folded into council effectiveness directly
+#     (se_QING_COUNCIL.txt ~404-408), so re-using it here would double-count.
+# A VACANT War office floors the meter low (no one runs the Board). All reads guarded.
+# ======================================================================
+QING_ministry_recompute_perf_war = {
+	# --- rebuild the OFFICER-CORPS ROSTER list (the concrete on-map commanders the War
+	# panel #349 renders). Every serving unit-commander in CHI's employ, deduped by the
+	# is_target_in_variable_list guard (a general can lead several sub-units). This is the
+	# datamodel the panel's dynamicgridbox iterates. Bounded O(units).
+	# [#410] ALSO build the FOUR grouped rosters the panel renders + tally garrison vacancy:
+	#   • qing_war_roster_inland    — army commander parked on a HISTORICAL GARRISON province
+	#                                 (qing_hist_garrison_prov) that CHI OWNS (Inland Commandant 提督/將軍).
+	#   • qing_war_roster_frontier  — army commander on a historical garrison province owned by a CHI
+	#                                 autonomous_governorship SUBJECT (Frontier Commandant 駐防將軍).
+	#   • qing_war_roster_admiral   — commander of a NAVY (水師提督).
+	#   • qing_war_roster_marshal   — army commander NOT on a historical garrison seat (a player-raised
+	#                                 field host: levy or legion — 大將軍/經略).
+	# Classification signal (user-chosen): the province the host is parked on. A historical garrison
+	# seat is stamped qing_hist_garrison_prov at OOB raise (imp19c_effects_legion_setup.txt); Inland vs
+	# Frontier is then the province OWNER (CHI vs a CHI subject). All four lists feed the panel; the
+	# roster/count above stays the flat superset used by the coverage term.
+	clear_variable_list = qing_war_officer_roster
+	clear_variable_list = qing_war_roster_inland
+	clear_variable_list = qing_war_roster_frontier
+	clear_variable_list = qing_war_roster_admiral
+	clear_variable_list = qing_war_roster_marshal
+	set_variable = { name = qing_war_roster_count  value = 0 }
+	# --- garrison-vacancy tally (feeds the perf penalty below): count HISTORICAL GARRISON armies
+	# that stand commanderless vs the total garrison establishment. A garrison army = an army parked
+	# on a qing_hist_garrison_prov seat. Bounded O(armies).
+	set_variable = { name = qing_war_garrison_total   value = 0 }
+	set_variable = { name = qing_war_garrison_vacant  value = 0 }
+	every_army = {
+		limit = {
+			exists = unit_location
+			unit_location = { has_variable = qing_hist_garrison_prov }
+		}
+		ROOT = { change_variable = { name = qing_war_garrison_total  add = 1 } }
+		if = {
+			# scope here IS the iterated army; a bare trigger reads it (PREV would wrongly
+			# resolve to the enclosing country scope).
+			limit = { NOT = { has_commander = yes } }
+			ROOT = { change_variable = { name = qing_war_garrison_vacant  add = 1 } }
+		}
+	}
+	every_unit = {
+		limit = { has_commander = yes  commander = { is_alive = yes  employer = ROOT } }
+		commander = {
+			ROOT = {
+				if = {
+					limit = { NOT = { is_target_in_variable_list = { name = qing_war_officer_roster  target = prev } } }
+					add_to_variable_list = { name = qing_war_officer_roster  target = prev }
+					change_variable = { name = qing_war_roster_count  add = 1 }
+				}
+			}
+		}
+	}
+	# --- classify each SERVING commander into exactly one of the four groups by iterating the UNITS
+	# directly (the natural country-scope iterators every_navy / every_army — NOT any_army from a
+	# character scope, which is invalid). Each commander is added once per list via the
+	# is_target_in_variable_list dedup guard (a general leading several sub-units appears once).
+	#   ADMIRAL   = commands a navy (every_navy).
+	#   INLAND    = commands an army parked on a historical garrison seat CHI owns.
+	#   FRONTIER  = commands an army on a historical garrison seat a CHI subject owns.
+	#   MARSHAL   = commands an army NOT on a historical seat (a player-raised field host).
+	every_navy = {
+		limit = { has_commander = yes  commander = { is_alive = yes  employer = ROOT } }
+		commander = {
+			ROOT = {
+				if = {
+					limit = { NOT = { is_target_in_variable_list = { name = qing_war_roster_admiral  target = prev } } }
+					add_to_variable_list = { name = qing_war_roster_admiral  target = prev }
+				}
+			}
+		}
+	}
+	every_army = {
+		limit = { has_commander = yes  commander = { is_alive = yes  employer = ROOT } }
+		# INLAND: on a historical garrison seat CHI owns.
+		if = {
+			limit = {
+				exists = unit_location
+				unit_location = { has_variable = qing_hist_garrison_prov  owner = ROOT }
+			}
+			commander = {
+				ROOT = {
+					if = {
+						limit = { NOT = { is_target_in_variable_list = { name = qing_war_roster_inland  target = prev } } }
+						add_to_variable_list = { name = qing_war_roster_inland  target = prev }
+					}
+				}
+			}
+		}
+		# FRONTIER: on a historical garrison seat owned by a CHI autonomous-governorship subject.
+		else_if = {
+			limit = {
+				exists = unit_location
+				unit_location = {
+					has_variable = qing_hist_garrison_prov
+					owner = { is_subject_of = ROOT  is_subject_type = autonomous_governorship }
+				}
+			}
+			commander = {
+				ROOT = {
+					if = {
+						limit = { NOT = { is_target_in_variable_list = { name = qing_war_roster_frontier  target = prev } } }
+						add_to_variable_list = { name = qing_war_roster_frontier  target = prev }
+					}
+				}
+			}
+		}
+		# FIELD MARSHAL: any other army (not parked on a historical seat) — a player-raised host.
+		else = {
+			commander = {
+				ROOT = {
+					if = {
+						limit = { NOT = { is_target_in_variable_list = { name = qing_war_roster_marshal  target = prev } } }
+						add_to_variable_list = { name = qing_war_roster_marshal  target = prev }
+					}
+				}
+			}
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_war  value = 50 }
+	if = {
+		# office FILLED by a live employed minister — score on his martial + the corps.
+		limit = {
+			has_variable = qing_office_war_holder
+			var:qing_office_war_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the minister's martial, deviation from a competent baseline of 7, x4 (the
+		# minister's own competence is the DOMINANT driver of how well the Board is run).
+		set_variable = { name = qing_min_war_scratch  value = 0 }
+		var:qing_office_war_holder = { save_scope_as = qing_war_minister }
+		change_variable = { name = qing_min_war_scratch  add = scope:qing_war_minister.martial }
+		change_variable = { name = qing_min_war_scratch  subtract = 7 }
+		change_variable = { name = qing_min_war_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_war  add = var:qing_min_war_scratch }
+		# (b) OFFICER-CORPS COVERAGE — is the standing army adequately officered? A count
+		# term (deviation from a healthy establishment of ~10 serving commanders), x2. We
+		# use COUNT, NOT average martial: the corps' average MARTIAL is ALREADY folded into
+		# council effectiveness directly (se_QING_COUNCIL.txt ~404-408, the officer-corps
+		# coupling), so re-scoring it here would DOUBLE-COUNT it. Coverage (are the posts
+		# manned at all) is an orthogonal Board-of-War responsibility not folded elsewhere.
+		# Reads qing_war_roster_count — the count WE JUST TALLIED above (fresh this pulse),
+		# NOT the council's qing_officer_corps_count (which is recomputed LATER in the same
+		# pulse, so reading it here would be one pulse stale).
+		if = {
+			limit = { var:qing_war_roster_count > 0 }
+			set_variable = { name = qing_min_war_scratch  value = var:qing_war_roster_count }
+			change_variable = { name = qing_min_war_scratch  subtract = 10 }   # deviation from a healthy establishment
+			change_variable = { name = qing_min_war_scratch  multiply = 2 }
+			change_variable = { name = qing_min_perf_war  add = var:qing_min_war_scratch }
+		}
+		else = {
+			# no serving officer corps at all — a paper ministry; a real penalty.
+			change_variable = { name = qing_min_perf_war  subtract = 10 }
+		}
+		# (c) [#410] GARRISON-VACANCY PENALTY — unmanned banner garrisons are the Board of War's
+		# direct failing. Penalty SCALED BY THE VACANCY SHARE (user-chosen): -15 * vacant/total, so a
+		# fully-officered garrison establishment costs nothing and a wholly-empty one docks -15. Integer
+		# maths: compute (vacant*15)/total, then subtract. Guarded on total>0 (no garrisons = no term).
+		if = {
+			limit = { var:qing_war_garrison_total > 0  var:qing_war_garrison_vacant > 0 }
+			set_variable = { name = qing_min_war_scratch  value = var:qing_war_garrison_vacant }
+			change_variable = { name = qing_min_war_scratch  multiply = 15 }
+			change_variable = { name = qing_min_war_scratch  divide = var:qing_war_garrison_total }
+			change_variable = { name = qing_min_perf_war  subtract = var:qing_min_war_scratch }
+		}
+	}
+	else = {
+		# VACANT Board of War — the army drifts without a head. Floor it low.
+		set_variable = { name = qing_min_perf_war  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_war < 0 }   set_variable = { name = qing_min_perf_war  value = 0 } }
+	if = { limit = { var:qing_min_perf_war > 100 } set_variable = { name = qing_min_perf_war  value = 100 } }
+	LOG_line = { sys = QING  msg = "war-ministry performance recomputed" }
+}
+
+# ======================================================================
+# [#350] LIFAN YUAN (理藩院) PERFORMANCE — qing_min_perf_lifanyuan (0..100, 50 = adequate).
+# The Court of Colonial Affairs administered the Inner-Asian dependencies through its
+# resident Ambans (駐防大臣). We build the meter from concrete state the amban system
+# already tracks:
+#   • the Grand Director's own charisma (the 理藩院尚書 — charisma is its governing skill),
+#   • AMBAN COVERAGE — of the subjects that WARRANT a resident (the autonomous-governorship
+#     Inner-Asian dependencies), how many actually HAVE a live amban posted. A dependency
+#     left without a resident = the Court failing its remit.
+# A VACANT Lifan Yuan office floors the meter low. Also (re)builds the roster list
+# qing_lifanyuan_amban_subjects (the amban-holding subjects the panel #350 renders).
+# All reads guarded; O(subjects).
+# ======================================================================
+QING_ministry_recompute_perf_lifanyuan = {
+	# --- rebuild the amban-holding-subjects roster (panel datamodel) + tally coverage.
+	clear_variable_list = qing_lifanyuan_amban_subjects
+	set_variable = { name = qing_lifan_amban_count  value = 0 }   # subjects WITH a live amban
+	set_variable = { name = qing_lifan_warrant_count  value = 0 } # subjects that WARRANT one
+	# [#334] running sum of the resident amban corps' affinity — the concrete quality of the
+	# real resident characters (qing_char_affinity, se_QING_AFFINITY.txt), not just their count.
+	set_variable = { name = qing_lifan_amban_affinity_sum  value = 0 }
+	every_subject = {
+		# [#334-fix / #392] a subject WARRANTS a resident amban iff it matches the SAME
+		# predicate QING_amban_post_sweep (se_QING_AMBAN.txt) uses to post one — the invariant
+		# is warrant == postable, so the roster shown here is never scored against subjects that
+		# can never receive a resident. #334 first aligned the two by matching on RULER culture
+		# group (mongolic/bodish); #392 extracted that into the shared trigger AND broadened BOTH
+		# sites to also cover autonomous_governorships. The old bare `is_subject_type =
+		# autonomous_governorship`-ONLY filter was a phantom roster (missed Tibet, whose amban is
+		# the archetype); the culture-ONLY filter that replaced it missed ILI/ULS (Manchu-ruled
+		# 將軍 governorates — the canonical resident-general posts). The shared trigger is the UNION.
+		# [#392] SHARED warrant gate — the SAME QING_amban_warrants_resident_trigger the
+		# post-sweep uses, so the roster shown here is exactly the set of subjects that
+		# warrant (and can receive) a resident. Now also counts the autonomous_governorships
+		# ILI/ULS (伊犁/烏里雅蘇台將軍), the canonical resident-general posts the prior
+		# culture-only test missed (their rulers are Manchu banner generals, not Mongol/Tibetan).
+		limit = {
+			QING_amban_warrants_resident_trigger = yes
+		}
+		ROOT = { change_variable = { name = qing_lifan_warrant_count  add = 1 } }
+		if = {
+			limit = {
+				has_variable = qing_amban_here
+				var:qing_amban_here = { is_alive = yes  employer = prev }
+			}
+			ROOT = {
+				change_variable = { name = qing_lifan_amban_count  add = 1 }
+				add_to_variable_list = { name = qing_lifanyuan_amban_subjects  target = prev }
+			}
+			# [#334] accumulate this resident's affinity (guarded — the score is set at post and
+			# re-scored by QING_amban_evaluate; a brand-new amban before its first eval still has
+			# the post-time score). ROOT-scoped add so the sum lives on CHI.
+			if = {
+				limit = { var:qing_amban_here = { has_variable = qing_char_affinity } }
+				var:qing_amban_here = { save_scope_as = qing_lifan_amban_char }
+				ROOT = { change_variable = { name = qing_lifan_amban_affinity_sum  add = scope:qing_lifan_amban_char.var:qing_char_affinity } }
+			}
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_lifanyuan  value = 50 }
+	if = {
+		# office FILLED — score on the Director's charisma + amban coverage.
+		limit = {
+			has_variable = qing_office_lifanyuan_holder
+			var:qing_office_lifanyuan_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the Director's charisma, deviation from a competent baseline of 7, x4.
+		var:qing_office_lifanyuan_holder = { save_scope_as = qing_lifan_director }
+		set_variable = { name = qing_min_lifan_scratch  value = 0 }
+		change_variable = { name = qing_min_lifan_scratch  add = scope:qing_lifan_director.charisma }
+		change_variable = { name = qing_min_lifan_scratch  subtract = 7 }
+		change_variable = { name = qing_min_lifan_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_lifanyuan  add = var:qing_min_lifan_scratch }
+		# (b) AMBAN COVERAGE — fraction of warrant subjects with a resident, scaled to +/-.
+		# coverage% = 100 * amban / warrant; deviation from a target of 100% (full coverage),
+		# divided down so an uncovered dependency is a real but bounded drag.
+		if = {
+			limit = { var:qing_lifan_warrant_count > 0 }
+			set_variable = { name = qing_min_lifan_scratch  value = var:qing_lifan_amban_count }
+			change_variable = { name = qing_min_lifan_scratch  multiply = 100 }
+			change_variable = { name = qing_min_lifan_scratch  divide = var:qing_lifan_warrant_count }  # coverage %
+			change_variable = { name = qing_min_lifan_scratch  subtract = 100 }   # deviation from full coverage (<=0)
+			change_variable = { name = qing_min_lifan_scratch  divide = 4 }        # scale (0..-25)
+			change_variable = { name = qing_min_perf_lifanyuan  add = var:qing_min_lifan_scratch }
+		}
+		# (c) [#367] XINJIANG CONSOLIDATION — the New Dominion (新疆) is the Court of Colonial
+		# Affairs' greatest charge; the 善後 consolidation arc (se_QING_XINJIANG.txt) publishes
+		# a 0..100 frontier-health score (qing_xj_consolidation) from the grip meter + the beg
+		# corps + tuntian colonies + the xiexiang subsidy. Fold its deviation from a neutral 50,
+		# scaled down (/3, so +/-16 at the extremes) — the Director is judged on how well the
+		# far west is held, not only on staffing (term b scores STAFFING; this scores HEALTH,
+		# so they are complementary, not double-counted). Read guarded (one-pulse lag; #367's
+		# own recompute runs in the same pulse, the fold reads last pulse's published score).
+		if = {
+			limit = { has_variable = qing_xj_consolidation }
+			set_variable = { name = qing_min_lifan_scratch  value = var:qing_xj_consolidation }
+			change_variable = { name = qing_min_lifan_scratch  subtract = 50 }   # deviation from neutral (-50..+50)
+			change_variable = { name = qing_min_lifan_scratch  divide = 3 }       # scale (~-16..+16)
+			change_variable = { name = qing_min_perf_lifanyuan  add = var:qing_min_lifan_scratch }
+		}
+		# (d) [#370] CARAVAN PROSPERITY — the Court of Colonial Affairs also governed the Altishahr
+		# caravan trade with the Central Asian khanates (the aqsaqal relations, the Yarkand customs).
+		# The caravan model (se_QING_CARAVAN.txt) publishes a 0..100 商道繁榮 score. Fold its deviation
+		# from a neutral 50, scaled down (/5, so +/-10 at the extremes) — a thriving trade node is a
+		# feather in the Director's cap, a collapsed route a reproach. Smaller weight than the grip
+		# term (c): commerce is the frontier's secondary charge, pacification the primary one, and the
+		# two are complementary, not double-counted (c scores the GRIP, d scores the COMMERCE). Read
+		# guarded (one-pulse lag; #370's own recompute runs in the same pulse, this reads last pulse's).
+		if = {
+			limit = { has_variable = qing_caravan_prosperity }
+			set_variable = { name = qing_min_lifan_scratch  value = var:qing_caravan_prosperity }
+			change_variable = { name = qing_min_lifan_scratch  subtract = 50 }   # deviation from neutral (-50..+50)
+			change_variable = { name = qing_min_lifan_scratch  divide = 5 }       # scale (~-10..+10)
+			change_variable = { name = qing_min_perf_lifanyuan  add = var:qing_min_lifan_scratch }
+		}
+		# (e) [#334] AMBAN CORPS QUALITY — the concrete resident characters, not just their count.
+		# Term (b) scores STAFFING (how many warrant subjects have a resident); this scores the
+		# QUALITY of those residents — the average qing_char_affinity of the amban corps, deviation
+		# from a neutral 50, /5 (~±10). A Director who staffs the marches with loyal, culturally-fit
+		# residents (a Fuk'anggan) runs them better than one whose ambans have gone native or turned
+		# disloyal — so the real characters the Amban system tracks drive his Grand Council standing.
+		# Guarded on there being at least one resident to average (avoid divide-by-zero).
+		if = {
+			limit = { var:qing_lifan_amban_count > 0 }
+			set_variable = { name = qing_min_lifan_scratch  value = var:qing_lifan_amban_affinity_sum }
+			change_variable = { name = qing_min_lifan_scratch  divide = var:qing_lifan_amban_count }  # average affinity
+			change_variable = { name = qing_min_lifan_scratch  subtract = 50 }   # deviation from neutral (-50..+50)
+			change_variable = { name = qing_min_lifan_scratch  divide = 5 }       # scale (~-10..+10)
+			change_variable = { name = qing_min_perf_lifanyuan  add = var:qing_min_lifan_scratch }
+		}
+		# (f) [#334] SUZERAIN PRESTIGE — the health of the whole tributary order (保藩威望,
+		# qing_suzerain_prestige, se_QING_VASSAL.txt). The Court of Colonial Affairs was the organ
+		# of the 藩屬 relationships (Mongolia, Tibet, the Central-Asian khanates, and — with the
+		# Board of Rites — the outer tributaries); a crumbling tributary order is a Lifan Yuan
+		# failure as much as a Rites one. Fold its deviation from a neutral 50, /5 (~±10). This is
+		# the piece that made the suzerain-prestige meter (which fed NO office before #334) answer
+		# to a Grand Council seat. Complementary to Rites term b (which scores tributary COVERAGE,
+		# the embassy count); this scores the ORDER's standing, not the headcount. Guarded.
+		if = {
+			limit = { has_variable = qing_suzerain_prestige }
+			set_variable = { name = qing_min_lifan_scratch  value = var:qing_suzerain_prestige }
+			change_variable = { name = qing_min_lifan_scratch  subtract = 50 }   # deviation from neutral (-50..+50)
+			change_variable = { name = qing_min_lifan_scratch  divide = 5 }       # scale (~-10..+10)
+			change_variable = { name = qing_min_perf_lifanyuan  add = var:qing_min_lifan_scratch }
+		}
+	}
+	else = {
+		# VACANT Court of Colonial Affairs — the dependencies drift. Floor it low.
+		set_variable = { name = qing_min_perf_lifanyuan  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_lifanyuan < 0 }   set_variable = { name = qing_min_perf_lifanyuan  value = 0 } }
+	if = { limit = { var:qing_min_perf_lifanyuan > 100 } set_variable = { name = qing_min_perf_lifanyuan  value = 100 } }
+	LOG_line = { sys = QING  msg = "lifan-yuan performance recomputed" }
+}
+
+# ======================================================================
+# [#354/#357] ZONGLI YAMEN (總理衙門) PERFORMANCE — qing_min_perf_zongli (0..100,
+# 50 = adequate). The Office for the General Management of Affairs administered the
+# Qing's modern foreign relations. Its performance is built from:
+#   • the Grand Director's own charisma (總理衙門大臣 — charisma is its governing skill, x4),
+#   • the DIPLOMAT CORPS it fields — lower-ranked diplomats (駐外使臣) reporting to the
+#     Director (qing_zongli_diplomats list), scored on their count + average charisma
+#     vs a healthy establishment. A staffed, able foreign service runs the plays well.
+# A VACANT Zongli office floors the meter low. Also rebuilds qing_zongli_diplomats
+# (the diplomat roster the panel #354 renders). The meter drives BOTH the fold into the
+# Director's Grand Council standing AND the per-play success nudge (#357,
+# QING_zongli_play_boost, applied in QING_gp_scan_plays). All reads guarded; O(court).
+# ======================================================================
+QING_ministry_recompute_perf_zongli = {
+	# [#362-R2 systemic fix] capture the COUNTRY (THIS in every call context: the
+	# pulse dispatcher, the open-button, AND the scope:player={} wrapper the char-scoped
+	# appoint/recall panels use). Referenced below instead of ROOT, which in the
+	# scope:player wrapper resolves to the appointed CHARACTER (not CHI) — a confirmed
+	# systemic bug that rebuilt the corps roster EMPTY + floored the meter to 25 until
+	# the next pulse. Root-independent recompute fixes it authoritatively.
+	save_scope_as = qing_min_recompute_ctry
+	# --- rebuild the diplomat corps roster (panel datamodel) + tally count/skill.
+	# A "diplomat" = a courtier flagged qing_zongli_diplomat (stamped when appointed to
+	# the corps; the corps seeding/appointment lives with the #354 panel). Bounded O(court).
+	clear_variable_list = qing_zongli_diplomats
+	set_variable = { name = qing_zongli_diplomat_count  value = 0 }
+	set_variable = { name = qing_zongli_diplomat_charisma  value = 0 }
+	every_character = {
+		limit = {
+			employer = scope:qing_min_recompute_ctry
+			is_alive = yes
+			has_variable = qing_zongli_diplomat
+		}
+		scope:qing_min_recompute_ctry = {
+			add_to_variable_list = { name = qing_zongli_diplomats  target = prev }
+			change_variable = { name = qing_zongli_diplomat_count  add = 1 }
+			change_variable = { name = qing_zongli_diplomat_charisma  add = prev.charisma }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_zongli  value = 50 }
+	if = {
+		# office FILLED — score on the Director's charisma + the diplomat corps.
+		limit = {
+			has_variable = qing_office_zongli_holder
+			var:qing_office_zongli_holder = { is_alive = yes  employer = scope:qing_min_recompute_ctry }
+		}
+		# (a) the Director's charisma, deviation from a competent baseline of 7, x4.
+		var:qing_office_zongli_holder = { save_scope_as = qing_zongli_director }
+		set_variable = { name = qing_min_zongli_scratch  value = 0 }
+		change_variable = { name = qing_min_zongli_scratch  add = scope:qing_zongli_director.charisma }
+		change_variable = { name = qing_min_zongli_scratch  subtract = 7 }
+		change_variable = { name = qing_min_zongli_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_zongli  add = var:qing_min_zongli_scratch }
+		# (b) DIPLOMAT CORPS — a staffed foreign service. Count term (deviation from a
+		# healthy ~4 diplomats), x2; a corps of zero is a real penalty.
+		if = {
+			limit = { var:qing_zongli_diplomat_count > 0 }
+			set_variable = { name = qing_min_zongli_scratch  value = var:qing_zongli_diplomat_count }
+			change_variable = { name = qing_min_zongli_scratch  subtract = 4 }   # deviation from a healthy corps
+			change_variable = { name = qing_min_zongli_scratch  multiply = 2 }
+			change_variable = { name = qing_min_perf_zongli  add = var:qing_min_zongli_scratch }
+		}
+		else = {
+			change_variable = { name = qing_min_perf_zongli  subtract = 8 }
+		}
+	}
+	else = {
+		# VACANT Zongli Yamen — no one manages foreign relations. Floor it low.
+		set_variable = { name = qing_min_perf_zongli  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_zongli < 0 }   set_variable = { name = qing_min_perf_zongli  value = 0 } }
+	if = { limit = { var:qing_min_perf_zongli > 100 } set_variable = { name = qing_min_perf_zongli  value = 100 } }
+	LOG_line = { sys = QING  msg = "zongli-yamen performance recomputed" }
+}
+
+# ======================================================================
+# [#351] MINISTRY OF WORKS (工部) PERFORMANCE — qing_min_perf_works (0..100, 50 = adequate).
+# The Board of Works maintained the empire's hydraulic + monumental infrastructure: the
+# Yellow River dikes (黃河河堤), the Grand Canal grain-tribute depots (漕運倉), the Great
+# Wall (長城), and — in this mod — the state specialty manufactories (織造/御窯/茶廠/棉紡/鹽場,
+# se_QING_WORKS.txt). We build the meter from concrete on-map state:
+#   • the Grand Minister of Works' own FINESSE (工部尚書 — finesse is its governing skill,
+#     the same stat se_QING_WORKS gates the build effects on, x4), and
+#   • WORKS COVERAGE — how many public-works buildings actually stand across the realm vs a
+#     healthy establishment of ~8 (a Board that has built little = neglected infrastructure),
+#   • less a CORRUPTION drag — the 河工 graft that plagued river-works budgets: high realm
+#     corruption saps the Board's real output no matter how it looks on paper.
+# A VACANT Works office floors the meter low (no one maintains the works). Also (re)builds
+# the roster list qing_works_provinces (every province holding a works building — the panel
+# #351 datamodel) + tallies qing_works_building_count. All reads guarded; O(owned provinces).
+# ======================================================================
+QING_ministry_recompute_perf_works = {
+	# --- rebuild the works-province roster (panel datamodel) + tally the count. A province
+	# is on the roster if it holds ANY Board-of-Works building. Bounded O(owned provinces).
+	clear_variable_list = qing_works_provinces
+	set_variable = { name = qing_works_building_count  value = 0 }
+	# [#335] per-type canal-relevant tallies — the CONCRETE inputs QING_canal_update_condition /
+	# QING_canal_run_grain_balance read (dike 河堤, depot 漕運倉, granary 糧倉). Kept SEPARATE from
+	# qing_works_building_count so the works-coverage term (b, baseline ~8) is undisturbed. Reset
+	# each recompute; tallied in the same O(owned) sweep that already runs first every gov pulse,
+	# so they are fresh when the Works pulse's canal tick reads them later in the same quarter.
+	set_variable = { name = qing_dike_count     value = 0 }
+	set_variable = { name = qing_depot_count    value = 0 }
+	set_variable = { name = qing_granary_count  value = 0 }
+	every_owned_province = {
+		limit = {
+			OR = {
+				has_building = qing_dike_building
+				has_building = qing_canal_depot_building
+				has_building = qing_wall_section_building
+				has_building = qing_silk_filature_building
+				has_building = qing_porcelain_kiln_building
+				has_building = qing_tea_workshop_building
+				has_building = qing_cotton_workshop_building
+				has_building = qing_salt_yard_building
+				has_building = qing_granary_building
+			}
+		}
+		# [#351 fix] The province joins the roster once if it holds ANY works building, but the
+		# building COUNT must tally EACH standing works building: the three commission routes all
+		# site into the single highest-population province, so several works stack in one province.
+		# A single per-province +1 undercounted that stack (3 buildings read as 1) and depressed
+		# qing_min_perf_works. Add the province once; count each works type it holds (below).
+		# [#335-R REVERTED, user directive] The Ministry of Works TRACKS the Ever-Normal Granaries
+		# (常平倉): a granary-holding province belongs on "Public Works of the Realm" like any other
+		# hydraulic/public work — the 常平倉 was administered as a public-works institution and the
+		# panel deliberately frames it under the HYDRAULIC line. So the roster add is UNCONDITIONAL
+		# here (the outer OR-limit already established the province holds a works building, granary
+		# included). NB: the granary is still kept OUT of qing_works_building_count below — that is a
+		# separate PERF-METER choice (not crediting the Works minister for the decline-engine's
+		# granary), unaffected by whether it shows on the roster.
+		ROOT = { add_to_variable_list = { name = qing_works_provinces  target = prev } }
+		# [review-fix Option C] dike 河堤 + canal depot 漕運倉 tally into their DEDICATED canal counts
+		# ONLY — NOT qing_works_building_count. They already reach the works meter through term (d)
+		# canal-condition (via qing_dike_count/qing_depot_count -> qing_canal_condition); counting them
+		# into coverage term (b) too double-credited canal infrastructure vs walls/manufactories. This
+		# mirrors the granary exclusion just below — every works building now hits exactly ONE term.
+		if = { limit = { has_building = qing_dike_building }           ROOT = { change_variable = { name = qing_dike_count  add = 1 } } }
+		if = { limit = { has_building = qing_canal_depot_building }    ROOT = { change_variable = { name = qing_depot_count  add = 1 } } }
+		if = { limit = { has_building = qing_wall_section_building }   ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
+		if = { limit = { has_building = qing_silk_filature_building }  ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
+		if = { limit = { has_building = qing_porcelain_kiln_building } ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
+		if = { limit = { has_building = qing_tea_workshop_building }   ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
+		if = { limit = { has_building = qing_cotton_workshop_building }ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
+		if = { limit = { has_building = qing_salt_yard_building }      ROOT = { change_variable = { name = qing_works_building_count  add = 1 } } }
+		# granary counted into its own tally only (NOT qing_works_building_count — it is the
+		# decline-engine's ever-normal granary, not a Works-minister commission; folding it into
+		# coverage term (b) would inflate the works-minister's score for infrastructure he did
+		# not raise).
+		if = { limit = { has_building = qing_granary_building }        ROOT = { change_variable = { name = qing_granary_count  add = 1 } } }
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_works  value = 50 }
+	if = {
+		# office FILLED by a live employed minister — score on his finesse + works coverage.
+		limit = {
+			has_variable = qing_office_works_holder
+			var:qing_office_works_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the minister's finesse, deviation from a competent baseline of 7, x4 (finesse is
+		# the Board's governing skill — the stat se_QING_WORKS gates its build routes on).
+		var:qing_office_works_holder = { save_scope_as = qing_works_minister }
+		set_variable = { name = qing_min_works_scratch  value = 0 }
+		change_variable = { name = qing_min_works_scratch  add = scope:qing_works_minister.finesse }
+		change_variable = { name = qing_min_works_scratch  subtract = 7 }
+		change_variable = { name = qing_min_works_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_works  add = var:qing_min_works_scratch }
+		# (b) WORKS COVERAGE — count of standing NON-CANAL works (walls 城牆 + the manufactories:
+		# silk/porcelain/tea/cotton/salt) vs a healthy establishment of ~5, x2. Canal buildings
+		# (dikes/depots) are DELIBERATELY excluded here — they score through term (d) canal-condition
+		# instead (Option C de-dup), so this term now measures only the works NOT already credited via
+		# the canal. Baseline dropped 8 -> 5 to match the smaller non-canal establishment (was 8 when
+		# dikes/depots were counted). Count, not skill re-use, so nothing is double-folded.
+		set_variable = { name = qing_min_works_scratch  value = var:qing_works_building_count }
+		change_variable = { name = qing_min_works_scratch  subtract = 5 }   # deviation from a healthy non-canal establishment
+		change_variable = { name = qing_min_works_scratch  multiply = 2 }
+		change_variable = { name = qing_min_perf_works  add = var:qing_min_works_scratch }
+		# (c) CORRUPTION DRAG — the 河工 graft. High realm corruption saps real output.
+		# subtract corruption/10 (0..-10 at the corruption rails), guarded on the var existing.
+		if = {
+			limit = { has_variable = qing_corruption_level }
+			set_variable = { name = qing_min_works_scratch  value = var:qing_corruption_level }
+			change_variable = { name = qing_min_works_scratch  divide = 10 }
+			change_variable = { name = qing_min_perf_works  subtract = var:qing_min_works_scratch }
+		}
+		# (d) [#335] CANAL CONDITION — the Board of Works' defining charge was the 漕運 lifeline:
+		# the Grand Canal + Yellow River dikes that carried the grain-tribute north. Its live
+		# condition (qing_canal_condition, se_QING_CANAL.txt) IS the minister's headline result,
+		# so it folds directly into his standing: deviation from a sound-canal baseline of 60,
+		# /4 (~±10 across the 0..100 band). This makes the concrete canal state the minister keeps
+		# (via the dike/depot buildings he raises) drive his Grand Council performance — and thus,
+		# through the generic council fold, his effectiveness at the table. Reads the PREVIOUS
+		# tick's condition (the canal tick runs later in the same gov pulse); a one-quarter lag is
+		# immaterial to a meter that itself drifts ±3/tick. Guarded on the var existing.
+		if = {
+			limit = { has_variable = qing_canal_condition }
+			set_variable = { name = qing_min_works_scratch  value = var:qing_canal_condition }
+			change_variable = { name = qing_min_works_scratch  subtract = 60 }
+			change_variable = { name = qing_min_works_scratch  divide = 4 }
+			change_variable = { name = qing_min_perf_works  add = var:qing_min_works_scratch }
+		}
+	}
+	else = {
+		# VACANT Board of Works — the dikes silt, the canal chokes. Floor it low.
+		set_variable = { name = qing_min_perf_works  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_works < 0 }   set_variable = { name = qing_min_perf_works  value = 0 } }
+	if = { limit = { var:qing_min_perf_works > 100 } set_variable = { name = qing_min_perf_works  value = 100 } }
+	LOG_line = { sys = QING  msg = "works-ministry performance recomputed" }
+}
+
+# ======================================================================
+# [#353] MINISTRY OF RITES (禮部) PERFORMANCE — qing_min_perf_rites (0..100, 50 = adequate).
+# The Board of Rites administered two great state functions this mod models concretely:
+#   • the TRIBUTARY ORDER (朝貢體系, se_QING_TRIBUTE.txt) — the periodic embassies from the
+#     Qing's tributary subjects (Korea/Ryukyu/Siam/...), the ceremony of empire; and
+#   • the IMPERIAL EXAMINATIONS (科舉, se_QING_EXAM.txt) — the triennial 會試/殿試 that
+#     recruited the scholar-officials, whose health is the qing_exam_pass_rate meter.
+# We build the ministry meter from concrete state both systems already track:
+#   • the Grand Minister of Rites' own ZEAL (禮部尚書 — zeal is its governing skill, x4),
+#   • TRIBUTARY COVERAGE — the number of tributary subjects sending embassies (a full court
+#     of vassals = the rites flourishing; an empty one = the ceremony hollow), and
+#   • EXAM HEALTH — the qing_exam_pass_rate deviation from a healthy 50 (a well-run
+#     examination ladder recruits talent; a corrupt/blocked one starves the bureaucracy).
+# A VACANT Rites office floors the meter low. Also rebuilds qing_rites_tributaries (the
+# tributary-subject roster the panel #353 renders). All reads guarded; O(subjects).
+# ======================================================================
+QING_ministry_recompute_perf_rites = {
+	# --- rebuild the tributary roster (panel datamodel) + tally coverage. Uses the proven
+	# tributary trigger (QING_tribute_is_tributary_trigger). Bounded O(subjects).
+	clear_variable_list = qing_rites_tributaries
+	set_variable = { name = qing_rites_tributary_count  value = 0 }
+	every_subject = {
+		limit = { QING_tribute_is_tributary_trigger = yes }
+		ROOT = {
+			add_to_variable_list = { name = qing_rites_tributaries  target = prev }
+			change_variable = { name = qing_rites_tributary_count  add = 1 }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_rites  value = 50 }
+	if = {
+		# office FILLED by a live employed minister — score on his zeal + tribute + exams.
+		limit = {
+			has_variable = qing_office_rites_holder
+			var:qing_office_rites_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the minister's zeal, deviation from a competent baseline of 7, x4 (zeal is the
+		# Board of Rites' governing skill — the ceremony + the examinations are its charge).
+		var:qing_office_rites_holder = { save_scope_as = qing_rites_minister }
+		set_variable = { name = qing_min_rites_scratch  value = 0 }
+		change_variable = { name = qing_min_rites_scratch  add = scope:qing_rites_minister.zeal }
+		change_variable = { name = qing_min_rites_scratch  subtract = 7 }
+		change_variable = { name = qing_min_rites_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_rites  add = var:qing_min_rites_scratch }
+		# (b) TRIBUTARY COVERAGE — count of tributary subjects vs a healthy ~4 court of vassals,
+		# x2 (the tributary embassies are the rites' most visible expression).
+		set_variable = { name = qing_min_rites_scratch  value = var:qing_rites_tributary_count }
+		change_variable = { name = qing_min_rites_scratch  subtract = 4 }
+		change_variable = { name = qing_min_rites_scratch  multiply = 2 }
+		change_variable = { name = qing_min_perf_rites  add = var:qing_min_rites_scratch }
+		# (c) EXAM HEALTH — the examination pass-rate meter's deviation from a healthy 50,
+		# divided down (0..±10 band): a flourishing exam ladder lifts the Board, a blocked one
+		# drags it. Guarded on the exam system being initialised.
+		if = {
+			limit = { has_variable = qing_exam_pass_rate }
+			set_variable = { name = qing_min_rites_scratch  value = var:qing_exam_pass_rate }
+			change_variable = { name = qing_min_rites_scratch  subtract = 50 }
+			change_variable = { name = qing_min_rites_scratch  divide = 5 }
+			change_variable = { name = qing_min_perf_rites  add = var:qing_min_rites_scratch }
+		}
+	}
+	else = {
+		# VACANT Board of Rites — the ceremony lapses, the examinations drift. Floor it low.
+		set_variable = { name = qing_min_perf_rites  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_rites < 0 }   set_variable = { name = qing_min_perf_rites  value = 0 } }
+	if = { limit = { var:qing_min_perf_rites > 100 } set_variable = { name = qing_min_perf_rites  value = 100 } }
+	LOG_line = { sys = QING  msg = "rites-ministry performance recomputed" }
+}
+
+# ======================================================================
+# [#355] MINISTRY OF REVENUE (戶部) PERFORMANCE — qing_min_perf_revenue (0..100, 50 = adequate).
+# The Board of Revenue held the imperial fisc: the census, the land tax, the SALT GABELLE
+# (鹽政 — a vast revenue riddled with patronage), the ever-normal GRANARIES (常平倉, grain
+# reserves against famine), and the response to the 19thC SILVER CRISIS (銀荒/銀貴錢賤). This
+# mod tracks all of these as concrete counters/buildings the decline engine already drives
+# (se_QING_REVENUE.txt): qing_salt_gabelle_reformed, qing_currency_stress, qing_corruption_level,
+# and the qing_granary_building in the Yellow-River provinces. We build the ministry meter
+# from that concrete state:
+#   • the Grand Minister of Revenue's own FINESSE (戶部尚書 — finesse is its governing skill,
+#     the same stat QING_revenue_assess_fitness leans on, x4),
+#   • GRANARY COVERAGE — the ever-normal reserves standing across the Yellow-River provinces
+#     vs a healthy ~5 (empty granaries = famine unmanaged), x3,
+#   • a SALT-GABELLE bonus (an honest, reformed 鹽政 lifts the fisc), and
+#   • drags for the SILVER CRISIS (qing_currency_stress) and realm CORRUPTION (the graft that
+#     ate the land-tax). Deliberately NOT the minister's honesty/loyalty traits — those feed
+#     QING_revenue_assess_fitness for the domain EVENTS, an orthogonal path.
+# [#355 review] The governing FINESSE (term a) is scored here AND, independently, into the
+# council skill total via QING_council_score_office — so a capable minister reaches
+# qing_council_eff_target twice. This is DELIBERATE and bounded: term (a) exists so the PANEL's
+# performance bar reads sensibly (a skilled minister with merely average fiscal output must not
+# show a flat neutral 50); its SECOND contribution through the perf fold is negligible
+# (~(finesse-7)*4 averaged across the filled offices, then /5 in QING_council_perf_accumulate
+# => <±0.5 pts of eff_target), a mild competence reinforcement, not a double-weighting. The
+# OUTPUT terms (b)-(e) below (reserves/salt/currency/corruption) are the meter's real signal.
+# A VACANT Revenue office floors the meter low. Also rebuilds qing_revenue_granaries (the
+# granary-province roster the panel #355 renders) + tallies qing_revenue_granary_count.
+# All reads guarded; O(owned provinces).
+# ======================================================================
+QING_ministry_recompute_perf_revenue = {
+	# --- rebuild the granary-province roster (panel datamodel) + tally the reserves. A
+	# province is on the roster if it holds an ever-normal granary. Bounded O(owned provinces).
+	clear_variable_list = qing_revenue_granaries
+	set_variable = { name = qing_revenue_granary_count  value = 0 }
+	every_owned_province = {
+		limit = { has_building = qing_granary_building }
+		ROOT = {
+			add_to_variable_list = { name = qing_revenue_granaries  target = prev }
+			change_variable = { name = qing_revenue_granary_count  add = 1 }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_revenue  value = 50 }
+	if = {
+		# office FILLED by a live employed minister — score on his finesse + fiscal output.
+		limit = {
+			has_variable = qing_office_revenue_holder
+			var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the minister's finesse, deviation from a competent baseline of 7, x4 (finesse is
+		# the Board's governing skill — the administrator's gift for the fisc).
+		var:qing_office_revenue_holder = { save_scope_as = qing_revenue_minister }
+		set_variable = { name = qing_min_revenue_scratch  value = 0 }
+		change_variable = { name = qing_min_revenue_scratch  add = scope:qing_revenue_minister.finesse }
+		change_variable = { name = qing_min_revenue_scratch  subtract = 7 }
+		change_variable = { name = qing_min_revenue_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_revenue  add = var:qing_min_revenue_scratch }
+		# (b) GRANARY COVERAGE — ever-normal reserves standing vs a healthy establishment of ~5,
+		# x3. Empty granaries = the realm one bad harvest from famine. Count, not skill re-use.
+		set_variable = { name = qing_min_revenue_scratch  value = var:qing_revenue_granary_count }
+		change_variable = { name = qing_min_revenue_scratch  subtract = 5 }   # deviation from a healthy reserve
+		change_variable = { name = qing_min_revenue_scratch  multiply = 3 }
+		change_variable = { name = qing_min_perf_revenue  add = var:qing_min_revenue_scratch }
+		# (c) SALT GABELLE — a reformed, honest 鹽政 lifts the fisc (+10); an unreformed one is
+		# the baseline (patronage tolerated, no bonus).
+		if = {
+			limit = {
+				has_variable = qing_salt_gabelle_reformed
+				var:qing_salt_gabelle_reformed = 1
+			}
+			change_variable = { name = qing_min_perf_revenue  add = 10 }
+		}
+		# (d) SILVER CRISIS DRAG — the 銀荒: the currency stress the Board is failing to arrest.
+		# subtract currency_stress/6 (0..-~16 at the rails), guarded on the var existing.
+		if = {
+			limit = { has_variable = qing_currency_stress }
+			set_variable = { name = qing_min_revenue_scratch  value = var:qing_currency_stress }
+			change_variable = { name = qing_min_revenue_scratch  divide = 6 }
+			change_variable = { name = qing_min_perf_revenue  subtract = var:qing_min_revenue_scratch }
+		}
+		# (e) CORRUPTION DRAG — the graft that ate the land-tax. subtract corruption/10
+		# (0..-10 at the rails), guarded on the var existing.
+		if = {
+			limit = { has_variable = qing_corruption_level }
+			set_variable = { name = qing_min_revenue_scratch  value = var:qing_corruption_level }
+			change_variable = { name = qing_min_revenue_scratch  divide = 10 }
+			change_variable = { name = qing_min_perf_revenue  subtract = var:qing_min_revenue_scratch }
+		}
+		# (f) [#369] POPULATION-PRESSURE DRAG — the 人地矛盾 the Board is failing to relieve. The
+		# 戶部 held the 黃冊 (census) and the 常平倉 (ever-normal granaries); a realm buckling under
+		# Malthusian crowding is a Board of Revenue failure. subtract pop_pressure/8 (0..-~12 at the
+		# rails), guarded on the var existing — same shape as the (d) currency and (e) corruption drags.
+		if = {
+			limit = { has_variable = qing_pop_pressure }
+			set_variable = { name = qing_min_revenue_scratch  value = var:qing_pop_pressure }
+			change_variable = { name = qing_min_revenue_scratch  divide = 8 }
+			change_variable = { name = qing_min_perf_revenue  subtract = var:qing_min_revenue_scratch }
+		}
+		# (g) [#431] TREASURY-INFLOW REWARD — the 戶部 is judged on money it actually books ON THE STATE
+		# LEDGER, not only on the reserves/famine/corruption drags above. A minister who makes a fortune on
+		# the Canton customs (粵海關 state share) or the salt gabelle (鹽課) must NOT be punished because the
+		# frontier caravans (回疆貿易) fell short (user #431). Sum the three real standing quarterly streams the
+		# Board books — salt (qing_salt_income_last) + Canton state-share (qing_canton_last_state) + caravan
+		# customs (qing_caravan_income_last, #430) — reward ~+1 per 4 taels of combined take, capped at +15 so a
+		# boom lifts the minister materially but cannot pin the meter alone. Each read guarded (a stream not yet
+		# online contributes 0). These are the SAME add_treasury streams paid elsewhere — this reads their
+		# published last-take vars, it does NOT pay again.
+		set_variable = { name = qing_min_revenue_inflow  value = 0 }
+		if = { limit = { has_variable = qing_salt_income_last }    change_variable = { name = qing_min_revenue_inflow  add = var:qing_salt_income_last } }
+		if = { limit = { has_variable = qing_canton_last_state }   change_variable = { name = qing_min_revenue_inflow  add = var:qing_canton_last_state } }
+		if = { limit = { has_variable = qing_caravan_income_last } change_variable = { name = qing_min_revenue_inflow  add = var:qing_caravan_income_last } }
+		change_variable = { name = qing_min_revenue_inflow  divide = 4 }
+		if = { limit = { var:qing_min_revenue_inflow > 15 } set_variable = { name = qing_min_revenue_inflow  value = 15 } }
+		change_variable = { name = qing_min_perf_revenue  add = var:qing_min_revenue_inflow }
+		remove_variable = qing_min_revenue_inflow
+	}
+	else = {
+		# VACANT Board of Revenue — the salt graft entrenches, the granaries empty. Floor it low.
+		set_variable = { name = qing_min_perf_revenue  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_revenue < 0 }   set_variable = { name = qing_min_perf_revenue  value = 0 } }
+	if = { limit = { var:qing_min_perf_revenue > 100 } set_variable = { name = qing_min_perf_revenue  value = 100 } }
+	LOG_line = { sys = QING  msg = "revenue-ministry performance recomputed" }
+}
+
+# ======================================================================
+# [#357] QING_zongli_play_boost — the Zongli Yamen's per-play success factor. Applied
+# once per Qing pulse to EACH of the Qing's live diplomatic plays (from QING_gp_scan_plays,
+# the (A) instigator=self branch). Scope: the PLAY PROVOBJ. A capable, well-staffed Zongli
+# (qing_min_perf_zongli > 50) nudges the play's success UP; a poor/vacant one (< 50) drags
+# it DOWN — the foreign service either advances the crisis or fumbles it. Counter-only +
+# clamped (DIPLOMACY_modify_play_success clamps 0..100), so it is idempotent-safe to
+# re-apply every pulse (like the GP-tension pressure it rides alongside). ROOT = CHI is
+# passed as $home$ so the provobj can read the Qing's perf var.
+# ======================================================================
+QING_zongli_play_boost = {
+	# convert (perf - 50) into a small per-pulse success delta: +/-50 perf -> +/-2 success.
+	# read the Qing's perf var off the passed home country.
+	set_variable = { name = qing_zongli_play_delta  value = $home$.var:qing_min_perf_zongli }
+	change_variable = { name = qing_zongli_play_delta  subtract = 50 }
+	change_variable = { name = qing_zongli_play_delta  divide = 25 }   # ~ +/-2 at the rails
+	DIPLOMACY_modify_play_success = { amt = var:qing_zongli_play_delta }
+	remove_variable = qing_zongli_play_delta
+}
+
+# ======================================================================
+# [#358] HANLIN ACADEMY (翰林院) → GRAND SECRETARIAT PERFORMANCE —
+# qing_min_perf_grand_secretariat (0..100, 50 = adequate).
+#
+# The Hanlin Academy is the elite scholar corps drawn from the top of the examination
+# ladder (the jinshi 進士), from which the Grand Secretaries (大學士) and the inner-court
+# drafters were always chosen — so for Grand Council purposes the Academy's leader IS the
+# grand_secretariat office-holder, and the Academy's scholarly health is his performance.
+# This is the CANONICAL grand_secretariat compute; the Central Secretariat panel (#361)
+# reads the same var rather than redefining it.
+#
+# The meter folds concrete state the mod already tracks:
+#   • the Grand Secretary's own FINESSE (the 大學士's gift for drafting/administration, x4),
+#   • HANLIN CORPS DEPTH — the size of the waiting jinshi/juren scholar pool vs a healthy
+#     bench of ~4 (a deep bench of exam laureates = a vigorous Academy that can staff the
+#     drafting offices; an empty one = a hollow Academy). Concrete count, not skill re-use.
+#   • EXAMINATION VIGOUR — the pass-rate metric (qing_exam_pass_rate, ladder health net of
+#     the 捐納/corruption drag) deviation from 50, /5 (a healthy ladder feeds the Academy),
+#   • CORRUPTION DRAG — subtract corruption/10 (graft in the drafting offices).
+# A VACANT Grand Secretariat floors the meter low (no one heads the Academy). Reads guarded;
+# scratch reads use var:X (bare name = 0). Clamp 0..100. Rebuilds the qing_hanlin_scholars
+# roster + qing_hanlin_scholar_count the panel renders (mirrors the scholar pool, jinshi/juren).
+# ======================================================================
+QING_ministry_recompute_perf_grand_secretariat = {
+	# --- rebuild the HANLIN scholar roster (the panel datamodel) from the exam pool. Every
+	# living pool scholar in CHI's employ is a Hanlin man awaiting a drafting post. Bounded
+	# O(pool). The list mirrors qing_scholar_pool but is panel-owned so the roster is stable.
+	clear_variable_list = qing_hanlin_scholars
+	set_variable = { name = qing_hanlin_scholar_count  value = 0 }
+	if = {
+		limit = { has_variable_list = qing_scholar_pool }
+		every_in_list = {
+			variable = qing_scholar_pool
+			limit = { is_alive = yes  employer = ROOT }
+			ROOT = {
+				add_to_variable_list = { name = qing_hanlin_scholars  target = prev }
+				change_variable = { name = qing_hanlin_scholar_count  add = 1 }
+			}
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_grand_secretariat  value = 50 }
+	if = {
+		# office FILLED by a live employed Grand Secretary — score on his finesse + the Academy.
+		limit = {
+			has_variable = qing_office_grand_secretariat_holder
+			var:qing_office_grand_secretariat_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the Grand Secretary's finesse, deviation from a competent baseline of 7, x4.
+		var:qing_office_grand_secretariat_holder = { save_scope_as = qing_gsec_holder }
+		set_variable = { name = qing_min_gsec_scratch  value = 0 }
+		change_variable = { name = qing_min_gsec_scratch  add = scope:qing_gsec_holder.finesse }
+		change_variable = { name = qing_min_gsec_scratch  subtract = 7 }
+		change_variable = { name = qing_min_gsec_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_grand_secretariat  add = var:qing_min_gsec_scratch }
+		# (b) HANLIN CORPS DEPTH — the waiting scholar bench vs a healthy establishment of ~4, x3.
+		set_variable = { name = qing_min_gsec_scratch  value = var:qing_hanlin_scholar_count }
+		change_variable = { name = qing_min_gsec_scratch  subtract = 4 }
+		change_variable = { name = qing_min_gsec_scratch  multiply = 3 }
+		change_variable = { name = qing_min_perf_grand_secretariat  add = var:qing_min_gsec_scratch }
+		# (c) EXAMINATION VIGOUR — the pass-rate metric deviation from 50, /5 (a healthy ladder
+		# feeds fresh talent into the Academy; a choked one starves it). Guarded on the var.
+		if = {
+			limit = { has_variable = qing_exam_pass_rate }
+			set_variable = { name = qing_min_gsec_scratch  value = var:qing_exam_pass_rate }
+			change_variable = { name = qing_min_gsec_scratch  subtract = 50 }
+			change_variable = { name = qing_min_gsec_scratch  divide = 5 }
+			change_variable = { name = qing_min_perf_grand_secretariat  add = var:qing_min_gsec_scratch }
+		}
+		# (d) CORRUPTION DRAG — the graft in the drafting offices. subtract corruption/10.
+		if = {
+			limit = { has_variable = qing_corruption_level }
+			set_variable = { name = qing_min_gsec_scratch  value = var:qing_corruption_level }
+			change_variable = { name = qing_min_gsec_scratch  divide = 10 }
+			change_variable = { name = qing_min_perf_grand_secretariat  subtract = var:qing_min_gsec_scratch }
+		}
+		# (e) [#361] CHANCERY BACKLOG DRAG — the 內閣's working throughput. The rescript
+		# backlog (票擬積壓, se_QING_SECRETARIAT.txt) is the concrete measure of whether the
+		# chancery keeps pace with the throne's business. A backlog worse than a tolerable ~30
+		# drags the Grand Secretary's standing; a well-cleared one (below 30) lifts it a touch.
+		# Deviation from 30, /4 (bounded so it neither dominates the finesse/Hanlin terms nor
+		# is negligible). Guarded on the var; scratch reads use var:X (bare = 0).
+		if = {
+			limit = { has_variable = qing_secretariat_backlog }
+			set_variable = { name = qing_min_gsec_scratch  value = 30 }
+			change_variable = { name = qing_min_gsec_scratch  subtract = var:qing_secretariat_backlog }
+			change_variable = { name = qing_min_gsec_scratch  divide = 4 }
+			change_variable = { name = qing_min_perf_grand_secretariat  add = var:qing_min_gsec_scratch }
+		}
+	}
+	else = {
+		# VACANT Grand Secretariat — the Academy heads no drafting office. Floor it low.
+		set_variable = { name = qing_min_perf_grand_secretariat  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_grand_secretariat < 0 }   set_variable = { name = qing_min_perf_grand_secretariat  value = 0 } }
+	if = { limit = { var:qing_min_perf_grand_secretariat > 100 } set_variable = { name = qing_min_perf_grand_secretariat  value = 100 } }
+	LOG_line = { sys = QING  msg = "grand-secretariat (Hanlin) performance recomputed" }
+}
+
+# ======================================================================
+# [#359] IMPERIAL HOUSEHOLD (內務府) PERFORMANCE — qing_min_perf_chamberlain
+# (0..100, 50 = adequate).
+#
+# The chamberlain office (總管內務府大臣) heads the throne's PERSONAL establishment: the
+# privy purse (內帑), the palace eunuchs (太監), and the imperial workshops (造辦處). The
+# closest man to the sovereign. We build the meter from the concrete household state
+# se_QING_HOUSEHOLD.txt already tracks:
+#   • the chamberlain's own CHARISMA (內務府's governing skill — the courtier's gift, x4),
+#   • PRIVY PURSE health — the emperor's private silver reserve deviation from a comfortable
+#     50, /4 (a full purse = a household well kept; a drained one = mismanagement),
+#   • EUNUCH DANGER — a hard -20 penalty if a eunuch faction leader exists in the court (the
+#     perennial Qing peril the chamberlain is meant to check),
+#   • CORRUPTION DRAG — subtract corruption/10 (the Heshen risk in the household).
+# A VACANT chamberlain office floors the meter low (no one keeps the throne's household).
+# Reads guarded; scratch reads use var:X (bare name = 0). Clamp 0..100. No roster list —
+# the household is the purse + the eunuch danger, not a set of on-map objects (the panel
+# reads the purse var + the eunuch indicator directly).
+# ======================================================================
+QING_ministry_recompute_perf_chamberlain = {
+	# base: adequate.
+	set_variable = { name = qing_min_perf_chamberlain  value = 50 }
+	if = {
+		# office FILLED by a live employed chamberlain — score on his charisma + the household.
+		limit = {
+			has_variable = qing_office_chamberlain_holder
+			var:qing_office_chamberlain_holder = { is_alive = yes  employer = ROOT }
+		}
+		# (a) the chamberlain's charisma, deviation from a competent baseline of 7, x4.
+		var:qing_office_chamberlain_holder = { save_scope_as = qing_chamberlain_holder }
+		set_variable = { name = qing_min_cham_scratch  value = 0 }
+		change_variable = { name = qing_min_cham_scratch  add = scope:qing_chamberlain_holder.charisma }
+		change_variable = { name = qing_min_cham_scratch  subtract = 7 }
+		change_variable = { name = qing_min_cham_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_chamberlain  add = var:qing_min_cham_scratch }
+		# (b) [#424] PRIVY PURSE health — the emperor's own wealth (內帑) vs a comfortable ~200, /16.
+		# (old meter: (purse-50)/4; purse baseline 50->200, so (wealth-200)/16 keeps the SAME contribution
+		# magnitude — a purse "at baseline" adds 0, a full one lifts the chamberlain, an empty one drags.)
+		if = {
+			limit = { exists = current_ruler }
+			set_variable = { name = qing_min_cham_scratch  value = current_ruler.wealth }
+			change_variable = { name = qing_min_cham_scratch  subtract = 200 }
+			change_variable = { name = qing_min_cham_scratch  divide = 16 }
+			change_variable = { name = qing_min_perf_chamberlain  add = var:qing_min_cham_scratch }
+		}
+		# (c) EUNUCH DANGER — a hard penalty if a eunuch faction leader stalks the court (the
+		# chamberlain has failed his signal charge: keeping the eunuchs in check).
+		if = {
+			limit = {
+				any_character = { employer = ROOT  has_variable = qing_eunuch_faction_leader  is_alive = yes }
+			}
+			change_variable = { name = qing_min_perf_chamberlain  subtract = 20 }
+		}
+		# (d) CORRUPTION DRAG — the Heshen risk in the household. subtract corruption/10.
+		if = {
+			limit = { has_variable = qing_corruption_level }
+			set_variable = { name = qing_min_cham_scratch  value = var:qing_corruption_level }
+			change_variable = { name = qing_min_cham_scratch  divide = 10 }
+			change_variable = { name = qing_min_perf_chamberlain  subtract = var:qing_min_cham_scratch }
+		}
+		# (e) HAREM ORDER (#360, 後宮) — the inner court is the chamberlain's charge, and a
+		# well-kept harem is the throne's succession engine. Rebuild the roster (self-healing
+		# prune of the dead/departed) then score its depth vs a healthy inner court of ~4, x2:
+		# a full court lifts him (+~8 at 8 consorts), an empty one drags a little (−8 at 0).
+		# Count, not skill re-use — the harem's OUTPUT, capped by the x2 to keep it a minor term.
+		QING_harem_recompute_roster = yes
+		set_variable = { name = qing_min_cham_scratch  value = var:qing_harem_consort_count }
+		change_variable = { name = qing_min_cham_scratch  subtract = 4 }   # deviation from a healthy inner court
+		change_variable = { name = qing_min_cham_scratch  multiply = 2 }
+		change_variable = { name = qing_min_perf_chamberlain  add = var:qing_min_cham_scratch }
+	}
+	else = {
+		# VACANT chamberlain office — the household drifts, the eunuchs creep. Floor it low.
+		set_variable = { name = qing_min_perf_chamberlain  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_chamberlain < 0 }   set_variable = { name = qing_min_perf_chamberlain  value = 0 } }
+	if = { limit = { var:qing_min_perf_chamberlain > 100 } set_variable = { name = qing_min_perf_chamberlain  value = 100 } }
+	LOG_line = { sys = QING  msg = "imperial-household (chamberlain) performance recomputed" }
+}
+
+# ======================================================================
+# [#362] CENSORATE (都察院) PERFORMANCE — qing_min_perf_censor (0..100, 50 = adequate).
+#
+# [#362 BUG-FIX] The council fold (QING_council_fold_ministry_perf) has always
+# enumerated `office = censor`, but NO effect ever SET qing_min_perf_censor — so the
+# Censor-in-Chief's charge silently contributed NOTHING to the Grand Council (the
+# accumulate helper self-guards on has_variable = qing_min_perf_censor and just skipped
+# it). This compute closes that gap: the Censorate now folds into its leader's standing
+# like every other office.
+#
+# The Censorate (都察院) is the dynasty's internal check on venality — the Censor-in-Chief
+# (左都御史) and his corps of investigating censors (御史/言官) impeach the corrupt and
+# remonstrate with the throne. We build the meter from concrete state se_QING_CENSORATE.txt
+# already tracks + the NEW inspector corps this panel manages:
+#   • the Censor-in-Chief's own FINESSE (都察院's governing skill — the investigator's rigour,
+#     x4), plus a bonus for an HONEST / JUST censor (the fearless remonstrant, +6 each),
+#   • INSPECTOR CORPS DEPTH — the investigating censors (御史) reporting to him
+#     (qing_censor_inspectors list), count deviation from a healthy bench of ~4, x2,
+#   • less a CORRUPTION DRAG — a court awash in graft (qing_corruption_level) means the
+#     Censorate is failing its signal charge no matter the man; subtract corruption/8.
+# A VACANT Censorate floors the meter low (no one checks venality). Rebuilds the
+# qing_censor_inspectors roster (the panel datamodel). Reads guarded; scratch reads use
+# var:X (bare = 0). Clamp 0..100. Bounded O(court).
+# ======================================================================
+QING_ministry_recompute_perf_censor = {
+	# [#362-R2 systemic fix] capture the COUNTRY (THIS in every call context: the
+	# pulse dispatcher, the open-button, AND the scope:player={} wrapper the char-scoped
+	# appoint/recall panels use). Referenced below instead of ROOT, which in the
+	# scope:player wrapper resolves to the appointed CHARACTER (not CHI) — a confirmed
+	# systemic bug that rebuilt the corps roster EMPTY + floored the meter to 25 until
+	# the next pulse. Root-independent recompute fixes it authoritatively.
+	save_scope_as = qing_min_recompute_ctry
+	# --- rebuild the inspecting-censor corps roster (panel datamodel) + tally count.
+	# An "inspector" = a courtier flagged qing_is_censor_inspector (stamped when commissioned
+	# to the corps via the #362 panel). Bounded O(court).
+	clear_variable_list = qing_censor_inspectors
+	set_variable = { name = qing_censor_inspector_count  value = 0 }
+	every_character = {
+		limit = {
+			employer = scope:qing_min_recompute_ctry
+			is_alive = yes
+			has_variable = qing_is_censor_inspector
+			# [#362 review-fix R2] EXCLUDE great-office holders from the inspector tally + roster.
+			# An inspector later appointed to a great office (e.g. promoted to Censor-in-Chief
+			# himself) would otherwise be double-counted — scored as the chief in term (a) AND
+			# tallied in the corps-depth term (c), and rendered both in the summit card and the
+			# roster. Gating on NOT office-held here fixes BOTH the count and the panel render.
+			NOT = { has_variable = qing_office_held }
+		}
+		scope:qing_min_recompute_ctry = {
+			add_to_variable_list = { name = qing_censor_inspectors  target = prev }
+			change_variable = { name = qing_censor_inspector_count  add = 1 }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_censor  value = 50 }
+	if = {
+		# office FILLED by a live employed Censor-in-Chief — score on his finesse + integrity + corps.
+		limit = {
+			has_variable = qing_office_censor_holder
+			var:qing_office_censor_holder = { is_alive = yes  employer = scope:qing_min_recompute_ctry }
+		}
+		# (a) the Censor-in-Chief's finesse, deviation from a competent baseline of 7, x4.
+		var:qing_office_censor_holder = { save_scope_as = qing_censor_chief }
+		set_variable = { name = qing_min_censor_scratch  value = 0 }
+		change_variable = { name = qing_min_censor_scratch  add = scope:qing_censor_chief.finesse }
+		change_variable = { name = qing_min_censor_scratch  subtract = 7 }
+		change_variable = { name = qing_min_censor_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_censor  add = var:qing_min_censor_scratch }
+		# (b) INTEGRITY — an honest / just censor is the fearless remonstrant the office needs, +6 each.
+		if = { limit = { scope:qing_censor_chief = { has_trait = honest } }  change_variable = { name = qing_min_perf_censor  add = 6 } }
+		if = { limit = { scope:qing_censor_chief = { has_trait = just } }    change_variable = { name = qing_min_perf_censor  add = 6 } }
+		# (c) INSPECTOR CORPS DEPTH — the investigating censors (御史) vs a healthy bench of ~4, x2.
+		set_variable = { name = qing_min_censor_scratch  value = var:qing_censor_inspector_count }
+		change_variable = { name = qing_min_censor_scratch  subtract = 4 }
+		change_variable = { name = qing_min_censor_scratch  multiply = 2 }
+		change_variable = { name = qing_min_perf_censor  add = var:qing_min_censor_scratch }
+		# (d) CORRUPTION DRAG — a court awash in graft = a Censorate failing its charge. subtract corruption/8.
+		if = {
+			limit = { has_variable = qing_corruption_level }
+			set_variable = { name = qing_min_censor_scratch  value = var:qing_corruption_level }
+			change_variable = { name = qing_min_censor_scratch  divide = 8 }
+			change_variable = { name = qing_min_perf_censor  subtract = var:qing_min_censor_scratch }
+		}
+	}
+	else = {
+		# VACANT Censorate — no one checks venality. Floor it low.
+		set_variable = { name = qing_min_perf_censor  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_censor < 0 }   set_variable = { name = qing_min_perf_censor  value = 0 } }
+	if = { limit = { var:qing_min_perf_censor > 100 } set_variable = { name = qing_min_perf_censor  value = 100 } }
+	LOG_line = { sys = QING  msg = "censorate performance recomputed" }
+}
+
+# ======================================================================
+# [#363] BOARD OF PUNISHMENTS (刑部) PERFORMANCE — qing_min_perf_justice (0..100, 50 = adequate).
+#
+# [#363 BUG-FIX] Like the Censorate before #362, the council fold has always enumerated
+# `office = justice` (se_QING_COUNCIL.txt), but NO effect ever SET qing_min_perf_justice —
+# QING_council_perf_accumulate self-guards on has_variable and silently DROPPED the Grand
+# Minister of Justice from the average, so his charge contributed NOTHING to the Grand
+# Council. This compute closes that gap so the 刑部 folds into its leader's standing.
+#
+# The Board of Punishments (刑部) was the empire's high court + keeper of the penal code
+# (大清律例), one of the 三法司. Its concrete work is a DOCKET of accused officials (待審) it
+# holds and TRIES — convicting the venal (disgrace + penal servitude 流刑) or acquitting the
+# wronged. We build the meter from concrete state:
+#   • the Grand Minister of Justice's own ZEAL (刑部尚書 — zeal is the office's governing skill,
+#     the same stat se_QING_JUSTICE gates its pulse on; the upright judge, x4), plus a bonus
+#     for a JUST / HONEST minister (even-handed application of the code, +6 each),
+#   • less a DOCKET-BACKLOG drag — a Board that lets accused pile up UNTRIED (待審積壓) is
+#     failing its charge; subtract the docket count x3 (bounded, since the docket self-caps),
+#   • less a CORRUPTION drag — arbitrary, purchasable justice (the 刑名 clerk's graft); subtract
+#     corruption/8. A VACANT Board floors the meter low (the law drifts). Rebuilds the
+#     qing_justice_docket roster (the panel datamodel). Clamp 0..100. Bounded O(court).
+# ======================================================================
+QING_ministry_recompute_perf_justice = {
+	# [#362-R2 systemic fix] capture the COUNTRY (THIS in every call context: the
+	# pulse dispatcher, the open-button, AND the scope:player={} wrapper the char-scoped
+	# appoint/recall panels use). Referenced below instead of ROOT, which in the
+	# scope:player wrapper resolves to the appointed CHARACTER (not CHI) — a confirmed
+	# systemic bug that rebuilt the corps roster EMPTY + floored the meter to 25 until
+	# the next pulse. Root-independent recompute fixes it authoritatively.
+	save_scope_as = qing_min_recompute_ctry
+	# --- rebuild the docket roster (panel datamodel) + tally count. An "accused" = a
+	# courtier flagged qing_justice_accused (docketed via the #363 panel / justice domain).
+	clear_variable_list = qing_justice_docket
+	set_variable = { name = qing_justice_docket_count  value = 0 }
+	every_character = {
+		limit = {
+			employer = scope:qing_min_recompute_ctry
+			is_alive = yes
+			has_variable = qing_justice_accused
+			# [#363 review-fix] exclude a sitting great-office holder from the docket, matching the
+			# censor (#362-R2) + guard (#364) rosters: an accused courtier later autofilled into the
+			# Justice office (or any office) must not be double-counted — scored as the sitting minister
+			# AND tallied/dragged as an untried docket entry, nor rendered as a Convict/Acquit row on himself.
+			NOT = { has_variable = qing_office_held }
+		}
+		scope:qing_min_recompute_ctry = {
+			add_to_variable_list = { name = qing_justice_docket  target = prev }
+			change_variable = { name = qing_justice_docket_count  add = 1 }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_justice  value = 50 }
+	if = {
+		# office FILLED by a live employed Minister of Justice — score on his zeal + integrity.
+		limit = {
+			has_variable = qing_office_justice_holder
+			var:qing_office_justice_holder = { is_alive = yes  employer = scope:qing_min_recompute_ctry }
+		}
+		# (a) the Minister's zeal, deviation from a competent baseline of 7, x4.
+		var:qing_office_justice_holder = { save_scope_as = qing_justice_minister_s }
+		set_variable = { name = qing_min_justice_scratch  value = 0 }
+		change_variable = { name = qing_min_justice_scratch  add = scope:qing_justice_minister_s.zeal }
+		change_variable = { name = qing_min_justice_scratch  subtract = 7 }
+		change_variable = { name = qing_min_justice_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_justice  add = var:qing_min_justice_scratch }
+		# (b) INTEGRITY — a just / honest minister applies the code even-handedly, +6 each.
+		if = { limit = { scope:qing_justice_minister_s = { has_trait = just } }    change_variable = { name = qing_min_perf_justice  add = 6 } }
+		if = { limit = { scope:qing_justice_minister_s = { has_trait = honest } }  change_variable = { name = qing_min_perf_justice  add = 6 } }
+		# (c) DOCKET BACKLOG (待審積壓) — accused left untried drag the Board's standing, x3.
+		if = {
+			limit = { var:qing_justice_docket_count > 0 }
+			set_variable = { name = qing_min_justice_scratch  value = var:qing_justice_docket_count }
+			change_variable = { name = qing_min_justice_scratch  multiply = 3 }
+			change_variable = { name = qing_min_perf_justice  subtract = var:qing_min_justice_scratch }
+		}
+		# (d) CORRUPTION DRAG — arbitrary, purchasable justice (刑名 graft). subtract corruption/8.
+		if = {
+			limit = { has_variable = qing_corruption_level }
+			set_variable = { name = qing_min_justice_scratch  value = var:qing_corruption_level }
+			change_variable = { name = qing_min_justice_scratch  divide = 8 }
+			change_variable = { name = qing_min_perf_justice  subtract = var:qing_min_justice_scratch }
+		}
+	}
+	else = {
+		# VACANT Board — the law drifts, justice is arbitrary. Floor it low.
+		set_variable = { name = qing_min_perf_justice  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_justice < 0 }   set_variable = { name = qing_min_perf_justice  value = 0 } }
+	if = { limit = { var:qing_min_perf_justice > 100 } set_variable = { name = qing_min_perf_justice  value = 100 } }
+	LOG_line = { sys = QING  msg = "board-of-punishments performance recomputed" }
+}
+
+# ======================================================================
+# [#364] IMPERIAL GUARD (領侍衛內大臣) PERFORMANCE — qing_min_perf_guard_commandant
+# (0..100, 50 = adequate).
+#
+# [#364 BUG-FIX] Like the censor (#362) and justice (#363) offices before it, the council
+# fold has always enumerated `office = guard_commandant` (QING_council_perf_accumulate,
+# se_QING_COUNCIL.txt:1395) but NO effect ever SET qing_min_perf_guard_commandant — so the
+# self-guarding accumulate helper silently DROPPED the Commandant of the Imperial Guard
+# from the council average. This compute closes that gap so the 領侍衛內大臣 folds into his
+# own Grand Council standing (his OTHER contributions — the emperor's power base + sovereign
+# vitality — already run in se_QING_COUNCIL.txt and are UNCHANGED here).
+#
+# The Commandant of the Imperial Guard (領侍衛內大臣) commanded the elite Manchu palace guard
+# drawn from the Upper Three Banners (上三旗) — the 侍衛 guardsmen and the Bayara braves
+# (巴牙喇) who warded the emperor's person and the metropolitan approaches. We build the meter
+# from concrete state the panel #364 manages:
+#   • the Commandant's own MARTIAL (領侍衛內大臣's governing skill — the soldier's competence, x4),
+#     plus a bonus for a LOYAL Commandant (the guard answers only to a man the throne trusts;
+#     high personal loyalty +6),
+#   • GUARDSMEN CORPS DEPTH — the 侍衛 guardsmen serving in the corps (qing_guard_corps list),
+#     count deviation from a healthy watch of ~4, x2,
+#   • a BAYARA-GUARD READINESS bonus — whether the elite Bayara legion (巴牙喇) stands raised
+#     (qing_bayara_guard_raised): +10 when the guard is under arms.
+# A VACANT Commandant post floors the meter low (no one commands the guard). Rebuilds the
+# qing_guard_corps roster (the panel datamodel), EXCLUDING great-office holders from the tally
+# (the #362-R2 double-count fix, applied here from the start). Reads guarded; scratch reads
+# use var:X. Clamp 0..100. Bounded O(court).
+# ======================================================================
+QING_ministry_recompute_perf_guard_commandant = {
+	# [#362-R2 systemic fix] capture the COUNTRY (THIS in every call context: the
+	# pulse dispatcher, the open-button, AND the scope:player={} wrapper the char-scoped
+	# appoint/recall panels use). Referenced below instead of ROOT, which in the
+	# scope:player wrapper resolves to the appointed CHARACTER (not CHI) — a confirmed
+	# systemic bug that rebuilt the corps roster EMPTY + floored the meter to 25 until
+	# the next pulse. Root-independent recompute fixes it authoritatively.
+	save_scope_as = qing_min_recompute_ctry
+	# --- rebuild the guardsmen corps roster (panel datamodel) + tally count. A "guardsman"
+	# = a courtier flagged qing_is_imperial_guardsman (enrolled via the #364 panel). Excludes
+	# great-office holders so a guardsman later given an office is not double-counted (the
+	# #362-R2 lesson, baked in from the start). Bounded O(court).
+	clear_variable_list = qing_guard_corps
+	set_variable = { name = qing_guard_corps_count  value = 0 }
+	every_character = {
+		limit = {
+			employer = scope:qing_min_recompute_ctry
+			is_alive = yes
+			has_variable = qing_is_imperial_guardsman
+			NOT = { has_variable = qing_office_held }
+		}
+		scope:qing_min_recompute_ctry = {
+			add_to_variable_list = { name = qing_guard_corps  target = prev }
+			change_variable = { name = qing_guard_corps_count  add = 1 }
+		}
+	}
+	# [#364-R2 review-fix] AUTHORITATIVELY re-derive the Bayara-Guard readiness flag from the
+	# concrete legion each pulse, so it can never leak past the legion's destruction (the set-once
+	# flag the adversarial review flagged: a wiped Bayara kept its +10 forever AND left the muster
+	# permanently spent). The Bayara stands under a MARKED founding commander (qing_is_bayara_commander,
+	# set in QING_guard_raise_bayara); if a legion we own still has that commander, the guard is under
+	# arms — else it has been destroyed/disbanded and the flag is cleared, dropping the +10 (term d)
+	# AND reopening the raise-once muster gate. any_legion / any_legion_commander are proven
+	# country-scope idioms (se_MOBILIZATION.txt:108). ROOT is the Qing player here.
+	if = {
+		limit = {
+			any_legion = {
+				any_legion_commander = { is_alive = yes  has_variable = qing_is_bayara_commander }
+			}
+		}
+		set_variable = { name = qing_bayara_guard_raised  value = 1 }
+	}
+	else = {
+		if = { limit = { has_variable = qing_bayara_guard_raised }  remove_variable = qing_bayara_guard_raised }
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_guard_commandant  value = 50 }
+	if = {
+		# office FILLED by a live employed Commandant — score on his martial + loyalty + corps.
+		limit = {
+			has_variable = qing_office_guard_commandant_holder
+			var:qing_office_guard_commandant_holder = { is_alive = yes  employer = scope:qing_min_recompute_ctry }
+		}
+		# (a) the Commandant's martial, deviation from a competent baseline of 7, x4.
+		var:qing_office_guard_commandant_holder = { save_scope_as = qing_guard_commandant_s }
+		set_variable = { name = qing_min_guard_scratch  value = 0 }
+		change_variable = { name = qing_min_guard_scratch  add = scope:qing_guard_commandant_s.martial }
+		change_variable = { name = qing_min_guard_scratch  subtract = 7 }
+		change_variable = { name = qing_min_guard_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_guard_commandant  add = var:qing_min_guard_scratch }
+		# (b) LOYALTY — the guard answers only to a man the throne can trust with the palace, +6.
+		if = { limit = { scope:qing_guard_commandant_s = { loyalty >= 50 } }  change_variable = { name = qing_min_perf_guard_commandant  add = 6 } }
+		# (c) GUARDSMEN CORPS DEPTH — the 侍衛 vs a healthy watch of ~4, x2.
+		set_variable = { name = qing_min_guard_scratch  value = var:qing_guard_corps_count }
+		change_variable = { name = qing_min_guard_scratch  subtract = 4 }
+		change_variable = { name = qing_min_guard_scratch  multiply = 2 }
+		change_variable = { name = qing_min_perf_guard_commandant  add = var:qing_min_guard_scratch }
+		# (d) BAYARA-GUARD READINESS — the elite Bayara legion under arms, +10.
+		if = { limit = { has_variable = qing_bayara_guard_raised }  change_variable = { name = qing_min_perf_guard_commandant  add = 10 } }
+	}
+	else = {
+		# VACANT Commandant post — the guard drifts leaderless. Floor it low.
+		set_variable = { name = qing_min_perf_guard_commandant  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_guard_commandant < 0 }   set_variable = { name = qing_min_perf_guard_commandant  value = 0 } }
+	if = { limit = { var:qing_min_perf_guard_commandant > 100 } set_variable = { name = qing_min_perf_guard_commandant  value = 100 } }
+	LOG_line = { sys = QING  msg = "imperial-guard performance recomputed" }
+}
+
+# ======================================================================
+# [#365] BOARD OF PERSONNEL (吏部) PERFORMANCE — qing_min_perf_personnel (0..100, 50 = adequate).
+# The Board of Personnel answered for the whole provincial officialdom: the appointment,
+# evaluation (考課), and triennial reckoning (大計) of the governor corps. We build the meter
+# from the concrete governor corps the mod already tracks (is_governor = yes chars in CHI's
+# employ — the same real engine objects QING_personnel_evaluate_governors / _daji_review iterate):
+#   • the Minister of Personnel's own finesse (the Board president 吏部尚書, x4),
+#   • GOVERNOR-CORPS INTEGRITY — the fraction of the governor corps that is CLEAN (not corrupt),
+#     deviation from a fully-clean corps, scaled: a rotten officialdom (sale of offices, 捐納)
+#     is the Board's signature failure and drags the meter down.
+# A VACANT Personnel office floors the meter low (no one runs the Board — the governorate drifts,
+# exactly the "no minister" branch of QING_personnel_evaluate_governors). All reads guarded.
+#
+# The council fold has always enumerated `office = personnel` (QING_council_perf_accumulate,
+# se_QING_COUNCIL.txt:1385) but NO effect ever SET qing_min_perf_personnel — so the self-guarding
+# fold silently DROPPED the Grand Minister of Personnel from the council average (the same latent
+# bug censor #362 / justice #363 / guard_commandant #364 fixed). #365 closes it.
+#
+# Rebuilds the qing_personnel_governor_corps roster (the panel datamodel) each pulse.
+# ======================================================================
+QING_ministry_recompute_perf_personnel = {
+	# [#362-R2 systemic fix] capture the COUNTRY (THIS in every call context: the
+	# pulse dispatcher, the open-button, AND the scope:player={} wrapper the char-scoped
+	# appoint/recall panels use). Referenced below instead of ROOT, which in the
+	# scope:player wrapper resolves to the appointed CHARACTER (not CHI) — a confirmed
+	# systemic bug that rebuilt the corps roster EMPTY + floored the meter to 25 until
+	# the next pulse. Root-independent recompute fixes it authoritatively.
+	save_scope_as = qing_min_recompute_ctry
+	# --- rebuild the GOVERNOR-CORPS ROSTER (the concrete governors the #365 panel renders) +
+	# tally the corps size and the clean-count. is_governor = yes are real engine objects; no
+	# marked-var needed. Bounded O(governors).
+	clear_variable_list = qing_personnel_governor_corps
+	set_variable = { name = qing_personnel_gov_count  value = 0 }   # governors in the corps
+	set_variable = { name = qing_personnel_gov_clean  value = 0 }   # of those, the CLEAN ones
+	every_character = {
+		limit = {
+			employer = scope:qing_min_recompute_ctry
+			is_governor = yes
+			is_alive = yes
+			# [#365 review-fix] exclude a governor who is ALSO a seated great-office holder,
+			# matching the three sibling corps rosters (censor #362-R2, justice #363, guard #364).
+			# Unlike theirs — whose filters key off strippable marks QING_office_appoint removes on
+			# appointment — is_governor is a native engine attribute with no strip path, so without
+			# this guard the sitting Minister of Personnel (if himself a governor) leaks into his OWN
+			# corps: double-scored in terms (a)+(b) and rendered as his own Cultivate/Discipline row.
+			NOT = { has_variable = qing_office_held }
+		}
+		scope:qing_min_recompute_ctry = {
+			change_variable = { name = qing_personnel_gov_count  add = 1 }
+			add_to_variable_list = { name = qing_personnel_governor_corps  target = prev }
+		}
+		if = {
+			limit = { NOT = { has_trait = corrupt }  corruption < 40 }
+			scope:qing_min_recompute_ctry = { change_variable = { name = qing_personnel_gov_clean  add = 1 } }
+		}
+	}
+	# base: adequate.
+	set_variable = { name = qing_min_perf_personnel  value = 50 }
+	if = {
+		# office FILLED by a live employed Minister — score on his finesse + corps integrity.
+		limit = {
+			has_variable = qing_office_personnel_holder
+			var:qing_office_personnel_holder = { is_alive = yes  employer = scope:qing_min_recompute_ctry }
+		}
+		# (a) the Minister's finesse, deviation from a competent baseline of 7, x4.
+		var:qing_office_personnel_holder = { save_scope_as = qing_personnel_minister_s }
+		set_variable = { name = qing_min_personnel_scratch  value = 0 }
+		change_variable = { name = qing_min_personnel_scratch  add = scope:qing_personnel_minister_s.finesse }
+		change_variable = { name = qing_min_personnel_scratch  subtract = 7 }
+		change_variable = { name = qing_min_personnel_scratch  multiply = 4 }
+		change_variable = { name = qing_min_perf_personnel  add = var:qing_min_personnel_scratch }
+		# (b) GOVERNOR-CORPS INTEGRITY — clean% of the corps, deviation from a fully-clean
+		# corps (target 100%), scaled down so a corrupt officialdom is a real but bounded drag.
+		if = {
+			limit = { var:qing_personnel_gov_count > 0 }
+			set_variable = { name = qing_min_personnel_scratch  value = var:qing_personnel_gov_clean }
+			change_variable = { name = qing_min_personnel_scratch  multiply = 100 }
+			change_variable = { name = qing_min_personnel_scratch  divide = var:qing_personnel_gov_count }  # clean %
+			change_variable = { name = qing_min_personnel_scratch  subtract = 100 }   # deviation from fully clean (<=0)
+			change_variable = { name = qing_min_personnel_scratch  divide = 4 }        # scale (0..-25)
+			change_variable = { name = qing_min_perf_personnel  add = var:qing_min_personnel_scratch }
+		}
+	}
+	else = {
+		# VACANT Board of Personnel — the governorate drifts leaderless. Floor it low.
+		set_variable = { name = qing_min_perf_personnel  value = 25 }
+	}
+	# clamp 0..100.
+	if = { limit = { var:qing_min_perf_personnel < 0 }   set_variable = { name = qing_min_perf_personnel  value = 0 } }
+	if = { limit = { var:qing_min_perf_personnel > 100 } set_variable = { name = qing_min_perf_personnel  value = 100 } }
+	LOG_line = { sys = QING  msg = "board-of-personnel performance recomputed" }
+}

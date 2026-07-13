@@ -1,0 +1,141 @@
+########################################################################
+# QING_guard_panel.txt — scripted GUIs for the Imperial Guard panel (#364).
+#
+# The Imperial Guard (領侍衛內大臣) bureaucracy: a Grand-Council-clone L4 window headed by the
+# Commandant of the Imperial Guard, surfacing the ministry-performance meter
+# qing_min_perf_guard_commandant (which folds into his Grand Council standing — a fold that
+# had NEVER been computed before #364), the corps of 侍衛 guardsmen enrolled under him
+# (qing_guard_corps, rebuilt each pulse in se_QING_MINISTRY.txt), and one standing-institution
+# lever: MUSTER THE BAYARA GUARD (巴牙喇 — raise the elite legion at the capital).
+#
+# Scoped to the Qing player (ROOT = CHI); AI never evaluates these (ai_is_valid = no).
+# Opened by qing_guard_open_panel_button (a button in government_view.gui). Window:
+# gui/qing_guard.gui. Mirrors gui/qing_censorate.gui (the corps-roster archetype).
+# Prefix = qing_guard_. se_LOG sys = QING.
+########################################################################
+
+# ---- OPEN THE IMPERIAL GUARD PANEL (button in the government view) ---------
+qing_guard_open_panel_button = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		# recompute so the meter + guardsmen roster are fresh the moment the panel opens.
+		QING_ministry_recompute_perf_guard_commandant = yes
+		LOG_line = { sys = QING  msg = "EVENT qing_guard_open_panel_button fired; opening the Imperial Guard panel for" }
+	}
+}
+
+# ---- COMMANDANT HOLDER INDICATOR -------------------------------------------
+qing_guard_filled = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_office_guard_commandant_holder
+		var:qing_office_guard_commandant_holder = { is_alive = yes  employer = ROOT }
+	}
+}
+
+qing_guard_vacant = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		NOR = {
+			AND = {
+				has_variable = qing_office_guard_commandant_holder
+				var:qing_office_guard_commandant_holder = { is_alive = yes  employer = ROOT }
+			}
+		}
+	}
+}
+
+# ---- ENROL A GUARDSMAN — flag a courtier as a member of the 侍衛 guard corps.
+# Row action on the court-candidate picker (reuses the shared court pool the Appoint
+# window lists). Capped at 6 guardsmen so the corps is a select service, not the whole
+# court. ROOT = the player; the char comes via the picker datacontext (GuiScope char +
+# player). Mirrors qing_censorate_appoint_inspector. Excludes office-holders (a great-office
+# holder cannot also serve as a guardsman — mirrors the #362-R2 roster exclusion).
+# ----------------------------------------------------------------------
+qing_guard_enrol_guardsman = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+	}
+	is_valid = {
+		# an eligible, unassigned courtier of the player, corps not yet full.
+		is_alive = yes
+		is_adult = yes
+		employer = scope:player
+		NOT = { has_variable = qing_is_imperial_guardsman }
+		NOT = { has_variable = qing_office_held }
+		scope:player = {
+			OR = {
+				NOT = { has_variable = qing_guard_corps_count }
+				var:qing_guard_corps_count < 6
+			}
+		}
+	}
+	effect = {
+		# stamp the guardsman mark (read by QING_ministry_recompute_perf_guard_commandant,
+		# which rebuilds the roster + count each pulse).
+		set_variable = { name = qing_is_imperial_guardsman  value = 1 }
+		LOG_line = { sys = QING  msg = "guard: a courtier enrolled into the 侍衛 guard corps for" }
+		# recompute immediately so the panel + the count gate reflect the new guardsman.
+		scope:player = { QING_ministry_recompute_perf_guard_commandant = yes }
+	}
+}
+
+# ---- DISCHARGE A GUARDSMAN — remove a serving guardsman from the corps. -----
+qing_guard_discharge_guardsman = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		has_variable = qing_is_imperial_guardsman
+	}
+	is_valid = {
+		has_variable = qing_is_imperial_guardsman
+		employer = scope:player
+	}
+	effect = {
+		remove_variable = qing_is_imperial_guardsman
+		LOG_line = { sys = QING  msg = "guard: a guardsman discharged from the corps for" }
+		scope:player = { QING_ministry_recompute_perf_guard_commandant = yes }
+	}
+}
+
+# ---- MUSTER THE BAYARA GUARD — raise the elite Bayara legion (巴牙喇) at the capital.
+# A raise-once standing institution. Gated on a seated Commandant + not-already-raised.
+# Country scope. Chains QING_guard_raise_bayara + refreshes the meter (readiness +10).
+# ----------------------------------------------------------------------
+qing_guard_muster_bayara = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		# a seated Commandant must command the guard to raise it...
+		has_variable = qing_office_guard_commandant_holder
+		var:qing_office_guard_commandant_holder = { is_alive = yes  employer = ROOT }
+		# ...and it must not already stand raised (raise-once; no dead-affordance click).
+		NOT = { has_variable = qing_bayara_guard_raised }
+		exists = capital_scope
+	}
+	effect = {
+		QING_guard_raise_bayara = yes
+		# refresh so the meter reflects the readiness bonus.
+		QING_ministry_recompute_perf_guard_commandant = yes
+		LOG_line = { sys = QING  msg = "guard: the Bayara Guard mustered from the panel for" }
+	}
+}
+
+# ---- CLOSE ------------------------------------------------------------------
+qing_guard_close_panel = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_valid = { always = yes }
+	effect = { }
+}

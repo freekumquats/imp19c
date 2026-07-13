@@ -180,6 +180,13 @@ QING_MIGR_move_one_nomad = {
 		# A genuine Oirat-Kalmyk-Mongol tribesman pop exists somewhere we do NOT
 		# already own it (a real out-migration, not shuffling our own pops), and it
 		# is a free mover (not slave/noble).
+		# [#429 unproven-primitive fix] the pop_culture TRIGGER takes the BARE culture name
+		# (pop_culture = kalmyks) — upstream TI + Invictus use that form 1046× and NEVER the
+		# scope-prefixed `culture:X` (that prefix is proven only for the SETTER set_pop_culture).
+		# This block previously read `pop_culture = culture:kalmyks`, which silently never matched
+		# → the whole any_province guard failed → QING_MIGR_move_one_nomad ALWAYS fell through to
+		# the create_state_pop fallback, never moving a real pop (defeating the move-not-spawn
+		# design). Corrected here + in the random_province source pick below.
 		limit = {
 			any_province = {
 				NOT = { this = scope:qing_nomad_dest }
@@ -188,10 +195,10 @@ QING_MIGR_move_one_nomad = {
 					NOT = { pop_type = slaves }
 					NOT = { pop_type = nobles }
 					OR = {
-						pop_culture = culture:kalmyks
-						pop_culture = culture:oirat
-						pop_culture = culture:mongolian
-						pop_culture = culture:buryat
+						pop_culture = kalmyks
+						pop_culture = oirat
+						pop_culture = mongolian
+						pop_culture = buryat
 					}
 				}
 			}
@@ -217,10 +224,10 @@ QING_MIGR_move_one_nomad = {
 					NOT = { pop_type = slaves }
 					NOT = { pop_type = nobles }
 					OR = {
-						pop_culture = culture:kalmyks
-						pop_culture = culture:oirat
-						pop_culture = culture:mongolian
-						pop_culture = culture:buryat
+						pop_culture = kalmyks
+						pop_culture = oirat
+						pop_culture = mongolian
+						pop_culture = buryat
 					}
 				}
 			}
@@ -230,10 +237,10 @@ QING_MIGR_move_one_nomad = {
 					NOT = { pop_type = slaves }
 					NOT = { pop_type = nobles }
 					OR = {
-						pop_culture = culture:kalmyks
-						pop_culture = culture:oirat
-						pop_culture = culture:mongolian
-						pop_culture = culture:buryat
+						pop_culture = kalmyks
+						pop_culture = oirat
+						pop_culture = mongolian
+						pop_culture = buryat
 					}
 				}
 				move_pop = scope:qing_nomad_dest
@@ -364,4 +371,119 @@ QING_COLON_spread_newworld_crops = {
 	# the ENTER/EXIT pair balances on BOTH paths (the fail path previously emitted
 	# ENTER+FAIL but no EXIT). result reflects which branch ran.
 	LOG_exit = { sys = QING  fn = QING_COLON_spread_newworld_crops  result = OK }
+}
+
+# ======================================================================
+# ORGANIC NEW-WORLD CROP DIFFUSION (#384, 2026-07-12).
+# The #64/#78 system was a static seed + colonisation-arc conversion. This adds the
+# ORGANIC time-based spread the user asked for: maize / sweet_potato / peanut / chili
+# creep out from the provinces already growing them into their MARGINAL neighbours across
+# the 18th c. (Ho Ping-ti; the Columbian Exchange via the Manila galleon), so the crop set
+# GROWS over a playthrough and the New World Crops report surfaces a live spread.
+#
+# MODEL — the proven PULL/PUSH two-pass sphere idiom (se_QING_SPHERE.txt), adapted:
+#   PASS 1 SNAPSHOT — stamp a per-province flag (qing_nwcrop_src_snap) on EVERY province
+#     that grows a NW crop RIGHT NOW, so pass 2 reads a FROZEN source set and a province
+#     converted this pulse cannot immediately seed its own neighbours (order-independence).
+#   PASS 2 ADOPT — for each eligible MARGINAL target (CHI-owned, land, populated, growing a
+#     non-staple low-value good — NEVER grain/rice/wheat), count its adjacent FROZEN crop
+#     sources; the more crop neighbours, the likelier it adopts the sweet potato this year.
+#     Capped nationwide per pulse (staple-safe, food supply not rebalanced).
+# Then QING_COLON_apply_nwcrop_capacity reconciles the capacity lift on the new crop
+# provinces, and the year's adoption tally is frozen for the report's spread indicator.
+#
+# GATED on qing_newworld_crops = 1 (the arrival event qing_migration.20) + self-throttled
+# to ~yearly by its own cooldown, so it is inert until the crops have arrived and then a
+# slow annual creep, never a churn. ROOT = CHI. Called from the quarterly pulse.
+# ======================================================================
+QING_COLON_nwcrop_diffuse = {
+	if = {
+		limit = {
+			tag = CHI
+			has_variable = qing_newworld_crops
+			var:qing_newworld_crops = 1
+			NOT = { has_variable = qing_nwcrop_diffuse_cooldown }
+		}
+		LOG_enter = { sys = QING  fn = "QING_COLON_nwcrop_diffuse" }
+		set_variable = { name = qing_nwcrop_diffuse_cooldown  days = 365 }   # ~yearly creep
+
+		# --- PASS 1 SNAPSHOT: freeze the current crop-source set (global; the crops are a
+		# property of the land, and a Qing target may border a non-Qing crop province) -----
+		every_province = {
+			limit = {
+				OR = {
+					trade_goods = maize
+					trade_goods = sweet_potato
+					trade_goods = potato
+					trade_goods = peanut
+					trade_goods = chili
+				}
+			}
+			set_variable = { name = qing_nwcrop_src_snap  value = 1 }
+		}
+
+		# --- PASS 2 ADOPT: eligible marginal CHI targets take up the crop, capped nationwide.
+		# Scored by adjacent frozen-source count; the flip is probabilistic (random, proven in
+		# the decline pulses) and weighted by that count, so a province ringed by crop land
+		# adopts far sooner than one with a single crop neighbour. The nationwide cap is
+		# enforced by a running counter checked in the limit (<= 3 per year).
+		set_variable = { name = qing_nwcrop_adopt_count  value = 0 }
+		ordered_owned_province = {
+			limit = {
+				is_sea = no
+				is_capital = no
+				total_population > 0
+				# marginal, non-staple land only — NEVER the grain/rice/wheat breadbasket
+				OR = { trade_goods = livestock  trade_goods = wood }
+				NOT = { has_variable = qing_nwcrop_src_snap }
+				# at least one FROZEN crop-source neighbour
+				any_neighbor_province = { has_variable = qing_nwcrop_src_snap }
+			}
+			# prefer the most crop-ringed, most crowded targets first (deterministic order);
+			# the per-province random flip below then decides adoption this year.
+			order_by = total_population
+			max = 12   # scan a bounded slice; the nationwide cap + random flip keep actual
+			           # conversions to a slow creep (see qing_nwcrop_adopt_count guard)
+			if = {
+				limit = { ROOT.var:qing_nwcrop_adopt_count < 3 }
+				# save THIS target province as a stable scope BEFORE the neighbour walk, so the
+				# accumulation writes to a saved scope (the proven sphere idiom — scope:bleed_src_state
+				# — not `prev`, which is unreliable inside a nested every_neighbor_province).
+				save_scope_as = nwcrop_target
+				set_variable = { name = qing_nwcrop_adj  value = 0 }
+				# tally adjacent frozen crop sources onto the saved target's persistent var.
+				every_neighbor_province = {
+					limit = { has_variable = qing_nwcrop_src_snap }
+					scope:nwcrop_target = { change_variable = { name = qing_nwcrop_adj  add = 1 } }
+				}
+				# probabilistic adoption: base 15% per crop-neighbour, capped at 60%. The chance
+				# is wrapped in qing_nwcrop_flip_chance_svalue (reads var:qing_nwcrop_adj on THIS
+				# province) — the proven `chance = <script_value>` idiom (Invictus me_cyrene
+				# chance = current_ruler.cyr_martial_prob_svalue); a bare `chance = var:X` / a
+				# `chance = scope:X.var:Y` accessor is NOT attested and risks a silent 0-chance no-op.
+				random = {
+					chance = qing_nwcrop_flip_chance_svalue
+					set_trade_goods = sweet_potato
+					ROOT = { change_variable = { name = qing_nwcrop_adopt_count  add = 1 } }
+					LOG_line = { sys = QING  msg = "NWCROP diffuse: marginal province takes up the sweet potato (organic spread) for" }
+				}
+				# clean the per-province scratch var
+				remove_variable = qing_nwcrop_adj
+			}
+		}
+
+		# --- reconcile the capacity lift on the freshly-converted provinces ----------------
+		QING_COLON_apply_nwcrop_capacity = yes
+
+		# --- freeze this year's adoption tally for the report spread indicator, then clear
+		# the snapshot flags (global) so next year starts clean --------------------------
+		set_variable = { name = qing_nwcrop_spread_last_year  value = var:qing_nwcrop_adopt_count }
+		remove_variable = qing_nwcrop_adopt_count
+		every_province = {
+			limit = { has_variable = qing_nwcrop_src_snap }
+			remove_variable = qing_nwcrop_src_snap
+		}
+		LOG_line = { sys = QING  msg = "NWCROP diffuse: annual spread tally frozen for report for" }
+		LOG_exit = { sys = QING  fn = "QING_COLON_nwcrop_diffuse"  result = OK }
+	}
 }

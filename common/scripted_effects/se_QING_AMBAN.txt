@@ -56,6 +56,24 @@ QING_amban_post = {
 		add_zeal = { 2 5 }
 		save_scope_as = qing_amban_new
 	}
+	# [#392 refactor] the post-wiring (move to subject, role modifier, affinity, storage,
+	# marker, tenure timer) is now the shared QING_amban_wire tail so the game-start seed
+	# (QING_amban_seed_one) and this runtime poster stay behaviourally identical — no drift.
+	QING_amban_wire = { subject = $subject$ }
+	LOG_line = { sys = QING  msg = "amban: posted to for" }
+	LOG_exit = { sys = QING  fn = "QING_amban_post"  result = OK }
+}
+
+# ======================================================================
+# [#392] SHARED WIRING TAIL. Runs in ROOT (CHI) with scope:qing_amban_new already set
+# to the freshly-created resident. $subject$ = the subject country scope. Moves the
+# resident into the subject, applies the qing_amban_resident modifier (OUTSIDE
+# create_character per the #90 boot-crash gotcha), scores his throne-affinity, stores
+# the fixed-name link on the subject, and stamps the death-cleanup marker + 8-year
+# tenure timer. Extracted verbatim from the old QING_amban_post body so both the
+# runtime poster and the game-start seed share ONE definition.
+# ======================================================================
+QING_amban_wire = {
 	# move him to the subject, apply the role modifier, store the link
 	scope:qing_amban_new = {
 		# [#157 fix] `minor_character = yes` inside create_character is an INVALID key
@@ -102,8 +120,6 @@ QING_amban_post = {
 		# >= 8 years, so qing_amban.2 fires on `NOT = { has_variable = qing_amban_tenure_pending }`.
 		set_variable = { name = qing_amban_tenure_pending  value = 1  days = 2920 }
 	}
-	LOG_line = { sys = QING  msg = "amban: posted to for" }
-	LOG_exit = { sys = QING  fn = "QING_amban_post"  result = OK }
 }
 
 # ======================================================================
@@ -170,14 +186,12 @@ QING_amban_post_sweep = {
 				# claimed — the manual layer owns those posts. Subjects the player never touches
 				# keep the gradual auto-staffing exactly as before.
 				NOT = { has_variable = qing_amban_manual }
-				any_owned_province = { count >= 1 }
-				exists = current_ruler
-				current_ruler = {
-					OR = {
-						has_culture_group = mongolic
-						has_culture_group = bodish
-					}
-				}
+				# [#392] SHARED warrant gate (was an inline culture-group predicate here) — now the
+				# single QING_amban_warrants_resident_trigger the panel roster also reads, so a
+				# posted resident is guaranteed to render (warrant == postable). This also brings the
+				# autonomous_governorships ILI/ULS (伊犁/烏里雅蘇台將軍, Manchu-ruled) into scope, the
+				# canonical resident-general posts the old culture-only test silently skipped.
+				QING_amban_warrants_resident_trigger = yes
 			}
 			save_scope_as = qing_amban_post_target
 			ROOT = { QING_amban_post = { subject = scope:qing_amban_post_target } }
@@ -233,11 +247,19 @@ QING_amban_evaluate = {
 					LOG_line = { sys = QING  msg = "amban: CLASH vs Lifan holder (friction) in , dependency slips for" }
 					# queue a recall crisis at high friction
 					if = {
-						limit = { var:qing_pair_friction >= 65 }
+						# [court-slot] qing_amban.1 is a MODAL Lifan Yuan (理藩院) court event fired inside every_subject —
+						# several subjects clashing in one pulse would queue several modals AND dogpile the other court
+						# beats. Share the quarterly court-event slot (qing_gc_event_slot_used, reset monthly): the FIRST
+						# clash this pulse takes the slot, the rest hold until a later month. Claim only on the fire path.
+						limit = {
+							var:qing_pair_friction >= 65
+							NOT = { has_variable = qing_gc_event_slot_used }  # [court-slot] share the court-event throttle
+						}
 						scope:qing_amban_subject = { save_scope_as = qing_amban_crisis_subject }
 						scope:qing_amban_current = { save_scope_as = qing_amban_crisis_resident }
 						scope:qing_lifan_holder = { save_scope_as = qing_amban_crisis_holder }
 						trigger_event = { id = qing_amban.1  days = { 5 15 } }
+						set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [court-slot] claim on the fire path
 					}
 				}
 				else = {
@@ -345,4 +367,104 @@ QING_amban_evaluate = {
 		}
 	}
 	LOG_exit = { sys = QING  fn = "QING_amban_evaluate"  result = OK }
+}
+
+# ======================================================================
+# [#392] GAME-START SEED — post the HISTORICAL 1763 resident-generals into the
+# Inner-Asian frontier commands so the Lifan Yuan Directorate opens with its real
+# roster (the amban system was live in 1763; an empty panel misrepresented that).
+#
+# QING_amban_seed_one — creates ONE named historical resident and wires him via the
+# shared QING_amban_wire tail (identical to a runtime posting). Country scope (ROOT =
+# CHI). Params:
+#   $subject$ = the subject-country scope to post to (must be a live CHI subject).
+#   $nick$    = the NICKNAME_QING_AMBAN_* loc key pinning his historical name.
+#   $culture$ = his culture (manchu for the banner generals, mongolian for a Khalkha).
+#   $fin$/$mar$/$cha$/$zea$ = fixed skill BONUSES (historical competence, not random,
+#     so the roster is reproducible — the runtime poster keeps its random spread).
+# religion = vajrayana matches the Inner-Asian (Tibetan-Buddhist) posting context, as
+# the runtime poster uses. Guarded by the caller (only posts where none is present).
+# ======================================================================
+QING_amban_seed_one = {
+	LOG_enter = { sys = QING  fn = "QING_amban_seed_one" }
+	create_character = {
+		age = { 40 55 }
+		culture = $culture$
+		religion = vajrayana
+		add_finesse = $fin$
+		add_martial = $mar$
+		add_charisma = $cha$
+		add_zeal = $zea$
+		save_scope_as = qing_amban_new
+	}
+	# pin the historical name as an epithet (add_nickname takes the bare loc key —
+	# the proven upstream form; NEVER interpolate $nick$ into a quoted LOG string).
+	scope:qing_amban_new = { add_nickname = $nick$ }
+	# shared wiring tail (move to subject, modifier, affinity, storage, marker, timer)
+	QING_amban_wire = { subject = $subject$ }
+	LOG_line = { sys = QING  msg = "amban: game-start historical resident seeded for" }
+	LOG_exit = { sys = QING  fn = "QING_amban_seed_one"  result = OK }
+}
+
+# ======================================================================
+# [#392] QING_amban_seed_gamestart — called ONCE from imp19c_qing_on_game_initialized
+# (CHI only). Posts the three historical 1763 residents to the DIRECT CHI frontier
+# subjects the Lifan Yuan panel can render (every_subject reaches direct subjects only;
+# the nested XNG/MGA are unreachable, so seeding them would strand invisible chars):
+#   • TIB 西藏  → 輔鼐 Funai        (Manchu; amban in Lhasa 1761-64; middling administrator)
+#   • ILI 伊犁  → 明瑞 Mingrui      (Manchu; first 伊犁將軍 from 1762; distinguished general)
+#   • ULS 烏里雅蘇台 → 成衮札布 Chenggünjab (Khalkha Mongol; 定邊左副將軍 1757-71; able, long-tenured)
+# Each post is idempotent + guarded: only if the subject EXISTS, is a live CHI subject,
+# has no resident yet (never clobbers a post the player/sweep already made), AND passes
+# QING_amban_warrants_resident_trigger — the SAME gate the panel roster filters on, so we
+# never seed a resident the panel could not render (defense-in-depth: keeps the seed honest
+# even if a subject's generated ruler/subject-type ever shifts off the warrant set). Runs at
+# init BEFORE QING_ministry_recompute_all_perf so the opening Lifan Yuan meter/roster
+# already sees them. Country scope (ROOT = CHI).
+# ======================================================================
+QING_amban_seed_gamestart = {
+	LOG_enter = { sys = QING  fn = "QING_amban_seed_gamestart" }
+	# TIB — 輔鼐 Funai (Manchu amban, competent administrator)
+	if = {
+		limit = {
+			exists = c:TIB
+			c:TIB = { is_subject_of = ROOT  NOT = { has_variable = qing_amban_here }  QING_amban_warrants_resident_trigger = yes }
+		}
+		c:TIB = { save_scope_as = qing_amban_seed_target }
+		QING_amban_seed_one = {
+			subject = scope:qing_amban_seed_target
+			nick = NICKNAME_QING_AMBAN_FUNAI
+			culture = manchu
+			fin = 4  mar = 2  cha = 4  zea = 3
+		}
+	}
+	# ILI — 明瑞 Mingrui (Manchu banner general, distinguished commander)
+	if = {
+		limit = {
+			exists = c:ILI
+			c:ILI = { is_subject_of = ROOT  NOT = { has_variable = qing_amban_here }  QING_amban_warrants_resident_trigger = yes }
+		}
+		c:ILI = { save_scope_as = qing_amban_seed_target }
+		QING_amban_seed_one = {
+			subject = scope:qing_amban_seed_target
+			nick = NICKNAME_QING_AMBAN_MINGRUI
+			culture = manchu
+			fin = 3  mar = 6  cha = 4  zea = 3
+		}
+	}
+	# ULS — 成衮札布 Chenggünjab (Khalkha Mongol general, able + long-tenured)
+	if = {
+		limit = {
+			exists = c:ULS
+			c:ULS = { is_subject_of = ROOT  NOT = { has_variable = qing_amban_here }  QING_amban_warrants_resident_trigger = yes }
+		}
+		c:ULS = { save_scope_as = qing_amban_seed_target }
+		QING_amban_seed_one = {
+			subject = scope:qing_amban_seed_target
+			nick = NICKNAME_QING_AMBAN_CHENGGUNJAB
+			culture = mongolian
+			fin = 4  mar = 5  cha = 5  zea = 3
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_amban_seed_gamestart"  result = OK }
 }

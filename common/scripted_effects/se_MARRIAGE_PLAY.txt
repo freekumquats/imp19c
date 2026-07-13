@@ -1,0 +1,491 @@
+########################################################################
+# se_MARRIAGE_PLAY.txt — [#356] the MARRIAGE-PROPOSAL DIPLOMATIC PLAY.
+#
+# Replaces the old Dynastic Match window/builder (deleted). A royal marriage is now a
+# first-class DIPLOMATIC PLAY: the player picks ONE unmarried character of his own realm
+# and ONE opposite-gender unmarried character of a target realm; the play IS the proposal
+# that those two wed. It runs like any diplomatic play (progression + success events, the
+# Zongli-Yamen factor #357, incentives + adverse events), and RESOLVES by REUSING the
+# existing marriage machinery (se_MARRIAGE.txt): MARRY if both are adult, BETROTH if either
+# is a minor.
+#
+# The two chosen characters are stored ON THE PLAY PROVOBJ as marriage_play_groom /
+# marriage_play_bride (character-valued vars), set immediately after AI_begin_diplomatic_play
+# saves scope:diplomatic_play. Success is SEEDED from the existing compatibility triggers
+# (MARRIAGE_pair_compatible / _power_parity / _same_faith / _western_house). Resolution is
+# hung off the shared finale dispatcher (DIPLOMACY_trigger_diplomatic_play_finale_event, a
+# new flag:marriage_proposal branch) so it uses the one canonical play-teardown path (#58).
+#
+# Scope notes: ROOT/this = the PROPOSER country unless noted. play_target_country = the
+# receiving realm. play_target_area = the proposer's capital province (a play needs a target
+# area; the marriage has no territorial locus, so the instigator's capital stands in — it is
+# never ceded because the finale branch does no land transfer). se_LOG sys = MARRIAGE.
+########################################################################
+
+# ======================================================================
+# MARRIAGE_PLAY_begin — launch the proposal play. Scope: COUNTRY (the proposer/player).
+# Expects two saved scopes set by the GUI picker:
+#   scope:marriage_play_our_char   — the proposer's chosen unmarried character
+#   scope:marriage_play_their_char — the target realm's chosen opposite-gender unmarried char
+# The target country is derived from their_char's employer. Pays the standard begin price,
+# opens a manual play, stores the pair + a marriage goal on the provobj, and SEEDS success
+# from the pair's compatibility.
+# ======================================================================
+MARRIAGE_PLAY_begin = {
+	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_PLAY_begin" }
+	if = {
+		limit = {
+			exists = scope:marriage_play_our_char
+			exists = scope:marriage_play_their_char
+			scope:marriage_play_their_char = { exists = employer }
+			# distinct realms (a proposal is between two courts).
+			NOT = { scope:marriage_play_their_char.employer = { this = ROOT } }
+			exists = capital_scope
+		}
+		save_scope_as = marriage_play_proposer
+		scope:marriage_play_their_char = { employer = { save_scope_as = marriage_play_target_country } }
+		pay_price = begin_diplomatic_play_price
+		AI_begin_diplomatic_play = {
+			play_instigator = ROOT
+			play_target_area = capital_scope
+			play_target_country = scope:marriage_play_target_country
+			play_goal = flag:marriage_proposal
+			play_type = manual
+		}
+		# store the chosen pair on the freshly-created provobj (scope:diplomatic_play, set by
+		# AI_begin_diplomatic_play) so the resolution can wed exactly these two.
+		if = {
+			limit = { exists = scope:diplomatic_play  scope:diplomatic_play = { has_variable = is_diplomatic_play } }
+			scope:diplomatic_play = {
+				set_variable = { name = marriage_play_groom  value = scope:marriage_play_our_char }
+				set_variable = { name = marriage_play_bride  value = scope:marriage_play_their_char }
+			}
+			# SEED success from the pair's realm-compatibility — a well-matched pair opens with a
+			# head-start, a poor match starts cold (must develop through events to succeed).
+			MARRIAGE_PLAY_seed_success = yes
+			# [#411] then adjust the opening success by the INITIATOR's suit — the calibre of the
+			# proposing character (our_char), the realms' power differential, and the two houses'
+			# relative prestige. A strong, prestigious envoy from the greater power courting a lesser
+			# house opens markedly warmer (the target 'marries up'); a frail low-born suitor from a
+			# minor house courting a greater one opens cooler.
+			MARRIAGE_PLAY_seed_char_bonus = yes
+			LOG_line = { sys = MARRIAGE  msg = "marriage-proposal play opened between two chosen characters" }
+		}
+		else = {
+			LOG_fail = { sys = MARRIAGE  fn = "MARRIAGE_PLAY_begin"  reason = "play provobj not created; proposal aborted" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = MARRIAGE  fn = "MARRIAGE_PLAY_begin"  reason = "missing/invalid chosen characters or same-realm pair; no play opened" }
+	}
+	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_PLAY_begin"  result = OK }
+}
+
+# ======================================================================
+# MARRIAGE_PLAY_seed_success — set the play's opening success from the pair's realm
+# compatibility. Scope: the PROPOSER country; expects scope:diplomatic_play +
+# scope:marriage_play_target_country. Uses the EXISTING compatibility triggers (evaluated
+# proposer-vs-target via scope:target, the symmetric idiom se_MARRIAGE.txt uses): a fully
+# compatible pair (same bloc/faith + power parity) opens warm; a bridged/parity-only pair
+# opens moderate; an incompatible pair opens cold (near the fizzle floor). Below-decisive so
+# the play must still develop.
+# ======================================================================
+MARRIAGE_PLAY_seed_success = {
+	# the compatibility triggers read the OTHER house as scope:target (symmetric), so save the
+	# target realm there and evaluate from the proposer's scope.
+	scope:marriage_play_target_country = { save_scope_as = target }
+	if = {
+		# fully compatible — a natural match; opens warm.
+		limit = { MARRIAGE_pair_compatible_trigger = yes }
+		scope:diplomatic_play = { set_variable = { name = diplomatic_play_success  value = 45 } }
+		LOG_line = { sys = MARRIAGE  msg = "marriage play seeded WARM (compatible pair)" }
+	}
+	else_if = {
+		# power parity but a confessional/bloc gap (a bridge would help) — opens moderate.
+		limit = { MARRIAGE_power_parity_trigger = yes }
+		scope:diplomatic_play = { set_variable = { name = diplomatic_play_success  value = 30 } }
+		LOG_line = { sys = MARRIAGE  msg = "marriage play seeded MODERATE (parity, cross-line)" }
+	}
+	else = {
+		# a real mismatch (a great power to a princeling, no shared world) — opens cold.
+		scope:diplomatic_play = { set_variable = { name = diplomatic_play_success  value = 15 } }
+		LOG_line = { sys = MARRIAGE  msg = "marriage play seeded COLD (mismatched pair)" }
+	}
+}
+
+# ======================================================================
+# [#411] MARRIAGE_PLAY_seed_char_bonus — adjust the opening success by the INITIATOR's SUIT.
+# Scope: the PROPOSER country. Expects scope:diplomatic_play, scope:marriage_play_our_char (the
+# proposing character), scope:marriage_play_their_char (the courted character), scope:marriage_
+# play_proposer (us) + scope:marriage_play_target_country.
+#
+# We accumulate a signed DELTA in a scratch var (marriage_play_suit_delta), then apply it ONCE by
+# writing diplomatic_play_success DIRECTLY with a 0..100 clamp — the SAME raw idiom the base seed
+# uses (set_variable diplomatic_play_success). We deliberately do NOT route through
+# DIPLOMACY_modify_play_success: that helper re-scales amt by an instigator/target POWER multiplier,
+# which (a) would make these bumps non-additive/unpredictable and (b) would DOUBLE-COUNT power —
+# factor (2) below is already an explicit power-differential term, and the helper would re-amplify
+# it by the same power ratio. A direct clamped add keeps all three factors true, bounded nudges.
+#   (1) THE SUITOR'S CALIBRE — a fit, able, popular, wealthy, well-regarded proposing character
+#       makes the match attractive (paragon ~+12, a frail/poor/unpopular one ~-8).
+#   (2) POWER DIFFERENTIAL — if the proposer's realm outweighs the target's (num_of_cities, the
+#       proxy the union guards already use), the lesser house 'marries up': +8 (>= double the cities)
+#       or +4 (somewhat greater); if the proposer is the WEAKER party, -4 (courting above station).
+#   (3) FAMILY-PRESTIGE COMPARISON — if the suitor's house outranks the courted house, +6 (much
+#       higher) or +3 (higher); if markedly lower, -4. Mirrors the QING_char_affinity prestige bands.
+# ======================================================================
+MARRIAGE_PLAY_seed_char_bonus = {
+	if = {
+		limit = {
+			exists = scope:diplomatic_play
+			exists = scope:marriage_play_our_char
+			exists = scope:marriage_play_their_char
+			exists = scope:marriage_play_proposer
+			exists = scope:marriage_play_target_country
+		}
+		set_variable = { name = marriage_play_suit_delta  value = 0 }
+		# --- (1) the suitor's calibre (scope:marriage_play_our_char) — accumulate into the delta on
+		# the PROPOSER country (prev, inside the char block) via ROOT-less prev arithmetic. ---
+		scope:marriage_play_our_char = {
+			# vigour: a hale suitor in his prime vs a frail or aged one.
+			if = { limit = { health >= 0.7 }   scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  add = 2 } } }
+			else_if = { limit = { health < 0.35 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  subtract = 3 } } }
+			if = { limit = { age <= 45 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  add = 1 } } }
+			else_if = { limit = { age >= 65 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  subtract = 2 } } }
+			# standing: a popular, wealthy suitor is a catch.
+			if = { limit = { popularity >= 40 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  add = 2 } } }
+			else_if = { limit = { popularity <= 0 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  subtract = 2 } } }
+			if = { limit = { wealth >= 200 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  add = 2 } } }
+			else_if = { limit = { wealth < 25 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  subtract = 1 } } }
+			# ability: the best of his four skills lends lustre (any high stat helps).
+			if = {
+				limit = { OR = { martial >= 12  finesse >= 12  charisma >= 12  zeal >= 12 } }
+				scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  add = 3 } }
+			}
+			else_if = {
+				limit = { OR = { martial >= 9  finesse >= 9  charisma >= 9  zeal >= 9 } }
+				scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  add = 1 } }
+			}
+		}
+		# --- (2) power differential (num_of_cities, the union-guard proxy) ---
+		# Compute the size GAP (self - target) + TWICE the target size, pure integer counter maths.
+		set_variable = { name = marriage_play_pow_self  value = num_of_cities }
+		set_variable = { name = marriage_play_pow_gap   value = num_of_cities }
+		change_variable = { name = marriage_play_pow_gap  subtract = scope:marriage_play_target_country.num_of_cities }
+		set_variable = { name = marriage_play_pow_dbltgt  value = scope:marriage_play_target_country.num_of_cities }
+		change_variable = { name = marriage_play_pow_dbltgt  multiply = 2 }
+		if = {
+			# MUCH greater: proposer holds at least double the target's cities.
+			limit = { var:marriage_play_pow_self >= var:marriage_play_pow_dbltgt }
+			change_variable = { name = marriage_play_suit_delta  add = 8 }
+		}
+		else_if = {
+			# somewhat greater: a positive size gap, but less than double.
+			limit = { var:marriage_play_pow_gap > 0 }
+			change_variable = { name = marriage_play_suit_delta  add = 4 }
+		}
+		else_if = {
+			# the proposer is the WEAKER party — courting above his station.
+			limit = { var:marriage_play_pow_gap < 0 }
+			change_variable = { name = marriage_play_suit_delta  subtract = 4 }
+		}
+		remove_variable = marriage_play_pow_self
+		remove_variable = marriage_play_pow_gap
+		remove_variable = marriage_play_pow_dbltgt
+		# --- (3) family-prestige comparison between the two CHARACTERS (proven family={prestige} bands) ---
+		if = {
+			limit = {
+				scope:marriage_play_our_char   = { family = { prestige >= 500 } }
+				scope:marriage_play_their_char = { NOT = { family = { prestige >= 200 } } }
+			}
+			change_variable = { name = marriage_play_suit_delta  add = 6 }
+		}
+		else_if = {
+			limit = {
+				scope:marriage_play_our_char   = { family = { prestige >= 300 } }
+				scope:marriage_play_their_char = { NOT = { family = { prestige >= 100 } } }
+			}
+			change_variable = { name = marriage_play_suit_delta  add = 3 }
+		}
+		else_if = {
+			# the suitor's house is markedly the LESSER — courting a prouder line.
+			limit = {
+				scope:marriage_play_their_char = { family = { prestige >= 500 } }
+				scope:marriage_play_our_char   = { NOT = { family = { prestige >= 200 } } }
+			}
+			change_variable = { name = marriage_play_suit_delta  subtract = 4 }
+		}
+		# --- APPLY the accumulated delta DIRECTLY to the play's success, then clamp 0..100 (the raw
+		# idiom the base seed uses; NOT the power-scaling helper — see the header note). ---
+		scope:diplomatic_play = {
+			# ADD the accumulated delta to the seeded success (change_variable's operand is `add`, NOT
+			# `value` — `value` would OVERWRITE, wiping the base seed). Cross-scope var read is proven
+			# (se_AI.txt:1259 subtract = scope:X.var:Y; se_QING_MINISTRY.txt:290 add = scope:X.var:Y).
+			change_variable = { name = diplomatic_play_success  add = scope:marriage_play_proposer.var:marriage_play_suit_delta }
+			if = { limit = { var:diplomatic_play_success < 0 }    set_variable = { name = diplomatic_play_success  value = 0 } }
+			if = { limit = { var:diplomatic_play_success > 100 }  set_variable = { name = diplomatic_play_success  value = 100 } }
+		}
+		remove_variable = marriage_play_suit_delta
+		LOG_line = { sys = MARRIAGE  msg = "marriage play success adjusted by suitor calibre, power differential, and house prestige" }
+	}
+}
+
+# ======================================================================
+# MARRIAGE_PLAY_resolve — the FINALE. Called from DIPLOMACY_trigger_diplomatic_play_finale_event
+# (flag:marriage_proposal branch) after the shared path has gated on success >= floor and set
+# scope:diplomatic_play / scope:play_instigator / scope:play_target_country + local_var:
+# play_decisive. Weds the two stored characters, REUSING the existing marriage payload:
+#   • both adult  -> MARRY (marry_character) + the full country bond (MARRIAGE_apply_marriage_bond),
+#   • either minor -> BETROTH (character-level pledge, matured later by MARRIAGE_check_betrothals).
+# A DECISIVE win also seals the country bond; a PARTIAL win (floor..decisive) still weds/betroths
+# the pair but WITHOUT the alliance/dowry payload (a private match, not a state compact).
+# Scope: the play provobj. Guards throughout — a chosen char who died mid-play cleanly aborts.
+# ======================================================================
+MARRIAGE_PLAY_resolve = {
+	LOG_enter = { sys = MARRIAGE  fn = "MARRIAGE_PLAY_resolve" }
+	if = {
+		limit = {
+			has_variable = marriage_play_groom
+			has_variable = marriage_play_bride
+			var:marriage_play_groom = { is_alive = yes  is_married = no }
+			var:marriage_play_bride = { is_alive = yes  is_married = no }
+		}
+		var:marriage_play_groom = { save_scope_as = mplay_groom }
+		var:marriage_play_bride = { save_scope_as = mplay_bride }
+		if = {
+			# BOTH ADULT -> a wedding now.
+			limit = {
+				scope:mplay_groom = { is_adult = yes }
+				scope:mplay_bride = { is_adult = yes }
+			}
+			# marry_character requires opposite sexes (guaranteed by the picker's opposite-gender
+			# list); marry from whichever is female for the engine's convention.
+			if = {
+				limit = { scope:mplay_bride = { is_female = yes } }
+				scope:mplay_groom = { marry_character = scope:mplay_bride }
+			}
+			else = {
+				scope:mplay_bride = { marry_character = scope:mplay_groom }
+			}
+			# [#356 review-fix, MINOR] parity with the AI marriage paths (se_MARRIAGE.txt:404/:956):
+			# stamp marriage_origin_country on the foreign consort who ENTERS our house so the Grand
+			# Council foreign-spouse lobby (QING_council_foreign_spouse_check / qing_office.30) can
+			# fire if she later holds an office. mplay_bride is always the TARGET-court character;
+			# tag her only when she is the female joining our male.
+			if = {
+				limit = { scope:mplay_bride = { is_female = yes } }
+				scope:mplay_bride = { set_variable = { name = marriage_origin_country  value = scope:play_target_country } }
+			}
+			# a DECISIVE win seals the full country bond (alliance/entente + dowry); reuse the
+			# shared payload in the SENIOR (proposer) scope, partner = the target realm.
+			if = {
+				limit = { local_var:play_decisive = 1 }
+				scope:play_instigator = { MARRIAGE_apply_marriage_bond = { partner = scope:play_target_country } }
+				LOG_line = { sys = MARRIAGE  msg = "marriage play WED the pair + sealed the state bond (decisive)" }
+			}
+			else = {
+				# partial: the wedding stands, but as a private match (no alliance/dowry payload).
+				LOG_line = { sys = MARRIAGE  msg = "marriage play WED the pair (partial; private match, no state bond)" }
+			}
+		}
+		else = {
+			# EITHER A MINOR -> a betrothal (matured when both come of age, by the existing
+			# MARRIAGE_check_betrothals pulse). Bind the two chosen children directly via the
+			# proven character-var pledge, mirroring MARRIAGE_betroth's bookkeeping.
+			MARRIAGE_PLAY_betroth_pair = yes
+			LOG_line = { sys = MARRIAGE  msg = "marriage play BETROTHED the pair (a minor involved; matures at adulthood)" }
+		}
+	}
+	else = {
+		LOG_fail = { sys = MARRIAGE  fn = "MARRIAGE_PLAY_resolve"  reason = "a chosen character died / wed before resolution; no marriage concluded" }
+	}
+	LOG_exit = { sys = MARRIAGE  fn = "MARRIAGE_PLAY_resolve"  result = OK }
+}
+
+# ======================================================================
+# MARRIAGE_PLAY_betroth_pair — bind the two SPECIFIC chosen characters as betrothed (one or
+# both minors), reusing the exact character-var + country-list bookkeeping of MARRIAGE_betroth
+# so the existing MARRIAGE_check_betrothals maturation + dissolution machinery drives it. Scope:
+# the play provobj; expects scope:mplay_groom / scope:mplay_bride + scope:play_instigator /
+# scope:play_target_country. The proposer's char is the "home" side, the target's the "other".
+# ======================================================================
+MARRIAGE_PLAY_betroth_pair = {
+	scope:play_instigator = { MARRIAGE_init = yes }
+	scope:play_target_country = { MARRIAGE_init = yes }
+	# character-level bond: each child points at the other + at the partner COUNTRY (self-expiring
+	# 40y, exactly as MARRIAGE_betroth). Which of the pair is "groom"/"bride" is by sex, but the
+	# home/other country assignment follows the play sides.
+	scope:mplay_groom = {
+		set_variable = { name = betrothed_to_char         value = scope:mplay_bride           days = 14600 }
+		set_variable = { name = betrothed_partner_country  value = scope:play_target_country   days = 14600 }
+	}
+	scope:mplay_bride = {
+		set_variable = { name = betrothed_to_char         value = scope:mplay_groom           days = 14600 }
+		set_variable = { name = betrothed_partner_country  value = scope:play_instigator       days = 14600 }
+	}
+	# ruler-independent anchors (survive a succession) — each court records its own betrothed child.
+	scope:play_instigator     = { add_to_variable_list = { name = betrothed_children  target = scope:mplay_groom } }
+	scope:play_target_country = { add_to_variable_list = { name = betrothed_children  target = scope:mplay_bride } }
+	# country-level pledge both ways + the betrothal goodwill (drives the UI / repudiation exactly
+	# as the AI-path betrothal does).
+	scope:play_instigator = {
+		if = {
+			limit = { NOT = { is_target_in_variable_list = { name = marriage_betrothed  target = scope:play_target_country } } }
+			add_to_variable_list = { name = marriage_betrothed  target = scope:play_target_country }
+			add_opinion = { modifier = royal_betrothal_opmod  target = scope:play_target_country }
+		}
+	}
+	scope:play_target_country = {
+		if = {
+			limit = { NOT = { is_target_in_variable_list = { name = marriage_betrothed  target = scope:play_instigator } } }
+			add_to_variable_list = { name = marriage_betrothed  target = scope:play_instigator }
+			add_opinion = { modifier = royal_betrothal_opmod  target = scope:play_instigator }
+		}
+	}
+}
+
+# ======================================================================
+# MARRIAGE_PLAY_add_incentive — a PLAYER lever DURING the play: offer a dowry / gifts to sweeten
+# the proposal, raising its success. Scope: the PROPOSER country; $play$ = the play provobj.
+# Costs treasury; moves the play's success up via the proven DIPLOMACY_modify_play_success.
+# Wired to a GUI button on the marriage-play panel / a play interaction.
+# ======================================================================
+MARRIAGE_PLAY_add_incentive = {
+	if = {
+		limit = { treasury >= 50 }
+		add_treasury = -50
+		$play$ = { DIPLOMACY_modify_play_success = { amt = 10 } }
+		LOG_line = { sys = MARRIAGE  msg = "marriage play: dowry/gifts offered, success improved" }
+	}
+	else = {
+		LOG_fail = { sys = MARRIAGE  fn = "MARRIAGE_PLAY_add_incentive"  reason = "insufficient treasury for a dowry offer" }
+	}
+}
+
+# ======================================================================
+# LIST-BUILDERS for the two-step picker (MARRIAGE_PLAY_actions.txt). All COUNTRY scope
+# (ROOT = the player). Each rebuilds a datamodel list the window iterates. Ruling-family
+# members are added FIRST (a two-pass add: from_ruler_family=yes pass, then the rest), so
+# the ruling family sorts to the top of the character lists without needing a sort svalue.
+# Minors are INCLUDED in the character lists (the betrothal path). Bounded O(court/countries).
+# ======================================================================
+
+# Build the list of eligible TARGET REALMS (marriage_play_realms). A realm is a candidate if
+# it is a distinct country with a ruler that fields at least one unmarried character (adult OR
+# minor). Uses the wider gate + no diplomatic-range filter (same reasoning as marriage_open_
+# candidates / boot-test B12: an overture itself opens relations).
+MARRIAGE_PLAY_build_realms = {
+	clear_variable_list = marriage_play_realms
+	every_country = {
+		limit = {
+			NOT = { this = ROOT }
+			exists = current_ruler
+			MARRIAGE_candidate_realm_trigger = yes
+			# fields at least one unmarried courtier who could wed/betroth.
+			any_character = {
+				count >= 1
+				is_alive = yes
+				is_married = no
+				NOT = { is_ruler = yes }
+			}
+		}
+		ROOT = { add_to_variable_list = { name = marriage_play_realms  target = prev } }
+	}
+	LOG_line = { sys = MARRIAGE  msg = "marriage picker: target-realm list built" }
+}
+
+# Build OUR unmarried characters (marriage_play_own_candidates), ruling family first.
+MARRIAGE_PLAY_build_own = {
+	clear_variable_list = marriage_play_own_candidates
+	# pass 1: ruling family (from_ruler_family = yes), alive + unwed + free + not the ruler.
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			is_married = no
+			prisoner = no
+			from_ruler_family = yes
+			NOT = { is_ruler = yes }
+			# [#356 review-fix] exclude the already-betrothed. is_married=no is TRUE for a
+			# betrothed-but-unwed character, so without this guard he re-appears in the picker
+			# and MARRIAGE_PLAY_betroth_pair would set_variable-overwrite his betrothed_to_char,
+			# orphaning the prior betrothal (its partner still points back). Mirrors the
+			# canonical MARRIAGE_betroth guard (se_MARRIAGE.txt).
+			NOT = { has_variable = betrothed_to_char }
+		}
+		ROOT = { add_to_variable_list = { name = marriage_play_own_candidates  target = prev } }
+	}
+	# pass 2: the rest of the court (non-ruling-family), same eligibility.
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			is_married = no
+			prisoner = no
+			from_ruler_family = no
+			NOT = { is_ruler = yes }
+			NOT = { has_variable = betrothed_to_char }  # [#356 review-fix] see pass 1
+		}
+		ROOT = { add_to_variable_list = { name = marriage_play_own_candidates  target = prev } }
+	}
+	LOG_line = { sys = MARRIAGE  msg = "marriage picker: our-candidate list built" }
+}
+
+# Build the TARGET realm's OPPOSITE-GENDER unmarried characters (marriage_play_their_candidates),
+# ruling family first. Opposite-gender is relative to OUR pick (if made): if our pick is female,
+# list their MALES; else their females (the default before we pick is to list both sexes — but we
+# gate on our pick existing to fix the sex, matching the spec's step order). Guarded on a target set.
+MARRIAGE_PLAY_build_their = {
+	# [#356 review-fix, BLOCKER] anchor every list/var op to the COUNTRY explicitly. This
+	# effect is called from TWO scripted-gui contexts: marriage_play_pick_realm (GUI scope =
+	# country, so ROOT == this == country) AND marriage_play_pick_own (GUI scope = character,
+	# SetRoot = the clicked Character; the builder runs inside scope:player = {}, so `this` is
+	# the country but ROOT is the CHARACTER). Using ROOT for the list writes / want_male reads
+	# therefore appended to the character + read an unset var in the pick_own path, emptying
+	# column 3 and defeating the sex filter. `this` is the country in BOTH paths, so save it.
+	save_scope_as = mplay_home_country
+	clear_variable_list = marriage_play_their_candidates
+	if = {
+		limit = { has_variable = marriage_play_target }
+		var:marriage_play_target = { save_scope_as = mplay_target_realm }
+		# determine the wanted sex from our pick (if chosen). our pick female -> want males.
+		set_variable = { name = marriage_play_want_male  value = 0 }
+		if = {
+			limit = { has_variable = marriage_play_our_pick  var:marriage_play_our_pick = { is_female = yes } }
+			set_variable = { name = marriage_play_want_male  value = 1 }
+		}
+		# pass 1: target ruling family of the wanted sex.
+		scope:mplay_target_realm = {
+			every_character = {
+				limit = {
+					employer = scope:mplay_target_realm
+					is_alive = yes
+					is_married = no
+					prisoner = no
+					from_ruler_family = yes
+					NOT = { is_ruler = yes }
+					NOT = { has_variable = betrothed_to_char }  # [#356 review-fix] see MARRIAGE_PLAY_build_own
+					trigger_if = { limit = { scope:mplay_home_country = { var:marriage_play_want_male = 1 } }  is_male = yes }
+					trigger_else = { is_female = yes }
+				}
+				scope:mplay_home_country = { add_to_variable_list = { name = marriage_play_their_candidates  target = prev } }
+			}
+			# pass 2: the rest of the target court, wanted sex.
+			every_character = {
+				limit = {
+					employer = scope:mplay_target_realm
+					is_alive = yes
+					is_married = no
+					prisoner = no
+					from_ruler_family = no
+					NOT = { is_ruler = yes }
+					NOT = { has_variable = betrothed_to_char }  # [#356 review-fix] see MARRIAGE_PLAY_build_own
+					trigger_if = { limit = { scope:mplay_home_country = { var:marriage_play_want_male = 1 } }  is_male = yes }
+					trigger_else = { is_female = yes }
+				}
+				scope:mplay_home_country = { add_to_variable_list = { name = marriage_play_their_candidates  target = prev } }
+			}
+		}
+		LOG_line = { sys = MARRIAGE  msg = "marriage picker: their-candidate list built (opposite gender)" }
+	}
+}

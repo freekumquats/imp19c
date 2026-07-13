@@ -1,0 +1,159 @@
+########################################################################
+# qing_population_events.txt — [#369] Population Pressure / Famine (人口壓力 / 人地矛盾 / 饑荒).
+#
+# The player-facing surface of the standing Malthusian pressure model (se_QING_POPULATION.txt): the
+# memorial that dramatises the man-land crisis (Hong Liangji's 治平篇 warning) and the famine that
+# tests the throne's relief machinery. CHI-only, player-focused, logged sys = QING.
+#
+#   .1  THE MEMORIAL ON POPULATION (治平之憂) — Hong Liangji 洪亮吉's warning, offered by
+#       QING_pop_pulse when qing_pop_pressure first crosses the danger band (>=65). RELIEVE (賑濟移墾)
+#       vs REMIT TAXES (蠲免) vs PROMOTE RESETTLEMENT (移民實邊) vs LET NATURE TAKE ITS COURSE (聽其自然).
+#   .2  FAMINE IN THE PROVINCES (歲饑) — offered when pressure is high AND the granary reserve is
+#       exhausted (stock <=15). OPEN THE GRANARIES (賑災) vs WORK-RELIEF (以工代賑) vs THE THRONE
+#       CANNOT RESPOND (a hard sect + stability hit — the road to rebellion).
+#
+# These do NOT own the pressure meter — they act on it through the se_QING_POPULATION.txt levers,
+# which drive the SAME qing_pop_pressure / qing_granary_stock / qing_sect_pressure counters the
+# pulse reads, so the panel, the pulse, and the events all interlock.
+#
+# The once-only offered flags (qing_population_memorial_seen / _famine_seen) are set in each event's
+# OWN immediate (only when the event actually fires), NOT in the pulse — the #366/#368 flag-leak fix.
+#
+# HISTORY: Hong Liangji 洪亮吉 (1746-1809), "China's Malthus", argued in 治平篇 (c.1793, five years
+# before Malthus) that 戶口 (households) multiply geometrically while 田廬 (fields and dwellings)
+# grow only arithmetically, so peace breeds a surplus population that nature culls by flood, plague,
+# and famine (天地調劑之法) unless ruler and ministers open land, resettle, remit taxes, and relieve
+# (君相調劑之法) — remedies he judged too weak to keep pace. The relief levers are the real Qing
+# famine-administration instruments (蠲免 / 賑濟 / 平糶 / 以工代賑; Will & Wong, Nourish the People).
+########################################################################
+
+namespace = qing_population
+
+########################################################################
+# .1  THE MEMORIAL ON POPULATION (治平之憂)
+# Offered by QING_pop_pulse when qing_pop_pressure first crosses 65 under the human Qing. A censor
+# lays Hong Liangji's memorial before the throne: the realm's people have outrun its land.
+########################################################################
+qing_population.1 = {
+	type = country_event
+	title = "qing_population.1.t"
+	desc = "qing_population.1.desc"
+	picture = farming
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_pop_pressure
+		var:qing_pop_pressure >= 65
+	}
+
+	immediate = {
+		# [#369] set the once-only offered flag HERE (only when the event actually fires), not in
+		# the pulse — so a re-check failure during the 5-20 day delay never strands it set.
+		set_variable = { name = qing_population_memorial_seen  value = 1 }
+		LOG_line = { sys = QING  msg = "EVENT qing_population.1 (治平之憂 population memorial) for [ROOT.GetTag]" }
+	}
+
+	# --- RELIEVE & RESETTLE (賑濟移墾) — famine relief + open the frontier valve. -----
+	option = {
+		name = "qing_population.1.relieve"
+		custom_tooltip = "qing_population.1.relieve.tt"
+		trigger = { treasury >= 60 }
+		QING_pop_relief_resettle = yes
+	}
+
+	# --- REMIT TAXES (蠲免) — the classic imperial mercy; eases the crisis, nothing structural. --
+	option = {
+		name = "qing_population.1.remit"
+		custom_tooltip = "qing_population.1.remit.tt"
+		trigger = { treasury >= 30 }
+		QING_pop_tax_remission = yes
+	}
+
+	# --- PROMOTE RESETTLEMENT (移民實邊) — a standing frontier-settlement policy. ------
+	option = {
+		name = "qing_population.1.resettle"
+		custom_tooltip = "qing_population.1.resettle.tt"
+		QING_pop_promote_resettlement = yes
+	}
+
+	# --- LET NATURE TAKE ITS COURSE (聽其自然) — Hong Liangji's fatalism; the pressure mounts. --
+	option = {
+		name = "qing_population.1.nothing"
+		custom_tooltip = "qing_population.1.nothing.tt"
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 3 }
+		# the contest can recur if the strain persists — clear the seen flag so the pulse re-offers.
+		if = {
+			limit = { has_variable = qing_population_memorial_seen }
+			remove_variable = qing_population_memorial_seen
+		}
+	}
+}
+
+########################################################################
+# .2  FAMINE IN THE PROVINCES (歲饑)
+# Offered by QING_pop_pulse when qing_pop_pressure is high AND qing_granary_stock is exhausted
+# (<=15) — the crowded realm meets a bad harvest with no reserve. The throne's relief machinery
+# is tested.
+########################################################################
+qing_population.2 = {
+	type = country_event
+	title = "qing_population.2.t"
+	desc = "qing_population.2.desc"
+	picture = revolt
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_pop_pressure
+		var:qing_pop_pressure >= 60
+		has_variable = qing_granary_stock
+		var:qing_granary_stock <= 15
+	}
+
+	immediate = {
+		# [#369] set the once-only offered flag HERE (only when the event fires).
+		set_variable = { name = qing_population_famine_seen  value = 1 }
+		LOG_line = { sys = QING  msg = "EVENT qing_population.2 (歲饑 famine) for [ROOT.GetTag]" }
+	}
+
+	# --- OPEN THE GRANARIES (賑災) — direct relief; costly, big relief, steadies the realm. -----
+	option = {
+		name = "qing_population.2.relief"
+		custom_tooltip = "qing_population.2.relief.tt"
+		trigger = { treasury >= 60 }
+		QING_pop_relief_resettle = yes
+		# opening the granaries against a real famine is the throne at its most benevolent.
+		add_legitimacy = 4
+	}
+
+	# --- WORK-RELIEF (以工代賑) — cheaper, resettles the able-bodied; a smaller but durable fix. --
+	option = {
+		name = "qing_population.2.workrelief"
+		custom_tooltip = "qing_population.2.workrelief.tt"
+		trigger = { treasury >= 30 }
+		QING_pop_tax_remission = yes
+		QING_pop_promote_resettlement = yes
+	}
+
+	# --- THE THRONE CANNOT RESPOND — the reserves are empty and the treasury bare. ---
+	option = {
+		name = "qing_population.2.helpless"
+		custom_tooltip = "qing_population.2.helpless.tt"
+		# the landless starve and turn to the sects — the road to rebellion.
+		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = 12 }
+		QING_DECLINE_nudge = { var = qing_pop_pressure   amount = 6 }
+		add_stability = -2
+		# the famine can recur — clear the seen flag so the pulse re-offers when it bites again.
+		if = {
+			limit = { has_variable = qing_population_famine_seen }
+			remove_variable = qing_population_famine_seen
+		}
+	}
+}

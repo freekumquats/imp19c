@@ -1,0 +1,405 @@
+########################################################################
+# se_QING_SOUTHERNSTUDY.txt — the Southern Study (南書房), #336.
+#
+# The 南書房 ("Southern Study") was the Kangxi emperor's private literary cabinet,
+# founded 1677 in a study on the south side of the 乾清宮. Its members — the 南書房行走
+# ("those who walk in attendance at the Southern Study") — were the most brilliant
+# examination laureates (探花/狀元/進士), drawn into the inner court not to WIELD policy
+# power (that was the Grand Council's, 軍機處) but to draft the emperor's edicts and
+# poems, compile the great imperial literary projects, and — above all — to serve as the
+# throne's personal reservoir of the ablest scholar-officials. A tour in the Southern
+# Study was the surest ladder from the Hanlin Academy to the summit of the bureaucracy:
+# it FED the Grand Council rather than sitting on it.
+#
+# THIS FEATURE — an inner-court literary corps, NOT a Grand Council office (so it does
+# NOT fold into any office-holder's council standing — the #358+ ministry-perf spine is
+# untouched here). Instead the Study:
+#   • holds a CORPS of real 南書房行走 characters (qing_southernstudy_attendants), drawn
+#     FIRST from the exam hiring pool (qing_scholar_pool, se_QING_EXAM.txt) weighted by
+#     literary gifts (finesse + charisma) + throne affinity — the 天子門生 the exam mints;
+#   • allows an OPTIONAL "talent wildcard" recruit (the 高士奇 precedent — Kangxi drew the
+#     brilliant commoner 高士奇 into the Study though he never placed high in the exams),
+#     minting a fresh gifted scholar straight into the corps;
+#   • is led by a 首席南書房行走 ("Grand Preceptor of the Southern Study", the evocative
+#     English — deliberately grander than the literal "chief attendant") — the ablest
+#     serving attendant, re-derived each pulse;
+#   • confers COURT PRESTIGE + LEGITIMACY (a throne served by the realm's finest letters,
+#     the qing_southernstudy_luster country modifier) scaled by the corps' literary depth,
+#     binds its attendants closer to the emperor (affinity), and serves as a PROMOTION
+#     PIPELINE — the player may elevate a seasoned attendant into the first vacant great
+#     office (reusing the proven QING_office_appoint_first_vacant), the Study's core role.
+#
+# STATE (CHI country scope):
+#   qing_southernstudy_attendants     variable_list of the living 南書房行走
+#   qing_southernstudy_count          int, the corps size (GUI + luster read it)
+#   qing_southernstudy_literary       int, summed finesse+charisma of the corps (luster tier)
+#   qing_southernstudy_initialized    init guard
+# Character-scope mark (on each attendant):
+#   qing_is_southernstudy             flag (roster membership + death-cleanup key)
+#
+# PREFIX: QING_southernstudy_ / sys = QING. CHI-only. Init from on_game_initialized;
+# drifts quarterly via QING_southernstudy_pulse (se_QING_GOVERNANCE.txt). All logged
+# sys = QING, STATIC msgs only (#253). Uses ONLY proven idioms: the exam-pool draw
+# (se_QING_EXAM.txt), the marked-courtier roster rebuild (harem #360 / censor #362),
+# the create_character roster mint (#90 rule), and QING_office_appoint_first_vacant
+# (se_QING_COUNCIL.txt). NO council-fold edit — the Study is not an office.
+#
+#   ROOT / this = the Qing country (CHI, player); root.current_ruler = the emperor.
+########################################################################
+
+# ======================================================================
+# QING_southernstudy_init — seed the corps bookkeeping once + the 1763 opening cabinet.
+# Scope: COUNTRY (CHI). Idempotent (guards on a dedicated flag, not the count var —
+# the pulse recompute runs at game start BEFORE this and sets the count, so guarding
+# on the count would wrongly skip the opening seed; the harem #360 lesson).
+# ======================================================================
+QING_southernstudy_init = {
+	LOG_enter = { sys = QING  fn = "QING_southernstudy_init" }
+	if = {
+		limit = { NOT = { has_variable = qing_southernstudy_initialized } }
+		set_variable = { name = qing_southernstudy_initialized  value = 1 }
+		set_variable = { name = qing_southernstudy_count  value = 0 }
+		set_variable = { name = qing_southernstudy_literary  value = 0 }
+		clear_variable_list = qing_southernstudy_attendants
+		# the 1763 opening cabinet — two real historical laureates of the Qianlong reign:
+		#   梁詩正 (Liang Shizheng, 探花 1730 — third in the palace exam; the emperor's
+		#     calligrapher-in-chief and a Southern Study fixture; he dies late 1763, a
+		#     built-in succession beat that opens a seat early in the campaign), and
+		#   于敏中 (Yu Minzhong, 狀元 1737 — first in the palace exam; rose from the Study
+		#     to Grand Councillor, the Study's promotion arc made flesh).
+		if = {
+			limit = { exists = current_ruler }
+			QING_southernstudy_seed_attendant = { degree = jinshi  nick = "NICKNAME_QING_SS_LIANGSHIZHENG"  fin = 9  cha = 7  aged = 66 }
+			QING_southernstudy_seed_attendant = { degree = jinshi  nick = "NICKNAME_QING_SS_YUMINZHONG"    fin = 8  cha = 8  aged = 49 }
+			# [#336 review-fix] recompute at once so the seeded cabinet's literary depth is tallied and
+			# the luster country modifier is applied FROM TURN 1 — otherwise count reads 2 but literary
+			# reads 0 (throne carries no luster) until the first monthly pulse. Nothing folds this into
+			# a game-start QING_ministry_recompute_all_perf, so init must recompute itself.
+			QING_southernstudy_recompute_roster = yes
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_southernstudy_init"  result = OK }
+}
+
+# ======================================================================
+# QING_southernstudy_seed_attendant — create ONE named historical attendant and add
+# him to the corps. Scope: COUNTRY (CHI). $degree$ = status trait, $nick$ = loc
+# nickname key, $fin$/$cha$ = literary stat line, $aged$ = age. A Han scholar-official
+# of real literary gift, bound to the throne. Marked qing_is_southernstudy. Uses the
+# proven named-roster mint (se_QING_NAPOLEON.txt QING_napoleon_spawn + roster_finalize
+# for the nickname; #90 rule — no modifiers inside create_character).
+# ======================================================================
+QING_southernstudy_seed_attendant = {
+	# $degree$ status trait, $nick$ loc nickname key, $fin$/$cha$ stats, $aged$ age.
+	create_character = {
+		age = $aged$
+		culture = han
+		religion = root.religion
+		# the Study's men are the realm's finest letters — finesse + charisma lead.
+		add_finesse = $fin$
+		add_charisma = $cha$
+		add_martial = 1
+		add_zeal = 4
+		add_trait = $degree$
+		save_scope_as = qing_new_attendant
+	}
+	scope:qing_new_attendant = {
+		set_home_country = ROOT
+		set_variable = { name = qing_is_southernstudy  value = 1 }
+		# a Study attendant serves at the emperor's own side — bind him (天子門生) + name him.
+		QING_roster_finalize = { nick = $nick$ }
+	}
+	add_to_variable_list = { name = qing_southernstudy_attendants  target = scope:qing_new_attendant }
+	change_variable = { name = qing_southernstudy_count  add = 1 }
+	LOG_line = { sys = QING  msg = "southern-study: a historical attendant enters the Southern Study for" }
+}
+
+# ======================================================================
+# QING_southernstudy_mint_wildcard — the 高士奇 precedent: mint a fresh brilliant scholar
+# STRAIGHT into the corps (not via the exam ladder). Scope: COUNTRY (CHI). Kangxi drew
+# the commoner 高士奇 into the Study on raw talent though he never placed high in the
+# exams; this is the "talent wildcard" recruit the player may exercise from the panel.
+# A gifted Han man of letters, bound to the throne. Self-caps handled by the caller.
+# ======================================================================
+QING_southernstudy_mint_wildcard = {
+	create_character = {
+		age = 32
+		culture = han
+		religion = root.religion
+		# a raw literary prodigy — a notch above the ordinary exam graduate in his gifts.
+		add_finesse = 8
+		add_charisma = 7
+		add_martial = 1
+		add_zeal = 3
+		save_scope_as = qing_new_attendant
+	}
+	scope:qing_new_attendant = {
+		set_home_country = ROOT
+		set_variable = { name = qing_is_southernstudy  value = 1 }
+		QING_roster_finalize = { nick = "NICKNAME_QING_SS_WILDCARD" }
+	}
+	add_to_variable_list = { name = qing_southernstudy_attendants  target = scope:qing_new_attendant }
+	change_variable = { name = qing_southernstudy_count  add = 1 }
+	LOG_line = { sys = QING  msg = "southern-study: a talent wildcard is drawn into the Southern Study for" }
+}
+
+# ======================================================================
+# QING_southernstudy_recompute_roster — rebuild the attendant list fresh from the live
+# characters carrying the marker (alive + still in the household + NOT holding a great
+# office), tally the count + the literary depth (summed finesse+charisma), re-derive the
+# 首席 lead attendant, and apply the luster country modifier scaled to the corps' depth.
+# Self-healing (prunes dead/departed/promoted without relying on the death hook alone).
+# EXCLUDES great-office holders (the #362-R2 double-count lesson: an attendant promoted
+# to a great office LEAVES the Study — he is now on the council, not feeding it). Bounded
+# O(characters); run quarterly (pulse) + on panel open. Scope: COUNTRY (CHI).
+# ======================================================================
+QING_southernstudy_recompute_roster = {
+	clear_variable_list = qing_southernstudy_attendants
+	set_variable = { name = qing_southernstudy_count  value = 0 }
+	set_variable = { name = qing_southernstudy_literary  value = 0 }
+	every_character = {
+		limit = {
+			has_variable = qing_is_southernstudy
+			is_alive = yes
+			employer = ROOT
+			# an attendant elevated to a great office LEAVES the corps (he now sits on the
+			# council; the promotion pipeline is the Study's whole purpose). Excluding him
+			# here mirrors the censor/guard/justice roster rebuilds (#362-R2).
+			NOT = { has_variable = qing_office_held }
+		}
+		ROOT = {
+			add_to_variable_list = { name = qing_southernstudy_attendants  target = prev }
+			change_variable = { name = qing_southernstudy_count  add = 1 }
+			change_variable = { name = qing_southernstudy_literary  add = prev.finesse }
+			change_variable = { name = qing_southernstudy_literary  add = prev.charisma }
+		}
+	}
+	# --- re-derive the 首席南書房行走 (Grand Preceptor) — the ablest serving attendant,
+	# by the council-fitness sort the exam draw uses. Cleared when the corps is empty.
+	if = {
+		limit = { var:qing_southernstudy_count > 0 }
+		ordered_in_list = {
+			variable = qing_southernstudy_attendants
+			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_ss_chief_pick
+		}
+		if = {
+			limit = { exists = scope:qing_ss_chief_pick }
+			set_variable = { name = qing_southernstudy_chief  value = scope:qing_ss_chief_pick }
+		}
+	}
+	else = {
+		if = { limit = { has_variable = qing_southernstudy_chief }  remove_variable = qing_southernstudy_chief }
+	}
+	# --- LUSTER: a throne served by the realm's finest letters gains prestige + legitimacy.
+	# Scale the modifier tier to the corps' summed literary gift (finesse+charisma): a fuller,
+	# abler cabinet burnishes the reign more. Refresh each recompute (remove-then-reapply so a
+	# shrinking corps steps the buff back down). NOT policy power — pure prestige/legitimacy.
+	QING_southernstudy_apply_luster = yes
+	LOG_line = { sys = QING  msg = "southern-study: the attendant corps recomputed for" }
+}
+
+# ======================================================================
+# QING_southernstudy_apply_luster — set the luster country modifier to the tier the
+# corps' literary depth warrants. Scope: COUNTRY (CHI). Remove-then-reapply so the tier
+# tracks a growing/shrinking cabinet. Three tiers keyed on qing_southernstudy_literary
+# (summed finesse+charisma of the corps): a bare Study confers nothing, a modest one a
+# minor luster, a brilliant one a major luster. Reads guarded; called from the recompute.
+# ======================================================================
+QING_southernstudy_apply_luster = {
+	# clear whichever tier is live so we can reapply the correct one (no stacking/leak).
+	if = { limit = { has_country_modifier = qing_southernstudy_luster_minor } remove_country_modifier = qing_southernstudy_luster_minor }
+	if = { limit = { has_country_modifier = qing_southernstudy_luster_major } remove_country_modifier = qing_southernstudy_luster_major }
+	# a brilliant cabinet (literary depth >= 45 — roughly a full corps of able men): major luster.
+	if = {
+		limit = { var:qing_southernstudy_literary >= 45 }
+		add_country_modifier = { name = qing_southernstudy_luster_major }
+	}
+	# a modest cabinet (>= 20): minor luster.
+	else_if = {
+		limit = { var:qing_southernstudy_literary >= 20 }
+		add_country_modifier = { name = qing_southernstudy_luster_minor }
+	}
+	# a bare/empty Study confers no luster (both tiers already cleared above).
+}
+
+# ======================================================================
+# QING_southernstudy_draw_scholar (掄才入直) — draw the ablest waiting exam-pool scholar
+# INTO the Southern Study corps, weighted by literary gift + throne affinity. Scope:
+# COUNTRY (CHI). The Study's normal intake: it takes the finest 天子門生 the exam mints.
+# Removes him from the hiring pool (he is now placed in the inner court, so the exam
+# retirement tick + first-vacant fill must not also claim him) and marks him an attendant.
+# Guarded on a non-empty pool + a corps below its cap (8); the panel button mirrors this.
+# ======================================================================
+QING_southernstudy_draw_scholar = {
+	LOG_enter = { sys = QING  fn = "QING_southernstudy_draw_scholar" }
+	QING_southernstudy_init = yes
+	if = {
+		limit = {
+			var:qing_southernstudy_count < 8
+			has_variable_list = qing_scholar_pool
+			any_in_list = {
+				variable = qing_scholar_pool
+				is_alive = yes
+				employer = ROOT
+				NOT = { has_variable = qing_office_held }
+				NOT = { has_variable = qing_is_southernstudy }
+			}
+		}
+		# pick the ablest pool scholar by the council-fitness svalue (finesse+charisma-led
+		# for a literary post). combined_stats_council_svalue is the proven exam-draw sort.
+		ordered_in_list = {
+			variable = qing_scholar_pool
+			limit = {
+				is_alive = yes
+				employer = ROOT
+				NOT = { has_variable = qing_office_held }
+				NOT = { has_variable = qing_is_southernstudy }
+			}
+			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_ss_draw_pick
+		}
+		if = {
+			limit = { exists = scope:qing_ss_draw_pick }
+			# remove him from the exam hiring pool (he is placed now — the exam pool-exit
+			# path, mirroring QING_exam_pool_drop_member: strip the pool marker + delist +
+			# decrement, so the retirement tick / first-vacant fill never re-claim him).
+			scope:qing_ss_draw_pick = {
+				if = { limit = { has_variable = qing_is_pool_scholar }  remove_variable = qing_is_pool_scholar }
+				set_variable = { name = qing_is_southernstudy  value = 1 }
+				# a tour at the emperor's side binds the scholar closer to the throne.
+				QING_char_bind = yes
+			}
+			if = {
+				limit = { has_variable_list = qing_scholar_pool }
+				remove_list_variable = { name = qing_scholar_pool  target = scope:qing_ss_draw_pick }
+				if = { limit = { var:qing_scholar_pool_count > 0 }  change_variable = { name = qing_scholar_pool_count  subtract = 1 } }
+			}
+			LOG_line = { sys = QING  msg = "southern-study: drew a pool scholar into the Southern Study for" }
+		}
+		# refresh the roster/luster to reflect the new attendant at once.
+		QING_southernstudy_recompute_roster = yes
+	}
+	LOG_exit = { sys = QING  fn = "QING_southernstudy_draw_scholar"  result = OK }
+}
+
+# ======================================================================
+# QING_southernstudy_recruit_wildcard — the 高士奇 lever: mint + enrol a talent wildcard.
+# Scope: COUNTRY (CHI). Guarded on the corps cap (8); the panel button mirrors this.
+# ======================================================================
+QING_southernstudy_recruit_wildcard = {
+	LOG_enter = { sys = QING  fn = "QING_southernstudy_recruit_wildcard" }
+	QING_southernstudy_init = yes
+	if = {
+		limit = { var:qing_southernstudy_count < 8 }
+		QING_southernstudy_mint_wildcard = yes
+		# bind the fresh prodigy to the throne, then refresh the roster/luster.
+		if = {
+			limit = { exists = scope:qing_new_attendant }
+			scope:qing_new_attendant = { QING_char_bind = yes }
+		}
+		QING_southernstudy_recompute_roster = yes
+		LOG_line = { sys = QING  msg = "southern-study: a talent wildcard recruited into the Southern Study for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_southernstudy_recruit_wildcard"  result = OK }
+}
+
+# ======================================================================
+# QING_southernstudy_promote_chief (擢用) — the Study's core role: elevate the ablest
+# serving attendant (the 首席) into the FIRST vacant great office. Scope: COUNTRY (CHI).
+# The Southern Study as a PROMOTION PIPELINE to the Grand Council (于敏中's arc). Reuses
+# the proven QING_office_appoint_first_vacant (a no-op if no office is vacant — the
+# attendant then stays in the Study). On seating, the roster rebuild drops him (he now
+# holds an office, so is excluded from the corps). Guarded on a present chief + a vacancy.
+# ======================================================================
+QING_southernstudy_promote_chief = {
+	LOG_enter = { sys = QING  fn = "QING_southernstudy_promote_chief" }
+	QING_southernstudy_recompute_roster = yes
+	if = {
+		limit = {
+			has_variable = qing_southernstudy_chief
+			var:qing_southernstudy_chief = { is_alive = yes  employer = ROOT  NOT = { has_variable = qing_office_held } }
+			# a great office must genuinely be vacant, else the appoint no-ops (the Hanlin
+			# #358 review lesson: qing_council_vacancy > 0 gates the dead-affordance).
+			has_variable = qing_council_vacancy
+			var:qing_council_vacancy > 0
+		}
+		var:qing_southernstudy_chief = {
+			QING_office_appoint_first_vacant = yes
+		}
+		LOG_line = { sys = QING  msg = "southern-study: elevated the chief attendant to the first vacant office for" }
+		# he now holds an office — rebuild so the corps drops him + re-derives a new chief.
+		QING_southernstudy_recompute_roster = yes
+	}
+	LOG_exit = { sys = QING  fn = "QING_southernstudy_promote_chief"  result = OK }
+}
+
+# ======================================================================
+# QING_southernstudy_pulse — quarterly drift. Scope: COUNTRY (CHI). Called from the
+# governance pulse. Rebuilds the roster (self-heals dead/promoted, refreshes luster),
+# then on a throttled roll the Study draws a fresh pool scholar on its own (the inner
+# court doing its literary work, AI-side too) if the pool has talent and the corps has
+# room. Self-guarded; a clean no-op with an empty pool / full corps.
+# ======================================================================
+QING_southernstudy_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_southernstudy_pulse" }
+	QING_southernstudy_init = yes
+	QING_southernstudy_recompute_roster = yes
+	# the Study replenishes itself from the exam pool on a throttled roll (AI-side too).
+	if = {
+		limit = {
+			var:qing_southernstudy_count < 6
+			has_variable_list = qing_scholar_pool
+			any_in_list = {
+				variable = qing_scholar_pool
+				is_alive = yes
+				employer = ROOT
+				NOT = { has_variable = qing_office_held }
+				NOT = { has_variable = qing_is_southernstudy }
+			}
+		}
+		random = {
+			chance = 25
+			QING_southernstudy_draw_scholar = yes
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_southernstudy_pulse"  result = OK }
+}
+
+# ======================================================================
+# QING_southernstudy_remove_on_death — call in a DYING character's scope (hooked into
+# on_character_death). If the dead man was a Study attendant, drop him from his employer's
+# roster so no orphan reference survives + keep the count honest. Self-guards on the
+# marker. Mirrors QING_exam_pool_remove_on_death / QING_harem_remove_on_death.
+# ======================================================================
+QING_southernstudy_remove_on_death = {
+	if = {
+		limit = {
+			has_variable = qing_is_southernstudy
+			exists = employer
+		}
+		save_scope_as = qing_dead_attendant
+		employer = {
+			if = {
+				limit = { has_variable_list = qing_southernstudy_attendants }
+				remove_list_variable = { name = qing_southernstudy_attendants  target = scope:qing_dead_attendant }
+				if = { limit = { var:qing_southernstudy_count > 0 }  change_variable = { name = qing_southernstudy_count  subtract = 1 } }
+				LOG_line = { sys = QING  msg = "southern-study: an attendant died, removed from the Southern Study for" }
+			}
+			# [#336 review-fix] if the 首席 (lead) himself died, clear the chief var here too so it
+			# does not point at a corpse until the next recompute. Every read-site re-checks is_alive,
+			# so this is a tidiness/transient-staleness fix, not a crash.
+			if = {
+				limit = {
+					has_variable = qing_southernstudy_chief
+					var:qing_southernstudy_chief = scope:qing_dead_attendant
+				}
+				remove_variable = qing_southernstudy_chief
+			}
+		}
+	}
+}

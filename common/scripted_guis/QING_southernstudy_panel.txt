@@ -1,0 +1,122 @@
+########################################################################
+# QING_southernstudy_panel.txt — scripted GUIs for the Southern Study panel (#336).
+#
+# The Southern Study (南書房) is the emperor's private literary cabinet — an INNER-COURT
+# institution that FEEDS the Grand Council, NOT a council office (so unlike the ministry
+# panels there is no perf-fold-into-an-office-holder here; the Study's benefit is court
+# luster + a promotion pipeline). A Grand-Council-clone L4 window surfacing:
+#   • the 首席南書房行走 (Grand Preceptor, qing_southernstudy_chief) in the summit-card slot,
+#   • the CORPS of 南書房行走 attendants (qing_southernstudy_attendants) as a character roster,
+#   • the corps depth (qing_southernstudy_count) + literary luster tier as read-outs,
+# and THREE action levers:
+#   • DRAW A SCHOLAR (掄才入直) — take the ablest waiting exam-pool 天子門生 into the Study,
+#   • RECRUIT A TALENT WILDCARD (高士奇) — mint a fresh prodigy straight into the corps,
+#   • ELEVATE THE CHIEF (擢用) — promote the Grand Preceptor into the first vacant great office.
+#
+# Scoped to the Qing player (ROOT = CHI). AI never evaluates these (ai_is_valid = no).
+# Opened by qing_southernstudy_open_panel_button (a button in government_view.gui).
+# Window: gui/qing_southern_study.gui. Prefix = qing_southernstudy_. se_LOG sys = QING.
+########################################################################
+
+# ---- OPEN THE SOUTHERN STUDY PANEL (button in the government view) ----------
+qing_southernstudy_open_panel_button = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		# recompute so the roster + chief + luster are fresh the moment the panel opens.
+		QING_southernstudy_recompute_roster = yes
+		LOG_line = { sys = QING  msg = "EVENT qing_southernstudy_open_panel_button fired; opening the Southern Study panel for" }
+	}
+}
+
+# ---- GRAND PRECEPTOR (首席) HOLDER INDICATOR — the GUI reveals his card when present -
+qing_southernstudy_has_chief = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		has_variable = qing_southernstudy_chief
+		var:qing_southernstudy_chief = { is_alive = yes  employer = ROOT }
+	}
+}
+
+# ---- NO-CHIEF indicator (the GUI shows an "empty Study" note) ---------------
+qing_southernstudy_no_chief = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		NOR = {
+			AND = {
+				has_variable = qing_southernstudy_chief
+				var:qing_southernstudy_chief = { is_alive = yes  employer = ROOT }
+			}
+		}
+	}
+}
+
+# ---- DRAW A SCHOLAR (掄才入直) — take the ablest waiting exam-pool scholar into the
+# Study. Gated on a corps below cap (8) AND an eligible pool scholar (mirrors the effect
+# guard, so the lever is dead when there is no one to draw / the corps is full).
+# ----------------------------------------------------------------------
+qing_southernstudy_draw = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		var:qing_southernstudy_count < 8
+		has_variable_list = qing_scholar_pool
+		any_in_list = {
+			variable = qing_scholar_pool
+			is_alive = yes
+			employer = ROOT
+			NOT = { has_variable = qing_office_held }
+			NOT = { has_variable = qing_is_southernstudy }
+		}
+	}
+	effect = {
+		QING_southernstudy_draw_scholar = yes
+	}
+}
+
+# ---- RECRUIT A TALENT WILDCARD (高士奇) — mint a fresh prodigy into the corps. Gated
+# only on the corps cap (the wildcard is minted, not drawn from a pool).
+# ----------------------------------------------------------------------
+qing_southernstudy_wildcard = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		var:qing_southernstudy_count < 8
+	}
+	effect = {
+		QING_southernstudy_recruit_wildcard = yes
+	}
+}
+
+# ---- ELEVATE THE CHIEF (擢用) — promote the Grand Preceptor into the first vacant
+# great office (the Study's promotion-pipeline role). Gated on a present chief AND a
+# genuinely vacant office (mirrors the effect's qing_council_vacancy gate — no dead click).
+# ----------------------------------------------------------------------
+qing_southernstudy_elevate = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		has_variable = qing_southernstudy_chief
+		var:qing_southernstudy_chief = { is_alive = yes  employer = ROOT  NOT = { has_variable = qing_office_held } }
+		has_variable = qing_council_vacancy
+		var:qing_council_vacancy > 0
+	}
+	effect = {
+		QING_southernstudy_promote_chief = yes
+	}
+}
+
+# ---- CLOSE (button in the panel window) ------------------------------------
+qing_southernstudy_close_panel = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_valid = { always = yes }
+	effect = { }
+}

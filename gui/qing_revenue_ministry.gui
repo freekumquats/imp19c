@@ -1,0 +1,467 @@
+########################################################################
+# qing_revenue_ministry.gui — the Ministry of Revenue panel window (#355).
+#
+# A Grand-Council-clone dashboard for the Board of Revenue (戶部): the Grand Minister of
+# Revenue (戶部尚書) in the summit-card slot, the ministry-performance meter
+# qing_min_perf_revenue (which folds into his Grand Council standing), the imperial fisc he
+# answers for — the EVER-NORMAL GRANARIES (常平倉) as a scrolling PROVINCE roster (the
+# qing_revenue_granaries list built each pulse in se_QING_MINISTRY.txt), the SALT GABELLE
+# (鹽政) reform state + the SILVER CRISIS (銀荒, qing_currency_stress) as read-outs — and,
+# like the Works panel, ACTION BUTTONS to stock a granary + open the salt-gabelle reform
+# (the proven se_QING_REVENUE.txt effect + qing_revenue.1 event, both fitness/finesse-gated).
+#
+# Opened by qing_revenue_ministry_open_panel_button (QING_revenue_ministry_panel.txt), wired
+# to a button in gui/government_view.gui. Mirrors gui/qing_works_ministry.gui (the #351 ref
+# interactive panel). Province-roster datamodel idiom = qing_province_reports.gui:50.
+#
+# TAB indentation throughout (Paradox house style for .gui files).
+########################################################################
+
+base_window = {
+	name = "qing_revenue_ministry_panel"
+	size = { 520 760 }
+	allow_outside = yes
+	movable = yes
+
+	using = main_window_template
+
+	state = {
+		name = _show
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+	state = {
+		name = _hide
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+
+	flowcontainer = {
+		direction = vertical
+
+		# HEADER
+		widget = {
+			size = { 520 48 }
+			using = MainWindowHeaderBox
+			blockoverride "Title_text" { text = "QING_REVENUE_MINISTRY_PANEL_TITLE" }
+			blockoverride "FlagOrIcon" {
+				icon = {
+					texture = "gfx/interface/base_parts/yellow_button_color_200fs.dds"
+					framesize = { 100 100 }
+					frame = 6
+					position = { -2 -2 }
+					size = { 32 32 }
+					modify_texture = {
+						texture = "gfx/interface/icons/menu_buttons/menu_trade.dds"
+						blend_mode = alphamultiply
+					}
+				}
+			}
+			blockoverride "White_buttons" {
+				button_close = {
+					onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_revenue_ministry_panel')]"
+					tooltip = "CLOSE"
+					shortcut = "close_window"
+				}
+			}
+		}
+
+		# BODY
+		margin_widget = {
+			size = { 520 700 }
+			margin = { 10 10 }
+
+			scrollarea = {
+				size = { 500 680 }
+				scrollbarpolicy_horizontal = always_off
+				scrollbar_vertical = { using = VerticalScrollBar }
+				using = VerticalScrollAreaCutOff
+				scrollwidget = {
+					flowcontainer = {
+						direction = vertical
+						spacing = 12
+
+						# DESCRIPTION (wraps)
+						textbox = {
+							size = { 480 72 }
+							multiline = yes
+							using = BaseFontM
+							using = Default_FontColor
+							text = "QING_REVENUE_MINISTRY_PANEL_DESC"
+						}
+
+						# --- MINISTER + PERFORMANCE SECTION -----------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_REVENUE_MINISTRY_MINISTER_TITLE"
+							}
+
+							# Minister card (shown when the office is filled)
+							flowcontainer = {
+								visible = "[GetScriptedGui('qing_revenue_ministry_filled').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								spacing = 8
+								cpt_button = {
+									size = { 50 77 }
+									datacontext = "[Player.MakeScope.Var('qing_office_revenue_holder').GetCharacter]"
+								}
+								flowcontainer = {
+									direction = vertical
+									spacing = 4
+									textbox = {
+										size = { 380 24 }
+										using = BaseFontM
+										using = Default_FontColor
+										text = "[Player.MakeScope.Var('qing_office_revenue_holder').GetCharacter.GetName]"
+									}
+									# finesse read-out (the office's governing skill)
+									flowcontainer = {
+										datacontext = "[Player.MakeScope.Var('qing_office_revenue_holder').GetCharacter]"
+										icon_and_text = {
+											size = { 70 24 }
+											blockoverride "Icon" { using = icon_civic }
+											blockoverride "Text" { text = "[Character.GetFinesse]" }
+											tooltip = "[Character.GetFinesseToolTip]"
+										}
+									}
+								}
+							}
+
+							# Vacant note
+							textbox = {
+								visible = "[GetScriptedGui('qing_revenue_ministry_vacant').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								size = { 460 46 }
+								multiline = yes
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_REVENUE_MINISTRY_VACANT"
+							}
+
+							# Ministry performance meter (qing_min_perf_revenue, 0..100)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 180 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_REVENUE_MINISTRY_PERF_LABEL"
+									tooltip = "QING_REVENUE_MINISTRY_PERF_TT"
+								}
+								textbox = {
+									size = { 40 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_min_perf_revenue').GetValue|0]"
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 220 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_min_perf_revenue').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
+							}
+
+							# Granary-coverage read-out (ever-normal reserves standing)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_REVENUE_MINISTRY_GRANARY_LABEL"
+									tooltip = "QING_REVENUE_MINISTRY_GRANARY_TT"
+								}
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_revenue_granary_count').GetValue|0]"
+								}
+							}
+
+							# [#372 / #425] Silver-reserve read-out — the real engine currency-backing reserve
+							# silver_reserve_size, the concrete 戶部銀庫 balance in 千兩 (thousand taels)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_REVENUE_MINISTRY_RESERVE_LABEL"
+									tooltip = "QING_REVENUE_MINISTRY_RESERVE_TT"
+								}
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('silver_reserve_size').GetValue|0]"
+								}
+							}
+
+							# [ministry-fold #416] Canton customs read-out (粵海關) — last-quarter yield. The window lives
+							# under the Imperial Household (its take feeds the privy purse); its revenue shows here too.
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_REVENUE_MINISTRY_CANTON_LABEL"
+									tooltip = "QING_REVENUE_MINISTRY_CANTON_TT"
+								}
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_canton_last_state').GetValue|0]"
+								}
+							}
+
+							# Silver-crisis read-out (currency stress)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_REVENUE_MINISTRY_SILVER_LABEL"
+									tooltip = "QING_REVENUE_MINISTRY_SILVER_TT"
+								}
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_currency_stress').GetValue|0]"
+								}
+							}
+
+							# Salt-gabelle status read-out (reformed / patronage)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_REVENUE_MINISTRY_SALT_LABEL"
+									tooltip = "QING_REVENUE_MINISTRY_SALT_TT"
+								}
+								textbox = {
+									size = { 200 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									visible = "[GetScriptedGui('qing_revenue_ministry_salt_reformed').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									text = "QING_REVENUE_MINISTRY_SALT_REFORMED"
+								}
+								textbox = {
+									size = { 200 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									visible = "[Not( GetScriptedGui('qing_revenue_ministry_salt_reformed').IsShown( GuiScope.SetRoot( Player.MakeScope ).End ) )]"
+									text = "QING_REVENUE_MINISTRY_SALT_UNREFORMED"
+								}
+							}
+
+							# [#415] Salt-gabelle quarterly income read-out (鹽課 — the standing take)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_REVENUE_MINISTRY_SALT_INCOME_LABEL"
+									tooltip = "QING_REVENUE_MINISTRY_SALT_INCOME_TT"
+								}
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_salt_income_last').GetValue|0]"
+								}
+							}
+
+							# [#430] Caravan-customs quarterly income read-out (回疆貿易 — the Yarkand take)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_REVENUE_MINISTRY_CARAVAN_INCOME_LABEL"
+									tooltip = "QING_REVENUE_MINISTRY_CARAVAN_INCOME_TT"
+								}
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_caravan_income_last').GetValue|0]"
+								}
+							}
+
+							# [#431 / user] VANILLA FISC read-outs — the whole realm's net quarterly income and the
+							# standing treasury balance, so the 戶部 panel shows the true fisc the Board manages, not
+							# only the bespoke Qing streams. INCOME_national_total_quarterly + GetTreasury are the same
+							# values the topbar reads (gui/ingame_topbar.gui).
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_REVENUE_MINISTRY_TOTAL_INCOME_LABEL"
+									tooltip = "QING_REVENUE_MINISTRY_TOTAL_INCOME_TT"
+								}
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('INCOME_national_total_quarterly').GetValue|2]"
+								}
+							}
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 240 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_REVENUE_MINISTRY_TREASURY_LABEL"
+									tooltip = "QING_REVENUE_MINISTRY_TREASURY_TT"
+								}
+								textbox = {
+									size = { 80 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.GetTreasury|2]"
+								}
+							}
+
+							# Contribution to the Grand Council
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 300 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_MINISTRY_COUNCIL_CONTRIB_LABEL"
+									tooltip = "QING_MINISTRY_COUNCIL_CONTRIB_TT"
+								}
+								textbox = {
+									size = { 60 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_min_perf_council_mod_revenue').GetValue|0]"
+								}
+							}
+						}
+
+						# --- ADMINISTRATION SECTION (action buttons) --------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_REVENUE_MINISTRY_ADMIN_TITLE"
+							}
+
+							# stock an ever-normal granary (常平倉)
+							text_button_square_highlighted = {
+								size = { 300 28 }
+								datacontext = "[GetScriptedGui('qing_revenue_ministry_stock_granary')]"
+								blockoverride "Center_text" { text = "QING_REVENUE_MINISTRY_STOCK_GRANARY_BTN"  max_width = 280 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_REVENUE_MINISTRY_STOCK_GRANARY_TT"
+							}
+							# reform the salt gabelle (鹽政)
+							text_button_square_highlighted = {
+								size = { 300 28 }
+								datacontext = "[GetScriptedGui('qing_revenue_ministry_reform_salt')]"
+								blockoverride "Center_text" { text = "QING_REVENUE_MINISTRY_REFORM_SALT_BTN"  max_width = 280 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_REVENUE_MINISTRY_REFORM_SALT_TT"
+							}
+						}
+
+						# --- GRANARY-PROVINCE ROSTER SECTION ----------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_REVENUE_MINISTRY_ROSTER_TITLE"
+							}
+
+							# empty note when no province holds an ever-normal granary
+							textbox = {
+								visible = "[IsDataModelEmpty( Player.MakeScope.GetList('qing_revenue_granaries') )]"
+								size = { 460 46 }
+								multiline = yes
+								using = BaseFontS
+								using = Default_FontColor
+								text = "QING_REVENUE_MINISTRY_ROSTER_EMPTY"
+							}
+
+							# the roster (dynamicgridbox over the granary-province list — Scope.GetProvince)
+							dynamicgridbox = {
+								datamodel = "[Player.MakeScope.GetList('qing_revenue_granaries')]"
+								datamodel_wrap = 1
+								item = {
+									widget = {
+										size = { 468 40 }
+										margin = { 2 2 }
+										datacontext = "[Scope.GetProvince]"
+										using = background_widget
+										flowcontainer = {
+											parentanchor = vcenter
+											spacing = 8
+											margin = { 8 0 }
+											goto_button = {
+												size = { 24 24 }
+												parentanchor = vcenter
+												tooltip = "go_to"
+												blockoverride "On_click" {
+													onclick = "[OnClickOnProvince(Scope.GetProvince)]"
+													onmousehierarchyenter = "[SetHighlightProvince(Scope.GetProvince.GetId)]"
+													onmousehierarchyleave = "[ClearHighlightColors]"
+												}
+											}
+											textbox = {
+												size = { 400 36 }
+												parentanchor = vcenter
+												using = BaseFontS
+												using = Default_FontColor
+												text = "[Scope.GetProvince.GetName]"
+												tooltip = "[Scope.GetProvince.GetTradeGoods.GetTooltip]"
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
