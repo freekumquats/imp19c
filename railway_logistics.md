@@ -73,10 +73,11 @@ with NO clamp, and that value feeds `se_PURCHASE` as a transport COST gated only
 transportation totals can exceed 100, driving the connection cost NEGATIVE — nonsensical
 subsidised long-distance shipping. This is dominated by the pre-existing `railway_bonus`
 `value = 1` per-province base (reachable with zero canals); the canal leg contributes ~10%
-and only nudges it. Fix (user-directed): added `min = 0` to all 462 connection svalues so
-shipping cost floors at free and can never go negative. Purely protective — changes nothing
-in the normal regime, only clamps the pathological tail. MOVEMENT_connection_svalues.txt,
-brace-verified 462/462.
+and only nudges it. Fix (user-directed): added `min = 0.01` to all 462 connection svalues so
+shipping cost floors at a small positive value and can never go negative (or zero). A tiny
+positive floor rather than 0 keeps a token transport cost and is div-safe for any future
+consumer. Purely protective — changes nothing in the normal regime (values scale to ~0..1),
+only clamps the pathological tail. MOVEMENT_connection_svalues.txt, brace-verified 462/462.
 
 The orphan `INF_railway_upgrade_army_movement_bonus_province` svalue (ECON_svalues.txt,
 zero consumers) left as-is (out of scope, deletion risk).
