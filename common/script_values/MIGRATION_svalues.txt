@@ -16,10 +16,66 @@
 #   province_unrest, civilization_value, total_population  (engine, per-tick)
 #   governorship.ECON_governorship_food_shortage           (ECON_svalues.txt,
 #       itself a sum of the cached var:shortage_<food> the consume step writes)
+#   governorship.WEALTH_governorship_proletariat_per_capita vs the national
+#       average (owner.var:WEALTH_total_private_moveable_wealth / country_population,
+#       both cached by WEALTH_cache_national_wealth) — the wage/wealth adequacy
+#       signal (see MIGRATION_wealth_relative_province below).
 # So a pulse is O(provinces) cheap reads, not a resimulation.
 #
 # Prefix = MIGRATION_
 ########################################################################
+
+# ======================================================================
+# WEALTH ADEQUACY — the missing wage->welfare->behaviour link. The wage engine
+# (se_ECON_wealth.txt / JOBS_svalues.txt) already PAYS wages into the strata
+# wealth pools every quarter and nets cost-of-living against them, but nothing
+# read that wealth back into how pops BEHAVE. This helper turns a province's
+# per-capita wealth into a scale-free migration signal: how it compares to the
+# NATIONAL average.
+#   Scope: province. Returns a fraction clamped to [-1, 1]:
+#     0  = local per-capita is exactly at the national per-capita average
+#    <0  = poorer than average  (impoverishment -> emigration pressure)
+#    >0  = richer than average   (prosperity   -> immigration draw)
+#
+# LIKE-FOR-LIKE BASIS (critical, review-fix): BOTH sides are ALL-STRATA per-capita.
+# The numerator is governorship.WEALTH_governorship_per_capita (= governorship
+# total private wealth / governorship population, WEALTH_svalues.txt:447, floored
+# at 0.001 so it is never 0); the denominator is the national total private
+# wealth / national population. An earlier version compared PROLETARIAT-only
+# per-capita against the ALL-STRATA national mean — a units mismatch that made
+# the ratio < 1 almost everywhere (the proletariat is a poorer-than-average
+# stratum), so the deviation was negative nearly everywhere: the push leg fired
+# empire-wide and the pull leg was dead, and a governorship with no proletariat
+# read as maximally destitute (per-capita 0 -> deviation -1 -> full push). Using
+# the all-strata per-capita on BOTH sides makes the signal genuinely symmetric
+# around 0 (a governorship richer than the national average draws people; poorer
+# sheds them) and removes the zero-stratum edge (the all-strata per-capita has a
+# 0.001 floor and is populated for every governorship).
+#
+# All operands are already-cached reads. Guarded so it is a clean 0 before the
+# wealth system has initialised (no wealth_setup_done) or on a country without the
+# moveable-wealth cache — costing nothing when unset.
+# ======================================================================
+MIGRATION_wealth_relative_province = {
+	value = 0
+	if = {
+		limit = {
+			has_global_variable = wealth_setup_done
+			owner = { has_variable = WEALTH_total_private_moveable_wealth }
+		}
+		value = governorship.WEALTH_governorship_per_capita
+		divide = {
+			# national per capita = cached national private wealth / population
+			# (all strata, matching the all-strata numerator above)
+			value = owner.var:WEALTH_total_private_moveable_wealth
+			divide = owner.country_population
+			min = 0.0001 # floor the denominator, never div/0
+		}
+		subtract = 1 # ratio -> deviation from the average
+		min = -1
+		max = 1
+	}
+}
 
 # ======================================================================
 # PUSH — how strongly a province makes its pops want to LEAVE. Sum of the
@@ -65,6 +121,20 @@ MIGRATION_push_province = {
 			NOT = { controller = owner }
 		}
 		add = 10
+	}
+
+	# Impoverishment — a province whose proletariat is poorer than the national
+	# average sheds people (the wage/wealth adequacy link: low wages net of cost
+	# of living -> a thin wealth pool -> emigration pressure). Only the poor-half
+	# pushes (max 0 on the deviation), so prosperity does not create negative push;
+	# it draws people via the pull score instead. Scaled to 6 at the -1 floor
+	# (destitute vs the average), comparable to the war term — real but not
+	# swamping unrest/famine. Reads MIGRATION_wealth_relative_province (guarded,
+	# all-cached; 0 before the wealth system inits).
+	add = {
+		value = MIGRATION_wealth_relative_province
+		max = 0    # only the below-average leg pushes
+		multiply = -6
 	}
 
 	# GOVERNMENT LEVER (the "one factor among many"): a government may tag a
@@ -124,6 +194,18 @@ MIGRATION_pull_province = {
 			NOT = { controller = owner }
 		}
 		subtract = 20
+	}
+
+	# Prosperity — a province whose proletariat is richer than the national
+	# average draws incomers (the mirror of the push impoverishment leg: fat wage
+	# pools = opportunity). Only the above-average leg attracts (min 0 on the
+	# deviation), so a poor destination does not gain spurious pull here — it is
+	# already repelling via its own push and its thin opportunity. Scaled to 6 at
+	# the +1 ceiling, matching the push weight so the signal is symmetric.
+	add = {
+		value = MIGRATION_wealth_relative_province
+		min = 0    # only the above-average leg attracts
+		multiply = 6
 	}
 
 	# GOVERNMENT LEVER (the "one factor among many"): a government may tag a
