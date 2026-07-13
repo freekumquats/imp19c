@@ -32,11 +32,23 @@ of the four (correctly — it is a shortage layer, not an infrastructure layer).
    `qing_grand_canal_building`, `qing_canal_depot_building`, `qing_granary_building` to the
    supported-levy `has_building` OR-list.
 
-Deferred (documented, not built): adding canals to the 20 hardcoded per-TZ
-`*_transportation_svalue` blocks — canals already feed trade throughput via
-`TRADE_canal_bonus`; adding them to inter-zone transportation too would double-dip and is a
-large balance-affecting edit. The orphan `INF_railway_upgrade_army_movement_bonus_province`
-svalue (ECON_svalues.txt, zero consumers) left as-is (out of scope, deletion risk).
+3. **Canals were NOT in the inter-zone trade-route transportation svalue.** Initially
+   deferred as "double-dip", but that reasoning was WRONG (corrected on review): railways
+   feed BOTH the intra-zone throughput channel (`TRADE_railway_bonus ×2`, into
+   `TRADE_governorship_infrastructure_capacity_svalue`, consumed live by
+   se_GLOBALTRADE_split) AND the inter-zone transportation channel (`railway_bonus` in
+   MOVEMENT_svalues) — and that is NOT double-dipping, because the two channels model
+   different things (throughput capacity within a zone vs. connection cost between zones).
+   A canal is a genuine inter-regional artery (the Grand Canal moved grain across regions),
+   so by parity it belongs in both. FIX: added a `canal_bonus` svalue (num_of_INF_canal ×
+   0.15, a touch below rail/port's 0.2) and a canal leg + canal qualifying-gate to all 22
+   per-TZ `*_transportation_svalue` blocks (MOVEMENT_svalues.txt), mirroring the port leg
+   (gated on has_building, since a canal is point infrastructure like a port, not
+   road-adjacency like the rail leg). Canals now lower inter-zone transport cost as well as
+   feeding intra-zone throughput — matching railways.
+
+The orphan `INF_railway_upgrade_army_movement_bonus_province` svalue (ECON_svalues.txt,
+zero consumers) left as-is (out of scope, deletion risk).
 
 ## #440 — Countrywide Railway Network (全國鐵路網)
 
