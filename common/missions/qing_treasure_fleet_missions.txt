@@ -1,0 +1,160 @@
+########################################################################
+# qing_treasure_fleet_missions.txt — THE NEW TREASURE FLEET (新寶船隊 / 鄭和寶船), #439.
+#
+# An anachronistic revival of Zheng He's (鄭和) 15thC treasure voyages (下西洋) — the Qing
+# turning back to the sea it abandoned after 1433 (the 海禁 sea-ban + the burning of the
+# treasure-ship plans). As with the Burma tree (#421), the PLAYER does the real work; the
+# mission only recognises what he actually builds:
+#
+#   • REVIVE THE SHIPYARDS (振興船政) — an opening commitment: fund the yards (treasury), and
+#     the programme raises a real home shipyard/port (QING_treasure_open_yards).
+#   • BUILD THE PORTS (廣建船塢) — the goal gates on the player OWNING a well-developed sea
+#     port (a real port_building at level 3): he must actually raise the port infrastructure.
+#   • AMASS THE FLEET (聚舟師) — the goal gates on num_of_ships >= 20: the player builds the
+#     hulls himself. On completion the great 寶船隊 armada is mustered (QING_treasure_launch_fleet).
+#   • CAPSTONE — THE VOYAGE TO THE WESTERN OCEAN (下西洋) — gates on a still-larger fleet
+#     (num_of_ships >= 30): the fleet sails, and returns laden with tribute + renown (the
+#     lasting qing_treasure_fleet_glory dominion modifier).
+#
+# NO scripted battle/voyage outcomes decided by a die — the player raises the ports and the
+# hulls, the mission recognises the fleet once it genuinely exists, and only the fleet-muster
+# and the returning-tribute texture are scripted (se_QING_TREASURE_FLEET.txt). The proven navy
+# idiom (create_unit navy=yes + is_port berth + base sub_unit, #331/#352-F4 verified in-game).
+#
+# Gating: CHI-only, player-only (ai_chance factor 0). Coastal precondition (the empire must
+# touch the sea). Tasks cost treasury.
+#
+# Sources: Levathes, "When China Ruled the Seas: The Treasure Fleet of the Dragon Throne
+#   1405-1433"; Dreyer, "Zheng He: China and the Oceans in the Early Ming Dynasty" (2006).
+########################################################################
+
+qing_treasure_fleet_mission = {
+	icon = test2
+	header = mission_image_test
+
+	repeatable = no
+
+	chance = { }
+	ai_chance = { factor = 0 }   # player-only
+
+	potential = {
+		tag = CHI
+		is_ai = no
+		# the empire must touch the sea to dream of a treasure fleet.
+		any_owned_province = { is_port = yes }
+	}
+
+	abort = {
+		NOT = { tag = CHI }
+	}
+
+	on_start = {
+		LOG_line = { sys = QING  msg = "MISSION the New Treasure Fleet (新寶船隊) started for" }
+	}
+
+	on_completion = {
+		LOG_line = { sys = QING  msg = "MISSION the New Treasure Fleet COMPLETED for" }
+	}
+
+	# ==================================================================
+	# ROOT — REVIVE THE SHIPYARDS (振興船政). Overturn the sea-ban mindset and pour silver
+	# into the coastal yards. The programme raises a real home shipyard/port at the ablest
+	# coastal province. The point of commitment: the treasury takes on the shipbuilding strain.
+	# ==================================================================
+	qing_treasure_revive_yards = {
+		icon = test1
+		allow = {
+			treasury >= 100
+		}
+		on_start = {
+			add_treasury = -100
+		}
+		on_completion = {
+			custom_tooltip = qing_treasure_revive_yards_tt
+			# raise a real home shipyard/port for the programme.
+			QING_treasure_open_yards = yes
+			current_ruler = { add_popularity = 8 }
+			LOG_line = { sys = QING  msg = "MISSION task treasure fleet revive yards for" }
+		}
+	}
+
+	# ==================================================================
+	# BUILD THE PORTS (廣建船塢) — the player must actually raise the port infrastructure:
+	# the goal gates on OWNING a sea port developed to the top level (port_building >= 3).
+	# He builds it himself; the mission recognises the harbour once it stands.
+	# ==================================================================
+	qing_treasure_build_ports = {
+		icon = test2
+		requires = { qing_treasure_revive_yards }
+		allow = {
+			custom_tooltip = {
+				text = qing_treasure_needs_port_tt
+				# a fully-developed sea port genuinely held by the Qing.
+				any_owned_province = {
+					is_port = yes
+					num_of_building = { building = port_building  value >= 3 }
+				}
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_treasure_build_ports_tt
+			# [review-pre-empt] do NOT grant qing_treasure_fleet_glory here — that is the CAPSTONE's
+			# permanent (duration=-1) reward; granting it temporarily here would stack/conflict two
+			# copies of the same country modifier. The intermediate reward is prestige + a stability tick.
+			add_legitimacy = 4
+			current_ruler = { add_popularity = 10 }
+			LOG_line = { sys = QING  msg = "MISSION task treasure fleet ports built for" }
+		}
+	}
+
+	# ==================================================================
+	# AMASS THE FLEET (聚舟師) — the player builds the hulls. The goal gates on num_of_ships
+	# >= 20: he must genuinely raise the ships. On completion the great treasure-ship armada
+	# is formally mustered (QING_treasure_launch_fleet spawns the named 寶船隊 flagship fleet).
+	# ==================================================================
+	qing_treasure_amass_fleet = {
+		icon = test3
+		requires = { qing_treasure_build_ports }
+		allow = {
+			treasury >= 80
+			custom_tooltip = {
+				text = qing_treasure_needs_fleet_tt
+				num_of_ships >= 20
+			}
+		}
+		on_start = {
+			add_treasury = -80
+		}
+		on_completion = {
+			custom_tooltip = qing_treasure_amass_fleet_tt
+			# muster the named treasure-ship armada at the home sea port.
+			QING_treasure_launch_fleet = yes
+			current_ruler = { add_popularity = 15 }
+			LOG_line = { sys = QING  msg = "MISSION task treasure fleet amassed for" }
+		}
+	}
+
+	# ==================================================================
+	# CAPSTONE — THE VOYAGE TO THE WESTERN OCEAN (下西洋). A still-greater fleet (num_of_ships
+	# >= 30) sets sail down to the southern seas and the Indian Ocean, and returns laden with
+	# tribute and renown — the lasting qing_treasure_fleet_glory dominion sealed, a sea-power reborn.
+	# ==================================================================
+	qing_treasure_capstone = {
+		icon = test1
+		requires = { qing_treasure_amass_fleet }
+		allow = {
+			custom_tooltip = {
+				text = qing_treasure_needs_voyage_tt
+				# a grand ocean-going fleet genuinely built.
+				num_of_ships >= 30
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_treasure_capstone_tt
+			# the fleet sails and returns in triumph — the permanent glory + tributary swell.
+			QING_treasure_complete_voyage = yes
+			current_ruler = { add_popularity = 40 }
+			LOG_line = { sys = QING  msg = "MISSION the New Treasure Fleet CAPSTONE (下西洋成) for" }
+		}
+	}
+}

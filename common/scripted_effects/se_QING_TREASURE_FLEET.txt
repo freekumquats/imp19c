@@ -1,0 +1,171 @@
+########################################################################
+# se_QING_TREASURE_FLEET.txt — THE NEW TREASURE FLEET (新寶船隊 / 鄭和寶船), #439.
+#
+# The scripted texture behind the treasure-fleet mission tree (qing_treasure_fleet_missions.txt):
+# an anachronistic revival of Zheng He's 鄭和 15thC treasure voyages (下西洋) — the Qing turning
+# back to the sea it abandoned after 1433. As with the Burma tree (#421), the PLAYER does the real
+# work: he builds the ports, amasses the hulls (the mission goals gate on num_of_ships and real
+# port_building levels), and funds the yards from the treasury. What is SCRIPTED here is only the
+# texture the player cannot buy with a die roll:
+#   • QING_treasure_open_yards — open the programme: lay the strain on the treasury and (the concrete
+#     seed) raise a shipyard/port at the realm's ablest coastal province so the fleet has a home yard.
+#   • QING_treasure_launch_fleet — spawn the 寶船隊 itself: a real 12-hull war-fleet at a held sea
+#     port, modelling the great treasure-ships and their escorts. All hulls are `brig` — the ONLY
+#     period-appropriate warship key in this TC (the war-junk); the galley types are empty stubs, so
+#     the 寶船 armada is a fleet of war-junks. Uses the PROVEN #331/#352-F4 navy idiom (the Fujian/
+#     Guangdong coastal-patrol spawn, imp19c_effects_legion_setup.txt: navy=yes + is_port berth +
+#     base sub_unit before add_subunit), NOT the mod's own se_QING_SELFSTR (which was not proven).
+#   • QING_treasure_complete_voyage — the capstone: the fleet returns from the Western Ocean laden
+#     with tribute and renown — a lasting dominion modifier + legitimacy + a swell of tributary
+#     prestige, and the emperor's glory.
+#
+# Proven idioms only: create_unit { navy = yes location add_subunit } (se_QING_SELFSTR:201),
+# add_building_level = port_building at province scope, ordered_owned_province coastal pick,
+# add_treasury / add_legitimacy / add_country_modifier / current_ruler.add_popularity. CHI-only.
+# ROOT / this = the Qing country (CHI, player). se_LOG throughout per the standing rule.
+# Prefix = QING_treasure_.
+########################################################################
+
+# ======================================================================
+# QING_treasure_open_yards — open the treasure-fleet programme (振興船政). Scope: COUNTRY (CHI).
+# Lays the fiscal strain of a great shipbuilding effort and raises a real port/shipyard at the
+# most-developed coastal province lacking a full one — the home yard the fleet will sail from
+# (the historical 龍江船廠 at Nanjing / the Fujian yards). Guarded so it no-ops cleanly inland.
+# ======================================================================
+QING_treasure_open_yards = {
+	LOG_enter = { sys = QING  fn = "QING_treasure_open_yards" }
+	# raise / expand a port at the ablest coastal province that is not already at the top level —
+	# the concrete home yard for the shipbuilding programme.
+	if = {
+		# [review-fix] pick an is_port berth (NOT is_coastal): the build_ports goal + launch_fleet berth
+		# both require is_port, so seeding a river port (coastal but not a sea port — the Canton case)
+		# would waste the free level on a province that never counts. Match is_port for a usable berth.
+		limit = { any_owned_province = { is_port = yes  NOT = { num_of_building = { building = port_building  value >= 3 } } } }
+		ordered_owned_province = {
+			limit = { is_port = yes  NOT = { num_of_building = { building = port_building  value >= 3 } } }
+			order_by = total_population
+			max = 1
+			add_building_level = port_building
+			add_civilization_value = 3
+		}
+		LOG_line = { sys = QING  msg = "treasure fleet: the shipyards are revived at a coastal home port for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_treasure_open_yards"  reason = "no coastal province to raise a shipyard at for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_treasure_open_yards"  result = OK }
+}
+
+# ======================================================================
+# QING_treasure_launch_fleet — spawn the 寶船隊 itself. Scope: COUNTRY (CHI). A real navy of great
+# treasure-ships (mega_galley — the giant nine-masted 寶船) with a brig escort screen, raised at a
+# held coastal home port (fallback to the ablest coastal province). Mirrors QING_selfstr_raise_fleet
+# exactly (the proven create_unit navy=yes idiom); no home-port param — picks the best coastal berth.
+# ======================================================================
+QING_treasure_launch_fleet = {
+	LOG_enter = { sys = QING  fn = "QING_treasure_launch_fleet" }
+	if = {
+		# [#331/#352-F4 proven idiom] is_port = yes is the correct sea-berth province trigger (is_coastal
+		# is NOT reliable — a river port like Canton is coastal but rejects a navy). Pick the ablest held
+		# sea port as the treasure fleet's home berth.
+		limit = { any_owned_province = { is_port = yes } }
+		ordered_owned_province = {
+			limit = { is_port = yes }
+			order_by = total_population
+			max = 1
+			save_scope_as = qing_treasure_home_port
+		}
+		# [#331/#352-F4 proven idiom] BARE create_unit in the CHI country scope (this effect runs at
+		# country root), navy = yes, a BASE sub_unit declared before add_subunit, located at the saved
+		# sea-port scope. `brig` is the ONLY period-appropriate warship key in this TC (the war-junk —
+		# screw_frigate/medium_steamer are the modern steam hulls); the giant 寶船 treasure-ships and their
+		# escorts are all modelled as a great fleet of war-junks. A grand 12-hull armada (下西洋 scale).
+		create_unit = {
+			navy = yes
+			name = QING_UNIT_TREASURE_FLEET
+			location = scope:qing_treasure_home_port
+			sub_unit = brig
+			while = { count = 11  add_subunit = brig }
+		}
+		LOG_line = { sys = QING  msg = "treasure fleet: the 寶船隊 is launched from the home sea port for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_treasure_launch_fleet"  reason = "no sea port owned; fleet not raised for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_treasure_launch_fleet"  result = OK }
+}
+
+# ======================================================================
+# QING_treasure_complete_voyage — the capstone (下西洋成). Scope: COUNTRY (CHI). The fleet returns
+# from the Western Ocean laden with tribute and renown: a lasting dominion modifier (the standing
+# prestige of a sea-power reborn), legitimacy, and a swell of the emperor's glory. If the tributary
+# system is live, the voyage draws fresh envoys — nudge the tributary prestige counter if present.
+# ======================================================================
+QING_treasure_complete_voyage = {
+	LOG_enter = { sys = QING  fn = "QING_treasure_complete_voyage" }
+	# [review-fix] grant the PERMANENT glory UNCONDITIONALLY — a same-named country modifier re-add
+	# refreshes/replaces rather than stacking, so no guard is needed; removing the old guard makes the
+	# permanent grant deterministic even if any temporary copy were ever in force (none is now, since
+	# build_ports no longer grants a timed version — but this stays correct regardless).
+	add_country_modifier = { name = qing_treasure_fleet_glory  duration = -1 }
+	add_legitimacy = 12
+	add_stability = 2
+	if = { limit = { exists = current_ruler }  current_ruler = { add_popularity = 20 } }
+	# the voyage overawes the southern seas — if the tributary-prestige counter exists, lift it (the
+	# fleet's diplomacy is the 朝貢 system's grandest instrument). Guarded on the var existing.
+	if = {
+		limit = { has_variable = qing_tributary_prestige }
+		QING_DECLINE_nudge = { var = qing_tributary_prestige  amount = 15 }
+	}
+	LOG_line = { sys = QING  msg = "treasure fleet: the 寶船隊 returns from the Western Ocean in triumph for" }
+	LOG_exit = { sys = QING  fn = "QING_treasure_complete_voyage"  result = OK }
+}
+
+# ======================================================================
+# QING_treasure_return_voyage_pulse — the treasure fleet's STANDING work once the 下西洋 capstone
+# is won: each return voyage brings home the wealth of the empire's overseas colonies (the tribute,
+# rarities and specie of the 下西洋 trade). Scope: COUNTRY (CHI). Gated on the fleet glory standing
+# (qing_treasure_fleet_glory — the capstone reward); the haul SCALES with how many overseas dominions
+# are actually established (the qing_col_* colony country modifiers the colonization tree grants), so
+# the fleet only pays once there are colonies to sail to — the user's ask: it brings back treasures
+# FROM colonies after they are established. Quarterly (called from QING_GOV_pulse). CURRENCY_grant_
+# country_wealth is the proven wealth-grant idiom (se_QING_CUSTOMS:195, thousands = var: form).
+# ======================================================================
+QING_treasure_return_voyage_pulse = {
+	# only sails once the treasure-fleet enterprise is complete (the glory modifier stands).
+	if = {
+		limit = { has_country_modifier = qing_treasure_fleet_glory }
+		LOG_enter = { sys = QING  fn = "QING_treasure_return_voyage_pulse" }
+		# tally the established overseas dominions — each real colony the fleet can call at. These are the
+		# lasting colony country modifiers the colonization tree (#67/#69/#315 大洋洲事業) grants on settling
+		# a region: New Holland (Australia), the Cape / Congo interior (Africa), the fur coast & golden shore
+		# (Alaska/California/Canada), the Mexican crown, the South-Seas dominion, the Lanfang protectorate.
+		set_variable = { name = qing_treasure_colony_tmp  value = 0 }
+		if = { limit = { has_country_modifier = qing_col_new_holland_settled }   change_variable = { name = qing_treasure_colony_tmp  add = 1 } }
+		if = { limit = { has_country_modifier = qing_col_south_seas_dominion }    change_variable = { name = qing_treasure_colony_tmp  add = 1 } }
+		if = { limit = { has_country_modifier = qing_col_cape_route }             change_variable = { name = qing_treasure_colony_tmp  add = 1 } }
+		if = { limit = { has_country_modifier = qing_col_congo_interior }         change_variable = { name = qing_treasure_colony_tmp  add = 1 } }
+		if = { limit = { has_country_modifier = qing_col_protectorate_africa }    change_variable = { name = qing_treasure_colony_tmp  add = 1 } }
+		if = { limit = { has_country_modifier = qing_col_fur_coast }              change_variable = { name = qing_treasure_colony_tmp  add = 1 } }
+		if = { limit = { has_country_modifier = qing_col_golden_shore }           change_variable = { name = qing_treasure_colony_tmp  add = 1 } }
+		if = { limit = { has_country_modifier = qing_col_pacific_dominion }       change_variable = { name = qing_treasure_colony_tmp  add = 1 } }
+		if = { limit = { has_country_modifier = qing_col_mexican_crown }          change_variable = { name = qing_treasure_colony_tmp  add = 1 } }
+		if = { limit = { has_country_modifier = qing_col_protectorate_lanfang }   change_variable = { name = qing_treasure_colony_tmp  add = 1 } }
+		# only sail home laden if there is at least one colony to sail to (the user's gate). The haul is
+		# ~12 (thousand units of wealth) per established dominion per return voyage — a real, scaling
+		# colonial dividend the fleet carries back, not a flat constant.
+		if = {
+			limit = { var:qing_treasure_colony_tmp >= 1 }
+			set_variable = { name = qing_treasure_haul_tmp  value = var:qing_treasure_colony_tmp }
+			change_variable = { name = qing_treasure_haul_tmp  multiply = 12 }
+			CURRENCY_grant_country_wealth = { thousands = var:qing_treasure_haul_tmp }
+			# publish the last haul for the panel/log + a touch of ruler glory each triumphant return.
+			set_variable = { name = qing_treasure_last_haul  value = var:qing_treasure_haul_tmp }
+			if = { limit = { exists = current_ruler }  current_ruler = { add_popularity = 2 } }
+			remove_variable = qing_treasure_haul_tmp
+			LOG_line = { sys = QING  msg = "treasure fleet: a return voyage brings home the wealth of the overseas colonies for" }
+		}
+		remove_variable = qing_treasure_colony_tmp
+		LOG_exit = { sys = QING  fn = "QING_treasure_return_voyage_pulse"  result = OK }
+	}
+}

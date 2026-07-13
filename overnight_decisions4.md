@@ -1929,3 +1929,23 @@ taxes that transaction (leg 1). After #436 both now scale off the same GOODS_nat
 which is MORE correct (bigger export economy -> both more bullion in AND more customs), still not conflated.
 OPEN for #425 (silver reserve -> concrete currency backing): keep these two legs distinct — the customs
 money and the silver-reserve bullion must not be merged when #425 concretises the reserve.
+
+### #439 DONE — New Treasure Fleet (新寶船隊) mission tree + colonization tie-in + colonial return voyages
+Mission tree (qing_treasure_fleet_missions.txt): player builds ports (num_of_building port_building>=3),
+amasses a fleet (num_of_ships>=20), voyages (num_of_ships>=30). Scripted = the port seed
+(QING_treasure_open_yards), fleet muster (QING_treasure_launch_fleet), voyage capstone
+(QING_treasure_complete_voyage -> qing_treasure_fleet_glory modifier). NO scripted battle/voyage outcome.
+NAVY IDIOM CORRECTION (user, 2 flags): se_QING_SELFSTR is NOT proven; the proven path is the #331/#352-F4
+Fujian/Guangdong coastal-patrol spawn (imp19c_effects_legion_setup.txt): navy=yes + is_port=yes berth (NOT
+is_coastal — river ports reject navies) + a BASE sub_unit before add_subunit + `brig` (the TC's only
+pre-steam warship). Fixed the treasure fleet AND fixed the same latent bug in se_QING_SELFSTR (both navy
+raises: is_coastal->is_port + added base sub_unit=screw_frigate). The port-BUILDING block in SELFSTR keeps
+is_coastal (a building, not a navy berth — correct).
+TIE-IN (user): the treasure fleet is the naval enabler for the colonization tree (大洋洲事業, which already
+covers Australia/Africa/Alaska/Canada/California/Mexico — Alaska IS present, qing_col_alaska). Added
+has_country_modifier = qing_treasure_fleet_glory to the two fleet-gate OR-blocks (qing_col_bureau entry +
+qing_col_zheng_he strong-fleet gate) so completing the treasure fleet opens overseas colonisation.
+COLONIAL RETURN VOYAGES (user): QING_treasure_return_voyage_pulse (in QING_GOV_pulse) — once the capstone
+glory stands, each quarter the fleet brings home wealth SCALED by established overseas colonies (counts 10
+qing_col_* dominion modifiers), ~12k wealth/colony/voyage via CURRENCY_grant_country_wealth. Gated on >=1
+colony (the user's "after they are established"). No-op until both the fleet is built AND colonies exist.
