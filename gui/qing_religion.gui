@@ -2,17 +2,20 @@
 # qing_religion.gui — the Qing Religion panel window (#268).
 #
 # A read-only panel surfacing the Qing religious-tension systems (#275): the
-# anti-Christian sentiment meter (仇教情緒), sectarian pressure, missionary reach,
-# reform pressure, the active sentiment band, the anti-Christian agitator (if he
-# has taken the stage), and Taiping / Heavenly-Kingdom progress.
+# anti-Christian sentiment meter (仇教情緒), social friction, sectarian pressure,
+# missionary reach, reform pressure, the active sentiment band, the anti-Christian
+# agitator (if he has taken the stage), and Taiping / Heavenly-Kingdom progress.
 #
 # Opened by qing_religion_open_panel_button (QING_religion_panel.txt), wired to a
 # button in the religion view (gui/religion_view.gui).
 #
-# Mirrors gui/qing_greatgame.gui exactly (proven idiom): read-only, stateless,
-# console-command open/close, 0..100 var scaled into a 0..1 progressbar via
-# FixedPointToFloat( Multiply_CFixedPoint( ..GetValue, '(CFixedPoint)0.01' ) ).
-# GetCountry / GetVariable forms per imp19c-gui-panel-open-idiom.
+# [BT-53 REBUILD] The prior scaffold rendered header-only — the body never painted
+# even with a zero-dependency sentinel textbox, despite looking structurally
+# identical to the confirmed-working gui/qing_greatgame.gui. Rather than keep
+# patching the non-painting body, this file is now cloned BYTE-FOR-BYTE from the
+# greatgame window scaffold (which demonstrably paints), with the religion content
+# dropped into its proven-rendering body. Only the window name, title/icon, close
+# target, and body widgets differ from greatgame.
 #
 # TAB indentation throughout (Paradox house style for .gui files).
 ########################################################################
@@ -39,49 +42,37 @@ base_window = {
 		}
 	}
 
-	# [#352 F9 fix] The body rendered EMPTY (only the header showed). ROOT CAUSE: the body was a
-	# SIBLING margin_widget of the header inside a plain vertical flowcontainer with NO layoutpolicy,
-	# so the body had no height anchor and collapsed. The R2-20 "match greatgame sizes" attempt did
-	# not fix it because greatgame has the same latent structure. The PROVEN working idiom is
-	# Terra-Indomita gui/religion_view.gui:27-70 (dementive): the HEADER is a `vbox using
-	# MainWindowHeaderBox` and the BODY is NESTED INSIDE that same vbox with
-	# layoutpolicy_vertical/horizontal = expanding at each level, so the body fills the window.
 	flowcontainer = {
 		direction = vertical
 
-		# HEADER — fixed-size widget (proven-working greatgame idiom, gui/qing_greatgame.gui:40).
+		# HEADER
 		widget = {
-		size = { 480 48 }
-		using = MainWindowHeaderBox
-		blockoverride "Title_text" { text = "QING_RELIGION_PANEL_TITLE" }
-		blockoverride "FlagOrIcon" {
-			icon = {
-				texture = "gfx/interface/base_parts/yellow_button_color_200fs.dds"
-				framesize = { 100 100 }
-				frame = 6
-				position = { -2 -2 }
-				size = { 32 32 }
-				modify_texture = {
-					texture = "gfx/interface/icons/menu_buttons/menu_religion.dds"
-					blend_mode = alphamultiply
+			size = { 480 48 }
+			using = MainWindowHeaderBox
+			blockoverride "Title_text" { text = "QING_RELIGION_PANEL_TITLE" }
+			blockoverride "FlagOrIcon" {
+				icon = {
+					texture = "gfx/interface/base_parts/yellow_button_color_200fs.dds"
+					framesize = { 100 100 }
+					frame = 6
+					position = { -2 -2 }
+					size = { 32 32 }
+					modify_texture = {
+						texture = "gfx/interface/icons/menu_buttons/menu_religion.dds"
+						blend_mode = alphamultiply
+					}
+				}
+			}
+			blockoverride "White_buttons" {
+				button_close = {
+					onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_religion_panel')]"
+					tooltip = "CLOSE"
+					shortcut = "close_window"
 				}
 			}
 		}
-		blockoverride "White_buttons" {
-			button_close = {
-				onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_religion_panel')]"
-				tooltip = "CLOSE"
-				shortcut = "close_window"
-			}
-		}
-		}
 
-		# BODY — fixed-size margin_widget sibling of the header (proven-working greatgame idiom,
-		# gui/qing_greatgame.gui:70). [BT-14] The prior F9 "nest the body INSIDE the header vbox with
-		# layoutpolicy = expanding" (TI religion_view idiom) collapsed to an empty body on this build —
-		# only the header rendered. Reverted to the fixed-size sibling layout the confirmed-working
-		# greatgame / ministry panels use: header widget { 480 48 } + margin_widget { 480 620 } holding
-		# a scrollarea { 460 600 }. No expanding-policy dependence.
+		# BODY
 		margin_widget = {
 			size = { 480 620 }
 			margin = { 10 10 }
@@ -95,274 +86,247 @@ base_window = {
 					flowcontainer = {
 						direction = vertical
 						spacing = 12
-						# [BT-14 ROOT CAUSE — do NOT re-add layoutpolicy_horizontal here] This flowcontainer is the
-						# DIRECT child of scrollwidget. The proven-rendering twin gui/qing_greatgame.gui:80 gives its
-						# equivalent top flowcontainer NO layoutpolicy at all — it shrinks to its content width and lets
-						# the scrollwidget size to it. Putting layoutpolicy_horizontal = expanding HERE (on the
-						# scrollwidget's DIRECT child) makes it try to expand into a scrollwidget with no intrinsic width,
-						# so the whole body collapses to zero and the panel shows only the header. This is why the
-						# empty-body bug survived THREE prior layout rewrites (greatgame-mirror / TI-nested / sibling-
-						# margin): each shuffled the OUTER scaffold but left this expanding policy on the inner top
-						# flowcontainer, so the body kept collapsing. The `expanding` policy belongs ONLY on the nested
-						# SECTION flowcontainers below (which have a defined-width ancestor), exactly as greatgame does.
 
-				# [BT-53 DIAGNOSTIC SENTINEL — TEMPORARY, remove after the read] A dead-simple
-				# hardcoded textbox as the FIRST body child: no var, no data-function, no scripted_gui,
-				# no loc key — nothing that can fail. Boot-test read:
-				#   • SENTINEL VISIBLE  -> the body container renders; the fault is in the real content
-				#     below (a var/scripted_gui/loc that blanks its own widget), NOT the layout.
-				#   • SENTINEL ABSENT (header only) -> the body container itself is not painting -> the
-				#     scaffold/scrollwidget is the fault despite matching greatgame; escalate to a full
-				#     rebuild from the greatgame body.
-				textbox = {
-					size = { 460 40 }
-					multiline = yes
-					text = "BT-53 SENTINEL: if you can read this, the religion panel body renders."
-				}
-
-				# DESCRIPTION
-				# [#314 Bug6/B20] drop autoresize (it overrides the fixed width and spills the text);
-				# a taller fixed multiline box wraps within the panel.
-				textbox = {
-					size = { 460 64 }
-					multiline = yes
-					using = BaseFontM
-					using = Default_FontColor
-					text = "QING_RELIGION_PANEL_DESC"
-				}
-
-				# --- METERS SECTION ---------------------------------------
-				flowcontainer = {
-					direction = vertical
-					spacing = 6
-					layoutpolicy_horizontal = expanding
-
-					using = background_widget
-					margin = { 8 8 }
-
-					textbox = {
-						size = { 440 28 }
-						using = BaseFontM
-						using = Default_FontColor
-						text = "QING_RELIGION_METERS_TITLE"
-					}
-
-					# Anti-Christian sentiment (仇教情緒)
-					flowcontainer = {
-						spacing = 8
+						# DESCRIPTION
 						textbox = {
-							size = { 120 20 }
-							using = BaseFontS
+							size = { 460 64 }
+							multiline = yes
+							using = BaseFontM
 							using = Default_FontColor
-							text = "QING_RELIGION_ANTICHR_LABEL"
-							tooltip = "QING_RELIGION_ANTICHR_TT"
-						}
-						textbox = {
-							size = { 40 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "[Player.MakeScope.GetVariable('qing_antichristian_sentiment').GetValue|0]"
-						}
-						progressbar = {
-							using = progressbar_flat_green
-							size = { 250 12 }
-							value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_antichristian_sentiment').GetValue, '(CFixedPoint)0.01' ) )]"
-						}
-					}
-
-					# [#309] Social friction (民教相爭) — the low, ever-present cultural
-					# irritant of a foreign faith; the pre-treaty face of the missions. Distinct
-					# from the political sentiment meter above: it carries no diplomatic stake.
-					flowcontainer = {
-						spacing = 8
-						textbox = {
-							size = { 120 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "QING_RELIGION_SOCIAL_LABEL"
-							tooltip = "QING_RELIGION_SOCIAL_TT"
-						}
-						textbox = {
-							size = { 40 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "[Player.MakeScope.GetVariable('qing_mission_social_friction').GetValue|0]"
-						}
-						progressbar = {
-							using = progressbar_flat_green
-							size = { 250 12 }
-							value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_mission_social_friction').GetValue, '(CFixedPoint)0.01' ) )]"
-						}
-					}
-
-					# Sectarian pressure
-					flowcontainer = {
-						spacing = 8
-						textbox = {
-							size = { 120 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "QING_RELIGION_SECT_LABEL"
-							tooltip = "QING_RELIGION_SECT_TT"
-						}
-						textbox = {
-							size = { 40 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "[Player.MakeScope.GetVariable('qing_sect_pressure').GetValue|0]"
-						}
-						progressbar = {
-							using = progressbar_flat_green
-							size = { 250 12 }
-							value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_sect_pressure').GetValue, '(CFixedPoint)0.01' ) )]"
-						}
-					}
-
-					# Missionary reach (mission-station count)
-					flowcontainer = {
-						spacing = 8
-						textbox = {
-							size = { 120 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "QING_RELIGION_MISSION_LABEL"
-							tooltip = "QING_RELIGION_MISSION_TT"
-						}
-						textbox = {
-							size = { 40 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "[Player.MakeScope.GetVariable('qing_missionary_reach').GetValue|0]"
-						}
-						progressbar = {
-							using = progressbar_flat_green
-							size = { 250 12 }
-							value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_missionary_reach').GetValue, '(CFixedPoint)0.01' ) )]"
-						}
-					}
-
-					# Reform pressure
-					flowcontainer = {
-						spacing = 8
-						textbox = {
-							size = { 120 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "QING_RELIGION_REFORM_LABEL"
-							tooltip = "QING_RELIGION_REFORM_TT"
-						}
-						textbox = {
-							size = { 40 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "[Player.MakeScope.GetVariable('qing_reform_pressure').GetValue|0]"
-						}
-						progressbar = {
-							using = progressbar_flat_green
-							size = { 250 12 }
-							value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_reform_pressure').GetValue, '(CFixedPoint)0.01' ) )]"
-						}
-					}
-				}
-
-				# --- BAND STATUS (one line matching the live band) --------
-				flowcontainer = {
-					direction = vertical
-					spacing = 4
-					layoutpolicy_horizontal = expanding
-
-					using = background_widget
-					margin = { 8 8 }
-
-					textbox = {
-						size = { 440 28 }
-						visible = "[GetScriptedGui('qing_religion_band_fever').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-						using = BaseFontM
-						text = "QING_RELIGION_BAND_FEVER"
-					}
-					textbox = {
-						size = { 440 28 }
-						visible = "[GetScriptedGui('qing_religion_band_simmering').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-						using = BaseFontM
-						text = "QING_RELIGION_BAND_SIMMERING"
-					}
-					textbox = {
-						size = { 440 28 }
-						visible = "[GetScriptedGui('qing_religion_band_calm').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-						using = BaseFontM
-						using = Default_FontColor
-						text = "QING_RELIGION_BAND_CALM"
-					}
-
-					# Anti-Christian agitator (仇教 firebrand), if he has taken the stage
-					flowcontainer = {
-						visible = "[GetScriptedGui('qing_religion_agitator_present').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-						spacing = 8
-
-						cpt_button = {
-							size = { 50 77 }
-							datacontext = "[Player.MakeScope.Var('qing_antichr_agitator').GetCharacter]"
+							text = "QING_RELIGION_PANEL_DESC"
 						}
 
+						# --- METERS SECTION ---------------------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 440 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_RELIGION_METERS_TITLE"
+							}
+
+							# Anti-Christian sentiment (仇教情緒)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 120 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_RELIGION_ANTICHR_LABEL"
+									tooltip = "QING_RELIGION_ANTICHR_TT"
+								}
+								textbox = {
+									size = { 40 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_antichristian_sentiment').GetValue|0]"
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 250 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_antichristian_sentiment').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
+							}
+
+							# [#309] Social friction (民教相爭) — the low, ever-present cultural
+							# irritant of a foreign faith; the pre-treaty face of the missions.
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 120 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_RELIGION_SOCIAL_LABEL"
+									tooltip = "QING_RELIGION_SOCIAL_TT"
+								}
+								textbox = {
+									size = { 40 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_mission_social_friction').GetValue|0]"
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 250 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_mission_social_friction').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
+							}
+
+							# Sectarian pressure
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 120 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_RELIGION_SECT_LABEL"
+									tooltip = "QING_RELIGION_SECT_TT"
+								}
+								textbox = {
+									size = { 40 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_sect_pressure').GetValue|0]"
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 250 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_sect_pressure').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
+							}
+
+							# Missionary reach (mission-station count)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 120 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_RELIGION_MISSION_LABEL"
+									tooltip = "QING_RELIGION_MISSION_TT"
+								}
+								textbox = {
+									size = { 40 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_missionary_reach').GetValue|0]"
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 250 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_missionary_reach').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
+							}
+
+							# Reform pressure
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 120 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_RELIGION_REFORM_LABEL"
+									tooltip = "QING_RELIGION_REFORM_TT"
+								}
+								textbox = {
+									size = { 40 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_reform_pressure').GetValue|0]"
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 250 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_reform_pressure').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
+							}
+						}
+
+						# --- BAND STATUS (one line matching the live band) --------
 						flowcontainer = {
 							direction = vertical
 							spacing = 4
+							layoutpolicy_horizontal = expanding
+
+							using = background_widget
+							margin = { 8 8 }
 
 							textbox = {
-								size = { 340 20 }
+								size = { 440 28 }
+								visible = "[GetScriptedGui('qing_religion_band_fever').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								using = BaseFontM
+								text = "QING_RELIGION_BAND_FEVER"
+							}
+							textbox = {
+								size = { 440 28 }
+								visible = "[GetScriptedGui('qing_religion_band_simmering').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								using = BaseFontM
+								text = "QING_RELIGION_BAND_SIMMERING"
+							}
+							textbox = {
+								size = { 440 28 }
+								visible = "[GetScriptedGui('qing_religion_band_calm').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
 								using = BaseFontM
 								using = Default_FontColor
-								text = "[Player.MakeScope.Var('qing_antichr_agitator').GetCharacter.GetName]"
+								text = "QING_RELIGION_BAND_CALM"
 							}
+
+							# Anti-Christian agitator (仇教 firebrand), if he has taken the stage
+							flowcontainer = {
+								visible = "[GetScriptedGui('qing_religion_agitator_present').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								spacing = 8
+
+								cpt_button = {
+									size = { 50 77 }
+									datacontext = "[Player.MakeScope.Var('qing_antichr_agitator').GetCharacter]"
+								}
+
+								flowcontainer = {
+									direction = vertical
+									spacing = 4
+
+									textbox = {
+										size = { 340 20 }
+										using = BaseFontM
+										using = Default_FontColor
+										text = "[Player.MakeScope.Var('qing_antichr_agitator').GetCharacter.GetName]"
+									}
+									textbox = {
+										size = { 340 40 }
+										multiline = yes
+										using = BaseFontS
+										using = Default_FontColor
+										text = "QING_RELIGION_AGITATOR_DESC"
+									}
+								}
+							}
+						}
+
+						# --- TAIPING / HEAVENLY-KINGDOM (shown once the overture opens) ---
+						flowcontainer = {
+							visible = "[GetScriptedGui('qing_religion_taiping_active').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+
+							using = background_widget
+							margin = { 8 8 }
+
 							textbox = {
-								size = { 340 40 }
-								multiline = yes
-								using = BaseFontS
+								size = { 440 28 }
+								using = BaseFontM
 								using = Default_FontColor
-								text = "QING_RELIGION_AGITATOR_DESC"
+								text = "QING_RELIGION_TAIPING_TITLE"
+							}
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 120 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_RELIGION_TAIPING_LABEL"
+									tooltip = "QING_RELIGION_TAIPING_TT"
+								}
+								textbox = {
+									size = { 40 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_taiping_progress').GetValue|0]"
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 250 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_taiping_progress').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
 							}
 						}
-					}
-				}
-
-				# --- TAIPING / HEAVENLY-KINGDOM (shown once the overture opens) ---
-				flowcontainer = {
-					visible = "[GetScriptedGui('qing_religion_taiping_active').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-					direction = vertical
-					spacing = 6
-					layoutpolicy_horizontal = expanding
-
-					using = background_widget
-					margin = { 8 8 }
-
-					textbox = {
-						size = { 440 28 }
-						using = BaseFontM
-						using = Default_FontColor
-						text = "QING_RELIGION_TAIPING_TITLE"
-					}
-					flowcontainer = {
-						spacing = 8
-						textbox = {
-							size = { 120 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "QING_RELIGION_TAIPING_LABEL"
-							tooltip = "QING_RELIGION_TAIPING_TT"
-						}
-						textbox = {
-							size = { 40 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "[Player.MakeScope.GetVariable('qing_taiping_progress').GetValue|0]"
-						}
-						progressbar = {
-							using = progressbar_flat_green
-							size = { 250 12 }
-							value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_taiping_progress').GetValue, '(CFixedPoint)0.01' ) )]"
-						}
-					}
-				}
 					}
 				}
 			}
