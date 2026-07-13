@@ -1909,3 +1909,23 @@ set_pop_type=slaves on a capital pop — remove; the design pivoted away from th
 (c) IMPRISON via vanilla — proven idiom `imprison = { target = scope:target }` runs on a COUNTRY scope
 (scope:actor in TI imprison.txt:84). Also BT-29 loc rename 'Board of Punishments' -> 'Ministry of Justice'
 (刑部). Convict should imprison the character via vanilla instead of enslaving a pop.
+
+### #436 DONE — Canton yield from real trade goods
+Rewrote QING_canton_pulse base yield: was flat 30萬兩; now derives from real export production
+GOODS_national_production_tea + _silk + _porcelain (the proven country-scope aggregates #423's opium
+model already reads), /8 to the 萬兩 scale, floored 8, capped 45 (the 一口通商 single-port throughput
+ceiling, applied BEFORE port/squeeze multipliers). Moves with the real export base; lands near the
+historical ~30萬兩 at the 1763 zenith. Scale constants are conversion factors, not magic tael figures.
+
+### MONEY vs SILVER clarification (user Q 2026-07-13) — the two Canton legs are DISTINCT, both correct
+The SAME tea/silk/porcelain exports feed two systems in two currencies, deliberately NOT double-counting:
+ 1. Canton CUSTOMS (se_QING_CANTON) = the ad-valorem TARIFF the 粵海關 levies on the trade -> lands as
+    MONEY: add_treasury (state share) + add_wealth on current_ruler (privy purse 內帑, #424).
+ 2. Balance-of-trade (se_QING_OPIUM #366) = the BULLION the foreigners pay for the goods -> nudges the
+    SILVER RESERVE counter (qing_silver_reserve): net_silver_flow = export_inflow(tea+silk+porcelain) -
+    opium_outflow. Positive = silver in, negative = drain.
+Distinct sinks (treasury money vs silver counter); the merchant pays silver for tea (leg 2) and the state
+taxes that transaction (leg 1). After #436 both now scale off the same GOODS_national_production_* base,
+which is MORE correct (bigger export economy -> both more bullion in AND more customs), still not conflated.
+OPEN for #425 (silver reserve -> concrete currency backing): keep these two legs distinct — the customs
+money and the silver-reserve bullion must not be merged when #425 concretises the reserve.
