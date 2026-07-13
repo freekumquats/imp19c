@@ -377,6 +377,17 @@ QING_xj_xiexiang_off = {
 # ======================================================================
 QING_xj_pulse = {
 	LOG_enter = { sys = QING  fn = "QING_xj_pulse" }
+	# [#422 review-fix] ONE-WAY INTEGRATION LOCK. Once the consolidation-tree capstone has
+	# declared the New Dominion fully integrated (a normal province — QING_xj_integrate_fully
+	# set qing_xj_fully_integrated), the frontier machinery must STOP: otherwise a later cut to
+	# the xiexiang subsidy would drift qing_xinjiang_control back down, re-stamp the contested
+	# band and re-arm the khoja revolt-scare — silently unwinding the "henceforth a normal
+	# province" end-state the capstone promises. Early-return keeps the lock permanent.
+	if = {
+		limit = { has_variable = qing_xj_fully_integrated }
+		LOG_exit = { sys = QING  fn = "QING_xj_pulse"  result = OK }
+	}
+	else = {
 	QING_xj_recompute_consolidation = yes
 	# --- maintenance vs neglect drift on the grip (small, so it is a background pressure).
 	if = {
@@ -428,6 +439,7 @@ QING_xj_pulse = {
 			LOG_line = { sys = QING  msg = "xinjiang: the far west stirs -> queue the khoja revolt-scare for" }
 			trigger_event = { id = qing_xinjiang.1  days = { 10 40 } }
 		}
+	}
 	}
 	LOG_exit = { sys = QING  fn = "QING_xj_pulse"  result = OK }
 }
@@ -493,4 +505,60 @@ QING_xj_remove_on_death = {
 			}
 		}
 	}
+}
+
+# ======================================================================
+# QING_xj_integrate_fully (新疆一體) — the CONSOLIDATION-TREE CAPSTONE (#422): the New
+# Dominion is at last a fully integrated part of the empire — no longer a garrisoned
+# frontier under a special regime, but a normal province like any interior one. Scope:
+# COUNTRY (CHI). This is the reward for a player who has genuinely built the frontier up
+# (deep tuntian, a loyal beg corps, a capable governor, the xiexiang subsidy sustained)
+# — the mission gates the ballot on that real state; this effect makes it so:
+#   • the control meter is pegged to the top (the grip is total), and the band recompute
+#     is run so the country/province bands flip to the SECURED (positive) side for free;
+#   • every NEGATIVE Xinjiang/ethnic modifier is stripped off the New Dominion ground
+#     (the contested band, the ethnic-tension bands, the restive marks) and the per-
+#     province ethnic-tension counter is zeroed — the province is treated as normal;
+#   • a lasting integration dividend + the ILI subject is absorbed a step toward full
+#     incorporation (settlement has knit the north into the empire for good).
+# All verbs proven in-file / in se_QING_ILI: set_variable on the meter, the band
+# recompute, area:Dzungaria/Tarim every_area_province, remove_province_modifier,
+# SUBJ_QING_advance_integration.
+# ======================================================================
+QING_xj_integrate_fully = {
+	LOG_enter = { sys = QING  fn = "QING_xj_integrate_fully" }
+	QING_xj_init = yes
+	# peg the grip to the top and re-band (flips country + province bands to SECURED).
+	set_variable = { name = qing_xinjiang_control  value = 100 }
+	QING_ili_apply_control_band = yes
+	QING_ili_apply_prov_band = yes
+	# strip every NEGATIVE band/tension modifier off the New Dominion provinces, and zero
+	# the per-province ethnic-tension counter, so the ground is treated as a normal province.
+	area:Dzungaria = {
+		every_area_province = {
+			if = { limit = { has_province_modifier = qing_xinjiang_prov_contested } remove_province_modifier = qing_xinjiang_prov_contested }
+			if = { limit = { has_province_modifier = qing_ethnic_restive }          remove_province_modifier = qing_ethnic_restive }
+			if = { limit = { has_variable = qing_prov_ethnic_tension } set_variable = { name = qing_prov_ethnic_tension  value = 0 } }
+		}
+	}
+	area:Tarim = {
+		every_area_province = {
+			if = { limit = { has_province_modifier = qing_xinjiang_prov_contested } remove_province_modifier = qing_xinjiang_prov_contested }
+			if = { limit = { has_province_modifier = qing_ethnic_restive }          remove_province_modifier = qing_ethnic_restive }
+			if = { limit = { has_variable = qing_prov_ethnic_tension } set_variable = { name = qing_prov_ethnic_tension  value = 0 } }
+		}
+	}
+	# clear the country-level negative grip band (the recompute above already sets grip_firm).
+	if = { limit = { has_country_modifier = qing_xinjiang_grip_lost } remove_country_modifier = qing_xinjiang_grip_lost }
+	if = { limit = { has_country_modifier = qing_ethnic_high_tension } remove_country_modifier = qing_ethnic_high_tension }
+	# settlement has knit the north in for good — absorb the ILI governorship a step further.
+	if = {
+		limit = { exists = c:ILI  c:ILI = { is_subject_of = ROOT } }
+		c:ILI = { save_scope_as = target }
+		SUBJ_QING_advance_integration = { steps = 1 }
+	}
+	# a lasting mark: the New Dominion is now provincia like any other.
+	set_variable = { name = qing_xj_fully_integrated  value = 1 }
+	LOG_line = { sys = QING  msg = "xinjiang: the New Dominion is FULLY INTEGRATED — a normal province for" }
+	LOG_exit = { sys = QING  fn = "QING_xj_integrate_fully"  result = OK }
 }
