@@ -1863,3 +1863,49 @@ vanilla Bring-to-Trial hook lives in the Board of Punishments (刑部, #363) ins
 deliberately split (Censorate = political-corruption organ, Punishments = judicial). OPEN: does the user
 want the Censorate impeachment re-routed through vanilla Bring-to-Trial for consistency, or keep the
 split? No change made pending direction.
+
+## SESSION 2026-07-13 (continued) — court-event throttle rule + #430/#431 + #419/#420
+
+### STANDING RULE ADDED (user 2026-07-13): GC court-event throttle
+Every event offered by the Grand Council OR any subordinate bureaucracy must share the
+qing_gc_event_slot_used court-event slot (reset monthly in 00_monthly_country.txt:80). Check
+`NOT has_variable` in the offer's limit + claim `set_variable=1` ONLY on the fire path (BT-28
+claim-only-on-fire). A new court system does NOT inherit it — wire each offer by hand. Saved to
+memory as imp19c-gc-event-throttle-rule. AUDIT DONE this session: wired the new princes(#368) +
+harem(#428) offers AND closed pre-existing gaps: Amban crisis (fired in every_subject), Revenue
+.1-.4 pulse offers, Decline reaction roll. Verified already-correct: Dynasty/Faction/Works/Canton/
+Personnel/Wenzhi + the Culture roll (rides QING_frontier_flavour_roll's claim). Exempt: player-launched
+initiatives (Siku), event->event chains, non-court external beats (tribute has its own slot).
+
+### #430 DONE — caravan customs -> Revenue ledger line
+Published qing_caravan_income_last in QING_caravan_pulse (the same take just add_treasury'd, published
+even at 0). Surfaced as a 回疆貿易 line on the Ministry of Revenue panel. Caravans already paid real
+treasury + were driven by Xinjiang grip (#367->#430) and folded into the Lifan Yuan Director via caravan
+PROSPERITY (term d). Confirmed for user: caravans now touch BOTH perf meters, NOT double-counted —
+Lifan reads PROSPERITY (governance of the trade), Revenue reads CUSTOMS INCOME (the fisc). Distinct signals.
+
+### #431 DONE — Revenue perf rewards actual on-books inflow
+Added term (g) to QING_ministry_recompute_perf_revenue: sum salt(qing_salt_income_last) + Canton
+state-share(qing_canton_last_state) + caravan(qing_caravan_income_last), /4, cap +15. A minister who
+makes a fortune on Canton/salt is no longer punished because caravans fell short (user's exact ask).
+Each source guarded on has_variable (perf recompute runs at game-start before those pulses publish ->
+contributes 0 safely). Reads published _last vars, does NOT re-pay treasury.
+NOTE (potential double-reward, ACCEPTED): a reformed salt gabelle is rewarded twice — once as the +10
+flag bonus (term c), once as its income in the term-(g) sum. Bounded (salt income /4 ~ +2-3), intended
+as mild reinforcement, not flagged as a bug. [confirm with review]
+
+### USER ASK DONE — vanilla income on the Revenue panel
+Added two read-out lines to the 戶部 panel: Realm Income per quarter (INCOME_national_total_quarterly)
++ Treasury Balance (Player.GetTreasury) — the same values the topbar reads. So the panel shows the true
+fisc, not only the bespoke Qing streams.
+
+### #420 DONE (already shipped, commit 683d0cbbc) — Imperial Guard
+'Captains of the Guard (侍衛)' roster title + qing_bayara_elite unit modifier already present. Marked done.
+
+### #419 IN PROGRESS — Board of Punishments -> Ministry of Justice redesign
+Three asks: (a) broaden ACCUSE targets (currently corruption>=30 / corrupt trait / loyalty<40 — widen
+so more officials are chargeable), (b) DROP the pop->slave hook (QING_justice_convict_accused currently
+set_pop_type=slaves on a capital pop — remove; the design pivoted away from the slave-class mechanic),
+(c) IMPRISON via vanilla — proven idiom `imprison = { target = scope:target }` runs on a COUNTRY scope
+(scope:actor in TI imprison.txt:84). Also BT-29 loc rename 'Board of Punishments' -> 'Ministry of Justice'
+(刑部). Convict should imprison the character via vanilla instead of enslaving a pop.
