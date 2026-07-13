@@ -151,7 +151,9 @@ QING_opium_ramp_import_index = {
 QING_opium_assess_trade_balance = {
 	LOG_enter = { sys = QING  fn = "QING_opium_assess_trade_balance" }
 	QING_opium_init = yes
-	# ramp the import index first so the outflow reads a fresh value.
+	# [#423] ramp the import index (still drives the addiction epidemic + the Lin Zexu / treaty
+	# event chain + the opium panel read-out; it no longer sizes the silver outflow — that is now
+	# the concrete DEMAND_country_opium - GOODS_national_production_opium gap below).
 	QING_opium_ramp_import_index = yes
 
 	# --- EXPORT INFLOW: the real tea/silk/porcelain export economy (proven country svalues).
@@ -166,10 +168,26 @@ QING_opium_assess_trade_balance = {
 	change_variable = { name = qing_opium_inflow_tmp  divide = 4 }
 	if = { limit = { var:qing_opium_inflow_tmp > 40 } set_variable = { name = qing_opium_inflow_tmp  value = 40 } }
 
-	# --- OPIUM OUTFLOW: the import index scaled to the same units, amplified by addiction
-	# (addicts consume more -> a deeper drain) and eased by domestic substitution.
-	set_variable = { name = qing_opium_outflow_tmp  value = var:qing_opium_import_index }
-	change_variable = { name = qing_opium_outflow_tmp  divide = 2 }        # index 0..100 -> 0..50 outflow
+	# --- OPIUM OUTFLOW: [#423] the CONCRETE import gap. The silver drain is the opium the
+	# empire CONSUMES but does not GROW — i.e. what must be imported (and paid for in silver).
+	# Bengal opium paid in silver drains; Yunnan/Sichuan home-grown opium does not. So:
+	#     imported opium  =  national consumption  -  domestic production
+	#                     =  DEMAND_country_opium   -  GOODS_national_production_opium
+	# both proven country-scope aggregates (DEMAND_svalues.txt:2687 / GOODS_svalues.txt:195).
+	# Read into a scratch var, floored at 0 (you cannot import a negative amount — a net
+	# exporter simply has no drain), scaled into the model's 0..50 outflow band and clamped.
+	# This REPLACES the old date-ramp (qing_opium_import_index) as the outflow driver — the
+	# index var is KEPT (the Lin Zexu / treaty-posture event chain + the opium panel still read
+	# it), it just no longer sizes the silver drain. Now a player who plants domestic poppy
+	# (raising production via QING_opium_unlock_domestic + the poppy-farm building) concretely
+	# shrinks the drain, and a richer, more-addicted empire (higher consumption) deepens it.
+	# [#423 calibration] DIVISOR 8 brings the raw (demand-production) gap into the ~0..50 band;
+	# this is a scale factor to tune against a live economy, not a tael figure. Clamp 0..50.
+	set_variable = { name = qing_opium_outflow_tmp  value = DEMAND_country_opium }
+	change_variable = { name = qing_opium_outflow_tmp  subtract = GOODS_national_production_opium }
+	if = { limit = { var:qing_opium_outflow_tmp < 0 } set_variable = { name = qing_opium_outflow_tmp  value = 0 } }
+	change_variable = { name = qing_opium_outflow_tmp  divide = 8 }
+	if = { limit = { var:qing_opium_outflow_tmp > 50 } set_variable = { name = qing_opium_outflow_tmp  value = 50 } }
 	# addiction amplifier: + up to a third of the addicted share (deeper habit, larger imports).
 	set_variable = { name = qing_opium_addamp_tmp  value = var:qing_opium_addicted_share }
 	change_variable = { name = qing_opium_addamp_tmp  divide = 3 }
@@ -321,14 +339,48 @@ QING_opium_treaty_legalize = {
 	LOG_line = { sys = QING  msg = "opium: trade LEGALIZED by treaty (Tianjin); tariff revenue offsets the fisc, epidemic worsens for" }
 }
 
-# --- unlock domestic Yunnan/Sichuan production (1850s+). Pulls the import index down (home-grown
-# opium is not a silver drain) but deepens the epidemic (cheaper, closer supply). Scope: CHI.
+# --- unlock domestic Yunnan/Sichuan production. [#423] CONCRETELY turns hill provinces there to
+# poppy (QING_opium_spread_poppy_country) so home-grown opium raises GOODS_national_production_opium
+# — which the balance-of-trade model subtracts from consumption, so the silver drain eases in
+# proportion to what the empire grows for itself (no longer an abstract index nudge). The epidemic
+# still deepens (cheaper, closer supply). Scope: CHI.
 QING_opium_unlock_domestic = {
 	QING_opium_init = yes
 	if = {
 		limit = { NOT = { has_variable = qing_opium_domestic_unlocked } }
 		set_variable = { name = qing_opium_domestic_unlocked  value = 1 }
-		LOG_line = { sys = QING  msg = "opium: domestic Yunnan/Sichuan production unlocked; imports substitute home-grown for" }
+		# [#423] CONCRETE domestic production: turn the hill provinces of the poppy country to
+		# poppy so GOODS_national_production_opium becomes real (the balance-of-trade model
+		# subtracts it from national consumption to size the silver drain) and the
+		# qing_opium_poppy_farm_building becomes buildable there.
+		QING_opium_spread_poppy_country = yes
+		LOG_line = { sys = QING  msg = "opium: domestic production unlocked; imports substitute home-grown for" }
+	}
+}
+
+# ======================================================================
+# [#423] QING_opium_spread_poppy_country — convert the empire's core poppy-country hill
+# provinces to opium. Scope: COUNTRY (CHI). Yunnan + Sichuan (Chengdu), the historical
+# heartland of Qing domestic poppy. Bounded to 3 provinces so home-grown opium substitutes
+# for imports without flooding the map; prefers the crowded marginal hill land (poppy
+# displaced subsistence hill crops). Idempotent (skips provinces already growing opium).
+# set_trade_goods + is_in_area are proven (se_QING_COLON, se_QING_XINJIANG). Called at the
+# opium panel's domestic-unlock. NOTE: a Chinese-conquered Burma is turned to poppy separately,
+# by the Burma conquest mission tree's own capstone (#421), not here — the two poppy sources
+# are wired at their own feature so the drain-easing follows the historical geography.
+# ======================================================================
+QING_opium_spread_poppy_country = {
+	ordered_owned_province = {
+		limit = {
+			is_capital = no
+			NOT = { trade_goods = opium }
+			OR = { is_in_area = Yunnan  is_in_area = Chengdu }
+			OR = { trade_goods = grain  trade_goods = livestock  trade_goods = wood  trade_goods = vegetables }
+		}
+		order_by = total_population
+		max = 3
+		set_trade_goods = opium
+		LOG_line = { sys = QING  msg = "opium: a Yunnan/Sichuan hill province turned to poppy (domestic cultivation) for" }
 	}
 }
 
