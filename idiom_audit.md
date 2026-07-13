@@ -102,3 +102,84 @@ Sinicization assimilation gate now parses and evaluates.
 - `divide = var:X` — used 57× across the mod's own shipping economy engine (se_PRICE/se_DEMAND/
   se_CURRENCY etc.); engine accepts variables in arithmetic slots. No change.
 
+---
+
+## Pass 2 — remaining ~205 changed script/GUI files
+
+58 agents, 17 suspected, **8 CONFIRMED_UNPROVEN** (1 high, 7 medium). The 9 non-confirmed were
+adversarially downgraded to ACTUALLY_PROVEN/HARMLESS. Bug classes:
+
+### BUG-5 · `owner = ROOT` used as an EFFECT → `set_owned_by = ROOT`  [HIGH]
+`owner` is a read-only province trigger, not a settable effect. Used in effect position
+(se_QING_BURMA:147, inside every_province after the limit) to transfer a controlled Burma/Pegu
+province to CHI — silently discarded, so the #421/#423/#432 Burma-annex→poppy capstone does
+nothing (province stays unowned; the poppy pass gated on `owner = ROOT` then also never fires).
+Proven province-transfer effect: `set_owned_by` (mod's own sell_province_events.txt:26, se_FUNC.txt:123; Invictus nepal_decisions.txt:665).
+- **Site (1):** se_QING_BURMA.txt:147.
+
+### BUG-6 · `has_attribute = <attr>` is not a trigger → compare the attribute directly  [MEDIUM]
+`has_attribute` does not exist (0 oracle hits). Every character always has all four attributes,
+so the presence-guard is meaningless; the unknown trigger errors→false, so the `trigger_if`
+collapses to the looser `trigger_else` branch — silently degrading the Zongli able-holder bar
+from `>=7` to `>=5` + error spam. Fix: drop the guard, compare directly (`finesse >= 7` /
+`charisma >= 7`). Proven: TI conversions.txt:1003 `finesse >= 8`; Invictus 00_missions.txt:1034 `charisma >= 8`.
+- **Sites (2):** se_QING_GREATGAME.txt:70 (finesse), 75 (charisma).
+
+### BUG-7 · `imprison = ROOT` (bare, country arg) → `imprison = { target = <char> }`  [MEDIUM]
+`imprison` is always block-form with a character target upstream; the bare scalar form + a
+COUNTRY arg is unattested. Fix: run on the country with the courtier as target
+(`ROOT = { imprison = { target = scope:X } }`). Proven: mod's own annexation.txt:1194;
+Invictus 00_india_effects.txt:105.
+- **Site (1):** qing_character_events.txt:224 (the disloyal-courtier purge).
+
+### BUG-8 · `at_war = yes` / `is_at_war = yes|no` are not proven → `war = yes|no`  [MEDIUM]
+Neither `at_war` nor `is_at_war` appears in either oracle (0 hits); the proven country war-state
+trigger is `war = yes|no` (600× in oracles). Swept BOTH tokens for consistency.
+- **`at_war` sites (6):** se_MARRIAGE.txt:228,229,458,738,766 · qing_marriage_events.txt:51.
+- **`is_at_war` sites (5):** se_QING_DECLINE:1187 · se_QING_ACCOUNTABILITY:216,220 ·
+  qing_war_events:257 · qing_summer_palace_events:152.
+
+### BUG-9 · `add_loyalty` on a COUNTRY (tributary) scope is a no-op → loyalty_to_overlord country modifier  [MEDIUM]
+`add_loyalty` is a CHARACTER effect (courtier→employer loyalty); on a subject-COUNTRY scope
+(`scope:trib_defaulter`) it does nothing. The subject-loyalty channel is a country modifier
+carrying `loyalty_to_overlord`. The mod already ships both signed modifiers:
+`qing_tributary_invested` (loyalty_to_overlord = 20, qing_governance_modifiers.txt:352) for the
+reward; and a subject_loyalty-undermining modifier for the penalty.
+- **Sites (2):** qing_tribute_events.txt:326 (penalty), 338 (reward).
+
+### BUG-10 · `random_in_list { order_by … max = 1 }` ignores order_by → `ordered_in_list`  [MEDIUM]
+`random_in_list` picks at random and does NOT honor `order_by`, so the "pick the most-prominent
+council member as clique head" silently picks a RANDOM member. `ordered_in_list` honors order_by+max.
+Proven: mod's own se_QING_PRINCES.txt:182 `ordered_in_list = { … order_by = … max = 1 }`.
+- **Site (1):** qing_office_events.txt:697 (only the order_by-bearing one; the other random_in_list
+  uses have no order_by and are correct).
+
+
+
+## Pass 2 — FIXES APPLIED (commit on merge-overnight, freekumquats)
+
+All 6 confirmed bug classes fixed; each file brace-checked; repo-wide re-scan confirms zero
+residual live instances. Adversarially-downgraded suspicions (9) were left untouched.
+
+- **BUG-5** `owner = ROOT` (effect) → `set_owned_by = ROOT` — se_QING_BURMA.txt:147. The Burma
+  annex now actually transfers the controlled provinces (unblocking the poppy pass + #421/#423/#432 tie-in).
+- **BUG-6** `has_attribute` guards dropped; `finesse >= 7` / `charisma >= 7` compared directly —
+  se_QING_GREATGAME.txt:69-78. The Zongli able-holder bar now evaluates at the intended >=7, not the >=5 fallback.
+- **BUG-7** `imprison = ROOT` → `save_scope_as` + `ROOT = { imprison = { target = scope:X } }` —
+  qing_character_events.txt:224. The disloyal-courtier purge now actually jails the courtier.
+- **BUG-8** `at_war` / `is_at_war` → `war` (11 sites, 6 files): se_MARRIAGE (5), qing_marriage_events (1),
+  se_QING_DECLINE (1), se_QING_ACCOUNTABILITY (2), qing_war_events (1), qing_summer_palace_events (1).
+  Both unproven war-triggers normalized to the oracle-proven `war = yes|no`.
+- **BUG-9** tributary `add_loyalty` → country modifier (2 sites, qing_tribute_events.txt:326/338):
+  penalty = `subject_loyalty_undermined` (loyalty_to_overlord −15); reward = `qing_tributary_invested`
+  (loyalty_to_overlord +20), both shipping modifiers, 10-yr duration. Subject loyalty now actually moves.
+  NOTE: all other `add_loyalty = loyalty_qing_delta_*` uses are on CHARACTER scopes (correct) — left as-is.
+- **BUG-10** `random_in_list` → `ordered_in_list` — qing_office_events.txt:697. The clique-head pick now
+  honors `order_by = prominence` (picks the most prominent), not a random member.
+
+## Coverage summary
+- Pass 1: 85 files → 4 bug classes (10 sites) fixed.
+- Pass 2: 205 files → 6 bug classes (23 sites) fixed.
+- Total: 290 idiom-bearing changed files audited (full merge-overnight script diff vs upstream),
+  10 bug classes / 33 sites corrected to proven idioms. All error.log "Unknown …" classes from the
+  pre-fix baseline that trace to these idioms are resolved.
