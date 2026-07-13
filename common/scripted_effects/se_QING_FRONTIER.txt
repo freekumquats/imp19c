@@ -4,8 +4,9 @@
 #
 # The 1815/1763 frontier banner garrisons (Ili 伊犁, Ürümqi 烏魯木齊, Kashgar 喀什噶爾,
 # Mukden 盛京, Heilongjiang 黑龍江) sit in provinces owned by CHI's autonomous-
-# governorship SUBJECTS (ILI/XNG/MKD/HLJ). The setup OOB deliberately raises them
-# UNDER the subject (engine placement-validity, #338/B21) — but historically these were
+# governorship SUBJECTS (ILI/XNG/MKD/HLJ). [BT-15] The setup OOB raises them as
+# CHI-OWNED, CHI-COMMANDED armies standing on that subject soil (bare create_unit in the
+# c:CHI scope; the Son of Heaven garrisons the marches directly) — exactly the historical
 # QING FRONTIER COMMANDS (將軍) answering to Beijing, not the local dependency. This
 # overlay expresses that: a garrison COMMANDED BY A QING (c:CHI-employed) officer sitting
 # on a subject's frontier province is a direct imperial military occupation, which:
@@ -31,25 +32,36 @@ QING_fgar_scan = {
 	if = {
 		limit = { tag = CHI }
 		LOG_line = { sys = QING  msg = "frontier-garrison overlay scan firing for" }
-		# Iterate the QING's autonomous-governorship SUBJECTS (Ili/Xinjiang/Mukden/
-		# Heilongjiang). [#346 review-fix — BLOCKER] the frontier garrisons are RAISED IN THE
-		# SUBJECT'S SCOPE with a subject-employed commander (SE_qing_raise_garrison_cmd creates
-		# in scope:garrison_owner = the province owner = the subject; #338/B21), so CHI's OWN
-		# every_army NEVER sees them. We instead detect a garrison the SUBJECT itself fields on
-		# its OWN soil — that IS the frontier banner command (historically a 將軍 answering to
-		# Beijing, but engine-owned by the dependency). Its PRESENCE is the imperial-occupation
-		# signal this overlay models. Bounded O(subjects × own armies).
-		every_subject = {
+		# [BT-15 correction — supersedes the #346 every_subject rewrite] The frontier garrisons are
+		# NOT fielded by the subject: BT-15 changed SE_qing_raise_garrison[_cmd] to issue a BARE
+		# create_unit in the c:CHI scope with a CHI-employed commander, so a subject-owned frontier
+		# province now carries a CHI-CONTROLLED garrison (imp19c_effects_legion_setup.txt:103-113/150-156,
+		# "the Son of Heaven garrisons the marches directly"). The intervening every_subject { any_army }
+		# scan looked for a garrison the DEPENDENCY fields on its own soil — which no longer exists — so it
+		# could never match. Reverted to the correct idiom: iterate the QING's OWN settled armies
+		# (every_army), reach the province via unit_location (the proven se_ARMY.txt:27 idiom), and when the
+		# host stands on a province OWNED BY a CHI autonomous-governorship SUBJECT (not by CHI itself), that
+		# subject is under direct imperial occupation. Bounded O(own armies). Throttled per subject downstream.
+		every_army = {
 			limit = {
-				is_subject_type = autonomous_governorship
-				# the dependency fields a settled garrison of its own (the frontier banner host).
-				any_army = {
-					is_moving = no
-					in_combat = no
-					unit_size >= 3
+				is_moving = no
+				in_combat = no
+				unit_size >= 3
+				exists = unit_location
+				unit_location = {
+					exists = owner
+					owner = {
+						is_subject_of = ROOT
+						is_subject_type = autonomous_governorship
+					}
 				}
 			}
-			save_scope_as = qing_frontier_subject
+			# reach the garrison's province (proven se_ARMY.txt:27 idiom), save it, then save the
+			# occupied dependency (the province owner) as the subject scope the occupation reads
+			# (dot-access off a saved scope = proven se_ARMY.txt:69 / se_TRADE_new.txt:390). Apply
+			# the consequences in the CHI (ROOT) scope.
+			unit_location = { save_scope_as = qing_frontier_prov }
+			scope:qing_frontier_prov.owner = { save_scope_as = qing_frontier_subject }
 			ROOT = { QING_fgar_apply_occupation = yes }
 		}
 	}
@@ -57,9 +69,8 @@ QING_fgar_scan = {
 
 # ----------------------------------------------------------------------
 # QING_fgar_apply_occupation — the per-garrison consequence. Scope: COUNTRY (ROOT
-# = CHI); expects scope:qing_frontier_subject (the occupied dependency) + scope:
-# qing_frontier_commander (the Qing officer on its soil). Throttled per subject via a
-# timed var on the subject so it fires ~twice a year, not every pulse.
+# = CHI); expects scope:qing_frontier_subject (the occupied dependency). Throttled per
+# subject via a timed var on the subject so it fires ~twice a year, not every pulse.
 # ----------------------------------------------------------------------
 QING_fgar_apply_occupation = {
 	if = {
