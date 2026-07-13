@@ -62,6 +62,22 @@ of the four (correctly — it is a shortage layer, not an infrastructure layer).
   time 180→540 (3× the railway's 180). So canals move goods better but are dear and slow to
   dig — the intended trade-off.
 
+### Post-review fix: clamp the inter-zone connection svalue (min = 0)
+The canal review (12-agent workflow) confirmed the canal changes themselves are sound
+(scope/idiom proven, build-time within precedent, the canal leg is actually the
+better-behaved term — it adds 0 where absent, unlike the railway leg's per-province +1
+base). But it surfaced a **pre-existing** correctness gap it shares: each of the 462
+`X_to_Y_svalue` connection blocks is `(100 − X_transportation − Y_transportation) × 0.01`
+with NO clamp, and that value feeds `se_PURCHASE` as a transport COST gated only on
+`has_variable`, never on sign. In a rail/province-saturated late game the two zones'
+transportation totals can exceed 100, driving the connection cost NEGATIVE — nonsensical
+subsidised long-distance shipping. This is dominated by the pre-existing `railway_bonus`
+`value = 1` per-province base (reachable with zero canals); the canal leg contributes ~10%
+and only nudges it. Fix (user-directed): added `min = 0` to all 462 connection svalues so
+shipping cost floors at free and can never go negative. Purely protective — changes nothing
+in the normal regime, only clamps the pathological tail. MOVEMENT_connection_svalues.txt,
+brace-verified 462/462.
+
 The orphan `INF_railway_upgrade_army_movement_bonus_province` svalue (ECON_svalues.txt,
 zero consumers) left as-is (out of scope, deletion risk).
 
