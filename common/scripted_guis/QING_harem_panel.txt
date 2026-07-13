@@ -26,8 +26,9 @@ qing_harem_open_panel_button = {
 	is_shown = { tag = CHI }
 	is_valid = { always = yes }
 	effect = {
-		# rebuild the roster so the window opens on a fresh consort list.
+		# rebuild the roster + the take-as-consort candidate list so the window opens fresh.
 		QING_harem_recompute_roster = yes
+		QING_harem_refresh_candidates = yes
 		LOG_line = { sys = QING  msg = "EVENT qing_harem_open_panel_button fired; opening the Imperial Harem panel for" }
 	}
 }
@@ -79,6 +80,79 @@ qing_harem_favour_consort = {
 	effect = {
 		QING_harem_favour_consort = yes
 		LOG_line = { sys = QING  msg = "harem panel: the emperor favours a consort for" }
+	}
+}
+
+# ---- [#438] PROMOTE A CONSORT (晉封) — elevate the most-favoured eligible consort one rank up
+# the graded establishment (妃 → 貴妃 → 皇貴妃). MIRROR the effect's own guard: at least one living
+# consort below the top rank whose next tier still has an open place under its cap (皇貴妃 1 / 貴妃 2
+# / 妃 4). Without this the button would be a no-op affordance when the ladder is full at every tier.
+qing_harem_promote_consort = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		exists = current_ruler
+		has_variable_list = qing_harem_consorts
+		any_in_list = {
+			variable = qing_harem_consorts
+			is_alive = yes
+			var:qing_consort_rank < 4
+			OR = {
+				AND = { var:qing_consort_rank = 3  ROOT.var:qing_harem_rank4_count < 1 }
+				AND = { var:qing_consort_rank = 2  ROOT.var:qing_harem_rank3_count < 2 }
+				AND = { var:qing_consort_rank = 1  ROOT.var:qing_harem_rank2_count < 4 }
+			}
+		}
+	}
+	effect = {
+		QING_harem_promote_consort = yes
+		LOG_line = { sys = QING  msg = "harem panel: a consort is elevated in rank for" }
+	}
+}
+
+# ---- [#418] TAKE AS CONSORT (納為妃嬪) — the emperor takes an existing court woman into the inner
+# court. Row action on the court-candidate picker (the char comes via the picker datacontext; ROOT =
+# the woman, scope:player = the country), mirroring qing_guard_enrol_guardsman. Unlike the triennial
+# DRAFT (which mints a NEW banner woman), this elevates a woman ALREADY on the map — an unmarried adult
+# female of the emperor's household who is not already a consort. Self-caps at a court of 8. The effect
+# runs at COUNTRY scope reading scope:qing_take_target, so save the picked char + call on the player.
+qing_harem_take_consort = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+	}
+	is_valid = {
+		# an eligible, unmarried adult court woman of the player, not already a consort; court not full.
+		is_alive = yes
+		is_female = yes
+		is_adult = yes
+		is_married = no
+		employer = scope:player
+		NOT = { has_variable = qing_is_harem_consort }
+		scope:player = {
+			exists = current_ruler
+			OR = {
+				NOT = { has_variable = qing_harem_consort_count }
+				var:qing_harem_consort_count < 8
+			}
+		}
+	}
+	effect = {
+		# [review-fix / BT-13 pattern] This scripted_gui runs at CHARACTER root (ROOT = the clicked woman),
+		# but QING_harem_take_consort + QING_harem_recompute_roster + QING_harem_refresh_candidates are all
+		# written for ROOT = CHI (they use `employer = ROOT` / `set_home_country = ROOT` / `ROOT = { add_to_list }`).
+		# `scope:player = { ... }` rebases `this` to CHI but leaves ROOT on the character — so firing the
+		# ROOT-based machinery here would wipe the roster and spam errors. Save the target and re-root to CHI
+		# through the hidden qing_harem.2 country_event (exactly the qing_office.40 fix); saved scopes carry
+		# into trigger_event (proven: Invictus bribe_mercenary_button -> warfare.3).
+		save_scope_as = qing_take_target
+		scope:player = {
+			trigger_event = { id = qing_harem.2 }
+			LOG_line = { sys = QING  msg = "harem panel: a court woman is taken as a consort for" }
+		}
 	}
 }
 

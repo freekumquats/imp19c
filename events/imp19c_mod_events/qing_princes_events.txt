@@ -34,9 +34,19 @@ namespace = qing_princes
 qing_princes.1 = {
 	type = country_event
 	title = "qing_princes.1.t"
-	desc = "qing_princes.1.desc"
+	# [#427] two-variant desc: name the front-runner's mother when she is in scope (the usual case),
+	# else a mother-less variant — a 1763-seeded prince may carry no mother reference.
+	desc = {
+		first_valid = {
+			triggered_desc = { trigger = { exists = scope:qing_frontrunner_mother }  desc = "qing_princes.1.desc" }
+			triggered_desc = { trigger = { always = yes }  desc = "qing_princes.1.desc_nomother" }
+		}
+	}
 	picture = chinese_throne_room
 
+	# [#427] the emperor (the father, the decision-maker — always present) on the LEFT, the front-runner
+	# prince on the RIGHT. Imperator events carry only two portraits; the front-runner's MOTHER (his 生母,
+	# the empress if he is 嫡) is named in the desc text and drives the maternal-lobby option effects.
 	left_portrait = root.current_ruler
 	right_portrait = scope:qing_contest_frontrunner
 
@@ -65,6 +75,12 @@ qing_princes.1 = {
 				save_scope_as = qing_contest_frontrunner
 			}
 		}
+		# [#427] save the front-runner's mother for the portrait + the maternal-lobby beat, and mark
+		# whether she is the reigning empress (an 嫡子's mother) — the decisive succession fact.
+		if = {
+			limit = { exists = scope:qing_contest_frontrunner  scope:qing_contest_frontrunner = { exists = mother } }
+			scope:qing_contest_frontrunner.mother = { save_scope_as = qing_frontrunner_mother }
+		}
 		LOG_line = { sys = QING  msg = "EVENT qing_princes.1 (奪嫡之爭 princes contend) for [ROOT.GetTag]" }
 	}
 
@@ -73,6 +89,19 @@ qing_princes.1 = {
 		name = "qing_princes.1.a"
 		custom_tooltip = "qing_princes.1.a.tt"
 		QING_princes_seal_succession = yes
+		# [#427] a front-runner whose mother is the reigning empress (嫡子) is the orthodox choice —
+		# sealing on him settles the house cleanly (the empress's faction is satisfied). Sealing on a
+		# 庶子 over the empress's son slights her — a harmony cost, sharper if she is a forceful woman.
+		if = {
+			limit = { exists = scope:qing_frontrunner_mother  exists = root.current_ruler.spouse  scope:qing_frontrunner_mother = { this = root.current_ruler.spouse } }
+			scope:qing_frontrunner_mother = { add_popularity = 20 }
+			QING_dynasty_harmony_nudge = { amount = 3 }
+		}
+		else_if = {
+			limit = { exists = root.current_ruler.spouse  root.current_ruler.spouse = { OR = { finesse >= 8  charisma >= 8 } } }
+			# a capable, slighted empress makes the affront cost more.
+			QING_dynasty_harmony_nudge = { amount = -3 }
+		}
 	}
 
 	# --- GROOM THE ABLEST (培植) — advance a front-runner, keep the succession open --
@@ -80,6 +109,12 @@ qing_princes.1 = {
 		name = "qing_princes.1.b"
 		custom_tooltip = "qing_princes.1.b.tt"
 		QING_princes_favour = yes
+		# [#427] the front-runner's OWN gifts decide how well the grooming takes: an able, charismatic
+		# prince (high finesse/charisma) wins the court over faster; a dull one gains little for it.
+		if = {
+			limit = { exists = scope:qing_contest_frontrunner  scope:qing_contest_frontrunner = { OR = { finesse >= 8  charisma >= 8 } } }
+			scope:qing_contest_frontrunner = { QING_prince_backing_nudge = { amount = 8 } }
+		}
 		# the contest simmers on; re-offer later if it stays dangerous.
 		if = {
 			limit = { has_variable = qing_princes_contest_seen }
@@ -104,7 +139,13 @@ qing_princes.1 = {
 qing_princes.2 = {
 	type = country_event
 	title = "qing_princes.2.t"
-	desc = "qing_princes.2.desc"
+	# [#427] name the over-mighty prince's mother when in scope, else a mother-less variant.
+	desc = {
+		first_valid = {
+			triggered_desc = { trigger = { exists = scope:qing_overmighty_mother }  desc = "qing_princes.2.desc" }
+			triggered_desc = { trigger = { always = yes }  desc = "qing_princes.2.desc_nomother" }
+		}
+	}
 	picture = chinese_throne_room
 
 	left_portrait = root.current_ruler
@@ -134,6 +175,12 @@ qing_princes.2 = {
 				save_scope_as = qing_overmighty_prince
 			}
 		}
+		# [#427] save the over-mighty prince's mother (his 生母, the empress if he is 嫡) — the parent
+		# whose faction stands behind him and who bears the shock if the throne moves against her son.
+		if = {
+			limit = { exists = scope:qing_overmighty_prince  scope:qing_overmighty_prince = { exists = mother } }
+			scope:qing_overmighty_prince.mother = { save_scope_as = qing_overmighty_mother }
+		}
 		LOG_line = { sys = QING  msg = "EVENT qing_princes.2 (儲位太盛 over-mighty prince) for [ROOT.GetTag]" }
 	}
 
@@ -142,6 +189,19 @@ qing_princes.2 = {
 		name = "qing_princes.2.a"
 		custom_tooltip = "qing_princes.2.a.tt"
 		QING_princes_investigate = yes
+		# [#427] moving against an 嫡子 (the empress's own son) or a son of a mighty mother is uglier —
+		# the mother's faction resists, a sharper harmony blow, and her own standing falls with her son's.
+		if = {
+			limit = { exists = scope:qing_overmighty_mother }
+			scope:qing_overmighty_mother = { add_popularity = -12 }
+			if = {
+				limit = {
+					exists = root.current_ruler.spouse
+					scope:qing_overmighty_mother = { this = root.current_ruler.spouse }
+				}
+				QING_dynasty_harmony_nudge = { amount = -3 }
+			}
+		}
 	}
 
 	# --- ELEVATE HIM — accept the front-runner and seal on him now ------------------
@@ -149,6 +209,11 @@ qing_princes.2 = {
 		name = "qing_princes.2.b"
 		custom_tooltip = "qing_princes.2.b.tt"
 		QING_princes_seal_succession = yes
+		# [#427] accepting the mighty prince gratifies his mother's faction (she has won).
+		if = {
+			limit = { exists = scope:qing_overmighty_mother }
+			scope:qing_overmighty_mother = { add_popularity = 15 }
+		}
 	}
 
 	# --- WATCH — do nothing (let it ride, a harmony risk) ---------------------------

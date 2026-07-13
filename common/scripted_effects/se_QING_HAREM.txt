@@ -81,10 +81,31 @@ QING_harem_mint_consort = {
 	scope:qing_new_consort = {
 		set_home_country = ROOT
 		set_variable = { name = qing_is_harem_consort  value = 1 }
+		# [#438] every consort enters the inner court at the LOWEST rank (嬪/貴人, tier 1) and is
+		# promoted up the graded establishment (妃 → 貴妃 → 皇貴妃) by the promote lever/favour.
+		set_variable = { name = qing_consort_rank  value = 1 }
 	}
 	add_to_variable_list = { name = qing_harem_consorts  target = scope:qing_new_consort }
 	change_variable = { name = qing_harem_consort_count  add = 1 }
 	LOG_line = { sys = QING  msg = "harem: a consort enters the inner court for" }
+}
+
+# ======================================================================
+# [#438] HAREM RANK ESTABLISHMENT (後宮位號). The Qing inner court was a GRADED order, below the
+# Empress (皇后, current_ruler.spouse). The historic establishment CAPS modelled here:
+#   tier 4  皇貴妃 Imperial Noble Consort   cap 1
+#   tier 3  貴妃   Noble Consort            cap 2
+#   tier 2  妃     Consort                  cap 4
+#   tier 1  嬪/貴人 (entry rank)            uncapped (the pool a new consort enters at)
+# qing_consort_rank (1..4) is a char-scope var on each consort; the per-rank live counts
+# (qing_harem_rank4_count .. rank1) are rebuilt each recompute so the promote lever can enforce
+# the caps and the panel can show the establishment. Ranks are the reusable rank->cap map.
+# ======================================================================
+QING_harem_rank_cap = {
+	# $tier$ = 2|3|4 ; sets scope var qing_harem_rank_cap_tmp on ROOT. (tier 1 is uncapped.)
+	if =      { limit = { "$tier$" = 4 }  set_variable = { name = qing_harem_rank_cap_tmp  value = 1 } }
+	else_if = { limit = { "$tier$" = 3 }  set_variable = { name = qing_harem_rank_cap_tmp  value = 2 } }
+	else =    {                           set_variable = { name = qing_harem_rank_cap_tmp  value = 4 } }
 }
 
 # ======================================================================
@@ -98,17 +119,58 @@ QING_harem_mint_consort = {
 QING_harem_recompute_roster = {
 	clear_variable_list = qing_harem_consorts
 	set_variable = { name = qing_harem_consort_count  value = 0 }
+	# [#438] live per-rank tallies, rebuilt fresh each pass (cap enforcement + panel display).
+	set_variable = { name = qing_harem_rank4_count  value = 0 }
+	set_variable = { name = qing_harem_rank3_count  value = 0 }
+	set_variable = { name = qing_harem_rank2_count  value = 0 }
+	set_variable = { name = qing_harem_rank1_count  value = 0 }
 	every_character = {
 		limit = {
 			has_variable = qing_is_harem_consort
 			is_alive = yes
 			employer = ROOT
 		}
+		# [#438] a legacy consort minted before ranks existed carries no rank var — default her
+		# to the entry rank so the tallies stay complete and the promote lever can find her.
+		if = { limit = { NOT = { has_variable = qing_consort_rank } }  set_variable = { name = qing_consort_rank  value = 1 } }
+		save_scope_as = qing_roster_consort
 		ROOT = {
-			add_to_variable_list = { name = qing_harem_consorts  target = prev }
+			add_to_variable_list = { name = qing_harem_consorts  target = scope:qing_roster_consort }
 			change_variable = { name = qing_harem_consort_count  add = 1 }
+			if =      { limit = { scope:qing_roster_consort = { var:qing_consort_rank = 4 } }  change_variable = { name = qing_harem_rank4_count  add = 1 } }
+			else_if = { limit = { scope:qing_roster_consort = { var:qing_consort_rank = 3 } }  change_variable = { name = qing_harem_rank3_count  add = 1 } }
+			else_if = { limit = { scope:qing_roster_consort = { var:qing_consort_rank = 2 } }  change_variable = { name = qing_harem_rank2_count  add = 1 } }
+			else =    {                                                                        change_variable = { name = qing_harem_rank1_count  add = 1 } }
 		}
 	}
+}
+
+# ======================================================================
+# [#418] QING_harem_refresh_candidates — rebuild the pick-list of court women eligible to be TAKEN
+# as consorts (納為妃嬪): living adult unmarried females of the emperor's household who are not
+# already consorts. Scope: COUNTRY (CHI). Held on the country (qing_harem_candidates), walked by the
+# panel picker; each row's button runs QING_harem_take_consort on the chosen woman. Bounded top-12 by
+# charisma (the draft prized 德容 — bearing/charm). Uses the proven ordered_character +
+# add_to_variable_list idiom (QING_council_refresh_candidates). Refreshed on panel open + after a take.
+# ======================================================================
+QING_harem_refresh_candidates = {
+	LOG_enter = { sys = QING  fn = "QING_harem_refresh_candidates" }
+	clear_variable_list = qing_harem_candidates
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			is_female = yes
+			is_adult = yes
+			is_married = no
+			NOT = { has_variable = qing_is_harem_consort }
+		}
+		order_by = charisma
+		check_range_bounds = no
+		max = 12
+		ROOT = { add_to_variable_list = { name = qing_harem_candidates  target = prev } }
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_refresh_candidates"  result = OK }
 }
 
 # ======================================================================
@@ -182,6 +244,100 @@ QING_harem_favour_consort = {
 		LOG_line = { sys = QING  msg = "harem: a favoured consort conceives the emperor a child for" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_harem_favour_consort"  result = OK }
+}
+
+# ======================================================================
+# [#438] QING_harem_promote_consort — elevate ONE consort up the graded establishment (晉封).
+# Scope: COUNTRY (CHI). Picks the most-favoured (highest popularity) consort who sits BELOW the
+# top rank AND whose next rank up still has an open place under its cap, and raises her one tier.
+# The empress (皇后) is the ruler's spouse, outside this ladder — this promotes only within 妃嬪.
+# Caps: tier 4 皇貴妃 = 1, tier 3 貴妃 = 2, tier 2 妃 = 4 (tier 1 entry is uncapped). A promotion
+# gladdens the elevated woman (court standing) and steadies the house a touch. Guarded so nothing
+# fires if no consort is eligible. Callable from the panel button + a favour follow-on.
+# ======================================================================
+QING_harem_promote_consort = {
+	LOG_enter = { sys = QING  fn = "QING_harem_promote_consort" }
+	QING_harem_recompute_roster = yes
+	if = {
+		limit = {
+			has_variable_list = qing_harem_consorts
+			# at least one consort below the top rank whose next tier is not yet full.
+			any_in_list = {
+				variable = qing_harem_consorts
+				is_alive = yes
+				var:qing_consort_rank < 4
+				OR = {
+					AND = { var:qing_consort_rank = 3  ROOT.var:qing_harem_rank4_count < 1 }
+					AND = { var:qing_consort_rank = 2  ROOT.var:qing_harem_rank3_count < 2 }
+					AND = { var:qing_consort_rank = 1  ROOT.var:qing_harem_rank2_count < 4 }
+				}
+			}
+		}
+		# the most-favoured eligible consort is elevated (highest court popularity).
+		ordered_in_list = {
+			variable = qing_harem_consorts
+			limit = {
+				is_alive = yes
+				var:qing_consort_rank < 4
+				OR = {
+					AND = { var:qing_consort_rank = 3  ROOT.var:qing_harem_rank4_count < 1 }
+					AND = { var:qing_consort_rank = 2  ROOT.var:qing_harem_rank3_count < 2 }
+					AND = { var:qing_consort_rank = 1  ROOT.var:qing_harem_rank2_count < 4 }
+				}
+			}
+			# order_by = prominence (the upstream-proven character court-standing order key — TI
+			# on_character_death_inv / 00_religion_effects_inv; popularity is trigger-only, never an
+			# order key). Prominence rises with the favour/popularity a consort accrues, so the
+			# most-favoured eligible woman heads the list.
+			order_by = prominence
+			check_range_bounds = no
+			max = 1
+			change_variable = { name = qing_consort_rank  add = 1 }
+			add_popularity = 10
+		}
+		QING_dynasty_harmony_nudge = { amount = 2 }
+		QING_harem_recompute_roster = yes
+		LOG_line = { sys = QING  msg = "harem: a consort is elevated in rank for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_promote_consort"  result = OK }
+}
+
+# ======================================================================
+# [#418] QING_harem_take_consort — the emperor takes an existing court woman into the inner court
+# (納為妃嬪). Scope: COUNTRY (CHI); scope:qing_take_target = the chosen woman (set by the caller /
+# the character-interaction scripted_gui). Unlike the triennial draft (which MINTS a new banner
+# woman), this elevates a woman ALREADY on the map — an unmarried adult female of the emperor's
+# household — into a consort at the entry rank. Marks her qing_is_harem_consort + rank 1, re-homes
+# her to the throne, and rebuilds the roster. Self-caps at 8 (the draft cap) and guards that she is
+# not already a consort. Mirrors the guard-enrol idiom (QING_guard_enrol_guardsman).
+# ======================================================================
+QING_harem_take_consort = {
+	LOG_enter = { sys = QING  fn = "QING_harem_take_consort" }
+	QING_harem_recompute_roster = yes
+	if = {
+		limit = {
+			exists = scope:qing_take_target
+			var:qing_harem_consort_count < 8
+			scope:qing_take_target = {
+				is_alive = yes
+				is_female = yes
+				is_adult = yes
+				is_married = no
+				NOT = { has_variable = qing_is_harem_consort }
+			}
+		}
+		scope:qing_take_target = {
+			set_home_country = ROOT
+			set_variable = { name = qing_is_harem_consort  value = 1 }
+			set_variable = { name = qing_consort_rank  value = 1 }
+			add_popularity = 8
+		}
+		add_to_variable_list = { name = qing_harem_consorts  target = scope:qing_take_target }
+		change_variable = { name = qing_harem_consort_count  add = 1 }
+		QING_harem_recompute_roster = yes
+		LOG_line = { sys = QING  msg = "harem: a court woman is taken as a consort for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_take_consort"  result = OK }
 }
 
 # ======================================================================
@@ -265,6 +421,31 @@ QING_harem_pulse = {
 			limit = { var:qing_harem_consort_count <= 1 }
 			QING_dynasty_harmony_nudge = { amount = -1 }
 			LOG_line = { sys = QING  msg = "harem: a thin inner court breeds succession anxiety for" }
+		}
+	}
+
+	# --- [#428] HAREM INTRIGUE (宮鬥). A crowded inner court is a nest of rivalry: consorts scheme for
+	# the emperor's favour and against one another, and a forceful woman can turn the whole household.
+	# Offer the intrigue event on a throttled roll to the PLAYER when the court is populous enough for
+	# real rivalry (>=3 consorts) and no intrigue is already pending. The event re-checks its own state
+	# and (as with the princes offers) sets its once-pending flag in its OWN immediate so a re-check
+	# failure during the delay never strands the flag. Player-only; the pulse's own harem work runs AI-side.
+	# [court-slot] The harem is an Imperial Household matter, so this offer SHARES the quarterly court-event
+	# slot (qing_gc_event_slot_used, reset monthly in 00_monthly_country.txt) with the other court beats
+	# (dynasty / faction / Canton / Revenue / Works / princes) so palace events never dogpile in one month.
+	# Claim the slot ONLY after the chance succeeds (the BT-28 idiom — a failed roll leaves the slot free).
+	if = {
+		limit = {
+			is_ai = no
+			exists = current_ruler
+			var:qing_harem_consort_count >= 3
+			NOT = { has_variable = qing_harem_intrigue_pending }
+			NOT = { has_variable = qing_gc_event_slot_used }  # [court-slot] share the quarterly court-event slot
+		}
+		random = {
+			chance = 12
+			trigger_event = { id = qing_harem.1  days = { 5 25 } }
+			set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [court-slot] claim only after the roll succeeds
 		}
 	}
 	LOG_exit = { sys = QING  fn = "QING_harem_pulse"  result = OK }

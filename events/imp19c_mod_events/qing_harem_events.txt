@@ -1,0 +1,174 @@
+########################################################################
+# qing_harem_events.txt — Harem Intrigue (宮鬥) — #428.
+#
+# The inner court (後宮) was never only a succession engine; it was a pressure-cooker of rivalry,
+# where consorts schemed for the emperor's favour and against one another, and a forceful woman
+# could bend the whole household to her will. These events surface that intrigue CONCRETELY, on
+# the real consort characters (qing_harem_consorts, se_QING_HAREM.txt) and the reigning empress
+# (皇后, current_ruler.spouse), driven by their OWN attributes — a schemer is picked for her
+# finesse/charisma and scheming traits, and the fallout lands on the emperor and/or the empress.
+#
+#   .1  A SCHEME IN THE INNER COURT (宮闈之爭) — offered by QING_harem_pulse (throttled) when the
+#       court is populous enough for real rivalry (>=3 consorts). A scheming consort (the ablest
+#       intriguer — high finesse/charisma, ambitious/cruel) moves against the empress or a rival.
+#       INDULGE HER (favour the schemer) vs BACK THE EMPRESS (uphold order) vs STAY ABOVE IT.
+#
+# The intrigue couples into the SAME qing_dynastic_harmony meter the dynasty/harem systems drive,
+# and touches the concrete characters' popularity. CHI-only, player-focused, logged sys = QING.
+# The once-pending flag (qing_harem_intrigue_pending) is set in THIS event's immediate (not the
+# pulse) — so a re-check failure during the trigger delay never strands it (mirrors qing_princes.1).
+########################################################################
+
+namespace = qing_harem
+
+########################################################################
+# .1  A SCHEME IN THE INNER COURT (宮闈之爭)
+# The immediate picks the ablest SCHEMER from the living consorts (order_by finesse — the
+# intriguer's chief weapon) and saves the reigning empress. Portraits: the schemer + the empress
+# (the two women at the heart of it); the emperor is the decision-maker named in the desc.
+########################################################################
+qing_harem.1 = {
+	type = country_event
+	title = "qing_harem.1.t"
+	# two-variant desc: name the empress when there is one (current_ruler.spouse), else an
+	# empress-free variant (the schemer moves against a rival consort instead).
+	desc = {
+		first_valid = {
+			triggered_desc = { trigger = { exists = scope:qing_harem_empress }  desc = "qing_harem.1.desc" }
+			triggered_desc = { trigger = { always = yes }  desc = "qing_harem.1.desc_noempress" }
+		}
+	}
+	picture = chinese_throne_room
+
+	left_portrait = scope:qing_harem_schemer
+	right_portrait = scope:qing_harem_empress
+
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		is_monarchy = yes
+		exists = current_ruler
+		has_variable_list = qing_harem_consorts
+		var:qing_harem_consort_count >= 3
+	}
+
+	immediate = {
+		# [#428] set the once-pending flag HERE (only when the event actually fires) — a re-check
+		# failure during the 5-25 day delay then never strands it (mirrors qing_princes.1 #368-R).
+		set_variable = { name = qing_harem_intrigue_pending  value = 1 }
+		QING_harem_recompute_roster = yes
+		# the ablest SCHEMER: highest finesse among the living consorts (finesse is the intriguer's
+		# weapon). ordered_in_list max-pick, the proven ranking idiom (se_QING_EXAM.txt).
+		if = {
+			limit = { has_variable_list = qing_harem_consorts }
+			ordered_in_list = {
+				variable = qing_harem_consorts
+				limit = { is_alive = yes }
+				order_by = finesse
+				check_range_bounds = no
+				max = 1
+				save_scope_as = qing_harem_schemer
+			}
+		}
+		# the reigning empress (皇后), if there is one — the schemer's chief rival/target.
+		if = {
+			limit = { exists = current_ruler.spouse  current_ruler.spouse = { is_female = yes } }
+			current_ruler.spouse = { save_scope_as = qing_harem_empress }
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_harem.1 (宮闈之爭 harem intrigue) for [ROOT.GetTag]" }
+	}
+
+	# --- INDULGE THE SCHEMER — let the intriguer have her way. She rises; the empress and the ------
+	# ordered house suffer. A capable schemer (high finesse/charisma) extracts a real prize; the
+	# indulged favour destabilises the household (harmony down), the sharper the schemer's gifts.
+	option = {
+		name = "qing_harem.1.a"
+		custom_tooltip = "qing_harem.1.a.tt"
+		# clear the pending flag so the intrigue can recur later.
+		if = { limit = { has_variable = qing_harem_intrigue_pending }  remove_variable = qing_harem_intrigue_pending }
+		if = {
+			limit = { exists = scope:qing_harem_schemer }
+			scope:qing_harem_schemer = { add_popularity = 15 }
+			# [review-fix] a schemer indulged climbs the ladder — but she must RESPECT the establishment
+			# caps that QING_harem_promote_consort enforces (皇貴妃 1 / 貴妃 2 / 妃 4), else intrigue could
+			# mint a 3rd 貴妃 over the historic cap of 2. Recompute the roster so the per-rank tallies
+			# (qing_harem_rankN_count, on ROOT = CHI here) are fresh, then promote only if her NEXT tier up
+			# still has an open place — the same gate the promote lever uses.
+			QING_harem_recompute_roster = yes
+			if = {
+				limit = {
+					scope:qing_harem_schemer = { has_variable = qing_consort_rank  var:qing_consort_rank < 3 }
+					OR = {
+						AND = { scope:qing_harem_schemer = { var:qing_consort_rank = 2 }  var:qing_harem_rank3_count < 2 }
+						AND = { scope:qing_harem_schemer = { var:qing_consort_rank = 1 }  var:qing_harem_rank2_count < 4 }
+					}
+				}
+				scope:qing_harem_schemer = { change_variable = { name = qing_consort_rank  add = 1 } }
+			}
+		}
+		# the empress is slighted; a forceful empress (high finesse/charisma) makes the disorder cost more.
+		if = {
+			limit = { exists = scope:qing_harem_empress }
+			scope:qing_harem_empress = { add_popularity = -12 }
+		}
+		if = {
+			limit = { exists = scope:qing_harem_schemer  scope:qing_harem_schemer = { OR = { finesse >= 8  charisma >= 8 } } }
+			QING_dynasty_harmony_nudge = { amount = -4 }
+		}
+		else = { QING_dynasty_harmony_nudge = { amount = -2 } }
+		QING_harem_recompute_roster = yes
+	}
+
+	# --- BACK THE EMPRESS — uphold the ordered household. The empress is strengthened, the schemer -
+	# curbed. A capable empress steadies the whole house; moving against a well-liked schemer costs
+	# a little (she has friends), but order is restored.
+	option = {
+		name = "qing_harem.1.b"
+		custom_tooltip = "qing_harem.1.b.tt"
+		trigger = { exists = scope:qing_harem_empress }
+		if = { limit = { has_variable = qing_harem_intrigue_pending }  remove_variable = qing_harem_intrigue_pending }
+		scope:qing_harem_empress = { add_popularity = 12 }
+		if = {
+			limit = { exists = scope:qing_harem_schemer }
+			scope:qing_harem_schemer = { add_popularity = -15 }
+		}
+		# a capable empress restores order the more surely.
+		if = {
+			limit = { scope:qing_harem_empress = { OR = { finesse >= 8  charisma >= 8 } } }
+			QING_dynasty_harmony_nudge = { amount = 4 }
+		}
+		else = { QING_dynasty_harmony_nudge = { amount = 2 } }
+	}
+
+	# --- STAY ABOVE IT — the emperor declines to take a side. The intrigue festers (a harmony risk),
+	# but the throne keeps its dignity — sharper the older/more-secure the emperor.
+	option = {
+		name = "qing_harem.1.c"
+		custom_tooltip = "qing_harem.1.c.tt"
+		if = { limit = { has_variable = qing_harem_intrigue_pending }  remove_variable = qing_harem_intrigue_pending }
+		QING_dynasty_harmony_nudge = { amount = -2 }
+	}
+}
+
+########################################################################
+# .2  [#418 review-fix] RE-ROOT HELPER for TAKE AS CONSORT (納為妃嬪).
+# The take-as-consort scripted_gui (QING_harem_panel.txt qing_harem_take_consort) runs at CHARACTER
+# root (ROOT = the clicked woman), but QING_harem_take_consort + the roster recompute + the candidate
+# refresh are all written for ROOT = CHI (`employer = ROOT` / `set_home_country = ROOT` / `ROOT = {
+# add_to_list }`). Firing them from the character root would wipe the roster and spam errors (the
+# BT-13/#373 bug). This hidden country_event re-roots to CHI (ROOT = CHI here), so the ROOT-based
+# machinery stays byte-identical and correct. The scripted_gui saves scope:qing_take_target and
+# fires this on scope:player (= CHI); saved scopes carry into trigger_event (proven: Invictus
+# bribe_mercenary_button -> warfare.3). Mirrors qing_office.40.
+########################################################################
+qing_harem.2 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		QING_harem_take_consort = yes
+		# rebuild the candidate list so the newly-taken woman drops off the picker.
+		QING_harem_refresh_candidates = yes
+	}
+}

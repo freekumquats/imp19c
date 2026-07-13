@@ -95,6 +95,24 @@ QING_princes_recompute_roster = {
 					limit = { NOT = { has_variable = qing_prince_backing } }
 					set_variable = { name = qing_prince_backing  value = combined_stats_council_svalue }
 					change_variable = { name = qing_prince_backing  add = 20 }
+					# [#427] 嫡庶之別 — a prince's court backing turns hard on his MOTHER's standing, the
+					# decisive fact in a Qing succession. An 嫡子 (the empress's own son, mother =
+					# current_ruler.spouse) opens with a commanding +25; a 貴子 born of a senior harem rank
+					# (皇貴妃/貴妃, qing_consort_rank >= 3) opens +12; a low consort's 庶子 gets nothing extra.
+					# This couples #427 directly to the #438 harem-rank establishment — who the emperor
+					# raises in the harem shapes which son the court will back.
+					if = {
+						limit = {
+							exists = mother
+							exists = ROOT.current_ruler.spouse
+							mother = { this = ROOT.current_ruler.spouse }
+						}
+						change_variable = { name = qing_prince_backing  add = 25 }
+					}
+					else_if = {
+						limit = { exists = mother  mother = { has_variable = qing_consort_rank  var:qing_consort_rank >= 3 } }
+						change_variable = { name = qing_prince_backing  add = 12 }
+					}
 					if = { limit = { var:qing_prince_backing > 100 } set_variable = { name = qing_prince_backing  value = 100 } }
 				}
 				ROOT = {
@@ -194,12 +212,14 @@ QING_princes_pulse = {
 			var:qing_prince_count >= 2
 			NOT = { has_variable = qing_secret_succession_sealed }
 			NOT = { has_variable = qing_princes_contest_seen }
+			NOT = { has_variable = qing_gc_event_slot_used }  # [court-slot] share the quarterly court-event slot
 			is_ai = no
 		}
 		QING_princes_compute_spread = yes
 		if = {
 			limit = { var:qing_prince_spread_tmp >= 40 }
 			trigger_event = { id = qing_princes.1  days = { 5 20 } }
+			set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [court-slot] claim only on the fire path
 		}
 		remove_variable = qing_prince_spread_tmp
 	}
@@ -210,10 +230,12 @@ QING_princes_pulse = {
 			var:qing_prince_count >= 2
 			NOT = { has_variable = qing_secret_succession_sealed }
 			NOT = { has_variable = qing_princes_overmighty_seen }
+			NOT = { has_variable = qing_gc_event_slot_used }  # [court-slot] share the quarterly court-event slot
 			is_ai = no
 			any_in_list = { variable = qing_princes  var:qing_prince_backing >= 85 }
 		}
 		trigger_event = { id = qing_princes.2  days = { 5 20 } }
+		set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [court-slot] claim on the fire path
 	}
 	LOG_exit = { sys = QING  fn = "QING_princes_pulse"  result = OK }
 }
