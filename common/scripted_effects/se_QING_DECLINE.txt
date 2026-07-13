@@ -949,6 +949,10 @@ QING_DECLINE_pulse = {
 	#   M  ethnic_tension -> spawn a real named separatist revolt-leader character
 	#   O  currency_stress-> spawn a foreign smuggler pop in a Canton treaty port
 	# Each is once/rarity-guarded so it never runs away. Counters stay intact.
+	# [#429] the ever-normal granary POOL runs FIRST: it moves REAL food between states (fill from
+	# maxed-surplus states, ship to real-shortage states) and DERIVES qing_granary_stock from the
+	# pooled quantity, so granary_concrete below (which reads the stock band) sees a real-food value.
+	QING_DECLINE_granary_pool = yes
 	QING_DECLINE_granary_concrete = yes
 	QING_DECLINE_spawn_sect_leader = yes
 	# item M lives in se_SEPARATISM.txt (sys=SEPAR): a real named revolt-leader
@@ -1934,6 +1938,143 @@ QING_DECLINE_roll_reaction = {
 }
 
 # ======================================================================
+# [#429] THE EVER-NORMAL GRANARY POOL (常平倉) — the reserve as a REAL grain quantity that MOVES
+# REAL FOOD between states. This is the thing the vanilla per-governorship food sim cannot do:
+# pool surplus grain nationally and ship it to a deficit region to mitigate a LOCALIZED famine,
+# while a NATIONAL famine overwhelms the pool. All food reads/writes are proven engine primitives:
+#   has_state_food          — a state's CURRENT stored food (governor_policies:154; TI svalues)
+#   has_state_food_capacity — a state's MAX food storage        (00_governor_policies:140; TI)
+#   add_state_food = <v>    — move food into (+) / out of (-) a state (TI christianity/disasters_inv)
+#   every_country_state     — iterate the country's states       (TI, 128 uses)
+#
+# State (on CHI):
+#   qing_granary_food  — the pooled grain in REAL food units. Capped at qing_granary_count*200 (the
+#                        summed local_food_capacity of the actual ever-normal granary BUILDINGS —
+#                        qing_granary_count is kept fresh by the Works sweep, se_QING_MINISTRY:497).
+#   qing_granary_stock — KEPT: now DERIVED = qing_granary_food / cap * 100 (a 0..100 fill-ratio), so
+#                        every existing consumer (pop-pressure target, famine gate, ministry perf,
+#                        canal) keeps working — the number is now a real fill %, not a free counter.
+#
+# FILL: skim 1/20 of capacity from each NEAR-MAXED state (has_state_food >= 90% of capacity — a
+#   near-max test, NOT exact ==, since vanilla food may plateau just below the ceiling and never
+#   hit it exactly). The skimmed food leaves the province (add_state_food = -skim) and enters the
+#   pool (up to the cap — grain the granaries cannot hold is left in the province, not conjured).
+# SHIP: to each state in real shortage (has_state_food < 1/5 capacity) while the pool holds grain,
+#   send a relief shipment (add_state_food = +ship), drain the pool, and stamp qing_grain_relief.
+#   The pool drains as it ships, so a widespread (national) famine empties it before covering all
+#   the stricken states — only a localized dearth is fully relieved (the historical 常平倉 limit).
+# Scope: COUNTRY (CHI). One every_country_state sweep (fill+ship in the same pass). ROOT = CHI.
+# ======================================================================
+QING_DECLINE_granary_pool = {
+	LOG_enter = { sys = QING  fn = "QING_DECLINE_granary_pool" }
+	# the reserve CAP = the real ever-normal granary capacity: count * the building's 200 food_capacity.
+	# qing_granary_count is maintained by the Works sweep (se_QING_MINISTRY:497). [review-fix] that sweep
+	# runs in QING_GOV_pulse, which fires AFTER QING_DECLINE_pulse in 00_monthly_country.txt — so this
+	# reads LAST quarter's count (a harmless one-quarter lag; the count changes at most by the ~1 granary
+	# the Revenue path builds per quarter). Default 0 until the count first exists / no granaries built.
+	set_variable = { name = qing_granary_cap_tmp  value = 0 }
+	if = {
+		limit = { has_variable = qing_granary_count }
+		set_variable = { name = qing_granary_cap_tmp  value = var:qing_granary_count }
+		change_variable = { name = qing_granary_cap_tmp  multiply = 200 }
+	}
+	# init the pooled grain ONCE to EMPTY. [review-fix] no game-start granaries exist in any setup file,
+	# so the ever-normal reserve genuinely begins empty and fills only as granaries are built and skim
+	# real surplus (the old "half-full bootstrap" was dead anyway — cap is 0 on the first pulse before
+	# any granary). While cap==0 the derive-block below LEAVES qing_granary_stock at its DECLINE_init
+	# baseline (30), so an as-yet-granaryless realm is NOT false-flagged into famine.
+	if = { limit = { NOT = { has_variable = qing_granary_food } }  set_variable = { name = qing_granary_food  value = 0 } }
+
+	# --- FILL from near-maxed surplus states + SHIP to shortage states, one real-food sweep. ------
+	every_country_state = {
+		# save the state so the pool write below reads the skim/ship amount back via the PROVEN
+		# scope:X.var:Y idiom (upstream TI/Invictus use scope:X.var: heavily; prev.var: is NOT attested).
+		save_scope_as = qing_gran_state
+		# FILL: this state's stores are near-max (>= 90% capacity), so its surplus would be wasted —
+		# skim 1/20 of capacity into the national pool, but only while the pool has room under the cap.
+		if = {
+			limit = {
+				has_state_food_capacity > 0
+				has_state_food >= { value = has_state_food_capacity  multiply = 0.9 }
+				ROOT.var:qing_granary_food < ROOT.var:qing_granary_cap_tmp
+			}
+			set_variable = { name = qing_gran_skim_tmp  value = has_state_food_capacity }
+			change_variable = { name = qing_gran_skim_tmp  divide = 20 }
+			# do not overfill the pool past its cap: clamp the skim to the remaining headroom.
+			set_variable = { name = qing_gran_room_tmp  value = ROOT.var:qing_granary_cap_tmp }
+			change_variable = { name = qing_gran_room_tmp  subtract = ROOT.var:qing_granary_food }
+			if = { limit = { var:qing_gran_skim_tmp > var:qing_gran_room_tmp }  set_variable = { name = qing_gran_skim_tmp  value = var:qing_gran_room_tmp } }
+			if = {
+				limit = { var:qing_gran_skim_tmp > 0 }
+				add_state_food = { value = var:qing_gran_skim_tmp  multiply = -1 }   # leaves the province
+				ROOT = { change_variable = { name = qing_granary_food  add = scope:qing_gran_state.var:qing_gran_skim_tmp } }   # into the pool
+			}
+			remove_variable = qing_gran_skim_tmp
+			remove_variable = qing_gran_room_tmp
+		}
+		# SHIP: this state is in real shortage (< 1/5 capacity) — if the pool holds grain, send relief.
+		else_if = {
+			limit = {
+				has_state_food_capacity > 0
+				has_state_food < { value = has_state_food_capacity  multiply = 0.2 }
+				ROOT.var:qing_granary_food > 0
+			}
+			# ship up to 1/10 of the state's capacity, bounded by what the pool actually holds.
+			set_variable = { name = qing_gran_ship_tmp  value = has_state_food_capacity }
+			change_variable = { name = qing_gran_ship_tmp  divide = 10 }
+			if = { limit = { var:qing_gran_ship_tmp > ROOT.var:qing_granary_food }  set_variable = { name = qing_gran_ship_tmp  value = ROOT.var:qing_granary_food } }
+			if = {
+				limit = { var:qing_gran_ship_tmp > 0 }
+				add_state_food = { value = var:qing_gran_ship_tmp }                            # grain arrives (block form for parity with the FILL leg; bare = var:X is unattested)
+				ROOT = { change_variable = { name = qing_granary_food  subtract = scope:qing_gran_state.var:qing_gran_ship_tmp } }   # drawn from the pool
+				# stamp the relief on the state's provinces (real food + province loyalty + happiness +
+				# unrest reduction for the duration — see the qing_grain_relief modifier). Only on a FRESH
+				# grant (the NOT guard) so it does not re-stack while the shipment stands. Count fresh grants
+				# into a state var for the one-time governor-loyalty bump below.
+				set_variable = { name = qing_gran_fresh_tmp  value = 0 }
+				every_state_province = {
+					limit = { NOT = { has_province_modifier = qing_grain_relief } }
+					add_province_modifier = { name = qing_grain_relief  duration = 365 }
+					scope:qing_gran_state = { change_variable = { name = qing_gran_fresh_tmp  add = 1 } }
+				}
+				# GOVERNOR LOYALTY: governor_loyalty is a COUNTRY-scope modifier key (not valid on a
+				# province modifier), so the fed region's governor is thanked with a one-time loyalty
+				# bump instead — the throne's grain kept his province quiet. Fires ONLY on a fresh grant
+				# (qing_gran_fresh_tmp > 0). [review-fix] the governor is reached THROUGH A PROVINCE
+				# (province.governor is the PROVEN link — imp19c se_ARMY:60 scope:arm_province.governor,
+				# TI syracuse_province.governor; `governor` from STATE scope is NOT attested). Take the
+				# first owned province and bump its governor once (all provinces in a state share one).
+				if = {
+					limit = { var:qing_gran_fresh_tmp > 0 }
+					random_state_province = {
+						limit = { exists = governor }
+						governor = { add_loyalty = loyalty_qing_commended }
+					}
+				}
+				remove_variable = qing_gran_fresh_tmp
+			}
+			remove_variable = qing_gran_ship_tmp
+		}
+	}
+
+	# --- clamp the pool [0, cap] and DERIVE the 0..100 stock ratio every consumer reads. ----------
+	if = { limit = { var:qing_granary_food > var:qing_granary_cap_tmp }  set_variable = { name = qing_granary_food  value = var:qing_granary_cap_tmp } }
+	if = { limit = { var:qing_granary_food < 0 }  set_variable = { name = qing_granary_food  value = 0 } }
+	if = {
+		limit = { var:qing_granary_cap_tmp > 0 }
+		set_variable = { name = qing_granary_stock  value = var:qing_granary_food }
+		change_variable = { name = qing_granary_stock  multiply = 100 }
+		change_variable = { name = qing_granary_stock  divide = var:qing_granary_cap_tmp }
+	}
+	# [review-fix] when cap==0 (no granaries built / count not yet tallied) DO NOT overwrite
+	# qing_granary_stock — leave it at the DECLINE_init baseline (30). Zeroing it here would
+	# false-flag an as-yet-granaryless realm straight into the famine / pop-pressure bands.
+	remove_variable = qing_granary_cap_tmp
+	LOG_line = { sys = QING  msg = "granary: ever-normal pool moved real food; stock derived from pooled grain / capacity for" }
+	LOG_exit = { sys = QING  fn = "QING_DECLINE_granary_pool"  result = OK }
+}
+
+# ======================================================================
 # [#91 item K]  GRANARY STOCK -> REAL 糧倉 BUILDINGS in the Yellow River basin.
 # The abstract qing_granary_stock counter (se_QING_DECLINE.txt:25,66) is KEPT as
 # the summary/AI layer; this hangs the CONCRETE object off it. In a good year with
@@ -1970,29 +2111,40 @@ QING_DECLINE_granary_concrete = {
 			add_building_level = qing_granary_building
 			LOG_line = { sys = QING  msg = "granary: real 糧倉 built in (Yellow River basin) for (stock=)" }
 		}
+		# [#429] reserves are healthy again — RESTOCK the drained granaries: lift the empty flag from
+		# every basin granary that carries it (the stores are refilled; the building was never lost).
+		every_owned_province = {
+			limit = { has_province_modifier = qing_granary_empty }
+			remove_province_modifier = qing_granary_empty
+			LOG_line = { sys = QING  msg = "granary: 糧倉 restocked, stores refilled in for (stock=)" }
+		}
 	}
 	else_if = {
-		# FAMINE, reserves exhausted: the granaries are eaten — tear one down.
+		# FAMINE, reserves exhausted: the granaries are EMPTIED — but NOT razed. [#429 fix] an empty
+		# warehouse does not collapse; the physical 常平倉 building stands, its stores just run dry. Flag
+		# every stocked-basin granary province with qing_granary_empty (negates the food + stabilisation
+		# bonus while the reserve is drained) instead of remove_building_level (the old #435-era model
+		# wrongly destroyed the institution). The modifier is cleared on the good-year restock branch above.
 		limit = {
 			var:qing_granary_stock <= 15
 			any_owned_province = {
 				has_building = qing_granary_building
+				NOT = { has_province_modifier = qing_granary_empty }
 				OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Henan }
 			}
 		}
-		ordered_owned_province = {
-			order_by = total_population
-			max = 1
+		every_owned_province = {
 			limit = {
 				has_building = qing_granary_building
+				NOT = { has_province_modifier = qing_granary_empty }
 				OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Henan }
 			}
-			remove_building_level = qing_granary_building
-			LOG_line = { sys = QING  msg = "granary: 糧倉 in emptied and razed in famine for (stock=)" }
+			add_province_modifier = { name = qing_granary_empty  duration = -1 }
+			LOG_line = { sys = QING  msg = "granary: 糧倉 stores run dry in famine (building stands, empty) in for (stock=)" }
 		}
 	}
 	else = {
-		LOG_fail = { sys = QING  fn = "QING_DECLINE_granary_concrete"  reason = "no granary object change: stock in the middle band, or no eligible Yellow River province to build in / raze" }
+		LOG_fail = { sys = QING  fn = "QING_DECLINE_granary_concrete"  reason = "no granary object change: stock in the middle band, or no eligible Yellow River province to build/empty/restock" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_DECLINE_granary_concrete"  result = OK }
 }
