@@ -143,6 +143,58 @@ QING_revenue_reserve_drift = {
 }
 
 # ======================================================================
+# [#415] QING_revenue_salt_income — the STANDING salt-gabelle revenue (鹽課). Scope: country (CHI).
+# Called each quarter from QING_revenue_pulse. Historically the salt tax was one of the largest
+# single central revenues (~10-12%); this pays it as a routine quarterly treasury income, scaled by
+# the gabelle's honesty + the minister's competence + realm size. Counter maths into a scratch var,
+# clamped >= 0, added once. NOT era-gated (salt was collected throughout), but a vacant office /
+# entrenched graft yields less.
+# NOTE: this is a SECOND, distinct channel from the passive qing_salt_gabelle_reformed_mod /
+# qing_salt_gabelle_graft country modifiers (which apply a global_tax_modifier % buff/malus). This
+# effect is the flat quarterly 鹽課 line-item; the modifiers are the diffuse tax %. Tune both together.
+#   base 6, then:
+#     + reformed gabelle -> +4 (an honest, well-run monopoly); graft-modifier -> -2 (leaky)
+#     + a seated finesse>=8 Grand Minister -> +3 (wrings more from the yards)
+#     + realm scale: +1 per full 15 owned provinces (num_of_cities/15), the salt-yard base
+#   floored at 1 so the monopoly always yields something.
+# ======================================================================
+QING_revenue_salt_income = {
+	set_variable = { name = qing_salt_income_tmp  value = 6 }
+	# honesty of the monopoly.
+	if = {
+		limit = { has_variable = qing_salt_gabelle_reformed  var:qing_salt_gabelle_reformed = 1 }
+		change_variable = { name = qing_salt_income_tmp  add = 4 }
+	}
+	if = {
+		limit = { has_country_modifier = qing_salt_gabelle_graft }
+		change_variable = { name = qing_salt_income_tmp  subtract = 2 }
+	}
+	# a capable seated Grand Minister of Revenue wrings more from the yards.
+	if = {
+		limit = {
+			has_variable = qing_office_revenue_holder
+			var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT  finesse >= 8 }
+		}
+		change_variable = { name = qing_salt_income_tmp  add = 3 }
+	}
+	# realm scale: the salt-yard base grows with the empire (+1 per 15 provinces), CAPPED at +14
+	# so a vast conquest empire's salt line stays substantial-but-bounded (the Qing owns hundreds of
+	# cities; without a cap the term would balloon). At the ~1763 extent this sits near the cap.
+	set_variable = { name = qing_salt_scale_tmp  value = num_of_cities }
+	change_variable = { name = qing_salt_scale_tmp  divide = 15 }
+	if = { limit = { var:qing_salt_scale_tmp > 14 }  set_variable = { name = qing_salt_scale_tmp  value = 14 } }
+	change_variable = { name = qing_salt_income_tmp  add = var:qing_salt_scale_tmp }
+	remove_variable = qing_salt_scale_tmp
+	# floor at 1 (the monopoly always yields something), then pay it.
+	if = { limit = { var:qing_salt_income_tmp < 1 }  set_variable = { name = qing_salt_income_tmp  value = 1 } }
+	add_treasury = var:qing_salt_income_tmp
+	# publish for the Revenue panel read-out (the 鹽課 line item).
+	set_variable = { name = qing_salt_income_last  value = var:qing_salt_income_tmp }
+	remove_variable = qing_salt_income_tmp
+	LOG_line = { sys = QING  msg = "revenue: the salt gabelle pays its quarterly take for" }
+}
+
+# ======================================================================
 # QUARTERLY REVENUE PULSE — called from QING_GOV_pulse (quarterly cadence).
 # Checks the Revenue holder's state and offers the domain events (salt gabelle,
 # granary, silver crisis, treasury audit) on a throttled roll. A vacant office
@@ -153,6 +205,15 @@ QING_revenue_pulse = {
 	# [#372] drift the concrete silver reserve toward / away from its historic peak first,
 	# so the panel read-out + any milestone reflect this quarter before the event roll below.
 	QING_revenue_reserve_drift = yes
+
+	# [#415] THE SALT GABELLE (鹽課) — a STANDING quarterly revenue, not just an event lever.
+	# Historically the salt tax was ~10-12% of central revenue, a fiscal pillar (the Lianghuai
+	# 兩淮 salt administration alone rivalled whole provinces). We pay a quarterly salt income to
+	# the treasury, scaled by: base yield, whether the gabelle is REFORMED (honest, high yield) vs
+	# GRAFT-ridden (leaky), the Revenue minister's finesse (a capable 尚書 wrings more from the
+	# monopoly), and realm size (more provinces = more salt yards). All read into a scratch var,
+	# clamped >= 0, added once. Independent of the event roll below (this is the routine take).
+	QING_revenue_salt_income = yes
 
 	# If the office is VACANT, let the domain drift negatively.
 	if = {
