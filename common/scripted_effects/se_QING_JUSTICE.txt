@@ -207,10 +207,29 @@ QING_justice_find_accusable = {
 			# un-triable qing_justice_accused mark (and a phantom docket entry once he lost office). This
 			# broader guard subsumes the old sitting-Justice-minister-only exclusion (he holds an office).
 			NOT = { has_variable = qing_office_held }
+			# [#419] the convict is JAILED at trial via the vanilla `imprison` effect, whose allowed
+			# targets EXCLUDE serving commanders / governors / the heir / co-ruler / family & clan heads /
+			# legion commanders (TI imprison.txt allowed_trigger). Match that here so ACCUSE never docks a
+			# man CONVICT then cannot actually jail (the trial would disgrace him but the imprison would
+			# silently no-op). is_ruler is already excluded above; add the rest of imprison's bars.
+			is_general = no
+			is_admiral = no
+			is_governor = no
+			is_co_ruler = no
+			is_primary_heir = no
+			is_head_of_family = no
+			is_clan_chief = no
+			# [#419] BROADENED the accusable pool: the 刑部 tried the whole span of official misconduct
+			# (贓/酷/怠/叛 — graft, cruelty, dereliction, disloyalty), not only outright corruption. Was
+			# only { corruption>=30 OR corrupt OR loyalty<40 }; now also catches a moderately-corrupt
+			# official (>=20), the cruel/arbitrary magistrate (酷吏 — a real 刑部 charge), and the openly
+			# disloyal (loyalty<50). Widens who the docket can reach without making everyone chargeable.
 			OR = {
-				corruption >= 30
+				corruption >= 20
 				has_trait = corrupt
-				loyalty < 40
+				has_trait = cruel
+				has_trait = arbitrary
+				loyalty < 50
 			}
 		}
 		order_by = corruption
@@ -228,12 +247,13 @@ QING_justice_find_accusable = {
 	LOG_exit = { sys = QING  fn = "QING_justice_find_accusable"  result = OK }
 }
 
-# CONVICT AN ACCUSED (定罪) — the trial goes against the accused. Disgrace + strip
-# office + reduce corruption, and (the concrete 刑部 penalty the design calls for) condemn
-# the convict's household to PENAL SERVITUDE (流刑/籍沒): a pop in the realm's capital is
-# reduced to the slave class. Scope: the accused CHARACTER (ROOT); scope:player = CHI.
-# Uses only proven idioms: QING_char_taint, QING_office_vacate_dispatch, and the
-# set_pop_type = slaves conversion (naval_raiding.txt:174). Unmarks the docket flag.
+# CONVICT AN ACCUSED (定罪) — the trial goes against the accused. Disgrace + strip office + reduce
+# corruption, and (the concrete 刑部 penalty) IMPRISON the convict via the ENGINE's own prison mechanic
+# (下獄). Scope: the accused CHARACTER (ROOT); scope:player = CHI. Uses only proven idioms: QING_char_taint,
+# QING_office_vacate_dispatch, and the vanilla `imprison = { target = <char> }` run at country scope (TI
+# imprison.txt:84 — scope:actor = { imprison = { target = scope:target } }). [#419] REPLACES the former
+# set_pop_type = slaves household-enslavement hook (the design pivoted off the slave-class mechanic): a
+# convicted official is now JAILED as a real prisoner of the throne, not modelled by enslaving a capital pop.
 QING_justice_convict_accused = {
 	LOG_enter = { sys = QING  fn = "QING_justice_convict_accused" }
 	# the code falls on the convict: tainted (corrupt trait + corruption up), disgraced,
@@ -243,23 +263,20 @@ QING_justice_convict_accused = {
 	add_popularity = -20
 	if = { limit = { has_variable = qing_office_held }  QING_office_vacate_dispatch = yes }
 	remove_variable = qing_justice_accused
-	# PENAL SERVITUDE (籍沒): the convict's household reduced to bond-servitude — a non-slave
-	# pop in the capital province is condemned to the slave class. Guarded so it no-ops when
-	# the capital has no eligible pop (never errors). Concrete slaves-class hook per the design.
+	# [#419] IMPRISONMENT (下獄): the convict is jailed by the throne through the engine's OWN prison
+	# mechanic. `imprison` runs at COUNTRY scope with target = the character (TI imprison.txt:84); guarded
+	# on `prisoner = no` (the proven already-imprisoned test, imprison.txt:16/25) so it never errors on a
+	# re-conviction. ROOT = the convict, scope:player = CHI.
+	if = {
+		limit = { prisoner = no }
+		save_scope_as = qing_justice_convict
+		scope:player = { imprison = { target = scope:qing_justice_convict } }
+	}
 	scope:player = {
-		capital_scope = {
-			if = {
-				limit = { any_pops_in_province = { NOT = { pop_type = slaves } } }
-				random_pops_in_province = {
-					limit = { NOT = { pop_type = slaves } }
-					set_pop_type = slaves
-				}
-			}
-		}
 		# a conviction cleans a little rot out of the system.
 		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -5 }
 	}
-	LOG_line = { sys = QING  msg = "justice: an accused convicted — disgraced, stripped, household to penal servitude for" }
+	LOG_line = { sys = QING  msg = "justice: an accused convicted — disgraced, stripped of office, and imprisoned for" }
 	LOG_exit = { sys = QING  fn = "QING_justice_convict_accused"  result = OK }
 }
 
