@@ -479,6 +479,11 @@ QING_selfstr_found_rail = {
 		unlock_invention = tech_rack_railway
 		LOG_line = { sys = QING  msg = "selfstr: Railways & Ironworks unlock the steam/rail/metallurgy tech line for" }
 		QING_selfstr_advance = { amount = 12 }
+		# [#440] seed the countrywide-rail-network counter from the founding line (and any
+		# rail already on the map) and stamp the tier band, so the network mechanic is live
+		# from the moment railways become real. The Works panel's Extend Railway action then
+		# grows it province by province.
+		QING_rail_network_apply_band = yes
 	}
 	LOG_exit = { sys = QING  fn = "QING_selfstr_found_rail"  result = OK }
 }
@@ -684,4 +689,113 @@ QING_selfstr_apply_band = {
 		add_country_modifier = { name = qing_selfstr_nascent  duration = -1 }
 		LOG_line = { sys = QING  msg = "band selfstr = nascent for (progress=)" }
 	}
+}
+
+
+# ======================================================================
+# [#440] COUNTRYWIDE RAILWAY NETWORK (全國鐵路網)
+#
+# QING_selfstr_found_rail (above) founds railways as a CONCEPT — one line + the
+# Kaiping/Hanyang tech package. This is the follow-on: the empire physically knits
+# a NETWORK together, laying rail province by province, and the network's REACH
+# grants escalating national bonuses (a trunk line is a curiosity; a national grid
+# transforms movement, trade and mobilization). Historical arc: from the 1876
+# Woosung line (ripped up in outrage) through the 1881 Kaiping tramway to the
+# Imperial Railways of North China and the 1905 Jing-Zhang line — rail went from
+# xenophobic taboo to the spine of late-Qing modernization.
+#
+# MODEL: a repeatable EXTEND effect lays one INF_railway_upgrade in the next most-
+# populous owned core province that lacks it (a levy of treasury + manpower, like
+# the great-monument projects), increments qing_rail_network_count, and re-applies
+# the tiered network band. Reuses the movement/mobilization wiring completed in
+# #441 — every laid railway already speeds armies (army_movement_speed on the
+# building) and counts as muster supply — so the network's teeth are concrete, and
+# the tier modifiers are the emergent NATIONAL effect on top.
+#
+# Requires tech_steam_locomotive (unlocked by QING_selfstr_found_rail), so the
+# network can only be knit once railways are a real thing. Scope: COUNTRY (CHI).
+# ======================================================================
+# RECOUNT — AUTHORITATIVELY recompute qing_rail_network_count from the ACTUAL
+# number of owned provinces holding a railway, every call. It always resets to 0
+# and re-censuses, so the count NEVER drifts from reality — it captures railways
+# built through the ordinary construction UI, rail gained by conquest, and rail
+# lost to war/cession, none of which the Extend action touches. This mirrors the
+# Ministry of Works granary/works census (se_QING_MINISTRY.txt:711, the proven
+# ROOT = { change_variable } accumulation inside every_owned_province) rather than
+# an incremental counter that can only ever go up. Cheap O(owned provinces),
+# called from the quarterly governance pulse + on each Extend. Scope: country (CHI).
+QING_rail_network_recount = {
+	LOG_enter = { sys = QING  fn = "QING_rail_network_recount" }
+	set_variable = { name = qing_rail_network_count  value = 0 }
+	every_owned_province = {
+		limit = { has_building = INF_railway_upgrade }
+		ROOT = { change_variable = { name = qing_rail_network_count  add = 1 } }
+	}
+	LOG_exit = { sys = QING  fn = "QING_rail_network_recount"  result = OK }
+}
+
+# EXTEND — lay one more length of the network. Levies 60 treasury + 5 manpower (the
+# navvy corvee + iron), gated on a rail-capable state (tech + a seated Works
+# minister of finesse 7+, mirroring the great-monument projects) and on there still
+# being a core province to reach. Recompute + re-band afterwards (the recount, not a
+# manual +1, is the source of truth). ROOT = CHI.
+QING_rail_network_extend = {
+	LOG_enter = { sys = QING  fn = "QING_rail_network_extend" }
+	if = {
+		limit = {
+			invention = tech_steam_locomotive
+			has_variable = qing_office_works_holder
+			var:qing_office_works_holder = { is_alive = yes  employer = ROOT  finesse >= 7 }
+			treasury >= 60
+			manpower >= 5
+			any_owned_province = { NOT = { has_building = INF_railway_upgrade } }
+		}
+		add_treasury = -60
+		add_manpower = -5
+		# lay rail in the most-populous unconnected province (the network follows the
+		# people + the trunk routes first), then recount + re-band from reality.
+		ordered_owned_province = {
+			limit = { NOT = { has_building = INF_railway_upgrade } }
+			order_by = total_population
+			max = 1
+			add_building_level = INF_railway_upgrade
+		}
+		QING_rail_network_apply_band = yes
+		LOG_line = { sys = QING  msg = "rail network extended — 60 treasury + 5 manpower levied, count now for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_rail_network_extend"  reason = "no rail tech / no seated Works minister / insufficient treasury+manpower / network already spans every province for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_rail_network_extend"  result = OK }
+}
+
+# TIER BANDS — the network's national impact scales with its reach.
+#   >= 3   trunk line     (幹線)   — a first spine
+#   >= 8   regional net   (區域網)  — provinces knitted
+#   >= 15  national grid  (全國網)  — the empire on rails
+# RECOUNTS FIRST (authoritative), then stamps exactly one (or zero) band. Called
+# from the quarterly governance pulse (so manual builds / conquest / war losses are
+# always reflected) and on each Extend. Country scope.
+QING_rail_network_apply_band = {
+	LOG_enter = { sys = QING  fn = "QING_rail_network_apply_band" }
+	QING_rail_network_recount = yes
+	remove_country_modifier = qing_rail_network_trunk
+	remove_country_modifier = qing_rail_network_regional
+	remove_country_modifier = qing_rail_network_national
+	if = {
+		limit = { var:qing_rail_network_count >= 15 }
+		add_country_modifier = { name = qing_rail_network_national  duration = -1 }
+		LOG_line = { sys = QING  msg = "rail network = national grid (全國網) for (count=)" }
+	}
+	else_if = {
+		limit = { var:qing_rail_network_count >= 8 }
+		add_country_modifier = { name = qing_rail_network_regional  duration = -1 }
+		LOG_line = { sys = QING  msg = "rail network = regional (區域網) for (count=)" }
+	}
+	else_if = {
+		limit = { var:qing_rail_network_count >= 3 }
+		add_country_modifier = { name = qing_rail_network_trunk  duration = -1 }
+		LOG_line = { sys = QING  msg = "rail network = trunk line (幹線) for (count=)" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_rail_network_apply_band"  result = OK }
 }
