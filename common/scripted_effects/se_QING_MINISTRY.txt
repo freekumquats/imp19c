@@ -60,8 +60,42 @@ QING_ministry_recompute_perf_war = {
 	# panel #349 renders). Every serving unit-commander in CHI's employ, deduped by the
 	# is_target_in_variable_list guard (a general can lead several sub-units). This is the
 	# datamodel the panel's dynamicgridbox iterates. Bounded O(units).
+	# [#410] ALSO build the FOUR grouped rosters the panel renders + tally garrison vacancy:
+	#   • qing_war_roster_inland    — army commander parked on a HISTORICAL GARRISON province
+	#                                 (qing_hist_garrison_prov) that CHI OWNS (Inland Commandant 提督/將軍).
+	#   • qing_war_roster_frontier  — army commander on a historical garrison province owned by a CHI
+	#                                 autonomous_governorship SUBJECT (Frontier Commandant 駐防將軍).
+	#   • qing_war_roster_admiral   — commander of a NAVY (水師提督).
+	#   • qing_war_roster_marshal   — army commander NOT on a historical garrison seat (a player-raised
+	#                                 field host: levy or legion — 大將軍/經略).
+	# Classification signal (user-chosen): the province the host is parked on. A historical garrison
+	# seat is stamped qing_hist_garrison_prov at OOB raise (imp19c_effects_legion_setup.txt); Inland vs
+	# Frontier is then the province OWNER (CHI vs a CHI subject). All four lists feed the panel; the
+	# roster/count above stays the flat superset used by the coverage term.
 	clear_variable_list = qing_war_officer_roster
+	clear_variable_list = qing_war_roster_inland
+	clear_variable_list = qing_war_roster_frontier
+	clear_variable_list = qing_war_roster_admiral
+	clear_variable_list = qing_war_roster_marshal
 	set_variable = { name = qing_war_roster_count  value = 0 }
+	# --- garrison-vacancy tally (feeds the perf penalty below): count HISTORICAL GARRISON armies
+	# that stand commanderless vs the total garrison establishment. A garrison army = an army parked
+	# on a qing_hist_garrison_prov seat. Bounded O(armies).
+	set_variable = { name = qing_war_garrison_total   value = 0 }
+	set_variable = { name = qing_war_garrison_vacant  value = 0 }
+	every_army = {
+		limit = {
+			exists = unit_location
+			unit_location = { has_variable = qing_hist_garrison_prov }
+		}
+		ROOT = { change_variable = { name = qing_war_garrison_total  add = 1 } }
+		if = {
+			# scope here IS the iterated army; a bare trigger reads it (PREV would wrongly
+			# resolve to the enclosing country scope).
+			limit = { NOT = { has_commander = yes } }
+			ROOT = { change_variable = { name = qing_war_garrison_vacant  add = 1 } }
+		}
+	}
 	every_unit = {
 		limit = { has_commander = yes  commander = { is_alive = yes  employer = ROOT } }
 		commander = {
@@ -70,6 +104,72 @@ QING_ministry_recompute_perf_war = {
 					limit = { NOT = { is_target_in_variable_list = { name = qing_war_officer_roster  target = prev } } }
 					add_to_variable_list = { name = qing_war_officer_roster  target = prev }
 					change_variable = { name = qing_war_roster_count  add = 1 }
+				}
+			}
+		}
+	}
+	# --- classify each SERVING commander into exactly one of the four groups by iterating the UNITS
+	# directly (the natural country-scope iterators every_navy / every_army — NOT any_army from a
+	# character scope, which is invalid). Each commander is added once per list via the
+	# is_target_in_variable_list dedup guard (a general leading several sub-units appears once).
+	#   ADMIRAL   = commands a navy (every_navy).
+	#   INLAND    = commands an army parked on a historical garrison seat CHI owns.
+	#   FRONTIER  = commands an army on a historical garrison seat a CHI subject owns.
+	#   MARSHAL   = commands an army NOT on a historical seat (a player-raised field host).
+	every_navy = {
+		limit = { has_commander = yes  commander = { is_alive = yes  employer = ROOT } }
+		commander = {
+			ROOT = {
+				if = {
+					limit = { NOT = { is_target_in_variable_list = { name = qing_war_roster_admiral  target = prev } } }
+					add_to_variable_list = { name = qing_war_roster_admiral  target = prev }
+				}
+			}
+		}
+	}
+	every_army = {
+		limit = { has_commander = yes  commander = { is_alive = yes  employer = ROOT } }
+		# INLAND: on a historical garrison seat CHI owns.
+		if = {
+			limit = {
+				exists = unit_location
+				unit_location = { has_variable = qing_hist_garrison_prov  owner = ROOT }
+			}
+			commander = {
+				ROOT = {
+					if = {
+						limit = { NOT = { is_target_in_variable_list = { name = qing_war_roster_inland  target = prev } } }
+						add_to_variable_list = { name = qing_war_roster_inland  target = prev }
+					}
+				}
+			}
+		}
+		# FRONTIER: on a historical garrison seat owned by a CHI autonomous-governorship subject.
+		else_if = {
+			limit = {
+				exists = unit_location
+				unit_location = {
+					has_variable = qing_hist_garrison_prov
+					owner = { is_subject_of = ROOT  is_subject_type = autonomous_governorship }
+				}
+			}
+			commander = {
+				ROOT = {
+					if = {
+						limit = { NOT = { is_target_in_variable_list = { name = qing_war_roster_frontier  target = prev } } }
+						add_to_variable_list = { name = qing_war_roster_frontier  target = prev }
+					}
+				}
+			}
+		}
+		# FIELD MARSHAL: any other army (not parked on a historical seat) — a player-raised host.
+		else = {
+			commander = {
+				ROOT = {
+					if = {
+						limit = { NOT = { is_target_in_variable_list = { name = qing_war_roster_marshal  target = prev } } }
+						add_to_variable_list = { name = qing_war_roster_marshal  target = prev }
+					}
 				}
 			}
 		}
@@ -109,6 +209,17 @@ QING_ministry_recompute_perf_war = {
 		else = {
 			# no serving officer corps at all — a paper ministry; a real penalty.
 			change_variable = { name = qing_min_perf_war  subtract = 10 }
+		}
+		# (c) [#410] GARRISON-VACANCY PENALTY — unmanned banner garrisons are the Board of War's
+		# direct failing. Penalty SCALED BY THE VACANCY SHARE (user-chosen): -15 * vacant/total, so a
+		# fully-officered garrison establishment costs nothing and a wholly-empty one docks -15. Integer
+		# maths: compute (vacant*15)/total, then subtract. Guarded on total>0 (no garrisons = no term).
+		if = {
+			limit = { var:qing_war_garrison_total > 0  var:qing_war_garrison_vacant > 0 }
+			set_variable = { name = qing_min_war_scratch  value = var:qing_war_garrison_vacant }
+			change_variable = { name = qing_min_war_scratch  multiply = 15 }
+			change_variable = { name = qing_min_war_scratch  divide = var:qing_war_garrison_total }
+			change_variable = { name = qing_min_perf_war  subtract = var:qing_min_war_scratch }
 		}
 	}
 	else = {
