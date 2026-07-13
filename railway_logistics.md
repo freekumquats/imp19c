@@ -44,8 +44,23 @@ of the four (correctly — it is a shortage layer, not an infrastructure layer).
    0.15, a touch below rail/port's 0.2) and a canal leg + canal qualifying-gate to all 22
    per-TZ `*_transportation_svalue` blocks (MOVEMENT_svalues.txt), mirroring the port leg
    (gated on has_building, since a canal is point infrastructure like a port, not
-   road-adjacency like the rail leg). Canals now lower inter-zone transport cost as well as
    feeding intra-zone throughput — matching railways.
+
+### Canal refinements (post-review, user-directed)
+- **Gating corrected**: a canal is a PATH, not a fixed point, so the canal leg is gated on
+  route connectivity (`any_neighbor_province = { has_road_towards = PREV }`) like the
+  railway leg — NOT on `has_building` like the port leg (my first pass wrongly copied the
+  port pattern). The redundant `has_building = INF_canal` I'd added to the outer qualifying
+  gate was reverted (a connected canal province is already caught by the road clause).
+- **Canal bonus > railway bonus**: water carriage was historically the cheapest bulk
+  transport (a barge far out-hauled early rail per ton-mile), so `canal_bonus` is weighted
+  **0.3**, ABOVE `railway_bonus`/`port_bonus` (0.2). The canal is the STRONGER artery.
+- **Costlier + slower to build**: a canal must be hand-dug over a long corvee haul. The
+  build system has no manpower-cost field (the great monuments spend manpower via an event
+  effect, and there is no on_building_constructed hook to deduct it), so the digging burden
+  is expressed as a higher money cost AND a much longer build time: `INF_canal` cost 50→90,
+  time 180→540 (3× the railway's 180). So canals move goods better but are dear and slow to
+  dig — the intended trade-off.
 
 The orphan `INF_railway_upgrade_army_movement_bonus_province` svalue (ECON_svalues.txt,
 zero consumers) left as-is (out of scope, deletion risk).
