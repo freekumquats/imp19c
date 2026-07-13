@@ -32,73 +32,91 @@
 ########################################################################
 
 # ======================================================================
-# [#372] SILVER-RESERVE CONSTANTS + INIT. The 戶部銀庫 (Board of Revenue central silver
-# treasury) held a CONCRETE balance in 萬兩 (10k-tael units) that is well documented across
-# the Qing: ~6200 at the 1763 zenith, climbing to its all-time peak of 8182 in 乾隆42 (1777)
-# under sound administration, then draining in the decline (6939 by 1795, ~2000 by 1799 as
-# the Heshen fortune was seized and the White Lotus war bled it). This is a REAL balance,
-# distinct from the abstract qing_currency_stress meter (0 = sound) the decline engine keeps.
-# Seeded once at game start (idempotent). qing_silver_reserve_peak = 8182 is the historic high
-# the accumulation targets; qing_silver_reserve_peaked marks the one-shot milestone event.
-# Sources in memory imp19c-silver-reserve-figures. Scope: country (CHI).
+# [#372 / #425] SILVER-RESERVE CONSTANTS + INIT. The 戶部銀庫 (Board of Revenue central silver
+# treasury) held a CONCRETE, well-documented balance across the Qing: ~62M taels at the 1763
+# zenith, climbing to its all-time peak of ~81.8M taels in 乾隆42 (1777) under sound
+# administration, then draining in the decline (~69M by 1795, ~28M by 1820 as the Heshen fortune
+# was seized and the White Lotus war bled it).
+#
+# [#425 RETIREMENT] This balance is NO LONGER a bespoke counter. It IS the engine's currency-
+# backing reserve, silver_reserve_size (se_CURRENCY.txt: seeded per-tag for CHI, date-gated to
+# 62000/46140; read into currency power at :1913). The old qing_silver_reserve var (in 萬兩) is
+# GONE — driving silver_reserve_size directly means silver inflow/outflow actually moves the
+# currency backing (the real 銀荒 dynamic). Counted in 千兩 (thousand taels) = the engine unit,
+# so all #372 figures are ×10 vs the retired counter (6200萬兩 → 62000千兩, peak 8182 → 81820).
+#
+# INIT now only seeds the PEAK CONSTANT the accumulation targets (the reserve itself is seeded
+# by the engine). qing_silver_reserve_peaked marks the one-shot milestone event. Sources in
+# memory imp19c-silver-reserve-figures. Scope: country (CHI).
 # ======================================================================
 QING_revenue_init = {
 	LOG_enter = { sys = QING  fn = "QING_revenue_init" }
-	if = {
-		limit = { NOT = { has_variable = qing_silver_reserve } }
-		# 1763 zenith balance (~6200 萬兩); an 1815 start begins lower (post-decline), reflecting
-		# the drained treasury of the late Jiaqing — the High Qing era flag distinguishes them.
-		if = {
-			limit = { has_variable = qing_high_qing_era }
-			set_variable = { name = qing_silver_reserve  value = 6200 }
-		}
-		else = {
-			set_variable = { name = qing_silver_reserve  value = 3100 }  # ~嘉慶末 (1820) level
-		}
-	}
-	if = { limit = { NOT = { has_variable = qing_silver_reserve_peak } }   set_variable = { name = qing_silver_reserve_peak  value = 8182 } }
-	LOG_line = { sys = QING  msg = "revenue: silver reserve seeded (萬兩) for" }
+	# the historic all-time high the accumulation targets: 8182萬兩 (乾隆42/1777) = 81820 千兩.
+	if = { limit = { NOT = { has_variable = qing_silver_reserve_peak } }   set_variable = { name = qing_silver_reserve_peak  value = 81820 } }
+	LOG_line = { sys = QING  msg = "revenue: silver reserve peak constant seeded (千兩); reserve itself = engine silver_reserve_size for" }
 	LOG_exit = { sys = QING  fn = "QING_revenue_init"  result = OK }
 }
 
 # ======================================================================
-# [#372] SILVER-RESERVE DRIFT — called each quarter from QING_revenue_pulse. During the High
-# Qing era, a seated + capable Revenue minister (戶部尚書) accumulates the treasury toward its
-# historic 8182萬兩 peak; a middling minister climbs slowly; a vacant/venal office or the
-# post-Heshen decline era draws it DOWN. A high silver-crisis reading (qing_currency_stress)
-# also bleeds the reserve (the 銀荒 drain). Bounded [0, peak]. Fires the peak-milestone event
-# (qing_revenue.5) ONCE when the treasury first nears its all-time high. Scope: country (CHI).
+# [#372 / #425] SILVER-RESERVE DRIFT — called each quarter from QING_revenue_pulse. Drives the
+# engine's REAL currency-backing reserve, silver_reserve_size (千兩), DIRECTLY — so the silver
+# the throne accumulates or bleeds actually moves the currency backing (se_CURRENCY.txt:1913),
+# the true 銀荒 dynamic. During the High Qing era, a seated + capable Revenue minister (戶部尚書)
+# accumulates the treasury toward its historic ~81.8M-tael peak; a middling minister climbs
+# slowly; a vacant/venal office or the post-Heshen decline era draws it DOWN. A high silver-
+# crisis reading (qing_currency_stress) also bleeds the reserve (the 銀荒 drain). Bounded
+# [0, peak]. Fires the peak-milestone event (qing_revenue.5) ONCE when the treasury first nears
+# its all-time high. All figures ×10 vs the retired 萬兩 counter (千兩 units). Scope: country (CHI).
 # ======================================================================
 QING_revenue_reserve_drift = {
+	# [#425 ratchet-rule / other-writer audit] silver_reserve_size has THREE other engine writers that
+	# also run for CHI — this drift is NOT the sole mover, but it composes safely with all of them:
+	#   1. CURRENCY_all_governorships_send_to_reserves (oa_wealth_changes.txt:302, quarterly) adds each
+	#      governorship's SILVER-GOOD production. Audited: NO Qing province produces the `silver` trade
+	#      good (setup/provinces/*China/Yunnan/Sichuan/etc. = 0), so ~nil for CHI (only the small
+	#      silver_reserve_accumulation_rate buy).
+	#   2. CURRENCY_private_purchase_or_sell_reserves (se_CURRENCY.txt:1204, MONTHLY — 3×/quarter) adds/
+	#      subtracts CURRENCY_reserve_accumulation_rate_from_inflation_or_deflation to the LARGEST reserve
+	#      (always silver for CHI, gold=0): it SUBTRACTS under inflation, ADDS under deflation. This
+	#      REINFORCES the 銀荒 narrative (silver leaking out = inflation = further specie drain), it does
+	#      not fight the drift.
+	#   3. INCOME_sell_reserves (se_INCOME.txt:561, quarterly) drains the largest reserve when CHI runs a
+	#      deficit with auto-fund — a legitimate "sell the plate to pay the troops" mechanic.
+	# COMPOSITION IS SAFE regardless of these: the positive-accumulation leg here is band-gated (< peak)
+	# per the no-restoring-drift ratchet rule; the drain/crisis-bleed legs are ungated (so downward crisis
+	# dynamics are never neutered); and BOTH ends are clamped [0, peak] every quarter, so no other writer
+	# can push the reserve past its historic peak or below zero via this drift's window.
 	if = {
-		limit = { has_variable = qing_silver_reserve }
+		# guard on the engine reserve existing (always true for CHI — seeded per-tag in
+		# CURRENCY_setup_all_reserves — but explicit so a mis-scope no-ops rather than erroring).
+		limit = { has_variable = silver_reserve_size }
 		# --- accumulation vs drain -------------------------------------------------
 		if = {
 			# High Qing era + a seated minister: strong accumulation toward the peak
-			# (historically ~150萬兩/yr 1755-1777 ≈ ~35/quarter). [#372 review-fix] the base
-			# accumulation is gated ONLY on the office being FILLED, not on finesse >= 6 — the
-			# era + a seated minister already implies the fisc is being run competently, and the
-			# council autofill sorts by COMBINED stats (not finesse), so a low-finesse general
-			# can hold the Revenue chair on some seeds; gating the strong branch on finesse would
-			# then stall accumulation below the 8000 milestone and the peak event would silently
-			# never fire. A high-finesse minister still earns an EXTRA +10 (the competence reward)
-			# just below, so skill is rewarded without being a hard gate on the historic peak.
+			# (historically ~150萬兩/yr 1755-1777 ≈ ~35萬兩/quarter → ~350 千兩/quarter). [#372
+			# review-fix] the base accumulation is gated ONLY on the office being FILLED, not on
+			# finesse >= 6 — the era + a seated minister already implies the fisc is being run
+			# competently, and the council autofill sorts by COMBINED stats (not finesse), so a
+			# low-finesse general can hold the Revenue chair on some seeds; gating the strong branch
+			# on finesse would then stall accumulation below the milestone and the peak event would
+			# silently never fire. A high-finesse minister still earns an EXTRA +100 (千兩; the
+			# competence reward) just below, so skill is rewarded without being a hard gate.
 			limit = {
 				has_variable = qing_high_qing_era
 				has_variable = qing_office_revenue_holder
 				var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
-				var:qing_silver_reserve < var:qing_silver_reserve_peak
+				var:silver_reserve_size < var:qing_silver_reserve_peak
 			}
-			change_variable = { name = qing_silver_reserve  add = 25 }
+			change_variable = { name = silver_reserve_size  add = 250 }
 			# competence reward: a high-finesse Grand Minister accumulates faster still.
 			if = {
 				limit = { var:qing_office_revenue_holder = { finesse >= 6 } }
-				change_variable = { name = qing_silver_reserve  add = 10 }
+				change_variable = { name = silver_reserve_size  add = 100 }
 			}
 		}
 		else = {
 			# vacant office OR the post-era decline: the treasury drains.
-			change_variable = { name = qing_silver_reserve  subtract = 15 }
+			change_variable = { name = silver_reserve_size  subtract = 150 }
 		}
 		# --- the silver crisis (銀荒) bleeds the reserve on top of the above --------
 		if = {
@@ -106,31 +124,38 @@ QING_revenue_reserve_drift = {
 				has_variable = qing_currency_stress
 				var:qing_currency_stress >= 40
 			}
-			change_variable = { name = qing_silver_reserve  subtract = 10 }
+			change_variable = { name = silver_reserve_size  subtract = 100 }
 		}
+		# [#425 note] this drift writes silver_reserve_size with raw change_variable and deliberately
+		# does NOT touch silver_reserve_actual_change (the engine's per-tick delta var that the VANILLA
+		# economy panel's "silver accumulation rate" line reads). So the reserve SIZE moves each quarter
+		# but that vanilla rate line won't attribute the drift's ±250-350 to it — cosmetic only, and on
+		# the vanilla view, not the 戶部 panel (which reads the size directly). Left as-is: this drift is
+		# an administrative/historical driver, not a market accumulation, so folding it into the market
+		# accumulation-rate readout would misrepresent it.
 		# --- clamp [0, peak] -------------------------------------------------------
-		if = { limit = { var:qing_silver_reserve > var:qing_silver_reserve_peak }  set_variable = { name = qing_silver_reserve  value = var:qing_silver_reserve_peak } }
-		if = { limit = { var:qing_silver_reserve < 0 }  set_variable = { name = qing_silver_reserve  value = 0 } }
+		if = { limit = { var:silver_reserve_size > var:qing_silver_reserve_peak }  set_variable = { name = silver_reserve_size  value = var:qing_silver_reserve_peak } }
+		if = { limit = { var:silver_reserve_size < 0 }  set_variable = { name = silver_reserve_size  value = 0 } }
 		# --- [MO-ENH backfeed] a CRITICALLY DRAINED reserve worsens the silver crisis (bidirectional
 		# coupling). Currency stress already bleeds the reserve (above); the reverse is equally historical
 		# — an empty 戶部銀庫 (as in 1799, drained by the White Lotus war + the Heshen seizure) left the
 		# throne no silver to stabilise the copper-cash exchange, so 銀貴錢賤 worsened. A near-empty
-		# reserve (< 1000萬兩, ~1/8 of the zenith) adds a gentle quarterly push to currency stress; a
+		# reserve (< 10000 千兩, ~1/8 of the zenith) adds a gentle quarterly push to currency stress; a
 		# healthy reserve does nothing. Additive + clamped by QING_DECLINE_nudge; no runaway (stress
 		# feeds reform pressure, not back into the reserve at the same magnitude).
 		if = {
 			limit = {
-				var:qing_silver_reserve < 1000
+				var:silver_reserve_size < 10000
 				has_variable = qing_currency_stress
 			}
 			QING_DECLINE_nudge = { var = qing_currency_stress  amount = 1 }
 		}
 		# --- peak milestone (盈庫之盛): fire once when the treasury first nears its high.
 		# Gated on the shared court event slot (BT-28) + a one-shot flag, so it is a single
-		# memorable beat, never spam. 8000 (~98% of 8182) counts as "reached the peak".
+		# memorable beat, never spam. 80000 (~98% of 81820) counts as "reached the peak".
 		if = {
 			limit = {
-				var:qing_silver_reserve >= 8000
+				var:silver_reserve_size >= 80000
 				NOT = { has_variable = qing_silver_reserve_peaked }
 				NOT = { has_variable = qing_gc_event_slot_used }
 			}

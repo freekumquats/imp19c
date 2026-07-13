@@ -1927,8 +1927,8 @@ The SAME tea/silk/porcelain exports feed two systems in two currencies, delibera
 Distinct sinks (treasury money vs silver counter); the merchant pays silver for tea (leg 2) and the state
 taxes that transaction (leg 1). After #436 both now scale off the same GOODS_national_production_* base,
 which is MORE correct (bigger export economy -> both more bullion in AND more customs), still not conflated.
-OPEN for #425 (silver reserve -> concrete currency backing): keep these two legs distinct — the customs
-money and the silver-reserve bullion must not be merged when #425 concretises the reserve.
+[RESOLVED in #425 below] the two legs stayed distinct: Canton customs = MONEY (add_treasury/add_wealth),
+the silver reserve = the specie hoard (silver_reserve_size). #425 drove the hoard, not the customs money.
 
 ### #439 DONE — New Treasure Fleet (新寶船隊) mission tree + colonization tie-in + colonial return voyages
 Mission tree (qing_treasure_fleet_missions.txt): player builds ports (num_of_building port_building>=3),
@@ -1949,3 +1949,25 @@ COLONIAL RETURN VOYAGES (user): QING_treasure_return_voyage_pulse (in QING_GOV_p
 glory stands, each quarter the fleet brings home wealth SCALED by established overseas colonies (counts 10
 qing_col_* dominion modifiers), ~12k wealth/colony/voyage via CURRENCY_grant_country_wealth. Gated on >=1
 colony (the user's "after they are established"). No-op until both the fleet is built AND colonies exist.
+
+### #425 DONE — silver reserve RETIRED to the engine var (drive silver_reserve_size DIRECTLY)
+[SUPERSEDED the earlier "couple two counters" approach at user's insistence: "just use the real
+silver_reserve_size" — the bespoke counter was redundant abstraction.] The old qing_silver_reserve
+(#372 counter, 萬兩) is GONE. silver_reserve_size (the REAL engine currency-backing var, read into
+currency power at se_CURRENCY.txt:1913) is now the single source of truth and is DRIVEN DIRECTLY:
+ • SEED: changed the engine seed itself (se_CURRENCY.txt c:CHI block) — no pulse-seed, no ordering
+   landmine. DATE-GATED (current_date < 1772.1.1, matching the qing_high_qing_era gate): 1763 High
+   Qing start = 62000, 1815 start = 46140 (the well-sourced decline stock kept). Unit = 千兩 (thousand
+   taels) = the engine's hundreds-troy-lb unit; SAME physical silver as the old 萬兩 figures, ×10 count.
+ • DRIFT: QING_revenue_reserve_drift now change_variable's silver_reserve_size directly (accum +250/+350
+   band-gated <peak per ratchet rule; drain -150; crisis-bleed -100 ungated; clamp [0,81820]; <10000
+   backfeed to stress; milestone event at >=80000). All #372 figures ×10.
+ • EVENT: qing_revenue.5 trigger -> has_variable silver_reserve_size; option .b drain -800萬兩 -> -8000千兩.
+ • DISPLAY: panel read-out + label + TT relabeled 萬兩 -> 千兩 (engine units); .b.tt updated.
+ • RATCHET-RULE 2nd-writer check: CURRENCY_all_governorships_send_to_reserves (oa_wealth_changes:302,
+   quarterly) also adds governorship SILVER-GOOD production to silver_reserve_size — but audited NO Qing
+   province produces the silver good, so ~nil for CHI; this drift is the dominant writer, no tug-of-war.
+So silver inflow (China trade: tea/silk/porcelain) and outflow (opium drain, via stress->bleed) and the
+throne's fisc now genuinely move the currency backing — the real 銀荒 dynamic, previously inert.
+CANTON vs OPIUM vs RESERVE clarified: Canton = MONEY (add_treasury/add_wealth tariff); opium/balance =
+real GOODS (opium + silver trade goods); silver_reserve_size = the specie HOARD backing the currency.
