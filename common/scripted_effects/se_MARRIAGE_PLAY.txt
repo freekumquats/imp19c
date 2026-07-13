@@ -63,6 +63,12 @@ MARRIAGE_PLAY_begin = {
 			# SEED success from the pair's realm-compatibility — a well-matched pair opens with a
 			# head-start, a poor match starts cold (must develop through events to succeed).
 			MARRIAGE_PLAY_seed_success = yes
+			# [#411] then adjust the opening success by the INITIATOR's suit — the calibre of the
+			# proposing character (our_char), the realms' power differential, and the two houses'
+			# relative prestige. A strong, prestigious envoy from the greater power courting a lesser
+			# house opens markedly warmer (the target 'marries up'); a frail low-born suitor from a
+			# minor house courting a greater one opens cooler.
+			MARRIAGE_PLAY_seed_char_bonus = yes
 			LOG_line = { sys = MARRIAGE  msg = "marriage-proposal play opened between two chosen characters" }
 		}
 		else = {
@@ -104,6 +110,123 @@ MARRIAGE_PLAY_seed_success = {
 		# a real mismatch (a great power to a princeling, no shared world) — opens cold.
 		scope:diplomatic_play = { set_variable = { name = diplomatic_play_success  value = 15 } }
 		LOG_line = { sys = MARRIAGE  msg = "marriage play seeded COLD (mismatched pair)" }
+	}
+}
+
+# ======================================================================
+# [#411] MARRIAGE_PLAY_seed_char_bonus — adjust the opening success by the INITIATOR's SUIT.
+# Scope: the PROPOSER country. Expects scope:diplomatic_play, scope:marriage_play_our_char (the
+# proposing character), scope:marriage_play_their_char (the courted character), scope:marriage_
+# play_proposer (us) + scope:marriage_play_target_country.
+#
+# We accumulate a signed DELTA in a scratch var (marriage_play_suit_delta), then apply it ONCE by
+# writing diplomatic_play_success DIRECTLY with a 0..100 clamp — the SAME raw idiom the base seed
+# uses (set_variable diplomatic_play_success). We deliberately do NOT route through
+# DIPLOMACY_modify_play_success: that helper re-scales amt by an instigator/target POWER multiplier,
+# which (a) would make these bumps non-additive/unpredictable and (b) would DOUBLE-COUNT power —
+# factor (2) below is already an explicit power-differential term, and the helper would re-amplify
+# it by the same power ratio. A direct clamped add keeps all three factors true, bounded nudges.
+#   (1) THE SUITOR'S CALIBRE — a fit, able, popular, wealthy, well-regarded proposing character
+#       makes the match attractive (paragon ~+12, a frail/poor/unpopular one ~-8).
+#   (2) POWER DIFFERENTIAL — if the proposer's realm outweighs the target's (num_of_cities, the
+#       proxy the union guards already use), the lesser house 'marries up': +8 (>= double the cities)
+#       or +4 (somewhat greater); if the proposer is the WEAKER party, -4 (courting above station).
+#   (3) FAMILY-PRESTIGE COMPARISON — if the suitor's house outranks the courted house, +6 (much
+#       higher) or +3 (higher); if markedly lower, -4. Mirrors the QING_char_affinity prestige bands.
+# ======================================================================
+MARRIAGE_PLAY_seed_char_bonus = {
+	if = {
+		limit = {
+			exists = scope:diplomatic_play
+			exists = scope:marriage_play_our_char
+			exists = scope:marriage_play_their_char
+			exists = scope:marriage_play_proposer
+			exists = scope:marriage_play_target_country
+		}
+		set_variable = { name = marriage_play_suit_delta  value = 0 }
+		# --- (1) the suitor's calibre (scope:marriage_play_our_char) — accumulate into the delta on
+		# the PROPOSER country (prev, inside the char block) via ROOT-less prev arithmetic. ---
+		scope:marriage_play_our_char = {
+			# vigour: a hale suitor in his prime vs a frail or aged one.
+			if = { limit = { health >= 0.7 }   scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  add = 2 } } }
+			else_if = { limit = { health < 0.35 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  subtract = 3 } } }
+			if = { limit = { age <= 45 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  add = 1 } } }
+			else_if = { limit = { age >= 65 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  subtract = 2 } } }
+			# standing: a popular, wealthy suitor is a catch.
+			if = { limit = { popularity >= 40 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  add = 2 } } }
+			else_if = { limit = { popularity <= 0 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  subtract = 2 } } }
+			if = { limit = { wealth >= 200 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  add = 2 } } }
+			else_if = { limit = { wealth < 25 }  scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  subtract = 1 } } }
+			# ability: the best of his four skills lends lustre (any high stat helps).
+			if = {
+				limit = { OR = { martial >= 12  finesse >= 12  charisma >= 12  zeal >= 12 } }
+				scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  add = 3 } }
+			}
+			else_if = {
+				limit = { OR = { martial >= 9  finesse >= 9  charisma >= 9  zeal >= 9 } }
+				scope:marriage_play_proposer = { change_variable = { name = marriage_play_suit_delta  add = 1 } }
+			}
+		}
+		# --- (2) power differential (num_of_cities, the union-guard proxy) ---
+		# Compute the size GAP (self - target) + TWICE the target size, pure integer counter maths.
+		set_variable = { name = marriage_play_pow_self  value = num_of_cities }
+		set_variable = { name = marriage_play_pow_gap   value = num_of_cities }
+		change_variable = { name = marriage_play_pow_gap  subtract = scope:marriage_play_target_country.num_of_cities }
+		set_variable = { name = marriage_play_pow_dbltgt  value = scope:marriage_play_target_country.num_of_cities }
+		change_variable = { name = marriage_play_pow_dbltgt  multiply = 2 }
+		if = {
+			# MUCH greater: proposer holds at least double the target's cities.
+			limit = { var:marriage_play_pow_self >= var:marriage_play_pow_dbltgt }
+			change_variable = { name = marriage_play_suit_delta  add = 8 }
+		}
+		else_if = {
+			# somewhat greater: a positive size gap, but less than double.
+			limit = { var:marriage_play_pow_gap > 0 }
+			change_variable = { name = marriage_play_suit_delta  add = 4 }
+		}
+		else_if = {
+			# the proposer is the WEAKER party — courting above his station.
+			limit = { var:marriage_play_pow_gap < 0 }
+			change_variable = { name = marriage_play_suit_delta  subtract = 4 }
+		}
+		remove_variable = marriage_play_pow_self
+		remove_variable = marriage_play_pow_gap
+		remove_variable = marriage_play_pow_dbltgt
+		# --- (3) family-prestige comparison between the two CHARACTERS (proven family={prestige} bands) ---
+		if = {
+			limit = {
+				scope:marriage_play_our_char   = { family = { prestige >= 500 } }
+				scope:marriage_play_their_char = { NOT = { family = { prestige >= 200 } } }
+			}
+			change_variable = { name = marriage_play_suit_delta  add = 6 }
+		}
+		else_if = {
+			limit = {
+				scope:marriage_play_our_char   = { family = { prestige >= 300 } }
+				scope:marriage_play_their_char = { NOT = { family = { prestige >= 100 } } }
+			}
+			change_variable = { name = marriage_play_suit_delta  add = 3 }
+		}
+		else_if = {
+			# the suitor's house is markedly the LESSER — courting a prouder line.
+			limit = {
+				scope:marriage_play_their_char = { family = { prestige >= 500 } }
+				scope:marriage_play_our_char   = { NOT = { family = { prestige >= 200 } } }
+			}
+			change_variable = { name = marriage_play_suit_delta  subtract = 4 }
+		}
+		# --- APPLY the accumulated delta DIRECTLY to the play's success, then clamp 0..100 (the raw
+		# idiom the base seed uses; NOT the power-scaling helper — see the header note). ---
+		scope:diplomatic_play = {
+			# ADD the accumulated delta to the seeded success (change_variable's operand is `add`, NOT
+			# `value` — `value` would OVERWRITE, wiping the base seed). Cross-scope var read is proven
+			# (se_AI.txt:1259 subtract = scope:X.var:Y; se_QING_MINISTRY.txt:290 add = scope:X.var:Y).
+			change_variable = { name = diplomatic_play_success  add = scope:marriage_play_proposer.var:marriage_play_suit_delta }
+			if = { limit = { var:diplomatic_play_success < 0 }    set_variable = { name = diplomatic_play_success  value = 0 } }
+			if = { limit = { var:diplomatic_play_success > 100 }  set_variable = { name = diplomatic_play_success  value = 100 } }
+		}
+		remove_variable = marriage_play_suit_delta
+		LOG_line = { sys = MARRIAGE  msg = "marriage play success adjusted by suitor calibre, power differential, and house prestige" }
 	}
 }
 
