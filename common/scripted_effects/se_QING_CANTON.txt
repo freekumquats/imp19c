@@ -53,8 +53,12 @@ QING_canton_init = {
 	LOG_enter = { sys = QING  fn = "QING_canton_init" }
 	if = { limit = { NOT = { has_variable = qing_canton_customs } }     set_variable = { name = qing_canton_customs  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_canton_last_yield } }  set_variable = { name = qing_canton_last_yield  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_canton_last_state } }  set_variable = { name = qing_canton_last_state  value = 0 } }   # [#426] state share of the yield (Revenue ledger)
 	# the Hoppo's post ran on squeeze even at the zenith — seed a moderate baseline.
 	if = { limit = { NOT = { has_variable = qing_hoppo_squeeze } }      set_variable = { name = qing_hoppo_squeeze  value = 30 } }
+	# [#426] the Canton revenue split (percent of the yield to the emperor's privy purse 內帑 vs the
+	# state treasury 戶部). Player-set via the Canton window toggle: 0 / 50 / 100. Default 50.
+	if = { limit = { NOT = { has_variable = qing_canton_purse_share } } set_variable = { name = qing_canton_purse_share  value = 50 } }
 	LOG_line = { sys = QING  msg = "canton: bookkeeping seeded for" }
 	LOG_exit = { sys = QING  fn = "QING_canton_init"  result = OK }
 }
@@ -94,22 +98,32 @@ QING_canton_pulse = {
 			limit = { var:qing_hoppo_squeeze >= 60 }
 			change_variable = { name = qing_canton_yield_tmp  multiply = 0.7 }
 		}
-		# --- SPLIT: the bulk to the EMPEROR (內帑, bypassing the 戶部), a quota to the STATE.
-		# emperor share = 70% of the yield; state quota = the remaining 30%.
+		# --- SPLIT [#426]: the player sets (via the Canton window) what SHARE of the yield goes to
+		# the emperor's privy purse (內帑) vs the state treasury (戶部): qing_canton_purse_share = 0 / 50
+		# / 100 (percent to the purse). The state gets the remainder — 0% routes the whole Canton haul
+		# onto the 戶部 books (shown as the Revenue panel's Canton Contribution); 100% keeps it private.
 		set_variable = { name = qing_canton_emperor_tmp  value = var:qing_canton_yield_tmp }
-		change_variable = { name = qing_canton_emperor_tmp  multiply = 0.7 }
+		change_variable = { name = qing_canton_emperor_tmp  multiply = var:qing_canton_purse_share }
+		change_variable = { name = qing_canton_emperor_tmp  divide = 100 }
 		# accrue the emperor's Canton silver (the running privy haul the panel shows)...
 		change_variable = { name = qing_canton_customs  add = var:qing_canton_emperor_tmp }
-		# ...and lift the abstract privy-purse meter (內帑) a touch, capped by its own 0..100 clamp.
-		QING_DECLINE_nudge = { var = qing_privy_purse  amount = 3 }
-		# the state's ordinary quota reaches the 戶部 treasury (the smaller, on-books share).
+		# ...and lift the emperor's own privy purse (內帑 = current_ruler.wealth, #424), scaled by share.
+		if = {
+			limit = { exists = current_ruler  var:qing_canton_purse_share > 0 }
+			set_variable = { name = qing_canton_purse_gain_tmp  value = 12 }
+			change_variable = { name = qing_canton_purse_gain_tmp  multiply = var:qing_canton_purse_share }
+			change_variable = { name = qing_canton_purse_gain_tmp  divide = 100 }
+			current_ruler = { add_wealth = { value = ROOT.var:qing_canton_purse_gain_tmp } }
+			remove_variable = qing_canton_purse_gain_tmp
+		}
+		# the state's share reaches the 戶部 treasury (the on-books Canton Contribution).
 		set_variable = { name = qing_canton_state_tmp  value = var:qing_canton_yield_tmp }
-		change_variable = { name = qing_canton_state_tmp  multiply = 0.3 }
-		# add_treasury takes the game's gold unit; the quota is modest so it does not swamp the
-		# fisc (the design point is that Canton is the EMPEROR'S money, not the state's).
+		change_variable = { name = qing_canton_state_tmp  subtract = var:qing_canton_emperor_tmp }
 		add_treasury = var:qing_canton_state_tmp
-		# record the total yield for the panel read-out.
+		# record the total yield + the state share for the panel read-outs (the Revenue panel's
+		# Canton Contribution line reads qing_canton_last_state).
 		set_variable = { name = qing_canton_last_yield  value = var:qing_canton_yield_tmp }
+		set_variable = { name = qing_canton_last_state  value = var:qing_canton_state_tmp }
 
 		# --- the Hoppo milks the trade: squeeze drifts UP while the port is open, faster if the
 		# post is vacant (no accountable holder) — feeding the empire's corruption meter.
@@ -206,4 +220,17 @@ QING_canton_rotate_hoppo = {
 	}
 	LOG_line = { sys = QING  msg = "canton: a new Hoppo (粵海關監督) is sent to milk the trade for" }
 	LOG_exit = { sys = QING  fn = "QING_canton_rotate_hoppo"  result = OK }
+}
+
+# ======================================================================
+# [#426] QING_canton_set_purse_share — set what SHARE of the Canton yield accrues to the
+# emperor's privy purse (內帑) vs the state treasury (戶部). $share$ = 0 | 50 | 100 (percent
+# to the purse). The quarterly Canton pulse reads qing_canton_purse_share and splits the
+# yield accordingly; a lower share routes more onto the 戶部 books (the Revenue panel's
+# Canton Contribution line). Scope: COUNTRY (CHI). Called from the three Canton-window toggles.
+# ======================================================================
+QING_canton_set_purse_share = {
+	QING_canton_init = yes
+	set_variable = { name = qing_canton_purse_share  value = $share$ }
+	LOG_line = { sys = QING  msg = "canton: privy-purse share set (percent to 內帑) for" }
 }

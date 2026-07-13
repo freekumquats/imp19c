@@ -16,7 +16,11 @@
 # office means eunuch overreach, a drained privy purse, and a diminished sovereign.
 #
 # STATE (CHI country scope):
-#   qing_privy_purse       0..100 private silver reserve (init 50)
+#   [#424] THE PRIVY PURSE IS NOW current_ruler.wealth — the emperor's REAL vanilla character
+#   wealth (內帑 = the sovereign's private silver, exactly what `wealth` models), NOT a 0..100
+#   country meter. Every purse flow is add_wealth on the emperor; every read is his wealth. Scale:
+#   the old meter baseline 50 maps to a comfortable ruler wealth ~200 (old×4); the 內帑 passes to
+#   the successor on a change of sovereign (QING_household_carryover_purse, on_ruler_change).
 #   qing_eunuch_power      0..100 faction strength (NOT stored — derived from
 #                          the presence of a flagged eunuch character; 0 when
 #                          no eunuch faction exists)
@@ -30,12 +34,37 @@
 # INIT — seed the privy purse. Called once at game start from on_game_initialized.
 # ======================================================================
 QING_household_init = {
+	# [#424] the privy purse is now the emperor's own vanilla wealth (current_ruler.wealth),
+	# which the engine already seeds, so there is nothing to initialise. Kept as a no-op stub
+	# so the many callers (QING_household_pulse etc.) need no change. The old 0..100
+	# qing_privy_purse country meter is RETIRED; the 內帑 is the sovereign's real private silver.
 	LOG_enter = { sys = QING  fn = "QING_household_init" }
-	if = {
-		limit = { NOT = { has_variable = qing_privy_purse } }
-		set_variable = { name = qing_privy_purse  value = 50 }
-	}
 	LOG_exit = { sys = QING  fn = "QING_household_init"  result = OK }
+}
+
+# ======================================================================
+# [#424] QING_household_carryover_purse — the 內帑 is an institution of the throne: on a
+# change of sovereign it passes to the successor, not into the void with the dead emperor's
+# personal wealth. Called from on_ruler_change (scope:former_ruler is set there). Reads the
+# former ruler's wealth into a country var, then grants it to the new current_ruler — the
+# proven inheritance idiom (TI on_character_death_inv: set_variable value=<X.wealth>, then
+# add_wealth = { value = <var> }). Scope: COUNTRY (CHI).
+# ======================================================================
+QING_household_carryover_purse = {
+	LOG_enter = { sys = QING  fn = "QING_household_carryover_purse" }
+	if = {
+		limit = { exists = scope:former_ruler  exists = current_ruler }
+		set_variable = { name = qing_purse_carryover_tmp  value = scope:former_ruler.wealth }
+		# only carry a POSITIVE balance (a bankrupt emperor bequeaths no privy purse; the new
+		# sovereign is not saddled with the dead one's personal debts).
+		if = {
+			limit = { var:qing_purse_carryover_tmp > 0 }
+			current_ruler = { add_wealth = { value = ROOT.var:qing_purse_carryover_tmp } }
+			LOG_line = { sys = QING  msg = "household: the privy purse passes to the new sovereign for" }
+		}
+		remove_variable = qing_purse_carryover_tmp
+	}
+	LOG_exit = { sys = QING  fn = "QING_household_carryover_purse"  result = OK }
 }
 
 # ======================================================================
@@ -59,8 +88,8 @@ QING_household_pulse = {
 				loyalty >= 60
 			}
 		}
-		QING_DECLINE_nudge = { var = qing_privy_purse  amount = 2 }
-		LOG_line = { sys = QING  msg = "household pulse: privy purse +2 (capable Grand Secretary) for" }
+		if = { limit = { exists = current_ruler }  current_ruler = { add_wealth = 8 } }
+		LOG_line = { sys = QING  msg = "household pulse: privy purse +8 wealth (capable Grand Secretary) for" }
 	}
 	else_if = {
 		limit = {
@@ -76,8 +105,8 @@ QING_household_pulse = {
 				}
 			}
 		}
-		QING_DECLINE_nudge = { var = qing_privy_purse  amount = -3 }
-		LOG_line = { sys = QING  msg = "household pulse: privy purse -3 (vacant/venal office) for" }
+		if = { limit = { exists = current_ruler }  current_ruler = { add_wealth = -12 } }
+		LOG_line = { sys = QING  msg = "household pulse: privy purse -12 wealth (vacant/venal office) for" }
 	}
 
 	# --- EUNUCH DANGER CHECK: if the Grand Secretary is absent/weak/disloyal AND
@@ -144,7 +173,9 @@ QING_household_pulse = {
 # ======================================================================
 QING_household_replenish_purse = {
 	LOG_enter = { sys = QING  fn = "QING_household_replenish_purse" }
-	QING_DECLINE_nudge = { var = qing_privy_purse  amount = $amount$ }
+	# [#424] grant the replenishment to the emperor's own purse (his wealth). $amount$ is the
+	# old-meter delta; callers pass ×4 wealth values now (see qing_household_events).
+	if = { limit = { exists = current_ruler }  current_ruler = { add_wealth = $amount$ } }
 	add_treasury = $cost$
 	LOG_line = { sys = QING  msg = "household: privy purse += $amount$ (cost $cost$ treasury) for" }
 	LOG_exit = { sys = QING  fn = "QING_household_replenish_purse"  result = OK }
@@ -158,9 +189,15 @@ QING_household_replenish_purse = {
 # ======================================================================
 QING_household_tap_purse = {
 	LOG_enter = { sys = QING  fn = "QING_household_tap_purse" }
-	set_variable = { name = qing_purse_drain_tmp  value = var:qing_privy_purse }
-	change_variable = { name = qing_purse_drain_tmp  divide = 2 }
-	QING_DECLINE_nudge = { var = qing_privy_purse  amount = -40 }
+	# [#424] the throne raids its OWN privy purse (the emperor's wealth) to bail out the state.
+	# Drain HALF the sovereign's wealth into a country var, then subtract it from him. Proven
+	# inheritance/transfer idiom (TI on_character_death_inv: read wealth into a var, add_wealth={value}).
+	if = {
+		limit = { exists = current_ruler }
+		set_variable = { name = qing_purse_drain_tmp  value = { value = current_ruler.wealth  multiply = 0.5 } }
+		if = { limit = { var:qing_purse_drain_tmp < 0 }  set_variable = { name = qing_purse_drain_tmp  value = 0 } }
+		current_ruler = { add_wealth = { value = 0  subtract = ROOT.var:qing_purse_drain_tmp } }
+	}
 	add_treasury = $relief$
 	if = {
 		limit = { exists = current_ruler }
