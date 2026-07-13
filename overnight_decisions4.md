@@ -1854,3 +1854,12 @@ Study -1, all requiring count==1 + vacant chamberlain + low schooling); currency
 (reserve<1000 backfeed + vacant-office arm) — strongly asymmetric vs the -10/qtr stress->reserve drain,
 self-corrects in the High Qing era; greenstandard_decay +2/qtr (base +1 + MO-ENH >=40 +1), single-file
 clamped. Brace balance 0 on both edited files.
+
+## OPEN QUESTION (logged 2026-07-12, awaiting user) — Censorate vs vanilla Bring-to-Trial
+User asked whether the Censorate (都察院) reuses the vanilla Bring-to-Trial mechanic. ANSWER: it does
+NOT — QING_censorate_impeach_uphold is a bespoke disgrace/cleanse routine (QING_char_cleanse +
+loyalty_qing_disgraced + vacate office + corruption -6), no bring_to_trial/start_trial references. The
+vanilla Bring-to-Trial hook lives in the Board of Punishments (刑部, #363) instead — the two are
+deliberately split (Censorate = political-corruption organ, Punishments = judicial). OPEN: does the user
+want the Censorate impeachment re-routed through vanilla Bring-to-Trial for consistency, or keep the
+split? No change made pending direction.
