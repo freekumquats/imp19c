@@ -124,7 +124,21 @@ QING_wenzhi_fund_workshops = {
 		set_variable = qing_wenzhi_workshops_done
 		add_country_modifier = { name = qing_culture_imperial_jade  duration = -1 }
 		add_country_modifier = { name = qing_culture_porcelain  duration = -1 }
-		LOG_line = { sys = QING  msg = "wenzhi: imperial workshops endowed (jade + porcelain) for" }
+		# [#437] CONCRETE: the 造辦處 ateliers are not only a modifier — raise a real Imperial Kiln
+		# (御窯廠, qing_porcelain_kiln_building) at a porcelain-producing province that lacks one (景德鎮
+		# and its like), and lift that province's civilisation. add_building_level + add_civilization_value
+		# are the proven province-scope idioms (ordered_owned_province / every_owned_province upstream).
+		ordered_owned_province = {
+			limit = {
+				trade_goods = porcelain
+				NOT = { has_building = qing_porcelain_kiln_building }
+			}
+			order_by = total_population
+			max = 1
+			add_building_level = qing_porcelain_kiln_building
+			add_civilization_value = 5
+		}
+		LOG_line = { sys = QING  msg = "wenzhi: imperial workshops endowed — jade + porcelain renown, an Imperial Kiln raised for" }
 	}
 	else = {
 		# already endowed — a fresh commission is a one-off glory, not a new standing modifier.
@@ -148,6 +162,35 @@ QING_wenzhi_commission_painting = {
 		limit = { NOT = { has_country_modifier = qing_culture_court_painting } }
 		add_country_modifier = { name = qing_culture_court_painting  duration = -1 }
 		LOG_line = { sys = QING  msg = "wenzhi: the Ruyiguan painting academy is commissioned for" }
+	}
+	# [#437] CONCRETE: the 如意館 is staffed by real court painters. Mint one — a learned, charismatic
+	# artist of the emperor's household (marked qing_court_artist) — via the proven create_character roster
+	# idiom (mirrors QING_exam_mint_scholar; #90 rule: no modifiers granted inside create_character, markers
+	# set in a follow-up scope). CAPPED at a resident atelier of 5 living court artists (qing_court_artist_count),
+	# self-healing so a court painter who dies frees a place — repeated commissions must not spawn unbounded
+	# characters (save-bloat). The rebuild counts the LIVING marked artists first, then mints only if under cap.
+	set_variable = { name = qing_court_artist_count  value = 0 }
+	every_character = {
+		limit = { has_variable = qing_court_artist  is_alive = yes  employer = ROOT }
+		ROOT = { change_variable = { name = qing_court_artist_count  add = 1 } }
+	}
+	if = {
+		limit = { var:qing_court_artist_count < 5 }
+		create_character = {
+			age = 30
+			culture = root.primary_culture
+			religion = root.religion
+			add_charisma = 7
+			add_finesse = 6
+			add_zeal = 3
+			add_martial = 1
+			save_scope_as = qing_new_court_artist
+		}
+		scope:qing_new_court_artist = {
+			set_home_country = ROOT
+			set_variable = { name = qing_court_artist  value = 1 }
+			add_popularity = 10
+		}
 	}
 	current_ruler = { add_popularity = 8 }
 	LOG_exit = { sys = QING  fn = "QING_wenzhi_commission_painting"  result = OK }
@@ -178,6 +221,11 @@ QING_wenzhi_launch_siku = {
 			limit = { NOT = { has_variable = qing_wenzhi_siku_patronised } }
 			set_variable = qing_wenzhi_siku_patronised
 			QING_wenzhi_advance = { amount = 15 }
+			# [#437] CONCRETE: the greatest compilation of the age is a real advance in letters and
+			# statecraft — grant civic research (the 四庫全書 gathered and systematised the empire's
+			# scholarship). add_research { technology value } is the proven country-scope idiom
+			# (Invictus 01_armenia.txt:1029). Once, gated by the same one-shot patronage flag.
+			add_research = { technology = civic_tech  value = 25 }
 		}
 		# the scholar corps is stirred; hand off to the existing Siku dilemma event, which
 		# self-guards on qing_culture_siku_done and applies the modifiers + the 文字獄 choice.
@@ -200,6 +248,16 @@ QING_wenzhi_southern_tour = {
 	current_ruler = { add_popularity = 12 }
 	add_legitimacy = 4
 	add_stability = 1
+	# [#437] CONCRETE: the progress down the Jiangnan is a real civilising splendour on the ground —
+	# lift the civilisation of the wealthiest southern cities the tour passes through. The imperial
+	# barge, the academies patronised, the works commissioned leave a mark. Cap at the 5 most-developed
+	# owned provinces so a vast empire's tour is a Jiangnan progress, not a realm-wide sweep.
+	ordered_owned_province = {
+		limit = { has_city_status = yes }
+		order_by = total_population
+		max = 5
+		add_civilization_value = 3
+	}
 	LOG_line = { sys = QING  msg = "wenzhi: the emperor makes a Southern Tour (南巡) for" }
 	LOG_exit = { sys = QING  fn = "QING_wenzhi_southern_tour"  result = OK }
 }
