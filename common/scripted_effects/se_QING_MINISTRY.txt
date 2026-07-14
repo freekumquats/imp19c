@@ -36,6 +36,11 @@ QING_ministry_recompute_all_perf = {
 		QING_ministry_recompute_perf_chamberlain = yes
 		QING_ministry_recompute_perf_censor = yes
 		QING_ministry_recompute_perf_justice = yes
+		# [#443 BOOT-CRASHFIX] re-derive Bayara readiness (the ONLY legion-iterating guard
+		# computation) from the pulse ONLY — never from a panel button — so its any_legion
+		# iterator is never compile-inlined into the guard scripted_gui. Runs BEFORE the guard
+		# recompute so its readiness read (term d) sees a fresh flag.
+		QING_guard_rederive_bayara_readiness = yes
 		QING_ministry_recompute_perf_guard_commandant = yes
 		QING_ministry_recompute_perf_personnel = yes
 		# (Central Secretariat #361 reuses the grand_secretariat compute already
@@ -1217,6 +1222,39 @@ QING_ministry_recompute_perf_justice = {
 # (the #362-R2 double-count fix, applied here from the start). Reads guarded; scratch reads
 # use var:X. Clamp 0..100. Bounded O(court).
 # ======================================================================
+# ======================================================================
+# [#443 BOOT-CRASHFIX] Bayara-Guard readiness re-derivation — PULSE-ONLY, kept OUT of
+# QING_ministry_recompute_perf_guard_commandant on purpose.
+#
+# This is the ONLY guard computation that iterates legions (any_legion / any_legion_commander).
+# The recompute below is compile-INLINED into the Imperial Guard scripted_gui (its open/enrol/
+# discharge buttons all call it), and a scripted_gui compile-inlines its whole named-effect
+# chain at PARSE time. A legion iterator pulled into a GUI parse unit is the same loader-crash
+# class as raise_legion (verified 2026-07-14: NO upstream scripted_gui in Invictus (19) or
+# Terra-Indomita (43) reaches any_legion — a panel is not meant to inline one). Keeping the
+# iterator here, called ONLY from the pulse dispatcher (never from a panel button), keeps it out
+# of every GUI compile unit while the readiness re-derivation still runs every pulse.
+#
+# AUTHORITATIVELY re-derive the readiness flag from the concrete legion so it can never leak past
+# the legion's destruction: the Bayara stands under a MARKED founding commander
+# (qing_is_bayara_commander, set in QING_guard_raise_bayara); if a legion we own still has that
+# commander the guard is under arms, else it was destroyed/disbanded and the flag is cleared
+# (dropping the +10 readiness AND reopening the raise-once muster gate). Country scope (ROOT = CHI).
+# ======================================================================
+QING_guard_rederive_bayara_readiness = {
+	if = {
+		limit = {
+			any_legion = {
+				any_legion_commander = { is_alive = yes  has_variable = qing_is_bayara_commander }
+			}
+		}
+		set_variable = { name = qing_bayara_guard_raised  value = 1 }
+	}
+	else = {
+		if = { limit = { has_variable = qing_bayara_guard_raised }  remove_variable = qing_bayara_guard_raised }
+	}
+}
+
 QING_ministry_recompute_perf_guard_commandant = {
 	# [#362-R2 systemic fix] capture the COUNTRY (THIS in every call context: the
 	# pulse dispatcher, the open-button, AND the scope:player={} wrapper the char-scoped
@@ -1243,25 +1281,13 @@ QING_ministry_recompute_perf_guard_commandant = {
 			change_variable = { name = qing_guard_corps_count  add = 1 }
 		}
 	}
-	# [#364-R2 review-fix] AUTHORITATIVELY re-derive the Bayara-Guard readiness flag from the
-	# concrete legion each pulse, so it can never leak past the legion's destruction (the set-once
-	# flag the adversarial review flagged: a wiped Bayara kept its +10 forever AND left the muster
-	# permanently spent). The Bayara stands under a MARKED founding commander (qing_is_bayara_commander,
-	# set in QING_guard_raise_bayara); if a legion we own still has that commander, the guard is under
-	# arms — else it has been destroyed/disbanded and the flag is cleared, dropping the +10 (term d)
-	# AND reopening the raise-once muster gate. any_legion / any_legion_commander are proven
-	# country-scope idioms (se_MOBILIZATION.txt:108). ROOT is the Qing player here.
-	if = {
-		limit = {
-			any_legion = {
-				any_legion_commander = { is_alive = yes  has_variable = qing_is_bayara_commander }
-			}
-		}
-		set_variable = { name = qing_bayara_guard_raised  value = 1 }
-	}
-	else = {
-		if = { limit = { has_variable = qing_bayara_guard_raised }  remove_variable = qing_bayara_guard_raised }
-	}
+	# [#443 BOOT-CRASHFIX] The Bayara-readiness re-derivation that USED to live here iterated
+	# legions (any_legion / any_legion_commander). That iterator crashed the loader when this
+	# recompute was compile-inlined into the Imperial Guard scripted_gui. It has been extracted
+	# to QING_guard_rederive_bayara_readiness, called from the pulse dispatcher only (see above).
+	# This recompute now merely READS the flag it maintains (term (d) below) — no legion iterator,
+	# so it is safe to compile-inline into the panel. The pulse re-derives the flag before this
+	# recompute runs, so term (d) still reads a fresh value.
 	# base: adequate.
 	set_variable = { name = qing_min_perf_guard_commandant  value = 50 }
 	if = {
