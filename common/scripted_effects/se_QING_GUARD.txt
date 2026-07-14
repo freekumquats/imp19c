@@ -84,6 +84,13 @@ QING_guard_raise_bayara_at = {
 			name = "Bayara Guard"
 			location = $loc$
 			sub_unit = regular_infantry
+			# [#443/#420-crashfix] capture the freshly-raised legion as a scope handle, so the elite
+			# modifier can be applied in a genuine LEGION scope below. This is the proven in-mod idiom:
+			# se_QING_COUNCIL.txt:854 (qing_grandee_legion) saves the legion on create_unit inside
+			# raise_legion, then applies a legion-scope iterator to it as a SIBLING of raise_legion
+			# (scope:qing_grandee_legion = { every_sub_unit = { ... } }, :874) — exactly the move made
+			# below with every_legion_unit.
+			save_scope_as = bayara_legion
 			add_subunit = regular_infantry
 			add_subunit = regular_infantry
 			add_subunit = regular_infantry
@@ -94,12 +101,17 @@ QING_guard_raise_bayara_at = {
 			scope:bayara_commander = { add_to_legion = PREV }
 			random_legion_unit = { set_as_commander = scope:bayara_commander }
 		}
-		# [#420] mark the Bayara out as ELITE: a standing (duration = -1, proven upstream — TI
-		# mac_01_3_umod / Invictus bythinia_missions) unit modifier lifting morale/discipline and
-		# the line-infantry + field-gun combat stats on every battalion of the guard. Permanent, so
-		# it lives and dies WITH the legion — no remove_unit_modifier (unproven here). every_legion_unit
-		# is a legion-scope iterator (proven upstream, TI AGE_svalues.txt), and this block is legion
-		# scope (the sibling random_legion_unit above already iterates it).
+	}
+	# [#443/#420-crashfix] mark the Bayara out as ELITE: a standing (duration = -1, proven upstream — TI
+	# mac_01_3_umod / Invictus bythinia_missions) unit modifier lifting morale/discipline and the
+	# line-infantry + field-gun combat stats on every battalion of the guard. Permanent, so it lives
+	# and dies WITH the legion — no remove_unit_modifier (unproven here).
+	# every_legion_unit is a LEGION-scope iterator (proven upstream, TI AGE_svalues.txt uses it inside
+	# ordered_legion); it was previously placed as a direct child of raise_legion, whose scope is the
+	# GOVERNORSHIP, not a legion — there was no legion to iterate, which crashed the compiler when the
+	# muster scripted_gui inlined this chain at boot. Applied here through the saved bayara_legion
+	# scope (a real legion), the proven placement.
+	scope:bayara_legion = {
 		every_legion_unit = {
 			add_unit_modifier = { name = qing_bayara_elite  duration = -1 }
 		}
