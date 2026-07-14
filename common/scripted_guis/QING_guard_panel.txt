@@ -110,7 +110,9 @@ qing_guard_discharge_guardsman = {
 
 # ---- MUSTER THE BAYARA GUARD — raise the elite Bayara legion (巴牙喇) at the capital.
 # A raise-once standing institution. Gated on a seated Commandant + not-already-raised.
-# Country scope. Chains QING_guard_raise_bayara + refreshes the meter (readiness +10).
+# Country scope. Fires qing_guard.10 (which chains QING_guard_raise_bayara + refreshes the
+# meter, readiness +10) — see the [#443 crash fix] note in the effect{} below for why the
+# raise is trampolined through an event rather than inlined here.
 # ----------------------------------------------------------------------
 qing_guard_muster_bayara = {
 	scope = country
@@ -125,9 +127,16 @@ qing_guard_muster_bayara = {
 		exists = capital_scope
 	}
 	effect = {
-		QING_guard_raise_bayara = yes
-		# refresh so the meter reflects the readiness bonus.
-		QING_ministry_recompute_perf_guard_commandant = yes
+		# [#443 crash fix] Trampoline through a hidden event instead of inlining
+		# QING_guard_raise_bayara here. A scripted_gui compile-inlines every named effect it
+		# reaches, so inlining pulled the create_character + raise_legion/create_unit chain into
+		# the GUI parse unit — the compile-inline class that hard-crashed the loader at
+		# scripted_guis parse (EXCEPTION_ACCESS_VIOLATION, at the loading bar). This is the ONLY
+		# loaded panel that reaches raise_legion/create_unit; no proven/vanilla panel does — they
+		# all trampoline through an event. Routing it through qing_guard.10 (an event compile unit,
+		# where the identical idiom compiles cleanly as it does for QING_ili/selfstr/council) fixes
+		# it. The event's immediate does the raise + the meter recompute; behaviour is identical.
+		trigger_event = { id = qing_guard.10 }
 		LOG_line = { sys = QING  msg = "guard: the Bayara Guard mustered from the panel for" }
 	}
 }
