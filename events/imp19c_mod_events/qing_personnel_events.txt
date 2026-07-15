@@ -475,3 +475,85 @@ qing_personnel.4 = {
 		add_tyranny = 5
 	}
 }
+
+########################################################################
+# .5  CONVENE-THE-大計 TRAMPOLINE  (hidden)  [#443 boot-crash fix]
+# The panel lever qing_personnel_convene_daji (QING_personnel_panel.txt) used to call
+# QING_personnel_daji_review directly in its scripted_gui effect. A scripted_gui compile-inlines
+# its button's entire effect chain at PARSE time, and QING_personnel_daji_review's body is an
+# `every_character { ... }` CHARACTER ITERATOR whose loop body in turn inlines
+# QING_char_promote_standing / QING_char_cleanse / QING_char_honour_family — each expanding the
+# ~80-line QING_char_affinity THREE times inside the iterator. A heavy-bodied character iterator
+# inlined into a compiled button access-violates the loader (EXCEPTION_ACCESS_VIOLATION, zero
+# PostValidate) — the same crash class as the guard legion-iterator (bf5c46015) and the
+# censorate/harem/justice sorting iterators. FIX: the button now trigger_events this hidden event;
+# trigger_event is a RUNTIME ref, never compile-inlined, so the reckoning lives in an event unit
+# the parser does not expand. The event owns the review + cooldown stamp + recompute, so the panel
+# lever and the qing_personnel.1 flavour event still share one throttle. Behaviour is identical.
+########################################################################
+qing_personnel.5 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_personnel.5 (大計 Great Reckoning trampoline) [ROOT.GetTag]" }
+		QING_personnel_daji_review = yes
+		# stamp the ~3-year throttle (shared with the qing_personnel.1 flavour event).
+		set_variable = { name = qing_personnel_daji_cooldown  days = 1095  value = 1 }
+		# refresh so the meter + corps integrity reflect the reckoning's outcomes.
+		QING_ministry_recompute_perf_personnel = yes
+	}
+}
+
+########################################################################
+# .6 / .7 / .8  REMAINING PANEL-BUTTON TRAMPOLINES  (hidden)  [#443 boot-crash fix pt.2]
+# After the convene-大計 trampoline (.5), panel bisection proved personnel was STILL the sole
+# crasher: the user booted 22/23 panels clean with ONLY personnel disabled. Static discriminators
+# (expanded-size, iterator-nest-depth) could NOT explain it — justice's structurally-identical
+# recompute inlines the same every_character and boots. So, per the proven Study-panel cure, EVERY
+# effect-bearing personnel button is now routed off the compiled parse path. These three events own
+# the effects the open / cultivate / discipline buttons used to inline. Behaviour is identical.
+#   .6  open-panel recompute       (country; = the old open effect)
+#   .7  CULTIVATE A GOVERNOR (培養)  (character; ROOT = governor, scope:player carries — cf. justice.6)
+#   .8  DISCIPLINE A GOVERNOR (懲處) (character; ROOT = governor, scope:player carries)
+########################################################################
+qing_personnel.6 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_personnel.6 (open-panel recompute trampoline) [ROOT.GetTag]" }
+		QING_ministry_recompute_perf_personnel = yes
+	}
+}
+
+qing_personnel.7 = {
+	type = character_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_personnel.7 (cultivate a governor 培養 trampoline) [ROOT.GetTag]" }
+		# reward the able governor: a loyalty grant (NAMED modifier) + a lift in standing.
+		add_loyalty = loyalty_qing_commended
+		QING_char_promote_standing = { pop = 2  prom = 2 }
+		set_variable = { name = qing_personnel_cultivate_cooldown  days = 365 }
+		scope:player = { QING_ministry_recompute_perf_personnel = yes }
+	}
+}
+
+qing_personnel.8 = {
+	type = character_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_personnel.8 (discipline a governor 懲處 trampoline) [ROOT.GetTag]" }
+		# cashier the venal governor: disgrace (NAMED modifier) + a standing cut.
+		add_loyalty = loyalty_qing_disgraced
+		add_prominence = -5
+		# [#365-R2] PURGE THE ROT — a punitive clean (no affinity bump; deliberately NOT QING_char_cleanse).
+		if = { limit = { has_trait = corrupt }  remove_trait = corrupt }
+		add_corruption = -25
+		set_variable = { name = qing_personnel_discipline_cooldown  days = 365 }
+		scope:player = { QING_ministry_recompute_perf_personnel = yes }
+	}
+}

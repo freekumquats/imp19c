@@ -108,10 +108,15 @@ qing_censorate_recall_inspector = {
 }
 
 # ---- IMPEACH THE VENAL — find the most corrupt courtier and disgrace him.
-# Reuses the proven QING_censorate_find_corrupt (ordered_character by corruption ->
-# scope:qing_censorate_target) + QING_censorate_impeach_uphold (cleanse + vacate +
-# corruption -6). Gated on a present Censor-in-Chief AND the existence of a corrupt
-# target (mirrors the effect's own find guard, so no false affordance). Country scope.
+# [#443 boot-crash fix] The effect must NOT call QING_censorate_find_corrupt inline:
+# a scripted_gui compile-inlines its button's effect chain at PARSE time, and that
+# effect's body is an `ordered_character { order_by = corruption ... }` SORTING
+# iterator — the sole scripted_gui in the mod inlining a sorting char-iterator, which
+# access-violated the loader (same class as the guard-panel legion iterator + the
+# office-vacate chain). So the effect ONLY trigger_events the hidden qing_censorate.5,
+# which does the find + uphold + cooldown + recompute at RUNTIME (trigger_event is not
+# compile-inlined). Gated on a present Censor-in-Chief AND a corrupt target (mirrors
+# the trampoline's own guard, so no false affordance). Country scope.
 # ----------------------------------------------------------------------
 qing_censorate_impeach_venal = {
 	scope = country
@@ -144,15 +149,10 @@ qing_censorate_impeach_venal = {
 		}
 	}
 	effect = {
-		QING_censorate_find_corrupt = yes
-		if = {
-			limit = { exists = scope:qing_censorate_target }
-			QING_censorate_impeach_uphold = yes
-		}
-		# [#362 review-fix R1] stamp the ~1-quarter cooldown so the lever cannot be spam-clicked.
-		set_variable = { name = qing_censorate_impeach_cooldown  days = 90 }
-		# refresh so the corruption read-out + meter reflect the prosecution.
-		QING_ministry_recompute_perf_censor = yes
+		# [#443 boot-crash fix] route the sorting-iterator work through a hidden event
+		# (runtime ref, NOT compile-inlined) instead of calling QING_censorate_find_corrupt
+		# directly here. The event stamps the cooldown + refreshes the meter itself.
+		trigger_event = { id = qing_censorate.5 }
 		LOG_line = { sys = QING  msg = "censorate: the venal impeached from the panel for" }
 	}
 }

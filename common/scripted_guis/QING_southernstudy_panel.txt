@@ -25,8 +25,15 @@ qing_southernstudy_open_panel_button = {
 	is_shown = { tag = CHI }
 	is_valid = { always = yes }
 	effect = {
-		# recompute so the roster + chief + luster are fresh the moment the panel opens.
-		QING_southernstudy_recompute_roster = yes
+		# [#443 boot-crash fix] route through the hidden qing_southernstudy.1 event (a RUNTIME
+		# trigger_event, never compile-inlined). QING_southernstudy_recompute_roster inlines
+		# `every_character { ... }` AND a sorting `ordered_in_list { order_by = ... }` — a
+		# DEPTH-2 iterator nest (an iterator whose reachable body reaches another iterator).
+		# A scripted_gui compile-inlines its button's entire effect chain at PARSE time; the
+		# two Study panels are the only mod panels at iterator-nest-depth 2 and were the two
+		# group-B loader access-violations (EXCEPTION_ACCESS_VIOLATION, zero PostValidate).
+		# The event runs the recompute at RUNTIME. Behaviour is identical.
+		trigger_event = { id = qing_southernstudy.1 }
 		LOG_line = { sys = QING  msg = "EVENT qing_southernstudy_open_panel_button fired; opening the Southern Study panel for" }
 	}
 }
@@ -75,7 +82,9 @@ qing_southernstudy_draw = {
 		}
 	}
 	effect = {
-		QING_southernstudy_draw_scholar = yes
+		# [#443 boot-crash fix] trampoline: QING_southernstudy_draw_scholar reaches the same
+		# depth-2 iterator nest (create_character + the recompute's every_character/ordered_in_list).
+		trigger_event = { id = qing_southernstudy.2 }
 	}
 }
 
@@ -90,7 +99,9 @@ qing_southernstudy_wildcard = {
 		var:qing_southernstudy_count < 8
 	}
 	effect = {
-		QING_southernstudy_recruit_wildcard = yes
+		# [#443 boot-crash fix] trampoline: recruit_wildcard reaches create_character +
+		# the depth-2 recompute iterator nest.
+		trigger_event = { id = qing_southernstudy.3 }
 	}
 }
 
@@ -109,7 +120,8 @@ qing_southernstudy_elevate = {
 		var:qing_council_vacancy > 0
 	}
 	effect = {
-		QING_southernstudy_promote_chief = yes
+		# [#443 boot-crash fix] trampoline: promote_chief reaches the depth-2 recompute iterator nest.
+		trigger_event = { id = qing_southernstudy.4 }
 	}
 }
 

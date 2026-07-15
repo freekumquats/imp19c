@@ -337,3 +337,37 @@ qing_censorate.4 = {
 		add_country_modifier = { name = qing_censorate_dissolved  duration = 7300 }
 	}
 }
+
+########################################################################
+# .5  IMPEACH-THE-VENAL TRAMPOLINE  (hidden)  [#443 boot-crash fix]
+# The panel lever qing_censorate_impeach_venal (QING_censorate_panel.txt) used to
+# call QING_censorate_find_corrupt directly in its scripted_gui effect. A scripted_gui
+# compile-inlines its button's entire effect chain at PARSE time, and
+# QING_censorate_find_corrupt's body is an `ordered_character { order_by = corruption
+# ... save_scope_as }` SORTING iterator — censorate was the ONLY scripted_gui in the
+# mod inlining a sorting character-iterator into a compiled button, and it crashed the
+# loader (EXCEPTION_ACCESS_VIOLATION, zero PostValidate). Same crash class as the guard
+# panel's legion iterator (routed through qing_guard.10) and the office-vacate heavy
+# chain (routed through qing_office.40). FIX: the button now trigger_event = this hidden
+# event; trigger_event is a RUNTIME ref, never compile-inlined, so the sorting iterator
+# lives in an event unit the parser does not expand. Behaviour is identical to the old
+# inline effect (find the most corrupt courtier, uphold if one exists, stamp the
+# ~1-quarter cooldown, refresh the meter).
+########################################################################
+qing_censorate.5 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_censorate.5 (impeach-the-venal trampoline) [ROOT.GetTag]" }
+		QING_censorate_find_corrupt = yes
+		if = {
+			limit = { exists = scope:qing_censorate_target }
+			QING_censorate_impeach_uphold = yes
+		}
+		# [#362 review-fix R1] stamp the ~1-quarter cooldown so the lever cannot be spam-clicked.
+		set_variable = { name = qing_censorate_impeach_cooldown  days = 90 }
+		# refresh so the corruption read-out + meter reflect the prosecution.
+		QING_ministry_recompute_perf_censor = yes
+	}
+}

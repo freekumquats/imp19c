@@ -25,8 +25,13 @@ qing_personnel_open_panel_button = {
 	is_shown = { tag = CHI }
 	is_valid = { always = yes }
 	effect = {
-		# recompute so the meter + governor roster are fresh the moment the panel opens.
-		QING_ministry_recompute_perf_personnel = yes
+		# [#443 boot-crash fix pt.2] personnel was the SOLE remaining group-A crasher after the
+		# convene-大計 trampoline; user boot proved 22/23 panels boot with ONLY personnel out, so
+		# the crash lives in personnel's still-inline buttons. Static discriminators (size / iter-nest)
+		# FAILED to predict it (justice inlines a structurally-identical recompute and boots), so per
+		# the proven Study-panel cure EVERY effect-bearing personnel button is now trampolined off the
+		# compiled parse path. Open -> qing_personnel.6 (recompute at RUNTIME). Behaviour identical.
+		trigger_event = { id = qing_personnel.6 }
 		LOG_line = { sys = QING  msg = "EVENT qing_personnel_open_panel_button fired; opening the Board of Personnel panel for" }
 	}
 }
@@ -73,12 +78,20 @@ qing_personnel_convene_daji = {
 		NOT = { has_variable = qing_personnel_daji_cooldown }
 	}
 	effect = {
-		QING_personnel_daji_review = yes
-		# stamp the ~3-year throttle (shared with the qing_personnel.1 flavour event).
-		set_variable = { name = qing_personnel_daji_cooldown  days = 1095  value = 1 }
-		LOG_line = { sys = QING  msg = "personnel: the 大計 Great Reckoning convened from the panel for" }
-		# refresh so the meter + corps integrity reflect the reckoning's outcomes.
-		QING_ministry_recompute_perf_personnel = yes
+		# [#443 boot-crash fix] route the reckoning through the hidden qing_personnel.5 event
+		# (a RUNTIME trigger_event, never compile-inlined) instead of calling
+		# QING_personnel_daji_review directly here — its body is an `every_character { ... }`
+		# CHARACTER ITERATOR whose loop body in turn inlines QING_char_promote_standing /
+		# QING_char_cleanse / QING_char_honour_family, each expanding the ~80-line
+		# QING_char_affinity THREE TIMES inside the iterator. A scripted_gui compile-inlines its
+		# button's entire effect chain at PARSE time, and a heavy-bodied character iterator inlined
+		# into a compiled button access-violates the loader (EXCEPTION_ACCESS_VIOLATION, zero
+		# PostValidate) — the same crash class as the guard legion-iterator / censorate/harem/justice
+		# sorting iterators. The event runs the review + cooldown stamp + recompute at RUNTIME.
+		# Behaviour is identical. (The open button's recompute is a LIGHT every_character and is left
+		# inline — justice's identical-shape open recompute is proven to boot.)
+		trigger_event = { id = qing_personnel.5 }
+		LOG_line = { sys = QING  msg = "personnel: the 大計 Great Reckoning lever pulled from the panel for" }
 	}
 }
 
@@ -108,12 +121,11 @@ qing_personnel_cultivate_governor = {
 		NOT = { has_variable = qing_personnel_cultivate_cooldown }
 	}
 	effect = {
-		# reward the able governor: a loyalty grant (NAMED modifier) + a lift in standing.
-		add_loyalty = loyalty_qing_commended
-		QING_char_promote_standing = { pop = 2  prom = 2 }
-		set_variable = { name = qing_personnel_cultivate_cooldown  days = 365 }
-		LOG_line = { sys = QING  msg = "personnel: a governor cultivated from the panel for" }
-		scope:player = { QING_ministry_recompute_perf_personnel = yes }
+		# [#443 boot-crash fix pt.2] trampoline the whole reward through qing_personnel.7 (a hidden
+		# CHARACTER event; ROOT = the governor, scope:player carries — proven by justice.6). Keeps
+		# QING_char_promote_standing (-> the ~80-line QING_char_affinity) off the compiled parse path.
+		trigger_event = { id = qing_personnel.7 }
+		LOG_line = { sys = QING  msg = "personnel: the cultivate lever pulled from the panel for" }
 	}
 }
 
@@ -149,19 +161,10 @@ qing_personnel_discipline_governor = {
 		NOT = { has_variable = qing_personnel_discipline_cooldown }
 	}
 	effect = {
-		# cashier the venal governor: disgrace (NAMED modifier) + a standing cut.
-		add_loyalty = loyalty_qing_disgraced
-		add_prominence = -5
-		# [#365-R2] PURGE THE ROT — the cashiering must actually clean the office it targets,
-		# else the clean-count (NOT corrupt AND corruption<40), qing_min_perf_personnel, and the
-		# Grand Council fold never move on discipline and the "purge the rot" tooltip overpromises.
-		# A punitive clean (no affinity bump — a disgraced man is NOT brought closer to the throne,
-		# so this deliberately does NOT call QING_char_cleanse, which recomputes affinity upward).
-		if = { limit = { has_trait = corrupt }  remove_trait = corrupt }
-		add_corruption = -25
-		set_variable = { name = qing_personnel_discipline_cooldown  days = 365 }
-		LOG_line = { sys = QING  msg = "personnel: a venal governor disciplined from the panel for" }
-		scope:player = { QING_ministry_recompute_perf_personnel = yes }
+		# [#443 boot-crash fix pt.2] trampoline the whole cashiering through qing_personnel.8 (a hidden
+		# CHARACTER event; ROOT = the governor, scope:player carries). Off the compiled parse path.
+		trigger_event = { id = qing_personnel.8 }
+		LOG_line = { sys = QING  msg = "personnel: the discipline lever pulled from the panel for" }
 	}
 }
 

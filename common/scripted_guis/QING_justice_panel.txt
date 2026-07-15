@@ -101,16 +101,17 @@ qing_justice_accuse_official = {
 		}
 	}
 	effect = {
-		QING_justice_find_accusable = yes
-		if = {
-			limit = { exists = scope:qing_justice_target }
-			scope:qing_justice_target = {
-				set_variable = { name = qing_justice_accused  value = 1 }
-			}
-			LOG_line = { sys = QING  msg = "justice: an official charged onto the docket from the panel for" }
-		}
-		# refresh so the docket roster + meter reflect the new charge.
-		QING_ministry_recompute_perf_justice = yes
+		# [#443 boot-crash fix] route the find-accusable work through the hidden qing_justice.5
+		# event (a RUNTIME trigger_event, never compile-inlined) instead of calling
+		# QING_justice_find_accusable directly here — its body is an `ordered_character {
+		# order_by = corruption ... save_scope_as }` SORTING iterator, and a scripted_gui
+		# compile-inlines its button's effect chain at PARSE time, which access-violates the
+		# loader on a sorting char-iterator (same class as the censorate/harem levers). The
+		# event does the find + docket-mark + recompute itself. Behaviour is identical.
+		# NB: the "charged onto the docket" LOG_line lives in qing_justice.5 inside the success
+		# branch (only emitted when a target is actually found); this button logs only the pull.
+		trigger_event = { id = qing_justice.5 }
+		LOG_line = { sys = QING  msg = "justice: the accuse-an-official lever pulled from the panel for" }
 	}
 }
 
@@ -137,9 +138,14 @@ qing_justice_convict = {
 		}
 	}
 	effect = {
-		QING_justice_convict_accused = yes
+		# [#443 boot-crash fix] route through the hidden CHARACTER event qing_justice.6 (a RUNTIME
+		# trigger_event, never compile-inlined) instead of calling QING_justice_convict_accused
+		# directly here — it reaches the vanilla `imprison` engine effect, and a scripted_gui
+		# compile-inlines its button's effect chain at PARSE time, which access-violates the loader
+		# (same class as the censorate/harem/justice-accuse/princes/xinjiang iterators). ROOT is the
+		# convict (as convict_accused expects); the saved player scope carries into trigger_event.
+		trigger_event = { id = qing_justice.6 }
 		LOG_line = { sys = QING  msg = "justice: an accused convicted from the panel for" }
-		scope:player = { QING_ministry_recompute_perf_justice = yes }
 	}
 }
 

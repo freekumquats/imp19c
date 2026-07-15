@@ -328,3 +328,59 @@ qing_justice.4 = {
 		}
 	}
 }
+
+########################################################################
+# .5  ACCUSE-AN-OFFICIAL TRAMPOLINE  (hidden)  [#443 boot-crash fix]
+# The panel lever qing_justice_accuse_official (QING_justice_panel.txt) used to call
+# QING_justice_find_accusable directly in its scripted_gui effect. A scripted_gui compile-inlines
+# its button's entire effect chain at PARSE time, and QING_justice_find_accusable's body is an
+# `ordered_character { order_by = corruption ... save_scope_as }` SORTING iterator — the same crash
+# class as the censorate impeach lever (qing_censorate.5) and the harem open refresh (qing_harem.3):
+# the loader access-violates (EXCEPTION_ACCESS_VIOLATION, zero PostValidate) on a sorting character-
+# iterator inlined into a compiled button. FIX: the button now trigger_events this hidden event;
+# trigger_event is a RUNTIME ref, never compile-inlined, so the sorting iterator lives in an event
+# unit the parser does not expand. Behaviour is identical to the old inline effect (find the most
+# corrupt accusable official, mark him onto the docket, refresh the meter + docket roster).
+########################################################################
+qing_justice.5 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_justice.5 (accuse-an-official trampoline) [ROOT.GetTag]" }
+		QING_justice_find_accusable = yes
+		if = {
+			limit = { exists = scope:qing_justice_target }
+			scope:qing_justice_target = {
+				set_variable = { name = qing_justice_accused  value = 1 }
+			}
+			LOG_line = { sys = QING  msg = "justice: an official charged onto the docket from the panel for" }
+		}
+		# refresh so the docket roster + meter reflect the new charge.
+		QING_ministry_recompute_perf_justice = yes
+	}
+}
+
+########################################################################
+# .6  CONVICT-AN-ACCUSED TRAMPOLINE  (hidden, character-scoped)  [#443 boot-crash fix]
+# The panel row-lever qing_justice_convict (QING_justice_panel.txt) used to call
+# QING_justice_convict_accused directly in its scripted_gui effect. That effect reaches the vanilla
+# `imprison` engine effect — no proven panel in the crash-floor inlined imprison into a compiled
+# button, and a scripted_gui compile-inlines its button's entire effect chain at PARSE time (the
+# same unbounded-inline crash class as the sorting/character/province iterators fixed for
+# censorate/harem/justice-accuse/princes/xinjiang). FIX: the button now trigger_events this hidden
+# CHARACTER event on the convict (ROOT = the convict, as the effect expects); the saved `player`
+# scope carries into trigger_event (proven: Invictus bribe_mercenary_button -> warfare.3, and the
+# sibling qing_harem.2). trigger_event is a RUNTIME ref, never compile-inlined, so imprison lives in
+# an event unit the parser does not expand. Behaviour is identical to the old inline effect.
+########################################################################
+qing_justice.6 = {
+	type = character_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_justice.6 (convict-an-accused trampoline) [ROOT.GetTag]" }
+		QING_justice_convict_accused = yes
+		scope:player = { QING_ministry_recompute_perf_justice = yes }
+	}
+}
