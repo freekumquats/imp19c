@@ -43,37 +43,70 @@ qing_war.1 = {
 	immediate = {
 		LOG_line = { sys = QING  msg = "EVENT qing_war.1 (officer review board) [ROOT.GetTag]" }
 		var:qing_office_war_holder = { save_scope_as = war_minister }
+		# [playtest loc-fix] reset the per-fire "a real candidate was found" flags so a
+		# leftover flag from a prior board can't wrongly enable an option this time.
+		if = { limit = { has_variable = qing_war_has_able }       remove_variable = qing_war_has_able }
+		if = { limit = { has_variable = qing_war_has_negligent }  remove_variable = qing_war_has_negligent }
 		# find a capable commander to reward
-		ordered_character = {
+		if = {
 			limit = {
-				employer = ROOT
-				is_alive = yes
-				is_adult = yes
-				is_ruler = no
-				martial >= 8
-				power_base >= 1
-				loyalty >= 50
-			}
-			order_by = martial
-			check_range_bounds = no
-			max = 1
-			save_scope_as = able_commander
-		}
-		# find a negligent or disloyal commander to cashier
-		random_character = {
-			limit = {
-				employer = ROOT
-				is_alive = yes
-				is_adult = yes
-				is_ruler = no
-				martial >= 8
-				power_base >= 1
-				OR = {
-					loyalty < 40
-					martial < 6
+				any_character = {
+					employer = ROOT  is_alive = yes  is_adult = yes  is_ruler = no
+					martial >= 8  power_base >= 1  loyalty >= 50
 				}
 			}
-			save_scope_as = negligent_commander
+			ordered_character = {
+				limit = {
+					employer = ROOT
+					is_alive = yes
+					is_adult = yes
+					is_ruler = no
+					martial >= 8
+					power_base >= 1
+					loyalty >= 50
+				}
+				order_by = martial
+				check_range_bounds = no
+				max = 1
+				save_scope_as = able_commander
+			}
+			set_variable = qing_war_has_able
+		}
+		else = {
+			# [playtest loc-fix] fallback so scope:able_commander is ALWAYS set — the .a
+			# option NAME loc references it and Jomini pre-evaluates hidden options' names,
+			# so an unset scope rendered ERROR:[scope:able_commander.GetName]. The War
+			# minister stands in; the reward option stays hidden (gated on the flag below).
+			scope:war_minister = { save_scope_as = able_commander }
+		}
+		# find a negligent or disloyal commander to cashier
+		if = {
+			limit = {
+				any_character = {
+					employer = ROOT  is_alive = yes  is_adult = yes  is_ruler = no
+					martial >= 8  power_base >= 1
+					OR = { loyalty < 40  martial < 6 }
+				}
+			}
+			random_character = {
+				limit = {
+					employer = ROOT
+					is_alive = yes
+					is_adult = yes
+					is_ruler = no
+					martial >= 8
+					power_base >= 1
+					OR = {
+						loyalty < 40
+						martial < 6
+					}
+				}
+				save_scope_as = negligent_commander
+			}
+			set_variable = qing_war_has_negligent
+		}
+		else = {
+			scope:war_minister = { save_scope_as = negligent_commander }
 		}
 	}
 
@@ -81,7 +114,7 @@ qing_war.1 = {
 	option = {
 		name = "qing_war.1.a"
 		trigger = {
-			exists = scope:able_commander
+			has_variable = qing_war_has_able
 			scope:war_minister = { martial >= 10 }
 		}
 		custom_tooltip = "qing_war.1.a.tt"
@@ -98,7 +131,7 @@ qing_war.1 = {
 	option = {
 		name = "qing_war.1.b"
 		trigger = {
-			exists = scope:negligent_commander
+			has_variable = qing_war_has_negligent
 			scope:war_minister = { martial >= 8 }
 		}
 		custom_tooltip = "qing_war.1.b.tt"
