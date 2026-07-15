@@ -184,7 +184,9 @@ QING_exam_mint_scholar = {
 	# add to the pool list + keep the count var in step (GUI reads the count).
 	add_to_variable_list = { name = qing_scholar_pool  target = scope:qing_new_scholar }
 	change_variable = { name = qing_scholar_pool_count  add = 1 }
-	LOG_line = { sys = QING  msg = "exam: minted a $degree$ graduate into the hiring pool for" }
+	# [#34 review-fix] LOG string must never carry a macro $param$ (it can derail the
+	# parser — standing rule); the $degree$ interpolation is dropped for a static line.
+	LOG_line = { sys = QING  msg = "exam: minted a degreed graduate into the hiring pool for" }
 }
 
 # ======================================================================
@@ -342,6 +344,146 @@ QING_exam_pool_tick = {
 		}
 		LOG_line = { sys = QING  msg = "exam: pool tick (retired the aged/dead un-placed) for" }
 		LOG_exit = { sys = QING  fn = "QING_exam_pool_tick"  result = OK }
+	}
+}
+
+# ======================================================================
+# [#34] QING_exam_sit_candidate — THE COMING-OF-AGE INTAKE. Scope: CHARACTER (called
+# from on_becoming_adult, so root = the maturing character, NOT the country). This is
+# what makes the keju the SOURCE of the empire's civil characters: EVERY Qing court
+# character sits the examination on reaching adulthood and — if he passes — carries a
+# keju degree for life, so the candidate benches the council / ambanate / legations pick
+# from are populated by graduates BY CONSTRUCTION (the approved population-source model:
+# governors / researchers / engine-diplomats are not script-appointable, so the keju
+# gates the POOL of eligible men, not the individual seat). The soft-preference weight
+# in qing_degree_prestige_svalue then floats those graduates to the top of every picker.
+#
+# TWO TRACKS (per the approved banner-exam design):
+#   • Han and the general court sit the CIVIL examination (文科) → civil degrees
+#     (jiansheng→shengyuan→juren→gongshi→jinshi→hanlin); these staff the metropolitan
+#     offices, governorships, and legations.
+#   • Bannermen — Manchu (jurchen group) and Mongol (mongolic group) — sit the
+#     TRANSLATION examination (翻譯科) → the fanyi_jinshi banner degree; these are the
+#     stock the amban / resident-commissioner posts draw on (see se_QING_AMBAN.txt).
+#
+# PASS/FAIL is scaled by the realm's metropolitan pass-rate (employer.var:qing_exam_pass_rate,
+# maintained by QING_exam_compute_pass_rate) AND the candidate's own finesse+charisma
+# (qing_keju_pass_chance_svalue). A failed candidate takes NO degree (he joins the pool of
+# degreeless commoners a picker falls back on only when no graduate is free — so the realm
+# never soft-locks for want of a laureate), save a small chance of the purchased 監生 floor.
+# The degree TIER on a pass follows the same pass-rate bands the cohort-mint uses.
+#
+# NOTE (scope): this runs at character root, so it does NOT call QING_char_init_identity /
+# QING_char_bind (both read root.current_ruler, i.e. the COUNTRY's ruler — invalid when
+# root is a character). Conferring the degree is the whole job here; a graduate's throne-
+# affinity + Manchu/Han identity are set by the office/council machinery when he is drawn.
+# Marks qing_sat_keju so a character sits exactly once. CHI court only; safe no-op elsewhere.
+# ======================================================================
+QING_exam_sit_candidate = {
+	if = {
+		limit = {
+			# a Qing court character who has not yet sat, is a commoner subject (not the
+			# reigning sovereign), free, and holds no degree yet. He need not be a pool
+			# scholar — every court child sits the keju on coming of age.
+			exists = employer
+			employer = { tag = CHI }
+			NOT = { has_variable = qing_sat_keju }
+			is_ruler = no
+			prisoner = no
+			# not already degreed (defensive; a fresh adult never is).
+			NOT = { has_trait = jiansheng }
+			NOT = { has_trait = shengyuan }
+			NOT = { has_trait = juren }
+			NOT = { has_trait = gongshi }
+			NOT = { has_trait = jinshi }
+			NOT = { has_trait = hanlin }
+			NOT = { has_trait = fanyi_jinshi }
+		}
+		# sat once, whatever the outcome.
+		set_variable = { name = qing_sat_keju  value = 1 }
+		# refresh the pass-rate the roll reads (cheap; idempotent) so a child maturing between
+		# triennia still sits against a current metric.
+		employer = { QING_exam_compute_pass_rate = yes }
+		if = {
+			# ---------- THE BANNER TRACK (翻譯科) — Manchu + Mongol bannermen ----------
+			limit = {
+				OR = {
+					culture.culture_group = culture_group:jurchen
+					culture.culture_group = culture_group:mongolic
+				}
+			}
+			random = {
+				chance = qing_keju_pass_chance_svalue
+				# a banner pass: the translation laureate (amban stock), or a lower licentiate.
+				if = {
+					limit = { exists = employer  employer = { has_variable = qing_exam_pass_rate  var:qing_exam_pass_rate >= 45 } }
+					random_list = {
+						70 = { add_trait = fanyi_jinshi }
+						30 = { add_trait = shengyuan }
+					}
+				}
+				else = {
+					random_list = {
+						40 = { add_trait = fanyi_jinshi }
+						60 = { add_trait = shengyuan }
+					}
+				}
+				LOG_line = { sys = QING  msg = "keju: a bannerman passed the translation examination (翻譯科) for" }
+			}
+		}
+		else = {
+			# ---------- THE CIVIL TRACK (文科) — Han and the general court ----------
+			# NOTE: `random` has NO `else` branch (else is a sibling of if/else_if only), so we
+			# roll the pass into a one-shot marker, then branch pass/fail with a proper if/else.
+			random = {
+				chance = qing_keju_pass_chance_svalue
+				set_variable = { name = qing_keju_passed  value = 1 }
+			}
+			if = {
+				limit = { has_variable = qing_keju_passed }
+				# degree tier by the realm's pass-rate band (mirrors QING_exam_graduate_cohort).
+				if = {
+					# vigorous ladder: a chance at the Hanlin apex, else a strong civil degree.
+					limit = { exists = employer  employer = { has_variable = qing_exam_pass_rate  var:qing_exam_pass_rate >= 60 } }
+					random_list = {
+						10 = { add_trait = hanlin }
+						30 = { add_trait = jinshi }
+						30 = { add_trait = gongshi }
+						30 = { add_trait = juren }
+					}
+				}
+				else_if = {
+					# middling ladder.
+					limit = { exists = employer  employer = { has_variable = qing_exam_pass_rate  var:qing_exam_pass_rate >= 30 } }
+					random_list = {
+						5  = { add_trait = jinshi }
+						25 = { add_trait = gongshi }
+						40 = { add_trait = juren }
+						30 = { add_trait = shengyuan }
+					}
+				}
+				else = {
+					# choked ladder: only the lower rungs.
+					random_list = {
+						30 = { add_trait = juren }
+						45 = { add_trait = shengyuan }
+						25 = { add_trait = jiansheng }
+					}
+				}
+				remove_variable = qing_keju_passed
+				LOG_line = { sys = QING  msg = "keju: a candidate passed the civil examination (文科) for" }
+			}
+			else = {
+				# a failed candidate takes no merit degree — but a well-off family may still
+				# purchase the 監生 floor (捐監), the historical sale-of-rank escape. Most fail
+				# outright and join the degreeless commoners the pickers fall back on.
+				random = {
+					chance = 15
+					add_trait = jiansheng
+					LOG_line = { sys = QING  msg = "keju: a failed candidate purchased the 監生 rank (捐監) for" }
+				}
+			}
+		}
 	}
 }
 

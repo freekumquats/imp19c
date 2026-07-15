@@ -43,18 +43,96 @@
 # ======================================================================
 QING_amban_post = {
 	LOG_enter = { sys = QING  fn = "QING_amban_post" }
-	# The resident is a minor character, adult, Manchu or Han (Inner Asian post
-	# went to conquest-elite or sinicized officials), middling stats (not a
-	# great statesman — the great offices kept the best men in Peking).
-	create_character = {
-		age = { 35 50 }
-		culture = manchu          # [logfix] was ROOT.primary_culture (invalid create_character field); amban = Manchu conquest-elite
-		religion = vajrayana      # [logfix] was ROOT.religion
-		add_finesse = { 3 6 }
-		add_martial = { 2 5 }
-		add_charisma = { 3 6 }
-		add_zeal = { 2 5 }
-		save_scope_as = qing_amban_new
+	# [#34] THE KEJU IS THE SOURCE — AMBANS COME OUT OF THE BANNER EXAMINATION, not from
+	# nowhere. Draw the ablest FREE banner-track graduate the court holds (a 繙譯進士
+	# fanyi_jinshi, or failing that any degreed bannerman) and post HIM; only conjure a
+	# fresh resident when the court has no such graduate to spare (the soft-preference
+	# fallback that keeps the march staffed rather than soft-locking on an empty bench).
+	# The pick excludes the ruler/heir, serving commanders/governors, sitting GC office-
+	# holders, and men already posted as ambans elsewhere (qing_amban_marker).
+	if = {
+		limit = {
+			any_character = {
+				employer = ROOT
+				is_adult = yes
+				is_alive = yes
+				is_ruler = no
+				is_general = no
+				is_admiral = no
+				is_governor = no
+				NOT = { has_variable = qing_office_held }
+				NOT = { has_variable = qing_amban_marker }
+				NOT = { AND = { exists = ROOT.current_ruler  this = ROOT.current_ruler } }
+				NOT = { AND = { exists = ROOT.primary_heir   this = ROOT.primary_heir } }
+				OR = {
+					has_trait = fanyi_jinshi
+					AND = {
+						culture.culture_group = culture_group:jurchen
+						OR = { has_trait = jinshi  has_trait = hanlin  has_trait = gongshi  has_trait = juren  has_trait = shengyuan }
+					}
+					AND = {
+						culture.culture_group = culture_group:mongolic
+						OR = { has_trait = jinshi  has_trait = hanlin  has_trait = gongshi  has_trait = juren  has_trait = shengyuan }
+					}
+				}
+			}
+		}
+		# the ablest such graduate (banner laureates float to the top via qing_degree_prestige_svalue).
+		ordered_character = {
+			limit = {
+				employer = ROOT
+				is_adult = yes
+				is_alive = yes
+				is_ruler = no
+				is_general = no
+				is_admiral = no
+				is_governor = no
+				NOT = { has_variable = qing_office_held }
+				NOT = { has_variable = qing_amban_marker }
+				NOT = { AND = { exists = ROOT.current_ruler  this = ROOT.current_ruler } }
+				NOT = { AND = { exists = ROOT.primary_heir   this = ROOT.primary_heir } }
+				OR = {
+					has_trait = fanyi_jinshi
+					AND = {
+						culture.culture_group = culture_group:jurchen
+						OR = { has_trait = jinshi  has_trait = hanlin  has_trait = gongshi  has_trait = juren  has_trait = shengyuan }
+					}
+					AND = {
+						culture.culture_group = culture_group:mongolic
+						OR = { has_trait = jinshi  has_trait = hanlin  has_trait = gongshi  has_trait = juren  has_trait = shengyuan }
+					}
+				}
+			}
+			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_amban_new
+		}
+		# [#34] if the drawn graduate is a pool scholar, drop him from the hiring pool as he
+		# takes the post (the same exit path QING_office_appoint uses for a seated scholar).
+		scope:qing_amban_new = { QING_exam_pool_drop_member = yes }
+		LOG_line = { sys = QING  msg = "amban: drawn from the banner examination pool (翻譯科) for" }
+	}
+	else = {
+		# FALLBACK — no banner graduate free: conjure a resident (a minor character, adult,
+		# Manchu conquest-elite, middling stats — the great offices kept the best men in
+		# Peking) and confer the banner degree so he too is a keju man, not a stranger.
+		create_character = {
+			age = { 35 50 }
+			culture = manchu          # [logfix] was ROOT.primary_culture (invalid create_character field); amban = Manchu conquest-elite
+			religion = vajrayana      # [logfix] was ROOT.religion
+			add_finesse = { 3 6 }
+			add_martial = { 2 5 }
+			add_charisma = { 3 6 }
+			add_zeal = { 2 5 }
+			add_trait = fanyi_jinshi   # [#34] a resident is a translation-examination laureate
+			save_scope_as = qing_amban_new
+		}
+		# [#34 fix] demote the CREATED resident to minor standing HERE (the demotion was removed
+		# from the shared QING_amban_wire tail because the draw-path now feeds that tail a real full
+		# court bannerman who must keep major standing). A conjured resident is a minor character.
+		scope:qing_amban_new = { set_as_minor_character = THIS }
+		LOG_line = { sys = QING  msg = "amban: no banner graduate free, a resident is raised and degreed for" }
 	}
 	# [#392 refactor] the post-wiring (move to subject, role modifier, affinity, storage,
 	# marker, tenure timer) is now the shared QING_amban_wire tail so the game-start seed
@@ -76,12 +154,15 @@ QING_amban_post = {
 QING_amban_wire = {
 	# move him to the subject, apply the role modifier, store the link
 	scope:qing_amban_new = {
-		# [#157 fix] `minor_character = yes` inside create_character is an INVALID key
-		# ("Unknown effect" — silently discarded), so residents were being spawned as
-		# FULL major characters (office/succession-eligible, list clutter). The proven
-		# way to mark a created character minor is the set_as_minor_character effect in
-		# the character scope (events/annexation.txt:21). A resident is a minor courtier.
-		set_as_minor_character = THIS
+		# [#34 review-fix] set_as_minor_character was HERE, in the shared tail — correct
+		# when the tail only ever received a freshly-CREATED resident (fallback + seed),
+		# but the #34 draw-path now feeds this tail a real, full court bannerman drawn
+		# from the examination bench. Demoting HIM to minor standing was permanent (recall
+		# never restores it), so the system silently and irreversibly demoted the court's
+		# ablest graduates — the opposite of what the keju-source design intends. The
+		# demotion now lives at the two CREATE sites only (the fallback else below and
+		# QING_amban_seed_one), so a created resident is minor (as before) while a DRAWN
+		# court graduate keeps his major standing and rejoins the office pool on recall.
 		move_country = $subject$
 		add_character_modifier = { name = qing_amban_resident  duration = -1 }
 		# score his compatibility with the throne (the Lifan holder will be
@@ -395,8 +476,12 @@ QING_amban_seed_one = {
 		add_martial = $mar$
 		add_charisma = $cha$
 		add_zeal = $zea$
+		add_trait = fanyi_jinshi   # [#34] the historical residents are translation-examination laureates too
 		save_scope_as = qing_amban_new
 	}
+	# [#34 fix] demote the CREATED historical resident to minor standing HERE (the demotion no
+	# longer lives in the shared QING_amban_wire tail — see the wire-tail note).
+	scope:qing_amban_new = { set_as_minor_character = THIS }
 	# pin the historical name as an epithet (add_nickname takes the bare loc key —
 	# the proven upstream form; NEVER interpolate $nick$ into a quoted LOG string).
 	scope:qing_amban_new = { add_nickname = $nick$ }

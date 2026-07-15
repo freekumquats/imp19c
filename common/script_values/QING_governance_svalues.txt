@@ -4,16 +4,67 @@
 # See se_QING_COUNCIL.txt / se_QING_GOVERNANCE.txt.
 ########################################################################
 
+# [#34] KEJU DEGREE PRESTIGE — the soft-preference weight that makes the examination
+# the SOURCE of the empire's civil servants. Added to every candidate-ranking value
+# below, so a keju graduate outscores an equally-skilled commoner wherever the council,
+# the ambanate, or a legation picks a man — WITHOUT a hard lock (a degreeless character
+# can still be seated when the graduate pool is empty, so the realm never soft-locks for
+# want of a laureate). The ladder mirrors the degree hierarchy (translate/academy floor
+# → jinshi/hanlin apex), and is deliberately large relative to the 0..~9 skill axis so a
+# degree is the dominant sort key: even a modest graduate heads the bench over a brilliant
+# commoner, exactly as the historical bureaucracy privileged the metropolitan laureate.
+# Evaluated in a CHARACTER scope. Conditional add-by-trait is the proven script-value
+# idiom (cf. religionator_svalue, 00_governor_policies.txt). Degrees are mutually exclusive
+# (opposites), so at most one branch adds.
+qing_degree_prestige_svalue = {
+	value = 0
+	if = { limit = { has_trait = hanlin }       add = 30 }   # 翰林 — the Academy apex
+	else_if = { limit = { has_trait = jinshi }       add = 25 }   # 進士 — the metropolitan laureate
+	else_if = { limit = { has_trait = fanyi_jinshi } add = 25 }   # 繙譯進士 — the banner-track laureate (amban stock)
+	else_if = { limit = { has_trait = gongshi }      add = 20 }   # 貢士 — passed the metropolitan, awaiting the palace
+	else_if = { limit = { has_trait = juren }        add = 15 }   # 舉人 — the provincial laureate
+	else_if = { limit = { has_trait = shengyuan }    add = 10 }   # 生員/秀才 — the licentiate
+	else_if = { limit = { has_trait = jiansheng }    add = 5  }   # 監生 — the purchased/academy floor
+}
+
+# [#34] KEJU PASS CHANCE — the 0..100 probability a coming-of-age court character passes
+# the examination (used as `chance = qing_keju_pass_chance_svalue` in QING_exam_sit_candidate).
+# Evaluated in the CANDIDATE'S character scope. Blends the realm's metropolitan pass-rate
+# (employer.var:qing_exam_pass_rate, itself ladder-health net of corruption/捐納 drag) with the
+# candidate's own scholarly aptitude (finesse + charisma), so an able child of a vigorous realm
+# passes readily while a dull one in a clogged ladder rarely does. Bounded 5..90 (the exam is
+# never a certainty nor wholly closed). Reading a country var via the employer link is done
+# through a guarded `if = { limit = { employer = { var:X >= N } } }` band (the proven form —
+# a bare `add = employer.var:X` accessor is not attested), so the pass-rate enters as a coarse
+# floor rather than a continuous term; the finesse/charisma terms then separate candidates.
+qing_keju_pass_chance_svalue = {
+	value = 20
+	# scholarly aptitude: finesse is the examiner's chief measure, charisma the lesser.
+	add = finesse
+	add = finesse
+	add = charisma
+	# the realm's pass-rate enters as a coarse band (guarded employer read).
+	if = { limit = { exists = employer  employer = { has_variable = qing_exam_pass_rate  var:qing_exam_pass_rate >= 75 } }  add = 40 }
+	else_if = { limit = { exists = employer  employer = { has_variable = qing_exam_pass_rate  var:qing_exam_pass_rate >= 60 } }  add = 30 }
+	else_if = { limit = { exists = employer  employer = { has_variable = qing_exam_pass_rate  var:qing_exam_pass_rate >= 45 } }  add = 20 }
+	else_if = { limit = { exists = employer  employer = { has_variable = qing_exam_pass_rate  var:qing_exam_pass_rate >= 30 } }  add = 10 }
+	# bound: never a certainty, never wholly closed.
+	min = 5
+	max = 90
+}
+
 # Combined 4-skill worth of a character, used to rank council/office candidates
 # (order_by) and — historically — to weight the council's effectiveness. Mirrors
 # combined_stats_olympics_svalue in 00_event_values.txt. Evaluated in a
-# character scope.
+# character scope. [#34] The keju degree prestige is folded in so graduates head
+# the generalist (chancellor / regent / first-vacant) benches.
 combined_stats_council_svalue = {
 	value = 0
 	add = martial
 	add = finesse
 	add = charisma
 	add = zeal
+	add = qing_degree_prestige_svalue
 }
 
 # [#221] Single-skill ranking values for the per-office appoint pickers. Each
@@ -24,10 +75,12 @@ combined_stats_council_svalue = {
 # all four), since those summit posts are judged as generalists. Bare skill
 # tokens are not demonstrated as order_by exports in this codebase, so each is
 # wrapped in an explicit script value (proven order_by pattern). Character scope.
-council_sort_martial  = { value = 0  add = martial }
-council_sort_finesse  = { value = 0  add = finesse }
-council_sort_charisma = { value = 0  add = charisma }
-council_sort_zeal     = { value = 0  add = zeal }
+# [#34] Each folds in the keju degree prestige too, so a graduate heads even a
+# single-skill office bench over an equally-skilled commoner (the soft preference).
+council_sort_martial  = { value = 0  add = martial   add = qing_degree_prestige_svalue }
+council_sort_finesse  = { value = 0  add = finesse   add = qing_degree_prestige_svalue }
+council_sort_charisma = { value = 0  add = charisma  add = qing_degree_prestige_svalue }
+council_sort_zeal     = { value = 0  add = zeal      add = qing_degree_prestige_svalue }
 
 # [#384] New World crop adoption probability for an eligible marginal target province.
 # Evaluated in PROVINCE scope inside QING_COLON_nwcrop_diffuse, where qing_nwcrop_adj has

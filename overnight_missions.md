@@ -206,3 +206,92 @@ region keys all exist, ownership-count gates all well under region sizes.
   as-is"); steppe hordes are unlikely to be fully annexed, and over-relaxing any_subject would be less clean.
 
 Ready to commit.
+
+---
+
+## Task #34 — The keju as the source of all civil characters
+
+**User directive:** "enhance and connect the keju system to become the source of character creation.
+all civil officials (non-commanders) in all ministries must come from the keju. there should be several
+new character traits representing the degrees granted by the keju. ambans for example should not be spawned
+from nowhere but come out of the keju. the same system should also provide diplomats and governors and
+researchers and so forth" + "all children should be sent to the keju when they get old enough".
+
+**Approved design (AskUserQuestion, 3 answers):**
+- **Coverage = "Population-source."** The verified engine limit: governors / researchers / engine-diplomats and
+  the 8 fixed monarchy office slots are NOT script-appointable (no set_as_governor / set_as_researcher /
+  create_diplomat / appoint_office anywhere — this is why #28 is engine-blocked). So the keju cannot appoint
+  each SEAT; instead it gates the whole civil-character POPULATION. Every court character sits the exam on
+  coming of age → carries a degree for life → the candidate benches the council / ambanate / legations already
+  pick from are graduates by construction.
+- **Eligibility = "Soft preference."** Degree-holders score far higher and are picked first, but a degreeless
+  character can still be seated when no graduate is free — no soft-lock for want of a laureate.
+- **Ambans = "Banner-exam track."** A Manchu/Mongol translation examination (翻譯科 → fanyi_jinshi) feeds the
+  amban / resident posts; the civil track (文科) feeds the metropolitan offices.
+
+**As built (7 files):**
+1. **Degree traits** (`common/traits/00_imp19c.txt`): expanded the ladder to seven mutually-exclusive `status`
+   degrees — 監生 jiansheng (new, purchased/academy floor) < 生員 shengyuan < 舉人 juren < 貢士 gongshi < 進士
+   jinshi < 翰林 hanlin (new, Academy apex); plus 繙譯進士 fanyi_jinshi (new, banner track). **Bugfix:** the old
+   opposites lists named `jiansheng` (never declared) and `gongsheng` (a typo for the declared `gongshi`) —
+   `jiansheng` is now defined and every list rebuilt to reference all six others, so the ladder is genuinely
+   exclusive. Holding-income scales with rank (0.01→0.125).
+2. **Soft preference** (`common/script_values/QING_governance_svalues.txt`): new `qing_degree_prestige_svalue`
+   (character scope, conditional add-by-trait, the proven religionator_svalue idiom) adds 5→30 by degree; folded
+   into `combined_stats_council_svalue` AND all four `council_sort_<skill>` pickers, so a graduate outscores an
+   equally-skilled commoner wherever the council / office / amban picker sorts. Deliberately large vs the 0..~9
+   skill axis so a degree is the dominant sort key.
+3. **Coming-of-age intake** (`se_QING_EXAM.txt` `QING_exam_sit_candidate` + on_becoming_adult hook in
+   `00_specific_from_code.txt`): every Qing court character sits the keju on maturity. Bannermen (jurchen /
+   mongolic culture groups) sit the translation track → fanyi_jinshi/shengyuan; Han + general court sit the
+   civil track → degree tier by the realm's pass-rate band (mirrors QING_exam_graduate_cohort). Pass chance =
+   `qing_keju_pass_chance_svalue` (finesse+charisma + a pass-rate floor band, bounded 5..90). A failer takes no
+   merit degree (joins the fallback commoner pool), save a 15% 捐監-purchase of the 監生 floor. Marks
+   qing_sat_keju so a man sits once. Self-guards on employer=CHI so it is a global no-op elsewhere.
+   NOTE (scope): runs at CHARACTER root, so it does NOT call QING_char_init_identity / QING_char_bind (both read
+   root.current_ruler = a COUNTRY link, invalid at char root) — conferring the degree is the whole job; identity
+   + affinity are set by the office/council machinery when the graduate is drawn.
+4. **Ambans from the keju** (`se_QING_AMBAN.txt` `QING_amban_post`): now DRAWS the ablest free banner-track
+   graduate the court holds (fanyi_jinshi, or any degreed bannerman) and posts him, dropping him from the
+   scholar pool if he was in it; conjures a fresh resident (now stamped fanyi_jinshi so he too is a keju man)
+   ONLY when no banner graduate is free (the soft-preference fallback). Game-start historical residents
+   (QING_amban_seed_one) also get fanyi_jinshi.
+5. **Historical roster degrees** (`qing_roster_events.txt`): the real civil officials get their real degrees —
+   Lin Zexu/Kang Youwei = jinshi; Li Hongzhang/Zeng Guofan/Zhang Zhidong/Guo Songtao = hanlin (all Hanlin
+   compilers); Zuo Zongtang/Zeng Jize = juren; Sheng Xuanhuai = jiansheng (purchased rank). Correctly LEFT
+   degreeless: Prince Gong (imperial prince), Yung Wing/Sun Yat-sen (Western-educated), Yuan Shikai (failed the
+   exams for a military career), Heshen (banner favourite).
+6. **Loc** (`imp19traits_l_english.yml`): full trait loc for all seven degrees — the pre-existing degree traits
+   had NO loc entries at all (would have rendered as raw keys), so this fixes a latent display bug too.
+
+**Self-caught bug during build:** first draft used `random = { chance=… } else = { … }` for the civil
+pass/fail split — but `else` is a sibling of `if`/`else_if` ONLY, never of `random` (a silent parse break).
+Rewrote to roll the pass into a one-shot `qing_keju_passed` marker, then branch with a proper if/else.
+
+**Idioms verified before building:** conditional add-by-trait in a script_value (religionator_svalue); nested
+script_value in `add =` (combined_stats_olympics precedent); `else_if`/`min`/`max`/`divide` in script values;
+guarded `employer = { var:X >= N }` band read (bare `add = employer.var:X` NOT attested); culture_group keys
+(manchu∈jurchen, mongolian∈mongolic, han∈chinese_group); `any_character { employer = ROOT }` + `ordered_character
+order_by = combined_stats_council_svalue` (the exact council-picker idiom); on_becoming_adult = character scope.
+
+All 6 .txt files brace-balanced; every file's per-file BOM state preserved (traits/on_action/roster = BOM,
+exam/amban/svalues = no-BOM; loc = BOM). Loc YAML diagnostics are the documented false positives.
+
+**Code review (independent agent) — 3 findings, all resolved:**
+- MEDIUM (real bug, FIXED): the shared `QING_amban_wire` tail ran `set_as_minor_character = THIS`, correct
+  only for a freshly-CREATED resident — but the #34 draw-path feeds it a real full court bannerman, so the
+  ablest drawn graduate was PERMANENTLY demoted to minor standing (recall never restores it). Moved the
+  demotion to the two CREATE sites only (fallback `else` + `QING_amban_seed_one`); a drawn court graduate now
+  keeps major standing and rejoins the office pool on recall.
+- MEDIUM (design, KEPT + documented): degree prestige (+5..30) folded into the single-skill `council_sort_*`
+  keys. Assessed working-as-intended and historically correct — the Six Boards (incl. 兵部) were headed by
+  civil-exam graduates, not field generals, and generals/admirals are already excluded from office eligibility
+  (`QING_office_eligible_candidate`), so a "brilliant degreeless general loses the War seat" scenario cannot
+  arise: he is not a candidate. Degree tiers are 5 apart vs a ~0–15 skill span, so skill still separates men
+  within and across a tier — a genuine soft preference, not a collapse.
+- LOW (pre-existing, FIXED opportunistically): `QING_exam_mint_scholar`'s LOG line interpolated a macro
+  `$degree$` into the message string (violates the standing no-`$param$`-in-LOG rule). Replaced with a static
+  "minted a degreed graduate" line.
+
+All 6 .txt files re-verified brace-balanced after the fixes (amban 210/210, exam 184/184); no stale `gongsheng`
+in live code (only the two bugfix-note comments). Committed. Ready for boot test on the user's machine.
