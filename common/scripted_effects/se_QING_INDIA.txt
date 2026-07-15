@@ -1,0 +1,119 @@
+########################################################################
+# se_QING_INDIA.txt — the scripted half of CONTEST THE COMPANY
+# (逐夷復印, the Qing bid to contest the British East India Company for the
+# paramountcy of Hindustan), #449.
+#
+# The mission tree (common/missions/qing_india_missions.txt) makes the PLAYER
+# do the real work: task goals gate on the Qing actually CONTROLLING the ground
+# (the Company seat at Calcutta, 6219) and on the anti-Company powers being
+# brought under the wing. This file scripts only what the player cannot express
+# through a control goal:
+#
+#   • THE COMPANY PRESSURE (逼夷) — the Qing descent on Hindustan bears down on
+#     the Company's Bengal factories. Stamped as the qing_india_company_pressure
+#     province modifier on the EIC-held ports of Bengal/Bihar when the campaign
+#     opens (a defensive-sapping, trade-throttling texture). Finite duration,
+#     self-expiring; lifted at the capstone.
+#   • EMBRACE THE NAWAB — take BNG (the Nawab of Bengal, sovereign and at war
+#     with the Company in 1763) under the Qing wing as a sinosphere tributary,
+#     the natural anti-Company ally. FUNC_make_subject, guarded.
+#   • FREE THE MUGHAL — take MUG (the Mughal emperor, a Company client_state in
+#     1763) under the Qing wing as a tributary — freeing the Timurid throne from
+#     the Company and setting the Son of Heaven over it. FUNC_make_subject, guarded.
+#   • THE BENGAL CLAIM — a claim on the Company seat (Calcutta, 6219) so the
+#     drive has a war-goal and control can convert to cession.
+#
+# PREFIX: QING_india_ / sys = QING. CHI-only, driven by the mission tasks (no pulse).
+# Proven idioms only: add_province_modifier { duration } (self-expiring, se_QING_BURMA
+# QING_burma_stamp_miasma / se_QING_OPEN_JAPAN), FUNC_make_subject (se_FUNC /
+# himalaya_seasia tree), add/remove_country_modifier, add_claim guarded on NOT owns.
+#
+# NO BOM (common/scripted_effects/*.txt convention here).
+#
+#   ROOT / this = the Qing country (CHI, the player).
+########################################################################
+
+# ======================================================================
+# QING_india_open_demand — the campaign opens: lay the company-pressure modifier over the
+# Company's Bengal/Bihar factory ports (the EIC-held ground the Qing descent bears down on).
+# Scope: COUNTRY (CHI). The Company seat at Calcutta (6219) is stamped explicitly; every other
+# EIC-controlled port in the Bengal/Bihar regions is stamped by the loop. Finite duration
+# (5 years) so it self-expires (the burma-miasma / open-Japan idiom); guarded, capstone lifts.
+# ======================================================================
+QING_india_open_demand = {
+	LOG_enter = { sys = QING  fn = "QING_india_open_demand" }
+	if = { limit = { exists = p:6219  NOT = { p:6219 = { has_province_modifier = qing_india_company_pressure } } }  p:6219 = { add_province_modifier = { name = qing_india_company_pressure  duration = 1825 } } }
+	# the pressure also weighs on any Company-held port across Bengal and Bihar.
+	every_province = {
+		limit = {
+			OR = { is_in_region = Bengal_region  is_in_region = Bahar }
+			is_port = yes
+			controller = { OR = { tag = EIC  is_subject_of = c:EIC } }
+			NOT = { has_province_modifier = qing_india_company_pressure }
+		}
+		add_province_modifier = { name = qing_india_company_pressure  duration = 1825 }
+	}
+	LOG_line = { sys = QING  msg = "India: the Qing descent's company pressure (逼夷) laid on the Bengal factories for" }
+	LOG_exit = { sys = QING  fn = "QING_india_open_demand"  result = OK }
+}
+
+# ======================================================================
+# QING_india_embrace_nawab — take the Nawab of Bengal (BNG) under the Qing wing as a
+# sinosphere tributary. Scope: COUNTRY (CHI). The Nawab was sovereign and at war with the
+# Company in 1763 — the natural anti-Company ally. The make-subject-by-fiat idiom the
+# southern-frontier tree uses (FUNC_make_subject); guarded so an absent or already-bound
+# Nawab is a no-op.
+# ======================================================================
+QING_india_embrace_nawab = {
+	LOG_enter = { sys = QING  fn = "QING_india_embrace_nawab" }
+	if = {
+		limit = { exists = c:BNG  NOT = { c:BNG = { is_subject_of = ROOT } } }
+		FUNC_make_subject = { overlord = ROOT  target = c:BNG  type = sinosphere_tributary }
+		LOG_line = { sys = QING  msg = "India: the Nawab of Bengal (孟加拉) taken under the wing as a tributary for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_india_embrace_nawab"  result = OK }
+}
+
+# ======================================================================
+# QING_india_free_mughal — take the Mughal emperor (MUG) under the Qing wing as a
+# sinosphere tributary. Scope: COUNTRY (CHI). In 1763 the Timurid throne was a Company
+# client_state; embracing it frees it from the Company and sets the Son of Heaven over it.
+# FUNC_make_subject; guarded so an absent or already-bound Mughal is a no-op (and since the
+# guard is only NOT-subject-of-ROOT, a Company vassal still qualifies — that is the point).
+# ======================================================================
+QING_india_free_mughal = {
+	LOG_enter = { sys = QING  fn = "QING_india_free_mughal" }
+	if = {
+		limit = { exists = c:MUG  NOT = { c:MUG = { is_subject_of = ROOT } } }
+		FUNC_make_subject = { overlord = ROOT  target = c:MUG  type = sinosphere_tributary }
+		LOG_line = { sys = QING  msg = "India: the Mughal emperor (蒙兀兒) freed from the Company and taken under the wing for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_india_free_mughal"  result = OK }
+}
+
+# ======================================================================
+# QING_india_claim_bengal — grant a claim on the Company seat (Calcutta, 6219) so the drive
+# on Bengal has a war-goal and control can convert to cession. Scope: COUNTRY (CHI). Guarded
+# so a province the Qing already owns is skipped.
+# ======================================================================
+QING_india_claim_bengal = {
+	LOG_enter = { sys = QING  fn = "QING_india_claim_bengal" }
+	if = { limit = { exists = p:6219  NOT = { owns = 6219 } }  add_claim = p:6219 }
+	LOG_line = { sys = QING  msg = "India: a claim laid on the Company seat at Calcutta (加爾各答) for" }
+	LOG_exit = { sys = QING  fn = "QING_india_claim_bengal"  result = OK }
+}
+
+# ======================================================================
+# QING_india_close_campaign — the Company is broken and Hindustan won: lift the company-
+# pressure modifier from every province still carrying it. Scope: COUNTRY (CHI). Called by
+# the capstone task.
+# ======================================================================
+QING_india_close_campaign = {
+	LOG_enter = { sys = QING  fn = "QING_india_close_campaign" }
+	every_province = {
+		limit = { has_province_modifier = qing_india_company_pressure }
+		remove_province_modifier = qing_india_company_pressure
+	}
+	LOG_line = { sys = QING  msg = "India: the Company broken, the pressure on the Bengal factories lifted for" }
+	LOG_exit = { sys = QING  fn = "QING_india_close_campaign"  result = OK }
+}
