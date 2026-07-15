@@ -1,5 +1,9 @@
 # Pending Qing Mission Trees
 
+**ALL IMPLEMENTED (2026-07-15, branch `merge-overnight`, commit 16ca8e1e3).** #447/#448/#449/#451 built,
+code-reviewed (no critical/medium issues), committed and pushed. See `overnight_missions.md` for the full
+per-tree decision log. Kept below for reference; nothing here remains outstanding except the two Dropped ideas.
+
 Requested but not yet implemented. Recorded on the `1763_bookmark` branch.
 
 ## #447 — Qing Opens Japan a Century Early
