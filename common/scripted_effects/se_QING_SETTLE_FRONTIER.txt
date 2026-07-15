@@ -1,0 +1,82 @@
+########################################################################
+# se_QING_SETTLE_FRONTIER.txt — the scripted half of SETTLE THE NOMADS
+# (定牧墾邊, the Qing consolidation of the Mongol and Manchurian frontier),
+# #451.
+#
+# The mission tree (common/missions/qing_settle_frontier_missions.txt) makes the
+# PLAYER do the real work: task goals gate on the Qing actually HOLDING ground in
+# Mongolia / Liaoning / the Far East (reached by integrating the autonomous military
+# governorships — ULS/KBD/MGA in the Mongol lands, MNC/MKD/HLJ in Manchuria — that
+# hold those regions as CHI subjects in 1763), and on the Tannu tributary tie. This
+# file scripts only what the player cannot express through a control goal:
+#
+#   • THE RECLAMATION (墾荒) — the settlement of the steppe and the taiga: military-
+#     agricultural colonies (屯田), fixed pasture and broken sod. Stamped as the
+#     qing_frontier_reclamation province modifier on the Qing-held frontier provinces
+#     when a settlement task completes (a food + tax texture). Finite duration, so it
+#     lapses as the colonists take root; re-stampable, guarded against double-stamp.
+#   • EMBRACE TANNU — take TNN (Tannu Tuva / Uriankhai) firmly under the wing as a
+#     sinosphere tributary if it has slipped the leash. FUNC_make_subject, guarded.
+#
+# PREFIX: QING_settle_ / sys = QING. CHI-only, driven by the mission tasks (no pulse).
+# Proven idioms only: add_province_modifier { duration } (self-expiring, se_QING_BURMA /
+# se_QING_OPEN_JAPAN), FUNC_make_subject (se_FUNC / himalaya_seasia tree), guarded if.
+#
+# NO BOM (common/scripted_effects/*.txt convention here).
+#
+#   ROOT / this = the Qing country (CHI, the player).
+########################################################################
+
+# ======================================================================
+# QING_settle_reclaim_mongolia — lay the reclamation texture (military-agricultural colonies)
+# over the Qing-held ground of the Mongol lands. Scope: COUNTRY (CHI). Stamps every province
+# the Qing OWNS in the Mongolia region (guarded against double-stamp); finite duration so it
+# lapses as the colonists take root (the burma-miasma self-expiring idiom). Called by the
+# Mongol-settlement task.
+# ======================================================================
+QING_settle_reclaim_mongolia = {
+	LOG_enter = { sys = QING  fn = "QING_settle_reclaim_mongolia" }
+	every_owned_province = {
+		limit = {
+			is_in_region = Mongolia
+			NOT = { has_province_modifier = qing_frontier_reclamation }
+		}
+		add_province_modifier = { name = qing_frontier_reclamation  duration = 3650 }
+	}
+	LOG_line = { sys = QING  msg = "settle-frontier: reclamation (墾荒) laid on the Mongol lands for" }
+	LOG_exit = { sys = QING  fn = "QING_settle_reclaim_mongolia"  result = OK }
+}
+
+# ======================================================================
+# QING_settle_reclaim_manchuria — lay the reclamation texture over the Qing-held ground of the
+# Manchurian homeland (Liaoning + the Far East). Scope: COUNTRY (CHI). Guarded, self-expiring.
+# Called by the Manchurian-settlement task.
+# ======================================================================
+QING_settle_reclaim_manchuria = {
+	LOG_enter = { sys = QING  fn = "QING_settle_reclaim_manchuria" }
+	every_owned_province = {
+		limit = {
+			OR = { is_in_region = Liaoning  is_in_region = Far_East }
+			NOT = { has_province_modifier = qing_frontier_reclamation }
+		}
+		add_province_modifier = { name = qing_frontier_reclamation  duration = 3650 }
+	}
+	LOG_line = { sys = QING  msg = "settle-frontier: reclamation (墾荒) laid on the Manchurian homeland for" }
+	LOG_exit = { sys = QING  fn = "QING_settle_reclaim_manchuria"  result = OK }
+}
+
+# ======================================================================
+# QING_settle_embrace_tannu — take Tannu Tuva (TNN, the Uriankhai) firmly under the wing as a
+# sinosphere tributary if it has slipped the leash. Scope: COUNTRY (CHI). TNN starts a CHI
+# tributary in 1763, so this is only a safety net (guarded on NOT-already-subject) for a game
+# in which it has broken away. The make-subject-by-fiat idiom (FUNC_make_subject).
+# ======================================================================
+QING_settle_embrace_tannu = {
+	LOG_enter = { sys = QING  fn = "QING_settle_embrace_tannu" }
+	if = {
+		limit = { exists = c:TNN  NOT = { c:TNN = { is_subject_of = ROOT } } }
+		FUNC_make_subject = { overlord = ROOT  target = c:TNN  type = sinosphere_tributary }
+		LOG_line = { sys = QING  msg = "settle-frontier: Tannu Tuva (唐努烏梁海) brought back under the wing for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_settle_embrace_tannu"  result = OK }
+}

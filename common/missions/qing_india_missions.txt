@@ -1,0 +1,251 @@
+########################################################################
+# qing_india_missions.txt — CONTEST THE COMPANY (逐夷復印), #449.
+#
+# The Qing bid to exploit the chaos of eighteenth-century India and contest the
+# British East India Company (EIC) for the paramountcy of Hindustan — the Company
+# broken in Bengal, the Nawab and the Mughal brought under the wing of the Son of
+# Heaven, and the western sea-merchants driven back from the subcontinent.
+#
+# The 1763 board (setup/main/00_default.txt): the EIC is a megacorporation seated at
+# Calcutta (6219), a client_colony of Britain (GBR), holding a web of Indian client
+# states (MUG the Mughal emperor, AWA Awadh, HYD Hyderabad, and more). BNG — the Nawab
+# of Bengal (Mir Qasim), seated at Murshidabad — is SOVEREIGN and at war with the
+# Company in 1763 (the road to Buxar, 1764). So the tree has a natural anti-Company
+# ally (the Nawab) and a Company puppet to liberate (the Mughal).
+#
+# As with the Burma (#421) and open-Japan (#447) trees, the PLAYER does the real work:
+# the task goals gate on the Qing genuinely CONTROLLING the ground (the Company seat at
+# Calcutta) or bringing the Indian powers under the wing (is_subject_of). What is scripted
+# (se_QING_INDIA.txt) is only the texture — the pressure the Qing descent lays on the
+# Company's Bengal factories, the claim that lets control convert to cession, and the
+# tributary embrace of the Nawab and the Mughal (FUNC_make_subject).
+#
+# It FORKS after the shared opening (the descent on Hindustan):
+#   ARC W — 撫孟加拉 THE NAWAB'S CAUSE: make common cause with the Nawab of Bengal (BNG)
+#     against the Company, take him under the wing, then storm the Company seat at
+#     Calcutta (6219) itself — the Company broken in its Bengal stronghold.
+#   ARC E — 復蒙兀兒 THE MUGHAL RESTORED: free the Timurid emperor (MUG) from his Company
+#     tutelage and set him under the Son of Heaven, then hold ground in the Gangetic
+#     heartland — the paramountcy of Hindustan claimed.
+#
+# CAPSTONE — 逐夷復印 THE COMPANY EXPELLED: the Company broken at Calcutta and the two
+# thrones of Hindustan (Bengal and the Mughal) under the wing; the lasting
+# qing_india_paramountcy dominion modifier sealed.
+#
+# Gating: CHI-only, player-only (ai_chance factor 0). Requires the Company (EIC) to exist.
+# Tasks cost treasury / political influence and gate on the advancing control + the
+# tributary ties, so the tree cannot resolve in the Company's absence. Icons reuse stock
+# test1/2/3 (the whole Qing suite's placeholder convention).
+#
+# Sources: C.A. Bayly, Indian Society and the Making of the British Empire (1988); P.J.
+#   Marshall, Bengal: The British Bridgehead (1987); Peter Marshall, The Making and Unmaking
+#   of Empires: Britain, India, and America c.1750-1783 (2005); William Dalrymple, The
+#   Anarchy: The East India Company, Corporate Violence, and the Pillage of an Empire (2019).
+########################################################################
+
+qing_india_mission = {
+	icon = test3
+	header = mission_image_test
+
+	repeatable = no
+
+	chance = { }
+	ai_chance = { factor = 0 }   # player-only
+
+	potential = {
+		tag = CHI
+		is_ai = no
+		# there must be a Company to contest.
+		exists = c:EIC
+	}
+
+	abort = {
+		NOT = { tag = CHI }
+	}
+
+	on_start = {
+		LOG_line = { sys = QING  msg = "MISSION contest the Company (逐夷復印) started for" }
+	}
+
+	on_completion = {
+		LOG_line = { sys = QING  msg = "MISSION contest the Company COMPLETED for" }
+	}
+
+	# ==================================================================
+	# ROOT — THE DESCENT ON HINDUSTAN (南征印度). Commit the frontier armies and the treasury
+	# to the long march south through the passes into the plains of Hindustan — the point from
+	# which the empire contests the western sea-merchants for the subcontinent. The descent
+	# lays its pressure on the Company's Bengal factories.
+	# ==================================================================
+	qing_india_descent = {
+		icon = test1
+		allow = {
+			treasury >= 150
+			political_influence >= 30
+		}
+		on_start = {
+			add_treasury = -150
+			add_political_influence = -30
+		}
+		on_completion = {
+			custom_tooltip = qing_india_descent_tt
+			# the descent bears down on the Company's Bengal factories (the pressure texture).
+			QING_india_open_demand = yes
+			current_ruler = { add_popularity = 10 }
+			LOG_line = { sys = QING  msg = "MISSION task India descent on Hindustan for" }
+		}
+	}
+
+	# ==================================================================
+	# ARC W — 撫孟加拉 THE NAWAB'S CAUSE. Make common cause with the Nawab of Bengal (BNG),
+	# sovereign and at war with the Company in 1763. Take him under the Qing wing as a
+	# tributary — the anti-Company ally in the field. A claim on the Company seat is granted
+	# so the drive on Calcutta has a war-goal.
+	# ==================================================================
+	qing_india_nawab = {
+		icon = test2
+		requires = { qing_india_descent }
+		allow = {
+			political_influence >= 30
+			custom_tooltip = {
+				text = qing_india_needs_nawab_tt
+				# the Nawab must be on the map to be reached.
+				exists = c:BNG
+			}
+		}
+		on_start = {
+			add_political_influence = -30
+		}
+		on_completion = {
+			custom_tooltip = qing_india_nawab_tt
+			# take the Nawab under the wing (the make-subject-by-fiat idiom; guarded), and
+			# grant a claim on the Company seat at Calcutta so the drive has a war-goal.
+			QING_india_embrace_nawab = yes
+			QING_india_claim_bengal = yes
+			current_ruler = { add_popularity = 15 }
+			LOG_line = { sys = QING  msg = "MISSION task India Nawab of Bengal embraced for" }
+		}
+	}
+
+	# ==================================================================
+	# ARC W (cont.) — THE FALL OF CALCUTTA (克加爾各答). Storm the Company's Bengal stronghold:
+	# take and hold Fort William at Calcutta (6219) itself. With its seat lost, the Company's
+	# grip on Bengal is broken.
+	# ==================================================================
+	qing_india_calcutta = {
+		icon = test3
+		requires = { qing_india_nawab }
+		allow = {
+			treasury >= 100
+			custom_tooltip = {
+				text = qing_india_needs_calcutta_tt
+				# the Company seat under Qing control.
+				exists = p:6219
+				p:6219 = { controller = ROOT }
+			}
+		}
+		on_start = {
+			add_treasury = -100
+		}
+		on_completion = {
+			custom_tooltip = qing_india_calcutta_tt
+			if = { limit = { exists = p:6219  NOT = { owns = 6219 } }  add_claim = p:6219 }
+			current_ruler = { add_popularity = 20 }
+			add_stability = 1
+			LOG_line = { sys = QING  msg = "MISSION task India Calcutta taken for" }
+		}
+	}
+
+	# ==================================================================
+	# ARC E — 復蒙兀兒 THE MUGHAL RESTORED. Reach past the Company to the Timurid emperor (MUG),
+	# a Company client_state in 1763. Free him from his tutelage and set him under the Son of
+	# Heaven as a tributary — the legitimist crown of Hindustan turned against the Company.
+	# ==================================================================
+	qing_india_mughal = {
+		icon = test2
+		requires = { qing_india_descent }
+		allow = {
+			political_influence >= 30
+			custom_tooltip = {
+				text = qing_india_needs_mughal_tt
+				# the Mughal must be on the map to be reached.
+				exists = c:MUG
+			}
+		}
+		on_start = {
+			add_political_influence = -30
+		}
+		on_completion = {
+			custom_tooltip = qing_india_mughal_tt
+			# free the Mughal from the Company and take him under the wing (guarded).
+			QING_india_free_mughal = yes
+			current_ruler = { add_popularity = 15 }
+			LOG_line = { sys = QING  msg = "MISSION task India Mughal freed and embraced for" }
+		}
+	}
+
+	# ==================================================================
+	# ARC E (cont.) — THE GANGETIC HEARTLAND (據恆河). Secure the plains: take and hold ground
+	# in the Gangetic heartland (the East_India region — Bihar and the doab), the granary of
+	# Hindustan, so the Qing paramountcy rests on real soil and not on tribute alone.
+	# ==================================================================
+	qing_india_heartland = {
+		icon = test3
+		requires = { qing_india_mughal }
+		allow = {
+			custom_tooltip = {
+				text = qing_india_needs_heartland_tt
+				# ground held in the Gangetic heartland — by the Qing directly, or by the freed
+				# Mughal tributary (either roots the paramountcy on real soil).
+				OR = {
+					any_owned_province = { count >= 2  is_in_region = East_India }
+					AND = {
+						exists = c:MUG
+						c:MUG = { is_subject_of = ROOT }
+						c:MUG = { any_owned_province = { count >= 1  is_in_region = East_India } }
+					}
+				}
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_india_heartland_tt
+			current_ruler = { add_popularity = 15 }
+			add_stability = 1
+			LOG_line = { sys = QING  msg = "MISSION task India Gangetic heartland held for" }
+		}
+	}
+
+	# ==================================================================
+	# CAPSTONE — 逐夷復印 THE COMPANY EXPELLED. The Company broken at Calcutta (its seat held)
+	# and the two thrones of Hindustan under the wing — the Nawab of Bengal and the Timurid
+	# emperor both Qing tributaries. The lasting qing_india_paramountcy dominion modifier is
+	# sealed and the pressure on the factories lifts: the western sea-merchants driven from
+	# the subcontinent, the paramountcy of Hindustan won for the Son of Heaven.
+	# ==================================================================
+	qing_india_capstone = {
+		icon = test1
+		requires = { qing_india_calcutta  qing_india_heartland }
+		allow = {
+			custom_tooltip = {
+				text = qing_india_needs_paramountcy_tt
+				# the Company seat held AND both Indian thrones mastered — each either held under
+				# the wing as a tributary OR absorbed into the empire outright (annexed out of
+				# existence), so a player who integrates a throne rather than keeping it a subject
+				# does not strand the completed tree.
+				exists = p:6219
+				p:6219 = { controller = ROOT }
+				OR = { NOT = { exists = c:BNG }  c:BNG = { is_subject_of = ROOT } }
+				OR = { NOT = { exists = c:MUG }  c:MUG = { is_subject_of = ROOT } }
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_india_capstone_tt
+			add_country_modifier = { name = qing_india_paramountcy  duration = -1 }
+			# the Company is broken — the pressure on the Bengal factories lifts.
+			QING_india_close_campaign = yes
+			current_ruler = { add_popularity = 40 }
+			add_stability = 1
+			LOG_line = { sys = QING  msg = "MISSION contest the Company CAPSTONE (逐夷復印) for" }
+		}
+	}
+}

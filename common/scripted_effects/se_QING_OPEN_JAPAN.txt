@@ -1,0 +1,104 @@
+########################################################################
+# se_QING_OPEN_JAPAN.txt — the scripted half of OPEN THE CLOSED COUNTRY
+# (叩關破鎖國, the anachronistic Qing naval opening of Sakoku Japan), #447.
+#
+# The mission tree (common/missions/qing_open_japan_missions.txt) makes the PLAYER
+# do the real work: its task goals gate on the Qing actually CONTROLLING the ground
+# (Kyushu, the Kanto/Edo heartland, Ezo) and on the Ainu tie, so the coercion is his
+# to do on the map. This file scripts only what the player cannot express through a
+# control goal:
+#
+#   • THE COASTAL PRESSURE (海壓) — the great treasure fleet standing off the closed
+#     coast bears down on the seaward domains. Stamped as the qing_japan_coastal_pressure
+#     province modifier on the shogunate's port heartland when the demand is pressed
+#     (a defensive-sapping blockade texture). Finite duration, self-expiring; lifted at
+#     the capstone.
+#   • THE HEARTLAND CLAIM — a claim on Edo (3684) so the southern drive has a war-goal
+#     and control can convert to cession.
+#   • EMBRACE THE AINU — take AIN under the Qing wing as a sinosphere tributary, the
+#     make-subject-by-fiat idiom the southern-frontier tree uses (FUNC_make_subject),
+#     guarded so an already-bound / absent Ainu is a no-op.
+#
+# PREFIX: QING_openjapan_ / sys = QING. CHI-only, driven by the mission tasks (no pulse).
+# Proven idioms only: add_province_modifier { duration } (self-expiring, se_QING_BURMA
+# QING_burma_stamp_miasma), FUNC_make_subject (se_FUNC / himalaya_seasia tree),
+# add/remove_country_modifier, add_claim guarded on NOT owns.
+#
+# NO BOM (common/scripted_effects/*.txt convention here).
+#
+#   ROOT / this = the Qing country (CHI, the player).
+########################################################################
+
+# The shogunate's seaward heartland the fleet bears down on — the four-gates ports and
+# the Kanto/Edo core (TKG's own 1763 ground, 00_default.txt): 3684 Edo (capital) plus the
+# principal port approaches. Kept as an explicit list so the pressure texture and the
+# goal checks describe the same coast.
+
+# ======================================================================
+# QING_openjapan_open_demand — the fleet arrives and presses the demand: lay the coastal-
+# pressure modifier over the shogunate's port heartland. Scope: COUNTRY (CHI). Each province
+# guarded on existence; finite duration (5 years) so it self-expires as the campaign season
+# turns (the burma-miasma self-expiring idiom). Called by the opening task.
+# ======================================================================
+QING_openjapan_open_demand = {
+	LOG_enter = { sys = QING  fn = "QING_openjapan_open_demand" }
+	if = { limit = { exists = p:3684  NOT = { p:3684 = { has_province_modifier = qing_japan_coastal_pressure } } }  p:3684 = { add_province_modifier = { name = qing_japan_coastal_pressure  duration = 1825 } } }
+	# the coastal-pressure texture also weighs on any Kyushu / Kanto port the shogunate holds:
+	# stamp every Tokugawa-controlled port in the seaward regions (self-expiring, guarded).
+	every_province = {
+		limit = {
+			OR = { is_in_region = Kyushu  is_in_region = Honshu }
+			is_port = yes
+			controller = { OR = { tag = TKG  is_subject_of = c:TKG } }
+			NOT = { has_province_modifier = qing_japan_coastal_pressure }
+		}
+		add_province_modifier = { name = qing_japan_coastal_pressure  duration = 1825 }
+	}
+	LOG_line = { sys = QING  msg = "open-Japan: the treasure fleet's coastal pressure (海壓) laid on the shogunate's ports for" }
+	LOG_exit = { sys = QING  fn = "QING_openjapan_open_demand"  result = OK }
+}
+
+# ======================================================================
+# QING_openjapan_claim_heartland — grant a claim on the shogun's seat (Edo, 3684) once the
+# southern gate is held, so the drive on the heartland has a war-goal and control can convert
+# to cession. Scope: COUNTRY (CHI). Guarded so a province the Qing already owns is skipped.
+# ======================================================================
+QING_openjapan_claim_heartland = {
+	LOG_enter = { sys = QING  fn = "QING_openjapan_claim_heartland" }
+	if = { limit = { exists = p:3684  NOT = { owns = 3684 } }  add_claim = p:3684 }
+	LOG_line = { sys = QING  msg = "open-Japan: a claim laid on the shogun's seat (江戶) for" }
+	LOG_exit = { sys = QING  fn = "QING_openjapan_claim_heartland"  result = OK }
+}
+
+# ======================================================================
+# QING_openjapan_embrace_ainu — take the Ainu (AIN) of Ezo under the Qing wing as a
+# sinosphere tributary. Scope: COUNTRY (CHI). The make-subject-by-fiat idiom the southern-
+# frontier tree uses (FUNC_make_subject); guarded so an absent or already-bound Ainu is a
+# no-op (no double-subjugation).
+# ======================================================================
+QING_openjapan_embrace_ainu = {
+	LOG_enter = { sys = QING  fn = "QING_openjapan_embrace_ainu" }
+	if = {
+		limit = {
+			exists = c:AIN
+			NOT = { c:AIN = { is_subject_of = ROOT } }
+		}
+		FUNC_make_subject = { overlord = ROOT  target = c:AIN  type = sinosphere_tributary }
+		LOG_line = { sys = QING  msg = "open-Japan: the Ainu (蝦夷) taken under the wing as a tributary for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_openjapan_embrace_ainu"  result = OK }
+}
+
+# ======================================================================
+# QING_openjapan_close_campaign — the country is opened: lift the coastal-pressure modifier
+# from every province still carrying it. Scope: COUNTRY (CHI). Called by the capstone task.
+# ======================================================================
+QING_openjapan_close_campaign = {
+	LOG_enter = { sys = QING  fn = "QING_openjapan_close_campaign" }
+	every_province = {
+		limit = { has_province_modifier = qing_japan_coastal_pressure }
+		remove_province_modifier = qing_japan_coastal_pressure
+	}
+	LOG_line = { sys = QING  msg = "open-Japan: the country opened, the fleet's coastal pressure lifted for" }
+	LOG_exit = { sys = QING  fn = "QING_openjapan_close_campaign"  result = OK }
+}
