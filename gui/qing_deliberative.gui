@@ -1,0 +1,313 @@
+########################################################################
+# qing_deliberative.gui — the Deliberative Council panel window (議政王大臣會議) — #35.
+#
+# A Grand-Council-clone dashboard for the Manchu banner aristocracy's collective-rule organ,
+# surfaced ONLY while a Grand Regent (攝政) sits (the Dorgon/Oboi regency pattern). Surfaces the
+# eight banner lords (qing_delib_council) as a scrolling CHARACTER roster — each with his banner
+# (qing_delib_banner 1..8, rendered as the banner name) and court backing (qing_delib_backing) —
+# the council cohesion meter (qing_delib_cohesion), and the three levers (大集議 convene,
+# 優賞旗主 reward, 裁抑跋扈 curb), each firing a proven se_QING_DELIBERATIVE effect via a hidden event.
+#
+# Opened by qing_delib_open_panel_button (QING_deliberative_panel.txt), wired to a button under
+# the Grand Regent card in gui/government_view.gui. Mirrors gui/qing_princes.gui.
+#
+# TAB indentation throughout (Paradox house style for .gui files).
+########################################################################
+
+base_window = {
+	name = "qing_deliberative_panel"
+	size = { 520 720 }
+	allow_outside = yes
+	movable = yes
+
+	using = main_window_template
+
+	state = {
+		name = _show
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+	state = {
+		name = _hide
+		start_sound = { soundeffect = "event:/SFX/UI/Generic/2.0/sfx_ui_window_tab_close" }
+	}
+
+	flowcontainer = {
+		direction = vertical
+
+		# HEADER
+		widget = {
+			size = { 520 48 }
+			using = MainWindowHeaderBox
+			blockoverride "Title_text" { text = "QING_DELIB_PANEL_TITLE" }
+			blockoverride "FlagOrIcon" {
+				icon = {
+					texture = "gfx/interface/base_parts/yellow_button_color_200fs.dds"
+					framesize = { 100 100 }
+					frame = 6
+					position = { -2 -2 }
+					size = { 32 32 }
+					modify_texture = {
+						texture = "gfx/interface/icons/menu_buttons/menu_military.dds"
+						blend_mode = alphamultiply
+					}
+				}
+			}
+			blockoverride "White_buttons" {
+				button_close = {
+					onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets qing_deliberative_panel')]"
+					tooltip = "CLOSE"
+					shortcut = "close_window"
+				}
+			}
+		}
+
+		# BODY
+		margin_widget = {
+			size = { 520 660 }
+			margin = { 10 10 }
+
+			scrollarea = {
+				size = { 500 640 }
+				scrollbarpolicy_horizontal = always_off
+				scrollbar_vertical = { using = VerticalScrollBar }
+				using = VerticalScrollAreaCutOff
+				scrollwidget = {
+					flowcontainer = {
+						direction = vertical
+						spacing = 12
+
+						# DESCRIPTION (wraps)
+						textbox = {
+							size = { 480 320 }
+							multiline = yes
+							using = BaseFontM
+							using = Default_FontColor
+							text = "QING_DELIB_PANEL_DESC"
+						}
+
+						# --- COUNCIL STANDING SECTION -----------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_DELIB_STANDING_TITLE"
+							}
+
+							# number of seated banner lords (qing_delib_count)
+							flowcontainer = {
+								spacing = 8
+								textbox = {
+									size = { 300 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "QING_DELIB_COUNT_LABEL"
+									tooltip = "QING_DELIB_COUNT_TT"
+								}
+								textbox = {
+									size = { 60 20 }
+									using = BaseFontS
+									using = Default_FontColor
+									text = "[Player.MakeScope.GetVariable('qing_delib_count').GetValue|0]"
+								}
+							}
+
+							# council cohesion (qing_delib_cohesion) — the mean backing, folds into
+							# the Eight Banners' condition (qing_banner_decay).
+							flowcontainer = {
+								direction = vertical
+								spacing = 4
+								flowcontainer = {
+									spacing = 8
+									textbox = {
+										size = { 300 20 }
+										using = BaseFontS
+										using = Default_FontColor
+										text = "QING_DELIB_COHESION_LABEL"
+										tooltip = "QING_DELIB_COHESION_TT"
+									}
+									textbox = {
+										size = { 60 20 }
+										using = BaseFontS
+										using = Default_FontColor
+										text = "[Player.MakeScope.GetVariable('qing_delib_cohesion').GetValue|0]"
+									}
+								}
+								progressbar = {
+									using = progressbar_flat_green
+									size = { 300 12 }
+									value = "[FixedPointToFloat( Multiply_CFixedPoint( Player.MakeScope.GetVariable('qing_delib_cohesion').GetValue, '(CFixedPoint)0.01' ) )]"
+								}
+							}
+						}
+
+						# --- ACTION LEVERS ----------------------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_DELIB_ADMIN_TITLE"
+							}
+
+							# convene the grand deliberation (大集議)
+							text_button_square_highlighted = {
+								size = { 340 28 }
+								datacontext = "[GetScriptedGui('qing_delib_convene')]"
+								blockoverride "Center_text" { text = "QING_DELIB_CONVENE_BTN"  max_width = 320 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_DELIB_CONVENE_TT"
+							}
+							# reward a banner lord (優賞旗主)
+							text_button_square_highlighted = {
+								size = { 340 28 }
+								datacontext = "[GetScriptedGui('qing_delib_reward')]"
+								blockoverride "Center_text" { text = "QING_DELIB_REWARD_BTN"  max_width = 320 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_DELIB_REWARD_TT"
+							}
+							# curb an over-mighty banner lord (裁抑跋扈)
+							text_button_square_highlighted = {
+								size = { 340 28 }
+								datacontext = "[GetScriptedGui('qing_delib_curb')]"
+								blockoverride "Center_text" { text = "QING_DELIB_CURB_BTN"  max_width = 320 }
+								blockoverride "On_click" {
+									enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+								}
+								tooltip = "QING_DELIB_CURB_TT"
+							}
+						}
+
+						# --- BANNER LORD ROSTER -----------------------------------
+						flowcontainer = {
+							direction = vertical
+							spacing = 6
+							layoutpolicy_horizontal = expanding
+							using = background_widget
+							margin = { 8 8 }
+
+							textbox = {
+								size = { 460 28 }
+								using = BaseFontM
+								using = Default_FontColor
+								text = "QING_DELIB_ROSTER_TITLE"
+							}
+
+							# empty note when no lords are seated
+							textbox = {
+								visible = "[IsDataModelEmpty( Player.MakeScope.GetList('qing_delib_council') )]"
+								size = { 460 46 }
+								multiline = yes
+								using = BaseFontS
+								using = Default_FontColor
+								text = "QING_DELIB_ROSTER_EMPTY"
+							}
+
+							# the roster (dynamicgridbox over the council list — Scope.GetCharacter)
+							dynamicgridbox = {
+								datamodel = "[Player.MakeScope.GetList('qing_delib_council')]"
+								item = {
+									widget = {
+										size = { 468 92 }
+										margin = { 2 3 }
+										datacontext = "[Scope.GetCharacter]"
+										using = background_widget
+										flowcontainer = {
+											spacing = 8
+											margin = { 8 6 }
+											cpt_button = { size = { 46 68 } }
+											flowcontainer = {
+												direction = vertical
+												spacing = 3
+												# name + banner name on one row
+												flowcontainer = {
+													spacing = 8
+													tag = { text = "[Character.GetName]"  maximumsize = { 240 24 }  using = BaseFontM  using = Default_FontColor }
+													# banner name: one of eight labels, visible when qing_delib_banner == n
+													textbox = { visible = "[EqualTo_int32( Character.MakeScope.GetVariable('qing_delib_banner').GetValue, '(int32)1' )]"  size = { 190 24 }  using = BaseFontS  using = Default_FontColor  text = "QING_DELIB_BANNER_1" }
+													textbox = { visible = "[EqualTo_int32( Character.MakeScope.GetVariable('qing_delib_banner').GetValue, '(int32)2' )]"  size = { 190 24 }  using = BaseFontS  using = Default_FontColor  text = "QING_DELIB_BANNER_2" }
+													textbox = { visible = "[EqualTo_int32( Character.MakeScope.GetVariable('qing_delib_banner').GetValue, '(int32)3' )]"  size = { 190 24 }  using = BaseFontS  using = Default_FontColor  text = "QING_DELIB_BANNER_3" }
+													textbox = { visible = "[EqualTo_int32( Character.MakeScope.GetVariable('qing_delib_banner').GetValue, '(int32)4' )]"  size = { 190 24 }  using = BaseFontS  using = Default_FontColor  text = "QING_DELIB_BANNER_4" }
+													textbox = { visible = "[EqualTo_int32( Character.MakeScope.GetVariable('qing_delib_banner').GetValue, '(int32)5' )]"  size = { 190 24 }  using = BaseFontS  using = Default_FontColor  text = "QING_DELIB_BANNER_5" }
+													textbox = { visible = "[EqualTo_int32( Character.MakeScope.GetVariable('qing_delib_banner').GetValue, '(int32)6' )]"  size = { 190 24 }  using = BaseFontS  using = Default_FontColor  text = "QING_DELIB_BANNER_6" }
+													textbox = { visible = "[EqualTo_int32( Character.MakeScope.GetVariable('qing_delib_banner').GetValue, '(int32)7' )]"  size = { 190 24 }  using = BaseFontS  using = Default_FontColor  text = "QING_DELIB_BANNER_7" }
+													textbox = { visible = "[EqualTo_int32( Character.MakeScope.GetVariable('qing_delib_banner').GetValue, '(int32)8' )]"  size = { 190 24 }  using = BaseFontS  using = Default_FontColor  text = "QING_DELIB_BANNER_8" }
+												}
+												flowcontainer = {
+													spacing = 10
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_martial }
+														blockoverride "Text" { text = "[Character.GetMartial]" }
+														tooltip = "[Character.GetMartialToolTip]"
+													}
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_civic }
+														blockoverride "Text" { text = "[Character.GetFinesse]" }
+														tooltip = "[Character.GetFinesseToolTip]"
+													}
+													icon_and_text = {
+														size = { 66 24 }
+														blockoverride "Icon" { using = icon_oratory }
+														blockoverride "Text" { text = "[Character.GetCharisma]" }
+														tooltip = "[Character.GetCharismaToolTip]"
+													}
+												}
+												# court backing (qing_delib_backing) from the character's own scope
+												flowcontainer = {
+													direction = vertical
+													spacing = 4
+													flowcontainer = {
+														spacing = 8
+														textbox = {
+															size = { 300 20 }
+															using = BaseFontS
+															using = Default_FontColor
+															text = "QING_DELIB_BACKING_LABEL"
+															tooltip = "QING_DELIB_BACKING_TT"
+														}
+														textbox = {
+															size = { 60 20 }
+															using = BaseFontS
+															using = Default_FontColor
+															text = "[Character.MakeScope.GetVariable('qing_delib_backing').GetValue|0]"
+														}
+													}
+													progressbar = {
+														using = progressbar_flat_green
+														size = { 300 12 }
+														value = "[FixedPointToFloat( Multiply_CFixedPoint( Character.MakeScope.GetVariable('qing_delib_backing').GetValue, '(CFixedPoint)0.01' ) )]"
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

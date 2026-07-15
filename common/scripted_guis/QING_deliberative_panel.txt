@@ -1,0 +1,115 @@
+﻿########################################################################
+# QING_deliberative_panel.txt — scripted GUIs for the DELIBERATIVE COUNCIL (議政王大臣會議) — #35.
+#
+# The council of the Manchu banner aristocracy — eight banner lords (one per banner), the
+# HEREDITARY counterweight to the keju civil service (#34). Historically paramount only during
+# a REGENCY (the Dorgon/Oboi minorities), so surfaced ONLY while a Grand Regent (攝政) sits:
+# qing_delib_open_panel_button.is_shown gates on qing_office_regent_holder, and the button in
+# gui/government_view.gui sits directly under the Grand Regent card.
+#
+# A Grand-Council-clone L4 window (gui/qing_deliberative.gui) surfacing the eight banner lords
+# (qing_delib_council) as a CHARACTER roster, each with his court backing (qing_delib_backing)
+# and banner (qing_delib_banner 1..8), plus the council cohesion meter (qing_delib_cohesion) and
+# three se_QING_DELIBERATIVE levers:
+#   • CONVENE THE GRAND DELIBERATION (大集議) — QING_delib_convene   (1-year cooldown)
+#   • REWARD A BANNER LORD (優賞旗主)          — QING_delib_reward    (needs a seated lord; £40)
+#   • CURB AN OVER-MIGHTY LORD (裁抑跋扈)      — QING_delib_curb      (gated on a lord backing >= 80)
+#
+# Scoped to the Qing player (ROOT = CHI). AI never evaluates these (ai_is_valid = no). Every
+# button that reaches a sorting iterator / create_character routes through a hidden event
+# (qing_delib.1/.2/.3/.4) per the scripted_gui compile-recursion crash class. Mirrors
+# QING_princes_panel.txt. Prefix = qing_delib_.
+########################################################################
+
+# ---- OPEN THE DELIBERATIVE COUNCIL PANEL (button in the government view) --------
+# is_shown gates on a SITTING GRAND REGENT — the council is dormant under a reigning adult
+# emperor, so the button only appears during a regency (the user's requirement + the history).
+qing_delib_open_panel_button = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = {
+		tag = CHI
+		has_variable = qing_office_regent_holder
+		var:qing_office_regent_holder = { is_alive = yes  employer = ROOT }
+	}
+	is_valid = { always = yes }
+	effect = {
+		# [compile-recursion crash class] rebuild the roster via the hidden qing_delib.1 event (a
+		# RUNTIME trigger_event, never compile-inlined) — QING_delib_recompute_roster reaches an
+		# ordered_character iterator + create_character, which access-violate the loader if inlined
+		# into a compiled button (same class as the censorate/harem/princes iterators).
+		trigger_event = { id = qing_delib.1 }
+		LOG_line = { sys = QING  msg = "EVENT qing_delib_open_panel_button fired; opening the Deliberative Council panel for" }
+	}
+}
+
+# ---- CONVENE THE GRAND DELIBERATION (大集議) — call the council into formal session. Needs a
+# seated council and no active cooldown (mirror QING_delib_convene's own throttle).
+qing_delib_convene = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		has_variable = qing_office_regent_holder
+		var:qing_office_regent_holder = { is_alive = yes  employer = ROOT }
+		# [#35 review-fix] guard the bare-var read with has_variable first (the princes panel
+		# leads with has_variable = qing_prince_count) — the count is init'd by the .1 open event,
+		# but this makes the gate robust if it ever evaluates before init.
+		has_variable = qing_delib_count
+		var:qing_delib_count >= 1
+		NOT = { has_variable = qing_delib_convened_recently }
+	}
+	effect = {
+		# [compile-recursion crash class] QING_delib_convene → QING_delib_compute_cohesion reaches
+		# every_in_list; route through the hidden qing_delib.2 event to be safe (runtime ref).
+		trigger_event = { id = qing_delib.2 }
+		LOG_line = { sys = QING  msg = "delib panel: 大集議 convened for" }
+	}
+}
+
+# ---- REWARD A BANNER LORD (優賞旗主) — buy the concord of the wavering banner. Needs a seated
+# lord and the treasury to pay (mirror the effect's own £40 draw).
+qing_delib_reward = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		# [#35 review-fix] guard the bare-var read with has_variable first (template parity).
+		has_variable = qing_delib_count
+		var:qing_delib_count >= 1
+		custom_tooltip = {
+			text = qing_delib_needs_treasury_40_tt
+			treasury >= 40
+		}
+	}
+	effect = {
+		# [compile-recursion crash class] QING_delib_reward reaches ordered_in_list/every_in_list.
+		trigger_event = { id = qing_delib.3 }
+		LOG_line = { sys = QING  msg = "delib panel: 優賞旗主 — a banner lord is rewarded for" }
+	}
+}
+
+# ---- CURB AN OVER-MIGHTY BANNER LORD (裁抑跋扈) — cut down an over-backed lord. MIRROR the
+# effect's own guard (a seated lord at backing >= 80), so the button is not a live no-op.
+qing_delib_curb = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		has_variable_list = qing_delib_council
+		any_in_list = { variable = qing_delib_council  var:qing_delib_backing >= 80 }
+	}
+	effect = {
+		# [compile-recursion crash class] QING_delib_curb reaches ordered_in_list.
+		trigger_event = { id = qing_delib.4 }
+		LOG_line = { sys = QING  msg = "delib panel: 裁抑跋扈 — an over-mighty banner lord is curbed for" }
+	}
+}
+
+# ---- CLOSE (button in the panel window) ------------------------------------
+qing_delib_close_panel = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_valid = { always = yes }
+	effect = { }
+}
