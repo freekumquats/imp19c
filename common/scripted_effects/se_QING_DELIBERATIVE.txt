@@ -1,0 +1,379 @@
+########################################################################
+# se_QING_DELIBERATIVE.txt — the DELIBERATIVE COUNCIL (議政王大臣會議) — #35.
+#
+# 議政王大臣會議 (Yizheng Wang Dachen Huiyi, the "Council of Deliberative Princes and
+# Ministers", short form 議政處) — the Manchu banner aristocracy's collective-rule organ.
+# Founded when Nurhaci gave his eight sons command of one banner each (1622) and ordered
+# them to deliberate policy; formalised by Hong Taiji under eight banner commanders (都統).
+# It was the paramount institution during the DORGON (1643-50) and OBOI (1661-69)
+# REGENCIES — when a child emperor sat, the banner princes reasserted collective aristocratic
+# rule over the throne. The Yongzheng Grand Council (軍機處, 1729-33) eclipsed it and it was
+# formally abolished in 1791; in the 1763 present it is a vestigial honour — EXCEPT under a
+# regency, when the old collective organ wakes.
+#
+# So this council is surfaced ONLY WHILE A GRAND REGENT (攝政) SITS (qing_office_regent_holder).
+# It is the aristocratic counterweight to the KEJU civil service (#34): where the examination
+# feeds the civil offices, the Deliberative Council is the HEREDITARY BANNER NOBILITY — eight
+# Manchu lords, one per banner (the upper three 鑲黃/正黃/正白 + lower five 正紅/鑲白/鑲紅/正藍/鑲藍),
+# each martial (a 都統, not an exam laureate) and each carrying his court BACKING. A cohesive,
+# well-rewarded council drills the banners (slows qing_banner_decay) and legitimises the
+# regency; a fractious one lets the banners rot and gnaws at the regent's standing.
+#
+# CHI-only, player-only. The roster rebuild + the three levers all reach an ordered_character /
+# create_character construct, so — per the scripted_gui compile-recursion crash class — every
+# panel button trigger_events a HIDDEN event (qing_delib.1/.2/.3/.4), never calling these
+# iterator effects inline. The quarterly pulse (QING_delib_pulse) is called from QING_GOV_pulse.
+# se_LOG throughout. Prefix = qing_delib_ / QING_delib_.
+########################################################################
+
+# ======================================================================
+# ONE-SHOT INIT — seed the council-wide meters. Scope: COUNTRY (CHI).
+# qing_delib_cohesion (0..100) = the council's collective concord (mean banner-lord backing);
+# starts middling. All idempotent (guarded on has_variable).
+# ======================================================================
+QING_delib_init = {
+	if = { limit = { NOT = { has_variable = qing_delib_cohesion } }  set_variable = { name = qing_delib_cohesion  value = 50 } }
+	if = { limit = { NOT = { has_variable = qing_delib_count } }     set_variable = { name = qing_delib_count      value = 0  } }
+}
+
+# ======================================================================
+# FILL ONE BANNER SEAT — $n$ = the banner index 1..8. If no LIVING court character already
+# holds banner seat $n$ (qing_delib_banner == $n$), fill it: prefer drawing an unassigned
+# Manchu/Mongol banner noble already at court (the ablest, so the great bannermen sit the
+# council), else conjure a fresh banner lord. Either way the seat-holder is stamped with his
+# banner index + an opening court backing. Scope: COUNTRY (CHI). Called 8× from the roster
+# rebuild. Only ever runs inside the hidden qing_delib.1 event (never a compiled button).
+# ======================================================================
+QING_delib_fill_seat = {
+	if = {
+		limit = {
+			NOT = {
+				any_character = {
+					employer = ROOT
+					is_alive = yes
+					has_variable = qing_delib_banner
+					var:qing_delib_banner = $n$
+				}
+			}
+		}
+		# --- seat $n$ is VACANT: fill it (draw an able bannerman, else conjure one) ---
+		if = {
+			# an able Manchu/Mongol bannerman is at court and unassigned — seat HIM (the
+			# hereditary banner nobility, so the pick excludes the ruler/heir, serving
+			# commanders/governors, sitting GC office-holders, posted ambans, and men already
+			# seated on this council).
+			limit = {
+				any_character = {
+					employer = ROOT
+					is_adult = yes
+					is_alive = yes
+					is_ruler = no
+					is_general = no
+					is_admiral = no
+					is_governor = no
+					NOT = { has_variable = qing_delib_banner }
+					NOT = { has_variable = qing_office_held }
+					NOT = { has_variable = qing_amban_marker }
+					NOT = { AND = { exists = ROOT.current_ruler  this = ROOT.current_ruler } }
+					NOT = { AND = { exists = ROOT.primary_heir   this = ROOT.primary_heir } }
+					OR = {
+						culture.culture_group = culture_group:jurchen
+						culture.culture_group = culture_group:mongolic
+					}
+				}
+			}
+			ordered_character = {
+				limit = {
+					employer = ROOT
+					is_adult = yes
+					is_alive = yes
+					is_ruler = no
+					is_general = no
+					is_admiral = no
+					is_governor = no
+					NOT = { has_variable = qing_delib_banner }
+					NOT = { has_variable = qing_office_held }
+					NOT = { has_variable = qing_amban_marker }
+					NOT = { AND = { exists = ROOT.current_ruler  this = ROOT.current_ruler } }
+					NOT = { AND = { exists = ROOT.primary_heir   this = ROOT.primary_heir } }
+					OR = {
+						culture.culture_group = culture_group:jurchen
+						culture.culture_group = culture_group:mongolic
+					}
+				}
+				order_by = combined_stats_council_svalue
+				check_range_bounds = no
+				max = 1
+				save_scope_as = qing_delib_seat_pick
+			}
+			scope:qing_delib_seat_pick = {
+				set_variable = { name = qing_delib_banner  value = $n$ }
+				QING_delib_seed_backing = yes
+			}
+			LOG_line = { sys = QING  msg = "delib: banner seat filled from the court's bannermen for" }
+		}
+		else = {
+			# no free bannerman: conjure a banner lord (a minor court character, adult, Manchu
+			# conquest-elite, martial lean — a 都統, not an exam man; the modifier-free create,
+			# per the #90 boot-crash gotcha). set_as_minor_character in the character scope.
+			create_character = {
+				age = { 40 60 }
+				culture = manchu
+				religion = root.religion
+				add_martial = { 4 7 }
+				add_finesse = { 2 5 }
+				add_charisma = { 2 5 }
+				add_zeal = { 1 4 }
+				save_scope_as = qing_delib_seat_pick
+			}
+			scope:qing_delib_seat_pick = {
+				set_home_country = ROOT
+				set_as_minor_character = THIS
+				set_variable = { name = qing_delib_banner  value = $n$ }
+				QING_delib_seed_backing = yes
+			}
+			LOG_line = { sys = QING  msg = "delib: no free bannerman, a banner lord is raised for" }
+		}
+	}
+}
+
+# ======================================================================
+# SEED A SEAT-HOLDER'S OPENING BACKING — CHARACTER scope. A banner lord opens loyal-ish:
+# base 30 + his combined-stats worth, capped 100. One-shot (guarded). Called from the fill.
+# ======================================================================
+QING_delib_seed_backing = {
+	if = {
+		limit = { NOT = { has_variable = qing_delib_backing } }
+		# [#35 review-fix] ONE set_variable off qing_delib_backing_seed_svalue (combined stats + 30,
+		# clamped 0..100 inside the svalue). The old form set the var then IMMEDIATELY read it back
+		# via change_variable + clamp ifs — fatal for a lord conjured by create_character THIS tick
+		# (the documented keju #26 same-tick read-back flood: change_variable/var: reads on a just-
+		# created character fail and flood the log). The svalue reads only engine stats+traits, which
+		# ARE readable on a fresh character, so this single write is flood-free.
+		set_variable = { name = qing_delib_backing  value = qing_delib_backing_seed_svalue }
+	}
+}
+
+# ======================================================================
+# REBUILD THE ROSTER — fill all eight banner seats (self-heals: a seat whose holder died or
+# was reassigned is refilled), then rebuild the qing_delib_council list the GUI iterates and
+# the qing_delib_count var. Scope: COUNTRY (CHI). Runs ONLY inside qing_delib.1 (hidden event)
+# because QING_delib_fill_seat reaches ordered_character + create_character. Banner order =
+# upper three (1鑲黃 2正黃 3正白) then lower five (4正紅 5鑲白 6鑲紅 7正藍 8鑲藍).
+# ======================================================================
+QING_delib_recompute_roster = {
+	QING_delib_init = yes
+	QING_delib_fill_seat = { n = 1 }
+	QING_delib_fill_seat = { n = 2 }
+	QING_delib_fill_seat = { n = 3 }
+	QING_delib_fill_seat = { n = 4 }
+	QING_delib_fill_seat = { n = 5 }
+	QING_delib_fill_seat = { n = 6 }
+	QING_delib_fill_seat = { n = 7 }
+	QING_delib_fill_seat = { n = 8 }
+	clear_variable_list = qing_delib_council
+	set_variable = { name = qing_delib_count  value = 0 }
+	# [#35 review-fix] rebuild the list from the COMMITTED seat-holders only. A lord conjured by
+	# create_character earlier THIS tick is invisible to this employer scan (fresh creates do not
+	# appear in same-tick any_character/ordered_character scans, the documented keju #26 behavior)
+	# AND his qing_delib_backing var cannot be read back the same tick — so leaving him out here is
+	# both correct and flood-free: he is listed on the NEXT recompute (pulse/open), once committed,
+	# when his backing reads clean. This is why compute_cohesion / the levers never read a fresh
+	# lord's var back. The one-tick roster blip (a seat conjured this tick shows next tick) is
+	# cosmetic and self-heals. order_by = qing_delib_banner keeps the list in banner order.
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			has_variable = qing_delib_banner
+		}
+		order_by = var:qing_delib_banner
+		check_range_bounds = no
+		# ROOT-scope the list write (prev = the seat-holder character), the proven princes idiom.
+		ROOT = {
+			add_to_variable_list = { name = qing_delib_council  target = prev }
+			change_variable = { name = qing_delib_count  add = 1 }
+		}
+	}
+	LOG_line = { sys = QING  msg = "delib: roster rebuilt, seats held =" }
+}
+
+# ======================================================================
+# COMPUTE COHESION — the council's collective concord = the MEAN backing across the seated
+# lords. Written to qing_delib_cohesion on CHI. Scope: COUNTRY (CHI). Uses a running sum over
+# the list (every_in_list) then divides by the count — no sub-iterator ranking. A council of
+# fewer than one seated lord holds cohesion at its current value.
+# ======================================================================
+QING_delib_compute_cohesion = {
+	if = {
+		limit = { has_variable_list = qing_delib_council  var:qing_delib_count >= 1 }
+		set_variable = { name = qing_delib_sum_tmp  value = 0 }
+		every_in_list = {
+			variable = qing_delib_council
+			save_scope_as = qing_delib_scan
+			ROOT = { change_variable = { name = qing_delib_sum_tmp  add = scope:qing_delib_scan.var:qing_delib_backing } }
+		}
+		# mean = sum / count, clamped 0..100 — the proven value-block divide idiom
+		# (se_BALANCE_HISTORY.txt BALHIST_normalise_slot); there is no divide_variable effect.
+		set_variable = {
+			name = qing_delib_cohesion
+			value = {
+				value = var:qing_delib_sum_tmp
+				divide = var:qing_delib_count
+				min = 0
+				max = 100
+			}
+		}
+		remove_variable = qing_delib_sum_tmp
+	}
+}
+
+# ======================================================================
+# THE PULSE — quarterly. ONLY while a Grand Regent sits (the council is dormant under a
+# reigning adult emperor). Rebuild the roster, recompute cohesion, and fold the council into
+# the Eight Banners' condition: a cohesive council (>= 60) DRILLS the banners (eases
+# qing_banner_decay); a fractious one (< 35) lets them rot (worsens it). The nudge is small +
+# BIDIRECTIONAL + bounded (QING_DECLINE_nudge clamps 0..100), so it never ratchets. Scope:
+# COUNTRY (CHI). Called from QING_GOV_pulse. Self-guarded on the regent.
+# ======================================================================
+QING_delib_pulse = {
+	if = {
+		limit = {
+			tag = CHI
+			has_variable = qing_office_regent_holder
+			var:qing_office_regent_holder = { is_alive = yes  employer = ROOT }
+		}
+		LOG_enter = { sys = QING  fn = "QING_delib_pulse" }
+		# the pulse is a PLAIN effect (called from QING_GOV_pulse via on_action), NOT a compiled
+		# scripted_gui button — so the compile-recursion crash class does not apply here and the
+		# recompute (which reaches ordered_character + create_character) is called DIRECTLY, exactly
+		# as QING_princes_pulse calls QING_princes_recompute_roster inline. Only the panel BUTTON
+		# path (qing_delib_open_panel_button) needs the qing_delib.1 event trampoline.
+		QING_delib_recompute_roster = yes
+		QING_delib_compute_cohesion = yes
+		if = {
+			limit = { var:qing_delib_cohesion >= 60 }
+			QING_DECLINE_nudge = { var = qing_banner_decay  amount = -1 }
+			LOG_line = { sys = QING  msg = "delib: a cohesive council drills the banners for" }
+		}
+		else_if = {
+			limit = { var:qing_delib_cohesion < 35 }
+			QING_DECLINE_nudge = { var = qing_banner_decay  amount = 1 }
+			LOG_line = { sys = QING  msg = "delib: a fractious council lets the banners rot for" }
+		}
+		LOG_exit = { sys = QING  fn = "QING_delib_pulse"  result = OK }
+	}
+}
+
+# ======================================================================
+# LEVER — CONVENE THE GRAND DELIBERATION (大集議). The regent calls the council into formal
+# session. A cohesive council (>= 55) endorses the regency (add_legitimacy + add_stability) and
+# resolves to drill the banners (a one-off qing_banner_decay cut); a divided one merely airs its
+# grievances (a token legitimacy bump). Throttled by a 1-year cooldown var so it is a
+# deliberate act, not a spammable tap. Scope: COUNTRY (CHI). Runs inside qing_delib.2.
+# ======================================================================
+QING_delib_convene = {
+	LOG_enter = { sys = QING  fn = "QING_delib_convene" }
+	# [#35 review-fix] rebuild the roster before acting (the princes levers all recompute first),
+	# so a lord who died since the panel was opened is dropped from the list before we average
+	# cohesion / act on it — no stale dead-character ref. Safe here: the lever runs inside the
+	# hidden qing_delib.2 event, not a compiled button, so the iterator/create is not inlined.
+	QING_delib_recompute_roster = yes
+	QING_delib_compute_cohesion = yes
+	if = {
+		limit = { var:qing_delib_cohesion >= 55 }
+		add_legitimacy = 6
+		add_stability = 1
+		QING_DECLINE_nudge = { var = qing_banner_decay  amount = -6 }
+		LOG_line = { sys = QING  msg = "delib: 大集議 — a cohesive council endorses the regency for" }
+	}
+	else = {
+		add_legitimacy = 2
+		LOG_line = { sys = QING  msg = "delib: 大集議 — a divided council airs its grievances for" }
+	}
+	# 1-year cooldown (the expiring-variable idiom; the button mirrors this guard).
+	set_variable = { name = qing_delib_convened_recently  value = 1  days = 365 }
+	LOG_exit = { sys = QING  fn = "QING_delib_convene"  result = OK }
+}
+
+# ======================================================================
+# LEVER — REWARD A BANNER LORD (優賞旗主). Raise the LOWEST-backing seated lord (the weakest
+# link) — the throne buys the concord of a wavering banner. +backing to him, and the treasury
+# pays. Scope: COUNTRY (CHI). Runs inside qing_delib.3. ordered_in_list min-pick (order_by
+# ascending is not a token; we take the max of the NEGATED backing via a scan, mirroring the
+# princes spread bottom-pick — simplest proven form: scan for the current minimum).
+# ======================================================================
+QING_delib_reward = {
+	LOG_enter = { sys = QING  fn = "QING_delib_reward" }
+	# [#35 review-fix] rebuild the roster first (mirrors the princes levers) — drop any lord who
+	# died since the panel opened before we scan the list for the lowest-backed. Runs inside the
+	# hidden qing_delib.3 event, so the iterator/create is not compile-inlined.
+	QING_delib_recompute_roster = yes
+	if = {
+		limit = { has_variable_list = qing_delib_council  var:qing_delib_count >= 1 }
+		# find the lowest-backing lord (seed high, take the running min — the proven bottom-pick).
+		set_variable = { name = qing_delib_low_tmp  value = 101 }
+		every_in_list = {
+			variable = qing_delib_council
+			limit = { var:qing_delib_backing < ROOT.var:qing_delib_low_tmp }
+			save_scope_as = qing_delib_scan
+			ROOT = { set_variable = { name = qing_delib_low_tmp  value = scope:qing_delib_scan.var:qing_delib_backing } }
+		}
+		ordered_in_list = {
+			variable = qing_delib_council
+			order_by = var:qing_delib_backing
+			# lowest backing = smallest order_by, so take the LAST (max picks the top; we want the
+			# bottom) — re-pick the one whose backing equals the running min we just found.
+			limit = { var:qing_delib_backing = ROOT.var:qing_delib_low_tmp }
+			max = 1
+			QING_delib_backing_nudge = { amount = 12 }
+		}
+		remove_variable = qing_delib_low_tmp
+		add_treasury = -40
+		LOG_line = { sys = QING  msg = "delib: 優賞旗主 — the wavering banner lord is rewarded for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_delib_reward"  result = OK }
+}
+
+# ======================================================================
+# LEVER — CURB AN OVER-MIGHTY BANNER LORD (裁抑跋扈). An over-backed lord (backing >= 80) is
+# cut down to size: -backing to him, but the affront ripples (a small cohesion knock, as the
+# banners resent the throne's hand). Gated on such a lord existing (the button mirrors this).
+# Scope: COUNTRY (CHI). Runs inside qing_delib.4.
+# ======================================================================
+QING_delib_curb = {
+	LOG_enter = { sys = QING  fn = "QING_delib_curb" }
+	# [#35 review-fix] rebuild the roster first (mirrors the princes levers) — drop any lord who
+	# died since the panel opened before we scan for the most over-backed. Runs inside the hidden
+	# qing_delib.4 event, so the iterator/create is not compile-inlined.
+	QING_delib_recompute_roster = yes
+	if = {
+		limit = {
+			has_variable_list = qing_delib_council
+			any_in_list = { variable = qing_delib_council  var:qing_delib_backing >= 80 }
+		}
+		# strike the single most over-backed lord (ordered_in_list max-pick = the top).
+		ordered_in_list = {
+			variable = qing_delib_council
+			order_by = var:qing_delib_backing
+			max = 1
+			QING_delib_backing_nudge = { amount = -25 }
+		}
+		# the banners resent the curb (bounded cohesion knock; recomputed next pulse anyway).
+		change_variable = { name = qing_delib_cohesion  subtract = 5 }
+		if = { limit = { var:qing_delib_cohesion < 0 }  set_variable = { name = qing_delib_cohesion  value = 0 } }
+		LOG_line = { sys = QING  msg = "delib: 裁抑跋扈 — an over-mighty banner lord is curbed for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_delib_curb"  result = OK }
+}
+
+# ======================================================================
+# NUDGE ONE LORD'S BACKING — CHARACTER scope, $amount$ = signed delta. Clamped 0..100. The
+# proven bounded-counter idiom (mirrors QING_prince_backing_nudge).
+# ======================================================================
+QING_delib_backing_nudge = {
+	if = { limit = { NOT = { has_variable = qing_delib_backing } }  set_variable = { name = qing_delib_backing  value = 0 } }
+	change_variable = { name = qing_delib_backing  add = $amount$ }
+	if = { limit = { var:qing_delib_backing > 100 }  set_variable = { name = qing_delib_backing  value = 100 } }
+	if = { limit = { var:qing_delib_backing < 0 }    set_variable = { name = qing_delib_backing  value = 0 } }
+}
