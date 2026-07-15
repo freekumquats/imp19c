@@ -6,8 +6,9 @@
 # qing_min_perf_justice (which folds into his Grand Council standing — a fold that had NEVER
 # been computed before #363, the same latent bug the Censorate #362 fixed), the realm's
 # corruption level, and the concrete DOCKET (待審) of accused officials the Board holds and
-# tries. Three action levers: ACCUSE AN OFFICIAL (charge the most corrupt courtier onto the
-# docket), CONVICT (定罪 — disgrace + penal servitude) and ACQUIT (開釋) each docketed man.
+# tries. Three action levers: ACCUSE AN OFFICIAL (#6: opens a corruption-sorted PICKER window
+# so the player chooses whom to charge onto the docket), CONVICT (定罪 — disgrace + penal
+# servitude) and ACQUIT (開釋) each docketed man.
 #
 # Distinct from the Censorate (都察院, #362) which impeaches in one blow: the 刑部 is the high
 # COURT — it CHARGES first, then TRIES. Scoped to the Qing player (ROOT = CHI); AI never
@@ -51,11 +52,15 @@ qing_justice_vacant = {
 	}
 }
 
-# ---- ACCUSE AN OFFICIAL — charge the most corrupt courtier onto the docket.
-# The 刑部 lays a case (待審): find the venal courtier (QING_justice_find_accusable) and
-# mark him qing_justice_accused so he appears on the docket awaiting trial. Gated on a
-# present Minister of Justice AND the existence of an accusable target (mirrors the find
-# limit, so the lever is dead when there is no one to charge). Country scope.
+# ---- ACCUSE AN OFFICIAL — the panel button's ENABLE-GATE (#6).
+# [#6] This verb no longer CHARGES anyone directly: the button now fires
+# qing_justice_refresh_accusable_btn + opens the qing_justice_accuse_window picker, and a
+# row-click there charges the chosen man (qing_justice_accuse_selected). This verb survives
+# only as the button's is_valid gate — it stays dead (button disabled) unless a Minister of
+# Justice is seated AND at least one accusable official exists, so the picker is never opened
+# empty. Its is_valid limit MUST stay byte-identical to QING_justice_refresh_accusable's.
+# (The old auto-pick effect — trigger_event qing_justice.5 → QING_justice_find_accusable —
+# is retained in events for reference but no longer invoked from here.) Country scope.
 # ----------------------------------------------------------------------
 qing_justice_accuse_official = {
 	scope = country
@@ -101,17 +106,11 @@ qing_justice_accuse_official = {
 		}
 	}
 	effect = {
-		# [#443 boot-crash fix] route the find-accusable work through the hidden qing_justice.5
-		# event (a RUNTIME trigger_event, never compile-inlined) instead of calling
-		# QING_justice_find_accusable directly here — its body is an `ordered_character {
-		# order_by = corruption ... save_scope_as }` SORTING iterator, and a scripted_gui
-		# compile-inlines its button's effect chain at PARSE time, which access-violates the
-		# loader on a sorting char-iterator (same class as the censorate/harem levers). The
-		# event does the find + docket-mark + recompute itself. Behaviour is identical.
-		# NB: the "charged onto the docket" LOG_line lives in qing_justice.5 inside the success
-		# branch (only emitted when a target is actually found); this button logs only the pull.
-		trigger_event = { id = qing_justice.5 }
-		LOG_line = { sys = QING  msg = "justice: the accuse-an-official lever pulled from the panel for" }
+		# [#6] NO-OP. This verb is now only the button's enable-gate (see block header); the
+		# panel button's onclick fires qing_justice_refresh_accusable_btn + opens the picker,
+		# and does NOT Execute this verb — so this effect never runs. Left empty (rather than
+		# the old auto-pick trigger_event qing_justice.5) so that if anything ever does invoke
+		# it, it cannot silently auto-charge a man behind the player's back.
 	}
 }
 
@@ -176,6 +175,77 @@ qing_justice_acquit = {
 		scope:player = { QING_ministry_recompute_perf_justice = yes }
 	}
 }
+
+# ---- [#6] REFRESH THE ACCUSABLE-OFFICIAL PICKER ROSTER ----------------------
+# Country-scope verb the ACCUSE button fires before opening the picker window. Rebuilds
+# qing_justice_accusable (most-corrupt-first) via the scripted-effect (safe sorting inline).
+qing_justice_refresh_accusable_btn = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		# [#6 crash-safety] route the SORTING roster build through the hidden qing_justice.7
+		# RUNTIME event (never compile-inlined) instead of calling QING_justice_refresh_accusable
+		# directly here — its body is an `ordered_character order_by=corruption` sorting iterator,
+		# and a scripted_gui compile-inlines its button effect chain at PARSE time (the same class
+		# that boot-crashed THIS panel's accuse lever in #443). Mirrors the .5/.6 trampolines.
+		trigger_event = { id = qing_justice.7 }
+		LOG_line = { sys = QING  msg = "justice: accuse-picker roster refreshed from the panel for" }
+	}
+}
+
+# ---- [#6] ACCUSE A SELECTED OFFICIAL (待審) — row-click in the picker window. --------
+# The chosen courtier comes via datacontext (GuiScope char + player), exactly like the
+# convict/acquit row levers. Marks him qing_justice_accused so the docket rebuild picks
+# him up, then recomputes. No trampoline needed: no sorting iterator, no imprison — this
+# is a bare set_variable + recompute (same shape as qing_justice_acquit's effect).
+qing_justice_accuse_selected = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		employer = scope:player
+		NOT = { has_variable = qing_justice_accused }
+	}
+	is_valid = {
+		# a present Minister of Justice must be seated to lay a charge (mirror the panel gate).
+		scope:player = {
+			has_variable = qing_office_justice_holder
+			var:qing_office_justice_holder = { is_alive = yes  employer = scope:player }
+		}
+		# the selected man must still be chargeable — mirror QING_justice_refresh_accusable's
+		# limit so a row that went stale (e.g. promoted to office since the refresh) is dead.
+		employer = scope:player
+		is_ruler = no
+		is_adult = yes
+		is_alive = yes
+		NOT = { has_variable = qing_rebel_foil }
+		NOT = { has_variable = qing_justice_accused }
+		NOT = { has_variable = qing_office_held }
+		is_general = no
+		is_admiral = no
+		is_governor = no
+		is_co_ruler = no
+		is_primary_heir = no
+		is_head_of_family = no
+		is_clan_chief = no
+		OR = {
+			corruption >= 20
+			has_trait = corrupt
+			has_trait = cruel
+			has_trait = arbitrary
+			loyalty < 50
+		}
+	}
+	effect = {
+		set_variable = { name = qing_justice_accused  value = 1 }
+		LOG_line = { sys = QING  msg = "justice: an official charged onto the docket via the picker for" }
+		scope:player = { QING_ministry_recompute_perf_justice = yes }
+	}
+}
+
 
 # ---- CLOSE ------------------------------------------------------------------
 qing_justice_close_panel = {

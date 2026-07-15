@@ -247,6 +247,63 @@ QING_justice_find_accusable = {
 	LOG_exit = { sys = QING  fn = "QING_justice_find_accusable"  result = OK }
 }
 
+# ======================================================================
+# [#6] QING_justice_refresh_accusable — build the qing_justice_accusable roster
+# (the ACCUSE picker's datamodel) sorted MOST-CORRUPT-FIRST. Country scope (CHI).
+#
+# Replaces the old auto-pick-the-single-worst-man behaviour: the panel's ACCUSE lever
+# now opens a picker window listing every chargeable official (like the Grand Council
+# Appoint picker), so the player chooses WHOM to charge. The limit is byte-identical to
+# QING_justice_find_accusable's ordered_character limit (every eligibility bar the docket
+# and the vanilla imprison effect impose) so a picked man always reaches the docket and
+# is always convictable — no dead rows. order_by = corruption, worst first.
+#
+# ordered_character SORTING inline is proven safe from a scripted_EFFECT called via a
+# scripted_gui verb (the appoint picker's QING_council_refresh_candidates does exactly
+# this and boots) — the crash class is inlining a sorting iterator into a compiled BUTTON
+# effect chain, which we avoid by putting the sort here and firing this from the verb.
+# ======================================================================
+QING_justice_refresh_accusable = {
+	LOG_enter = { sys = QING  fn = "QING_justice_refresh_accusable" }
+	clear_variable_list = qing_justice_accusable
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_ruler = no
+			is_adult = yes
+			is_alive = yes
+			NOT = { has_variable = qing_rebel_foil }
+			NOT = { has_variable = qing_justice_accused }
+			# exclude ALL seated great-office holders (mirror find_accusable / the docket rebuild).
+			NOT = { has_variable = qing_office_held }
+			# the convict is jailed via vanilla imprison, whose targets exclude these (mirror #419).
+			is_general = no
+			is_admiral = no
+			is_governor = no
+			is_co_ruler = no
+			is_primary_heir = no
+			is_head_of_family = no
+			is_clan_chief = no
+			# the broadened misconduct pool (贓/酷/怠/叛) — byte-identical to find_accusable.
+			OR = {
+				corruption >= 20
+				has_trait = corrupt
+				has_trait = cruel
+				has_trait = arbitrary
+				loyalty < 50
+			}
+		}
+		order_by = corruption
+		check_range_bounds = no
+		max = 12   # show the dozen most venal — mirrors QING_COUNCIL_CANDIDATE_CAP
+		# the list is COUNTRY-held: add through ROOT with the courtier as prev (appoint idiom).
+		ROOT = { add_to_variable_list = { name = qing_justice_accusable  target = prev } }
+	}
+	LOG_line = { sys = QING  msg = "justice: accusable-official picker roster refreshed for" }
+	LOG_exit = { sys = QING  fn = "QING_justice_refresh_accusable"  result = OK }
+}
+
+
 # CONVICT AN ACCUSED (定罪) — the trial goes against the accused. Disgrace + strip office + reduce
 # corruption, and (the concrete 刑部 penalty) IMPRISON the convict via the ENGINE's own prison mechanic
 # (下獄). Scope: the accused CHARACTER (ROOT); scope:player = CHI. Uses only proven idioms: QING_char_taint,
