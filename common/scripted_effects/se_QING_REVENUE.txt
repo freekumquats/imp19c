@@ -440,6 +440,41 @@ QING_revenue_stock_granary = {
 }
 
 # ======================================================================
+# [playtest fix task #23] SEED the historical High-Qing ever-normal granary system (常平倉).
+# Scope: country (CHI). Called ONCE from QING_DECLINE_init's High-Qing branch (start < 1772.1.1).
+# The 常平倉 were at their zenith in the High Qing — the roster must NOT be empty at a 1763 start
+# (the same rationale as the 62,000-tael silver-reserve seed). Places a qing_granary_building in
+# each Yellow-River heartland city that lacks one (北京/天津/保定/開封/濟南 — the ids the Revenue
+# stock/deplete paths already use), and pre-fills the pooled grain so the reserve reads stocked
+# from turn one. Building placement drives qing_granary_count (Works sweep) and hence the pool cap;
+# the qing_granary_food pre-fill is clamped to that cap on the first DECLINE pulse (harmless if the
+# count lags one quarter — it simply tops out at the true capacity).
+# ======================================================================
+QING_revenue_seed_historical_granaries = {
+	LOG_enter = { sys = QING  fn = "QING_revenue_seed_historical_granaries" }
+	every_owned_province = {
+		limit = {
+			OR = {
+				province_id = 7229    # 北京
+				province_id = 7230    # 天津
+				province_id = 7234    # 保定
+				province_id = 1       # 開封
+				province_id = 7235    # 濟南
+			}
+			has_city_status = yes
+			NOT = { has_building = qing_granary_building }
+		}
+		add_building_level = qing_granary_building
+		LOG_line = { sys = QING  msg = "revenue: SEEDED historical High-Qing granary (常平倉) at for" }
+	}
+	# pre-fill the pooled grain so the reserve begins stocked (not empty). Init if the DECLINE
+	# pulse has not yet created the var; the first pulse clamps this to the real [0, count*200] cap.
+	if = { limit = { NOT = { has_variable = qing_granary_food } }  set_variable = { name = qing_granary_food  value = 0 } }
+	change_variable = { name = qing_granary_food  add = 600 }
+	LOG_exit = { sys = QING  fn = "QING_revenue_seed_historical_granaries"  result = OK }
+}
+
+# ======================================================================
 # CONCRETE: deplete a granary (famine draws down the reserves).
 # Removes a qing_granary_building from a Yellow River province that has one.
 # Scope: country.

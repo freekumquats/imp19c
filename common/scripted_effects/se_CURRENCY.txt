@@ -1308,15 +1308,41 @@ CURRENCY_alter_own_debt = {
 CURRENCY_grant_country_wealth = {
 	# Scope: Country
 	# Function: Grant $thousands$ thousand of units of currency's worth of wealth
+	# [playtest logfix] GUARD the wealth-per-unit multiply. CURRENCY_wealth_value_1_unit
+	# reads var:official_currency.var:units_to_the_lb (unguarded, CURRENCY_svalues.txt:276)
+	# and the silver/gold leaves read var:country_unit_price_* (CURRENCY_svalues.txt:454-462).
+	# When any of those is transiently unset (e.g. the trade-split market-penetration pass has
+	# not yet written country_unit_price_silver this frame), the script-value resolves to 'none',
+	# the change_local_variable multiply drops the local var, and add_treasury then reads an unset
+	# local_var — which both grants 0 gold AND, if fired from a still-open event popup, re-throws
+	# every frame (~300/s → the ~25k-line 'wealth_to_grant not set' flood). Only multiply + grant
+	# when the currency backing this country resolves cleanly; otherwise log a fail and skip
+	# (no corrupt local var, no flood). Mirrors the has_variable = country_unit_price_* guard the
+	# rest of the currency code already uses (CURRENCY_update_backing_value, this file :1893-1943).
 	set_local_variable = {
 		name = wealth_to_grant
 		value = $thousands$
 	}
-	change_local_variable = {
-		name = wealth_to_grant
-		multiply = CURRENCY_wealth_value_1_unit_scaled_by_reserve_ratio_x1k
+	if = {
+		limit = {
+			has_variable = official_currency
+			var:official_currency = { has_variable = units_to_the_lb }
+			OR = {
+				# silver / gold standard needs its metal's unit price;
+				# bimetallic needs both. Any standard: at least one price present.
+				has_variable = country_unit_price_silver
+				has_variable = country_unit_price_gold
+			}
+		}
+		change_local_variable = {
+			name = wealth_to_grant
+			multiply = CURRENCY_wealth_value_1_unit_scaled_by_reserve_ratio_x1k
+		}
+		add_treasury = local_var:wealth_to_grant
 	}
-	add_treasury = local_var:wealth_to_grant
+	else = {
+		LOG_fail = { sys = ECON  fn = "CURRENCY_grant_country_wealth"  reason = "currency backing not resolvable (official_currency / units_to_the_lb / country_unit_price_ unset); grant skipped to avoid 0-gold + per-frame flood" }
+	}
 }
 
 CURRENCY_mint_currency = {

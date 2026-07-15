@@ -165,8 +165,21 @@ QING_exam_mint_scholar = {
 		# this). The retirement tick keys on AGE (created 28, retired ~55 = decades un-placed),
 		# so no separate intake-date var is needed.
 		set_variable = { name = qing_is_pool_scholar  value = 1 }
-		# the degree is conferred under the throne's eye — score + bind (天子門生).
-		QING_char_bind = yes
+		# [playtest logfix] the degree is conferred under the throne's eye (天子門生) — but the
+		# affinity SCORE + bind is DEFERRED to the next quarterly pool tick (QING_exam_pool_tick).
+		# A character just made by create_character THIS tick cannot have its own script variables
+		# read back the same tick (set_variable writes silently, but the immediate change_variable
+		# read-back fails), so QING_char_bind's inline affinity read here flooded the log (~6k lines:
+		# qing_char_affinity / qing_aff_zeal_gap "not being set"). By the next tick the scholar is
+		# committed and the affinity model reads clean — mirrors the Southern/Upper Study seed→bind
+		# split (se_QING_SOUTHERNSTUDY.txt: mint, then bind in a later block).
+		# Stamp a dedicated one-shot BIND marker (a write-only var — safe this tick, cf. the
+		# qing_is_pool_scholar write above; only same-tick READ-back fails). The pool tick binds
+		# exactly the scholars carrying it. We do NOT gate the deferred bind on the affinity var
+		# itself, because QING_office_appoint scores a man (QING_char_affinity, deliberately WITHOUT
+		# bind — se_QING_COUNCIL.txt) so a scholar autofilled before the next tick would have his
+		# affinity var already set and would wrongly skip binding.
+		set_variable = { name = qing_needs_bind  value = 1 }
 	}
 	# add to the pool list + keep the count var in step (GUI reads the count).
 	add_to_variable_list = { name = qing_scholar_pool  target = scope:qing_new_scholar }
@@ -311,6 +324,21 @@ QING_exam_pool_tick = {
 			}
 			# a living retiree keeps his degree but loses the pool marker.
 			if = { limit = { is_alive = yes }  remove_variable = qing_is_pool_scholar }
+		}
+		# [playtest logfix] DEFERRED BIND: score + bind each pool scholar the tick AFTER he is
+		# minted (see QING_exam_mint_scholar — the affinity read cannot run in the create tick,
+		# so binding inline there flooded the log with qing_char_affinity/qing_aff_zeal_gap
+		# "not being set"). Gate on the dedicated qing_needs_bind marker stamped at mint, and
+		# clear it as we bind — a clean one-shot per scholar that is NOT confused by the bare
+		# affinity SCORING that QING_office_appoint performs on a man seated before this tick.
+		every_in_list = {
+			variable = qing_scholar_pool
+			limit = {
+				is_alive = yes
+				has_variable = qing_needs_bind
+			}
+			QING_char_bind = yes
+			remove_variable = qing_needs_bind
 		}
 		LOG_line = { sys = QING  msg = "exam: pool tick (retired the aged/dead un-placed) for" }
 		LOG_exit = { sys = QING  fn = "QING_exam_pool_tick"  result = OK }

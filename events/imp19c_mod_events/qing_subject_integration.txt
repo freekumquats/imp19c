@@ -370,11 +370,52 @@ qing_integ.20 = {
 		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.20 (harvest) overlord=[ROOT.GetTag] subject=[scope:target.GetTag]" }
 	}
 
-	# --- Bank the surplus and press the advantage ------------------------
+	# --- Store the grain surplus in the Ever-Normal Granaries (常平倉) ----
+	# [playtest fix task #22] The surplus is LITERAL GRAIN, not silver — it feeds the
+	# ever-normal granary reserve (the concrete qing_granary_food pool), NOT the treasury.
+	# The old CURRENCY_grant_country_wealth path granted 0 gold at a 1763 start (the
+	# currency backing was not yet resolvable) AND, left open, re-threw every frame — the
+	# ~25k-line wealth_to_grant flood. This option shows only when a granary EXISTS to
+	# receive the grain (qing_granary_count >= 1, so the pool's cap is already > 0 and the
+	# deposit survives the pulse clamp); otherwise the build option below is offered instead.
 	option = {
 		name = "qing_integ.20.a"
+		trigger = {
+			has_variable = qing_granary_count
+			var:qing_granary_count >= 1
+		}
 		custom_tooltip = "qing_integ.20.a.tt"
-		CURRENCY_grant_country_wealth = { thousands = 50 }
+		# deposit the harvest into the ever-normal granary pool (food, not money). The pool
+		# is derived/clamped to [0, count*200] each quarter by QING_DECLINE_granary_pool, so a
+		# deposit into an already-counted pool persists; init to 0 if the pulse has not yet run.
+		if = { limit = { NOT = { has_variable = qing_granary_food } }  set_variable = { name = qing_granary_food  value = 0 } }
+		change_variable = { name = qing_granary_food  add = 150 }
+		add_country_modifier = {
+			name = qing_integ_bountiful_frontier
+			duration = 730
+		}
+		# A prosperous year advances the process a further step for free.
+		SUBJ_QING_advance_integration = { steps = 1 }
+	}
+
+	# --- No granary yet: build a new Ever-Normal Granary to hold the surplus ----
+	# [playtest fix task #22] Shown only when the realm holds NO ever-normal granary
+	# (qing_granary_count unset or 0). We do NOT deposit grain here: the granary count is
+	# retallied by the Works sweep, and the DECLINE pulse (which runs first and clamps the
+	# pool to [0, count*200]) would zero any grain banked before the count catches up. The
+	# reward is the granary infrastructure itself — it then fills organically from surplus
+	# states via the pool sweep. QING_revenue_stock_granary raises one 糧倉 in the Yellow-
+	# River heartland (北京/天津/保定/開封/濟南).
+	option = {
+		name = "qing_integ.20.a2"
+		trigger = {
+			OR = {
+				NOT = { has_variable = qing_granary_count }
+				var:qing_granary_count < 1
+			}
+		}
+		custom_tooltip = "qing_integ.20.a2.tt"
+		QING_revenue_stock_granary = yes
 		add_country_modifier = {
 			name = qing_integ_bountiful_frontier
 			duration = 730
