@@ -12,21 +12,23 @@ shortage.1 = { # General food shortage
 	goto_location = scope:famine_province
 
 	trigger = {
-		# [#1 follow-up] Famine now fires SOLELY off the engine's own State food pool — the same
+		# [#1 follow-up / #49] Famine fires SOLELY off the engine's own State food pool — the same
 		# signal the hardcoded state_starving/starving_city modifiers key on — reusing the engine's
-		# accounting instead of a second parallel one. A State genuinely runs out of STORED food
-		# (below 1/5 of capacity; "Amenities" in the UI, topped up by the ever-normal granary pool
-		# QING_DECLINE_granary_pool) before its pops starve. The old governorship trade-sim gate
-		# (ECON_governorship_food_shortage_physical, a per-good demand-vs-stockpile FLOW snapshot)
-		# was a SEPARATE ledger that fired famine even on a State sitting atop a full granary — the
-		# reported #1 bug — so it is dropped; the trade-sim number no longer bears on famine.
+		# accounting instead of a second parallel one. Pops do not starve until the State's STORED
+		# food is actually EXHAUSTED (has_state_food < 1 — i.e. 0; "Amenities" in the UI, topped up
+		# by the ever-normal granary pool QING_DECLINE_granary_pool), matching the native mechanic.
+		# [#49 fix] The earlier gate fired at < 1/5 of capacity, which starved pops while the State
+		# still held up to a fifth of its food — the reported "pops starving with food in store" bug.
+		# The old governorship trade-sim gate (ECON_governorship_food_shortage_physical, a per-good
+		# demand-vs-stockpile FLOW snapshot) was a SEPARATE ledger that fired famine even atop a full
+		# granary — dropped in #47; the trade-sim number no longer bears on famine.
 		# The event still narrows to a governorship, but only because it needs a save-able province.
 		any_governorships = {
 			any_governorship_state = {
 				# "Real shortage" = below 1/5 of capacity, byte-identical to the granary SHIP-leg test
 				# (se_QING_DECLINE.txt:2018-2019); capacity>0 guards the degenerate no-storage state.
 				has_state_food_capacity > 0
-				has_state_food < { value = has_state_food_capacity  multiply = 0.2 }
+				has_state_food < 1
 				any_state_province = {
 					total_population > 1
 					NOT = { has_province_modifier = recent_famine }
@@ -47,7 +49,7 @@ shortage.1 = { # General food shortage
 				# STORED food (below 1/5 capacity) AND still has a save-able province. No trade-sim gate.
 				any_governorship_state = {
 					has_state_food_capacity > 0
-					has_state_food < { value = has_state_food_capacity  multiply = 0.2 }
+					has_state_food < 1
 					any_state_province = {
 						total_population > 1
 						NOT = { has_province_modifier = recent_famine }
@@ -58,7 +60,7 @@ shortage.1 = { # General food shortage
 				limit = {
 					# [#1 boot] only a state actually short of stored food starves its pops (see trigger).
 					has_state_food_capacity > 0
-					has_state_food < { value = has_state_food_capacity  multiply = 0.2 }
+					has_state_food < 1
 					any_state_province = {
 						total_population > 1
 						NOT = { has_province_modifier = recent_famine }
