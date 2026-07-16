@@ -128,6 +128,31 @@ builds the their-list, pick_own re-filters it by sex, launch guards opposite-sex
 button unchanged (still opens marriage_play_window = screen 1). Added 6 loc keys (3 per-screen INSTR_* + 3
 NO_* empty-list lines); brace-balanced (100/100), .gui no-BOM, loc BOM present.
 
+### #8 — Religion: populate the Qing pantheon deities + holy sites (DONE)
+Vanilla ships `confucianism` (the Qing state religion, confirmed CHI religion=confucianism, capital
+Beijing 8363) with ZERO deities, so the vanilla Pantheon & Holy Sites panel stood empty for the player.
+Populated it with TWELVE deities across the four traditions of the realm — Confucian sages (Kongzi/Mengzi/
+Zhu Xi), martial guardians (Guan Yu/Xuanwu/Nezha), Taoist & wealth (Laozi/Caishen/Mazu), Buddhas & Heaven
+(Guanyin/Shangdi/Tudigong) — in common/deities/03_confucian_pantheon.txt. Slot balance mirrors the proven
+base-game 00_generic.txt: 3 each of war/economy/culture/fertility.
+DECISION — clone the mod's OWN proven-loading 00_generic.txt bodies, NOT the Invictus 01_chinese_religions.txt:
+the Invictus file is the closest thematic reference but depends on Invictus-only infrastructure absent from
+imp19c (common_deity_trigger, holy_site_deity_check_trigger, deity_china_* icons, its own religion
+`chinese_religions`). 00_generic's tokens (icons deity_war/wealth/eloquence/love, deity_*_svalue passives,
+omen_*_svalue omens, *_apotheosis_*_effect on_activate) are ALL base-game vanilla, inherited at runtime —
+so cloning them verbatim and only swapping the key + religion (region1 -> confucianism) is guaranteed to load.
+Verified all 8 referenced apotheosis `_tt_description` loc macros exist as base-game keys (present in Invictus's
+apotheosis_tooltips loc).
+HOLY SITES: the engine reads `holy_site=<deity key>` in PROVINCE HISTORY (proven Invictus/base-game
+convention — holy_site is a province field, NEVER a deity field; verified 0 deity-field uses across both
+oracles). My first draft wrongly put holy_site= inside the deity blocks; corrected to comments there and added
+`holy_site=deity_X` to 8 province setup blocks (Tai'an 7197 Kongzi / Jining 9041 Mengzi / Fuzhou 3651 Zhu Xi /
+Luoyang 8620 Guan Yu / Leshan 8145 Laozi / Putian 1159 Mazu / Wutai 2407 Guanyin / Beijing 8363=Temple of
+Heaven Shangdi), inserted after each block's religion= line with BOM preserved. Loc file
+qing_deities_l_english.yml follows the proven Invictus `deity_KEY:0 "$omen_KEY$"` / `omen_KEY:1 "Name"` /
+`omen_KEY_desc` triple with the apotheosis-effect macro. Deity file no-BOM (deities/ convention), braces 72/72,
+loc BOM present, all 6 province files brace-balanced + BOM-preserved.
+
 **INHERITED / framework noise (not mod-authored, left):** PROVINCE_TOOLTIP loc (10790), missing
 `gradient_black_flip.dds` texture (7378), the `oa_wealth_changes`/`GT_split_*`/`EE_scripted_guis`
 economy-framework script errors + sqrt `Illegal use of operator` (the economy-framework's own
