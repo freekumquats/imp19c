@@ -294,19 +294,21 @@ merge, develop #254); SPA beats under a tag=SPA if, the Qing beat under a separa
 brace-balanced (events 49/49, on_action 19/19); verified QING_americas_press_pacific_coast + the col-modifier/
 region gates exist. se_LOG-wired throughout.
 
-### #18 — colonise unowned land + Pacific islands (DONE)
-The mod REMOVED the vanilla migrant `settle` ability (it keeps `military_colonies`, which requires
-`has_owner = yes` — it settles ALREADY-owned land), and the engine's built-in ColonizeButton
-(ProvinceWindow.QuickColonize) rides on that disabled migrant system — so the Qing had no working way to take
-the empty frontier / Pacific islands. The full vanilla `settle` import would graft the whole num_of_migrants
-subsystem (heavy, risky for a settled empire). Instead built a scripted colonise action in the mod's own idiom:
+### #18 — colonise unowned land + Pacific islands (DONE — corrected scope)
+CORRECTION after a user challenge: I initially claimed the mod had "disabled vanilla colonisation" and built a
+button for the whole unowned frontier. That was WRONG. Native ENGINE colonisation IS enabled — define
+`MINIMUM_COLONISATION_POP = 8` was re-enabled by #304 (it had been the 99999 disable-sentinel) — so the province
+window's built-in ColonizeButton already colonises the CONTIGUOUS frontier for the Qing with no code needed.
+What the mod deleted was the separate migrant `settle` ARMY ability (a different mechanic), and what the engine
+genuinely CANNOT do is reach OVERSEAS/Pacific-island land out of colonisation range. So I NARROWED the scripted
+button to fill only that real gap (it no longer duplicates the engine on adjacent land):
 - common/scripted_guis/QING_colonise_frontier.txt — QING_colonise_frontier_button, a province-scope player
   button cloned from the proven found_city_button (saved_scopes={player}, is_shown/is_valid/effect). Shown to CHI
-  on an UNOWNED, inhabitable (is_uninhabitable=no, not sea) province; enabled when Qing-REACHABLE — either
-  any_neighbor_province owned by the Qing (contiguous frontier — the #16b-vacated interior, Ili/Xinjiang marches)
-  OR a coastal province while the Qing holds a Pacific colonial foothold (fur-coast/silver-road/pacific-trade/
-  golden-shore modifier or a California/Cascadia/Alaska/Pacific_Mexico province) — so PACIFIC ISLANDS qualify.
-  Price-gated via the proven found_city can_pay_price idiom.
+  on an UNOWNED, inhabitable (is_uninhabitable=no, not sea) province; is_valid gates on OVERSEAS-only reach:
+  is_coastal = yes, NOT adjacent to any Qing province (so it never overlaps the engine ColonizeButton's contiguous
+  range), AND the throne holds a Pacific foothold (fur-coast/silver-road/pacific-trade/golden-shore modifier or a
+  California/Cascadia/Alaska/Pacific_Mexico province). This is the Pacific-island / out-of-range case the engine
+  can't do. Price-gated via the proven found_city can_pay_price idiom.
 - price_colonise_frontier (common/prices/00_from_script.txt): 30 political influence + 100 gold.
 - QING_colonise_this_province (se_QING_AMERICAS.txt): transfers the clicked province with set_owned_by = scope:player
   (the proven in-mod province-transfer idiom, se_QING_BURMA:149) + seeds a create_state_pop tribesmen (the
