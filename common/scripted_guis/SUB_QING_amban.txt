@@ -82,8 +82,15 @@ qing_amban_manage_post_button = {
 		# claim the post for the player: the auto-sweep will not touch it, and the
 		# auto turnover/gone-native/recall events are frozen for it.
 		scope:target = { set_variable = { name = qing_amban_manual  value = 1 } }
-		# dispatch the resident (ROOT = CHI is already the overlord scope)
-		QING_amban_post = { subject = scope:target }
+		# [#34 CRASHFIX] dispatch the resident via the hidden qing_amban.5 trampoline, NOT by
+		# inlining QING_amban_post here. As of #34 QING_amban_post carries an ordered_character
+		# SORTING ITERATOR (the banner-graduate draw); a scripted_gui compile-inlines its button
+		# effect at LOAD, and inlining a sorting iterator ACCESS_VIOLATES at boot (the censorate
+		# #443 crash class). The trampoline runs the iterator inside the event, never inlined.
+		# Saved scopes propagate through trigger_event (cf. qing_amban.1), so qing_amban.5 reads
+		# scope:qing_amban_manual_target. ROOT = CHI is the overlord scope the event needs.
+		scope:target = { save_scope_as = qing_amban_manual_target }
+		trigger_event = { id = qing_amban.5  days = 0 }
 	}
 }
 
@@ -183,9 +190,13 @@ qing_amban_manage_replace_button = {
 		# more tyranny (add_tyranny = 2 vs recall's 1). Country scope (se_QING_CENSORATE.txt:155).
 		add_tyranny = 2
 		scope:target = { set_variable = { name = qing_amban_manual  value = 1 } }
-		# recall the old man FIRST (clears qing_amban_here), then dispatch the new one
+		# recall the old man FIRST (clears qing_amban_here) — recall carries no sorting iterator,
+		# so it is safe to inline. Then dispatch the new resident via the qing_amban.5 trampoline
+		# ([#34 CRASHFIX] — QING_amban_post now inlines an ordered_character sorting iterator that
+		# access-violates a scripted_gui at boot; see the post-button note above).
 		QING_amban_recall = { subject = scope:target  reason = "manual-replace" }
-		QING_amban_post = { subject = scope:target }
+		scope:target = { save_scope_as = qing_amban_manual_target }
+		trigger_event = { id = qing_amban.5  days = 0 }
 	}
 }
 
