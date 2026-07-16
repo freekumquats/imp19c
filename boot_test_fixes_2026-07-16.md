@@ -54,6 +54,22 @@ Service (武舉出身)"→"Military Degree-Holders in Service". (qing_rites_mini
 ### #13 — Rename Censor-in-Chief → Grand Inspector (DONE)
 Replaced all 10 "Censor-in-Chief" loc occurrences (qing_censorate_l_english.yml) with "Grand Inspector".
 
+### #5 — Ministry of Works Hydraulic Works layout (DONE)
+Was a single crammed value "Dikes N · Depots N · Granaries N" that overran the right edge. Restructured
+the GUI block (qing_works_ministry.gui) into a header + THREE indented per-type rows (Yellow River Dikes
+/ Grand Canal Depots / Ever-Normal Granaries), each with its own count var. Added 3 label loc keys,
+removed the obsolete `_HYDRAULIC_VALUE` key (no dangling refs).
+
+### #6 — Public Works buildings not shown in province view (DONE)
+Root cause: the province build view (province_window.gui:4044-4067) uses a CURATED per-type item list
+(build_item_* types, name-matched via EqualTo_string in gui_templates.gui) — NOT an auto-enumeration —
+so the 6 Board-of-Works buildings (real building defs in qing_works_buildings.txt + qing_granary_buildings.txt)
+had no item type and never displayed, though they stood on the works roster. FIX: added 6 `build_item_qing_*`
+types (dike/canal_depot/wall_section/granary/great_wall/grand_canal) cloned from the vanilla infrastructure
+pattern (name-match on the building's loc key, verified all 6 name keys exist), and wired them into the
+InfrastructureItems block. The buildings' own allow-gate keeps them appropriately placed. This IS the
+"new Public Works category in the province view" the user asked for (grouped under Infrastructure).
+
 ### #1 — Event-loc data-function scan vs oracles (DONE)
 Cataloged every `[X.Method]` head/method the mod's event loc calls; validated each against Invictus + Terra-Indomita loc (never against mod code). Findings + fixes:
 - `[scope:X...]` → bare `[X...]` — already fixed prior commit (0 residual; scope: is script-only, absent from both oracles).
