@@ -213,6 +213,17 @@ placement. Answers the user's "what is the starting criteria": CHI + coastal (a 
 tasks then gate on a level-3 harbour and fleet size. Brace-balanced (42/42), missions no-BOM preserved.
 (This also closes the #11/#19 New-Treasure-Fleet thread: standalone tree #439, now correctly listed.)
 
+### #14 — USA Atlantic seaboard chain broken (Charleston / Savannah) (DONE)
+The #397 trim listed Charleston 3082 (South Carolina) and Savannah 3400 (Georgia) among the
+"trans-Appalachian/western frontier" provinces it dropped as unowned — but these are the principal
+British SEABOARD PORT cities of the SC & GA colonies in 1763, and dropping them broke the coastal chain
+between the kept ports Beaufort 144 / Georgetown 2672 / Brunswick 10054. RESTORED both to the USA (=GBR
+client-colony at 1763) own_control_core, and removed them from the "removed" comment so the ledger stays
+honest. Left the genuine trans-Appalachian interior removed (that's #16, pending research). Verified no
+other tag's own_control_core claims 3082/3400 (they were unowned holes, no conflict). Per the user: "if
+the coastal gap is historically accurate, then leave it" — it was NOT accurate; these two are unambiguous
+Atlantic ports, so restored.
+
 **INHERITED / framework noise (not mod-authored, left):** PROVINCE_TOOLTIP loc (10790), missing
 `gradient_black_flip.dds` texture (7378), the `oa_wealth_changes`/`GT_split_*`/`EE_scripted_guis`
 economy-framework script errors + sqrt `Illegal use of operator` (the economy-framework's own
