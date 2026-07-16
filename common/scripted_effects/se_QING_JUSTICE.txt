@@ -180,18 +180,10 @@ QING_justice_vindicate_appeal = {
 # excludes men already charged (so ACCUSE never re-charges a docketed suspect). Country scope.
 QING_justice_find_accusable = {
 	LOG_enter = { sys = QING  fn = "QING_justice_find_accusable" }
-	# [#363, mirrors #362 review-fix R2] save the sitting Minister of Justice so the search can
-	# EXCLUDE him: he cannot be charged onto his OWN docket (that would double-role him — scored
-	# as the presiding minister in perf term (a) AND tallied in the docket-backlog term (c)). A
-	# corrupt Justice minister is dealt with by removing him from office, not by self-indictment.
-	# `this = scope:X` char-equality is the proven exclusion idiom (se_QING_COLON.txt:185).
-	if = {
-		limit = {
-			has_variable = qing_office_justice_holder
-			var:qing_office_justice_holder = { is_alive = yes  employer = ROOT }
-		}
-		var:qing_office_justice_holder = { save_scope_as = qing_justice_sitting_minister }
-	}
+	# [#14 boot] the old sitting-Justice-minister save+exclude is gone: STRIP-THEN-ACCUSE relieves any
+	# office-holder (including the Justice minister) of his post on charge, so he is never double-roled.
+	# NOTE this effect + its qing_justice.5 auto-pick trampoline are RETAINED-BUT-UNUSED (the panel now
+	# opens the QING_justice_refresh_accusable picker); kept as reference for the shared accusable limit.
 	ordered_character = {
 		limit = {
 			employer = ROOT
@@ -200,21 +192,25 @@ QING_justice_find_accusable = {
 			is_alive = yes
 			NOT = { has_variable = qing_rebel_foil }
 			NOT = { has_variable = qing_justice_accused }
-			# [#363-R2 review-fix] exclude ALL seated great-office holders (not just the sitting
-			# Minister of Justice). The docket rebuild (QING_ministry_recompute_perf_justice) filters
-			# NOT={has_variable=qing_office_held}, so charging an office-holder produced an accused man
-			# who never appeared on the docket — the ACCUSE lever visibly no-op'd and left a permanent,
-			# un-triable qing_justice_accused mark (and a phantom docket entry once he lost office). This
-			# broader guard subsumes the old sitting-Justice-minister-only exclusion (he holds an office).
-			NOT = { has_variable = qing_office_held }
-			# [#419] the convict is JAILED at trial via the vanilla `imprison` effect, whose allowed
-			# targets EXCLUDE serving commanders / governors / the heir / co-ruler / family & clan heads /
-			# legion commanders (TI imprison.txt allowed_trigger). Match that here so ACCUSE never docks a
-			# man CONVICT then cannot actually jail (the trial would disgrace him but the imprison would
-			# silently no-op). is_ruler is already excluded above; add the rest of imprison's bars.
-			is_general = no
-			is_admiral = no
-			is_governor = no
+			# [#14 boot] STRIP-THEN-ACCUSE: office-holders, commanders, and governors are NO LONGER
+			# exempt — they are RELIEVED of the shielding position on charge (QING_justice_strip_for_trial,
+			# fired from qing_justice.8) and then face trial as private men. So the old blanket exclusions
+			# (NOT={has_variable=qing_office_held}, is_general/is_admiral/is_governor = no) are dropped: a
+			# corrupt minister/commander/governor IS chargeable now. The sitting Justice minister is not
+			# specially excluded any more either — charging him strips him first, so he is never double-
+			# roled (scored as presiding minister AND docket backlog) because he is relieved atomically
+			# before the accused mark is set.
+			# [#14 review-fix] the SITTING Grand Minister of Justice cannot be charged onto his OWN docket:
+			# stripping him would vacate the Justice seat, and the convict/acquit levers both require a
+			# seated minister — so a self-charge would strand him un-triable until a successor is named. A
+			# corrupt Justice minister is dealt with by relieving him of office first, then charging him as a
+			# private man. Character-local (qing_office_held = flag:justice, the guarded var-compare idiom
+			# proven at :190) so it stays byte-identical across all four accusable sites. OTHER office-holders
+			# stay chargeable (they are stripped on charge, #14) — only the presiding judge is barred.
+			NOT = { AND = { has_variable = qing_office_held  var:qing_office_held = flag:justice } }
+			# [#419] BUT the vanilla `imprison` effect (run at CONVICT) refuses the heir / co-ruler /
+			# family & clan heads — birth/imperial-house positions that CANNOT be stripped. Keep excluding
+			# them so ACCUSE never docks a man CONVICT then cannot actually jail. is_ruler is excluded above.
 			is_co_ruler = no
 			is_primary_heir = no
 			is_head_of_family = no
@@ -274,12 +270,13 @@ QING_justice_refresh_accusable = {
 			is_alive = yes
 			NOT = { has_variable = qing_rebel_foil }
 			NOT = { has_variable = qing_justice_accused }
-			# exclude ALL seated great-office holders (mirror find_accusable / the docket rebuild).
-			NOT = { has_variable = qing_office_held }
-			# the convict is jailed via vanilla imprison, whose targets exclude these (mirror #419).
-			is_general = no
-			is_admiral = no
-			is_governor = no
+			# [#14 boot] STRIP-THEN-ACCUSE: office-holders/commanders/governors are chargeable now — they
+			# are relieved of the shielding position on charge (QING_justice_strip_for_trial via qing_justice.8),
+			# so the old NOT={has_variable=qing_office_held} + is_general/is_admiral/is_governor=no exclusions
+			# are dropped. Keep only imprison's un-strippable bars (heir/co-ruler/family & clan heads); is_ruler
+			# excluded above. MUST stay byte-identical to QING_justice_find_accusable + the panel gate.
+			# [#14 review-fix] the sitting Justice minister cannot try himself (byte-identical to find_accusable).
+			NOT = { AND = { has_variable = qing_office_held  var:qing_office_held = flag:justice } }
 			is_co_ruler = no
 			is_primary_heir = no
 			is_head_of_family = no
@@ -303,6 +300,30 @@ QING_justice_refresh_accusable = {
 	LOG_exit = { sys = QING  fn = "QING_justice_refresh_accusable"  result = OK }
 }
 
+# ======================================================================
+# [#14 boot] STRIP THE SHIELDING POSITION FOR TRIAL (奪職候審) — a charged official is RELIEVED
+# of any great office / command / governorship the moment he is docketed, so that (a) he faces
+# trial as a private man the way the historic 刑部 required a suspect be stripped of rank before
+# indictment, and (b) the eventual CONVICT can actually jail him (the vanilla `imprison` engine
+# effect refuses serving commanders/governors — QING_justice_convict_accused's #419 note). Birth /
+# imperial-house positions (heir, co-ruler, family & clan heads) are NOT strippable and are excluded
+# upstream by the accusable limit, so this only ever relieves an APPOINTED post. Scope: the accused
+# CHARACTER (ROOT). Uses only proven char-scope idioms: QING_office_vacate_dispatch (censorate
+# impeach-uphold, se_QING_CENSORATE.txt:143), remove_command (annexation.txt:546), remove_as_governor
+# (office_eligibility_events.txt:186). No sorting iterator / imprison / create_character here.
+# ======================================================================
+QING_justice_strip_for_trial = {
+	LOG_enter = { sys = QING  fn = "QING_justice_strip_for_trial" }
+	# relieve of a Grand Council great office (dispatches to the correct QING_office_vacate branch).
+	if = { limit = { has_variable = qing_office_held }  QING_office_vacate_dispatch = yes }
+	# relieve of army/navy command so the convict is jailable (imprison refuses serving commanders).
+	if = { limit = { OR = { is_general = yes  is_admiral = yes } }  remove_command = yes }
+	# relieve of any governorship (imprison likewise refuses serving governors).
+	if = { limit = { is_governor = yes }  remove_as_governor = yes }
+	LOG_line = { sys = QING  msg = "justice: an accused stripped of office/command/governorship for trial for" }
+	LOG_exit = { sys = QING  fn = "QING_justice_strip_for_trial"  result = OK }
+}
+
 
 # CONVICT AN ACCUSED (定罪) — the trial goes against the accused. Disgrace + strip office + reduce
 # corruption, and (the concrete 刑部 penalty) IMPRISON the convict via the ENGINE's own prison mechanic
@@ -318,7 +339,11 @@ QING_justice_convict_accused = {
 	QING_char_taint = yes
 	add_loyalty = loyalty_qing_disgraced
 	add_popularity = -20
-	if = { limit = { has_variable = qing_office_held }  QING_office_vacate_dispatch = yes }
+	# [#14 review-fix] re-strip office/command/governorship at conviction too, not just at charge: a
+	# docketed man RE-APPOINTED to command or a governorship between charge and conviction would otherwise
+	# be refused by the vanilla `imprison` below (it bars serving commanders/governors), leaving him
+	# disgraced-but-unjailed. Reuse the same strip helper (idempotent — its ifs no-op if he holds nothing).
+	QING_justice_strip_for_trial = yes
 	remove_variable = qing_justice_accused
 	# [#419] IMPRISONMENT (下獄): the convict is jailed by the throne through the engine's OWN prison
 	# mechanic. `imprison` runs at COUNTRY scope with target = the character (TI imprison.txt:84); guarded
