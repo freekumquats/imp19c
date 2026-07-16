@@ -109,6 +109,25 @@ flowcontainer already has margin. (Line 69 is a `margin_widget`, which DOES acce
   the silent `var:X >= { value = var:Y }` same-scope form (the e799a7c04 fix). Council/governance use
   the identical form with 0 log hits, confirming it's legal; these hits are pre-fix.
 
+### #7 — Propose-a-Marriage rebuilt as 3 sequential single-column screens (DONE)
+The 3-column layout (900×640) had repeatedly rendered as a blank black frame + grey overspill despite
+several layout fixes. Per the religion-panel lesson (stop re-fixing a layout that keeps failing; clone a
+PROVEN structure instead), rebuilt marriage_play_window.gui as THREE standalone `base_window`s cloned from
+the proven `qing_office_picker_window` single-column picker (windowgfx / parentanchor=center / one fixed
+scrollarea under a MainWindowHeaderBoxCentered header / dynamicgridbox datamodel / window-level button_close):
+  1. `marriage_play_window`        — pick TARGET REALM (marriage_play_realms).
+  2. `marriage_play_own_window`    — pick OUR character (marriage_play_own_candidates).
+  3. `marriage_play_their_window`  — pick THEIR character (marriage_play_their_candidates) + Propose/Cancel bar.
+Each row's onclick keeps the PROVEN idiom unchanged (datacontext = Scope.GetCountry/GetCharacter; inline
+GetScriptedGui(...).Execute(GuiScope.SetRoot(...).AddScope(...).End) — the #8 boot-fix that stops a
+ScriptedGui datacontext override from blanking the row), then chains forward: pick_realm closes screen 1 +
+createwidget screen 2; pick_own closes screen 2 + createwidget screen 3; on screen 3 the Propose button runs
+the already-validated marriage_play_launch (both picks set, opposite sex, unmarried) then closes. The data
+layer (MARRIAGE_PLAY_actions.txt) already sequenced realm→own→their, so NO script change was needed — pick_realm
+builds the their-list, pick_own re-filters it by sex, launch guards opposite-sex/unmarried. government_view.gui
+button unchanged (still opens marriage_play_window = screen 1). Added 6 loc keys (3 per-screen INSTR_* + 3
+NO_* empty-list lines); brace-balanced (100/100), .gui no-BOM, loc BOM present.
+
 **INHERITED / framework noise (not mod-authored, left):** PROVINCE_TOOLTIP loc (10790), missing
 `gradient_black_flip.dds` texture (7378), the `oa_wealth_changes`/`GT_split_*`/`EE_scripted_guis`
 economy-framework script errors + sqrt `Illegal use of operator` (the economy-framework's own
