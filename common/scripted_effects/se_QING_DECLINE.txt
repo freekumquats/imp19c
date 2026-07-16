@@ -1990,13 +1990,29 @@ QING_DECLINE_granary_pool = {
 		# save the state so the pool write below reads the skim/ship amount back via the PROVEN
 		# scope:X.var:Y idiom (upstream TI/Invictus use scope:X.var: heavily; prev.var: is NOT attested).
 		save_scope_as = qing_gran_state
+		# [logfix 2026-07-16] Precompute EVERY comparison operand into a plain STATE var first. A trigger
+		# (has_state_food_capacity) or a cross-scope ROOT.var: inside a comparison RHS { value = } block,
+		# evaluated in this every_country_state scope, floods the live 1763 log with "Unsupported scope
+		# operator '<'" / "Unknown trigger type: value" — so the FILL/SHIP limits NEVER passed and the
+		# ever-normal pool never moved grain (the granary relief was dead). Comparing a plain state var to
+		# { value = <state var> } in the SAME scope is the proven-silent form (se_QING_COUNCIL/GOVERNANCE,
+		# 0 log hits). Reading has_state_food(_capacity)/ROOT.var: into set_variable is fine — only the
+		# comparison RHS is the problem. These temps are re-set each state and removed at the loop end.
+		set_variable = { name = qing_gran_cap_tmp      value = has_state_food_capacity }
+		set_variable = { name = qing_gran_food_tmp     value = has_state_food }
+		set_variable = { name = qing_gran_fill_thr     value = has_state_food_capacity }
+		change_variable = { name = qing_gran_fill_thr  multiply = 0.9 }
+		set_variable = { name = qing_gran_ship_thr     value = has_state_food_capacity }
+		change_variable = { name = qing_gran_ship_thr  multiply = 0.2 }
+		set_variable = { name = qing_gran_pool_tmp     value = ROOT.var:qing_granary_food }
+		set_variable = { name = qing_gran_poolcap_tmp  value = ROOT.var:qing_granary_cap_tmp }
 		# FILL: this state's stores are near-max (>= 90% capacity), so its surplus would be wasted —
 		# skim 1/20 of capacity into the national pool, but only while the pool has room under the cap.
 		if = {
 			limit = {
-				has_state_food_capacity > 0
-				has_state_food >= { value = has_state_food_capacity  multiply = 0.9 }
-				ROOT.var:qing_granary_food < { value = ROOT.var:qing_granary_cap_tmp }
+				var:qing_gran_cap_tmp > 0
+				var:qing_gran_food_tmp >= { value = var:qing_gran_fill_thr }
+				var:qing_gran_pool_tmp < { value = var:qing_gran_poolcap_tmp }
 			}
 			set_variable = { name = qing_gran_skim_tmp  value = has_state_food_capacity }
 			change_variable = { name = qing_gran_skim_tmp  divide = 20 }
@@ -2013,16 +2029,17 @@ QING_DECLINE_granary_pool = {
 			remove_variable = qing_gran_room_tmp
 		}
 		# SHIP: this state is in real shortage (< 1/5 capacity) — if the pool holds grain, send relief.
+		# (same precomputed-operand form as the FILL leg above — see the logfix note.)
 		else_if = {
 			limit = {
-				has_state_food_capacity > 0
-				has_state_food < { value = has_state_food_capacity  multiply = 0.2 }
-				ROOT.var:qing_granary_food > 0
+				var:qing_gran_cap_tmp > 0
+				var:qing_gran_food_tmp < { value = var:qing_gran_ship_thr }
+				var:qing_gran_pool_tmp > 0
 			}
 			# ship up to 1/10 of the state's capacity, bounded by what the pool actually holds.
 			set_variable = { name = qing_gran_ship_tmp  value = has_state_food_capacity }
 			change_variable = { name = qing_gran_ship_tmp  divide = 10 }
-			if = { limit = { var:qing_gran_ship_tmp > { value = ROOT.var:qing_granary_food } }  set_variable = { name = qing_gran_ship_tmp  value = ROOT.var:qing_granary_food } }
+			if = { limit = { var:qing_gran_ship_tmp > { value = var:qing_gran_pool_tmp } }  set_variable = { name = qing_gran_ship_tmp  value = var:qing_gran_pool_tmp } }   # [logfix] was ROOT.var: on the RHS (cross-scope in state ctx — illegal); use the precomputed pool temp
 			if = {
 				limit = { var:qing_gran_ship_tmp > 0 }
 				add_state_food = { value = var:qing_gran_ship_tmp }                            # grain arrives (block form for parity with the FILL leg; bare = var:X is unattested)
@@ -2055,6 +2072,13 @@ QING_DECLINE_granary_pool = {
 			}
 			remove_variable = qing_gran_ship_tmp
 		}
+		# [logfix 2026-07-16] clear the per-state comparison temps (set at the top of every iteration).
+		remove_variable = qing_gran_cap_tmp
+		remove_variable = qing_gran_food_tmp
+		remove_variable = qing_gran_fill_thr
+		remove_variable = qing_gran_ship_thr
+		remove_variable = qing_gran_pool_tmp
+		remove_variable = qing_gran_poolcap_tmp
 	}
 
 	# --- clamp the pool [0, cap] and DERIVE the 0..100 stock ratio every consumer reads. ----------
