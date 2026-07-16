@@ -1,23 +1,78 @@
 ﻿namespace = gbr_empire
 
 ########################################################################
-# [#283] GBR 1763->1815 AI-autonomous historical railroad.
+# [#283 / scripted-revolutions] GBR 1763->1815 AI-autonomous historical railroad.
+#
 # Seeded from common/on_action/gbr_empire_on_actions.txt (day-offsets from the
-# 1763.2.16 START_DATE). Flavour + posture-nudge chain: prestige / stability /
-# aggressive_expansion / political_influence shifts steer the AI toward the
-# historical trajectory at each dated beat, guarded by per-beat has_variable
-# done-flags with ai_chance-weighted options. Successions are left to the
-# engine (setup death_dates); GP wars are scripted as dated events (#303, imp19c_setup.*)
-# (boot-safe — see the on_actions design note). All logged sys = GBR.
+# 1763.2.16 START_DATE). Every beat is tag=GBR gated (so it runs for the AI — the
+# usual case) with a per-beat has_variable done-flag, and every AI-reachable option
+# carries an explicit ai_chance. Because ALL non-Qing countries are AI and may be
+# railroaded (user directive 2026-07-16), the LOAD-BEARING state changes live in
+# immediate{} and fire regardless of the option the AI picks — the flavour/posture
+# nudges are secondary. The great-power WARS are declared by the dated imp19c_setup.*
+# events (#303); the 1783 independence RELEASE is the load-bearing act of this arc.
+#
+# The AMERICAN REVOLUTION (.1, .2, .7-.13, .3) is the causal chain 1763->1783 that
+# drives an AI Britain to lose the Thirteen Colonies (tag USA, a GBR client_colony at
+# the 1763 start). It is deliberately front-loaded from 1763 so all the pieces are in
+# place well before the 1775 war and the 1783 release. See scripted_revolutions.md.
+#
+# Character deaths are left to the engine (setup death_dates). All logged sys = GBR.
+#
+# Sources: P.J. Marshall, The Making and Unmaking of Empires (2005); Gordon Wood, The
+#   Radicalism of the American Revolution (1992); Robert Middlekauff, The Glorious Cause
+#   (1982/2005); Piers Mackesy, The War for America (1964); Jeremy Black, War for America.
 ########################################################################
 
-# --- .1  1765.3.22  The Stamp Act -------------------------------------
+# ======================================================================
+# .7  1763.10.07  THE PROCLAMATION OF 1763. Fresh from the conquest of New France,
+# London draws the Proclamation Line along the Appalachians, barring colonial
+# settlement of the trans-mountain west and reserving it for the Crown and the
+# natives. The first friction of the new imperial order: the colonists resent being
+# fenced out of the land they fought for. (The opening beat — long before the war.)
+# ======================================================================
+gbr_empire.7 = {
+	type = country_event
+	title = "gbr_empire.7.t"
+	desc = "gbr_empire.7.desc"
+	picture = senate
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = GBR
+		NOT = { has_variable = gbr_empire_beat_proclamation }
+	}
+	immediate = {
+		set_variable = gbr_empire_beat_proclamation
+		# seed the colonial-grievance meter that the arc builds up toward the war.
+		set_variable = { name = gbr_colonial_grievance  value = 5 }
+		LOG_line = { sys = GBR  msg = "EVENT gbr_empire.7 (Proclamation of 1763) for [ROOT.GetTag]" }
+	}
+	option = {
+		name = "gbr_empire.7.a"   # enforce the line
+		add_political_influence = 5
+		ai_chance = { factor = 10 }
+	}
+	option = {
+		name = "gbr_empire.7.b"   # wink at the settlers
+		change_variable = { name = gbr_colonial_grievance  add = -2 }
+		ai_chance = { factor = 3 }
+	}
+}
+
+# ======================================================================
+# .1  1765.3.22  THE STAMP ACT. The first direct internal tax on the colonies to
+# defray the war debt; "no taxation without representation" becomes the colonial
+# cry. The Stamp Act Congress (Oct 1765) coordinates resistance; the Act is repealed
+# in 1766, but the Declaratory Act asserts Parliament's right to bind the colonies
+# "in all cases whatsoever". (Pre-existing beat; done-flag gbr_empire_beat_stamp_act.)
+# ======================================================================
 gbr_empire.1 = {
 	type = country_event
 	title = "gbr_empire.1.t"
 	desc = "gbr_empire.1.desc"
 	picture = senate
-
 	left_portrait = root.current_ruler
 	is_triggered_only = yes
 
@@ -25,32 +80,141 @@ gbr_empire.1 = {
 		tag = GBR
 		NOT = { has_variable = gbr_empire_beat_stamp_act }
 	}
-
 	immediate = {
 		set_variable = gbr_empire_beat_stamp_act
 		add_political_influence = -10
+		change_variable = { name = gbr_colonial_grievance  add = 8 }
 		LOG_line = { sys = GBR  msg = "EVENT gbr_empire.1 (The Stamp Act) for [ROOT.GetTag]" }
 	}
-
 	option = {
-		name = "gbr_empire.1.a"
+		name = "gbr_empire.1.a"   # press the tax
 		add_aggressive_expansion = 3
+		change_variable = { name = gbr_colonial_grievance  add = 4 }
 		ai_chance = { factor = 10 }
 	}
 	option = {
-		name = "gbr_empire.1.b"
+		name = "gbr_empire.1.b"   # repeal (the historical retreat)
 		add_stability = 1
 		ai_chance = { factor = 4 }
 	}
 }
 
-# --- .2  1775.4.19  The American War ----------------------------------
+# ======================================================================
+# .8  1767.06.29  THE TOWNSHEND ACTS. New duties on glass, lead, paint, paper and tea;
+# the customs commissioners and writs of assistance inflame Boston. Non-importation
+# associations spread; the friction hardens into a movement.
+# ======================================================================
+gbr_empire.8 = {
+	type = country_event
+	title = "gbr_empire.8.t"
+	desc = "gbr_empire.8.desc"
+	picture = senate
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = GBR
+		NOT = { has_variable = gbr_empire_beat_townshend }
+	}
+	immediate = {
+		set_variable = gbr_empire_beat_townshend
+		add_political_influence = -8
+		change_variable = { name = gbr_colonial_grievance  add = 10 }
+		LOG_line = { sys = GBR  msg = "EVENT gbr_empire.8 (The Townshend Acts) for [ROOT.GetTag]" }
+	}
+	option = {
+		name = "gbr_empire.8.a"   # station troops in Boston
+		add_aggressive_expansion = 3
+		change_variable = { name = gbr_colonial_grievance  add = 6 }
+		ai_chance = { factor = 10 }
+	}
+	option = {
+		name = "gbr_empire.8.b"   # partial repeal (keep only the tea duty — the real 1770 outcome)
+		ai_chance = { factor = 6 }
+	}
+}
+
+# ======================================================================
+# .9  1773.12.16  THE BOSTON TEA PARTY. The Tea Act hands the East India Company a
+# monopoly; the Sons of Liberty answer by dumping the tea into Boston harbour. London
+# retaliates with the Coercive (Intolerable) Acts of 1774 — closing the port, revoking
+# the Massachusetts charter — which unite the colonies as nothing else had.
+# ======================================================================
+gbr_empire.9 = {
+	type = country_event
+	title = "gbr_empire.9.t"
+	desc = "gbr_empire.9.desc"
+	picture = revolt
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = GBR
+		NOT = { has_variable = gbr_empire_beat_teaparty }
+	}
+	immediate = {
+		set_variable = gbr_empire_beat_teaparty
+		add_stability = -1
+		change_variable = { name = gbr_colonial_grievance  add = 15 }
+		LOG_line = { sys = GBR  msg = "EVENT gbr_empire.9 (Boston Tea Party -> Coercive Acts) for [ROOT.GetTag]" }
+	}
+	option = {
+		name = "gbr_empire.9.a"   # the Coercive Acts (the historical crackdown)
+		add_aggressive_expansion = 5
+		change_variable = { name = gbr_colonial_grievance  add = 12 }
+		ai_chance = { factor = 10 }
+	}
+	option = {
+		name = "gbr_empire.9.b"   # conciliation (the road not taken)
+		add_stability = 1
+		change_variable = { name = gbr_colonial_grievance  add = -5 }
+		ai_chance = { factor = 2 }
+	}
+}
+
+# ======================================================================
+# .10  1774.09.05  THE FIRST CONTINENTAL CONGRESS. Twelve colonies send delegates to
+# Philadelphia; they endorse the Suffolk Resolves, adopt the Continental Association
+# (a total trade boycott), and petition the King. The colonies now act as one body —
+# the embryo of a nation. The grievance meter tips past the point of no return.
+# ======================================================================
+gbr_empire.10 = {
+	type = country_event
+	title = "gbr_empire.10.t"
+	desc = "gbr_empire.10.desc"
+	picture = senate
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = GBR
+		NOT = { has_variable = gbr_empire_beat_congress }
+	}
+	immediate = {
+		set_variable = gbr_empire_beat_congress
+		add_political_influence = -12
+		change_variable = { name = gbr_colonial_grievance  add = 12 }
+		LOG_line = { sys = GBR  msg = "EVENT gbr_empire.10 (First Continental Congress) for [ROOT.GetTag]" }
+	}
+	option = {
+		name = "gbr_empire.10.a"   # declare Massachusetts in rebellion
+		add_aggressive_expansion = 4
+		ai_chance = { factor = 10 }
+	}
+}
+
+# ======================================================================
+# .2  1775.04.19  THE AMERICAN WAR. Lexington and Concord — "the shot heard round the
+# world". The Second Continental Congress creates the Continental Army under George
+# Washington. The actual war declaration is fired by imp19c_setup.2 (USA declares its
+# independence_wargoal on GBR). This beat carries the political shock on the British side.
+# (Pre-existing beat; done-flag gbr_empire_beat_revolution.)
+# ======================================================================
 gbr_empire.2 = {
 	type = country_event
 	title = "gbr_empire.2.t"
 	desc = "gbr_empire.2.desc"
 	picture = revolt
-
 	left_portrait = root.current_ruler
 	is_triggered_only = yes
 
@@ -58,28 +222,116 @@ gbr_empire.2 = {
 		tag = GBR
 		NOT = { has_variable = gbr_empire_beat_revolution }
 	}
-
 	immediate = {
 		set_variable = gbr_empire_beat_revolution
 		add_stability = -2
 		add_political_influence = -20
 		LOG_line = { sys = GBR  msg = "EVENT gbr_empire.2 (The American War) for [ROOT.GetTag]" }
 	}
-
 	option = {
-		name = "gbr_empire.2.a"
+		name = "gbr_empire.2.a"   # crush the rebellion
 		add_aggressive_expansion = 5
 		ai_chance = { factor = 10 }
 	}
 }
 
-# --- .3  1783.9.3  The Loss of America -------------------------------
+# ======================================================================
+# .11  1777.10.17  SARATOGA — THE HINGE. Burgoyne's army surrenders at Saratoga. The
+# victory persuades France that the Americans can win, and Vergennes brings France
+# into the war (Feb 1778) — turning a colonial rebellion into a global war Britain
+# cannot win alone. This is the load-bearing turning point of the whole Revolution.
+# The FRANCO-AMERICAN alliance is forged here: FRA guarantees USA and enters the war
+# against GBR (the alliance is the real mechanism that lost Britain the war).
+# ======================================================================
+gbr_empire.11 = {
+	type = country_event
+	title = "gbr_empire.11.t"
+	desc = "gbr_empire.11.desc"
+	picture = battlefield
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = GBR
+		NOT = { has_variable = gbr_empire_beat_saratoga }
+	}
+	immediate = {
+		set_variable = gbr_empire_beat_saratoga
+		add_prestige = -15
+		add_stability = -1
+		# FRANCE ENTERS (Feb 1778): the Franco-American alliance. FRA joins the
+		# American war against GBR. Railroaded (all non-Qing are AI): FRA allies USA and
+		# declares on GBR. Guarded on the belligerents existing + not already at war.
+		if = {
+			limit = {
+				exists = c:FRA
+				exists = c:USA
+				exists = c:GBR
+				c:USA = { is_subject_of = c:GBR }
+				NOT = { c:FRA = { war_with = c:GBR } }
+			}
+			c:FRA = {
+				# ally the American cause, then enter the war on their side.
+				add_alliance = c:USA
+				FUNC_declare_war_with_wargoal_province = {
+					war_goal = conquer_wargoal
+					province = p:3388
+					target = c:GBR
+				}
+			}
+			LOG_line = { sys = GBR  msg = "EVENT gbr_empire.11: Saratoga -> France enters the American war (1778) for [ROOT.GetTag]" }
+		}
+		LOG_line = { sys = GBR  msg = "EVENT gbr_empire.11 (Saratoga, the hinge) for [ROOT.GetTag]" }
+	}
+	option = {
+		name = "gbr_empire.11.a"   # fight on against the House of Bourbon
+		add_aggressive_expansion = 3
+		ai_chance = { factor = 10 }
+	}
+}
+
+# ======================================================================
+# .12  1781.10.19  YORKTOWN. Cornwallis, penned against the sea by Washington and
+# Rochambeau on land and de Grasse's fleet at the Capes, surrenders his army. The
+# last great British field force in America is gone; in London, Lord North cries
+# "Oh God, it is all over." The war for America is effectively lost.
+# ======================================================================
+gbr_empire.12 = {
+	type = country_event
+	title = "gbr_empire.12.t"
+	desc = "gbr_empire.12.desc"
+	picture = city_siege
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = GBR
+		NOT = { has_variable = gbr_empire_beat_yorktown_battle }
+	}
+	immediate = {
+		set_variable = gbr_empire_beat_yorktown_battle
+		add_prestige = -20
+		add_stability = -2
+		LOG_line = { sys = GBR  msg = "EVENT gbr_empire.12 (Yorktown) for [ROOT.GetTag]" }
+	}
+	option = {
+		name = "gbr_empire.12.a"   # sue for peace
+		ai_chance = { factor = 10 }
+	}
+}
+
+# ======================================================================
+# .3  1783.09.03  THE LOSS OF AMERICA (Treaty of Paris). Britain recognises the
+# independence of the United States. This is the load-bearing act: release the USA
+# subject to sovereign statehood, and white-peace out the American war so the map
+# settles cleanly. The pre-existing usa_section Civil-War arc (#93) then fires ~1820.
+# (Pre-existing beat; done-flag gbr_empire_beat_yorktown [historical name kept].)
+# ======================================================================
 gbr_empire.3 = {
 	type = country_event
 	title = "gbr_empire.3.t"
 	desc = "gbr_empire.3.desc"
 	picture = city_siege
-
 	left_portrait = root.current_ruler
 	is_triggered_only = yes
 
@@ -87,45 +339,53 @@ gbr_empire.3 = {
 		tag = GBR
 		NOT = { has_variable = gbr_empire_beat_yorktown }
 	}
-
 	immediate = {
 		set_variable = gbr_empire_beat_yorktown
 		add_stability = -2
 		add_prestige = -20
-		# [bookmark-1763 #289] The Loss of America (Treaty of Paris, 3 Sep 1783): free the
-		# Thirteen Colonies. USA starts as a GBR client_colony at the 1763 bookmark (see
-		# 00_default.txt); this releases it to independent statehood holding its own 236
-		# eastern provinces, so the pre-existing usa_section Civil-War arc (#93) fires ~1820
-		# exactly as before. Guarded on USA still being GBR's subject (safe no-op otherwise).
-		# Proven idiom (verified upstream, not just in-mod): the overlord frees a subject via
-		# release_subject in the overlord's scope — Invictus form_upper_cilicia.txt:225
-		# (release_subject = c:CAS) and TI 02_numidian_missions.txt:306 (c:CAR = { release_subject
-		# = c:MSY }); release_subject is in the vanilla effect set (Invictus vanilla_keys.txt).
+		# THE RELEASE (Treaty of Paris, 3 Sep 1783): free the Thirteen Colonies. USA
+		# starts as a GBR client_colony holding its own 236 eastern provinces; this
+		# releases it to independent statehood so the usa_section arc fires ~1820.
+		# release_subject is the proven overlord-scope idiom (Invictus/TI + vanilla).
 		if = {
 			limit = {
 				exists = c:USA
 				c:USA = { is_subject_of = ROOT }
 			}
+			# end the war first (belt-and-braces determinism; all belligerents are AI):
+			# a lingering GBR<->USA/FRA war would otherwise contradict the peace.
+			# force_white_peace = c:TAG is the proven verb (WAR_scripted_guis.txt:1202,
+			# se_AI.txt:2624); it ends the whole war the two share, settling co-belligerents too.
+			if = {
+				limit = { war_with = c:USA }
+				force_white_peace = c:USA
+			}
 			release_subject = c:USA
 			LOG_line = { sys = GBR  msg = "EVENT gbr_empire.3: released USA to independence (1783) for [ROOT.GetTag]" }
 		}
+		# also settle the Franco-British war (Treaty of Versailles, same 1783 settlement).
+		if = {
+			limit = { exists = c:FRA  war_with = c:FRA }
+			force_white_peace = c:FRA
+		}
 		LOG_line = { sys = GBR  msg = "EVENT gbr_empire.3 (The Loss of America) for [ROOT.GetTag]" }
 	}
-
 	option = {
-		name = "gbr_empire.3.a"
+		name = "gbr_empire.3.a"   # turn east — India and the second empire
 		add_aggressive_expansion = 5
 		ai_chance = { factor = 10 }
 	}
 }
 
-# --- .4  1801.1.1  The Act of Union ----------------------------------
+# ======================================================================
+# .4  1801.01.01  THE ACT OF UNION. Great Britain and Ireland unite into the United
+# Kingdom. (Pre-existing beat; done-flag gbr_empire_beat_union.)
+# ======================================================================
 gbr_empire.4 = {
 	type = country_event
 	title = "gbr_empire.4.t"
 	desc = "gbr_empire.4.desc"
 	picture = throneroom
-
 	left_portrait = root.current_ruler
 	is_triggered_only = yes
 
@@ -133,27 +393,28 @@ gbr_empire.4 = {
 		tag = GBR
 		NOT = { has_variable = gbr_empire_beat_union }
 	}
-
 	immediate = {
 		set_variable = gbr_empire_beat_union
 		add_prestige = 15
 		add_stability = 1
 		LOG_line = { sys = GBR  msg = "EVENT gbr_empire.4 (The Act of Union) for [ROOT.GetTag]" }
 	}
-
 	option = {
 		name = "gbr_empire.4.a"
 		ai_chance = { factor = 10 }
 	}
 }
 
-# --- .5  1805.10.21  Trafalgar -----------------------------------------
+# ======================================================================
+# .5  1805.10.21  TRAFALGAR. Nelson destroys the Franco-Spanish fleet off Cape
+# Trafalgar; Britain rules the waves for a century, and the invasion threat lifts.
+# (Pre-existing beat; done-flag gbr_empire_beat_trafalgar.)
+# ======================================================================
 gbr_empire.5 = {
 	type = country_event
 	title = "gbr_empire.5.t"
 	desc = "gbr_empire.5.desc"
 	picture = naval_battle
-
 	left_portrait = root.current_ruler
 	is_triggered_only = yes
 
@@ -161,27 +422,28 @@ gbr_empire.5 = {
 		tag = GBR
 		NOT = { has_variable = gbr_empire_beat_trafalgar }
 	}
-
 	immediate = {
 		set_variable = gbr_empire_beat_trafalgar
 		add_prestige = 30
 		add_stability = 2
 		LOG_line = { sys = GBR  msg = "EVENT gbr_empire.5 (Trafalgar) for [ROOT.GetTag]" }
 	}
-
 	option = {
 		name = "gbr_empire.5.a"
 		ai_chance = { factor = 10 }
 	}
 }
 
-# --- .6  1815.6.18  Waterloo ------------------------------------------
+# ======================================================================
+# .6  1815.06.18  WATERLOO. Wellington and Blücher break Napoleon's last army; the
+# Napoleonic Wars end, and Britain emerges the paramount power. (Pre-existing beat;
+# done-flag gbr_empire_beat_waterloo.)
+# ======================================================================
 gbr_empire.6 = {
 	type = country_event
 	title = "gbr_empire.6.t"
 	desc = "gbr_empire.6.desc"
 	picture = war_council
-
 	left_portrait = root.current_ruler
 	is_triggered_only = yes
 
@@ -189,14 +451,12 @@ gbr_empire.6 = {
 		tag = GBR
 		NOT = { has_variable = gbr_empire_beat_waterloo }
 	}
-
 	immediate = {
 		set_variable = gbr_empire_beat_waterloo
 		add_prestige = 30
 		add_stability = 2
 		LOG_line = { sys = GBR  msg = "EVENT gbr_empire.6 (Waterloo) for [ROOT.GetTag]" }
 	}
-
 	option = {
 		name = "gbr_empire.6.a"
 		ai_chance = { factor = 10 }

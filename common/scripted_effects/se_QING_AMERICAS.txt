@@ -1,0 +1,150 @@
+﻿########################################################################
+# se_QING_AMERICAS.txt — [scripted-revolutions 2nd pass] texture effects for the
+# NORTH AMERICAN OPPORTUNITY events (qing_americas_events.txt). The Napoleonic Wars and
+# the War of 1812 fling the North American frontier open; a Qing that has already planted
+# a Pacific foothold (the Great Pacific Enterprise colonisation tree — Alaska/Canada/
+# California) may exploit it. The events OFFER the choices (the Qing is the player, D0);
+# these helpers supply the mechanical texture.
+#
+#   ROOT / this = CHI (the Qing player). Prefix = QING_americas_. sys = QING.
+#
+# DESIGN — CLAIM & SPHERE, NOT CONQUEST. The Louisiana Purchase transferred France's
+# PREEMPTION RIGHT (paper title to negotiate with / displace the Native nations), NOT
+# de-facto control: the Mississippi-Missouri watershed was held by sovereign Native
+# powers (Osage, Comanche, Lakota, Pawnee, Kiowa — tags OSG/CMC/LAK/PWN/… on the map)
+# into the 1820s-30s (Hämäläinen, Lakota America / The Comanche Empire; DuVal, The Native
+# Ground). So "buying Louisiana" here does NOT set_owned_by the interior. Instead it
+#   (a) lays a Qing CLAIM on the watershed provinces (the preemption right made concrete —
+#       the add_claim-in-loop idiom, proven se_DEJURE.txt:134), and
+#   (b) draws the Plains Native nations under the Qing wing as sinosphere_tributary
+#       subjects (FUNC_make_subject), which — being Qing subjects — auto-enter the existing
+#       four-power sphere-of-influence ring (se_QING_SPHERE builds its ring from CHI's
+#       subjects), so the trans-Mississippi west becomes a CONTESTED QING SPHERE, exactly
+#       as India/Central Asia/the marches already are. No Native land is annexed.
+# All FUNC_make_subject / add_claim / add_country_modifier calls are guarded so an absent
+# or already-bound target is a clean no-op.
+########################################################################
+
+# ======================================================================
+# QING_americas_claim_louisiana — lay the Qing preemption claim across the GREATER
+# Louisiana watershed (the Great_Plains region + the Louisiana & Arkansas areas — far
+# larger than the 14-province LSA tag, matching the real 1803 purchase). add_claim in a
+# province loop is the proven idiom (se_DEJURE.txt). Provinces the Qing already holds are
+# skipped. Scope: COUNTRY (CHI). Idempotent (adding an existing claim is a no-op).
+# ======================================================================
+QING_americas_claim_louisiana = {
+	LOG_enter = { sys = QING  fn = "QING_americas_claim_louisiana" }
+	save_scope_as = americas_claimant
+	every_province = {
+		limit = {
+			is_sea = no
+			OR = {
+				is_in_region = Great_Plains
+				is_in_area = Louisiana
+				is_in_area = Arkansas
+			}
+			NOT = { owner = scope:americas_claimant }
+		}
+		add_claim = scope:americas_claimant
+	}
+	LOG_line = { sys = QING  msg = "Americas: Qing preemption claim laid across the greater Louisiana watershed for" }
+	LOG_exit = { sys = QING  fn = "QING_americas_claim_louisiana"  result = OK }
+}
+
+# ======================================================================
+# QING_americas_embrace_plains — draw the sovereign Plains Native nations under the Qing
+# wing as sinosphere_tributary subjects (the historically-grounded suzerainty form — a
+# tributary tie, not displacement). Each such subject auto-enters the four-power sphere
+# ring (se_QING_SPHERE), so the trans-Mississippi west becomes a contested Qing sphere.
+# Scope: COUNTRY (CHI). Each embrace is guarded on the tag existing + not already ours.
+# Tags: OSG Osage | CMC Comanche | LAK Lakota | DAK Dakota | PWN Pawnee | CHY Cheyenne |
+#       ARP Arapaho | KIO (Kiowa — via CMC ally if no tag) | CDD Caddo | APA Apache | BLF Blackfoot.
+# ======================================================================
+QING_americas_embrace_plains = {
+	LOG_enter = { sys = QING  fn = "QING_americas_embrace_plains" }
+	QING_americas_embrace_one = { tag = OSG }
+	QING_americas_embrace_one = { tag = CMC }
+	QING_americas_embrace_one = { tag = LAK }
+	QING_americas_embrace_one = { tag = DAK }
+	QING_americas_embrace_one = { tag = PWN }
+	QING_americas_embrace_one = { tag = CHY }
+	QING_americas_embrace_one = { tag = ARP }
+	QING_americas_embrace_one = { tag = CDD }
+	QING_americas_embrace_one = { tag = APA }
+	QING_americas_embrace_one = { tag = BLF }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_americas_louisiana_claim } }
+		add_country_modifier = { name = qing_americas_louisiana_claim  duration = -1 }
+	}
+	LOG_line = { sys = QING  msg = "Americas: the Plains nations drawn into the Qing sphere as tributaries for" }
+	LOG_exit = { sys = QING  fn = "QING_americas_embrace_plains"  result = OK }
+}
+
+# One Plains nation embraced as a sinosphere_tributary. Scope: COUNTRY (CHI). $tag$ = the
+# native country tag. Guarded so an absent or already-subject tag is a clean no-op.
+QING_americas_embrace_one = {
+	if = {
+		limit = { exists = c:$tag$  NOT = { c:$tag$ = { is_subject_of = ROOT } } }
+		FUNC_make_subject = { overlord = ROOT  target = c:$tag$  type = sinosphere_tributary }
+		LOG_line = { sys = QING  msg = "Americas: $tag$ taken under the wing as a Plains tributary for" }
+	}
+}
+
+# ======================================================================
+# QING_americas_press_pacific_coast — press the Pacific-Northwest fur coast while the
+# Anglo-Americans are at war and the Russian-American Company is stretched. Lays a claim on
+# the Columbia mouth (Astoria, p:9250) — the American post the North West Company seized in
+# 1813 — and grants the Pacific-trade foothold modifier. Scope: COUNTRY (CHI). Guarded.
+# ======================================================================
+QING_americas_press_pacific_coast = {
+	LOG_enter = { sys = QING  fn = "QING_americas_press_pacific_coast" }
+	if = { limit = { exists = p:9250  NOT = { owns = 9250 } }  add_claim = p:9250 }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_col_pacific_trade } }
+		add_country_modifier = { name = qing_col_pacific_trade  duration = -1 }
+	}
+	# contesting the Columbia irks Britain (the Hudson's Bay / North West Company) —
+	# UNLESS the later Daoguang Doctrine has aligned the Qing with the American republic.
+	if = {
+		limit = { NOT = { has_country_modifier = qing_daoguang_doctrine } }
+		QING_gp_provoke_britain = { severity = 8 }
+	}
+	LOG_line = { sys = QING  msg = "Americas: the Qing presses the Columbia fur coast for" }
+	LOG_exit = { sys = QING  fn = "QING_americas_press_pacific_coast"  result = OK }
+}
+
+# ======================================================================
+# QING_americas_press_california — plant the Qing foothold on the golden shore while
+# Spain is prostrate under the Peninsular War (1808-1814) and cannot answer, as Russia
+# did at Fort Ross (1812). Claims San Francisco Bay (p:1493) and grants the golden-shore
+# foothold. Scope: COUNTRY (CHI). Guarded so an already-held bay is a no-op.
+# ======================================================================
+QING_americas_press_california = {
+	LOG_enter = { sys = QING  fn = "QING_americas_press_california" }
+	if = { limit = { exists = p:1493  NOT = { owns = 1493 } }  add_claim = p:1493 }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_col_golden_shore } }
+		add_country_modifier = { name = qing_col_golden_shore  duration = -1 }
+	}
+	LOG_line = { sys = QING  msg = "Americas: the Qing plants a foothold on the Californian shore for" }
+	LOG_exit = { sys = QING  fn = "QING_americas_press_california"  result = OK }
+}
+
+# ======================================================================
+# QING_americas_press_alaska — press Russian America (Sitka p:9429, Kodiak p:2477) while
+# the Tsar throws everything into the war against Napoleon and the fur coast is stripped
+# bare. Claims the two Alaskan seats and grants the fur-coast foothold; provokes Russia
+# (the direct contest for the Tsar's colony). Scope: COUNTRY (CHI). Guarded.
+# ======================================================================
+QING_americas_press_alaska = {
+	LOG_enter = { sys = QING  fn = "QING_americas_press_alaska" }
+	if = { limit = { exists = p:9429  NOT = { owns = 9429 } }  add_claim = p:9429 }
+	if = { limit = { exists = p:2477  NOT = { owns = 2477 } }  add_claim = p:2477 }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_col_fur_coast } }
+		add_country_modifier = { name = qing_col_fur_coast  duration = -1 }
+	}
+	QING_gp_provoke_russia = { severity = 10 }
+	LOG_line = { sys = QING  msg = "Americas: the Qing presses Russian America while the Tsar fights in the west for" }
+	LOG_exit = { sys = QING  fn = "QING_americas_press_alaska"  result = OK }
+}
