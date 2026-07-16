@@ -280,3 +280,107 @@ Ran a workflow: 4 dimension reviewers (boot-crash / ai-autonomy / historical / i
 - Tag existence: any new country tags (if needed) must be added to `setup/countries/countries.txt` before `change_country_tag`.
 - Offset arithmetic: all dated beats computed as (historical_date − 1763.2.16) in days; windows `{ off  off+90 }`.
 - AI war prosecution: reconquest/wargoal needs `add_claim` on target provinces first for the AI's `allow` to pass.
+
+## 10. SECOND PASS (2026-07-16) — additional research + new content
+
+The user asked for a second pass with additional research: (a) Qing SE-Asia historical-choice
+events (Tây Sơn/Vietnam, Taksin's Siam, Batavia massacre, Penang, 海禁); (b) a Louisiana
+Purchase offer to the Qing, contingent on a N. American presence, granting the GREATER
+watershed (not the small LSA tag); (c) the War of 1812 + Napoleonic effects on British
+Canada/the US, offering more Qing colonial openings; (d) Alaska/Russian America; and — a
+mid-pass correction — the Louisiana grant reworked from outright annexation into a
+CLAIM/SPHERE approach, reusing the existing Qing sphere content, because Native tags occupy
+that land.
+
+### Research dispatched (2026-07-16, 2nd pass)
+Two more general-purpose agents (EN academic), both delivered full reports:
+- **War of 1812 / Napoleonic North America** — Hickey (2012); Taylor, *The Civil War of 1812*
+  (2010); Borneman (2004); Latimer (2007); Hitsman & Graves (1999); Berton (1981); Bickham
+  (2012); Calloway. Full datable chronology + the Pacific opportunity windows (Astoria
+  1811/sold-to-British 1813; Fort Ross 1812; Spanish-California collapse 1808–1814).
+- **Louisiana / Pacific presences** — Hämäläinen, *The Comanche Empire* (2008, Yale) &
+  *Lakota America* (2019, Yale); DuVal, *The Native Ground* (2006); Gibson, *Otter Skins,
+  Boston Ships, and China Goods* (maritime fur trade to Canton); Tikhmenev, *A History of the
+  Russian-American Company* (1978). **Both reports independently confirm the user's
+  correction:** the 1803 purchase transferred France's PREEMPTION RIGHT (paper title to
+  negotiate-with/displace the natives), NOT control — the Osage, Comanche, Lakota, Pawnee,
+  Kiowa held de-facto sovereignty over the interior into the 1820s–30s.
+
+### KEY DECISION — Louisiana as CLAIM + SPHERE, not conquest
+The user's correction ("Native tags occupy that land … a colonial claim or making them
+subjects or a sphere of influence alternative is better … refer to existing sphere content
+for Qing implemented in Asia"). So the "buy Louisiana" option does NOT `set_owned_by` the
+interior. Instead (`QING_americas_claim_louisiana` + `QING_americas_embrace_plains`, in the
+new `se_QING_AMERICAS.txt`):
+- lays a Qing **claim** across the greater watershed — `Great_Plains` region + `Louisiana`
+  + `Arkansas` areas — via the proven `every_province { … add_claim = scope:claimant }`
+  loop (se_DEJURE.txt idiom). This is the preemption right made concrete. (This is the
+  greater Louisiana, ~far larger than the 14-province LSA tag, per the user's note.)
+- draws the sovereign **Plains Native tags** (OSG Osage, CMC Comanche, LAK Lakota, DAK,
+  PWN Pawnee, CHY, ARP, CDD, APA, BLF — all confirmed to own land at the 1763 start) under
+  the wing as `sinosphere_tributary` subjects (`FUNC_make_subject`). **Because
+  `se_QING_SPHERE` (the #165 four-power sphere) builds its contested ring from CHI's
+  SUBJECTS**, these tributaries auto-enter the sphere contest — so the trans-Mississippi
+  west becomes a contested Qing sphere exactly as India/Central Asia already are. No Native
+  land is annexed. This is the "reuse existing Asia sphere content" the user asked for.
+
+### New files (2nd pass)
+- `events/imp19c_mod_events/qing_nanyang_events.txt` (namespace `qing_nanyang`, BOM) — the 5
+  SE-Asia choice events: .1 Taksin/Siam (3241), .5 Penang (8577), .2 Vietnam/Tây Sơn (9390),
+  .3 Lanfang succession (11642), .4 Hongxi massacre (13467). Player OFFERS (D0). The old
+  in-file `.6` Louisiana stub was REMOVED — North America moved to its own namespace.
+- `common/on_action/qing_nanyang_on_actions.txt` — seeds the 5 to c:CHI (LIST form).
+- `events/imp19c_mod_events/qing_americas_events.txt` (namespace `qing_americas`, BOM) — .1
+  Louisiana Offer (14682, claim+sphere), .2 Spain-Prostrate/California (16541, Fort-Ross
+  window), .4 Tsar's-Colony-Stripped/Alaska (18104), .3 Fall-of-Astoria/Columbia (18511).
+  Each GATED on a genuine Pacific presence (colonisation-tree footholds or a held NA province).
+- `common/on_action/qing_americas_on_actions.txt` — seeds the 4 to c:CHI.
+- `common/scripted_effects/se_QING_AMERICAS.txt` — the claim/sphere/coast helpers.
+- `events/imp19c_mod_events/usa_1812_events.txt` (namespace `usa_1812`, BOM) — the AI-
+  AUTONOMOUS War of 1812 arc (9 beats): Chesapeake (16196), Embargo (16379), Tippecanoe
+  (17795), **US declares war** (18019, `FUNC_declare_war_with_wargoal_province` on Toronto
+  p:5484), Detroit (18078, GBR), Thames/Tecumseh-dies (18493, opens the Old Northwest via
+  `usa_1812_northwest_open`), Burning of Washington (18816, GBR — gated on Napoleon beaten),
+  **Ghent** (18938, GBR, `force_white_peace` — status quo ante, net territory = 0), New
+  Orleans (18953). Reuses the generic `USA_nudge` counter helper. Bridges the gap before the
+  `usa_section` Civil-War arc (opens 1820).
+- `common/on_action/usa_1812_on_actions.txt` — seeds USA-side + GBR-side beats (tag-gated).
+- Modifiers: `qing_americas_louisiana_claim` (asia_napoleonic_modifiers.txt),
+  `usa_1812_northwest_open` (usa_section_modifiers.txt).
+- Loc: `usa_1812_l_english.yml`, `qing_americas_l_english.yml` (both BOM); qing_nanyang
+  events appended to the existing `qing_nanyang_l_english.yml`.
+
+### Design notes (2nd pass)
+- **Vietnam tags:** VIE (Nguyễn/Annam), TRH (Trịnh/Tonkin) — no Tây Sơn tag exists, so the
+  intervention is modelled by the choice + tributary outcome, not a tag swap.
+- **War of 1812 is deliberately indecisive:** .4 declares, .8 white-peaces out; the LASTING
+  effect is the Native-confederacy collapse (opens the west) + the Anglo-American distraction
+  that the `qing_americas` Pacific beats read. Napoleonic linkage explicit: Washington (.7)
+  gated on the war being on, and its flavour ties to Napoleon's first abdication freeing the
+  Peninsular veterans (fra_revolution.6, four months prior).
+- **Pacific beats mirror the real vacuum-fillers:** Russia (Fort Ross 1812) and Britain
+  (Astoria 1813) took these openings historically; the Qing is OFFERED the same, contingent
+  on already having a Pacific foothold from the Great Pacific Enterprise colonisation tree.
+- All Qing-facing content OFFERS (D0); all USA/GBR content is AI-autonomous (tag self-gate,
+  explicit ai_chance, decisive change in immediate). BOM + brace-balance verified on all files.
+
+### Adversarial review (2nd pass) — DONE (2026-07-16)
+Ran the workflow (4 dimension reviewers → skeptic verification → synthesis). Findings raised
+resolved to **2 distinct real defects** (the rest were the same issue re-reported, or refuted):
+
+1. **Orphaned first-pass `qing_nanyang.6` Louisiana event** (CONFIRMED, ×3 angles) — the old
+   set_owned_by Louisiana stub was left in `qing_nanyang_events.txt` when I moved the design to
+   `qing_americas.1`; it was unseeded (dead), referenced an undefined modifier
+   (`qing_nanyang_louisiana`) and missing loc, AND still annexed Native land (contradicting the
+   claim/sphere rework). **FIX:** deleted the entire `qing_nanyang.6` event.
+2. **War-of-1812 wargoal province not owned by the target** (CONFIRMED) — `usa_1812.4` anchored
+   `conquer_wargoal` on Toronto (p:5484), owned by GBR's *subject* Upper Canada (UCA), not GBR
+   itself; a conquer_wargoal on a province the target does not DIRECTLY own can be rejected,
+   no-op'ing the load-bearing declaration. **FIX:** re-anchored on London (p:3388, GBR's capital)
+   — matching the proven `gbr_empire.11` precedent. `FUNC_declare_war_with_wargoal_province` still
+   pulls GBR's Canadian colonies into the war (the historical invasion); the war is white-peaced
+   out at Ghent regardless, so net territory = 0 and the Canadian theatre is narrative.
+
+**Refuted (correctly):** the .4/.5 window-overlap race (pre-empted — .4's window 18019–18069 ends
+before .5's 18078; documented inline); a phantom "lines 311-369" claim (stale after the .6 delete).
+No boot-crash, log-flood, AI-autonomy, D0, or other reference defects found in the new content.
