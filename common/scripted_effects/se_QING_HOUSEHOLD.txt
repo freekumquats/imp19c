@@ -39,7 +39,85 @@ QING_household_init = {
 	# so the many callers (QING_household_pulse etc.) need no change. The old 0..100
 	# qing_privy_purse country meter is RETIRED; the 內帑 is the sovereign's real private silver.
 	LOG_enter = { sys = QING  fn = "QING_household_init" }
+	# [boot #12] seed the opening palace-eunuch corps (太監) once at game start.
+	QING_household_seed_eunuchs = yes
 	LOG_exit = { sys = QING  fn = "QING_household_init"  result = OK }
+}
+
+# ======================================================================
+# [boot #12] PALACE-EUNUCH CORPS (太監). The user saw "The Eunuchs" as a field in the
+# Household panel but only a threat-meter stood behind it — no actual eunuch characters.
+# The Qing kept a large palace establishment of eunuchs (the 敬事房 administered them);
+# they are the concrete objects the eunuch mechanic should manage (concrete-over-abstract
+# house rule), and the faction-danger mechanic promotes one of THESE rather than conjuring a
+# fresh stranger. Seed a small opening corps + keep a self-healing roster, mirroring the
+# proven harem consort roster (se_QING_HAREM.txt QING_harem_mint_consort / _recompute_roster).
+#
+# STATE:  qing_household_eunuchs  country variable_list of the living palace eunuchs
+#         qing_eunuch_count       their count (GUI + perf reads)
+# Char:   qing_is_palace_eunuch   marker flag on each eunuch character
+# ======================================================================
+QING_household_seed_eunuchs = {
+	if = {
+		limit = { NOT = { has_variable = qing_eunuchs_initialized } }
+		set_variable = { name = qing_eunuchs_initialized  value = 1 }
+		set_variable = { name = qing_eunuch_count  value = 0 }
+		clear_variable_list = qing_household_eunuchs
+		# an opening establishment of four palace eunuchs (only if the throne is filled).
+		if = {
+			limit = { exists = current_ruler }
+			QING_household_mint_eunuch = yes
+			QING_household_mint_eunuch = yes
+			QING_household_mint_eunuch = yes
+			QING_household_mint_eunuch = yes
+		}
+		LOG_line = { sys = QING  msg = "household: seeded the opening palace-eunuch corps for" }
+	}
+}
+
+# QING_household_mint_eunuch — create ONE palace eunuch and add him to the roster.
+# Scope: COUNTRY (CHI). Palace eunuchs were overwhelmingly Han commoners bound to the
+# throne's household. #90 rule: NO modifiers granted inside create_character; markers set
+# in a follow-up scope. Mirrors QING_harem_mint_consort.
+QING_household_mint_eunuch = {
+	create_character = {
+		age = 30
+		culture = han            # palace eunuchs were overwhelmingly Han commoners
+		religion = confucianism
+		# a eunuch's gifts are administrative/social, not martial.
+		add_finesse = 4
+		add_charisma = 3
+		add_zeal = 1
+		save_scope_as = qing_new_eunuch
+	}
+	scope:qing_new_eunuch = {
+		set_home_country = ROOT
+		set_variable = { name = qing_is_palace_eunuch  value = 1 }
+	}
+	add_to_variable_list = { name = qing_household_eunuchs  target = scope:qing_new_eunuch }
+	change_variable = { name = qing_eunuch_count  add = 1 }
+	LOG_line = { sys = QING  msg = "household: a eunuch enters the palace establishment for" }
+}
+
+# QING_household_recompute_eunuchs — rebuild the eunuch roster fresh from the live
+# characters carrying the marker (alive + still in the household). Self-healing (prunes the
+# dead/departed), keeps the count honest for the GUI. Bounded O(characters); run on the
+# household pulse + on panel open. Scope: COUNTRY (CHI). Mirrors QING_harem_recompute_roster.
+QING_household_recompute_eunuchs = {
+	clear_variable_list = qing_household_eunuchs
+	set_variable = { name = qing_eunuch_count  value = 0 }
+	every_character = {
+		limit = {
+			has_variable = qing_is_palace_eunuch
+			is_alive = yes
+			employer = ROOT
+		}
+		save_scope_as = qing_roster_eunuch
+		ROOT = {
+			add_to_variable_list = { name = qing_household_eunuchs  target = scope:qing_roster_eunuch }
+			change_variable = { name = qing_eunuch_count  add = 1 }
+		}
+	}
 }
 
 # ======================================================================
@@ -75,6 +153,8 @@ QING_household_carryover_purse = {
 QING_household_pulse = {
 	LOG_enter = { sys = QING  fn = "QING_household_pulse" }
 	QING_household_init = yes
+	# [boot #12] refresh the palace-eunuch roster (prunes the dead/departed, keeps the count honest).
+	QING_household_recompute_eunuchs = yes
 
 	# --- PRIVY PURSE DRIFT: capable loyal high-charisma Grand Secretary fills it
 	# (+2/quarter), vacant or venal office drains it (-3/quarter).
@@ -138,28 +218,33 @@ QING_household_pulse = {
 		random = {
 			chance = 20
 			LOG_line = { sys = QING  msg = "household pulse: eunuch faction arising (corrupt + weak Grand Secretary) for" }
-			# CONCRETE: create the eunuch character first (#90 rule: no modifiers inside create_character)
-			create_character = {
-				culture = han            # [logfix] was ROOT.primary_culture (invalid create_character field); palace eunuchs were Han
-				religion = confucianism  # [logfix] was ROOT.religion
-				age = 35
-				add_trait = corrupt
-				add_trait = ambitious
+			# [boot #12] CONCRETE: the faction leader rises from the EXISTING palace-eunuch corps
+			# (the danger is one of the seeded 太監 growing overmighty, not a stranger materialising).
+			# Guard against an empty corps (all dead/departed) by minting one first if needed.
+			if = {
+				limit = {
+					NOT = {
+						any_character = { employer = ROOT  has_variable = qing_is_palace_eunuch  is_alive = yes }
+					}
+				}
+				QING_household_mint_eunuch = yes
 			}
-			# then flag + empower him in a SEPARATE effect
-			random_character = {
+			# promote the most capable serving eunuch to faction leader + give him a power base.
+			ordered_character = {
 				limit = {
 					employer = ROOT
+					has_variable = qing_is_palace_eunuch
+					is_alive = yes
 					NOT = { has_variable = qing_eunuch_faction_leader }
-					has_trait = corrupt
-					has_trait = ambitious
-					age < 40
 				}
+				order_by = finesse
+				max = 1
 				set_variable = { name = qing_eunuch_faction_leader  value = 1 }
+				add_trait = ambitious
 				add_loyal_veterans = 3
 				add_gold = 50
 				add_corruption = 20
-				LOG_line = { sys = QING  msg = "household pulse: eunuch leads faction (power base +3) for" }
+				LOG_line = { sys = QING  msg = "household pulse: a palace eunuch leads a faction (power base +3) for" }
 			}
 		}
 	}

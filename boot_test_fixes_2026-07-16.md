@@ -180,6 +180,26 @@ overpopulation-flagged / in-migration-boom province across the whole realm is li
 Brace-balanced (89/89). The qualifying criteria (boom modifiers / overpopulation / total_population>=20) are
 unchanged.
 
+### #12 — Eunuch characters (add real eunuchs, not just the threat meter) (DONE)
+The user saw "The Eunuchs (太監)" as a Household field but only a threat-indicator + a faction-leader
+flag (stamped on an ad-hoc created stranger) stood behind it — no visible corps. Added a CONCRETE
+palace-eunuch establishment (concrete-over-abstract house rule), mirroring the proven harem consort
+roster (se_QING_HAREM.txt):
+- se_QING_HOUSEHOLD.txt: QING_household_seed_eunuchs (guarded, seeds an opening corps of 4 Han eunuchs
+  at game start, called from QING_household_init which runs in the CHI init block), QING_household_mint_eunuch
+  (create_character, #90-safe — markers in a follow-up scope: qing_is_palace_eunuch + set_home_country;
+  finesse/charisma gifts), QING_household_recompute_eunuchs (self-healing roster rebuild → qing_household_eunuchs
+  list + qing_eunuch_count, run on pulse + panel open). REWORKED the pulse's faction-arising branch: the
+  danger now PROMOTES the most capable serving eunuch (ordered_character order_by=finesse max=1) to
+  qing_eunuch_faction_leader instead of conjuring a fresh stranger (falls back to minting one only if the
+  corps is empty).
+- QING_household_panel.txt: panel-open now seeds+recomputes the roster; added qing_household_has_eunuchs indicator.
+- qing_household.gui: added a "Palace Eunuchs (太監)" roster section (dynamicgridbox over qing_household_eunuchs,
+  Character.GetName + finesse/charisma; a faction-leader eunuch tagged in red via
+  Character.MakeScope.Var('qing_eunuch_faction_leader').IsSet — the proven imp19c_windows.gui idiom).
+- Added 4 loc keys. All files brace-balanced (se 137/137, panel 81/81, gui 147/147); ordered_character
+  order_by=finesse is a proven in-mod idiom (se_QING_CANTON.txt).
+
 **INHERITED / framework noise (not mod-authored, left):** PROVINCE_TOOLTIP loc (10790), missing
 `gradient_black_flip.dds` texture (7378), the `oa_wealth_changes`/`GT_split_*`/`EE_scripted_guis`
 economy-framework script errors + sqrt `Illegal use of operator` (the economy-framework's own
