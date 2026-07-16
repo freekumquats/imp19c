@@ -70,6 +70,9 @@ qing_justice_accuse_official = {
 		# a present Minister of Justice must be seated to lay a charge...
 		has_variable = qing_office_justice_holder
 		var:qing_office_justice_holder = { is_alive = yes  employer = ROOT }
+		# [#13 boot] ...the throne must be able to AFFORD the political capital a formal indictment
+		# spends (mirror qing_justice_accuse_selected + the qing_justice.8 charge cost). Scope = CHI.
+		political_influence >= 20
 		# ...and there must BE an accusable official not already on the docket (mirror
 		# find_accusable's limit, so no dead-affordance click).
 		any_character = {
@@ -79,19 +82,13 @@ qing_justice_accuse_official = {
 			is_alive = yes
 			NOT = { has_variable = qing_rebel_foil }
 			NOT = { has_variable = qing_justice_accused }
-			# [#363-R2 review-fix] exclude ALL seated great-office holders (mirrors the widened
-			# find-limit + the docket rebuild's NOT={has_variable=qing_office_held} guard), so the
-			# lever is dead unless there is an accusable man who will actually reach the docket —
-			# charging an office-holder used to no-op (he was filtered out of the docket) and strand
-			# a permanent un-triable mark. Subsumes the old sitting-Justice-minister-only exclusion.
-			NOT = { has_variable = qing_office_held }
-			# [#419] MUST stay byte-identical to QING_justice_find_accusable's limit (se_QING_JUSTICE.txt)
-			# so the button is never a dead affordance: the imprison-target bars (a convict is jailed via
-			# vanilla `imprison`, which refuses commanders/governors/heir/co-ruler/family & clan heads) and
-			# the broadened misconduct OR (moderate corruption / cruel / arbitrary / disloyal) both mirror it.
-			is_general = no
-			is_admiral = no
-			is_governor = no
+			# [#14 boot] STRIP-THEN-ACCUSE: office-holders/commanders/governors are chargeable now (they
+			# are relieved of the shielding post on charge), so the old NOT={has_variable=qing_office_held}
+			# + is_general/is_admiral/is_governor=no exclusions are dropped. Keep only imprison's un-strippable
+			# bars. MUST stay byte-identical to QING_justice_find_accusable / _refresh_accusable / _accuse_selected.
+			# [#14 review-fix] but the sitting Justice minister cannot try himself (self-charge would vacate
+			# his seat and strand his docket entry un-triable).
+			NOT = { AND = { has_variable = qing_office_held  var:qing_office_held = flag:justice } }
 			is_co_ruler = no
 			is_primary_heir = no
 			is_head_of_family = no
@@ -214,19 +211,21 @@ qing_justice_accuse_selected = {
 		scope:player = {
 			has_variable = qing_office_justice_holder
 			var:qing_office_justice_holder = { is_alive = yes  employer = scope:player }
+			# [#13 boot] the throne must afford the political capital an indictment spends.
+			political_influence >= 20
 		}
 		# the selected man must still be chargeable — mirror QING_justice_refresh_accusable's
-		# limit so a row that went stale (e.g. promoted to office since the refresh) is dead.
+		# limit so a row that went stale (e.g. gained a bar since the refresh) is dead.
 		employer = scope:player
 		is_ruler = no
 		is_adult = yes
 		is_alive = yes
 		NOT = { has_variable = qing_rebel_foil }
 		NOT = { has_variable = qing_justice_accused }
-		NOT = { has_variable = qing_office_held }
-		is_general = no
-		is_admiral = no
-		is_governor = no
+		# [#14 boot] office-holders/commanders/governors ARE chargeable (stripped on charge); keep
+		# only imprison's un-strippable bars. Byte-identical to the shared accusable limit.
+		# [#14 review-fix] the sitting Justice minister cannot try himself.
+		NOT = { AND = { has_variable = qing_office_held  var:qing_office_held = flag:justice } }
 		is_co_ruler = no
 		is_primary_heir = no
 		is_head_of_family = no
@@ -240,9 +239,14 @@ qing_justice_accuse_selected = {
 		}
 	}
 	effect = {
-		set_variable = { name = qing_justice_accused  value = 1 }
+		# [#13/#14 boot] route the charge through the hidden CHARACTER event qing_justice.8 (a RUNTIME
+		# trigger_event, never compile-inlined): it STRIPS the shielding position (QING_justice_strip_for_trial
+		# reaches remove_command / remove_as_governor / QING_office_vacate_dispatch — vacate itself fires a
+		# nested trigger_event, which must not be compile-inlined into this button), spends the political
+		# influence, adds the small tyranny of a politically-charged indictment, then sets the accused mark.
+		# ROOT = the charged man (as strip_for_trial expects); the saved player scope carries into trigger_event.
+		trigger_event = { id = qing_justice.8 }
 		LOG_line = { sys = QING  msg = "justice: an official charged onto the docket via the picker for" }
-		scope:player = { QING_ministry_recompute_perf_justice = yes }
 	}
 }
 

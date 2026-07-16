@@ -279,25 +279,28 @@ QING_sphere_seed_state = {
 # A state whose top score is below the contest floor (20) reads as neutral.
 # ======================================================================
 QING_sphere_recompute_dominant = {
-	# [BT-64 logfix] top_val was a LOCAL var, and `var:X > local_var:top_val` is rejected by the
-	# engine ("Illegal use of operator >") — a persistent var may not be compared against a local_var
-	# operand this way. Promote top_val to a PERSISTENT scratch var so every compare is the proven
-	# `var: > var:` form (used dozens of times across the Qing suite, e.g. qing_banner_decay >=
-	# qing_greenstandard_decay). Cleared at the end so no state leaks between states/pulses.
+	# [logfix] the engine rejects a variable-reference on a RELATIONAL comparison RHS ("Illegal use
+	# of operator", operators < > <= >=) — bare var:, scope:X.var:, ROOT.var:, AND local_var: alike
+	# (proven from the live 1763 log: the sqrt helper's `local_var: > local_var:` floods 157x).
+	# Numeric `=` identity is EXEMPT (var:qing_sphere_dominant = var:..._prev at :512 is silent in
+	# the same log). The ONLY legal relational RHS is a literal number or an inline `{ value = ... }`
+	# block (byte-identical to the granary/famine SHIP-leg `has_state_food < { value = ... }`, silent
+	# in the same log). top_val is a PERSISTENT scratch var so it survives the block eval; each
+	# compare wraps the RHS var in `{ value = var:X }`. Cleared at the end so no state leaks.
 	set_variable = { name = qing_sphere_top_val  value = var:china_influence }
 	set_variable = { name = qing_sphere_dominant  value = 1 }
 	if = {
-		limit = { var:britain_influence > var:qing_sphere_top_val }
+		limit = { var:britain_influence > { value = var:qing_sphere_top_val } }
 		set_variable = { name = qing_sphere_top_val  value = var:britain_influence }
 		set_variable = { name = qing_sphere_dominant  value = 2 }
 	}
 	if = {
-		limit = { var:france_influence > var:qing_sphere_top_val }
+		limit = { var:france_influence > { value = var:qing_sphere_top_val } }
 		set_variable = { name = qing_sphere_top_val  value = var:france_influence }
 		set_variable = { name = qing_sphere_dominant  value = 3 }
 	}
 	if = {
-		limit = { var:russia_influence > var:qing_sphere_top_val }
+		limit = { var:russia_influence > { value = var:qing_sphere_top_val } }
 		set_variable = { name = qing_sphere_top_val  value = var:russia_influence }
 		set_variable = { name = qing_sphere_dominant  value = 4 }
 	}
@@ -363,7 +366,7 @@ QING_sphere_bleed_one_power = {
 					limit = {
 						NOT = { this = scope:bleed_src_state }
 						has_variable = qing_sphere_contested
-						var:$power$_influence_snap > scope:bleed_src_state.var:sphere_bleed_nbrmax
+						var:$power$_influence_snap > { value = scope:bleed_src_state.var:sphere_bleed_nbrmax }
 					}
 					# raise the running max on the SOURCE state (proven cross-state numeric read).
 					save_scope_as = bleed_nbr_state
@@ -376,7 +379,7 @@ QING_sphere_bleed_one_power = {
 	}
 	# Pull toward the strongest neighbour if it out-influences our own snapshot: close 1/4 the gap.
 	if = {
-		limit = { var:sphere_bleed_nbrmax > var:$power$_influence_snap }
+		limit = { var:sphere_bleed_nbrmax > { value = var:$power$_influence_snap } }
 		# gap = nbrmax - own snapshot; bleed = gap / 4 (persistent-var arithmetic, proven).
 		set_variable = { name = sphere_bleed_gap  value = var:sphere_bleed_nbrmax }
 		change_variable = { name = sphere_bleed_gap  subtract = var:$power$_influence_snap }

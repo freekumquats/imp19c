@@ -405,3 +405,47 @@ qing_justice.7 = {
 		QING_justice_refresh_accusable = yes
 	}
 }
+
+########################################################################
+# .8  CHARGE-AN-OFFICIAL TRAMPOLINE  (hidden, character-scoped)  [#13/#14 boot]
+# The picker row-lever qing_justice_accuse_selected (QING_justice_panel.txt) fires this instead of
+# charging the man inline. It (a) STRIPS his shielding position for trial (QING_justice_strip_for_trial
+# reaches remove_command / remove_as_governor / QING_office_vacate_dispatch — and vacate itself fires
+# a nested trigger_event, which a scripted_gui would compile-inline into the button's effect chain at
+# PARSE time and access-violate the loader, the #443 crash class); (b) spends the political influence
+# and adds the small tyranny of a politically-charged indictment (#13, at CHI = scope:player); (c) marks
+# him qing_justice_accused so the docket rebuild picks him up; (d) recomputes the meter + roster.
+# ROOT = the charged man (as strip_for_trial expects); the saved `player` scope (= CHI) carries into
+# trigger_event (proven: qing_harem.2 / qing_justice.6). trigger_event is a RUNTIME ref, never inlined.
+########################################################################
+qing_justice.8 = {
+	type = character_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_justice.8 (charge-an-official trampoline) [ROOT.GetTag]" }
+		# re-guard at fire time (the row's is_valid checked these, but is_valid and the trampoline are two
+		# separate evaluations — a stale/double click must no-op rather than double-spend or go negative):
+		#   - the treasury must still afford the 20 PI (else charge for free / negative);
+		#   - the man must not ALREADY be docketed (else a re-fire double-spends PI + tyranny on a no-op charge).
+		if = {
+			limit = {
+				scope:player = { political_influence >= 20 }
+				NOT = { has_variable = qing_justice_accused }
+			}
+			# strip the shielding position so the accused faces trial as a private man and is jailable.
+			QING_justice_strip_for_trial = yes
+			set_variable = { name = qing_justice_accused  value = 1 }
+			scope:player = {
+				# [#13] a formal indictment of a serving official spends political capital and, being a
+				# politically-charged act of the throne, carries a small tyranny.
+				add_political_influence = -20
+				add_tyranny = tyranny_small
+				QING_ministry_recompute_perf_justice = yes
+			}
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "qing_justice.8"  reason = "insufficient political influence to charge for" }
+		}
+	}
+}

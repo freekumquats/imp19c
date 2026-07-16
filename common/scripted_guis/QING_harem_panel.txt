@@ -65,10 +65,11 @@ qing_harem_hold_draft = {
 	}
 }
 
-# ---- FAVOUR A CONSORT (臨幸) — beget a recognised imperial child. MIRROR the effect's own
-# guard (a male reigning emperor + a living consort in the roster), so the button and the
-# effect agree — without this it would be a live-but-no-op affordance on an empty court or a
-# female/absent sovereign.
+# ---- FAVOUR A CONSORT (臨幸) — open the FAVOUR PICKER. [#9 boot] The panel button no longer
+# favours a random consort; it refreshes the favourable-consort list (the qing_harem.4 trampoline —
+# a SORTING iterator, so trigger_event-fired, never inlined) and opens qing_harem_favour_window, where
+# a row-click favours the CHOSEN woman (qing_harem_favour_selected). is_valid mirrors the effect's own
+# guard so the button greys on an empty/ineligible court (a male reigning emperor + a favourable consort).
 qing_harem_favour_consort = {
 	scope = country
 	ai_is_valid = { always = no }
@@ -82,15 +83,47 @@ qing_harem_favour_consort = {
 		any_in_list = { variable = qing_harem_consorts  is_alive = yes  is_pregnant = no }
 	}
 	effect = {
-		QING_harem_favour_consort = yes
-		LOG_line = { sys = QING  msg = "harem panel: the emperor favours a consort for" }
+		trigger_event = { id = qing_harem.4 }
+		LOG_line = { sys = QING  msg = "harem panel: opening the favour-a-consort picker for" }
 	}
 }
 
-# ---- [#438] PROMOTE A CONSORT (晉封) — elevate the most-favoured eligible consort one rank up
-# the graded establishment (妃 → 貴妃 → 皇貴妃). MIRROR the effect's own guard: at least one living
-# consort below the top rank whose next tier still has an open place under its cap (皇貴妃 1 / 貴妃 2
-# / 妃 4). Without this the button would be a no-op affordance when the ladder is full at every tier.
+# ---- FAVOUR THE CHOSEN CONSORT (臨幸) — row action on the favour picker. The clicked consort comes
+# via the picker's character datacontext (ROOT = the woman); scope:player = CHI. Re-roots to CHI
+# through qing_harem.5 (the effect is written for ROOT = CHI reading scope:qing_favour_target), exactly
+# the take-consort re-root pattern. is_valid re-guards the emperor + the woman's eligibility.
+qing_harem_favour_selected = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+	}
+	is_valid = {
+		is_alive = yes
+		is_female = yes
+		is_pregnant = no
+		has_variable = qing_is_harem_consort
+		scope:player = {
+			exists = current_ruler
+			current_ruler = { is_male = yes }
+		}
+	}
+	effect = {
+		save_scope_as = qing_favour_target
+		scope:player = {
+			trigger_event = { id = qing_harem.5 }
+			LOG_line = { sys = QING  msg = "harem panel: the emperor favours a chosen consort for" }
+		}
+	}
+}
+
+# ---- [#438] PROMOTE A CONSORT (晉封) — open the PROMOTE PICKER. [#9 boot] The panel button no longer
+# promotes the most-favoured consort automatically; it refreshes the promotable-consort list (the
+# qing_harem.6 trampoline — a SORTING iterator, so trigger_event-fired) and opens
+# qing_harem_promote_window, where a row-click elevates the CHOSEN woman (qing_harem_promote_selected).
+# is_valid mirrors the effect's own guard: a living consort below the top rank whose next tier under its
+# cap (皇貴妃 1 / 貴妃 2 / 妃 4) still has an open place — so the button greys when the ladder is full.
 qing_harem_promote_consort = {
 	scope = country
 	ai_is_valid = { always = no }
@@ -110,8 +143,36 @@ qing_harem_promote_consort = {
 		}
 	}
 	effect = {
-		QING_harem_promote_consort = yes
-		LOG_line = { sys = QING  msg = "harem panel: a consort is elevated in rank for" }
+		trigger_event = { id = qing_harem.6 }
+		LOG_line = { sys = QING  msg = "harem panel: opening the promote-a-consort picker for" }
+	}
+}
+
+# ---- PROMOTE THE CHOSEN CONSORT (晉封) — row action on the promote picker. The clicked consort comes
+# via the picker's character datacontext (ROOT = the woman); scope:player = CHI. Re-roots to CHI through
+# qing_harem.7 (the effect is written for ROOT = CHI reading scope:qing_promote_target). is_valid re-guards
+# her rank against the effect's caps — but the caps read here are ROOT.var on the CHARACTER root, which
+# is wrong, so the per-tier cap check is deferred to the effect (which recomputes on CHI); the row only
+# guards the woman is a living consort below the top rank.
+qing_harem_promote_selected = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+	}
+	is_valid = {
+		is_alive = yes
+		has_variable = qing_is_harem_consort
+		var:qing_consort_rank < 4
+		scope:player = { exists = current_ruler }
+	}
+	effect = {
+		save_scope_as = qing_promote_target
+		scope:player = {
+			trigger_event = { id = qing_harem.7 }
+			LOG_line = { sys = QING  msg = "harem panel: a chosen consort is elevated in rank for" }
+		}
 	}
 }
 

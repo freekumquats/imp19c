@@ -171,6 +171,13 @@ QING_harem_refresh_candidates = {
 		}
 		ordered_character = {
 			limit = {
+				# [#11 boot] IMPRISONED WOMEN ARE INCLUDED, by design. Do NOT add `prisoner = no` here.
+				# I:R character iterators return prisoners by default (TI ritual_sacrifice_inv.txt finds
+				# them with a bare `prisoner = yes`, no opt-in), and a woman the throne holds in its own
+				# court retains `employer = ROOT` while jailed (TI 00_character_events.txt pairs
+				# `employer = root` with an EXPLICIT `prisoner = no` — redundant unless employer returns
+				# prisoners). So a court woman who is jailed still passes this filter and appears in the
+				# picker; a `prisoner = no` gate would be the very exclusion #11 asks us NOT to add.
 				employer = ROOT
 				is_alive = yes
 				is_female = yes
@@ -185,6 +192,141 @@ QING_harem_refresh_candidates = {
 		}
 	}
 	LOG_exit = { sys = QING  fn = "QING_harem_refresh_candidates"  result = OK }
+}
+
+# ======================================================================
+# [#9 boot] QING_harem_refresh_favourable — build the picker list for FAVOUR A CONSORT (臨幸).
+# Scope: COUNTRY (CHI). The favourable consorts are the LIVING roster members NOT already carrying
+# a child — the same set the old random favour lever picked from. Built only when the throne holds a
+# reigning MALE emperor (the sole one who can beget an heir), so a female/absent sovereign yields an
+# empty list and the picker's empty-note renders (mirrors the favour lever's is_valid). Ordered by
+# prominence (court standing) so the most-favoured women head the picker. Sorting iterator — this is
+# why it lives in an effect fired via a trigger_event trampoline, never inlined in a scripted_gui
+# button (the qing_harem.3 open trampoline calls it; same crash class as refresh_candidates).
+# ======================================================================
+QING_harem_refresh_favourable = {
+	LOG_enter = { sys = QING  fn = "QING_harem_refresh_favourable" }
+	clear_variable_list = qing_harem_favourable
+	if = {
+		limit = {
+			exists = current_ruler
+			current_ruler = { is_male = yes }
+			has_variable_list = qing_harem_consorts
+		}
+		ordered_in_list = {
+			variable = qing_harem_consorts
+			limit = { is_alive = yes  is_pregnant = no }
+			order_by = prominence
+			check_range_bounds = no
+			max = 12
+			ROOT = { add_to_variable_list = { name = qing_harem_favourable  target = prev } }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_refresh_favourable"  result = OK }
+}
+
+# ======================================================================
+# [#9 boot] QING_harem_refresh_promotable — build the picker list for PROMOTE A CONSORT (晉封).
+# Scope: COUNTRY (CHI). The promotable consorts are the LIVING roster members below the top rank
+# whose NEXT tier still has an open place under its cap (皇貴妃 1 / 貴妃 2 / 妃 4) — the exact gate the
+# promote lever enforces. MUST run after QING_harem_recompute_roster so the per-rank tallies
+# (qing_harem_rankN_count on ROOT = CHI) are fresh; the qing_harem.3 open trampoline recomputes
+# first, then calls this. Ordered by prominence. Sorting iterator → trampoline-only (see above).
+# ======================================================================
+QING_harem_refresh_promotable = {
+	LOG_enter = { sys = QING  fn = "QING_harem_refresh_promotable" }
+	clear_variable_list = qing_harem_promotable
+	if = {
+		limit = { has_variable_list = qing_harem_consorts }
+		ordered_in_list = {
+			variable = qing_harem_consorts
+			limit = {
+				is_alive = yes
+				var:qing_consort_rank < 4
+				OR = {
+					AND = { var:qing_consort_rank = 3  ROOT.var:qing_harem_rank4_count < 1 }
+					AND = { var:qing_consort_rank = 2  ROOT.var:qing_harem_rank3_count < 2 }
+					AND = { var:qing_consort_rank = 1  ROOT.var:qing_harem_rank2_count < 4 }
+				}
+			}
+			order_by = prominence
+			check_range_bounds = no
+			max = 12
+			ROOT = { add_to_variable_list = { name = qing_harem_promotable  target = prev } }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_refresh_promotable"  result = OK }
+}
+
+# ======================================================================
+# [#9 boot] QING_harem_favour_consort_target — favour the CHOSEN consort (臨幸), the picker variant of
+# QING_harem_favour_consort. Scope: COUNTRY (CHI); scope:qing_favour_target = the woman clicked in the
+# favour picker. Re-guards the effect's own conditions (a male reigning emperor + a living, not-already-
+# pregnant consort of the inner court) so a stale click no-ops rather than double-conceiving. Mirrors
+# the random favour body exactly, only on the chosen woman instead of random_in_list.
+# ======================================================================
+QING_harem_favour_consort_target = {
+	LOG_enter = { sys = QING  fn = "QING_harem_favour_consort_target" }
+	QING_harem_recompute_roster = yes
+	if = {
+		limit = {
+			exists = current_ruler
+			current_ruler = { is_male = yes }
+			exists = scope:qing_favour_target
+			scope:qing_favour_target = {
+				is_alive = yes
+				is_pregnant = no
+				has_variable = qing_is_harem_consort
+			}
+		}
+		current_ruler = { save_scope_as = qing_harem_father }
+		scope:qing_favour_target = {
+			make_pregnant = {
+				father = scope:qing_harem_father
+				known_bastard = no
+				number_of_children = 1
+			}
+			add_popularity = 15
+		}
+		QING_dynasty_harmony_nudge = { amount = 4 }
+		LOG_line = { sys = QING  msg = "harem: a chosen consort conceives the emperor a child for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_favour_consort_target"  result = OK }
+}
+
+# ======================================================================
+# [#9 boot] QING_harem_promote_consort_target — promote the CHOSEN consort (晉封), the picker variant of
+# QING_harem_promote_consort. Scope: COUNTRY (CHI); scope:qing_promote_target = the woman clicked in the
+# promote picker. Re-guards the establishment caps (皇貴妃 1 / 貴妃 2 / 妃 4) against the FRESH per-rank
+# tallies so a stale click cannot overfill a tier. Mirrors the ordered_in_list promote body, only on the
+# chosen woman. Recompute first so the counts read here are current.
+# ======================================================================
+QING_harem_promote_consort_target = {
+	LOG_enter = { sys = QING  fn = "QING_harem_promote_consort_target" }
+	QING_harem_recompute_roster = yes
+	if = {
+		limit = {
+			exists = scope:qing_promote_target
+			scope:qing_promote_target = {
+				is_alive = yes
+				has_variable = qing_is_harem_consort
+				var:qing_consort_rank < 4
+			}
+			OR = {
+				AND = { scope:qing_promote_target = { var:qing_consort_rank = 3 }  var:qing_harem_rank4_count < 1 }
+				AND = { scope:qing_promote_target = { var:qing_consort_rank = 2 }  var:qing_harem_rank3_count < 2 }
+				AND = { scope:qing_promote_target = { var:qing_consort_rank = 1 }  var:qing_harem_rank2_count < 4 }
+			}
+		}
+		scope:qing_promote_target = {
+			change_variable = { name = qing_consort_rank  add = 1 }
+			add_popularity = 10
+		}
+		QING_dynasty_harmony_nudge = { amount = 2 }
+		QING_harem_recompute_roster = yes
+		LOG_line = { sys = QING  msg = "harem: a chosen consort is elevated in rank for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_promote_consort_target"  result = OK }
 }
 
 # ======================================================================
@@ -267,7 +409,12 @@ QING_harem_favour_consort = {
 # The empress (皇后) is the ruler's spouse, outside this ladder — this promotes only within 妃嬪.
 # Caps: tier 4 皇貴妃 = 1, tier 3 貴妃 = 2, tier 2 妃 = 4 (tier 1 entry is uncapped). A promotion
 # gladdens the elevated woman (court standing) and steadies the house a touch. Guarded so nothing
-# fires if no consort is eligible. Callable from the panel button + a favour follow-on.
+# fires if no consort is eligible.
+# [#9 boot] RETAINED-BUT-UNUSED: the panel Promote lever now routes through the click-to-select
+# picker (QING_harem_promote_consort_target, chosen woman) instead of this auto-pick-most-favoured
+# effect. Kept as the canonical cap-enforcement reference (qing_harem.1 intrigue cites it) and a
+# ready home for a future AI-side auto-promotion. Its ordered_in_list is never compile-inlined
+# because nothing calls it from a scripted_gui — no crash risk while dormant.
 # ======================================================================
 QING_harem_promote_consort = {
 	LOG_enter = { sys = QING  fn = "QING_harem_promote_consort" }

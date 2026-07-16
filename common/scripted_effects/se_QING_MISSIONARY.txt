@@ -54,15 +54,13 @@ QING_missionary_init = {
 	# every era (incl. 1763); driven by the on-the-ground station footprint. This is the low,
 	# quiet tension the research calls for; the political meter above stays near-zero until 1860.
 	if = { limit = { NOT = { has_variable = qing_mission_social_friction } } set_variable = { name = qing_mission_social_friction  value = 0 } }
-	# [#446 crash/no-open fix] qing_missionary_reach = the live station-count meter. It is only
-	# ever (re)computed inside QING_mission_stations_pulse (365-day cooldown), which does NOT run
-	# at on_game_initialized — so at game-start it was UNSET. The religion panel (gui/qing_religion.gui)
-	# reads it in an unguarded progressbar promote: value="[FixedPointToFloat(Multiply_CFixedPoint(
-	# GetVariable('qing_missionary_reach').GetValue, ...))]". A null operand there aborts the widget
-	# build, which makes the whole window fail to instantiate — gui.createwidget silently no-ops
-	# ("Faith & Sedition" clicks do nothing). Its 5 sibling meter-vars are all init-seeded; this was
-	# the lone gap, and the reason the prior body/scaffold rebuilds (#328/#345/#377) never took.
-	# Seed it here (0 = no stations yet), guarded identically to the siblings; the pulse recomputes it.
+	# [#446] qing_missionary_reach = the live station-count meter. It is only ever (re)computed
+	# inside QING_mission_stations_pulse (365-day cooldown), which does NOT run at
+	# on_game_initialized — so at game-start it was UNSET. Seed it here (0 = no stations yet),
+	# guarded identically to its 5 sibling meter-vars; the pulse recomputes it thereafter.
+	# NOTE: the player-facing "Faith & Sedition" panel that formerly read this var was reverted to
+	# the vanilla religion view (a null read there had aborted its widget build); the var seed
+	# stays because the missionary mechanic and QING_mission_stations_pulse still consume it.
 	if = { limit = { NOT = { has_variable = qing_missionary_reach } } set_variable = { name = qing_missionary_reach  value = 0 } }
 	LOG_exit = { sys = QING  fn = "QING_missionary_init"  result = OK }
 }
@@ -187,11 +185,11 @@ QING_missionary_pulse = {
 	# not a crisis). Post-treaty the political meter below carries the real danger.
 	if = { limit = { var:qing_social_friction_target > 45 }  set_variable = { name = qing_social_friction_target  value = 45 } }
 	if = {
-		limit = { var:qing_mission_social_friction < var:qing_social_friction_target }
+		limit = { var:qing_mission_social_friction < { value = var:qing_social_friction_target } }
 		QING_DECLINE_nudge = { var = qing_mission_social_friction  amount = 1 }
 	}
 	else_if = {
-		limit = { var:qing_mission_social_friction > var:qing_social_friction_target }
+		limit = { var:qing_mission_social_friction > { value = var:qing_social_friction_target } }
 		QING_DECLINE_nudge = { var = qing_mission_social_friction  amount = -1 }
 	}
 	QING_missionary_apply_social_band = yes
@@ -236,11 +234,11 @@ QING_missionary_pulse = {
 		if = { limit = { has_variable = qing_missionary_reach } change_variable = { name = qing_antichr_target  add = var:qing_missionary_reach } }
 		if = { limit = { var:qing_antichr_target > 100 } set_variable = { name = qing_antichr_target  value = 100 } }
 		if = {
-			limit = { var:qing_antichristian_sentiment < var:qing_antichr_target }
+			limit = { var:qing_antichristian_sentiment < { value = var:qing_antichr_target } }
 			QING_DECLINE_nudge = { var = qing_antichristian_sentiment  amount = 1 }
 		}
 		else_if = {
-			limit = { var:qing_antichristian_sentiment > var:qing_antichr_target }
+			limit = { var:qing_antichristian_sentiment > { value = var:qing_antichr_target } }
 			QING_DECLINE_nudge = { var = qing_antichristian_sentiment  amount = -1 }
 		}
 	}
@@ -367,9 +365,10 @@ QING_missionary_spawn_agitator = {
 			save_scope_as = qing_antichr_agitator
 		}
 		# [#268] persist the agitator as a country VARIABLE too. save_scope_as populates only the
-		# transient saved-scope namespace, which does NOT survive save/reload and is NOT readable by the
-		# religion panel's Var('qing_antichr_agitator').GetCharacter. Mirror the proven office-holder
-		# idiom (qing_office_zongli_holder is a set_variable) so the panel shows his portrait + name.
+		# transient saved-scope namespace, which does NOT survive save/reload. Mirror the proven
+		# office-holder idiom (qing_office_zongli_holder is a set_variable) so his identity survives
+		# reload. (The religion panel that read this was reverted to vanilla; the persist is harmless
+		# and left in place for any future surface onto the anti-Christian agitator.)
 		set_variable = { name = qing_antichr_agitator  value = scope:qing_antichr_agitator }
 		scope:qing_antichr_agitator = {
 			# roster tail: home country, historical epithet, identity band, throne affinity.
