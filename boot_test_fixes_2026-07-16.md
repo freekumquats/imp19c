@@ -248,6 +248,17 @@ steer before building:
 - #18 (colonise unowned land incl. Pacific islands via vanilla colonization): depends on #16 leaving the right
   land colonisable; the vanilla mechanic is the army `settle` ability on colonizable provinces.
 
+### #16a — mint the Haudenosaunee (Iroquois) tag (DONE)
+Audited the Native roster: the mod ALREADY ships Creek (MSG/alabama), Comanche (CMC), Osage (OSG=niukonska/
+"Wazhazhe"), Pawnee (PWN), Shawnee (SHW), plus Choctaw/Chickasaw/Cherokee/Miami/Council-of-Three-Fires/etc — so
+of the "key missing nations" the user approved, only the **Haudenosaunee (Iroquois Six Nations)** was genuinely
+absent. Minted tag IRO: country file setup/countries/n_america/haudenosaunee.txt (BOM, cloned from the shawnee
+template), registered in countries.txt, setup block (government federated_tribe, primary_culture mohawk, religion
+waashat, capital 8418 Ashtabula). Their upstate-NY homeland sits inside the USA (=GBR 13-colonies) claim, so IRO
+takes its unowned western-Lake-Erie / upper-Ohio "Ohio Country" (the conquered hunting-grounds reserved to Natives
+by the 1763 Proclamation Line): 8418 8696 9828 9164 9149 9881 — all confirmed UNOWNED (vacated by the #397 trim),
+each now owned only by IRO. Added IRO / IRO_ADJ loc. Setup file brace-balanced (10967/10967).
+
 **INHERITED / framework noise (not mod-authored, left):** PROVINCE_TOOLTIP loc (10790), missing
 `gradient_black_flip.dds` texture (7378), the `oa_wealth_changes`/`GT_split_*`/`EE_scripted_guis`
 economy-framework script errors + sqrt `Illegal use of operator` (the economy-framework's own
