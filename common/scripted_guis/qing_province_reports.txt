@@ -144,37 +144,37 @@ qing_report_open_migration = {
 		LOG_line = { sys = QING  msg = "migration report opened by" }
 		clear_variable_list = qing_migration_report_provinces
 
-		# [BT-55] Order the listed provinces by population, highest -> lowest. The innermost
-		# every_state_province walk cannot itself sort AND the list must keep the SAME membership
-		# (only governorship provinces — capital-domain provinces are not under a governorship, so
-		# a bare ordered_owned_province over ALL owned provinces would change WHICH provinces show).
-		# So: PASS 1 marks each qualifying governorship province with qing_migr_report_pick; PASS 2
-		# emits them via ordered_owned_province( order_by = total_population ) filtered on that mark,
-		# giving a global high-pop-first order with membership unchanged; then clear the marker.
-		every_governorships = {
-			every_governorship_state = {
-				every_state_province = {
-					save_scope_as = this_prov
-					# include in-migration / boom hotspots OR crowded (pressure) provinces
-					if = {
-						limit = {
-							scope:this_prov = {
-								OR = {
-									has_province_modifier = qing_migr_hongkong_boom
-									has_province_modifier = qing_nwcrop_abundance
-									# [#49] a province the engine has flagged over its pop capacity (auto-applied
-									# `overpopulation` modifier, 00_hardcoded.txt:251) is a crowded province by
-									# definition — the report is meant to list exactly these, so include them
-									# explicitly rather than only the raw total_population >= 20 floor (which
-									# missed crowded-but-smaller provinces, so the report showed almost none).
-									has_province_modifier = overpopulation
-									total_population >= 20
-								}
-							}
+		# [BT-55 / boot #10 fix] Order the listed provinces by population, highest -> lowest.
+		# PASS 1 marks each qualifying province with qing_migr_report_pick; PASS 2 emits them via
+		# ordered_owned_province( order_by = total_population ) filtered on that mark, giving a global
+		# high-pop-first order; then the marker is cleared.
+		# BOOT #10 ROOT CAUSE: PASS 1 previously walked every_governorships > every_governorship_state
+		# > every_state_province, which iterates ONLY governorship provinces and EXCLUDES the entire
+		# CAPITAL DOMAIN — i.e. most of China proper, where nearly all the crowded/over-capacity
+		# provinces actually sit. So the report surfaced almost nothing (the user saw only Nanchong,
+		# which happens to fall under a governorship). PASS 2 already scans ordered_owned_province (ALL
+		# owned provinces), so the membership walk must match it: mark over every_owned_province too.
+		# every_owned_province is a proven iterator (00_tech_modifier_applicator_effects.txt).
+		every_owned_province = {
+			save_scope_as = this_prov
+			# include in-migration / boom hotspots OR crowded (pressure) provinces
+			if = {
+				limit = {
+					scope:this_prov = {
+						OR = {
+							has_province_modifier = qing_migr_hongkong_boom
+							has_province_modifier = qing_nwcrop_abundance
+							# [#49] a province the engine has flagged over its pop capacity (auto-applied
+							# `overpopulation` modifier, 00_hardcoded.txt:251) is a crowded province by
+							# definition — the report is meant to list exactly these, so include them
+							# explicitly rather than only the raw total_population >= 20 floor (which
+							# missed crowded-but-smaller provinces, so the report showed almost none).
+							has_province_modifier = overpopulation
+							total_population >= 20
 						}
-						scope:this_prov = { set_variable = { name = qing_migr_report_pick  value = 1 } }
 					}
 				}
+				scope:this_prov = { set_variable = { name = qing_migr_report_pick  value = 1 } }
 			}
 		}
 		# PASS 2: emit in descending-population order (global sort across all marked provinces).

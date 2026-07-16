@@ -169,6 +169,17 @@ modifier-guarded (re-init can't stack), logged per-province. Proven idiom p:<id>
 (TI p:687 second_temple). Added modifier name/desc loc. Brace-balanced across all four files; se_QING_MECHANICS
 kept its existing no-BOM, modifiers loc kept BOM.
 
+### #10 — Migration Report listed only Nanchong (DONE)
+ROOT CAUSE: the report's PASS-1 membership walk iterated `every_governorships > every_governorship_state
+> every_state_province`, which visits ONLY governorship provinces and EXCLUDES the entire CAPITAL DOMAIN —
+most of China proper, where nearly every crowded/over-capacity province actually sits. Only Nanchong showed
+because it happens to lie under a governorship. PASS 2 already emits via `ordered_owned_province` (ALL owned
+provinces), so the two passes disagreed on membership. FIX: mark in PASS 1 over `every_owned_province` (a
+proven iterator, 00_tech_modifier_applicator_effects.txt) so it matches PASS 2's scan — now every crowded /
+overpopulation-flagged / in-migration-boom province across the whole realm is listed, high-pop-first.
+Brace-balanced (89/89). The qualifying criteria (boom modifiers / overpopulation / total_population>=20) are
+unchanged.
+
 **INHERITED / framework noise (not mod-authored, left):** PROVINCE_TOOLTIP loc (10790), missing
 `gradient_black_flip.dds` texture (7378), the `oa_wealth_changes`/`GT_split_*`/`EE_scripted_guis`
 economy-framework script errors + sqrt `Illegal use of operator` (the economy-framework's own
