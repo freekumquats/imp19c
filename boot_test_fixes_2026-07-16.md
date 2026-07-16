@@ -200,6 +200,19 @@ roster (se_QING_HAREM.txt):
 - Added 4 loc keys. All files brace-balanced (se 137/137, panel 81/81, gui 147/147); ordered_character
   order_by=finesse is a proven in-mod idiom (se_QING_CANTON.txt).
 
+### #19 — New Treasure Fleet tree not visible in the missions list (DONE)
+ROOT CAUSE: the tree's `potential` carried a PROVINCE-scope condition — `any_owned_province = { is_port = yes }`
+— and it is the ONLY Qing tree that put a province walk in `potential`; every visible sibling
+(japan_preperry / xinjiang / colonization / india) gates `potential` on tag / flag / tag-existence only.
+A province-scope check in mission `potential` hides the whole tree from the mission browser, so the New
+Treasure Fleet never listed. FIX: reduced `potential` to `tag = CHI  is_ai = no` (matching the siblings) and
+moved the "empire must touch the sea" precondition into the opening task's `allow` as a custom_tooltip
+(`any_owned_province = { is_port = yes }` + new loc qing_treasure_needs_coast_tt). The tree is now visible and
+the first task simply can't be taken until the empire holds a port — the mechanic is unchanged, only the gate's
+placement. Answers the user's "what is the starting criteria": CHI + coastal (a port province); the later
+tasks then gate on a level-3 harbour and fleet size. Brace-balanced (42/42), missions no-BOM preserved.
+(This also closes the #11/#19 New-Treasure-Fleet thread: standalone tree #439, now correctly listed.)
+
 **INHERITED / framework noise (not mod-authored, left):** PROVINCE_TOOLTIP loc (10790), missing
 `gradient_black_flip.dds` texture (7378), the `oa_wealth_changes`/`GT_split_*`/`EE_scripted_guis`
 economy-framework script errors + sqrt `Illegal use of operator` (the economy-framework's own
