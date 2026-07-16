@@ -18,12 +18,8 @@ base_window = {
 	name = "marriage_play_window"
 	# [#356 layout fix] Match the PROVEN createwidget list-picker pattern of
 	# qing_office_picker_window (imp19c_windows.gui:36): gfxtype=windowgfx gives the window a
-	# concrete backing so the expanding MainWindowHeaderBoxCentered header stays inside the
-	# 900px frame (without it the header blew out horizontally — the "enormous grey box spilling
-	# off the right"), parentanchor=center places it on screen, and a window-level button_close
-	# gives an always-reachable X (the Launch/Cancel bar was off-screen, so the window "couldn't
-	# be closed"). Do NOT use main_window_template here — it supplies no gfxtype and a fixed
-	# offset position, which is what broke this window.
+	# concrete backing, parentanchor=center places it on screen, and a window-level button_close
+	# gives an always-reachable X.
 	gfxtype = windowgfx
 	parentanchor = center
 	size = { 900 640 }
@@ -33,61 +29,164 @@ base_window = {
 		using = MainWindowHeaderBoxCentered
 		blockoverride "Title_text" { text = "MARRIAGE_PLAY_TITLE" }
 
-		# INSTRUCTIONS
-		textbox = {
-			size = { 880 40 }
-			multiline = yes
-			using = BaseFontS
-			using = Default_FontColor
-			margin = { 8 4 }
-			text = "MARRIAGE_PLAY_INSTR"
-		}
+		# [#50 boot-fix] BOUND THE HEADER. MainWindowHeaderBoxCentered is an EXPANDING header:
+		# it takes its width from its parent vbox, which in turn sizes to its children. The
+		# proven pickers (qing_office_picker_window / qing_harem_take_window) always give the
+		# vbox a SINGLE fixed-size child (a sized scrollarea) so the header has a definite width
+		# to fill. This window instead hung three unbounded siblings (instructions + the 3-column
+		# flowcontainer + the launch bar) directly off the header, so it had no bounding width and
+		# the header blew out horizontally — the "large grey box spilling off the right" over a
+		# blank black frame. Wrapping the whole body in ONE fixed-size vbox restores that bound.
+		vbox = {
+			size = { 884 588 }
 
-		# THREE COLUMNS
-		flowcontainer = {
-			direction = horizontal
-			spacing = 6
-			margin = { 6 4 }
+			# INSTRUCTIONS
+			textbox = {
+				size = { 880 40 }
+				multiline = yes
+				using = BaseFontS
+				using = Default_FontColor
+				margin = { 8 4 }
+				text = "MARRIAGE_PLAY_INSTR"
+			}
 
-			# --- COLUMN 1: TARGET REALM -------------------------------------
-			vbox = {
-				using = background_widget
-				margin = { 6 6 }
-				textbox = { size = { 280 24 }  using = BaseFontM  using = Default_FontColor  text = "MARRIAGE_PLAY_COL_REALM" }
-				scrollarea = {
-					size = { 280 480 }
-					scrollbarpolicy_horizontal = always_off
-					scrollbar_vertical = { using = VerticalScrollBar }
-					scrollwidget = {
-						flowcontainer = {
-							direction = vertical
-							spacing = 2
-							datamodel = "[Player.MakeScope.GetList('marriage_play_realms')]"
-							item = {
-								widget = {
-									size = { 262 44 }
-									datacontext = "[Scope.GetCountry]"
-									using = background_widget
-									# [#8 boot-fix] Do NOT override this button's datacontext to the ScriptedGui —
-									# that shadowed the parent widget's Country context, so Country.GetId in down=
-									# couldn't bind ("Failed parsing data statement ... for property 'down'"), which
-									# blanked the row template (the "black box"). Inline GetScriptedGui in onclick
-									# instead, leaving Country intact — mirrors diplomatic_view.gui:2390.
-									list_button = {
-										size = { 100% 100% }
-										onclick = "[GetScriptedGui('marriage_play_pick_realm').Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', Country.MakeScope ).End )]"
-										down = "[And( Player.MakeScope.GetVariable('marriage_play_target').IsSet, EqualTo_int32( Country.GetId, Player.MakeScope.GetVariable('marriage_play_target').GetCountry.GetId ) )]"
-										tooltip = "MARRIAGE_PLAY_PICK_REALM_TT"
-									}
-									flowcontainer = {
-										parentanchor = vcenter
-										spacing = 6
-										margin = { 6 0 }
-										new_country_flag = {
-											parentanchor = vcenter
-											blockoverride "Size" { size = { 32 32 } }
+			# THREE COLUMNS
+			flowcontainer = {
+				direction = horizontal
+				spacing = 6
+				margin = { 6 4 }
+
+				# --- COLUMN 1: TARGET REALM -------------------------------------
+				vbox = {
+					using = background_widget
+					margin = { 6 6 }
+					textbox = { size = { 280 24 }  using = BaseFontM  using = Default_FontColor  text = "MARRIAGE_PLAY_COL_REALM" }
+					scrollarea = {
+						size = { 280 480 }
+						scrollbarpolicy_horizontal = always_off
+						scrollbar_vertical = { using = VerticalScrollBar }
+						scrollwidget = {
+							flowcontainer = {
+								direction = vertical
+								spacing = 2
+								datamodel = "[Player.MakeScope.GetList('marriage_play_realms')]"
+								item = {
+									widget = {
+										size = { 262 44 }
+										datacontext = "[Scope.GetCountry]"
+										using = background_widget
+										# [#8 boot-fix] Do NOT override this button's datacontext to the ScriptedGui —
+										# that shadowed the parent widget's Country context, so Country.GetId in down=
+										# couldn't bind ("Failed parsing data statement ... for property 'down'"), which
+										# blanked the row template (the "black box"). Inline GetScriptedGui in onclick
+										# instead, leaving Country intact — mirrors diplomatic_view.gui:2390.
+										list_button = {
+											size = { 100% 100% }
+											onclick = "[GetScriptedGui('marriage_play_pick_realm').Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', Country.MakeScope ).End )]"
+											down = "[And( Player.MakeScope.GetVariable('marriage_play_target').IsSet, EqualTo_int32( Country.GetId, Player.MakeScope.GetVariable('marriage_play_target').GetCountry.GetId ) )]"
+											tooltip = "MARRIAGE_PLAY_PICK_REALM_TT"
 										}
-										textbox = { size = { 210 40 }  parentanchor = vcenter  using = BaseFontS  using = Default_FontColor  text = "[Country.GetName]" }
+										flowcontainer = {
+											parentanchor = vcenter
+											spacing = 6
+											margin = { 6 0 }
+											new_country_flag = {
+												parentanchor = vcenter
+												blockoverride "Size" { size = { 32 32 } }
+											}
+											textbox = { size = { 210 40 }  parentanchor = vcenter  using = BaseFontS  using = Default_FontColor  text = "[Country.GetName]" }
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+
+				# --- COLUMN 2: OUR CHARACTER ------------------------------------
+				vbox = {
+					using = background_widget
+					margin = { 6 6 }
+					textbox = { size = { 280 24 }  using = BaseFontM  using = Default_FontColor  text = "MARRIAGE_PLAY_COL_OWN" }
+					scrollarea = {
+						size = { 280 480 }
+						scrollbarpolicy_horizontal = always_off
+						scrollbar_vertical = { using = VerticalScrollBar }
+						scrollwidget = {
+							flowcontainer = {
+								direction = vertical
+								spacing = 2
+								datamodel = "[Player.MakeScope.GetList('marriage_play_own_candidates')]"
+								item = {
+									widget = {
+										size = { 262 56 }
+										datacontext = "[Scope.GetCharacter]"
+										using = background_widget
+										# [#8 boot-fix] Inline GetScriptedGui in onclick; leave the row's Character
+										# datacontext intact so Character.GetId in down= binds (see column 1).
+										list_button = {
+											size = { 100% 100% }
+											onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+											down = "[And( Player.MakeScope.GetVariable('marriage_play_our_pick').IsSet, EqualTo_int32( Character.GetId, Player.MakeScope.GetVariable('marriage_play_our_pick').GetCharacter.GetId ) )]"
+											tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
+										}
+										flowcontainer = {
+											parentanchor = vcenter
+											spacing = 6
+											margin = { 6 0 }
+											cpt_button = { parentanchor = vcenter  size = { 34 50 } }
+											textbox = { size = { 210 52 }  parentanchor = vcenter  multiline = yes  using = BaseFontS  using = Default_FontColor  text = "[Character.GetName]" }
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+
+				# --- COLUMN 3: THEIR CHARACTER ----------------------------------
+				vbox = {
+					using = background_widget
+					margin = { 6 6 }
+					textbox = { size = { 280 24 }  using = BaseFontM  using = Default_FontColor  text = "MARRIAGE_PLAY_COL_THEIR" }
+					# prompt to pick a realm first (shown when no target realm chosen)
+					textbox = {
+						visible = "[Not( Player.MakeScope.GetVariable('marriage_play_target').IsSet )]"
+						size = { 280 40 }
+						multiline = yes
+						using = BaseFontS
+						using = Default_FontColor
+						text = "MARRIAGE_PLAY_PICK_REALM_FIRST"
+					}
+					scrollarea = {
+						size = { 280 460 }
+						scrollbarpolicy_horizontal = always_off
+						scrollbar_vertical = { using = VerticalScrollBar }
+						scrollwidget = {
+							flowcontainer = {
+								direction = vertical
+								spacing = 2
+								datamodel = "[Player.MakeScope.GetList('marriage_play_their_candidates')]"
+								item = {
+									widget = {
+										size = { 262 56 }
+										datacontext = "[Scope.GetCharacter]"
+										using = background_widget
+										# [#8 boot-fix] Inline GetScriptedGui in onclick; leave the row's Character
+										# datacontext intact so Character.GetId in down= binds (see column 1).
+										list_button = {
+											size = { 100% 100% }
+											onclick = "[GetScriptedGui('marriage_play_pick_their').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+											down = "[And( Player.MakeScope.GetVariable('marriage_play_their_pick').IsSet, EqualTo_int32( Character.GetId, Player.MakeScope.GetVariable('marriage_play_their_pick').GetCharacter.GetId ) )]"
+											tooltip = "MARRIAGE_PLAY_PICK_THEIR_TT"
+										}
+										flowcontainer = {
+											parentanchor = vcenter
+											spacing = 6
+											margin = { 6 0 }
+											cpt_button = { parentanchor = vcenter  size = { 34 50 } }
+											textbox = { size = { 210 52 }  parentanchor = vcenter  multiline = yes  using = BaseFontS  using = Default_FontColor  text = "[Character.GetName]" }
+										}
 									}
 								}
 							}
@@ -96,128 +195,36 @@ base_window = {
 				}
 			}
 
-			# --- COLUMN 2: OUR CHARACTER ------------------------------------
-			vbox = {
-				using = background_widget
-				margin = { 6 6 }
-				textbox = { size = { 280 24 }  using = BaseFontM  using = Default_FontColor  text = "MARRIAGE_PLAY_COL_OWN" }
-				scrollarea = {
-					size = { 280 480 }
-					scrollbarpolicy_horizontal = always_off
-					scrollbar_vertical = { using = VerticalScrollBar }
-					scrollwidget = {
-						flowcontainer = {
-							direction = vertical
-							spacing = 2
-							datamodel = "[Player.MakeScope.GetList('marriage_play_own_candidates')]"
-							item = {
-								widget = {
-									size = { 262 56 }
-									datacontext = "[Scope.GetCharacter]"
-									using = background_widget
-									# [#8 boot-fix] Inline GetScriptedGui in onclick; leave the row's Character
-									# datacontext intact so Character.GetId in down= binds (see column 1).
-									list_button = {
-										size = { 100% 100% }
-										onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-										down = "[And( Player.MakeScope.GetVariable('marriage_play_our_pick').IsSet, EqualTo_int32( Character.GetId, Player.MakeScope.GetVariable('marriage_play_our_pick').GetCharacter.GetId ) )]"
-										tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
-									}
-									flowcontainer = {
-										parentanchor = vcenter
-										spacing = 6
-										margin = { 6 0 }
-										cpt_button = { parentanchor = vcenter  size = { 34 50 } }
-										textbox = { size = { 210 52 }  parentanchor = vcenter  multiline = yes  using = BaseFontS  using = Default_FontColor  text = "[Character.GetName]" }
-									}
-								}
-							}
-						}
+			# LAUNCH BAR
+			flowcontainer = {
+				direction = horizontal
+				spacing = 10
+				margin = { 8 6 }
+				text_button_square_highlighted = {
+					size = { 260 32 }
+					datacontext = "[GetScriptedGui('marriage_play_launch')]"
+					blockoverride "Center_text" { text = "MARRIAGE_PLAY_LAUNCH_BTN"  max_width = 240 }
+					blockoverride "On_click" {
+						enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+						onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+						onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_window')]"
 					}
+					tooltip = "MARRIAGE_PLAY_LAUNCH_TT"
 				}
-			}
-
-			# --- COLUMN 3: THEIR CHARACTER ----------------------------------
-			vbox = {
-				using = background_widget
-				margin = { 6 6 }
-				textbox = { size = { 280 24 }  using = BaseFontM  using = Default_FontColor  text = "MARRIAGE_PLAY_COL_THEIR" }
-				# prompt to pick a realm first (shown when no target realm chosen)
-				textbox = {
-					visible = "[Not( Player.MakeScope.GetVariable('marriage_play_target').IsSet )]"
-					size = { 280 40 }
-					multiline = yes
-					using = BaseFontS
-					using = Default_FontColor
-					text = "MARRIAGE_PLAY_PICK_REALM_FIRST"
-				}
-				scrollarea = {
-					size = { 280 460 }
-					scrollbarpolicy_horizontal = always_off
-					scrollbar_vertical = { using = VerticalScrollBar }
-					scrollwidget = {
-						flowcontainer = {
-							direction = vertical
-							spacing = 2
-							datamodel = "[Player.MakeScope.GetList('marriage_play_their_candidates')]"
-							item = {
-								widget = {
-									size = { 262 56 }
-									datacontext = "[Scope.GetCharacter]"
-									using = background_widget
-									# [#8 boot-fix] Inline GetScriptedGui in onclick; leave the row's Character
-									# datacontext intact so Character.GetId in down= binds (see column 1).
-									list_button = {
-										size = { 100% 100% }
-										onclick = "[GetScriptedGui('marriage_play_pick_their').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-										down = "[And( Player.MakeScope.GetVariable('marriage_play_their_pick').IsSet, EqualTo_int32( Character.GetId, Player.MakeScope.GetVariable('marriage_play_their_pick').GetCharacter.GetId ) )]"
-										tooltip = "MARRIAGE_PLAY_PICK_THEIR_TT"
-									}
-									flowcontainer = {
-										parentanchor = vcenter
-										spacing = 6
-										margin = { 6 0 }
-										cpt_button = { parentanchor = vcenter  size = { 34 50 } }
-										textbox = { size = { 210 52 }  parentanchor = vcenter  multiline = yes  using = BaseFontS  using = Default_FontColor  text = "[Character.GetName]" }
-									}
-								}
-							}
-						}
+				text_button_square_highlighted = {
+					size = { 160 32 }
+					blockoverride "Center_text" { text = "MARRIAGE_PLAY_CANCEL_BTN"  max_width = 150 }
+					blockoverride "On_click" {
+						onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_window')]"
 					}
+					tooltip = "MARRIAGE_PLAY_CANCEL_TT"
 				}
-			}
-		}
-
-		# LAUNCH BAR
-		flowcontainer = {
-			direction = horizontal
-			spacing = 10
-			margin = { 8 6 }
-			text_button_square_highlighted = {
-				size = { 260 32 }
-				datacontext = "[GetScriptedGui('marriage_play_launch')]"
-				blockoverride "Center_text" { text = "MARRIAGE_PLAY_LAUNCH_BTN"  max_width = 240 }
-				blockoverride "On_click" {
-					enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-					onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-					onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_window')]"
-				}
-				tooltip = "MARRIAGE_PLAY_LAUNCH_TT"
-			}
-			text_button_square_highlighted = {
-				size = { 160 32 }
-				blockoverride "Center_text" { text = "MARRIAGE_PLAY_CANCEL_BTN"  max_width = 150 }
-				blockoverride "On_click" {
-					onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_window')]"
-				}
-				tooltip = "MARRIAGE_PLAY_CANCEL_TT"
 			}
 		}
 	}
 
 	# [#356 layout fix] Always-reachable X in the window's top-right — mirrors the proven
-	# qing_office_picker_window (imp19c_windows.gui:19). Previously the only way out was the
-	# Launch/Cancel bar at the bottom, which sat off-screen when the window spilled right.
+	# qing_office_picker_window (imp19c_windows.gui:19).
 	button_close = {
 		onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_window')]"
 		tooltip = "CLOSE"
