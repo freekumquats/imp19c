@@ -224,6 +224,30 @@ other tag's own_control_core claims 3082/3400 (they were unowned holes, no confl
 the coastal gap is historically accurate, then leave it" — it was NOT accurate; these two are unambiguous
 Atlantic ports, so restored.
 
+### #15 — French/Spanish Louisiana too small (confined to the modern state) (DONE)
+Confirmed all 14 LSA provinces sat inside the modern US state of Louisiana. Per research
+(.research/1763_north_america_map_groundtruth.md §1), Spanish Louisiana's CONTROLLED footprint in 1763
+ran up the WEST bank of the Mississippi (Ste. Genevieve district near St. Louis, Cape Girardeau) and the
+lower Arkansas River (Arkansas Post 1686, Little Rock) — a riverine post corridor, NOT the trans-plains
+interior (that was paper-claim only). Added the 4 controlled west-bank posts (Saint Louis 4459, Cape
+Girardeau 3587, Arkansas Post 3057, Little Rock 3643) — all confirmed currently UNOWNED (they were in MSI's
+now-inert commented frontier list), so no ownership conflict; verified each now belongs only to LSA. Left the
+Osage plains interior unowned for the Native-tag pass (#16). Per the user: give LSA "its historical territory,
+which was much larger… do not give it the territory that was merely claimed and not controlled" — done. No-BOM
+preserved.
+
+### #16 / #17 / #18 — DEFERRED to a user steer (larger interpretive map + subsystem work)
+These three are a different class from the discrete boot bugs and carry design latitude, so surfacing for a
+steer before building:
+- #16 (Native tags over the trans-Appalachian + plains interior): the mod ALREADY ships Native tags
+  CHE/CHT/CHC/MSG/MIA/SHO/LAK/DAK/PWN with country files; missing ones I'd otherwise add = Creek/Iroquois/
+  Comanche/Osage/Pawnee/Shawnee/Ottawa. Question: place ownership using only the existing tags, or mint the
+  missing nations too? And how much interior to fill vs leave colonisable-unowned (feeds #18).
+- #17 (Spanish-America Napoleonic disruption arc + Qing intervention): a new event chain (San Ildefonso 1800 /
+  Louisiana Purchase 1803 / Bayonne 1808 / West Florida 1810 / Hidalgo 1810) — scope/size TBD.
+- #18 (colonise unowned land incl. Pacific islands via vanilla colonization): depends on #16 leaving the right
+  land colonisable; the vanilla mechanic is the army `settle` ability on colonizable provinces.
+
 **INHERITED / framework noise (not mod-authored, left):** PROVINCE_TOOLTIP loc (10790), missing
 `gradient_black_flip.dds` texture (7378), the `oa_wealth_changes`/`GT_split_*`/`EE_scripted_guis`
 economy-framework script errors + sqrt `Illegal use of operator` (the economy-framework's own
