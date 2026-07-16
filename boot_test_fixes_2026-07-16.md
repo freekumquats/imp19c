@@ -31,6 +31,29 @@ never `[scope:x]`, adjective is `[X.GetCountry.GetAdjective]` (see memory imp19c
 
 ## Decisions taken
 
+### #2 — Mission Completion Criteria showed eligibility (DONE)
+Oracle-verified: `_CRITERIA_DESCRIPTION` is the mission-level COMPLETION-GOAL summary (Invictus/TI:
+"This mission will be considered complete when we…"), NOT the start/eligibility gate. The 15 Qing
+trees wrongly put the eligibility text ("Play as the Qing (CHI), and X must exist") there. Rewrote all
+15 to describe the completion objective ("This enterprise is complete when …"). Files: burma_war,
+colonization, central_asia, india, himalaya_seasia, japan_preperry, japan, open_japan, reform,
+settle_frontier, selfstrengthening, summer_palace, treasure_fleet, taiping, xinjiang.
+
+### #3 — "Missing mission loc" (burma/colonization/central_asia/himalaya_seasia) — RESOLVED BY VERIFICATION
+Checked all four: mission title key, _DESCRIPTION, _CRITERIA_DESCRIPTION, and every per-task key
+(_tt/_desc/needs_*) are ALL present; BOM + `l_english:` header correct; fully populated (30/168/26/51
+keys); no parse-breakers (no missing :N, no stray quotes). This was a STALE report — the keys were
+added by the completed task #55 ("CRITERIA_DESCRIPTION showing raw"). No change needed.
+
+### #4 — Ministry of Rites table label overlap (DONE)
+Removed the parenthetical Chinese from the three long labels so they no longer overrun the value
+column: "Candidates Awaiting Appointment (科舉候選)"→"Candidates Awaiting Appointment"; "Civil
+Degree-Holders in Service (科舉出身)"→"Civil Degree-Holders in Service"; "Military Degree-Holders in
+Service (武舉出身)"→"Military Degree-Holders in Service". (qing_rites_ministry_l_english.yml.)
+
+### #13 — Rename Censor-in-Chief → Grand Inspector (DONE)
+Replaced all 10 "Censor-in-Chief" loc occurrences (qing_censorate_l_english.yml) with "Grand Inspector".
+
 ### #1 — Event-loc data-function scan vs oracles (DONE)
 Cataloged every `[X.Method]` head/method the mod's event loc calls; validated each against Invictus + Terra-Indomita loc (never against mod code). Findings + fixes:
 - `[scope:X...]` → bare `[X...]` — already fixed prior commit (0 residual; scope: is script-only, absent from both oracles).
