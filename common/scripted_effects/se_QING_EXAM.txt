@@ -398,6 +398,11 @@ QING_exam_sit_candidate = {
 			NOT = { has_trait = jinshi }
 			NOT = { has_trait = hanlin }
 			NOT = { has_trait = fanyi_jinshi }
+			# [#48] nor already a military-exam degree-holder (parallel guard).
+			NOT = { has_trait = wu_shengyuan }
+			NOT = { has_trait = wu_juren }
+			NOT = { has_trait = wu_jinshi }
+			NOT = { has_trait = wu_zhuangyuan }
 		}
 		# sat once, whatever the outcome.
 		set_variable = { name = qing_sat_keju  value = 1 }
@@ -432,13 +437,64 @@ QING_exam_sit_candidate = {
 			}
 		}
 		else = {
-			# ---------- THE CIVIL TRACK (文科) — Han and the general court ----------
-			# NOTE: `random` has NO `else` branch (else is a sibling of if/else_if only), so we
-			# roll the pass into a one-shot marker, then branch pass/fail with a proper if/else.
-			random = {
-				chance = qing_keju_pass_chance_svalue
-				set_variable = { name = qing_keju_passed  value = 1 }
+			# ---------- HAN & THE GENERAL COURT — civil OR military track ----------
+			# [#48] A martially-inclined man (martial the dominant skill) sat the 武舉 (military
+			# exam) rather than the civil keju; everyone else sat the civil examination. Bare
+			# skill-token comparisons on the RHS (martial > finesse) are the proven idiom
+			# (se_POLITICS.txt:387, diplomatic_play_events.txt). The wuju was a HAN path into the
+			# Green Standard officer corps; bannermen keep the translation-exam branch above.
+			if = {
+				limit = {
+					martial > finesse
+					martial > charisma
+				}
+				# ---------- THE MILITARY TRACK (武科) → the wuju degrees ----------
+				random = {
+					chance = qing_wuju_pass_chance_svalue
+					set_variable = { name = qing_wuju_passed  value = 1 }
+				}
+				if = {
+					limit = { has_variable = qing_wuju_passed }
+					# martial degree tier by the realm's pass-rate band (parallels the civil ladder).
+					if = {
+						# vigorous ladder: a slim chance at the 武狀元 apex, else a strong martial degree.
+						limit = { exists = employer  employer = { has_variable = qing_exam_pass_rate  var:qing_exam_pass_rate >= 60 } }
+						random_list = {
+							5  = { add_trait = wu_zhuangyuan }
+							35 = { add_trait = wu_jinshi }
+							60 = { add_trait = wu_juren }
+						}
+					}
+					else_if = {
+						# middling ladder.
+						limit = { exists = employer  employer = { has_variable = qing_exam_pass_rate  var:qing_exam_pass_rate >= 30 } }
+						random_list = {
+							10 = { add_trait = wu_jinshi }
+							40 = { add_trait = wu_juren }
+							50 = { add_trait = wu_shengyuan }
+						}
+					}
+					else = {
+						# choked ladder: only the lower rungs.
+						random_list = {
+							30 = { add_trait = wu_juren }
+							70 = { add_trait = wu_shengyuan }
+						}
+					}
+					remove_variable = qing_wuju_passed
+					LOG_line = { sys = QING  msg = "wuju: a candidate passed the military examination (武科) for" }
+				}
+				# a failed military candidate takes NO degree — there is no purchased-rank floor on the
+				# martial ladder (捐監 was a CIVIL rank); he joins the degreeless the pickers fall back on.
 			}
+			else = {
+				# ---------- THE CIVIL TRACK (文科) ----------
+				# NOTE: `random` has NO `else` branch (else is a sibling of if/else_if only), so we
+				# roll the pass into a one-shot marker, then branch pass/fail with a proper if/else.
+				random = {
+					chance = qing_keju_pass_chance_svalue
+					set_variable = { name = qing_keju_passed  value = 1 }
+				}
 			if = {
 				limit = { has_variable = qing_keju_passed }
 				# degree tier by the realm's pass-rate band (mirrors QING_exam_graduate_cohort).
@@ -480,7 +536,8 @@ QING_exam_sit_candidate = {
 				random = {
 					chance = 15
 					add_trait = jiansheng
-					LOG_line = { sys = QING  msg = "keju: a failed candidate purchased the 監生 rank (捐監) for" }
+						LOG_line = { sys = QING  msg = "keju: a failed candidate purchased the 監生 rank (捐監) for" }
+					}
 				}
 			}
 		}
