@@ -153,6 +153,22 @@ qing_deities_l_english.yml follows the proven Invictus `deity_KEY:0 "$omen_KEY$"
 `omen_KEY_desc` triple with the apotheosis-effect macro. Deity file no-BOM (deities/ convention), braces 72/72,
 loc BOM present, all 6 province files brace-balanced + BOM-preserved.
 
+### #9 — remaining starving pops (Yulin / Taiyuan / Jinhua) (DONE)
+Confirmed the granary_pool operator fix does NOT address this — that fix buffers the *capital* grain
+draw (漕運/糧儲), whereas the Pops-Starving alert here fires on *local* population > *local* capacity.
+Diagnosed the four remaining outliers: Yulin (Shaanxi 5270 + Guangxi 9709 — the user's "Yulin" is
+ambiguous so both are covered), Taiyuan (8501), Jinhua (9585). All four are hills/plains, low-civilisation
+SETTLEMENTS: their seeded 1763 density sits just above even the #49 doubled base capacity, while their
+FARMLAND peers at equal-or-higher pop (e.g. 6053 @319, 8311 @349) clear it — so terrain-driven low base
+capacity, not headcount, is the discriminator, and the empire-wide +100% couldn't lift these last few.
+FIX: a targeted permanent province modifier `qing_dense_prefecture` (local_population_capacity_modifier =
+0.75 — a proven base-game province token, TI 00_from_missions_* / 00_aos_modfiers) applied to exactly these
+four at game start via QING_boot_relieve_dense_prefectures (hooked right after qing_populous_realm in the
+tag=CHI init). Each add is existence-checked (exists = p:$PROV$ — a trimmed map can't error) and
+modifier-guarded (re-init can't stack), logged per-province. Proven idiom p:<id> add_permanent_province_modifier
+(TI p:687 second_temple). Added modifier name/desc loc. Brace-balanced across all four files; se_QING_MECHANICS
+kept its existing no-BOM, modifiers loc kept BOM.
+
 **INHERITED / framework noise (not mod-authored, left):** PROVINCE_TOOLTIP loc (10790), missing
 `gradient_black_flip.dds` texture (7378), the `oa_wealth_changes`/`GT_split_*`/`EE_scripted_guis`
 economy-framework script errors + sqrt `Illegal use of operator` (the economy-framework's own
