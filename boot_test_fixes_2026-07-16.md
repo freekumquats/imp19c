@@ -274,6 +274,26 @@ double-owned provinces, 0 misassignments. Also repointed 6 tags' capitals (CHE/C
 capital construction crash class — memory imp19c-ownerless-capital-crash-rule). Setup file brace-balanced
 (10967/10967).
 
+### #17 — Spanish-America Napoleonic disruption arc + Qing hook (DONE)
+Found the existing `spa_bourbon` arc scripts Spain's OWN 1763-1815 trajectory (Jesuits/San Ildefonso/Dos de
+Mayo/Ferdinand) and `qing_americas.2` already gives a Qing "seize the Californian shore" beat — so the gap the
+user asked for was the COLONIAL-side disruption in Spanish America. Built a new `spa_america` arc (namespace
+spa_america) mirroring the proven spa_bourbon idiom (is_triggered_only country events, self-gated tag=SPA,
+per-beat has_variable done-flags, ai_chance-weighted posture nudges, sys=SPA logging):
+- .1 1800.10 Retrocession of Louisiana (San Ildefonso) — political_influence/prestige nudge
+- .2 1803.12 Louisiana Purchase — the vigorous new US neighbour
+- .3 1808.05 Bayonne abdications → the colonial juntas (stability/prestige/influence hit — the turmoil the
+  MEX/mex_instability arc presumes)
+- .4 1810.09 Grito de Dolores + Republic of West Florida (US annexation)
+- .5 (CHI-only) 1808.06 "Spain prostrate — a Pacific opening": the Qing-intervention hook, gated on a Pacific
+  presence (same trigger as qing_americas.2), firing the PROVEN QING_americas_press_pacific_coast effect. This
+  is the user's "give Qing an opportunity to intervene as well."
+Driver common/on_action/spa_america_on_actions.txt: on_actions LIST form (bare on_game_initialized doesn't
+merge, develop #254); SPA beats under a tag=SPA if, the Qing beat under a separate tag=CHI if; day-offsets from
+1763.2.16. Loc spa_america_l_english.yml (BOM). Events + on_action BOM'd (sibling convention + BOM rule), each
+brace-balanced (events 49/49, on_action 19/19); verified QING_americas_press_pacific_coast + the col-modifier/
+region gates exist. se_LOG-wired throughout.
+
 **INHERITED / framework noise (not mod-authored, left):** PROVINCE_TOOLTIP loc (10790), missing
 `gradient_black_flip.dds` texture (7378), the `oa_wealth_changes`/`GT_split_*`/`EE_scripted_guis`
 economy-framework script errors + sqrt `Illegal use of operator` (the economy-framework's own
