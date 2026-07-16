@@ -259,6 +259,21 @@ takes its unowned western-Lake-Erie / upper-Ohio "Ohio Country" (the conquered h
 by the 1763 Proclamation Line): 8418 8696 9828 9164 9149 9881 — all confirmed UNOWNED (vacated by the #397 trim),
 each now owned only by IRO. Added IRO / IRO_ADJ loc. Setup file brace-balanced (10967/10967).
 
+### #16b — assign the vacated 1763 interior to the Native nations (DONE)
+The #397 trim vacated ~200 trans-Appalachian / Ohio-Valley / plains provinces to unowned. Each unowned
+interior province already carries its historical Native `culture=` in the province data, so I bucketed them
+by culture to the culturally-matching Native tag (no guesswork): assigned 143 provinces across 13 tags —
+CHE (Cherokee), CHT (Choctaw), CHC (Chickasaw), MSG (Muscogee/Creek — incl. creek/koasati cultures), CDD
+(Caddo — incl. wichita), MIA (Miami/Illinois confederation — the `illinois` culture), SHW (Shawnee), C3F
+(Council of Three Fires — ojibwe), OSG (Osage — incl. quapaw/iowa Dhegihan/Chiwere kin), CMC (Comanche —
+incl. kiowa southern-plains), DAK (Dakota — yanktonai), DIN (Diné/Navajo), IRO (Haudenosaunee — the seneca
+culture). LEFT 65 settler-culture provinces (dixie/yankee/creole, the coastal-adjacent margin) UNOWNED as the
+colonisable frontier for #18 — consistent with the 1763 Proclamation-Line Indian Reserve. Verified: 0
+double-owned provinces, 0 misassignments. Also repointed 6 tags' capitals (CHE/CHC/MIA/DAK/CHT/MSG) that the
+#397 crash-fix had parked in USA/LAK land back onto their OWN reclaimed territory (avoids the ownerless/foreign-
+capital construction crash class — memory imp19c-ownerless-capital-crash-rule). Setup file brace-balanced
+(10967/10967).
+
 **INHERITED / framework noise (not mod-authored, left):** PROVINCE_TOOLTIP loc (10790), missing
 `gradient_black_flip.dds` texture (7378), the `oa_wealth_changes`/`GT_split_*`/`EE_scripted_guis`
 economy-framework script errors + sqrt `Illegal use of operator` (the economy-framework's own
