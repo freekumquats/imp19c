@@ -294,6 +294,30 @@ merge, develop #254); SPA beats under a tag=SPA if, the Qing beat under a separa
 brace-balanced (events 49/49, on_action 19/19); verified QING_americas_press_pacific_coast + the col-modifier/
 region gates exist. se_LOG-wired throughout.
 
+### #18 — colonise unowned land + Pacific islands (DONE)
+The mod REMOVED the vanilla migrant `settle` ability (it keeps `military_colonies`, which requires
+`has_owner = yes` — it settles ALREADY-owned land), and the engine's built-in ColonizeButton
+(ProvinceWindow.QuickColonize) rides on that disabled migrant system — so the Qing had no working way to take
+the empty frontier / Pacific islands. The full vanilla `settle` import would graft the whole num_of_migrants
+subsystem (heavy, risky for a settled empire). Instead built a scripted colonise action in the mod's own idiom:
+- common/scripted_guis/QING_colonise_frontier.txt — QING_colonise_frontier_button, a province-scope player
+  button cloned from the proven found_city_button (saved_scopes={player}, is_shown/is_valid/effect). Shown to CHI
+  on an UNOWNED, inhabitable (is_uninhabitable=no, not sea) province; enabled when Qing-REACHABLE — either
+  any_neighbor_province owned by the Qing (contiguous frontier — the #16b-vacated interior, Ili/Xinjiang marches)
+  OR a coastal province while the Qing holds a Pacific colonial foothold (fur-coast/silver-road/pacific-trade/
+  golden-shore modifier or a California/Cascadia/Alaska/Pacific_Mexico province) — so PACIFIC ISLANDS qualify.
+  Price-gated via the proven found_city can_pay_price idiom.
+- price_colonise_frontier (common/prices/00_from_script.txt): 30 political influence + 100 gold.
+- QING_colonise_this_province (se_QING_AMERICAS.txt): transfers the clicked province with set_owned_by = scope:player
+  (the proven in-mod province-transfer idiom, se_QING_BURMA:149) + seeds a create_state_pop tribesmen (the
+  se_QING_COLON settler idiom); guarded on still-unowned so a stale/double click can't re-transfer owned land.
+- Wired a button into gui/province_window.gui's UNOWNED-province row (beside the inert engine ColonizeButton),
+  gated by the ScriptedGui.IsShown/IsValid over province+player scope.
+- Loc: confirm_t/desc + button tooltip in qing_americas_l_english.yml.
+All proven-in-mod triggers (is_coastal/any_neighbor_province/is_uninhabitable/is_sea/has_owner/create_state_pop/
+set_owned_by); scripted_gui BOM'd; brace-balanced (gui 23/23, province_window 1954/1954, prices 70/70,
+se_QING_AMERICAS 80/80).
+
 **INHERITED / framework noise (not mod-authored, left):** PROVINCE_TOOLTIP loc (10790), missing
 `gradient_black_flip.dds` texture (7378), the `oa_wealth_changes`/`GT_split_*`/`EE_scripted_guis`
 economy-framework script errors + sqrt `Illegal use of operator` (the economy-framework's own

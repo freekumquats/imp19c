@@ -1,0 +1,73 @@
+﻿########################################################################
+# QING_colonise_frontier.txt — [boot #18] COLONISE AN UNOWNED PROVINCE.
+#
+# The mod removed the vanilla migrant `settle` ability (it kept `military_colonies`, which only
+# settles ALREADY-OWNED land), so the Qing had NO way to take the empty frontier / Pacific islands
+# the user asked about. This is a province-scope player button — cloned from the proven
+# found_city_button — that plants a colony on a clicked UNOWNED, inhabitable province the Qing can
+# reach: either it neighbours Qing-held land (the contiguous frontier — the #16b-vacated interior,
+# Xinjiang/Ili marches, etc.) OR it is a coastal/island province while the Qing holds a Pacific
+# colonial foothold (the treasure-fleet / fur-coast / silver-road reach — so Pacific islands qualify).
+#
+# On use: pay price_colonise_frontier, transfer the province to the Qing (set_owned_by = ROOT — the
+# proven in-mod province-transfer idiom, se_QING_BURMA:149), and seed a starter pop
+# (create_state_pop tribesmen — the se_QING_COLON settler idiom). CHI-only, ai_is_valid no.
+# Wired into gui/province_window.gui on the UNOWNED-province path. Effect: se_QING_AMERICAS.txt.
+########################################################################
+
+QING_colonise_frontier_button = {
+	scope = province
+	confirm_title = "QING_colonise_frontier_confirm_t"
+	confirm_text = "QING_colonise_frontier_confirm_desc"
+	saved_scopes = { player }
+
+	is_shown = {
+		scope:player = { tag = CHI }
+		# only ever offered on genuinely UNOWNED, settleable land
+		has_owner = no
+		is_uninhabitable = no
+		NOT = { is_sea = yes }
+	}
+
+	ai_is_valid = { always = no }
+
+	is_valid = {
+		has_owner = no
+		is_uninhabitable = no
+		NOT = { is_sea = yes }
+		# reachable: adjacent to Qing land, OR a coastal province the Pacific reach can plant on.
+		OR = {
+			any_neighbor_province = { owner = scope:player }
+			AND = {
+				is_coastal = yes
+				scope:player = {
+					OR = {
+						has_country_modifier = qing_col_silver_road
+						has_country_modifier = qing_col_fur_coast
+						has_country_modifier = qing_col_pacific_trade
+						has_country_modifier = qing_col_golden_shore
+						any_owned_province = {
+							OR = {
+								is_in_region = California
+								is_in_region = Cascadia
+								is_in_region = Alaska
+								is_in_region = Pacific_Mexico
+							}
+						}
+					}
+				}
+			}
+		}
+		# affordable (proven price-gate idiom from found_city_button).
+		trigger_if = {
+			limit = { scope:player = { NOT = { can_pay_price = price_colonise_frontier } } }
+			hidden:scope:player = { can_pay_price = price_colonise_frontier }
+		}
+	}
+
+	effect = {
+		scope:player = { pay_price = price_colonise_frontier }
+		QING_colonise_this_province = yes
+		LOG_line = { sys = QING  msg = "colonisation: a colony is planted on the unowned frontier for" }
+	}
+}
