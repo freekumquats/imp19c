@@ -12,21 +12,17 @@ shortage.1 = { # General food shortage
 	goto_location = scope:famine_province
 
 	trigger = {
-		# [logfix] require a governorship that is BOTH short of food AND still has an
-		# eligible province (populated + not already under recent_famine). The immediate
-		# block saves scope:famine_province only from such a province; without this guard
-		# the event could fire with every candidate already famine-flagged, leaving the
-		# scope unsaved and every scope:famine_province read below throwing "Undefined
-		# event target 'famine_province'" (245/session).
+		# [#1 follow-up] Famine now fires SOLELY off the engine's own State food pool — the same
+		# signal the hardcoded state_starving/starving_city modifiers key on — reusing the engine's
+		# accounting instead of a second parallel one. A State genuinely runs out of STORED food
+		# (below 1/5 of capacity; "Amenities" in the UI, topped up by the ever-normal granary pool
+		# QING_DECLINE_granary_pool) before its pops starve. The old governorship trade-sim gate
+		# (ECON_governorship_food_shortage_physical, a per-good demand-vs-stockpile FLOW snapshot)
+		# was a SEPARATE ledger that fired famine even on a State sitting atop a full granary — the
+		# reported #1 bug — so it is dropped; the trade-sim number no longer bears on famine.
+		# The event still narrows to a governorship, but only because it needs a save-able province.
 		any_governorships = {
-			ECON_governorship_food_shortage_physical > 0.3
 			any_governorship_state = {
-				# [#1 boot] the owning STATE must ACTUALLY be short of STORED food before its pops
-				# starve. The governorship trade-sim shortage (ECON_governorship_food_shortage_physical,
-				# a per-good demand-vs-stockpile snapshot) is a SEPARATE accounting from the engine's
-				# State food pool (has_state_food) shown in the UI as "Amenities" and topped up by the
-				# ever-normal granary (QING_DECLINE_granary_pool). Without this gate a State sitting on a
-				# large food surplus still starved pops whenever the trade-sim tripped — the reported bug.
 				# "Real shortage" = below 1/5 of capacity, byte-identical to the granary SHIP-leg test
 				# (se_QING_DECLINE.txt:2018-2019); capacity>0 guards the degenerate no-storage state.
 				has_state_food_capacity > 0
@@ -47,11 +43,9 @@ shortage.1 = { # General food shortage
 			# and famine_province is never saved (Undefined event target below). Each level now
 			# requires a descendant province that is populated AND not already famine-flagged.
 			limit = {
-				ECON_governorship_food_shortage_physical > 0.3
+				# [#1 follow-up] mirror the trigger: pick a governorship whose STATE genuinely lacks
+				# STORED food (below 1/5 capacity) AND still has a save-able province. No trade-sim gate.
 				any_governorship_state = {
-					# [#1 boot] mirror the trigger: the state must genuinely lack STORED food (below 1/5
-					# capacity) AND still have a save-able province, or the random pick could land on a
-					# surplus/no-eligible-province state and famine_province is never saved.
 					has_state_food_capacity > 0
 					has_state_food < { value = has_state_food_capacity  multiply = 0.2 }
 					any_state_province = {
@@ -151,6 +145,57 @@ shortage.1 = { # General food shortage
 			multiply = -1
 		}
 		add_political_influence = -20
+	}
+
+	# --- Open the ever-normal granaries (常平倉) — draw on the national reserve -------------------
+	# [#1 follow-up/user] Historically the Qing answer to famine was to open the ever-normal granary.
+	# This option is shown ONLY when the national pool actually holds grain (ROOT.var:qing_granary_food
+	# > 0). It ships real food into the stricken State (add_state_food), drains the pool by the same
+	# amount, and stamps the qing_grain_relief modifier used by the DECLINE ship-leg — no treasury cost,
+	# but it spends down a finite reserve that only refills in good years (QING_DECLINE_granary_pool).
+	option = {
+		name = "shortage.1.c"
+		trigger = {
+			tag = CHI
+			exists = scope:famine_province
+			# has_variable guard mirrors the DECLINE convention (var always defended before read);
+			# QING_DECLINE_init/the 1763 seed create it at game start, so this is belt-and-braces.
+			has_variable = qing_granary_food
+			var:qing_granary_food > 0
+		}
+		# relief size = 1/5 of the stricken State's food capacity, bounded by what the pool holds.
+		# Save the owning State as a scope (scope:X.var: is the proven pool-write idiom the DECLINE
+		# ship-leg uses at se_QING_DECLINE.txt:2029; a longer scope:famine_province.state.var: chain
+		# on a comparison RHS is not attested). Block-value RHS per the relational-comparison rule.
+		scope:famine_province.state = {
+			save_scope_as = qing_famine_state
+			set_variable = { name = qing_gran_famine_ship_tmp  value = has_state_food_capacity }
+			change_variable = { name = qing_gran_famine_ship_tmp  divide = 5 }
+			if = {
+				limit = { var:qing_gran_famine_ship_tmp > { value = ROOT.var:qing_granary_food } }
+				set_variable = { name = qing_gran_famine_ship_tmp  value = ROOT.var:qing_granary_food }
+			}
+			# ship + drain only when there is something to ship (matches DECLINE ship-leg
+			# se_QING_DECLINE.txt:2027; trigger already guarantees pool>0 & capacity>0, but keep
+			# the guard so a future trigger relaxation can't ship/drain a zero or negative amount).
+			if = {
+				limit = { var:qing_gran_famine_ship_tmp > 0 }
+				add_state_food = { value = var:qing_gran_famine_ship_tmp }
+				ROOT = { change_variable = { name = qing_granary_food  subtract = scope:qing_famine_state.var:qing_gran_famine_ship_tmp } }
+			}
+			remove_variable = qing_gran_famine_ship_tmp
+		}
+		scope:famine_province = {
+			# non-stacking modifier, but guard the stamp anyway to mirror DECLINE (se_QING_DECLINE.txt:2036).
+			if = {
+				limit = { NOT = { has_province_modifier = qing_grain_relief } }
+				add_province_modifier = {
+					name = qing_grain_relief
+					duration = 365
+				}
+			}
+		}
+		add_political_influence = -10
 	}
 
 	option = {
