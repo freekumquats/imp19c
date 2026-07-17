@@ -100,3 +100,43 @@ Historical check like #16. DONE-flag pending research.
 ## Holy sites (B7 follow-on) — added the 4 missing custom-deity holy sites
 deity_xuanwu→Shiyan 7249 (Wudang), deity_nezha→Chengdu 3537, deity_caishen→Suzhou 2588,
 deity_tudigong→Baoding 5213. (Beijing 8363 already holds deity_shangdi.) DONE.
+
+## B18 — French Louisiana main chunk = exactly modern-Louisiana shape (wrong); research 1763 extent
+The extra disconnected provinces may be fine, but the core is shaped like the modern US state, not the
+vast 1763 Louisiana. NOTE: in 1763 France ceded Louisiana to SPAIN (secret Treaty of Fontainebleau
+1762 / Paris 1763) — so a FRENCH Louisiana at a Feb-1763 start is itself historically suspect. Research
+the real 1763 controlled extent + correct owner. NEEDS RESEARCH.
+RESEARCH DONE (agent a9e0b3cc): LSA already IS a Spanish subject (correct owner). Footprint is too
+SMALL, not too large — should add the Arkansas River-valley posts (1804 5826 5832 6176 7458 7476 7776
+9911 9915 9987 10062 10077). Illinois Country east-bank villages (721 1614 3748 3812 4208 5320 6044
+6228 7258 7569 7899 7972 9197 9200 9679) went to BRITAIN in 1763 → assign to GBR. Interior plains stay
+Native/OSG (paper claim only, per #16). Any "French Louisiana" label is a dynamic-name artefact.
+
+# ======================================================================
+# ROUND 2 (this boot test) — new reports
+# ======================================================================
+
+## B19 — Character-window court-position title row completely absent
+The f867bcb69 subtitle row (names the GC office / sub-post under a character's name) shows for NO
+character — not Grand Council office-holders, not sub-post holders. Static-clean (loc keys exist, marker
+vars are set by the office/subpost effects, Or()-IsSet + Custom() idioms individually proven elsewhere),
+so this is the "static-clean but broken" trap. PLAN: rebuild the visible-gate as a proven
+ScriptedGui.IsShown gate (a new qing_has_court_position char-scope scripted_gui) instead of the
+hand-rolled 8-way Or() chain, and give the textbox an explicit fixed size like the working incumbent
+marker (imp19c_windows.gui:110). NEEDS FIX.
+
+## B20 — Some Zongli Yamen diplomats are ALSO commanders → breaks the 1:1 position mapping
+A courtier can hold the qing_zongli_diplomat sub-post AND be an army/navy commander at once, so the
+"one man, one court position" rule I was told to enforce is violated. The subpost fill/eligibility
+gate (QING_subpost_eligible_candidate) must exclude is_general/is_admiral (and the sweep should
+release a diplomat who later takes a command). NEEDS FIX.
+
+## B21 — School icon in the Outliner "Building Constructions" queue is a broken placeholder
+The construction-queue entry for a school building shows gfx/interface/placeholder.dds instead of the
+proper school building icon. Likely a missing/placeholder construction-icon mapping for the school
+building type in the outliner build-queue widget. NEEDS INVESTIGATION.
+
+## B22 (feature request) — "Dispatch Diplomat" button on each Great Power row (Great Game screen)
+Diplomats should be dispatchable to a Great Power to SOOTHE it and reduce tension modestly (not zero it
+out). Add a "Dispatch Diplomat" button in each Great Power's row on the Great Game screen; consumes /
+occupies a Zongli diplomat, applies a modest one-shot tension reduction to that power. NEW FEATURE.
