@@ -22,6 +22,53 @@
 ########################################################################
 
 # ======================================================================
+# [migration-push fix] POP OVER-CAPACITY OVERFLOW (province scope). The prior push term guessed
+# `has_province_modifier = overpopulation` — but that hardcoded engine auto-modifier is NOT queryable
+# by name from script, so the term was inert (boot-test: over-capacity drove no migration). Compute
+# the overflow DIRECTLY instead: total_population minus the province's readable pop ceiling
+# (modifier:local_population_capacity — the proven numeric read, AI_svalues.txt:379 / MODIFIER_svalues.txt).
+# Positive only when the province is genuinely over its ceiling; 0 otherwise (min = 0). Pure arithmetic —
+# no trigger, no var-on-RHS comparison (safe per the RHS-operator rule).
+MIGRATION_pop_overcapacity_overflow = {
+	# Scope: province
+	value = total_population
+	subtract = modifier:local_population_capacity
+	min = 0
+}
+
+# [migration-push fix] LOW STATE FOOD (province scope, reads its state). A state whose stored food is
+# low against its capacity is a hungry state whose pops want out. has_state_food / has_state_food_capacity
+# are the proven bare-readable state-food numerics (governor_policies:140 / se_QING_DECLINE granary), read
+# here via the proven `state = { add = <primitive> }` scope-wrapper (JOBS_svalues idiom) rather than a
+# dotted `state.has_state_food` accessor (unproven for engine primitives). Score = the shortfall of stored
+# food below HALF the capacity, normalised by capacity and ×20: a full granary scores 0, an empty one ~10.
+# Guarded so a 0-capacity state (deserts, sea-tiles) contributes nothing and never divides by zero.
+MIGRATION_state_food_deficit = {
+	# Scope: province
+	value = 0
+	if = {
+		limit = { state = { has_state_food_capacity > 0 } }
+		# shortfall below the comfort line (half capacity), via the state scope-wrapper
+		add = {
+			value = 0
+			state = { add = has_state_food_capacity }
+			multiply = 0.5
+		}
+		subtract = {
+			value = 0
+			state = { add = has_state_food }
+		}
+		# normalise by capacity and scale
+		divide = {
+			value = 0
+			state = { add = has_state_food_capacity }
+		}
+		multiply = 20
+		min = 0
+	}
+}
+
+# ======================================================================
 # PUSH — how strongly a province makes its pops want to LEAVE. Sum of the
 # hardships a pop can flee: joblessness/overpopulation, unrest, hunger, and
 # the disruption of war/occupation. Per-pop grievances that vary WITHIN a
@@ -40,31 +87,24 @@ MIGRATION_push_province = {
 		min = 0
 	}
 
-	# [#49] POPULATION OVER CAPACITY — the crowding that actually trips the engine's
-	# "Pops Starving" alert (population EXCEEDS the province/state pop capacity, which
-	# is a HOUSING/land ceiling, distinct from the JOBS unemployment above). The engine
-	# auto-applies its own hardcoded `overpopulation` province modifier (00_hardcoded.txt:251,
-	# "scales depending on how much over capacity") the moment a province crosses its
-	# ceiling, and the `state_starving` STATE modifier once the overflow starves pops — so
-	# these are the direct, already-computed engine signals for the condition, no capacity
-	# read needed. This is the historical 人地矛盾 push (Hong Liangji): people leave the
-	# crowded core for the frontier. Weighted HEAVY (per user: over-capacity should drive
-	# "a lot of" migration). has_province_modifier / has_state_modifier are inert (false),
-	# never fatal, if the engine does not expose the auto-modifier by name — so this is a
-	# safe additive term either way.
-	if = {
-		limit = { has_province_modifier = overpopulation }
-		add = 12
+	# [migration-push fix / user boot-test] POPULATION OVER CAPACITY — the historical 人地矛盾 push
+	# (Hong Liangji): people leave the crowded core for the frontier. The prior draft gated this on
+	# `has_province_modifier = overpopulation` (the engine's hardcoded auto-modifier) — but the boot
+	# test confirmed that term does NOTHING, because that auto-modifier is not queryable by name from
+	# script. REPLACED with a DIRECT arithmetic overflow: how many pops the province holds ABOVE its
+	# readable ceiling (MIGRATION_pop_overcapacity_overflow = total_population - modifier:local_population_capacity,
+	# min 0). Weighted heavy (per user: over-capacity should drive a lot of migration). A province at or
+	# under its ceiling contributes 0; one 10 pops over adds ~15.
+	add = {
+		value = MIGRATION_pop_overcapacity_overflow
+		multiply = 1.5
 	}
-	# [#49 review-fix] Use the PROVINCE-scope starvation auto-modifier `starving_city`
-	# (00_hardcoded.txt, all-`local_*`/supply_limit payload = province level, grouped beside
-	# `overpopulation`), NOT the `state_starving` state modifier the first draft tested via a
-	# `state = { has_state_modifier = … }` chain — `state_starving`'s scope was unproven and the
-	# chain would have silently never matched. The score is province-scoped, so a plain
-	# has_province_modifier keeps it in-scope and parallel to the overpopulation term above.
-	if = {
-		limit = { has_province_modifier = starving_city }
-		add = 10
+	# [migration-push fix / user boot-test] LOW STATE FOOD CAPACITY — a state whose granary is running
+	# empty against its capacity is a hungry state whose pops seek fuller lands. DIRECT read of the state
+	# food store vs capacity (MIGRATION_state_food_deficit), distinct from the governorship shortage term
+	# below (which is a per-good production shortfall, not the stored-food level). Empty granary adds ~10.
+	add = {
+		value = MIGRATION_state_food_deficit
 	}
 
 	# Unrest — a restless province bleeds people. province_unrest is ~0..10.

@@ -325,3 +325,59 @@ se_QING_AMERICAS 80/80).
 economy-framework script errors + sqrt `Illegal use of operator` (the economy-framework's own
 local_var-on-RHS, tracked separately in the economy-audit backlog), map-locator bounding-box warnings,
 COHORT_NAME_jurchen ordinal. These are upstream/framework, out of scope for this pass.
+
+---
+
+## Follow-on session (post boot-test feedback)
+
+### STANDING RULE ADDED — boot-crash review before "ready to test"
+User directive: after ANY batch of changes, run an independent boot-crash review BEFORE saying it's ready to
+boot-test (the user tests on a separate machine, so a missed crash costs a full round-trip). Saved to memory
+imp19c-boot-crash-review-rule; on top of the existing fix-traceability rule, this makes the boot-crash review
+unconditional for every batch.
+
+### #18 CORRECTION — vanilla colonisation is ENABLED (I was wrong twice)
+I twice claimed the mod "disabled vanilla colonisation." FALSE: `MINIMUM_COLONISATION_POP = 8` was re-enabled by
+#304 (from the 99999 disable-sentinel), so the province window's built-in ColonizeButton already colonises the
+CONTIGUOUS unowned frontier for the Qing with no code. What the mod deleted was the separate migrant `settle`
+ARMY ability (a different mechanic). NARROWED my #18 button to the one thing the engine can't do — OVERSEAS /
+Pacific-island land out of colonisation range (unowned coastal, NOT adjacent to Qing land, Pacific-foothold gated).
+[STILL TO VERIFY — task: check whether a vanilla colonisation-range define can reach islands, and if so drop the
+script entirely; see "consolidation" below.]
+
+### MIGRATION PUSH — food capacity + over-capacity now real push factors (DONE)
+User boot-test: the over-capacity push "does not appear to work." ROOT CAUSE: the prior term gated on
+`has_province_modifier = overpopulation` — the engine's hardcoded auto-modifier, which is NOT queryable by name
+from script, so the term was silently inert (the code comment had even hedged that it "may be inert"; the boot
+test confirmed it IS). Also `has_province_modifier = starving_city` (same class). REPLACED both with DIRECT
+readable arithmetic in MIGRATION_svalues.txt:
+- `MIGRATION_pop_overcapacity_overflow` = total_population − modifier:local_population_capacity (min 0) — the
+  proven readable pop-ceiling numeric (AI_svalues.txt:379 / MODIFIER_svalues.txt read modifier:local_* directly).
+  Wired into the push × 1.5 (heavy, per "over-capacity should drive a lot of migration"). 人地矛盾.
+- `MIGRATION_state_food_deficit` = shortfall of stored food below half the state's food capacity, normalised by
+  capacity × 20 (empty granary ≈ +10). Reads has_state_food / has_state_food_capacity via the proven
+  `state = { add = <primitive> }` scope-wrapper (JOBS_svalues idiom), NOT a dotted state.has_state_food accessor
+  (unproven for engine primitives). Guarded on capacity > 0 so deserts/sea divide safely. This is the user's
+  "lack of food (state food capacity low) … should be a migration push factor", distinct from the existing
+  governorship per-good production-shortage term. Pure arithmetic — no trigger, no var-on-RHS comparison (safe
+  per the RHS-operator rule). Brace-balanced 43/43.
+
+### BOOT-CRASH REVIEW findings applied (independent review of the boot #7–#19 series)
+Review verdict: series clean overall (0 double-owned provinces across 8,790 assignments; all re-territoried
+capitals self-owned; IRO/arc/colonise/eunuch/deity mechanics all sound). Actioned findings:
+- **MEDIUM (1763-crash class) FIXED:** common/deities/03_confucian_pantheon.txt carried CJK comments but NO BOM,
+  while its populated sibling 00_generic.txt DOES have a BOM — my "no-BOM deities convention" claim was FACTUALLY
+  WRONG (only 00_generic is populated, and it is BOM'd). Added the BOM + corrected the file's header comment.
+- **MEDIUM (loc rule) FIXED:** localization/english/qing_americas_l_english.yml (heavy CJK) had no BOM → added.
+- **LOW FIXED:** common/scripted_effects/se_QING_HOUSEHOLD.txt (CJK, pre-existing no-BOM) → added BOM for consistency.
+- **NOTED (out of scope, pre-existing):** 5 ownerless capitals not touched by this session — MRI(7709) PSR(3856)
+  MLK(883) SNR(883) KBO(4083) — a latent ownerless-capital crash risk IF those tags construct; flagged for a
+  separate pass. Cosmetic: IRO placeholder Celtic ship names; 4 deities without holy sites (function fine).
+
+### PENDING (this follow-on)
+- Consolidate the 6 "settle the frontier" surfaces (engine ColonizeButton / #18 overseas / Promote Frontier
+  Settlement policy / #451 Settle-Nomads tree / Xinjiang tuntian / send_settlers): user wants them renamed +
+  cross-referenced by role and to lean on vanilla where a script reinvents it. FINDING: they mostly act on
+  DIFFERENT land (unowned-colonise vs owned-develop vs migration-policy vs diplomatic) so they're not true
+  mechanical duplicates — the overlap is naming/discoverability. Approach approved: names+cross-refs, and replace
+  script-with-vanilla where applicable (incl. re-checking whether vanilla can reach islands → maybe drop #18).
