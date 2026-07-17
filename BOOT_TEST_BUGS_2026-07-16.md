@@ -60,3 +60,43 @@ is still province-scope-limited.
 
 ## Holy sites / deities — see B6/B7 (one cluster, under investigation)
 User also reports Holy Sites section blank + unsure if the 12 custom deities appear at all.
+
+## B9 — Palace Eunuch roster rows squashed (skills cut off)
+Refer to Captains of the Guard (qing_guard.gui) for the correct row height. Household panel eunuch list.
+
+## B10 — Palace Eunuch list is ABOVE the action buttons; should be at the BOTTOM
+Like Captains of the Guard, the roster list belongs after the button strip, not before.
+
+## B11 — Harem women list rows slightly squashed
+Same as B9 — bump row height to match the Guard panel.
+
+## B12 — Palace Eunuch characters lack the eunuch trait
+The minted eunuchs (QING_household_mint_eunuch) don't carry the eunuch/castrated trait.
+
+## B13 (fixed) — confucianism showed raw generic-deity keys
+Excluded confucianism from the 8 generic region1 deities (00_generic.txt) so only the 12 themed
+Qing deities show. DONE.
+
+## B14 — pops starving in Yongzhou (203/64) + Hengyang (258/124): raise pop capacity drastically
+Same class as #9 (over-capacity prefectures). Extend the QING_boot_relieve mechanism to these 2 provinces.
+
+## B3 — Treasure Fleet: triggers all valid (num_of_ships/num_of_port_building/is_port proven in oracle).
+Definition confirmed valid by 2 agents. Applying `final = yes` on the capstone as the best remaining
+hypothesis (the boot log warns missions "lack a final task"); noting uncertainty since visible sibling
+xinjiang also lacks it.
+
+## B15 — Colonize + "Establish an Overseas Colony" buttons both greyed out
+Both appear on an unowned island but are disabled. Actions: (a) double-check vanilla Colonize
+requirements (may be legit); (b) "Establish an Overseas Colony" (capitalize thus) should NOT be greyed
+for the islands being selected — the #18 button's is_valid is too strict. NEEDS INVESTIGATION.
+
+## B16 — Overseas-colony pops conjured from thin air; should come from real crowded provinces
+The #18 colonise effect create_state_pop's new tribesmen; instead it should DRAW pops from real
+(over-capacity) source provinces — tie into the migration source model.
+
+## B17 — US still disconnected: research whether provinces 5204 and 1154 should be empty/unowned in 1763
+Historical check like #16. DONE-flag pending research.
+
+## Holy sites (B7 follow-on) — added the 4 missing custom-deity holy sites
+deity_xuanwu→Shiyan 7249 (Wudang), deity_nezha→Chengdu 3537, deity_caishen→Suzhou 2588,
+deity_tudigong→Baoding 5213. (Beijing 8363 already holds deity_shangdi.) DONE.
