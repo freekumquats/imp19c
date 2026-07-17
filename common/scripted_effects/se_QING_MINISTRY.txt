@@ -604,6 +604,19 @@ QING_ministry_recompute_perf_works = {
 			change_variable = { name = qing_min_works_scratch  divide = 4 }
 			change_variable = { name = qing_min_perf_works  add = var:qing_min_works_scratch }
 		}
+		# (e) [#76-GAP1] RAILWAY NETWORK — the Works panel's "Extend the Railway" action lays
+		# INF_*_upgrade rail across the realm (se_QING_SELFSTR.txt QING_selfstr_extend_rail,
+		# tallied into qing_rail_network_count). Once the empire has taken up the iron road, a
+		# growing trunk is the modern Board of Works' headline achievement — so it lifts the
+		# minister, +1 per line laid, capped at +12 so a mature network materially rewards him
+		# without dwarfing the canal/coverage terms. Zero rail (the pre-industrial 1763 norm)
+		# adds nothing — no penalty for an era that has no railways. Guarded on the var existing.
+		if = {
+			limit = { has_variable = qing_rail_network_count }
+			set_variable = { name = qing_min_works_scratch  value = var:qing_rail_network_count }
+			if = { limit = { var:qing_min_works_scratch > 12 }  set_variable = { name = qing_min_works_scratch  value = 12 } }
+			change_variable = { name = qing_min_perf_works  add = var:qing_min_works_scratch }
+		}
 	}
 	else = {
 		# VACANT Board of Works — the dikes silt, the canal chokes. Floor it low.
@@ -921,6 +934,20 @@ QING_ministry_recompute_perf_grand_secretariat = {
 			change_variable = { name = qing_min_gsec_scratch  divide = 4 }
 			change_variable = { name = qing_min_perf_grand_secretariat  add = var:qing_min_gsec_scratch }
 		}
+		# (f) [#76-GAP4] SOUTHERN STUDY (南書房) — the Hanlin panel's "Second a scholar to the
+		# Southern Study" action drains the Hanlin bench (term b) to staff the inner-court literary
+		# secretariat (南書房, se_QING_SOUTHERNSTUDY.txt qing_southernstudy_count). That corps IS an
+		# output of the Academy's leader — the emperor's private brush-secretaries, drawn from his
+		# jinshi — so its depth credits him back: the seconded scholars staff the throne's inner
+		# chancery, they are not lost from his account. Count vs a healthy ~3 (a small elite body),
+		# x2 — bounded so it roughly offsets the Hanlin-bench cost of seconding. Guarded on the var.
+		if = {
+			limit = { has_variable = qing_southernstudy_count }
+			set_variable = { name = qing_min_gsec_scratch  value = var:qing_southernstudy_count }
+			change_variable = { name = qing_min_gsec_scratch  subtract = 3 }
+			change_variable = { name = qing_min_gsec_scratch  multiply = 2 }
+			change_variable = { name = qing_min_perf_grand_secretariat  add = var:qing_min_gsec_scratch }
+		}
 	}
 	else = {
 		# VACANT Grand Secretariat — the Academy heads no drafting office. Floor it low.
@@ -945,7 +972,12 @@ QING_ministry_recompute_perf_grand_secretariat = {
 #     50, /4 (a full purse = a household well kept; a drained one = mismanagement),
 #   • EUNUCH DANGER — a hard -20 penalty if a eunuch faction leader exists in the court (the
 #     perennial Qing peril the chamberlain is meant to check),
-#   • CORRUPTION DRAG — subtract corruption/10 (the Heshen risk in the household).
+#   • CORRUPTION DRAG — subtract corruption/10 (the Heshen risk in the household),
+#   • HAREM ORDER — the inner court's depth vs a healthy ~4, x2 (#360),
+#   • [#75] EUNUCHS CHECKED — +6 when a palace-eunuch corps is present AND none leads a faction
+#     (the POSITIVE counterpart to the danger penalty: the eunuchs held in hand, not merely absent),
+#   • [#76-GAP2] UPPER STUDY (上書房) — the heirs' schooling progress deviation from ~50, /5,
+#   • [#76-GAP3] WENZHI PATRONAGE (文治) — the imperial cultural patronage standing dev. from ~50, /5.
 # A VACANT chamberlain office floors the meter low (no one keeps the throne's household).
 # Reads guarded; scratch reads use var:X (bare name = 0). Clamp 0..100. No roster list —
 # the household is the purse + the eunuch danger, not a set of on-map objects (the panel
@@ -1002,6 +1034,48 @@ QING_ministry_recompute_perf_chamberlain = {
 		change_variable = { name = qing_min_cham_scratch  subtract = 4 }   # deviation from a healthy inner court
 		change_variable = { name = qing_min_cham_scratch  multiply = 2 }
 		change_variable = { name = qing_min_perf_chamberlain  add = var:qing_min_cham_scratch }
+		# (f) [#75] EUNUCHS CHECKED — the POSITIVE counterpart to the (c) danger penalty. The
+		# chamberlain's signal charge is keeping the 太監 in hand, and a well-ordered palace
+		# establishment (a corps present, none of them an overmighty faction leader) is a mark
+		# in his favour, not merely the ABSENCE of catastrophe. Reward +6 when a serving eunuch
+		# corps exists AND no faction leader stalks the court — so the meter distinguishes "the
+		# eunuchs are held in check" from "there are no eunuchs at all" (a hollow establishment,
+		# no bonus). The (c) penalty already handles the danger case; guarded so the two never
+		# both fire (the any_character faction-leader check is the same predicate, negated).
+		if = {
+			limit = {
+				any_character = { employer = ROOT  has_variable = qing_is_palace_eunuch  is_alive = yes }
+				NOT = { any_character = { employer = ROOT  has_variable = qing_eunuch_faction_leader  is_alive = yes } }
+			}
+			change_variable = { name = qing_min_perf_chamberlain  add = 6 }
+		}
+		# (g) [#75/#76-GAP2] UPPER STUDY (上書房) — the crown prince's schooling is the
+		# chamberlain's charge (the 內務府 ran the palace schools). The heirs' schooling
+		# progress (qing_upperstudy_schooling, 0..100) folds in as a deviation from a sound
+		# ~50, /5 (~±10 across the band): a vigorous Upper Study with able masters lifts the
+		# household head; a neglected one drags him. Guarded on the var (the system may not be
+		# initialised in a non-CHI or pre-init read). The corps QUALITY already reaches the
+		# heir via the school pulse; this credits the household head for keeping the school.
+		if = {
+			limit = { has_variable = qing_upperstudy_schooling }
+			set_variable = { name = qing_min_cham_scratch  value = var:qing_upperstudy_schooling }
+			change_variable = { name = qing_min_cham_scratch  subtract = 50 }
+			change_variable = { name = qing_min_cham_scratch  divide = 5 }
+			change_variable = { name = qing_min_perf_chamberlain  add = var:qing_min_cham_scratch }
+		}
+		# (h) [#76-GAP3] WENZHI PATRONAGE (文治) — the imperial cultural patronage (the workshops,
+		# the great compilations, the southern tours) is managed from the Household panel, so the
+		# standing of that patronage (qing_wenzhi_patronage, 0..100, init 40) belongs in the
+		# chamberlain's account. Deviation from a healthy ~50, /5 (~±10): a flourishing patronage
+		# (funded workshops, a launched 四庫, a well-received tour) lifts the household head; a
+		# lapsed one drags him. Guarded on the var.
+		if = {
+			limit = { has_variable = qing_wenzhi_patronage }
+			set_variable = { name = qing_min_cham_scratch  value = var:qing_wenzhi_patronage }
+			change_variable = { name = qing_min_cham_scratch  subtract = 50 }
+			change_variable = { name = qing_min_cham_scratch  divide = 5 }
+			change_variable = { name = qing_min_perf_chamberlain  add = var:qing_min_cham_scratch }
+		}
 	}
 	else = {
 		# VACANT chamberlain office — the household drifts, the eunuchs creep. Floor it low.

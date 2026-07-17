@@ -1,0 +1,172 @@
+﻿########################################################################
+# se_QING_SUBPOSTS.txt — [#77] AUTO-STAFFING THE MINISTRY SUB-POSTS.
+#
+# Beneath the thirteen Grand Council offices (se_QING_COUNCIL.txt, filled by
+# QING_council_autofill) sit the appointable CORPS the ministry panels manage:
+#   • the Zongli Yamen's diplomats           (駐外使臣, marker qing_zongli_diplomat)
+#   • the Censorate's investigating censors   (御史,   marker qing_is_censor_inspector)
+#   • the Imperial Guard's captains           (侍衛,   marker qing_is_imperial_guardsman)
+# Historically these posts were STAFFED BY THE STATE, not left for a sovereign to
+# fill by hand — a censor bench sat, envoys were posted, guardsmen enrolled. Yet in
+# the mod they started EMPTY and filled only when the player clicked each row. This
+# file gives them the SAME game-start seed + quarterly vacancy-refill the ambans have
+# (QING_amban_seed_gamestart / QING_amban_post_sweep): the throne staffs them without
+# the player's intervention, and the player keeps the panel Recall/Discharge levers to
+# replace an officeholder at will.
+#
+# 1:1 RULE (user): a character holds AT MOST ONE post. Every fill draws only a
+# QING_subpost_eligible_candidate (qing_dynasty_triggers.txt) — an employed adult who is
+# NOT the ruler/heir, NOT a governor/general/admiral, NOT on the Grand Council, and NOT
+# already in ANY other sub-post/study/amban/eunuch role. So no man is ever double-booked.
+#
+# CANDIDATE SUPPLY (user): a fill prefers a FREE eligible courtier (the ablest, by
+# combined_stats_council_svalue, exam laureates floating to the top). When the court has
+# no free man to spare, it MINTS one through the examination process — QING_exam_mint_scholar
+# — framed as an EXTRAORDINARY PROVINCIAL STUDENT who performed above expectations (marker
+# qing_is_above_exp_student, counted in qing_above_exp_student_count for the Ministry of Rites
+# panel). So the roster is always staffable; the exam is the source, exactly as for civil
+# office (#34) and the ambans (#392).
+#
+# Scope: COUNTRY (ROOT = CHI) throughout. se_LOG sys = QING. Prefix = QING_subpost_.
+# No modifiers granted inside create_character (#90 rule — the mint helper obeys it).
+########################################################################
+
+# ======================================================================
+# QING_subpost_fill_one — staff ONE vacancy in a corps. Country scope (ROOT = CHI).
+# Params:
+#   $marker$ = the character-scope flag stamped on a serving member (qing_zongli_diplomat,
+#              qing_is_censor_inspector, qing_is_imperial_guardsman).
+#   $count$  = the corps count var the panel + perf recompute read.
+# Prefers the ablest FREE eligible courtier; mints an above-expectations provincial
+# student through the exam process when none is free. Stamps the marker + bumps the
+# count on whichever man is chosen. Idempotent per call (fills exactly one seat).
+# ======================================================================
+QING_subpost_fill_one = {
+	if = {
+		# (A) a free eligible courtier exists — post the ablest.
+		limit = {
+			any_character = { QING_subpost_eligible_candidate = yes }
+		}
+		ordered_character = {
+			limit = { QING_subpost_eligible_candidate = yes }
+			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_subpost_new
+		}
+		# if the drawn man is a hiring-pool scholar, drop him from the pool as he takes the
+		# post (the same exit path QING_office_appoint / the amban poster use).
+		scope:qing_subpost_new = { QING_exam_pool_drop_member = yes }
+		LOG_line = { sys = QING  msg = "subpost: staffed from a free courtier for" }
+	}
+	else = {
+		# (B) no free man — mint an EXTRAORDINARY PROVINCIAL STUDENT through the exam. He is a
+		# juren graduate (the rank that supplied the lesser posts) who performed above expectations;
+		# QING_exam_mint_scholar creates him into the hiring pool + saves scope:qing_new_scholar. We
+		# then immediately claim him (drop from pool, tag him the above-expectations student for the
+		# Rites counter) and post him — so the mint's net effect is one new officeholder, not a pool
+		# scholar left waiting. Marked here in a FOLLOW-UP scope (never inside create_character, #90).
+		QING_exam_mint_scholar = { degree = juren }
+		scope:qing_new_scholar = { save_scope_as = qing_subpost_new }
+		scope:qing_subpost_new = {
+			QING_exam_pool_drop_member = yes
+			set_variable = { name = qing_is_above_exp_student  value = 1 }
+		}
+		change_variable = { name = qing_above_exp_student_count  add = 1 }
+		LOG_line = { sys = QING  msg = "subpost: minted an above-expectations provincial student to staff a post for" }
+	}
+	# stamp the corps marker + bump the count on the chosen man.
+	scope:qing_subpost_new = { set_variable = { name = $marker$  value = 1 } }
+	change_variable = { name = $count$  add = 1 }
+}
+
+# ======================================================================
+# QING_subpost_staff_corps — fill a corps up to its establishment target. Country scope.
+# Params: $marker$, $count$ (as above); $target$ = how many the corps should carry.
+# Recomputes the LIVE count first (so a dead/departed member's seat is seen as vacant),
+# then fills one seat at a time up to the target. Unrolled to the target ceiling (the
+# engine `while` counts only a literal, not a var) — the ministry corps caps are small
+# (target 4, cap 6), so a fixed ladder of guarded fills is clean and bounded.
+# ======================================================================
+QING_subpost_staff_corps = {
+	# LIVE recount: rebuild the count from the marker so stale seats (holder dead / left
+	# CHI employ / promoted to a great office) read vacant and get refilled. The
+	# NOT=qing_office_held guard MATCHES the sibling perf recomputes exactly
+	# (QING_ministry_recompute_perf_censor / _guard_commandant), so the count this sweep
+	# stores agrees with the count the meter scores: a corps member promoted onto the Grand
+	# Council (QING_office_appoint strips his corps marker at seating, but this guards belt-
+	# and-suspenders in case the marker ever lingers) reads as a VACANCY and is refilled,
+	# rather than permanently occupying a slot the working bench can no longer use.
+	set_variable = { name = $count$  value = 0 }
+	every_character = {
+		limit = { employer = ROOT  is_alive = yes  has_variable = $marker$  NOT = { has_variable = qing_office_held } }
+		ROOT = { change_variable = { name = $count$  add = 1 } }
+	}
+	# fill up to $target$ — one guarded seat per rung (at most 4 rungs; a small select corps).
+	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one = { marker = $marker$  count = $count$ } }
+	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one = { marker = $marker$  count = $count$ } }
+	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one = { marker = $marker$  count = $count$ } }
+	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one = { marker = $marker$  count = $count$ } }
+}
+
+# ======================================================================
+# QING_subpost_seed_gamestart — [#77] staff the three ministry corps at game start
+# (called once from imp19c_qing_on_game_initialized, CHI only, BEFORE the ministry perf
+# fold so the panels open with a manned roster). Also inits the above-expectations
+# student counter. Country scope (ROOT = CHI). Targets: a working bench of 4 each (the
+# panel caps are 6; 4 is the "healthy corps" baseline the perf meters score against).
+# ======================================================================
+QING_subpost_seed_gamestart = {
+	LOG_enter = { sys = QING  fn = "QING_subpost_seed_gamestart" }
+	# the exam bookkeeping (qing_scholar_pool_count etc.) must exist before a fill can mint
+	# into the pool — this seed runs BEFORE QING_exam_init in the game-start order, so init it
+	# here first. Idempotent (guards on qing_exam_initialized), so the later init call no-ops.
+	QING_exam_init = yes
+	if = { limit = { NOT = { has_variable = qing_above_exp_student_count } }  set_variable = { name = qing_above_exp_student_count  value = 0 } }
+	QING_subpost_staff_corps = { marker = qing_zongli_diplomat        count = qing_zongli_diplomat_count  target = 4 }
+	QING_subpost_staff_corps = { marker = qing_is_censor_inspector    count = qing_censor_inspector_count  target = 4 }
+	QING_subpost_staff_corps = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count       target = 4 }
+	LOG_line = { sys = QING  msg = "subpost: game-start ministry corps staffed for" }
+	LOG_exit = { sys = QING  fn = "QING_subpost_seed_gamestart"  result = OK }
+}
+
+# ======================================================================
+# QING_subpost_refill_sweep — [#77] quarterly vacancy refill (called from QING_GOV_pulse,
+# beside QING_amban_post_sweep). Tops each corps back up to its establishment target so a
+# member lost to death/departure/promotion is replaced without the player lifting a finger
+# — the state staffs its own benches. The player's panel Recall/Discharge levers still let
+# him drop a man; the next sweep simply refills the gap (so removing a specific officeholder
+# to make room for a chosen replacement works: discharge, then appoint the man he wants, or
+# let the sweep pick the ablest). Gated so it only runs while the relevant GC office is
+# FILLED — a headless ministry does not conjure a staff (mirrors the amban sweep, which
+# gates on the Lifan Yuan holder). Country scope (ROOT = CHI).
+# ======================================================================
+QING_subpost_refill_sweep = {
+	if = {
+		limit = { tag = CHI }
+		# diplomats — only while the Zongli Yamen has a Director.
+		if = {
+			limit = {
+				has_variable = qing_office_zongli_holder
+				var:qing_office_zongli_holder = { is_alive = yes  employer = ROOT }
+			}
+			QING_subpost_staff_corps = { marker = qing_zongli_diplomat  count = qing_zongli_diplomat_count  target = 4 }
+		}
+		# investigating censors — only while the Censorate has a Censor-in-Chief.
+		if = {
+			limit = {
+				has_variable = qing_office_censor_holder
+				var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
+			}
+			QING_subpost_staff_corps = { marker = qing_is_censor_inspector  count = qing_censor_inspector_count  target = 4 }
+		}
+		# guard captains — only while the Guard has a Commandant.
+		if = {
+			limit = {
+				has_variable = qing_office_guard_commandant_holder
+				var:qing_office_guard_commandant_holder = { is_alive = yes  employer = ROOT }
+			}
+			QING_subpost_staff_corps = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count  target = 4 }
+		}
+	}
+}

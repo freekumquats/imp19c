@@ -430,3 +430,102 @@ reports templates"):
 - #75 eunuch danger → Household perf metric + Upper Study → Household perf + throttled eunuch GC events.
 - #76 comprehensive audit: every ACTIVE feature under each Grand Council ministry should feed that ministry's
   effectiveness metric (not passive read-only reports).
+
+---
+
+## Follow-on batch (2026-07-16): #75 / #76 / #77 IMPLEMENTED
+
+### Audit result (#76) — ministry ACTIVE features → effectiveness
+Audited all 12 recompute functions in `se_QING_MINISTRY.txt`. 8 ministries already fold every
+active lever. **4 gaps found & fixed:**
+- **GAP1 Works (工部) — railway.** Added term (e) to `QING_ministry_recompute_perf_works`:
+  `qing_rail_network_count` (from the panel's Extend-the-Railway action, se_QING_SELFSTR) now lifts the
+  minister, +1/line, capped +12. Zero-rail (1763 norm) = no penalty (guarded on the var).
+- **GAP2 Household (內務府) — Upper Study.** Added term (g) to `QING_ministry_recompute_perf_chamberlain`:
+  `qing_upperstudy_schooling` deviation from ~50, /5. The 上書房 (crown-prince school) is the chamberlain's charge.
+- **GAP3 Household — wenzhi patronage.** Added term (h): `qing_wenzhi_patronage` deviation from ~50, /5.
+  The 文治 cultural patronage is managed from the Household panel; now folds into the chamberlain.
+- **GAP4 Grand Secretariat (翰林院) — Southern Study.** Added term (f) to
+  `QING_ministry_recompute_perf_grand_secretariat`: `qing_southernstudy_count` vs healthy ~3, x2. The
+  "second a scholar to the Southern Study" lever drained the Hanlin bench (term b) with no credit back;
+  now the 南書房 corps depth credits the Academy's leader (his brush-secretaries staff the inner chancery).
+- **VERIFIED already-feeding** (no change): eunuch danger → chamberlain (−20, term c); canal condition →
+  works (term d); Xinjiang consolidation → Lifan Yuan (term c); all Zongli/Revenue/Censorate/Justice/Guard/
+  Personnel active levers. Passive read-only REPORTS deliberately excluded (per user).
+
+### #75 — eunuch danger → Household perf (positive term) + throttled eunuch GC events
+- **Perf:** added term (f) to `QING_ministry_recompute_perf_chamberlain` — a POSITIVE +6 when a palace-eunuch
+  corps EXISTS and NONE leads a faction (distinguishes "eunuchs held in check" from "no eunuchs at all").
+  The existing −20 danger penalty (term c) is the negative counterpart; the two are mutually exclusive by
+  the negated faction-leader predicate. Also added Upper Study (g) per the user's follow-up.
+- **Events:** two new throttled GC events in `qing_household_events.txt` — `qing_household.5` (POSITIVE: the
+  敬事房 in good order; reward chamberlain / entrench 祖制 prohibitions / note-and-pass) and `qing_household.6`
+  (EARLY WARNING: a eunuch oversteps before a full faction; nip early / chamberlain handles quietly / look away
+  → raises .2 odds). Both wired into `QING_frontier_flavour_roll`'s random_list in `se_QING_DECLINE.txt`
+  (weights 7 / 6), sharing the same `qing_gc_event_slot_used` court throttle as every other GC event, and each
+  re-checks its own trigger in the fired event (stale-pick-safe).
+- **Modifier:** new `qing_household_eunuchs_curbed` (10yr, `monthly_corruption = -0.05`) for .5.b, in
+  `qing_household_modifiers.txt`.
+- **Loc:** new keys in `qing_household_l_english.yml` (BOM preserved).
+
+### #77 — auto-fill ALL ministry sub-posts (1:1 mapping; mint via exam when short)
+Sub-post map (from the explorer): 13 top offices already autofill (`QING_council_autofill`). Ambans already
+seed+sweep. The Studies (Southern/Upper) & Xinjiang begs already seed+auto-draw. The **three ministry corps
+started EMPTY and filled only by manual player clicks** — those were the gap:
+- **Zongli diplomats** (`qing_zongli_diplomat`, count `qing_zongli_diplomat_count`, cap 6)
+- **Censorate inspectors** (`qing_is_censor_inspector`, `qing_censor_inspector_count`, cap 6)
+- **Imperial Guard captains** (`qing_is_imperial_guardsman`, `qing_guard_corps_count`, cap 6)
+
+New file **`se_QING_SUBPOSTS.txt`** (BOM, matching CJK sibling se_QING_HOUSEHOLD):
+- `QING_subpost_fill_one` — fills one seat: prefers the ablest FREE eligible courtier
+  (`combined_stats_council_svalue`); when none free, MINTS via `QING_exam_mint_scholar {degree=juren}` — the
+  minted man is tagged `qing_is_above_exp_student` and counted in `qing_above_exp_student_count` (the "students
+  who performed above expectations" the user asked for). Pool-drop on seating (shared exit path).
+- `QING_subpost_staff_corps` — live-recounts from the marker (stale seats read vacant), then fills up to a
+  target of 4 (unrolled 4 rungs; engine `while` counts only literals, and caps are small).
+- `QING_subpost_seed_gamestart` — wired into `on_game_initialized` right after `QING_amban_seed_gamestart` and
+  BEFORE the perf fold; self-calls `QING_exam_init` (idempotent) since the seed runs before the normal exam init.
+- `QING_subpost_refill_sweep` — wired into `QING_GOV_pulse` beside `QING_amban_post_sweep`; per-corps gated on
+  the relevant GC office being filled (a headless ministry conjures no staff, mirroring the amban sweep).
+- **Player retains** the panel Recall/Discharge levers; the next sweep refills the gap.
+
+**1:1 mapping enforcement:** new trigger `QING_subpost_eligible_candidate` (qing_dynasty_triggers.txt) =
+`QING_office_eligible_candidate` (already excludes ruler/heir/governor/general/admiral/vanilla-office/GC-seat)
+PLUS a hard NOT on every other sub-post marker (diplomat / inspector / guardsman / southernstudy / upperstudy /
+amban / eunuch / foreign-advisor). So a character holds AT MOST one post and each post one character, with no
+overlap with governors/commanders/GC offices.
+- **NOTE on "researchers":** Imperator has NO `is_researcher` trigger / researcher role — the analogous
+  conflicting roles (governor/general/admiral/office) are already excluded. Nothing to add.
+
+### Rites window (new user ask)
+Added a read-out row "Students Raised Above Expectation (拔貢)" in `gui/qing_rites_ministry.gui` (after the
+military-degree row) bound to `qing_above_exp_student_count`, with loc `QING_RITES_MINISTRY_ABOVE_EXP_LABEL/_TT`
+in `qing_rites_ministry_l_english.yml` (BOM preserved) — surfacing the exam-minted sub-post staff as
+above-quota provincial students, framed as 拔貢 (selection of the outstanding beyond the triennial cohort).
+
+### BOM decisions
+- `se_QING_MINISTRY.txt` ships **noBOM** and boots fine with heavy CJK → my CJK-comment edits kept it noBOM
+  (adding a BOM would diverge from its committed booting state).
+- `se_QING_SUBPOSTS.txt` (NEW) written **with BOM** — matches `se_QING_HOUSEHOLD` (the CJK scripted_effect that
+  carries one) and the standing BOM rule for CJK common/*.txt.
+- All loc .yml edits preserved their BOM.
+
+### Verification
+- Brace balance confirmed on all 9 edited files + the new file.
+- Pending: mandatory boot-crash review (standing rule) BEFORE ready-to-test.
+
+### Boot-crash review (mandatory standing rule) — result
+Ran independent code-review agent on the whole batch. **No boot crash found.** All crash classes traced clean
+(no #90 modifier-in-create_character; new trigger correctly in scripted_triggers; var-RHS all literal; static LOG
+strings; BOM bytes correct; on_init ordering sound; braces balanced; events is_triggered_only + share the court
+throttle; corps fill bounded, cannot over-fill/loop).
+- **FIX APPLIED (medium):** `QING_subpost_staff_corps` recount now excludes `qing_office_held`, matching the
+  sibling perf recomputes (`_censor`/`_guard_commandant`) exactly — so a corps member promoted onto the Grand
+  Council reads as a VACANCY and is refilled, and the sweep-stored count agrees with the meter's count
+  (belt-and-suspenders; `QING_office_appoint` already strips corps markers at seating).
+- **Not changed (non-issues):** (a) the mint-branch pool-drop uses `has_variable` existence checks (the
+  documented same-tick gotcha was a NUMERIC change_variable read-back, not a boolean existence check; the branch
+  is rare — no free courtier). (b) `qing_above_exp_student_count` is a deliberate lifetime tally (matches loc),
+  not a live headcount. (c) `qing_household_events.txt` / `qing_household_modifiers.txt` are noBOM, but ALL their
+  CJK-bearing event/modifier siblings are noBOM and boot fine (CJK is comment-only) — adding a BOM would diverge
+  from the booting convention, so left as-is.
