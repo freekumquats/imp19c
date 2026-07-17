@@ -153,16 +153,55 @@ QING_americas_press_alaska = {
 # [boot #18] QING_colonise_this_province — plant a Qing colony on the UNOWNED province this is
 # scoped to (called from QING_colonise_frontier_button, which has already paid the price + verified
 # the province is unowned/inhabitable/reachable). PROVINCE scope; scope:player = CHI. Transfers the
-# province via set_owned_by (the proven in-mod province-transfer idiom, se_QING_BURMA:149) and seeds
-# a starter tribesmen pop (the se_QING_COLON settler idiom) so the new colony is not left empty.
+# province via set_owned_by (the proven in-mod province-transfer idiom, se_QING_BURMA:149).
+#
+# [B16] The SETTLERS are REAL EMIGRANTS drawn from a genuinely OVER-CAPACITY Qing province, not a
+# pop conjured from thin air (the old create_state_pop = tribesmen). The empire's crowded heartland
+# is exactly the pressure the overseas colony relieves (the whole 移民實邊 premise). Mirrors the
+# proven se_QING_COLON nomad-in-gathering move-a-real-pop idiom (se_QING_COLON.txt:219-257):
+#   • pick a random OWNED CHI province that is over its population capacity (random_owned_province,
+#     NOT ordered_* — the oracle-warned unreliable sort, se_QING_COLON.txt:210) and holds a movable
+#     commoner pop (not slaves/nobles — the same emigrant filter the migration system uses);
+#   • move ONE such pop to the new colony (move_pop, the proven cross-province transfer);
+#   • FALLBACK to create_state_pop = tribesmen only if no crowded source has a movable pop, so the
+#     colony is never left empty.
 # Guarded on still-unowned so a double-click / stale button cannot re-transfer owned land.
 # ======================================================================
 QING_colonise_this_province = {
 	if = {
 		limit = { has_owner = no }
 		set_owned_by = scope:player
-		create_state_pop = tribesmen
-		LOG_line = { sys = QING  msg = "colonisation: unowned province transferred to the Qing + settler pop seeded" }
+		save_scope_as = qing_colony_dest
+		if = {
+			# a real over-capacity Qing province with a movable commoner pop to send.
+			limit = {
+				scope:player = {
+					any_owned_province = {
+						MIGRATION_pop_overcapacity_overflow > 0
+						any_pops_in_province = { NOT = { pop_type = slaves }  NOT = { pop_type = nobles } }
+					}
+				}
+			}
+			scope:player = {
+				random_owned_province = {
+					limit = {
+						NOT = { this = scope:qing_colony_dest }
+						MIGRATION_pop_overcapacity_overflow > 0
+						any_pops_in_province = { NOT = { pop_type = slaves }  NOT = { pop_type = nobles } }
+					}
+					random_pops_in_province = {
+						limit = { NOT = { pop_type = slaves }  NOT = { pop_type = nobles } }
+						move_pop = scope:qing_colony_dest
+					}
+					LOG_line = { sys = QING  msg = "colonisation: real settlers emigrate from a crowded province to the new overseas colony for" }
+				}
+			}
+		}
+		else = {
+			# no crowded source with a movable pop — deliver a starter host so the colony is not empty.
+			create_state_pop = tribesmen
+			LOG_line = { sys = QING  msg = "colonisation: no over-capacity source pop to move; seeded a starter colony pop (fallback) for" }
+		}
 	}
 	else = {
 		LOG_fail = { sys = QING  fn = "QING_colonise_this_province"  reason = "province already owned; colony not planted (stale button)" }
