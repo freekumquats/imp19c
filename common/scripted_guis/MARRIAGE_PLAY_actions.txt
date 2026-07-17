@@ -34,6 +34,41 @@ marriage_play_open = {
 	}
 }
 
+# ---- OPEN FROM THE DIPLOMATIC VIEW ("Royal Marriage" action) ---------------
+# [B1] The realm-picker window (screen 1) is bypassed: the diplomatic view already knows the
+# TARGET realm (the viewed country), so this entry point takes it as saved scope:target and does
+# the work of marriage_play_open + marriage_play_pick_realm in one shot — clears stale picks, sets
+# marriage_play_target = the viewed realm, and builds BOTH our-own and their candidate lists — so
+# the button can open screen 2 (marriage_play_own_window) directly. Scope: COUNTRY (ROOT = CHI).
+# scope:target = the viewed country (passed from DiplomaticView.GetTargetCountry.MakeScope).
+marriage_play_diplo_open = {
+	scope = country
+	saved_scopes = { target }
+	ai_is_valid = { always = no }
+	# CHI only, a real foreign realm with a ruler to marry into (not ourselves, not a barbarian
+	# with no court). Mirrors the marriage_play_pick_realm gate + the CHI gate marriage_play_open had.
+	is_shown = { tag = CHI }
+	is_valid = {
+		tag = CHI
+		exists = scope:target
+		NOT = { scope:target = { this = ROOT } }
+		scope:target = { exists = current_ruler }
+	}
+	effect = {
+		LOG_line = { sys = MARRIAGE  msg = "marriage picker: opened from the diplomatic view for" }
+		# clear any stale selection from a prior open (as marriage_play_open does).
+		if = { limit = { has_variable = marriage_play_target }      remove_variable = marriage_play_target }
+		if = { limit = { has_variable = marriage_play_our_pick }    remove_variable = marriage_play_our_pick }
+		if = { limit = { has_variable = marriage_play_their_pick }  remove_variable = marriage_play_their_pick }
+		# fix the target to the viewed realm (what marriage_play_pick_realm would have done).
+		set_variable = { name = marriage_play_target  value = scope:target }
+		# build our own unmarried candidates (screen 2) + the target's opposite-... (all sexes until
+		# our pick fixes the filter) candidates (screen 3). Same builders marriage_play_open uses.
+		MARRIAGE_PLAY_build_own = yes
+		MARRIAGE_PLAY_build_their = yes
+	}
+}
+
 # ---- STEP 1: pick a TARGET REALM -------------------------------------------
 # Row action on the realms list (scope:target = the clicked realm, via the row datacontext).
 marriage_play_pick_realm = {
