@@ -995,3 +995,21 @@ Scripted arcs (gbr_empire, spa_america, usa_1812, mex_instability, qing_americas
 their own tags, NOT these provinces/HBC/NSP — so the historical railroads are unaffected. MEX holds its
 own provinces from start (SPA->MEX client_colony), it does not inherit NSP territory, so trimming NSP
 does not change Mexican independence.
+
+---
+
+## ROUND-2 CORRECTION (2026-07-17): pop-presence test overrides culture-label
+
+A peer scan (ClaimedControlledScanner) applied a more rigorous test than my culture-label judgment:
+does the province hold actual SPANISH SETTLEMENT POPS (a norteno/castilian/mexican lower_strata),
+not just a Spanish primary-culture label? Re-checked all 19 NSP strips against pop data:
+- OVER-STRIPPED (have real norteno settlement pops = genuine 1763 presence) -> RESTORED to NSP:
+  2749 Las Cruces, 5861 Carlsbad, 7714 San Antonio-area, 5253 Puerto Isabel. (I had judged these
+  "Apache desert" by primary culture, but they carry norteno lower_strata = a real Spanish foothold.)
+- The other 15 NSP strips: pure Native, zero settler pops -> correctly stripped, stay with APA/LIP/CDD.
+- HBC strips: all 27 verified pure-Native (zero settler pops) -> correctly stripped. No change.
+- LSA 3643 Little Rock: wichita/tribesmen only, NO French/Spanish pops (Arkansas Post 3057 was the
+  only real lower-Arkansas post) -> MOVED LSA -> CDD (Caddo sphere, holds the neighbouring provinces).
+LESSON: judge control by settlement POPS, not the primary-culture label — a presidio in Native
+territory reads as Native-primary-culture + Spanish settler-strata, exactly the pattern to KEEP.
+Verified: braces balanced; zero double-assignments file-wide.
