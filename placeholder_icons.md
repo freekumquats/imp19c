@@ -334,3 +334,66 @@ ministry-specific icon.
 ---
 
 *Reference-image links: Wikimedia Commons file pages / categories and Wikipedia article leads, gathered by web search. Category/article links point to a page whose imagery represents the concept (grab the lead/representative image); direct upload.wikimedia.org links are specific files. Verify each licence before redistribution.*
+
+---
+
+## Producing real `.dds` icons from the reference images
+
+**Environment as found (2026-07-17):** Compressonator is present at `~/github.com/compressonator/`
+as a **source checkout only** — the `compressonatorcli` files there are bash wrapper scripts and
+there is **no built binary** (no `bin/`, no Mach-O executable). This machine has `python3`, `cmake`,
+`xcodebuild`, and `brew`, but **no image library** (no Pillow, no ImageMagick) and no DDS encoder on
+`PATH`. So an encoder must be built or installed before any DDS can be produced.
+
+**Target DDS formats (match the existing icons):**
+- Mission task icons, trade-goods, and `menu_buttons`/panel icons → **50×50, uncompressed BGRA8
+  (`A8R8G8B8`, 32-bit, masks BGRA), 1 mip, no mipmaps, non-power-of-two OK.** (verified: `tradegoods/coal.dds`,
+  `menu_buttons/menu_trade.dds`)
+- Small modifier icons → **DXT1** (or **DXT5** if alpha needed) at the sibling's size (e.g.
+  `administration.dds` = 46×46 DXT1). No mipmaps.
+- The engine needs neither mipmaps nor power-of-two dimensions.
+
+### Steps YOU need to do (blockers — I can't do these from here)
+
+1. **Stand up a DDS encoder.** Either:
+   - **(a) Build the Compressonator CLI** (best format coverage — does both BGRA8 and DXT):
+     ```
+     cd ~/github.com/compressonator
+     cmake -S . -B build_cli -DOPTION_ENABLE_ALL_APPS=OFF -DOPTION_BUILD_APPS_CMP_CLI=ON
+     cmake --build build_cli --config Release
+     ```
+     Then symlink the resulting `compressonatorcli` onto `PATH` (or tell me its path). If the CLI
+     build drags in Qt5/other deps and fails, paste me the error and I'll adjust the flags.
+   - **(b) Fallback:** `brew install imagemagick` — scriptable, writes DXT1/DXT5 DDS out of the box.
+     (For the uncompressed 50×50 BGRA8 style I can hand-write correct DDS headers in Python instead.)
+2. **Install an image-processing lib** (needed for crop/resize/alpha regardless of encoder):
+   `brew install imagemagick` **and/or** `pip3 install Pillow numpy`.
+3. **Decide the licensing/style approach (the real decision — see the reference-link note above).**
+   The links are *reference* images (photos/paintings under assorted licences), not sprites:
+   - **(i) Mechanical conversion** — I crop/resize/alpha/encode the reference images as-is into DDS
+     placeholders. Fast and functional, but photo-style (mismatched with the mod's painted-icon look)
+     and licence-encumbered (attribution/redistribution obligations per file).
+   - **(ii) Reference-only** — the links guide real art that you/an artist draw; I only encode DDS
+     from your finished PNGs. Clean licence + consistent style.
+4. **Confirm I may fetch the source rasters** (if going with (i)): I can `curl` the URLs into a scratch
+   folder, but many links are Commons **category/article** pages, not direct files — so I'd pick a
+   representative image per concept (your call), or you drop chosen PNGs into `art_src/<icon_key>.png`.
+
+### Steps I will do once 1–4 are set
+
+5. Fetch/read each source raster → **square-crop + resize** to the target size + **apply the alpha**
+   (transparent rounded-icon look matching siblings).
+6. **Encode** each to DDS in the correct format:
+   - `compressonatorcli -fd DXT1 in.png out.dds` (or `-fd DXT5` for alpha), or
+   - ImageMagick / a small Python BGRA8 writer for the uncompressed 50×50 icons.
+7. **Place** each DDS at the right `gfx/interface/icons/...` path, keyed off this catalogue.
+8. **Wire the sprite defs.** Mission task icons currently point at stock `test1/2/3`, so besides the
+   DDS I'll add real `spriteType`/`spriteTypes` entries and repoint the mission-file `icon =` lines
+   (and the trade-good / building / panel references) to the new sprites.
+9. **Verify** every DDS header (magic `DDS `, format, dimensions) and run a boot-safety pass before
+   committing.
+
+### Fastest validation path
+Do **step 1** (build CLI *or* `brew install imagemagick`) + **step 2**, answer **step 3** with (i) or
+(ii). Then I convert **one** icon end-to-end (e.g. the Zongli Yamen panel icon) to prove the pipeline
+before batching all ~130 concepts.
