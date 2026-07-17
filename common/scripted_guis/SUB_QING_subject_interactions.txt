@@ -28,7 +28,10 @@ qing_subject_type_is_tributary = {
 	ai_is_valid = { always = no }
 	is_shown = {
 		exists = scope:target
-		scope:target = { is_subject_type = tributary }
+		# [1763-hist-fix 2026-07-17] The bottom rung of the Qing ladder is now the sinosphere_tributary
+		# (朝貢國) — the historically-apt ritual tributary (protected, event-based tribute, non-cancellable).
+		# Match BOTH so any legacy plain-tributary subject still labels + promotes correctly.
+		scope:target = { OR = { is_subject_type = sinosphere_tributary  is_subject_type = tributary } }
 	}
 }
 
@@ -77,7 +80,8 @@ qing_subject_promote_button = {
 		# Only meaningful for the four Qing ladder types, and not at the top rung.
 		scope:target = {
 			OR = {
-				is_subject_type = tributary
+				is_subject_type = sinosphere_tributary   # [1763-hist-fix] bottom rung of the ladder
+				is_subject_type = tributary               # legacy plain-tributary still promotable
 				is_subject_type = nominal_vassal
 				is_subject_type = feudatory
 			}
@@ -106,7 +110,7 @@ qing_subject_promote_button = {
 		# Step one rung tighter based on the subject's current type.
 		scope:target = { SUBJ_QING_derive_rung = yes }
 		if = {
-			limit = { scope:target = { is_subject_type = tributary } }
+			limit = { scope:target = { OR = { is_subject_type = sinosphere_tributary  is_subject_type = tributary } } }
 			SUBJ_QING_change_type = { direction = promote  new_type = nominal_vassal }
 		}
 		else_if = {
@@ -169,7 +173,7 @@ qing_subject_demote_button = {
 		}
 		else_if = {
 			limit = { scope:target = { is_subject_type = nominal_vassal } }
-			SUBJ_QING_change_type = { direction = demote  new_type = tributary }
+			SUBJ_QING_change_type = { direction = demote  new_type = sinosphere_tributary }   # [1763-hist-fix] demote back to the 朝貢 bottom rung
 		}
 		else = {
 			LOG_fail = { sys = SUBJ  fn = "qing_subject_demote_button"  reason = "target not on a demotable rung" }
@@ -215,6 +219,52 @@ qing_subject_integrate_button = {
 			limit = { scope:target = { is_subject_of = ROOT } }
 			SUBJ_QING_roll_reaction = { ambient = no }
 		}
+	}
+}
+
+# ---- EXPAND SINOSPHERE: convert a plain tributary / tribal vassal into a 朝貢國 -----
+# [1763-hist-fix 2026-07-17] "Expand Sinosphere" — draw a vanilla-type subject (a common
+# tributary or a tribal vassal) INTO the Confucian tributary system (sinosphere_tributary):
+# it gains the throne's protection + event-based 朝貢 tribute, becomes non-cancellable, and
+# takes its place on the bottom rung of the Qing ladder (whence it can be promoted). CHI-only,
+# player-only. Shown when the target is our subject and currently a plain tributary or tribal
+# vassal (not already sinosphere). Costs influence; per-subject cooldown shared with type changes.
+qing_subject_expand_sinosphere_button = {
+	scope = country
+	saved_scopes = { target }
+
+	is_shown = {
+		tag = CHI
+		exists = scope:target
+		scope:target = { is_subject_of = ROOT }
+		scope:target = {
+			OR = {
+				is_subject_type = tributary
+				is_subject_type = vassal_tribe
+			}
+		}
+	}
+
+	ai_is_valid = { always = no }
+
+	is_valid = {
+		custom_tooltip = {
+			text = qing_subject_needs_influence_50_tt
+			political_influence >= 50
+		}
+		custom_tooltip = {
+			text = qing_subject_promote_cooldown_tt
+			scope:target = { NOT = { has_variable = qing_recently_changed_type } }
+		}
+	}
+
+	effect = {
+		add_political_influence = -50
+		scope:target = { set_variable = { name = qing_recently_changed_type  days = 730  value = 1 } }
+		# convert to the sinosphere tributary (the mod's make_subject wrapper preserves the overlord bond).
+		FUNC_make_subject = { overlord = ROOT  target = scope:target  type = sinosphere_tributary }
+		scope:target = { SUBJ_QING_derive_rung = yes }
+		LOG_line = { sys = SUBJ  msg = "expand sinosphere: subject drawn into the 朝貢 tributary system by" }
 	}
 }
 
