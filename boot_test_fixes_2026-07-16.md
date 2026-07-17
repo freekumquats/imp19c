@@ -374,10 +374,38 @@ capitals self-owned; IRO/arc/colonise/eunuch/deity mechanics all sound). Actione
   MLK(883) SNR(883) KBO(4083) — a latent ownerless-capital crash risk IF those tags construct; flagged for a
   separate pass. Cosmetic: IRO placeholder Celtic ship names; 4 deities without holy sites (function fine).
 
+### #72 — can vanilla colonisation reach Pacific islands? NO → keep #18 button (DONE, investigated)
+Checked all colonisation defines: only `MINIMUM_COLONISATION_POP = 8` (the on/off gate) and
+`MAX_COLONISATION_BARB_IN_TARGET = 2` exist — identical to the Terra-Indomita parent, and there is NO
+colonisation-RANGE define. Vanilla I:R engine colonisation is hardcoded to ADJACENCY (a province is colonizable
+only if it borders your territory or a sea zone you control), so it genuinely cannot reach an isolated Pacific
+island from the Asian mainland. DECISION: keep the #18 QING_colonise_frontier button as the documented overseas
+exception — it is not reinventing a vanilla capability, it fills a real engine gap. (Its adjacent-frontier case
+was already removed in the earlier correction, so it no longer overlaps the engine ColonizeButton at all.)
+
+### #73 — consolidate the 6 "settle the frontier" surfaces (DONE — cross-referenced, not merged)
+Audited all six for what they actually target/do:
+  1. Engine ColonizeButton (province window) — colonises EMPTY adjacent land (vanilla, enabled #304).
+  2. #18 QING_colonise_frontier — colonises EMPTY overseas/Pacific-island land (fills the vanilla range gap; #72).
+  3. Promote Frontier Settlement (Population panel, 移民實邊) — empire-wide MIGRATION POLICY; stamps migr_gov_pull
+     on the held frontier so existing heartland pops drift there over decades. Settles no new ground.
+  4. #451 Settle the Nomads (定牧墾邊) mission tree — DEVELOPS the held Mongol/Manchu ground (integrate the banner-
+     governorships, lay the qing_frontier_reclamation texture).
+  5. Xinjiang 屯田 (New Dominion panel) — DZUNGARIA-specific colony lever (grip + Yili integration).
+  6. send_settlers diplomatic play — moves pops into a NEIGHBOUR's sparsely-held area.
+FINDING (confirmed with the user): these are NOT mechanical duplicates — they act on different land (empty-
+colonise vs owned-develop vs migration-policy vs diplomatic). An outright merge would erase real distinctions
+(empire-wide vs Dzungaria-specific; policy vs one-shot). So the right consolidation is DISCOVERABILITY, not
+deletion. Applied: added a cross-reference clause to each overlapping surface's tooltip so the player can tell
+them apart —
+  - #3 移民實邊 TT: "empire-wide migration policy, settles no new ground; to take empty land colonise directly / for
+    Dzungaria use 屯田 / for the Mongol-Manchu ground run 定牧墾邊."
+  - #5 屯田 TT: "Dzungaria-specific lever; for the empire-wide policy see 移民實邊 / for Mongol-Manchu see 定牧墾邊."
+  - #4 定牧墾邊 DESCRIPTION: "DEVELOPS held ground; distinct from colonising empty land, the 移民實邊 policy, and 屯田."
+  - #2 #18 TT already cross-refs "the ordinary colonisation of the neighbouring frontier" (the engine button).
+LEAN-ON-VANILLA: settled by #72 — the only script that could have reinvented vanilla was #18, and vanilla can't
+reach islands, so it stays as the documented exception; #1 (the vanilla ColonizeButton) is untouched and remains
+the primary colonise route. No mechanic deleted; 3 loc tooltips edited, all BOM-verified.
+
 ### PENDING (this follow-on)
-- Consolidate the 6 "settle the frontier" surfaces (engine ColonizeButton / #18 overseas / Promote Frontier
-  Settlement policy / #451 Settle-Nomads tree / Xinjiang tuntian / send_settlers): user wants them renamed +
-  cross-referenced by role and to lean on vanilla where a script reinvents it. FINDING: they mostly act on
-  DIFFERENT land (unowned-colonise vs owned-develop vs migration-policy vs diplomatic) so they're not true
-  mechanical duplicates — the overlap is naming/discoverability. Approach approved: names+cross-refs, and replace
-  script-with-vanilla where applicable (incl. re-checking whether vanilla can reach islands → maybe drop #18).
+- #74 Faith & Sedition per-province drill-downs (follow the qing_province_reports template).
