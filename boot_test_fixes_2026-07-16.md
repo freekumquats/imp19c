@@ -407,5 +407,26 @@ LEAN-ON-VANILLA: settled by #72 — the only script that could have reinvented v
 reach islands, so it stays as the documented exception; #1 (the vanilla ColonizeButton) is untouched and remains
 the primary colonise route. No mechanic deleted; 3 loc tooltips edited, all BOM-verified.
 
+### #74 — Faith & Sedition per-province drill-down reports (DONE)
+The three Faith & Sedition read-outs in the religion view were abstract national aggregates. Made each a
+CLICKABLE button that opens a province-list report of the concrete provinces driving that number — the data
+already exists per-province (qing_prov_missionary_tension var; qing_mission_station + qing_mission_unrest
+province modifiers). Followed the existing qing_province_reports template EXACTLY (per user "follow the existing
+reports templates"):
+- 3 report scripted_guis in qing_province_reports.txt (qing_report_open_antichristian / _missions / _friction)
+  + their _empty indicators. Each walks every_owned_province (NOT every_governorships — reuses the boot #10
+  lesson so the capital domain is covered), building the country list; degrades to empty gracefully.
+    • Anti-Christian Sentiment → provinces with qing_prov_missionary_tension >= 30 (shows the value)
+    • Mission Stations → provinces with the qing_mission_station modifier
+    • Social Friction → provinces with the qing_mission_unrest (地方教案 disorder) modifier
+- 3 report windows in qing_province_reports.gui, each cloned from qing_tension_report_window (base_sub_window /
+  vbox / scrollarea / dynamicgridbox / per-row goto_button / empty-note / count).
+- Wired the religion_view.gui Faith & Sedition block: each label is now a text_button_square_highlighted that
+  Executes the report scripted_gui then createwidgets its window (the proven report-open idiom); the value
+  textbox stays beside it. 13 loc keys added (BOM preserved). All brace-balanced (reports.txt 137/137,
+  reports.gui 348/348, religion_view 377/377). No mechanic changed — pure read-only drill-down.
+
 ### PENDING (this follow-on)
-- #74 Faith & Sedition per-province drill-downs (follow the qing_province_reports template).
+- #75 eunuch danger → Household perf metric + Upper Study → Household perf + throttled eunuch GC events.
+- #76 comprehensive audit: every ACTIVE feature under each Grand Council ministry should feed that ministry's
+  effectiveness metric (not passive read-only reports).
