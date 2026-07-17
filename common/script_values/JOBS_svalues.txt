@@ -354,9 +354,36 @@ JOBS_num_used_slots = {
 
 JOBS_unemployed_pops_province = {
 	# Scope: province
+	# Wage-unemployment = workforce not absorbed by EITHER building jobs OR
+	# subsistence (land) labour. Counting only building jobs (the old behaviour)
+	# read almost the entire pre-industrial peasantry as "unemployed", which
+	# inflated MIGRATION_push_province everywhere in agrarian provinces — the
+	# subsistence half of the employment model (github issue #37, the orphan
+	# JOBS_set_employment_slots) was scaffolded but never wired. Fold it in here at
+	# read-time so it stays a cheap cached svalue with no new pulse or stored state.
 	value = total_population
 	multiply = 0.5
 	subtract = JOBS_num_used_slots
+	# Subsistence absorption: the land can employ up to total_population *
+	# inverse_industrialisation people (inverse_industrialisation =
+	# (100 - civilization_value)/100, so at civ 0 the land absorbs the whole
+	# population, at civ 100 none). This is a CAPACITY, subtracted alongside — not
+	# instead of — the building jobs already removed above. Do NOT subtract
+	# JOBS_non_subsistence here: the building jobs are counted once via
+	# JOBS_num_used_slots; folding them in again made the building term CANCEL in
+	# the agrarian regime, so unemployment degenerated to a pure civ function that
+	# ignored actual job-slot scarcity (review-fix). With this form:
+	#   unemployed = max(0, 0.5*pop - building_jobs - inv_ind*pop)
+	# which stays responsive to buildings at every civ level (at low civ the
+	# subsistence term dominates and floors it at 0; at high civ it reduces to the
+	# old building-only calc). min 0 defends against civ_value>100 pushing
+	# inverse_industrialisation negative.
+	subtract = {
+		value = total_population
+		multiply = inverse_industrialisation
+		min = 0
+	}
+	min = 0
 }
 
 ###############
