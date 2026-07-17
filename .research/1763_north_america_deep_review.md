@@ -897,3 +897,101 @@ The mod's 1763 North American map demonstrates:
 ---
 
 **END OF AUDIT**
+
+---
+
+## CLAIMED-VS-CONTROLLED FOLLOW-UP SCAN (2026-07-17, done directly — the dispatched agent narrated but never wrote findings)
+
+Method: extracted each tag's LIVE own_control_core (brace-counted, comments stripped) and mapped every
+province to its place-name + culture. Judged European CONTROL (a real fort/mission/town by Feb 1763)
+vs. mere CLAIM.
+
+### FRA — ✅ CORRECT (no change)
+North American holdings are ONLY St. Pierre & Miquelon (3127) + Guadeloupe/Martinique/St-Martin/
+St-Barthélemy. Exactly the Treaty of Paris outcome. Zero mainland French provinces. Do not touch.
+
+### LSA (Spanish Louisiana) — ✅ ESSENTIALLY CORRECT (no change)
+18 provinces: the lower-Mississippi settled core (New Orleans, Baton Rouge, the Cajun/Creole parishes)
++ the west-bank/Arkansas posts (Ste. Genevieve/St. Louis 4459, Girardeau 3587, Arkansas Post 3057,
+Little Rock 3643). These are the genuine French-then-Spanish riverine posts. Defensible as controlled.
+
+### ALC / NWC — ✅ ALREADY FIXED this session (verified own 0 provinces).
+
+### HBC (Hudson's Bay Company) — ⚠️ CLASSIC CHARTER-CLAIM OVERREACH (43 provinces)
+Real 1763 HBC control = a HANDFUL of coastal factory posts on Hudson & James Bay: York Factory (1684),
+Churchill/Fort Prince of Wales (1717), Fort Severn (1689), Fort Albany (1679), Moose Factory (1673),
+Fort Rupert, plus the Arctic Baffin posts. HBC's charter (Rupert's Land, 1670) CLAIMED the entire
+Hudson Bay watershed, but the company did NOT move inland until forced to by NWC competition — HBC's
+first interior post was CUMBERLAND HOUSE, 1774 (Samuel Hearne). Before that its policy was famously to
+"sleep by the frozen sea" and let natives bring furs to the Bay.
+- CONTROLLED (coastal/Bay posts, keep): 5222 York Factory, 4579 Fort Severn, 4797+1327 Churchill,
+  9623 Fort Hope, 4456 Frobisher Bay, 8383 Cape Dorset, 8217 Harricana, 7769 Fort Rupert, 3906 Moose
+  Factory, 4918 Fort Albany, 5830 Fort George, 5325 Baie-d'Hudson (James/Hudson Bay + Arctic coast).
+- CLAIMED-not-controlled (interior, candidate -> unowned Native): the ~30 interior Quebec/Ontario/
+  Prairie provinces — Winnipeg 3055, Selkirk, Steinbach, Berens River, Red Lake, the Huron/Ojibwe
+  boreal interior (North Bay, Temagami, Chapleau, Ville-Marie/Montreal-adjacent), Roseau on the Plains.
+  Cumberland House (interior) came only 1774; the Red River (Winnipeg) settlement 1812.
+  NOTE: Ville-Marie 1458 = MONTREAL — that is French-then-British ST. LAWRENCE settlement, NOT HBC land;
+  it should belong to the GBR Quebec subject (LCA), not the fur company. Flag for review.
+
+### NSP (New Spain) northern frontier — ⚠️ MIXED: real settled core + desert over-claim (154 provs)
+The Mexican core (Zacatecas, Durango, Chihuahua, Monterrey, Saltillo, San Luis Potosi, the Bajío,
+Yucatan, Cuba, Hispaniola, Puerto Rico) is all genuinely controlled — no issue. Baja California (the
+Jesuit-mission provinces) is legit (see the Alta-Cal verified-clear note above). The QUESTION is the
+far-northern frontier arc:
+- GENUINELY CONTROLLED (real presidios/missions/towns by 1763, KEEP):
+  Santa Fe 7083 (Spanish 1610), Albuquerque 8530 (1706), El Paso 1169 (1680s), San Antonio de Béxar
+  9852 (presidio 1718), La Bahía/Goliad 3221 (1749), Laredo 747 (1755), Nacogdoches-area East-Texas
+  missions 1463 (Los Adaes was the Texas capital), Tucson/Tubac 10022 (Pimería Alta presidio 1752/1775).
+- CLAIMED-not-controlled DESERT (Apache/Comanche/Navajo land, candidate -> unowned Native):
+  Terlingua 5331, Carlsbad 5861, Las Cruces 2749, Ruidoso 8929, Monahans 3113, Austin 7208 (Comanche —
+  no Spanish town until 1839!), Sandersons 7549, Yuma 7801 (no Spanish settlement; Anza crossing 1774,
+  mission 1780 then destroyed 1781), Corpus Christi 8053, Coahuiltecan/Tonkawa/Cotulla belt. These are
+  the Comanchería / Apachería the Spanish never held — Rubí's 1766-68 inspection explicitly recommended
+  ABANDONING most of this frontier and pulling back to San Antonio + La Bahía.
+  Existing Native recipients already on the map: APA (Apache, 11 provs), LIP (Lipan, 1), CDD (Caddo,
+  25), PWN (Pawnee) — the over-claimed desert could be ceded to these or left unowned.
+
+### SUMMARY / RECOMMENDATION
+- SAFE, clear-cut (like ALC/NWC): none remaining that are wholesale anachronistic tags.
+- JUDGMENT CALLS (control-realism vs. playability), NOT unilaterally applied — flagged to user:
+  1. HBC: strip the ~30 interior provinces to unowned Native (HBC didn't go inland until 1774), keep the
+     ~13 Bay/Arctic coastal posts. Move Ville-Marie/Montreal 1458 to the GBR Quebec subject (LCA).
+  2. NSP: strip the deep Apache/Comanche desert provinces (Austin, Yuma, Terlingua, Carlsbad, etc.) to
+     unowned Native, keep the real presidio/mission/town line (Santa Fe, Albuquerque, El Paso, San
+     Antonio, La Bahía, Laredo, Tucson, Nacogdoches).
+- Both are the SAME claimed-vs-controlled disease as ALC/NWC, just partial (a tag keeps its real core and
+  sheds its paper frontier) rather than a whole-tag removal. Each province flagged above verified to not
+  be another tag's capital before any edit.
+- Sources: Treaty of Paris (Avalon); D. Weber, *The Spanish Frontier in North America* (1992) on the
+  presidio line + Rubí inspection; Rich, *The Hudson's Bay Company 1670-1870* on Cumberland House 1774
+  as HBC's first interior post.
+
+---
+
+## APPLIED (2026-07-17): HBC + NSP claimed-vs-controlled trim + Native reassignment
+
+User approved fixing both. Stripped provinces were assigned to the historically-resident Native tag
+(all of which already own provinces + have valid capitals — no crash risk), not merely left unowned.
+
+HBC (43 -> 15 coastal Bay/Arctic posts kept): interior stripped ->
+- ICF (Cree): 1464 5548 6896 7841 2404 2419 3321 4802 3055(Winnipeg) 4798 6543 7400
+- C3F (Ojibwe/Great Lakes): 7335 3106 7086 8424 9152 2051 1257 1522 3920 2422 5495 5497 4898
+- DAK (Yanktonai): 7589
+- LCA (GBR Quebec subject): 1458 Montreal/Ville-Marie (St. Lawrence settlement, not fur land)
+- 910 Timmins: left UNOWNED (no cultural match in the province data)
+
+NSP northern frontier (deep desert stripped, presidio/mission line kept) ->
+- APA (Apache/Chiricahua): 5331 2749 5861 7714 8929 7610 3113 7208(Austin) 7549 7801(Yuma) 5253
+- LIP (Lipan): 8053 7624 8052
+- CDD (Caddo sphere, Koasati SE-Texas): 269 1790 7864 8559 8711
+KEPT by NSP (real 1763 Spanish establishments): Santa Fe 7083, Albuquerque 8530, El Paso 1169,
+San Antonio 9852, La Bahia/Goliad 3221, Laredo 747, Nacogdoches 1463, Tucson/Tubac 10022, + norteno
+provinces 8174/4234/8252 + all the Mexican/Baja/Cuban/Caribbean core (untouched).
+
+VERIFICATION: braces balanced; ZERO double-assignments file-wide; every moved province owned by exactly
+one recipient; no stripped province was a capital; all 6 recipient tags already had valid capitals.
+Scripted arcs (gbr_empire, spa_america, usa_1812, mex_instability, qing_americas) reference regions +
+their own tags, NOT these provinces/HBC/NSP — so the historical railroads are unaffected. MEX holds its
+own provinces from start (SPA->MEX client_colony), it does not inherit NSP territory, so trimming NSP
+does not change Mexican independence.
