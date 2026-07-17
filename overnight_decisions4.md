@@ -631,7 +631,7 @@ the throne's succession engine, not a new council seat. New se_QING_HAREM.txt + 
 - **D56 — FIXES a never-computed council fold (latent bug).** The council fold
   (QING_council_fold_ministry_perf) has always enumerated `office = censor`, but NO effect ever
   SET `qing_min_perf_censor` — QING_council_perf_accumulate self-guards on
-  `has_variable = qing_min_perf_censor` and silently DROPPED the Censor-in-Chief from the average.
+  `has_variable = qing_min_perf_censor` and silently DROPPED the Grand Inspector from the average.
   So the censor's charge contributed NOTHING to the Grand Council. #362 builds
   QING_ministry_recompute_perf_censor + registers it in the dispatcher, closing the gap so the
   Censorate now folds into its leader's standing like every other office (the HARD requirement).
@@ -649,7 +649,7 @@ the throne's succession engine, not a new council seat. New se_QING_HAREM.txt + 
   lever chains the existing QING_censorate_find_corrupt (ordered_character by corruption →
   scope:qing_censorate_target) + QING_censorate_impeach_uphold (cleanse + vacate office +
   corruption −6) — no new prosecution logic. is_valid MIRRORS find_corrupt's own limit (present
-  Censor-in-Chief + a venal courtier exists via any_character) so the lever is dead when the court
+  Grand Inspector + a venal courtier exists via any_character) so the lever is dead when the court
   is clean — no live-but-no-op affordance.
 - **D60 — Opened from a government_view council-strip button (its own great office).** Unlike the
   #361 內閣 facet, the Censorate IS its own distinct great office (censor holder), so it gets its
@@ -723,7 +723,7 @@ the throne's succession engine, not a new council seat. New se_QING_HAREM.txt + 
   (qing_censorate_impeach_cooldown, days=90) — is_valid now gates on NOT has_variable, effect stamps it.
 - **#362-R2 (major) — inspector double-count when an inspector is promoted to a great office.** The corps
   roster/count (every_character has_variable=qing_is_censor_inspector) didn't exclude office-holders, so an
-  inspector later made Censor-in-Chief was scored as chief in term (a) AND tallied in corps term (c) (+2
+  inspector later made Grand Inspector was scored as chief in term (a) AND tallied in corps term (c) (+2
   inflate) and rendered in both the summit card and the roster. FIX: added NOT={has_variable=qing_office_held}
   to the roster-rebuild limit — fixes both the count and the panel render at once.
 - **#362-R3 (minor) — disgraced inspector kept his corps mark.** QING_censorate_impeach_uphold cleansed/

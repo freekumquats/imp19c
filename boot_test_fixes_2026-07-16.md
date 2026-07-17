@@ -19,7 +19,7 @@ never `[scope:x]`, adjective is `[X.GetCountry.GetAdjective]` (see memory imp19c
 10. Migration Report filter shows only Nanchong.
 11. (RESOLVED, no code) New Treasure Fleet = standalone tree #439, hub gating Pacific+Japan trees.
 12. Eunuch characters — add real eunuch characters (on-map), not just the threat meter.
-13. Rename "Censor-in-Chief" → "Grand Inspector" (loc).
+13. Rename "Grand Inspector" → "Grand Inspector" (loc).
 14. USA coastal chain broken by #397 trim — restore seaboard SC/GA (Charleston 3082, Savannah 3400, …).
 15. French Louisiana too small — give LSA its historical CONTROLLED extent (not merely-claimed interior).
 16. Empty unowned US-area territory — historical check: more Native tags? match 1763 layout.
@@ -51,8 +51,8 @@ column: "Candidates Awaiting Appointment (科舉候選)"→"Candidates Awaiting 
 Degree-Holders in Service (科舉出身)"→"Civil Degree-Holders in Service"; "Military Degree-Holders in
 Service (武舉出身)"→"Military Degree-Holders in Service". (qing_rites_ministry_l_english.yml.)
 
-### #13 — Rename Censor-in-Chief → Grand Inspector (DONE)
-Replaced all 10 "Censor-in-Chief" loc occurrences (qing_censorate_l_english.yml) with "Grand Inspector".
+### #13 — Rename Grand Inspector → Grand Inspector (DONE)
+Replaced all 10 "Grand Inspector" loc occurrences (qing_censorate_l_english.yml) with "Grand Inspector".
 
 ### #5 — Ministry of Works Hydraulic Works layout (DONE)
 Was a single crammed value "Dikes N · Depots N · Granaries N" that overran the right edge. Restructured
