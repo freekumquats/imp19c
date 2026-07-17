@@ -529,3 +529,40 @@ throttle; corps fill bounded, cannot over-fill/loop).
   not a live headcount. (c) `qing_household_events.txt` / `qing_household_modifiers.txt` are noBOM, but ALL their
   CJK-bearing event/modifier siblings are noBOM and boot fine (CJK is comment-only) — adding a BOM would diverge
   from the booting convention, so left as-is.
+
+---
+
+## Character-window court-position title row (new user ask)
+
+**Ask:** show a row under a character's name naming their Grand Council position / sub-position, the way a
+governor's window shows "Governor of X" or a ruler's shows "Huangdi".
+
+**Feasibility:** fully feasible + clean. The character-window header (characterwindow.gui:35) already renders the
+name via a character-scope custom_loc (`TITLES_character_name`), and the appoint picker already renders an
+"Incumbent: <office>" line via a `QING_office_held_name` custom_loc gated on `[Character.MakeScope.Var('qing_office_held').IsSet]`.
+Reused exactly those proven mechanisms.
+
+**Implemented:**
+- **New custom_loc `QING_court_position_name`** (common/customizable_localization/00_offices.txt, BOM) — character
+  scope. Names, in priority order: the 13 Grand Council great offices (reusing the existing office-name keys via
+  the `qing_office_held` flag map, identical idiom to the proven `QING_office_held_name` sibling), then the
+  ministry sub-posts (`qing_zongli_diplomat` / `qing_is_censor_inspector` / `qing_is_imperial_guardsman`), the
+  studies (`qing_is_southernstudy` / `qing_is_upperstudy`), the amban (`qing_amban_marker`), and the palace eunuch
+  (`qing_is_palace_eunuch`). Fallthrough → `QING_OFFICE_NAME_GENERIC` ("a great office"), matching the sibling
+  (so a stray office flag never renders a blank row).
+- **New loc** (qing_governance_l_english.yml, BOM): `QING_SUBPOST_NAME_DIPLOMAT/_CENSOR/_GUARD/_SOUTHERNSTUDY/`
+  `_UPPERSTUDY/_AMBAN/_EUNUCH`, `QING_COURT_POSITION_NONE` (""), `QING_COURT_POSITION_ROW_TT` (tooltip).
+- **GUI row** (characterwindow.gui, noBOM) — a subtitle textbox inserted right after the header, before the main
+  content block, rendering `[CharacterWindow.GetCharacter.Custom('QING_court_position_name')]`. Visible only when
+  the char holds a post — a nested `Or()` of the 8 marker `.IsSet` checks (the proven `qing_office_held.IsSet`
+  visibility idiom; `.IsSet` on an absent var returns false, so it's a clean no-op for every non-Qing character
+  whose window is opened). `ignoreinvisible` collapses the gap when hidden. Comments kept pure-ASCII (no CJK / no
+  em-dash) since the .gui is noBOM.
+
+**1:1 alignment:** because `QING_office_appoint` strips sub-post markers on seating and
+`QING_subpost_eligible_candidate` blocks double-booking (both from the earlier #77 batch), at most one branch
+matches per character — the row names exactly one position.
+
+**Boot-crash review:** ran independent review — CLEAN, no boot/gui-load/loc-load risk (custom_loc faithful to the
+proven sibling; all 24 loc keys defined; Or() balanced 7/7; empty-string loc value legal; BOM states correct;
+.gui confirmed pure ASCII). Applied the one low cosmetic suggestion (fallthrough → generic, not blank).
