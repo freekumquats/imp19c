@@ -106,11 +106,16 @@ The extra disconnected provinces may be fine, but the core is shaped like the mo
 vast 1763 Louisiana. NOTE: in 1763 France ceded Louisiana to SPAIN (secret Treaty of Fontainebleau
 1762 / Paris 1763) — so a FRENCH Louisiana at a Feb-1763 start is itself historically suspect. Research
 the real 1763 controlled extent + correct owner. NEEDS RESEARCH.
-RESEARCH DONE (agent a9e0b3cc): LSA already IS a Spanish subject (correct owner). Footprint is too
-SMALL, not too large — should add the Arkansas River-valley posts (1804 5826 5832 6176 7458 7476 7776
-9911 9915 9987 10062 10077). Illinois Country east-bank villages (721 1614 3748 3812 4208 5320 6044
-6228 7258 7569 7899 7972 9197 9200 9679) went to BRITAIN in 1763 → assign to GBR. Interior plains stay
-Native/OSG (paper claim only, per #16). Any "French Louisiana" label is a dynamic-name artefact.
+RESEARCH DONE (agent a9e0b3cc) + VERIFIED IN SETUP → RESOLVED (no change). LSA already IS a Spanish
+subject = the historically-correct 1763 owner (Fontainebleau 1762). The agent recommended adding the
+Arkansas River-valley posts (1804 5826 5832 6176 7458 7476 7776 9911 9915 9987 10062 10077) to LSA, but
+a setup check shows THOSE PROVINCES ARE ALREADY OWNED by the Caddo (CDD own_control_core, 00_default.txt
+:35372) — a deliberate boot #16 decision to give the trans-Mississippi interior to Native nations.
+Adding them to LSA would be a fatal double-assignment. The "modern-Louisiana shape" is therefore the
+INTENDED footprint, not a bug: Spanish Louisiana's controlled riverine posts (already extended up the
+west bank to St. Louis per boot #15) with the plains interior left to Caddo/Osage. Owner correct,
+footprint deliberate → nothing to fix. (Illinois-Country-east-bank→GBR is a separate possible
+enhancement, not the reported bug.)
 
 # ======================================================================
 # ROUND 2 (this boot test) — new reports
