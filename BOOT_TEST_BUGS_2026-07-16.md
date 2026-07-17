@@ -3,6 +3,28 @@
 Bugs reported from the boot test of the b37cb9847 build. Fixes committed as freekumquats and
 pushed so the user can re-test on the other machine.
 
+## SESSION RESOLUTION (2026-07-16, second work pass)
+Round-2 boot produced fresh logs (build @ 1ad216570). Log triage + all reported bugs addressed:
+- LOG FLOODS fixed: pop-pressure target (bare total_population → wrapped svalue); colonise LOG_line
+  fn= arg; tribute qing_trib_gift (bare has_monthly_income → named qing_tribute_gift_svalue — the
+  REAL fix; the prior Jul-11 init-before-read never worked). Pre-existing non-regression floods
+  (gradient_black_flip.dds, EE/ECON/GT trade cluster, parse errors in untouched files) left alone.
+- B17 DONE (5204 Beaufort SC + 1154 Conway SC restored to USA; verified no double-assign).
+- B18 RESOLVED no-change (LSA correctly Spanish; Arkansas provs are deliberately Caddo-owned).
+- B19 DONE (court-position title row: proven ScriptedGui.IsShown gate + explicit textbox size).
+- B20 DONE (subpost sweep releases diplomats/censors/guards who became commanders/governors).
+- B10 DONE (eunuch roster moved to bottom of Household panel).
+- B15/B16 DONE (overseas-colony button no longer needs a Pacific foothold; settlers now real
+  emigrants from an over-capacity province, not thin-air tribesmen).
+- B21 DONE (school queue icon: qing_shuyuan_building.dds; other 17 custom buildings catalogued).
+- B22 DONE (new "Dispatch a Diplomat" lever on each Great Power row: modest tension cut).
+- Deep-review agent audited all N. American 1763 territory vs academic sources → map production-ready,
+  no errors; Alta California follow-up = NSP holds only Baja (Loreto/Ensenada/Tijuana), no Alta.
+- STILL OPEN (verification/observation, not fixes): B3 (Treasure Fleet visibility — re-verify next
+  boot), B8 (migration report shows only Nanchong — confirm intended).
+Boot-crash review: clean (empty-effect scripted_gui, move_pop, svalue reads, RHS-operator rule,
+IsShown gate, no double-assign, braces + BOMs all verified against proven idioms).
+
 ## B1 — Propose-a-Marriage: realm rows are dead (clicking a country does nothing)
 **Symptom:** the Propose-a-Marriage button now opens the realm list correctly (fixing the earlier
 blank-window bug), but clicking a country row does nothing — screen 2 never opens.
