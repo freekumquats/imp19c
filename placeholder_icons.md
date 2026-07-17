@@ -250,6 +250,40 @@ Each points at an existing vanilla building-cost `.dds`.
 
 ---
 
+## 3b. New buildings — BUILDING-TYPE queue icons — `gfx/interface/icons/buildings/<building_key>.dds`
+[B21] A SEPARATE icon from the modifier-cost icon above: the engine renders the building-TYPE icon
+in the Outliner "Building Constructions" queue + the macro-builder, resolved BY FILENAME from
+`gfx/interface/icons/buildings/<building_key>.dds` (no `.gfx` registry entry — proven by the vanilla
+"Added missing port building icon" commit). Every mod-custom building below currently has NO such file
+→ it renders `gfx/interface/placeholder.dds` in the queue. **`qing_shuyuan_building` is FIXED** (copied
+`EDU_school.dds`, the closest visual match — the reported school placeholder). The other 17 still show
+placeholders in the queue and want proper 50×50-style building icons (each row suggests a vanilla icon
+to borrow as a stopgap; final art via the DDS pipeline below).
+
+| Building type icon (file `<key>.dds`) | Concept | Borrow (stopgap) | Reference image |
+|---|---|---|---|
+| qing_shuyuan_building | shuyuan / academy (書院) — school | **DONE: EDU_school.dds** | classical academy |
+| qing_yamen_building | yamen / local government office (衙門) | URB_administration_district.dds | [ref](https://upload.wikimedia.org/wikipedia/commons/4/4d/Yamen_of_Three_Counties%2C_Huanglongxi%2C_Sichuan.jpg) — a Chinese yamen 衙門 |
+| qing_granary_building | state granary (倉) | food_exchange_building.dds | [ref](https://commons.wikimedia.org/wiki/Category:Granaries_in_China) — a Chinese state granary |
+| qing_customs_house_building | maritime customs house (海關) | port_building.dds | [ref](https://commons.wikimedia.org/wiki/Category:Chinese_Maritime_Customs_Service) — maritime customs house 海關 |
+| qing_silk_filature_building | silk filature (絲) | IND_industrial_estate.dds | [ref](https://commons.wikimedia.org/wiki/Category:Silk_reeling) — a silk filature / reeling |
+| qing_porcelain_kiln_building | porcelain kiln (瓷) | IND_industrial_estate.dds | [ref](https://commons.wikimedia.org/wiki/Category:Jingdezhen_porcelain) — a Jingdezhen porcelain kiln |
+| qing_tea_workshop_building | tea workshop (茶) | IND_resource_gathering_operation.dds | [ref](https://commons.wikimedia.org/wiki/Category:Tea_production_in_China) — a Chinese tea workshop |
+| qing_cotton_workshop_building | cotton workshop (棉) | IND_industrial_estate.dds | [ref](https://commons.wikimedia.org/wiki/Category:Cotton_mills) — a cotton textile mill |
+| qing_salt_yard_building | salt yard / works (鹽) | IND_resource_gathering_operation.dds | [ref](https://commons.wikimedia.org/wiki/Category:Salt_production_in_China) — a Chinese salt works |
+| qing_opium_poppy_farm_building | opium poppy farm (罌粟) | IND_resource_gathering_operation.dds | [ref](https://commons.wikimedia.org/wiki/Category:Opium_poppy) — an opium poppy field |
+| qing_selfstr_wonder_building | Self-Strengthening wonder (arsenal/works) | IND_industrial_estate.dds | [ref](https://commons.wikimedia.org/wiki/Category:Jiangnan_Arsenal) — the Jiangnan Arsenal, Shanghai |
+| qing_dike_building | river dike / flood works (堤) | INF_canal.dds | [ref](https://commons.wikimedia.org/wiki/Category:Yellow_River) — a Yellow River dike |
+| qing_grand_canal_building | Grand Canal (大運河) | INF_canal.dds | [ref](https://commons.wikimedia.org/wiki/Category:Grand_Canal_(China)) — the Grand Canal |
+| qing_canal_depot_building | Grand Canal grain-transport depot (漕運) | INF_depot.dds | [ref](https://commons.wikimedia.org/wiki/Category:Grand_Canal_(China)) — the Grand Canal |
+| qing_great_wall_building | Great Wall (長城) | fortress_building.dds | [ref](https://commons.wikimedia.org/wiki/Category:Great_Wall_of_China) — the Great Wall |
+| qing_wall_section_building | fortified wall section | fortress_building.dds | [ref](https://commons.wikimedia.org/wiki/Category:Great_Wall_of_China) — the Great Wall |
+| military_depot_building | military supply depot | INF_depot.dds | [ref](https://commons.wikimedia.org/wiki/Category:Military_logistics) — a military supply depot |
+| row_manufactory_building | Rest-of-World manufactory | IND_industrial_estate.dds | [ref](https://commons.wikimedia.org/wiki/Category:Factories) — a manufactory / factory |
+| row_plantation_building | Rest-of-World plantation | IND_resource_gathering_operation.dds | [ref](https://commons.wikimedia.org/wiki/Category:Plantations) — a plantation |
+
+---
+
 ## 4. Military traditions
 Both trees borrow shared arabic/indian tradition sprites; each slot flagged `# placeholder`.
 
