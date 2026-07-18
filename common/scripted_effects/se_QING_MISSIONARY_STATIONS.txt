@@ -22,9 +22,14 @@
 # bred far more resentment than winning an already-marginal one — the 教案 grievance.
 #
 # CONCRETE OBJECTS (concrete-over-abstract):
-#   qing_mission_station  PROVINCE modifier — a real mission on the map. Founded at
-#                         treaty ports, spreads to neighbours. Carries province var
-#                         qing_mission_faith (flag) = the denomination it preaches.
+#   qing_mission_underground_building / qing_mission_public_building  — a real BUILDING on the
+#                         province Buildings tab IS the mission (the retired qing_mission_station
+#                         province modifier's effects are folded onto these). Underground = the
+#                         pre-treaty tolerated kind; public = the post-treaty open, treaty-sanctioned
+#                         kind. Presence is read via has_building (QING_prov_has_mission trigger).
+#                         Founded at treaty ports (public) or the interior heartlands (underground),
+#                         spreads to neighbours. Carries province var qing_mission_faith (flag) =
+#                         the denomination it preaches.
 #   converted pops        real pops whose set_pop_religion is a Christian faith
 #                         (catholic | evangelical | orthodox) — the mission's harvest.
 #   qing_prov_missionary_tension  PROVINCE var 0..100 — local anti-Christian feeling,
@@ -68,7 +73,27 @@ QING_mission_faith_seed = {
 # local tension var. Bumps ROOT's reach counter (a founded station IS a station).
 # ======================================================================
 QING_mission_found_station = {
-	add_province_modifier = { name = qing_mission_station  duration = -1 }
+	# [#7 2026-07-18] CONCRETE BUILDING IS THE STATION (concrete-over-abstract + effect-on-building):
+	# the mission is now a REAL building carrying its own local modifiers — the old qing_mission_station
+	# PROVINCE MODIFIER is retired (its civ/happiness effects folded onto the buildings). Presence is
+	# read via has_building, not the modifier. Tier by mode — a post-treaty founding (owner holds
+	# qing_treaty_system_imposed) is an OPEN, treaty-sanctioned mission; a pre-treaty founding is the
+	# tolerated/underground kind. add_building_level is the proven engine verb (vanilla
+	# common/unit_abilities/border_forts.txt:125). Guarded NOT-has-building so a re-entry never stacks.
+	# ROOT = the Qing owner (this = the province).
+	if = {
+		limit = { ROOT = { has_variable = qing_treaty_system_imposed } }
+		if = {
+			limit = { NOT = { has_building = qing_mission_public_building } }
+			add_building_level = qing_mission_public_building
+		}
+	}
+	else = {
+		if = {
+			limit = { NOT = { has_building = qing_mission_underground_building } }
+			add_building_level = qing_mission_underground_building
+		}
+	}
 	QING_mission_faith_seed = yes
 	if = { limit = { NOT = { has_variable = qing_prov_missionary_tension } } set_variable = { name = qing_prov_missionary_tension  value = 0 } }
 	# [#275 review-fix] mark a station founded THIS pulse pass. add_province_modifier takes
@@ -80,6 +105,37 @@ QING_mission_found_station = {
 	set_variable = { name = qing_station_founded_this_pass  value = 1 }
 	ROOT = { change_variable = { name = qing_missionary_reach  add = 1 } }
 	LOG_line = { sys = QING  msg = "mission: station founded in province for" }
+}
+
+# ======================================================================
+# [#7 2026-07-18] QING_mission_remove_station — tear down a station CONCRETELY. Scope: PROVINCE.
+# The counterpart to found_station: strips the summary modifier AND the real building (either tier),
+# for a local crackdown / suppression. remove_building_level is the proven engine verb (vanilla-
+# derived FlavorEvents.txt:506 scope:X = { remove_building_level = EDU_university }); guarded by
+# has_building so it is a clean no-op where that tier does not stand.
+# ======================================================================
+QING_mission_remove_station = {
+	if = { limit = { has_building = qing_mission_public_building }      remove_building_level = qing_mission_public_building }
+	if = { limit = { has_building = qing_mission_underground_building } remove_building_level = qing_mission_underground_building }
+	LOG_line = { sys = QING  msg = "mission: station removed (building torn down) in province for" }
+}
+
+# ======================================================================
+# [#7 2026-07-18] QING_mission_promote_to_public — an existing UNDERGROUND mission comes into the
+# open once its province is drawn into the treaty system (the 1858/60 toleration clauses). Swaps the
+# underground building for the public one (the modifier + faith are unchanged). Scope: PROVINCE;
+# guarded so it only fires where an underground building actually stands.
+# ======================================================================
+QING_mission_promote_to_public = {
+	if = {
+		limit = { has_building = qing_mission_underground_building }
+		remove_building_level = qing_mission_underground_building
+		if = {
+			limit = { NOT = { has_building = qing_mission_public_building } }
+			add_building_level = qing_mission_public_building
+		}
+		LOG_line = { sys = QING  msg = "mission: underground station came into the open (-> public) in province for" }
+	}
 }
 
 # ======================================================================
@@ -192,7 +248,7 @@ QING_mission_spread_one = {
 				any_neighbor_province = {
 					is_sea = no
 					owner = scope:mission_owner
-					NOT = { has_province_modifier = qing_mission_station }
+					NOT = { QING_prov_has_mission = yes }
 					total_population > 0  # [logfix] read on the PROVINCE directly (already province scope); the prior state={..} threw "Wrong scope: state, expected province"
 				}
 			}
@@ -200,7 +256,7 @@ QING_mission_spread_one = {
 				limit = {
 					is_sea = no
 					owner = scope:mission_owner
-					NOT = { has_province_modifier = qing_mission_station }
+					NOT = { QING_prov_has_mission = yes }
 					total_population > 0  # [logfix] read on the PROVINCE directly (already province scope); the prior state={..} threw "Wrong scope: state, expected province"
 				}
 				QING_mission_found_station = yes
@@ -244,7 +300,7 @@ QING_mission_stations_pulse = {
 			# re-spreading a same-year daughter caused the reach double-count + spread cascade. ---
 			if = {
 				limit = {
-					has_province_modifier = qing_mission_station
+					QING_prov_has_mission = yes
 					NOT = { has_variable = qing_station_founded_this_pass }
 				}
 				scope:mission_owner = { change_variable = { name = qing_missionary_reach  add = 1 } }
@@ -252,6 +308,9 @@ QING_mission_stations_pulse = {
 				# a thin trickle that raises only LOCAL friction, no national political charge.
 				if = {
 					limit = { scope:mission_owner = { has_variable = qing_treaty_system_imposed } }
+					# [#7 2026-07-18] once the treaties are imposed, an existing UNDERGROUND mission comes
+					# into the open — swap it for the public building (no-op if it is already public).
+					QING_mission_promote_to_public = yes
 					QING_mission_convert_pops = yes
 					QING_mission_spread_one = yes
 				}
@@ -267,7 +326,7 @@ QING_mission_stations_pulse = {
 				limit = {
 					scope:mission_owner = { has_variable = qing_treaty_system_imposed }
 					has_province_modifier = qing_treaty_port
-					NOT = { has_province_modifier = qing_mission_station }
+					NOT = { QING_prov_has_mission = yes }
 				}
 				QING_mission_found_station = yes
 			}
@@ -309,21 +368,47 @@ QING_mission_seed_pretreaty = {
 			var:qing_missionary_reach < 6
 			any_owned_province = {
 				is_sea = no
-				NOT = { has_province_modifier = qing_mission_station }
+				NOT = { QING_prov_has_mission = yes }
 				total_population > 0  # [logfix] read on the PROVINCE directly (already province scope); the prior state={..} threw "Wrong scope: state, expected province"
 			}
 		}
-		ordered_owned_province = {
+		# [#21] Prefer a GENUINE historical mission city (Beijing/Nanchang/Nanjing/Hangzhou/Shanghai/
+		# Fuzhou/Wuchang/Chengdu/Guangzhou) if one is still un-missioned — that is where the
+		# underground church actually stood. Among those still open, take the most populous.
+		if = {
 			limit = {
-				is_sea = no
-				NOT = { has_province_modifier = qing_mission_station }
-				total_population > 0  # [logfix] read on the PROVINCE directly (already province scope); the prior state={..} threw "Wrong scope: state, expected province"
+				any_owned_province = {
+					is_sea = no
+					NOT = { QING_prov_has_mission = yes }
+					QING_prov_is_historic_mission_city = yes
+				}
 			}
-			order_by = total_population
-			max = 1
-			QING_mission_found_station = yes
+			ordered_owned_province = {
+				limit = {
+					is_sea = no
+					NOT = { QING_prov_has_mission = yes }
+					QING_prov_is_historic_mission_city = yes
+				}
+				order_by = total_population
+				max = 1
+				QING_mission_found_station = yes
+			}
+			LOG_line = { sys = QING  msg = "mission: pre-treaty station seeded at historical mission city for" }
 		}
-		LOG_line = { sys = QING  msg = "mission: pre-treaty low-intensity station seeded for" }
+		# Fallback once the historical seats are all taken: the most-populous interior province.
+		else = {
+			ordered_owned_province = {
+				limit = {
+					is_sea = no
+					NOT = { QING_prov_has_mission = yes }
+					total_population > 0  # [logfix] read on the PROVINCE directly (already province scope); the prior state={..} threw "Wrong scope: state, expected province"
+				}
+				order_by = total_population
+				max = 1
+				QING_mission_found_station = yes
+			}
+			LOG_line = { sys = QING  msg = "mission: pre-treaty low-intensity station seeded for" }
+		}
 	}
 }
 
@@ -382,7 +467,7 @@ QING_mission_spread_one_pretreaty = {
 					any_neighbor_province = {
 						is_sea = no
 						owner = scope:mission_owner
-						NOT = { has_province_modifier = qing_mission_station }
+						NOT = { QING_prov_has_mission = yes }
 						total_population > 0  # [logfix] read on the PROVINCE directly (already province scope); the prior state={..} threw "Wrong scope: state, expected province"
 					}
 				}
@@ -390,7 +475,7 @@ QING_mission_spread_one_pretreaty = {
 					limit = {
 						is_sea = no
 						owner = scope:mission_owner
-						NOT = { has_province_modifier = qing_mission_station }
+						NOT = { QING_prov_has_mission = yes }
 						total_population > 0  # [logfix] read on the PROVINCE directly (already province scope); the prior state={..} threw "Wrong scope: state, expected province"
 					}
 					QING_mission_found_station = yes

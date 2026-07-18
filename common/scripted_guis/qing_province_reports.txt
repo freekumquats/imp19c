@@ -394,7 +394,7 @@ qing_report_antichristian_empty = {
 	is_shown = { NOT = { has_variable_list = qing_antichr_report_provinces } }
 }
 
-# --- MISSION STATIONS: provinces carrying the qing_mission_station modifier ---
+# --- MISSION STATIONS: provinces carrying a mission building (QING_prov_has_mission) ---
 qing_report_open_missions = {
 	scope = country
 	ai_is_valid = { always = no }
@@ -406,7 +406,7 @@ qing_report_open_missions = {
 		every_owned_province = {
 			save_scope_as = this_prov
 			if = {
-				limit = { scope:this_prov = { has_province_modifier = qing_mission_station } }
+				limit = { scope:this_prov = { QING_prov_has_mission = yes } }
 				root = { add_to_variable_list = { name = qing_missions_report_provinces  target = scope:this_prov } }
 			}
 		}
@@ -416,6 +416,37 @@ qing_report_missions_empty = {
 	scope = country
 	ai_is_valid = { always = no }
 	is_shown = { NOT = { has_variable_list = qing_missions_report_provinces } }
+}
+
+# [#7/#22 2026-07-18] SUPPRESS MISSIONS (查禁傳教) — the standing, proactive crackdown lever, living
+# inside the missions report window (beside the province list it acts on). Enforces the proscription:
+# concretely shutters the most-inflamed mission (QING_missionary_suppress_local tears the building
+# down + drops reach/friction). Gated CHI + at least one mission standing + a ~1-year cooldown
+# (shared var qing_missionary_suppress_cd) so it cannot be spam-clicked and does not stack with the
+# reactive 邪教/教案 scare events firing the same effect. is_valid keeps the button disabled otherwise.
+qing_action_suppress_missions = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		tag = CHI
+		NOT = { has_variable = qing_missionary_suppress_cd }
+		any_owned_province = { QING_prov_has_mission = yes }
+	}
+	effect = {
+		QING_missionary_suppress_local = yes
+		set_variable = { name = qing_missionary_suppress_cd  days = 365 }
+		# rebuild the report list so the shuttered province drops off immediately.
+		clear_variable_list = qing_missions_report_provinces
+		every_owned_province = {
+			save_scope_as = this_prov
+			if = {
+				limit = { scope:this_prov = { QING_prov_has_mission = yes } }
+				root = { add_to_variable_list = { name = qing_missions_report_provinces  target = scope:this_prov } }
+			}
+		}
+		LOG_line = { sys = QING  msg = "missionary: SUPPRESS MISSIONS lever used from the report window for" }
+	}
 }
 
 # --- SOCIAL FRICTION: provinces in active anti-Christian disorder (qing_mission_unrest modifier) ---
