@@ -149,11 +149,72 @@ qing_censorate_impeach_venal = {
 		}
 	}
 	effect = {
-		# [#443 boot-crash fix] route the sorting-iterator work through a hidden event
-		# (runtime ref, NOT compile-inlined) instead of calling QING_censorate_find_corrupt
-		# directly here. The event stamps the cooldown + refreshes the meter itself.
-		trigger_event = { id = qing_censorate.5 }
-		LOG_line = { sys = QING  msg = "censorate: the venal impeached from the panel for" }
+		# [#9 2026-07-17] NO LONGER auto-picks. This verb now survives only as the panel button's
+		# ENABLE-GATE (its is_valid above): the button's onclick fires qing_censorate_refresh_venal_btn
+		# + opens the qing_censorate_impeach_window picker, and a row-click there impeaches the CHOSEN
+		# man (qing_censorate_impeach_selected) — mirroring the Accuse-an-Official flow, so the player
+		# sees WHOM he disgraces sorted by corruption instead of a blind auto-pick. Left empty (not the
+		# old trigger_event qing_censorate.5 auto-pick) so it never silently disgraces a man behind the
+		# player's back if anything invokes it.
+	}
+}
+
+# [#9 2026-07-17] IMPEACH-PICKER ROSTER refresh — the panel button's FIRST onclick. Fires the hidden
+# qing_censorate.6 runtime event, which builds the corruption-sorted qing_censorate_venal list
+# (routed off the compiled button chain because it is a sorting iterator — the #443 crash class).
+qing_censorate_refresh_venal_btn = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		trigger_event = { id = qing_censorate.6 }
+		LOG_line = { sys = QING  msg = "censorate: impeach-picker roster refreshed from the panel for" }
+	}
+}
+
+# [#9 2026-07-17] IMPEACH A SELECTED OFFICIAL — row-click in the qing_censorate_impeach_window picker.
+# The chosen courtier comes via datacontext (GuiScope char + player), exactly like the Accuse picker's
+# row lever. Saves him as scope:qing_censorate_target, upholds the impeachment (QING_censorate_impeach_
+# uphold: cleanse, disgrace, vacate office), stamps the ~1-quarter cooldown, and recomputes the meter.
+# No trampoline needed here: this is not a sorting iterator (the roster was already built by .6), just a
+# save-scope + the uphold effect, so it is safe inline in the row's scripted-gui effect.
+qing_censorate_impeach_selected = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		employer = scope:player
+	}
+	is_valid = {
+		# a present Grand Inspector must be seated + not in the impeachment cooldown (mirror the
+		# panel gate qing_censorate_impeach_venal).
+		scope:player = {
+			has_variable = qing_office_censor_holder
+			var:qing_office_censor_holder = { is_alive = yes  employer = scope:player }
+			NOT = { has_variable = qing_censorate_impeach_cooldown }
+		}
+		# the selected man must still be a valid impeachment target (mirror find_corrupt's limit).
+		employer = scope:player
+		is_ruler = no
+		is_adult = yes
+		is_alive = yes
+		NOT = { has_variable = qing_rebel_foil }
+		OR = {
+			corruption >= 30
+			has_trait = corrupt
+			loyalty < 40
+		}
+	}
+	effect = {
+		save_scope_as = qing_censorate_target
+		scope:player = {
+			QING_censorate_impeach_uphold = yes
+			set_variable = { name = qing_censorate_impeach_cooldown  days = 90 }
+			QING_ministry_recompute_perf_censor = yes
+		}
+		LOG_line = { sys = QING  msg = "censorate: the venal impeached via the picker for" }
 	}
 }
 
