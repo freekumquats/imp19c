@@ -114,8 +114,13 @@ QING_students_graduate = {
 	if = {
 		limit = { var:qing_students_abroad >= 1 }
 		QING_DECLINE_nudge = { var = qing_students_abroad  amount = $amount$ }
-		# the negative-of-$amount$ flows into returned. $amount$ is passed negative
-		# by the caller (it drains abroad), so add its magnitude to returned here.
+		# [PERF-AUDIT 2026-07-18 L11] derive the magnitude LOCALLY from $amount$ instead of reading
+		# qing_students_graduate_mag (which was set only by the sole caller immediately before — a fragile
+		# dependency that would silently read stale/unset if any future caller invoked this directly).
+		# $amount$ is passed NEGATIVE (drains abroad), so the returned magnitude = -$amount$.
+		set_variable = { name = qing_students_graduate_mag  value = $amount$ }
+		change_variable = { name = qing_students_graduate_mag  multiply = -1 }
+		# the negative-of-$amount$ flows into returned.
 		change_variable = { name = qing_students_returned  add = var:qing_students_graduate_mag }
 		if = { limit = { var:qing_students_returned > 100 } set_variable = { name = qing_students_returned  value = 100 } }
 		# [#91 item C] the returned pool is now the SUMMARY counter; hang a real
@@ -270,7 +275,8 @@ QING_students_pulse = {
 	# drip). We pass a magnitude of 4 (abroad -4 → returned +4).
 	if = {
 		limit = { var:qing_students_abroad >= 10 }
-		set_variable = { name = qing_students_graduate_mag  value = 4 }
+		# [PERF-AUDIT 2026-07-18 L11] the mag is now derived inside QING_students_graduate from
+		# $amount$ itself — no external set_variable priming needed (see the effect's comment).
 		QING_students_graduate = { amount = -4 }
 	}
 

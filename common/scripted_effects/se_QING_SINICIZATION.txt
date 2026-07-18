@@ -50,6 +50,19 @@ QING_sinic_pulse = {
 	# in STEP 2 snapshots this into qing_prov_sinicized_prev; a province that is Han now
 	# but was NOT at the last annual snapshot gets qing_prov_sinicized_new (the report's
 	# per-row "newly sinicized" indicator). Same snapshot->delta idiom as the count.
+	# [PERF-AUDIT 2026-07-18 §10#1/§3-P1/§12#3 — LOW RISK CADENCE FIX] Gate the STEP 1 recount behind
+	# the SAME annual cooldown (qing_sinic_year_cd) that already throttles STEP 2's baseline roll. This
+	# was the single largest UNCAPPED sweep on the quarterly pulse: a triple-nested
+	# every_governorships > every_governorship_state > every_state_province walk (hundreds-to-thousands
+	# of CHI provinces) running every 90 days, with per-province var writes. Dominant-culture flips are a
+	# glacial migration/conquest process — the count barely moves within a year, and the report consumes
+	# it only as a 3-way band (up/steady/down). qing_sinic_year_cd is UNSET only on the opening pulse and
+	# is (re)set by STEP 2 below (which runs right after, on the same annual pulse), so STEP 1 + STEP 2
+	# now fire together yearly and both skip on the ~3 intervening quarterly pulses. Precision lost:
+	# the count/delta may lag reality by up to ~1 year (invisible at band granularity). ~4x fewer full
+	# province walks. Precedent: QING_DECLINE_scan_ethnic_target is annually throttled the same way.
+	if = {
+	limit = { NOT = { has_variable = qing_sinic_year_cd } }
 	set_variable = { name = qing_sinic_count_tmp  value = 0 }
 	every_governorships = {
 		every_governorship_state = {
@@ -88,6 +101,7 @@ QING_sinic_pulse = {
 	}
 	set_variable = { name = qing_sinic_count  value = var:qing_sinic_count_tmp }
 	remove_variable = qing_sinic_count_tmp
+	}   # [PERF-AUDIT 2026-07-18] end annual-gate around STEP 1 recount
 
 	# Seed the baseline on the very first touch so the delta reads 0 until the first
 	# annual roll (no phantom jump from an unset prev). Until that first roll fires,
