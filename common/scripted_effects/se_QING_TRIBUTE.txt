@@ -195,22 +195,24 @@ QING_tribute_receive = {
 	# proven country-income read (00_event_values.txt), as used by the B17 collector.
 	if = {
 		limit = { exists = $sender$ }
+		# [logfix R3 2026-07-17] Do the SET, the guarded READ, and the REMOVE all INSIDE a single
+		# $sender$ scope block. The prior R2 shape set qing_trib_gift inside `$sender$ = { }` but then
+		# read it from a SEPARATE sibling `if` via `$sender$ = { var:qing_trib_gift > 0 }` / a
+		# `$sender$.var:qing_trib_gift` treasury add — and that cross-block re-entry read the var
+		# before/without the set landing in the same evaluation, flooding error.log 139x/boot
+		# ("Failed to fetch variable 'qing_trib_gift' ... not being set" + "Event target link 'var'
+		# returned an unset scope" + "Invalid left side during comparison 'var'"). Collapsing to one
+		# scope block, and guarding the read with has_variable, makes the read unconditionally safe.
+		# The profit is added to ROOT (the Qing) — captured into a temp before leaving $sender$ scope.
 		$sender$ = {
-			# [logfix R2] Read the sender's income through the named qing_tribute_gift_svalue
-			# (has_monthly_income * 0.25, min 0). The PRIOR fix (seed 0, then `change_variable add =
-			# has_monthly_income` + `limit = { has_monthly_income >= 0 }`) still flooded 54x/session
-			# ("Failed to fetch variable 'qing_trib_gift' ... not being set") because a BARE
-			# has_monthly_income inside an effect/limit is parsed as a nonexistent variable NAME, not
-			# a game read (00_event_values.txt:174 T1-C review-fix documents exactly this). Only inside
-			# a script_value does has_monthly_income resolve. Setting the var straight FROM the svalue
-			# both reads correctly AND guarantees the var exists as a value type before the > 0 read.
 			set_variable = { name = qing_trib_gift  value = qing_tribute_gift_svalue }
+			if = {
+				limit = { has_variable = qing_trib_gift  var:qing_trib_gift > 0 }
+				save_temporary_scope_as = trib_gift_payer
+				ROOT = { add_treasury = scope:trib_gift_payer.var:qing_trib_gift }
+			}
+			remove_variable = qing_trib_gift
 		}
-		if = {
-			limit = { $sender$ = { var:qing_trib_gift > 0 } }
-			add_treasury = $sender$.var:qing_trib_gift
-		}
-		$sender$ = { remove_variable = qing_trib_gift }
 	}
 	change_variable = { name = qing_tribute_missions_recent  add = 1 }
 	LOG_exit = { sys = QING  fn = "QING_tribute_receive"  result = OK }
