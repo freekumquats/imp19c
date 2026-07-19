@@ -487,11 +487,11 @@ QING_council_recompute = {
 
 	# --- smooth drift toward target (+/-3 per pulse)
 	if = {
-		limit = { var:qing_council_effectiveness < qing_council_eff_target_cmpsvalue }
+		limit = { var:qing_council_effectiveness < { value = var:qing_council_eff_target } }
 		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 3 }
 	}
 	else_if = {
-		limit = { var:qing_council_effectiveness > qing_council_eff_target_cmpsvalue }
+		limit = { var:qing_council_effectiveness > { value = var:qing_council_eff_target } }
 		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -3 }
 	}
 
@@ -916,31 +916,6 @@ QING_council_refresh_candidates = {
 			employer = ROOT
 			is_adult = yes
 			is_alive = yes
-			# [#8 fix 2026-07-18] EXCLUDE harem consorts (後宮妃嬪). A consort is created employed by CHI,
-			# adult and alive (se_QING_HAREM.txt QING_harem_mint_consort), so without this she matched the
-			# generic bench filter and flowed into the shared Appoint picker; appointing her stamped
-			# qing_zongli_diplomat and she surfaced in the Zongli diplomat roster — the reported
-			# 'diplomat list replaced by harem women' bug. The inner court is not a pool of officials.
-			NOT = { has_variable = qing_is_harem_consort }
-			# [#6 fix 2026-07-17] EXCLUDE the conflicting NON-council roles the appoint verb's is_valid
-			# (QING_office_eligible_candidate) rejects — a serving army/navy commander, a provincial
-			# governor, the reigning ruler, the primary heir, or a vanilla great-office holder. Without
-			# this the picker LISTED such men (e.g. a general like Sun Yuting/Zhang Xu) but the row-click
-			# silently failed is_valid — the reported 'listed but un-appointable' bug. Cross-COUNCIL-office
-			# holders stay (one-office-per-man reshuffle is intended); only the conflicting roles are cut.
-			is_ruler = no
-			is_general = no
-			is_admiral = no
-			is_governor = no
-			NOT = { AND = { exists = ROOT.primary_heir  this = ROOT.primary_heir } }
-			NOT = { has_office = office_foreign_minister }
-			NOT = { has_office = office_royal_tutor }
-			NOT = { has_office = office_marshal }
-			NOT = { has_office = office_master_of_the_guard }
-			NOT = { has_office = office_high_priest_monarchy }
-			NOT = { has_office = office_philosopher }
-			NOT = { has_office = office_steward }
-			NOT = { has_office = office_physician }
 			# [R2-7 fix] MUST match the inclusive eligibility of QING_council_refresh_candidates_by
 			# (the B7 fix): do NOT exclude ALL office-holders — autofill staffs every office at start,
 			# so `NOT has_variable qing_office_held` left the list EMPTY (the boot-test empty picker).
@@ -999,31 +974,6 @@ QING_council_refresh_candidates_by = {
 			employer = ROOT
 			is_adult = yes
 			is_alive = yes
-			# [#8 fix 2026-07-18] EXCLUDE harem consorts (後宮妃嬪). A consort is created employed by CHI,
-			# adult and alive (se_QING_HAREM.txt QING_harem_mint_consort), so without this she matched the
-			# generic bench filter and flowed into the shared Appoint picker; appointing her stamped
-			# qing_zongli_diplomat and she surfaced in the Zongli diplomat roster — the reported
-			# 'diplomat list replaced by harem women' bug. The inner court is not a pool of officials.
-			NOT = { has_variable = qing_is_harem_consort }
-			# [#6 fix 2026-07-17] EXCLUDE the conflicting NON-council roles the appoint verb's is_valid
-			# (QING_office_eligible_candidate) rejects — a serving army/navy commander, a provincial
-			# governor, the reigning ruler, the primary heir, or a vanilla great-office holder. Without
-			# this the picker LISTED such men (e.g. a general like Sun Yuting/Zhang Xu) but the row-click
-			# silently failed is_valid — the reported 'listed but un-appointable' bug. Cross-COUNCIL-office
-			# holders stay (one-office-per-man reshuffle is intended); only the conflicting roles are cut.
-			is_ruler = no
-			is_general = no
-			is_admiral = no
-			is_governor = no
-			NOT = { AND = { exists = ROOT.primary_heir  this = ROOT.primary_heir } }
-			NOT = { has_office = office_foreign_minister }
-			NOT = { has_office = office_royal_tutor }
-			NOT = { has_office = office_marshal }
-			NOT = { has_office = office_master_of_the_guard }
-			NOT = { has_office = office_high_priest_monarchy }
-			NOT = { has_office = office_philosopher }
-			NOT = { has_office = office_steward }
-			NOT = { has_office = office_physician }
 			# still exclude the two dynastic FIGUREHEAD seats that ride on qing_office_held —
 			# the Grand Regent (攝政) and Emperor Emeritus (太上皇): they hold by regency/abdication,
 			# not appointment, and must not be shuffled into an ordinary office by the picker.
@@ -1277,18 +1227,6 @@ QING_office_appoint = {
 	# a later dismissal, bypassing the cap (the 擢用 Elevate lever is exactly that promote-out path).
 	if = { limit = { has_variable = qing_is_southernstudy }      remove_variable = qing_is_southernstudy }
 	if = { limit = { has_variable = qing_is_upperstudy }         remove_variable = qing_is_upperstudy }
-	# [#5 fix 2026-07-17; BOOT-CRASHFIX 2026-07-18] MARTIAL-OFFICE EXAM CONGRUENCE — the wu_jinshi
-	# grant that USED to live here was REMOVED. QING_office_appoint is reached at GAMESTATE
-	# CONSTRUCTION (on_game_initialized -> QING_council_autofill -> QING_council_autofill_office{war,
-	# guard_commandant} -> here; the war/guard seats are not pre-seated, so autofill fills them at
-	# boot). add_trait mutates the character's trait/opposites machinery (the appointee usually holds
-	# the civil jinshi, an OPPOSITE of wu_jinshi), and a trait mutation on a character during
-	# construction access-violates with NO logged line — the exact class of the two prior boot
-	# crashfixes (b385452a4 castrated eunuch, ade0b498f). At the last CLEAN boot QING_office_appoint
-	# did NO add_trait; the surrounding add_character_modifier / add_loyal_veterans are simple attaches
-	# that don't touch trait recomputation and boot fine. The martial-degree congruence is now granted
-	# at RUNTIME instead — qing_force_setup.1 (day 30, is_triggered_only) stamps wu_jinshi on the
-	# serving war/guard office-holders alongside the field commanders it already handles.
 	# heading a great office of state builds the holder a power base of his own —
 	# the board or yamen brings a staff, clients, and clout (power_base). Grant it
 	# here; QING_office_vacate strips it symmetrically when he is relieved.
