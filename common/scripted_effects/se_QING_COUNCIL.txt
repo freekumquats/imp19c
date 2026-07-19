@@ -722,8 +722,16 @@ QING_council_score_figurehead = {
 		limit = { exists = $who$  var:qing_fig_skill = flag:zeal }
 		$who$ = { ROOT = { change_variable = { name = qing_council_tmp  add = prev.zeal } } }
 	}
-	else = {
-		# default: the all-four-skill average
+	else_if = {
+		# default: the all-four-skill average. [BOOT-CRASHFIX 2026-07-18] MUST guard `exists = $who$`
+		# exactly like the four skill-specific branches above — this else was UNGUARDED, so scoping
+		# `$who$ = { ... }` on a $who$ that resolves to a non-existent character (a figurehead var
+		# holding a dead/cleared handle, or current_ruler.mother on a motherless sovereign that slips
+		# a caller guard) is a null-scope deref = EXCEPTION_ACCESS_VIOLATION at QING_council_recompute
+		# (fired at on_game_initialized). The four typed branches never crashed because each carries
+		# its own `exists = $who$`; only the all-skill default (the path Emperor/Dowager/Crown Prince/
+		# Regent take) was exposed. Convert else -> guarded else_if so an absent figurehead is a clean no-op.
+		limit = { exists = $who$ }
 		$who$ = {
 			ROOT = {
 				change_variable = { name = qing_council_tmp  add = prev.martial }
