@@ -146,6 +146,18 @@ Government-type scan for live republics surfaced 6 genuine 1763 anachronisms —
 - Invariant gate: 0 new ownerless capitals, 0 new double-owned; inert-tags 10→16. Brace delta 0.
   No set_as_ruler/create_character on any of the 6 → no construction-crash class.
 
+### 2026-07-20 — HRE abstraction: EVALUATED, LEFT AS-IS (operator rule satisfied)
+Operator: "the HRE may be modelled at a REASONABLE level of abstraction … evaluate whether it's good
+enough and leave it if so." Verdict: **good enough, no change.** The c_europe folder has 59 live tags.
+The major territorial princes carry real territory (Austria 130, Prussia 117, Hungary 85, Transylvania
+24, Bavaria 21, Switzerland 19, Croatia 19, Hanover 18, Saxony 9, Baden 8, Holstein/Württemberg 7,
+Hesse-Kassel/Mecklenburg 6…). The ~40 tiny states (free imperial cities Hamburg/Bremen/Augsburg/
+Nuremberg/Ulm/Aachen/Frankfurt; prince-bishoprics Mainz/Cologne/Trier/Salzburg/Würzburg/Bamberg/Münster/
+Passau…; small counties) are 1 province each — which is HISTORICALLY ACCURATE for 1763, not a shattering
+into microstates. It is neither over-fragmented (no cadastral explosion) nor over-aggregated (the great
+principalities are distinct). Exactly the "major princes kept, Kleinstaaten at their real 1-province
+grain" the operator asked for. No edit.
+
 ### 2026-07-20 — DEFERRED (documented, not a blind fix): USA at a 1763 start
 The single largest raw anachronism is **USA** — a `constitutional_republic` governed from Washington
 holding all **173 Thirteen-Colonies seaboard provinces**, when in 1763 those are British (GBR). This is
@@ -158,3 +170,46 @@ depends on — the same telescoped-anachronism design that lets the player run l
 per the mandate it is DEFERRED and recorded here rather than fixed blind. Resolving it properly would
 mean either (a) a startup transform that hands the 13 colonies to GBR and spawns USA later on the
 independence beat, or (b) accepting the anachronism as intended. Needs an operator call + boot.
+
+---
+
+## Comprehensive review — 2026-07-20 (audit closeout)
+
+Per the mandate's "do a comprehensive review when finished." Scope: every one of the 13,281 province
+IDs classified; all decisions recorded; setup edits invariant-gated + brace/BOM-verified.
+
+**Deliverable status — COMPLETE.**
+- `PROVINCE_OWNERSHIP_1763.csv`: 13,281 rows, every research column filled. 0 OWNED rows missing an
+  owner tag; 0 rows missing a justification. 8,602 OWNED (region-grounded), 173 USA→GBR (deferred),
+  2,589 unowned stateless (culture-only), 1,917 sea/placeholder.
+- Six regional research reports committed under `audit_worklists/research/` with academic sources.
+- Two regenerator scripts (`build_ownership_audit.py` skeleton, `fill_ownership_audit.py` research
+  columns) — idempotent, documented.
+
+**What the audit found and did.**
+1. The base map was already purpose-built for a 1763 start (viceroyalties not republics, Ottoman
+   Balkans+Maghreb, EIC+princely India, native-America tags, ALC/RUA inert, Mapuche butalmapu +
+   Miskito modelled). So the audit VALIDATED the existing owners against the reports rather than
+   rebuilding, and recorded that per-province in the CSV.
+2. Fixed 6 residual anachronisms — the 1809–25 South-American independence juntas (AYP/LRC/LAG/SCZ/VLG
+   → CHR Charcas; VLL → SFB New Granada) — via the proven inert-tag playbook. Invariant-gated.
+3. Evaluated the HRE abstraction → good enough per the operator rule, left as-is.
+4. USA/Thirteen-Colonies (173 provinces): historically GBR, but the USA tag anchors the AI Civil War
+   arc → DEFERRED with full rationale (a genuine history-vs-wired-subsystem contradiction, the one
+   case the mandate says to defer + document rather than force).
+
+**Verification (static; no boot this session).**
+- `check_setup_invariants.py`: 0 new ownerless capitals, 0 new double-owned, all refs exist.
+- `00_default.txt`: brace delta 0; BOM state unchanged (baseline = no BOM).
+- No boot-crash-catalogue construct introduced: the 6 folds are pure ownership moves with no
+  set_as_ruler / create_character / add_trait, so no construction-crash class.
+
+**Boot-pending.** Everything is static-verified only. The 6 junta folds should be confirmed in a boot
+(the ALC/RUA precedent makes the inert-tag pattern low-risk). The USA deferral needs an operator call.
+
+**Residual / not done (by design).**
+- USA→GBR: deferred (see above).
+- Unowned stateless zones left unowned (correct — culture-only, per each region report).
+- No new TAGs created: every polity the reports flagged as tag-worthy already exists in the base map
+  (Osage/OSG, Comanche/COM, Mapuche butalmapu, Miskito/MSK, etc.), so CREATE was never the right move —
+  REVIVE/VALIDATE/inert-fold covered the real gaps.
