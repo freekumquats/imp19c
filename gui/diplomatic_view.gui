@@ -1413,56 +1413,6 @@ base_window = {
 												}
 											}
 										}
-										################################################################
-										# [B1] ROYAL MARRIAGE — CHI-only dynastic-marriage entry point. Replaces the
-										# old government-view "Propose a Marriage" button + its broken realm-picker
-										# screen: the viewed country IS the target, so this opens the marriage picker
-										# straight at screen 2 (our character). marriage_play_diplo_open builds the
-										# candidate lists + fixes the target to the viewed realm; the second onclick
-										# opens the own-character window.
-										# [B1-a fix 2026-07-17] RELOCATED to sit immediately after the engine-generated
-										# action categories (Alliance Actions) and BEFORE the Trade Actions block below, so
-										# the button reads as part of the Alliance grouping instead of floating under Trade
-										# Actions. (actions_grid categories are engine-generated, so a custom button can't
-										# live INSIDE the Alliance category; directly beneath the grid is the closest fit.)
-										# Mirrors the Trade Actions button pattern
-										# above (target = DiplomaticView.GetTargetCountry.MakeScope).
-										################################################################
-										margin_widget = {
-											size = { 0 28 }
-											layoutpolicy_horizontal = expanding
-											margin = { 7 0 }
-											margin_right = 0
-											visible = "[And( EqualTo_string( Player.GetTag, 'CHI' ), And( Not(DiplomaticView.GetTargetCountry.IsBarbarian), Not(EqualTo_int32( DiplomaticView.GetTargetCountry.GetId, Player.GetId )) ) )]"
-											vbox = {
-												layoutpolicy_horizontal = expanding
-												margin_right = 22
-												diplomacy_action_button = {
-													size = { 0 22 }
-													layoutpolicy_horizontal = expanding
-													margin = { 14 0 }
-													margin_right = 0
-													datacontext = "[GetScriptedGui('marriage_play_diplo_open')]"
-													parentanchor = hcenter
-													enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
-													blockoverride "On_click"
-													{
-														onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
-														onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_own_window')]"
-													}
-													blockoverride "Left_text" { margin_left = 24  text = "MARRIAGE_PLAY_DIPLO_BTN" }
-													blockoverride "Right_text" { text = "" }
-													blockoverride "Icon"
-													{
-														framesize = { 46 46 }
-														texture = "gfx/interface/base_parts/accept_decline_flat.dds"
-														frame = "[Select_int32(ScriptedGui.IsValid(GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End),'(int32)2','(int32)1')]"
-													}
-													tooltip = "MARRIAGE_PLAY_DIPLO_BTN_TT"
-												}
-											}
-										}
-
 										margin_widget = {
 											size = { 0 28 }
 											layoutpolicy_horizontal = expanding
@@ -1579,6 +1529,88 @@ base_window = {
 
 
 
+										################################################################
+										# [BT-E fix 2026-07-19] DYNASTIC ACTIONS — Royal Marriage in its OWN collapsible
+										# category header, placed ABOVE Subject Actions (order: Alliance -> Trade -> Dynastic
+										# -> Subject). The engine-generated action categories (incl. Alliance Actions) live
+										# inside actions_grid's datamodel loop and CANNOT host a custom scripted-gui button, so
+										# the twice-failed "put it under Alliance Actions" is not reachable from GUI; giving it a
+										# real labeled category (cloning the proven Subject/Trade Actions category_drop dropdown)
+										# removes the "floating between Relation and Trade Actions" look. Toggle var =
+										# dynastic_actions_open. Gated CHI + target is a real foreign realm (not self/barbarian).
+										################################################################
+										# spacer above the Dynastic header (matches the Trade->Subject inter-section rhythm)
+										widget = {
+											size = { 0 10 }
+											visible = "[And( EqualTo_string( Player.GetTag, 'CHI' ), And( Not(DiplomaticView.GetTargetCountry.IsBarbarian), Not(EqualTo_int32( DiplomaticView.GetTargetCountry.GetId, Player.GetId )) ) )]"
+										}
+										margin_widget = {
+											size = { 0 28 }
+											layoutpolicy_horizontal = expanding
+											margin = { 7 0 }
+											margin_right = 0
+											visible = "[And( EqualTo_string( Player.GetTag, 'CHI' ), And( Not(DiplomaticView.GetTargetCountry.IsBarbarian), Not(EqualTo_int32( DiplomaticView.GetTargetCountry.GetId, Player.GetId )) ) )]"
+											vbox = {
+												layoutpolicy_horizontal = expanding
+												margin_right = 22
+												category_drop = {
+													name = "close_button_dynastic_dip"
+													layoutpolicy_horizontal = expanding
+													size = { 0 32 }
+													blockoverride "Text_alignment" { parentanchor = left|vcenter  align = left  position = { 16 -2 }  max_width = 300 }
+													blockoverride "Text" { text = "MARRIAGE_PLAY_DYNASTIC_HEADER" }
+													blockoverride "On_click" { onclick = "[GetVariableSystem.Set( 'dynastic_actions_open', 'no' )]" }
+													blockoverride "Down" { visible = yes }
+													blockoverride "Right" { visible = no }
+													blockoverride "RightArrowVisible" { visible = no }
+													visible = "[GetVariableSystem.HasValue( 'dynastic_actions_open', 'yes' )]"
+												}
+												category_drop = {
+													name = "open_button_dynastic_dip"
+													layoutpolicy_horizontal = expanding
+													size = { 0 32 }
+													blockoverride "Text_alignment" { parentanchor = left|vcenter  align = left  position = { 16 -2 }  max_width = 300 }
+													blockoverride "Text" { text = "MARRIAGE_PLAY_DYNASTIC_HEADER" }
+													blockoverride "On_click" { onclick = "[GetVariableSystem.Set( 'dynastic_actions_open', 'yes' )]" }
+													blockoverride "Down" { visible = no }
+													blockoverride "Right" { visible = yes }
+													blockoverride "RightArrowVisible" { visible = yes }
+													visible = "[Not( GetVariableSystem.HasValue( 'dynastic_actions_open', 'yes' ) )]"
+												}
+											}
+										}
+										vbox = {
+											visible = "[And( GetVariableSystem.HasValue( 'dynastic_actions_open', 'yes' ), And( EqualTo_string( Player.GetTag, 'CHI' ), And( Not(DiplomaticView.GetTargetCountry.IsBarbarian), Not(EqualTo_int32( DiplomaticView.GetTargetCountry.GetId, Player.GetId )) ) ) )]"
+											layoutpolicy_horizontal = expanding
+											margin_left = -2
+											margin_right = 32
+											margin_top = 10
+											# Royal Marriage — opens the picker straight at screen 2 (our character); marriage_play_diplo_open
+											# builds the candidate lists + fixes the target to the viewed realm.
+											diplomacy_action_button = {
+												size = { 0 22 }
+												layoutpolicy_horizontal = expanding
+												margin = { 14 0 }
+												margin_right = 0
+												datacontext = "[GetScriptedGui('marriage_play_diplo_open')]"
+												parentanchor = hcenter
+												enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+												blockoverride "On_click"
+												{
+													onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End )]"
+													onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_own_window')]"
+												}
+												blockoverride "Left_text" { margin_left = 24  text = "MARRIAGE_PLAY_DIPLO_BTN" }
+												blockoverride "Right_text" { text = "" }
+												blockoverride "Icon"
+												{
+													framesize = { 46 46 }
+													texture = "gfx/interface/base_parts/accept_decline_flat.dds"
+													frame = "[Select_int32(ScriptedGui.IsValid(GuiScope.SetRoot( Player.MakeScope ).AddScope('target', DiplomaticView.GetTargetCountry.MakeScope ).End),'(int32)2','(int32)1')]"
+												}
+												tooltip = "MARRIAGE_PLAY_DIPLO_BTN_TT"
+											}
+										}
 										################################################################
 										# [#176 fix] SUBJECT ACTIONS dropdown. The former inline block (a t4
 										# sibling of the whole actions area) did not render for the player; per
