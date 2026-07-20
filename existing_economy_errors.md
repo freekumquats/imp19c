@@ -135,3 +135,36 @@ GT_split guards (B) stop the upstream unset-scope cascade. Re-measure after a bo
 5. INCOME_sell_largest_reserve — OR-guard on reserve existence + zero-default locals.
 DEFERRED: piechart 'none' (display, low-risk-uncertain), the ~130-file ancient-galley navy keys
 (cosmetic, out of scope), and the entire perf backlog (high-risk correctness trap).
+
+## H) LIVE: CURRENCY_grant_country_wealth guard TOO WEAK (17+ lines, all grant callers) — FIX
+Same class as the ECON_LOG miss: a July-15 `[playtest logfix]` guard was PRESENT in the July-19 log but
+the error still fired (`wealth_to_grant` not set, via QING_sell_offices + every other grant caller). The
+guard used `OR = { has_variable country_unit_price_silver, ...gold }` — "at least one metal price". But
+`CURRENCY_wealth_value_1_unit` branches on the currency's `backing_type` and reads the price OF THAT
+METAL. So a SILVER-standard currency with `country_unit_price_silver` unset but `...gold` set PASSED the
+OR yet still read the unset silver price → svalue 'none' → `change_local_variable multiply` drops
+`wealth_to_grant` → `add_treasury` reads it unset (relative line 19). **FIX:** require the price MATCHING
+the backing type — gold/bimetallic → `country_unit_price_gold`; silver → `country_unit_price_silver`;
+anything else → the existing LOG_fail skip. Verified the only 3 backing types are gold/silver/bimetallic
+(se_CURRENCY.txt:1840), so no 4th type is wrongly skipped. flag-comparison-as-trigger idiom proven in
+CURRENCY_wealth_value_1_unit. Brace delta 0.
+
+## Remaining log classes — TRIAGE (what is NOT a script bug / out of scope)
+- **gradient_black_flip.dds missing texture (7525)** — GUI asset not shipped; cosmetic, not script.
+- **Map object locator too far outside bounding box — vfx/unit_stack/combat (756)** — map-data (locators),
+  cosmetic; not a script/economy bug.
+- **PURCHASE_order_external / _get_preferred_tradezone_internal "unknown arguments" (136)** — INTENTIONAL
+  no-op STUBS (se_PURCHASE.txt:1156/636 block comments): the real external-trade feature was never
+  written; empty body is engine-legal + proven; boot runs fine. Compile-warning on an unused-$param$
+  stub, not a bug. Left as-is (silencing would add noise to a deliberately-minimal stub for pure cosmetics).
+- **remove_country_modifier PostValidate false — INCOME_set_tax_modifier (80)** — the standard
+  "remove all 9 tax-tier modifiers, add the current one" idiom; removing an absent modifier is a
+  harmless no-op the engine merely warns about. Not a crash/behaviour bug. Left as-is (guarding all 9×N
+  removes with has_country_modifier is pure log-cosmetics on a working effect).
+- **WAR_scripted_guis "testing for exact value (=)" (804)** — engine STYLE warning (use <,>,<=,>=), not
+  an error; PEACE warscore GUI reads. Cosmetic.
+- **COHORT_NAME_jurchen ordinal / octere-liburnian navy keys / console.gui widget-not-destroyed** —
+  loc + culture-vocab + dev-console cosmetics; out of scope (see the ~130-file navy-keys note above).
+- **oa_economy_setup.txt sqrt "Illegal use of operator >" (61)** — SAME sqrt bug as (C), reached via the
+  setup on_action instead of oa_wealth_changes; my fix C guards the sqrt call itself → covers both. ✓
+- **DEBT_events local_var unset (79)** — INCOME_sell_largest_reserve/sell_reserves; addressed by (F). ✓
