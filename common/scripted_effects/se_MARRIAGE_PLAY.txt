@@ -401,14 +401,26 @@ MARRIAGE_PLAY_build_realms = {
 
 # Build OUR unmarried characters (marriage_play_own_candidates), ruling family first.
 MARRIAGE_PLAY_build_own = {
-	clear_variable_list = marriage_play_own_candidates
-	# pass 1: ruling family (from_ruler_family = yes), alive + unwed + free + not the ruler.
+	# [BT-F 2026-07-19] TWO age-banded lists so the picker renders ADULTS then CHILDREN as
+	# separate labeled sections (marriage_play_own_adults / marriage_play_own_children). We do
+	# NOT sort by age with an ordered_character order_by=age SORTING iterator: this builder is
+	# reached via a scripted_gui Execute, whose chain the loader COMPILE-INLINES, and a sorting
+	# iterator in that inlined chain is the #443/#9 boot-crash class (see QING_harem_panel.txt:30,
+	# which trampolines its ordered_character through qing_harem.3 for exactly this reason). A
+	# list-builder cannot be trampolined (the window opens synchronously after Execute), so we use
+	# only PLAIN every_character passes, banded by is_adult — no sorting iterator, no unproven
+	# ascending flag. Within each band the ruling family is still added first (the proven two-pass).
+	clear_variable_list = marriage_play_own_adults
+	clear_variable_list = marriage_play_own_children
+	# ---- ADULTS ----
+	# pass 1: ruling family (from_ruler_family = yes), alive + unwed + free + not the ruler, ADULT.
 	every_character = {
 		limit = {
 			employer = ROOT
 			is_alive = yes
 			is_married = no
 			prisoner = no
+			is_adult = yes
 			from_ruler_family = yes
 			NOT = { is_ruler = yes }
 			# [#356 review-fix] exclude the already-betrothed. is_married=no is TRUE for a
@@ -418,22 +430,52 @@ MARRIAGE_PLAY_build_own = {
 			# canonical MARRIAGE_betroth guard (se_MARRIAGE.txt).
 			NOT = { has_variable = betrothed_to_char }
 		}
-		ROOT = { add_to_variable_list = { name = marriage_play_own_candidates  target = prev } }
+		ROOT = { add_to_variable_list = { name = marriage_play_own_adults  target = prev } }
 	}
-	# pass 2: the rest of the court (non-ruling-family), same eligibility.
+	# pass 2: the rest of the court (non-ruling-family), same eligibility, ADULT.
 	every_character = {
 		limit = {
 			employer = ROOT
 			is_alive = yes
 			is_married = no
 			prisoner = no
+			is_adult = yes
 			from_ruler_family = no
 			NOT = { is_ruler = yes }
 			NOT = { has_variable = betrothed_to_char }  # [#356 review-fix] see pass 1
 		}
-		ROOT = { add_to_variable_list = { name = marriage_play_own_candidates  target = prev } }
+		ROOT = { add_to_variable_list = { name = marriage_play_own_adults  target = prev } }
 	}
-	LOG_line = { sys = MARRIAGE  msg = "marriage picker: our-candidate list built" }
+	# ---- CHILDREN (minors — the betrothal path) ----
+	# pass 1: ruling-family minors.
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			is_married = no
+			prisoner = no
+			is_adult = no
+			from_ruler_family = yes
+			NOT = { is_ruler = yes }
+			NOT = { has_variable = betrothed_to_char }
+		}
+		ROOT = { add_to_variable_list = { name = marriage_play_own_children  target = prev } }
+	}
+	# pass 2: the rest of the court's minors.
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			is_married = no
+			prisoner = no
+			is_adult = no
+			from_ruler_family = no
+			NOT = { is_ruler = yes }
+			NOT = { has_variable = betrothed_to_char }
+		}
+		ROOT = { add_to_variable_list = { name = marriage_play_own_children  target = prev } }
+	}
+	LOG_line = { sys = MARRIAGE  msg = "marriage picker: our-candidate lists built (adults + children)" }
 }
 
 # Build the TARGET realm's OPPOSITE-GENDER unmarried characters (marriage_play_their_candidates),
@@ -449,7 +491,12 @@ MARRIAGE_PLAY_build_their = {
 	# therefore appended to the character + read an unset var in the pick_own path, emptying
 	# column 3 and defeating the sex filter. `this` is the country in BOTH paths, so save it.
 	save_scope_as = mplay_home_country
-	clear_variable_list = marriage_play_their_candidates
+	# [BT-F 2026-07-19] two age-banded lists (adults + children), same reasoning as
+	# MARRIAGE_PLAY_build_own: plain every_character passes banded by is_adult, NOT an
+	# ordered_character order_by=age sorting iterator (that would be the #443/#9 compile-inline
+	# boot-crash class in this scripted_gui Execute path). Ruling family added first within each band.
+	clear_variable_list = marriage_play_their_adults
+	clear_variable_list = marriage_play_their_children
 	if = {
 		limit = { has_variable = marriage_play_target }
 		var:marriage_play_target = { save_scope_as = mplay_target_realm }
@@ -459,38 +506,70 @@ MARRIAGE_PLAY_build_their = {
 			limit = { has_variable = marriage_play_our_pick  var:marriage_play_our_pick = { is_female = yes } }
 			set_variable = { name = marriage_play_want_male  value = 1 }
 		}
-		# pass 1: target ruling family of the wanted sex.
 		scope:mplay_target_realm = {
+			# ---- ADULTS: pass 1 ruling family, pass 2 rest of court (wanted sex) ----
 			every_character = {
 				limit = {
 					employer = scope:mplay_target_realm
 					is_alive = yes
 					is_married = no
 					prisoner = no
+					is_adult = yes
 					from_ruler_family = yes
 					NOT = { is_ruler = yes }
 					NOT = { has_variable = betrothed_to_char }  # [#356 review-fix] see MARRIAGE_PLAY_build_own
 					trigger_if = { limit = { scope:mplay_home_country = { var:marriage_play_want_male = 1 } }  is_male = yes }
 					trigger_else = { is_female = yes }
 				}
-				scope:mplay_home_country = { add_to_variable_list = { name = marriage_play_their_candidates  target = prev } }
+				scope:mplay_home_country = { add_to_variable_list = { name = marriage_play_their_adults  target = prev } }
 			}
-			# pass 2: the rest of the target court, wanted sex.
 			every_character = {
 				limit = {
 					employer = scope:mplay_target_realm
 					is_alive = yes
 					is_married = no
 					prisoner = no
+					is_adult = yes
 					from_ruler_family = no
 					NOT = { is_ruler = yes }
 					NOT = { has_variable = betrothed_to_char }  # [#356 review-fix] see MARRIAGE_PLAY_build_own
 					trigger_if = { limit = { scope:mplay_home_country = { var:marriage_play_want_male = 1 } }  is_male = yes }
 					trigger_else = { is_female = yes }
 				}
-				scope:mplay_home_country = { add_to_variable_list = { name = marriage_play_their_candidates  target = prev } }
+				scope:mplay_home_country = { add_to_variable_list = { name = marriage_play_their_adults  target = prev } }
+			}
+			# ---- CHILDREN (minors — betrothal path): pass 1 ruling family, pass 2 rest ----
+			every_character = {
+				limit = {
+					employer = scope:mplay_target_realm
+					is_alive = yes
+					is_married = no
+					prisoner = no
+					is_adult = no
+					from_ruler_family = yes
+					NOT = { is_ruler = yes }
+					NOT = { has_variable = betrothed_to_char }
+					trigger_if = { limit = { scope:mplay_home_country = { var:marriage_play_want_male = 1 } }  is_male = yes }
+					trigger_else = { is_female = yes }
+				}
+				scope:mplay_home_country = { add_to_variable_list = { name = marriage_play_their_children  target = prev } }
+			}
+			every_character = {
+				limit = {
+					employer = scope:mplay_target_realm
+					is_alive = yes
+					is_married = no
+					prisoner = no
+					is_adult = no
+					from_ruler_family = no
+					NOT = { is_ruler = yes }
+					NOT = { has_variable = betrothed_to_char }
+					trigger_if = { limit = { scope:mplay_home_country = { var:marriage_play_want_male = 1 } }  is_male = yes }
+					trigger_else = { is_female = yes }
+				}
+				scope:mplay_home_country = { add_to_variable_list = { name = marriage_play_their_children  target = prev } }
 			}
 		}
-		LOG_line = { sys = MARRIAGE  msg = "marriage picker: their-candidate list built (opposite gender)" }
+		LOG_line = { sys = MARRIAGE  msg = "marriage picker: their-candidate lists built (adults + children, opposite gender)" }
 	}
 }
