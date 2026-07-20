@@ -158,6 +158,34 @@ into microstates. It is neither over-fragmented (no cadastral explosion) nor ove
 principalities are distinct). Exactly the "major princes kept, Kleinstaaten at their real 1-province
 grain" the operator asked for. No edit.
 
+### 2026-07-20 — CORRECTION: NSW (New South Wales) — a settler-colony anachronism my republic-filter MISSED
+**Honest note on a filter hole.** My first anachronism sweep keyed on GOVERNMENT TYPE = republic (that
+is how the 6 South-American juntas were found). NSW is a `viceroyalty`, so it slipped through — as would
+any post-1763 *settler colony* that is not a republic. That was an oversight (operator flagged it).
+- **NSW** held Sydney/Newcastle/Bathurst/Launceston/Hobart (`anglo_antipodean`, cap Sydney). New South
+  Wales was founded **1788** (Cook's Botany Bay landfall 1770) — it does not exist at a 1763 start.
+- **FIX:** emptied NSW (inert-tag playbook: 0 cores, capital repointed to GBR London 3388). Its 5
+  provinces revert to **unowned Aboriginal land** (culture-only, per the stateless-peoples rule — the
+  province cultures are already pama/nyungan/palawa/minor_aboriginal/aboriginal). Not wired to any arc
+  (only generic countryname/currency helpers) → inert-fold safe. Invariant gate clean.
+- The interior of Australia was ALREADY correct (unowned, Aboriginal cultures applied); NSW was the sole
+  settler stray. So "add Aboriginal tags to Australia" is correctly a NON-action — stateless peoples get
+  culture, not a tag; the fix was removing the anachronistic colony, not adding tags.
+
+### 2026-07-20 — BROADENED SWEEP: founding-date check on every live tag (not just republics)
+Re-swept all 613 live tags by settler-culture / 19c-nation name (not government type), to close the hole
+NSW exposed. Findings:
+- **NSW** — fixed above (only genuine settler anachronism in australasia/n_zealand/polynesia; the 10 NZ
+  Maori iwi + Hawaii/HWI are legitimate 1763 polities).
+- **CPC Cape Colony** — Dutch VOC Cape founded **1652** → legitimately exists in 1763. NO CHANGE.
+- **LCA / UCA (Lower/Upper Canada)** — the NAMES are 1791 (Constitutional Act), but the TERRITORY is
+  correct: the St. Lawrence valley (Quebec/Montreal) + Ontario shore were **British after the 1763
+  Treaty of Paris**. Same telescoped-identity convention the mod uses elsewhere (tag label early, owner
+  correct). BORDERLINE — flagged, NOT folded, because the land genuinely was European-held in 1763.
+- **SRB Serbia** — `absolute_principality` at Belgrade; in 1763 this is Ottoman territory (autonomous
+  Serbia is 1817). BORDERLINE/likely-anachronistic but 13 cores in the Ottoman Balkans; flagged for a
+  later Balkans pass rather than folded blind (needs the Ottoman-core reconciliation to avoid a hole).
+
 ### 2026-07-20 — DEFERRED (documented, not a blind fix): USA at a 1763 start
 The single largest raw anachronism is **USA** — a `constitutional_republic` governed from Washington
 holding all **173 Thirteen-Colonies seaboard provinces**, when in 1763 those are British (GBR). This is
