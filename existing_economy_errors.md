@@ -20,13 +20,25 @@ candidate against **git HEAD**, because parts of this log predate fixes already 
 | 417  | `Unexpected token: is_triggered_only` (event files) | **STALE** — event files brace-balanced at HEAD |
 | ~270 | `Failed to read key reference octere/liburnian` + `Unexpected token: secondary` | pre-existing, OUT OF SCOPE (C) |
 
-## A) ECON_LOG_production_snapshot flood (1866 lines) — STALE, no action
-Log points at `ECON_LOG_production_snapshot line: 8/9` doing `change_variable` on an empty var. In the
-CURRENT `se_ECON_LOG.txt` (fixed by commit 6b2c4d9f6, `logfix #371`, 2026-07-11) lines 8/9 are the
-harmless `set_variable ... value = 0` initialisers; the `change_variable` calls moved to lines 21/22
-and now read the governorship via `save_scope_as` + `scope:x.var:` (the prev-across-`root=` empty-scope
-bug is already fixed, with a `[logfix]` comment documenting it). The log is an older build than HEAD.
-**No action** — verifying-only per the stale-log rule.
+## A) ECON_LOG_production_snapshot flood (1866 lines) — REAL BUG, FIXED (my earlier "stale" call was WRONG)
+**Correction.** I first dismissed this as stale (claiming the log predated the 2026-07-11 fix 6b2c4d9f6).
+The operator corrected me: the log is from a **2026-07-19** build, which CONTAINS that fix — so the error
+is genuinely still firing, and the July-11 fix was INCOMPLETE. Root cause found by reading the scope, not
+the line numbers:
+- `ECON_LOG_production_snapshot` runs inside `every_country` (oa_wealth_changes.txt:166), so `this` = the
+  iterated country and `root` = the on_action origin — DIFFERENT scopes.
+- The temp vars were INITIALISED with `set_variable` on bare `this` (relative lines 8-9) but INCREMENTED
+  with `change_variable` inside `root = {}` (lines 21-22). change_variable on root hit a var that was only
+  ever set on `this` → "Variable not of the 'value' scope type. Type: empty", ~1860 lines/session.
+- The July-11 fix only corrected the READ idiom (`prev.var:` → `scope:x.var:`) on the increment line and
+  never noticed init-scope ≠ modify-scope.
+- Comment-stripped relative line 8/9 in the CURRENT file = the two `change_variable`s inside root — exactly
+  what the 07-19 log points at. (My "line 8 is now a harmless set_variable" claim used un-stripped numbers;
+  the engine reports comment-stripped positions. That error is what let me talk myself into "stale".)
+**FIX:** stage ALL temp-var ops (init, increment, cleanup) on `root` consistently — mirroring the working
+`ECON_LOG_country_snapshot` sibling. Verified the other 3 snapshot effects: `country`/`currency` are
+consistent (all-root); `jobs_snapshot` uses correct two-scope staging (accumulate on `this`, COPY to root
+temps, clean both) — NOT the same bug, left as-is.
 
 ## B) LIVE: GT_split unguarded stockpile reads (the real remaining flood) — FIX
 `GT_split_declare_sell_to_TZ_aggregate_stockpile` runs `every_tradegood_$type$_complex` (ALL trade

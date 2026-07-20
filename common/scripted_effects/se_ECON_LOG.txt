@@ -201,17 +201,21 @@ ECON_LOG_production_snapshot = {
 	# ROOT.MakeScope form (the only promptable form confirmed to work here — see the
 	# SYNTAX NOTE at the top of this file; This/Player/GuiScope forms are NOT valid).
 	# So production now has a greppable per-country line where it had none.
-	set_variable = { name = ECON_LOG_tmp_gov_count  value = 0 }
-	set_variable = { name = ECON_LOG_tmp_bonus_sum  value = 0 }
+	#
+	# [logfix #19 R2 — the REAL bug] This effect runs inside `every_country` (oa_wealth_changes.txt:166),
+	# so `this` = the iterated country while `root` = the on_action origin. The temp vars were INITIALISED
+	# on bare `this` (set_variable below) but INCREMENTED inside `root = {}` (change_variable) — two
+	# DIFFERENT scopes. So change_variable hit a var that was never set on root -> "Variable not of the
+	# 'value' scope type. Type: empty", ~1860 lines/session. The July-11 fix corrected only the READ idiom
+	# (prev.var -> scope:x.var) and never noticed init-scope != modify-scope. Fix: stage ALL temp-var ops
+	# (init, increment, cleanup) on ROOT consistently — exactly what the working ECON_LOG_country_snapshot
+	# above does. The per-governorship value is still read via the proven scope:x.var: idiom (se_SELL.txt:1569).
+	root = {
+		set_variable = { name = ECON_LOG_tmp_gov_count  value = 0 }
+		set_variable = { name = ECON_LOG_tmp_bonus_sum  value = 0 }
+	}
 	every_governorships = {
 		limit = { has_variable = industrialisation_bonus_cached }
-		# [logfix] `prev` is NOT preserved across the ABSOLUTE `root =` jump (contrast the
-		# working `owner = { add = prev.var:... }` in se_SELL.txt:1124, where owner is a
-		# RELATIVE link so prev = this governorship). Here prev resolved to an empty scope,
-		# so `prev.var:industrialisation_bonus_cached` was empty -> change_variable threw
-		# "Variable not of the 'value' scope type. Type: empty" (1860 lines/session). Save the
-		# governorship as a scope first, then read it back inside root via the proven
-		# scope:x.var: value-read idiom (se_SELL.txt:1569).
 		save_scope_as = econ_log_snapshot_gov
 		root = {
 			change_variable = { name = ECON_LOG_tmp_gov_count  add = 1 }
@@ -222,6 +226,8 @@ ECON_LOG_production_snapshot = {
 		sys = ECON
 		msg = " governorships_producing= summed_industrialisation_bonus="
 	}
-	remove_variable = ECON_LOG_tmp_gov_count
-	remove_variable = ECON_LOG_tmp_bonus_sum
+	root = {
+		remove_variable = ECON_LOG_tmp_gov_count
+		remove_variable = ECON_LOG_tmp_bonus_sum
+	}
 }
