@@ -1,0 +1,89 @@
+########################################################################
+# qing_mandate_events.txt — [#23 §2b Cluster A 2026-07-20] MANDATE OF HEAVEN disaster events.
+#
+# Design: DESIGN_qing_vanilla_layering.md §2b Cluster A. Each disaster event picks an affected
+# province, applies a LOCAL economic scar (a province modifier), calls the shared qing_mandate_omen
+# effect (se_QING_MANDATE.txt) for the vanilla legitimacy/stability judgement, and offers the ruler a
+# RELIEF-vs-NEGLECT choice: spend treasury to soften the scar + recover legitimacy (荒政 relief), or
+# save the silver at a legitimacy/stability cost (Heaven's displeasure deepens).
+#
+# PILOT: qing_mandate.1 — a great city fire (火災). is_triggered_only; dispatched as a RARE roll from
+# the existing QING_DECLINE_pulse under the shared quarterly court-event throttle (qing_gc_event_slot_
+# used), so it never floods and never double-fires with another court event the same quarter.
+# food/storms/comet/natural_disasters are DEFERRED (design doc) — each will be another .N here.
+#
+# ROOT = c:CHI (the pulse is CHI-only). se_LOG sys = QING. No create_character / add_trait / sorting
+# iterator — nothing in the boot-crash catalogue. STATIC-VERIFIED ONLY (no boot this session).
+########################################################################
+
+namespace = qing_mandate
+
+########################################################################
+# .1  A GREAT CITY FIRE (火災). Strikes a random owned CHI city; the timber-and-paper cities of the
+# Qing burned catastrophically (e.g. the recurring fires of the capital wards). The blaze is a local
+# economic scar + a Mandate omen; the throne chooses relief or thrift.
+########################################################################
+qing_mandate.1 = {
+	type = country_event
+	title = "qing_mandate.1.t"
+	desc = "qing_mandate.1.desc"
+	picture = natural_disaster  # proven-valid event picture (common/event_pictures)
+
+	left_portrait = root.current_ruler
+
+	is_triggered_only = yes
+
+	# pick the struck province: a random owned CHI city (metropolis/city rank burns worst). Saved as
+	# scope:qing_fire_prov so both the immediate scar and the option effects address the same place.
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_mandate.1 (city fire 火災) for" }
+		if = {
+			limit = {
+				any_owned_province = {
+					has_city_status = yes
+					NOT = { has_province_modifier = qing_fire_devastation }
+				}
+			}
+			random_owned_province = {
+				limit = {
+					has_city_status = yes
+					NOT = { has_province_modifier = qing_fire_devastation }
+				}
+				save_scope_as = qing_fire_prov
+				# the immediate local scar (1-year rebuild); relief (option a) shortens nothing but
+				# adds recovery on top, neglect (option b) extends it.
+				add_province_modifier = { name = qing_fire_devastation  duration = 365 }
+			}
+			# the Mandate judgement: a great city fire is a MAJOR omen (severity 2).
+			qing_mandate_omen = { severity = 2 }
+		}
+	}
+
+	# --- 荒政 RELIEF: open the granaries and treasury to rebuild ----------------------------------
+	# Spend silver to soften the blow: recover legitimacy (a caring throne answers Heaven's warning)
+	# and shorten the local scar. Gated on affording it.
+	option = {
+		name = "qing_mandate.1.a"
+		trigger = { treasury >= 80 }
+		custom_tooltip = "qing_mandate.1.a.tt"
+		add_treasury = -80
+		add_legitimacy = 5
+		add_stability = 1
+		if = {
+			limit = { exists = scope:qing_fire_prov }
+			scope:qing_fire_prov = {
+				# relief lifts the scar early (replace the 1-year modifier with a short 90-day tail).
+				if = { limit = { has_province_modifier = qing_fire_devastation }  remove_province_modifier = qing_fire_devastation }
+				add_province_modifier = { name = qing_fire_devastation  duration = 90 }
+			}
+		}
+	}
+
+	# --- THRIFT: spare the treasury, let the ward rebuild itself -----------------------------------
+	# Save the silver, but a neglected calamity deepens Heaven's displeasure (further legitimacy dip).
+	option = {
+		name = "qing_mandate.1.b"
+		custom_tooltip = "qing_mandate.1.b.tt"
+		add_legitimacy = -4
+	}
+}
