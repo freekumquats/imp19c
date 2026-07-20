@@ -44,7 +44,8 @@ Upstream ports (c87e8156b, 6e0c11604) NOT in scope for this test per user.
 - Symptom: the new "Suppress Missions" button is misaligned and off-center in the
   Mission Stations window.
 - File (likely): gui/qing_province_reports.gui.
-- Status: OPEN, uninvestigated.
+- Status: FIXED + USER-VERIFIED (commit 52900ff8c). Button wrapped in an expanding
+  margin_widget. Confirmed correct on boot.
 
 ### BT-C: Governor Corps list includes non-governors (Ministry of Personnel)
 - Symptom: the Governor Corps list under the Ministry of Personnel includes
@@ -56,7 +57,8 @@ Upstream ports (c87e8156b, 6e0c11604) NOT in scope for this test per user.
 - Symptom: the Ministry of Works panel displays Yellow River Dikes, Grand Canal
   Depots, and Ever-Normal Granaries, but their NUMBERS sit too far to the LEFT;
   they should be on the RIGHT, aligned with all the other numbers.
-- Status: OPEN, uninvestigated.
+- Status: FIXED + USER-VERIFIED (commit 52900ff8c). Dikes/Depots/Granaries labels
+  widened 200->284 so counts align at x~308 with the other columns. Confirmed on boot.
 
 ### BT-E: Royal Marriage button misaligned on country diplomatic view (#12, REGRESSION)
 - Symptom: the Royal Marriage button is badly misaligned on the country diplomatic
@@ -128,7 +130,7 @@ Upstream ports (c87e8156b, 6e0c11604) NOT in scope for this test per user.
   fix = NOT has_variable qing_is_harem_consort in both builders). Regressed OR the fix
   did not cover the "updated Diplomat Corps list" path. Check both the appoint picker
   builder AND the corps-list builder for the harem-consort exclusion.
-- Status: ROOT-CAUSED + FIXED (pending review/boot). User clarified the sequence: appoint a
+- Status: FIXED + USER-VERIFIED (commits 2e57cd07e + 62e451ba3). User clarified the sequence: appoint a
   VALID candidate, then the Diplomat Corps roster back-fills with HAREM WOMEN "replacing" diplomats.
   ROOT CAUSE: the corps AUTO-FILL. QING_subpost_staff_corps (se_QING_SUBPOSTS.txt:149) tops the
   diplomat corps up to target=4 via QING_subpost_fill_one, whose ordered_character picks by
