@@ -190,3 +190,41 @@ Investigation (operator asked whether to implement real external/internal trade)
   zero runtime cost/behaviour, 136 warnings gone. Confirmed the sibling
   `PURCHASE_get_preferred_tradezone_external` does NOT throw the warning precisely because it references
   `$tradegood$` in its body — validating the diagnosis. Brace delta 0.
+
+## J) Trade-system PERF cluster — INVESTIGATED (2026-07-20), verdict: NO safe cheap win
+Operator asked to investigate the se_GLOBALTRADE_split.txt perf items. Measured the actual cost of
+`GT_split_do_global_trade_split` (called 8×/quarter, once per good-type — food/luxury/luxury_2/3/4/5/6):
+
+1. **"Reset explosion"** — `GT_split_reset_global_TZ_variables` zeroes ~133 global vars/good (6 accumulator
+   families × 22 tradezones + extras). Across 61 goods that is ~8,100 `set_global_variable`/quarter.
+   BUT: it is called ONCE per type (NOT per country — it sits above the every_country block), and every
+   one of those globals is an ACCUMULATOR (`change_global_variable add=` all tick), so it MUST be zeroed
+   each quarter. **Not removable, not redundant** — it's inherent to an accumulator design. No safe win.
+
+2. **"Repeated every_country{every_governorship{}} passes"** — there are 5 such passes per type-driver.
+   They are separated by HARD DATA BARRIERS: each pass feeds a global aggregation (sum_all_TZ_stockpiles,
+   get_global_import_unit_price, sum_all_TZ_orders, scale_order_size, do_shipping_costs) that needs ALL of
+   the prior pass's per-gov output before the next pass can run. This is a genuine map→reduce→map→reduce
+   pipeline; the passes CANNOT be naively fused (that is precisely why they are split). Fusing would be a
+   correctness regression (reading a global mid-accumulation), the same class as the A2 trap. No safe win.
+
+3. **"goods-vs-trade_goods drift"** — FALSE ALARM. A set-diff shows 23 injector goods (steel, clothing,
+   chemicals, munitions, …) absent from common/trade_goods/, but those are MANUFACTURED goods handled by
+   the DEMAND/GOODS machinery (DEMAND_svalues.txt et al.), not undefined-var drift. The reverse list
+   (amber, cotton, whales, plus non-goods country/province/color) is regex noise / goods simply not
+   globally traded. No consistency bug.
+
+**VERDICT: the trade-cluster perf items are either inherent (reset accumulators), structurally necessary
+(barrier-separated passes), or false alarms (manufactured-goods "drift").** There is no low/med-risk perf
+win here — any real speedup (e.g. collapsing the per-good iteration, or a gross-production cache) is a
+net-new caching layer with the SAME consumed-vs-gross correctness trap that closed A2, plus it touches
+the live hot trade loop. Recommend NOT pursuing under the "low-med risk only" rule. The residual
+manufactured-good `X_stockpile not set` log lines (e.g. luxury_clothing, 22 lines) are the SAME unset-
+stockpile class already guarded by fixes B (GT_split) and D (DEMAND_luxury) this session.
+
+## Industry A2 — CLOSED / WONTFIX (do not reopen)
+Recorded here for completeness: A2 was investigated twice and BOTH framings proven counterproductive
+(switch-binned rewrite = mis-framed; "point 255 sites at var:X_stockpile" = correctness regression, since
+X_stockpile is consumed inventory not gross production, already tried+reverted for food goods). A2 is
+closed; the only "fix" would be a net-new gross-production cache + per-site semantic audit — not worth it.
+See memory [[imp19c-economy-audit-backlog]].
