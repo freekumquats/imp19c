@@ -78,3 +78,24 @@ return, then reconciled into the CSV.
   or unused placeholders — NOT land to assign. Left UNOWNED/UNNAMED; excluded from tag work.
 - **Stateless peoples:** culture/population only, no tag (Aboriginal, San, Papuan interior, many
   Amazonian/Siberian peoples).
+
+### 2026-07-20 — Tag inventory (before reconciliation)
+Audited the existing tag inventory so reconciliation prefers REVIVE over CREATE:
+- 675 registered tags (setup/countries/countries.txt); 619 have ≥1 core; **56 are INERT** (registered
+  + have a country file, but own ZERO provinces in setup). Inert sample: ABA ALC ATQ BAR BGK BIK CAN
+  CDM CLO CSC DAG FKE FLK GIB GRE GUJ HEL HRP ILL IND JPN KTK KWA KYR LFY LGS LOG MAS MER MIC MIL MRG
+  MSC MSI MSP MZH NGR NNN NWC PIR … (full list to be dumped when reconciling).
+- 680 country files exist under setup/countries/*/ (incl. many Native tags: blackfoot, arapaho, caddo,
+  bannock, assinibone, apacheria, alta_california …) — several are the inert ones.
+- **Reconciliation move-types**, in order of safety/preference:
+  1. REVIVE an inert tag (tag + country file + culture already exist → just add a setup block with
+     capital+cores). Lowest risk.
+  2. UPDATE a live tag's cores (trim/extend) — e.g. the DIN→DNE carve.
+  3. CREATE a new tag (register + country file + setup block + maybe culture) — for polities with no
+     existing tag.
+  4. REMOVE/empty a tag whose 1763 existence is an anachronism (inert-tag playbook).
+  5. LEAVE culture-only (stateless peoples) — province culture/pops, no tag.
+- Province NAMES are non-unique: 365 names shared by >1 province (e.g. two "Nelson", three "San
+  Cristobal", many "Atlantic"/"The Outback"). Reconciliation MUST disambiguate by region, never assign
+  by name alone. (This is the trap behind my earlier false "Navajo in New Zealand" alarm — 7745 Nelson
+  BC vs 8241 Nelson.)
