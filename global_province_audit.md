@@ -67,3 +67,14 @@ my "no geography" deferral premise was false. Both errors corrected; the audit p
 ### Regional research — dispatched (in progress)
 Agents fired per region to establish 1763 ground truth with sources. Results appended below as they
 return, then reconciled into the CSV.
+
+## Scope exceptions & rules
+- **HRE abstraction (operator):** the Holy Roman Empire may be modelled at a REASONABLE level of
+  abstraction — do NOT shatter it into a million microstates. Keep the major territorial princes
+  (Austria, Prussia, Bavaria, Saxony, Hanover, Württemberg, the big ecclesiastical/imperial cities,
+  etc.) and abstract the tiny Kleinstaaten into their nearest significant neighbour or a reasonable
+  aggregate. Historical plausibility at the great-power/major-principality grain, not cadastral.
+- **Sea/placeholder provinces:** rows named "Atlantic", "Strait of …", "PROV####" etc. are sea zones
+  or unused placeholders — NOT land to assign. Left UNOWNED/UNNAMED; excluded from tag work.
+- **Stateless peoples:** culture/population only, no tag (Aboriginal, San, Papuan interior, many
+  Amazonian/Siberian peoples).
