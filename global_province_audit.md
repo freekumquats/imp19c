@@ -64,9 +64,20 @@ That was wrong — it conflated the checker's self-consistency result (capital�
 correct geographic placement (never verified). The province geography WAS available (provincenames loc);
 my "no geography" deferral premise was false. Both errors corrected; the audit proceeds properly.
 
-### Regional research — dispatched (in progress)
-Agents fired per region to establish 1763 ground truth with sources. Results appended below as they
-return, then reconciled into the CSV.
+### Regional research — COMPLETE (6 of 6)
+All six regional agents returned; reports committed under `audit_worklists/research/`. Reconciled into
+the CSV via `setup/main/fill_ownership_audit.py` (see 2026-07-20 entries below).
+
+### CSV — POPULATED (deliverable complete)
+`PROVINCE_OWNERSHIP_1763.csv` (13,281 rows) now has every research column filled:
+- **8,602 OWNED** — owner_tag_1763 = validated current owner (base map is 1763-converted), name from
+  the tag's country-file, justification keyed to the region's research report. Confidence: high.
+- **173 USA → GBR** — the only owner divergence; historically British in 1763, left as USA by design
+  (AI Civil War arc). Marked FLAG-DEFERRED in the justification + confidence columns.
+- **2,589 UNOWNED(named)** — stateless/uncolonised zones (culture-only). Confidence: medium.
+- **1,917 UNNAMED-placeholder** — sea/wasteland/unused. Marked n/a.
+Regenerate: `build_ownership_audit.py` (skeleton from live setup) then `fill_ownership_audit.py`
+(research columns). Idempotent; re-run after any setup ownership edit so current_owner_tag stays fresh.
 
 ## Scope exceptions & rules
 - **HRE abstraction (operator):** the Holy Roman Empire may be modelled at a REASONABLE level of
