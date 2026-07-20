@@ -228,3 +228,25 @@ Recorded here for completeness: A2 was investigated twice and BOTH framings prov
 X_stockpile is consumed inventory not gross production, already tried+reverted for food goods). A2 is
 closed; the only "fix" would be a net-new gross-production cache + per-site semantic audit — not worth it.
 See memory [[imp19c-economy-audit-backlog]].
+
+## G-RESOLVED) piechart_update 'none'-type (96 lines) — CONFIRMED downstream of fix D, NOT a separate bug
+Deep investigation (operator asked). Chain: piechart_update.2 -> every_tradegood_complex -> APPLY
+TRADE_order_consumers -> (rel line 11) `ordered_country { limit = { DEMAND_country_$tradegood$ > 0 } }`.
+The error "Value of wrong type ... Got 'none'" means DEMAND_country_$tradegood$ resolved to none.
+- DEMAND_country_X (DEMAND_svalues.txt) = `every_governorships { add = DEMAND_X }`. All 61 iterated goods
+  HAVE this svalue (0 missing), so the none is INTERNAL to DEMAND_X.
+- Traced the 16 erroring goods by their hypercomplex line numbers (233..329): alcohol, gems, opium,
+  tobacco, maize, porcelain, sweet_potato, potato, peanut, chili, coffee, tea, spices, sugar,
+  luxury_clothing, luxury_furniture — **ALL luxury/manufactured goods** whose DEMAND_X lives in
+  DEMAND_luxury_svalues.txt.
+- DEMAND_alcohol (etc.) = the SAME svalues I guarded in fix D. Pre-fix: `value = var:DEMAND_luxury_alcohol`
+  read UNSET -> svalue returns none -> DEMAND_country_alcohol (sum) none -> `> 0` gets none -> the piechart
+  error. Post-fix D: the read falls back to `else = DEMAND_luxury_base_total` (a real number; verified
+  base_total + DEMAND_elasticity_impact + the currency multipliers are all none-safe), so the whole chain
+  resolves numerically.
+- The 16 erroring goods are a SUBSET of the 17 fix-D-guarded goods (only chocolate absent — it had 0
+  demand this session so didn't error; guarded anyway). **EXACT match -> the piechart 'none' is a pure
+  downstream symptom of the unset-luxury-cache reads fix D already resolves.**
+**VERDICT: NOT a separate open item. Fix D (DEMAND_luxury_svalues has_variable guards, committed
+fd56c2352) eliminates the root none; the piechart error should be gone on the next boot. No new code
+needed. Boot-pending confirmation like the rest of #19.**
