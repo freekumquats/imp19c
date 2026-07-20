@@ -171,7 +171,23 @@ Upstream ports (c87e8156b, 6e0c11604) NOT in scope for this test per user.
 - Symptom: naval commanders do NOT have the Military Presented Scholar (武舉/wu_ju) trait,
   though garrison commanders do (BT-O). The grant path evidently covers land/garrison
   commanders but misses naval commanders.
-- Status: OPEN, uninvestigated.
+- ROOT-CAUSED + FIXED (pending review/boot): TIMING. The martial grant lives in
+  qing_force_setup.1 (day 30); the navies raise in qing_force_setup.11 (day 31). At day 30
+  no admiral exists, so is_admiral matched nobody. FIX: added the guarded admiral grant to
+  qing_force_setup.11 (after SE_qing_navy_* raise the fleets), same remove-civil-first idiom.
+
+### EXAM-TRAIT CLUSTER FIXES (BT-N/O/P) — pending review/boot
+- BT-O (military trait icon = placeholder): trait icons resolve by file convention
+  gfx/interface/icons/traits/<key>.dds. Civil shengyuan/juren/gongshi/jinshi have .dds;
+  hanlin/fanyi_jinshi + all four wu_* (added #48) had NONE -> placeholder. FIX: created the
+  6 missing .dds from the rank-appropriate existing degree art (stopgap real art, not the
+  engine placeholder; bespoke martial icons can replace later). wu_shengyuan<-shengyuan,
+  wu_juren<-juren, wu_jinshi/wu_zhuangyuan/hanlin/fanyi_jinshi<-jinshi.
+- BT-N (War/Guard show civil Presented Scholar): the day-30 grant did bare add_trait=wu_jinshi
+  on a man already holding civil jinshi; relying on opposite-resolution to strip the civil
+  trait was unreliable. FIX: remove_trait the held civil degree FIRST, then add_trait wu_jinshi
+  (proven Invictus idiom for swapping mutually-exclusive status traits).
+- All: brace-balanced, UTF-8 valid, 6 new .dds are real 56x56 DXT3.
 
 ### BT-Q: Vanilla succession/heir-favoring mechanics not cross-referenced with Qing succession
 - Symptom/design gap: vanilla has succession mechanics where characters (governors,
