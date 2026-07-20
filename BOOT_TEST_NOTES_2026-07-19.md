@@ -3,6 +3,12 @@
 Branch: 1763_bookmark. Test target: PERF-AUDIT merge (46353a75f / cb8e3aa6d).
 Upstream ports (c87e8156b, 6e0c11604) NOT in scope for this test per user.
 
+## CONFIRMED-CLEAN BASE (user boot tests)
+- PERF-AUDIT merge (46353a75f) BOOTS clean.
+- Upstream ports (c87e8156b + 6e0c11604) BOOT clean (user confirmed).
+=> The next boot test is STRICTLY against this session's bugfixes (BT-A/B/D + any further).
+   A crash on the next test is attributable to a bugfix, not to the merge/ports.
+
 ## HEADLINE RESULT
 - **PERF-AUDIT merge BOOTS — no crash.** Crash question: PASS.
 - Boot surfaced pre-existing FUNCTIONAL regressions (below). None are in files the
@@ -122,7 +128,18 @@ Upstream ports (c87e8156b, 6e0c11604) NOT in scope for this test per user.
   fix = NOT has_variable qing_is_harem_consort in both builders). Regressed OR the fix
   did not cover the "updated Diplomat Corps list" path. Check both the appoint picker
   builder AND the corps-list builder for the harem-consort exclusion.
-- Status: OPEN, uninvestigated. USER CONFIRMED: issue was NOT fixed (not a new regression).
+- Status: ROOT-CAUSED + FIXED (pending review/boot). User clarified the sequence: appoint a
+  VALID candidate, then the Diplomat Corps roster back-fills with HAREM WOMEN "replacing" diplomats.
+  ROOT CAUSE: the corps AUTO-FILL. QING_subpost_staff_corps (se_QING_SUBPOSTS.txt:149) tops the
+  diplomat corps up to target=4 via QING_subpost_fill_one, whose ordered_character picks by
+  QING_subpost_eligible_candidate -> QING_office_eligible_candidate, which had NO harem-consort
+  exclusion. So the auto-fill stamped qing_zongli_diplomat on the ablest "eligible" courtier — a
+  consort qualified — and she showed in the corps. The #8 candidate-builder exclusions
+  (se_QING_COUNCIL.txt:928/1011) never covered this auto-fill path.
+  FIX (2 edits): (1) add NOT={has_variable=qing_is_harem_consort} to QING_office_eligible_candidate
+  (qing_dynasty_triggers.txt) — the shared base gate, closing appoint picker + council autofill +
+  corps auto-fill at once; (2) add consort to the QING_subpost_staff_corps release-sweep strip so a
+  consort already holding a marker (pre-fix save) is stripped + the seat refilled (self-healing).
 
 ### BT-M: "Take a Court Woman as Consort" picker should be age-sorted (youngest first)
 - Symptom: the candidate list in the Take-a-Consort picker is unsorted; it should be
