@@ -88,6 +88,32 @@ QING_subpost_fill_one = {
 # engine `while` counts only a literal, not a var) — the ministry corps caps are small
 # (target 4, cap 6), so a fixed ladder of guarded fills is clean and bounded.
 # ======================================================================
+QING_subpost_strip_double_booked = {
+	# [diplomat=commander fix R2 2026-07-20] STRIP-ONLY reconcile: remove the corps marker from any
+	# member who has taken a role that breaks the 1:1 court-position rule (army/navy commander,
+	# provincial governor, a Grand Council great office, or — legacy — a harem consort), and leave the
+	# count reflecting the survivors. This is the un-double-booking half of QING_subpost_staff_corps,
+	# split out so the quarterly sweep can run it UNGATED (the fill half stays gated on a serving
+	# director). Country scope (ROOT = CHI). Params: $marker$, $count$. No fill, so it never conjures
+	# staff for a headless ministry — it only ever REMOVES a clash. Same merged single-pass shape as
+	# QING_subpost_staff_corps's recount (PERF-AUDIT M1): recount from scratch, dropping the disqualified.
+	set_variable = { name = $count$  value = 0 }
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			has_variable = $marker$
+		}
+		if = {
+			limit = { OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_office_held  has_variable = qing_is_harem_consort } }
+			remove_variable = $marker$
+		}
+		else = {
+			ROOT = { change_variable = { name = $count$  add = 1 } }
+		}
+	}
+}
+
 QING_subpost_staff_corps = {
 	# LIVE recount: rebuild the count from the marker so stale seats (holder dead / left
 	# CHI employ / promoted to a great office) read vacant and get refilled. The
@@ -170,6 +196,20 @@ QING_subpost_seed_gamestart = {
 QING_subpost_refill_sweep = {
 	if = {
 		limit = { tag = CHI }
+		# [diplomat=commander fix R2 2026-07-20] STRIP the double-booked FIRST, UNGATED — every quarter,
+		# regardless of whether the office has a director. The reported "diplomats are also commanders"
+		# clash RE-FORMS after game start whenever a sitting diplomat/censor/guardsman is later given an
+		# army/navy command (by the player or the AI): the day-30/31 OOB reconcile cleans the initial
+		# clash, but the ONLY ongoing reconcile was this sweep — and it was wholly gated on the office
+		# being filled. At a 1763 start the Zongli Yamen (an 1861 institution) has NO director, so the
+		# sweep never ran and the re-formed double-booking was never cleaned. The STRIP (un-double-book)
+		# must be unconditional; only the FILL-to-target should wait for a director (a headless ministry
+		# conjures no new staff, but it must not keep a commander on its rolls either).
+		# QING_subpost_strip_double_booked = strip-only (the every_character marker-removal pass, no fill).
+		QING_subpost_strip_double_booked = { marker = qing_zongli_diplomat        count = qing_zongli_diplomat_count }
+		QING_subpost_strip_double_booked = { marker = qing_is_censor_inspector    count = qing_censor_inspector_count }
+		QING_subpost_strip_double_booked = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count }
+		# FILL to establishment — only while the relevant office has a serving director.
 		# diplomats — only while the Zongli Yamen has a Director.
 		if = {
 			limit = {
