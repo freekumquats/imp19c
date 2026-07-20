@@ -1987,6 +1987,14 @@ QING_DECLINE_roll_reaction = {
 # ======================================================================
 QING_DECLINE_granary_pool = {
 	LOG_enter = { sys = QING  fn = "QING_DECLINE_granary_pool" }
+	# [PERF-AUDIT 2026-07-18 M2] GATE this whole-CHI every_country_state grain sweep to a ~180-day cadence.
+	# It formerly ran every DECLINE pulse (~90d); the ever-normal reserve moves grain slowly and the derived
+	# qing_granary_stock / _capacity vars PERSIST in the save between runs, so every consumer (famine gate,
+	# pop-pressure, ministry perf, canal, GUI) keeps reading the last-computed values — a half-year cadence
+	# halves the sweep cost with only a modest lag in relief timing. Self-throttle cooldown idiom.
+	if = {
+		limit = { NOT = { has_variable = qing_granary_pool_cd } }
+		set_variable = { name = qing_granary_pool_cd  days = 180 }
 	# the reserve CAP = the real ever-normal granary capacity: count * the building's 200 food_capacity.
 	# qing_granary_count is maintained by the Works sweep (se_QING_MINISTRY:497). [review-fix] that sweep
 	# runs in QING_GOV_pulse, which fires AFTER QING_DECLINE_pulse in 00_monthly_country.txt — so this
@@ -2119,6 +2127,7 @@ QING_DECLINE_granary_pool = {
 	set_variable = { name = qing_granary_capacity  value = var:qing_granary_cap_tmp }
 	remove_variable = qing_granary_cap_tmp
 	LOG_line = { sys = QING  msg = "granary: ever-normal pool moved real food; stock derived from pooled grain / capacity for" }
+	}   # [M2] close the ~180-day cadence gate opened at the top of the effect.
 	LOG_exit = { sys = QING  fn = "QING_DECLINE_granary_pool"  result = OK }
 }
 

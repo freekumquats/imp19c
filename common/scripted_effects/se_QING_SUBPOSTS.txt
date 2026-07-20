@@ -104,19 +104,26 @@ QING_subpost_staff_corps = {
 	# bug: Zongli diplomats who are also commanders). Strip the sub-post marker from any such man FIRST
 	# so he reads as a vacancy below and the seat refills with a free civilian courtier. (office-holders
 	# already have their marker stripped at seating by QING_office_appoint; guarded here too.)
+	# [PERF-AUDIT 2026-07-18 M1] MERGED the former two global every_character passes (strip-then-recount)
+	# into ONE pass over the world's characters. Per member holding the marker: if he has since taken a
+	# disqualifying role (commander / governor / great-office holder) strip the marker and DO NOT count him;
+	# otherwise count him. Behaviour-equivalent to the old two passes (the old strip removed the marker from
+	# every qing_office_held man BEFORE the recount, so the recount's NOT=qing_office_held guard was redundant
+	# once the strip had run) at half the global-iterator cost.
+	set_variable = { name = $count$  value = 0 }
 	every_character = {
 		limit = {
 			employer = ROOT
 			is_alive = yes
 			has_variable = $marker$
-			OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_office_held }
 		}
-		remove_variable = $marker$
-	}
-	set_variable = { name = $count$  value = 0 }
-	every_character = {
-		limit = { employer = ROOT  is_alive = yes  has_variable = $marker$  NOT = { has_variable = qing_office_held } }
-		ROOT = { change_variable = { name = $count$  add = 1 } }
+		if = {
+			limit = { OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_office_held } }
+			remove_variable = $marker$
+		}
+		else = {
+			ROOT = { change_variable = { name = $count$  add = 1 } }
+		}
 	}
 	# fill up to $target$ — one guarded seat per rung (at most 4 rungs; a small select corps).
 	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one = { marker = $marker$  count = $count$ } }

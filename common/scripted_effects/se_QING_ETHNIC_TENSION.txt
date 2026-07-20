@@ -69,35 +69,41 @@ QING_ethnic_tension_pulse = {
 			QING_ethnic_tension_snowball_province = yes
 		}
 
-		# STEP 3: where tension crosses an ERUPTION threshold (>= 80), seed a
-		# revolt. Only provinces that have not already revolted this cycle.
+		# STEP 3+4 (MERGED): [PERF-AUDIT 2026-07-18 M4] the ERUPTION pass (tension >= 80) and the
+		# COOLDOWN-CLEAR pass (tension < 70) operate on DISJOINT province sets — no province is both
+		# >= 80 and < 70 — so they fold into ONE every_owned_province walk with an if/else_if, saving a
+		# whole global province iteration per pulse with zero behavioural change.
+		# NOTE (audit correction): STEP 1 and STEP 2 CANNOT join this merge. STEP 2 (snowball) reads a
+		# province's own tension then writes its NEIGHBOURS' — it requires STEP 1 to have finished for ALL
+		# provinces first (a barrier), and STEP 3 must see STEP 2's spillover before testing the eruption
+		# threshold. Only the disjoint 3+4 are safe to combine; the "4→1" scope was over-optimistic.
+		#
+		# STEP 3: where tension crosses an ERUPTION threshold (>= 80), seed a revolt. Only provinces
+		# that have not already revolted this cycle.
+		# STEP 4: [#107 review-fix] CLEAR the eruption cooldown for provinces whose tension has since
+		# fallen back below the eruption threshold (< 70, the snowball floor). Without this the
+		# qing_prov_ethnic_revolted flag was NEVER cleared, degrading the recurring-revolt engine into a
+		# per-province one-shot.
 		every_owned_province = {
 			limit = {
 				is_sea = no
-				total_population > 0
 				has_variable = qing_prov_ethnic_tension
-				var:qing_prov_ethnic_tension >= 80
-				NOT = { has_variable = qing_prov_ethnic_revolted }
 			}
-			QING_ethnic_tension_erupt_province = yes
-		}
-
-		# STEP 4: [#107 review-fix] CLEAR the eruption cooldown for provinces whose
-		# tension has since fallen back below the eruption threshold. Without this the
-		# qing_prov_ethnic_revolted flag (set in STEP 3) was NEVER cleared — the only
-		# clearing effect had zero callers — so any province could erupt exactly once
-		# and was then permanently locked out of re-eruption, degrading the recurring-
-		# revolt engine into a per-province one-shot. Gate the clear on tension having
-		# genuinely subsided (< 70, the snowball floor) so a still-boiling province is
-		# not immediately re-armed the same quarter it was suppressed.
-		every_owned_province = {
-			limit = {
-				is_sea = no
-				has_variable = qing_prov_ethnic_revolted
-				has_variable = qing_prov_ethnic_tension
-				var:qing_prov_ethnic_tension < 70
+			if = {
+				limit = {
+					total_population > 0
+					var:qing_prov_ethnic_tension >= 80
+					NOT = { has_variable = qing_prov_ethnic_revolted }
+				}
+				QING_ethnic_tension_erupt_province = yes
 			}
-			QING_ethnic_tension_clear_revolt_flag = yes
+			else_if = {
+				limit = {
+					has_variable = qing_prov_ethnic_revolted
+					var:qing_prov_ethnic_tension < 70
+				}
+				QING_ethnic_tension_clear_revolt_flag = yes
+			}
 		}
 
 		LOG_exit = { sys = QING  fn = "QING_ethnic_tension_pulse"  result = OK }
