@@ -241,3 +241,23 @@ IDs classified; all decisions recorded; setup edits invariant-gated + brace/BOM-
 - No new TAGs created: every polity the reports flagged as tag-worthy already exists in the base map
   (Osage/OSG, Comanche/COM, Mapuche butalmapu, Miskito/MSK, etc.), so CREATE was never the right move —
   REVIVE/VALIDATE/inert-fold covered the real gaps.
+
+### 2026-07-20 — Contents assessment (pops / cultures / religions / trade goods)
+Extended the audit to province CONTENTS → `PROVINCE_CONTENTS_1763.csv` (all 13,281 rows:
+id, name, owner, rank, culture, religion, trade_goods, total_pops, note). Findings:
+- **Static integrity clean:** all trade_goods valid vs common/trade_goods; all culture/religion values
+  valid (the 5 "unknown" from a first pass — ojibwe-potawatomi, kam-sui, tshu-kwe, khoi-san — are real
+  HYPHENATED keys, a regex false-positive, verified defined+used consistently).
+- **Buildings: N/A in static setup.** setup/building_list.txt is empty; buildings are generated
+  in-game (buildings_generator.py is a CSV→block tool). Nothing to assess/seed statically.
+- **`roman_pantheon` (29 provinces):** all are lakes / salt flats / sea placeholders (Titicaca, Dead
+  Sea, Baikal, Great Salt Lake, Balkhash, Lough Neagh, PROV####) — vanilla I:R default religion on
+  UNINHABITED water/wasteland. Cosmetic, in the "not land to assign" class. LEFT AS-IS.
+- **`rifles`/`oil`/`rubber`/`porcelain` trade goods:** INTENDED, not anachronisms. Per the design
+  comment in 00_imp19c.txt, rifles+porcelain are deliberate Self-Strengthening/Jingdezhen goods
+  (category-4, raw-style); oil/rubber are part of the Victorian-TC roster. The mod telescopes 19th-c.
+  economics onto the 1763 map by design (same principle as the USA/Civil-War arc). NO strip.
+- **841 owned-but-0-pop provinces:** normal frontier/empty tiles (mostly California under Newe/Shoshone
+  and Saharan/steppe interior). Not a defect.
+Total map population ≈ 194,162 pops across 13,281 provinces. Verdict: contents are 1763-consistent
+within the mod's telescoped-era design; no content edits warranted beyond the ownership fixes already made.
