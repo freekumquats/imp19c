@@ -99,3 +99,51 @@ Audited the existing tag inventory so reconciliation prefers REVIVE over CREATE:
   Cristobal", many "Atlantic"/"The Outback"). Reconciliation MUST disambiguate by region, never assign
   by name alone. (This is the trap behind my earlier false "Navajo in New Zealand" alarm — 7745 Nelson
   BC vs 8241 Nelson.)
+
+### 2026-07-20 — All 6 regional research reports captured
+All six regional 1763 ground-truth reports are committed under `audit_worklists/research/`:
+europe, asia_middleeast, africa, oceania_sea_maghreb, north_america, latin_america. Each classifies
+polities → TAG vs culture-only with academic sources and flags anachronisms.
+
+### 2026-07-20 — KEY FINDING: the base map is ALREADY substantially converted to 1763
+Cross-checking the 619 live owner tags against the six reports shows the setup was already
+purpose-built for a 1763 start, NOT a 19th-c. map. Confirmations:
+- **No independent nation-states/republics** where 1763 had colonies/empires: Latin America is
+  viceroyalties (SPA/NSP/BRZ/SFB/CHR/QTO/CPV/VNZ), not republics; the Ottoman TUR holds the Balkans +
+  Levant + Maghreb core; India is EIC + native princely tags; no Italy/Germany unification.
+- **The flagged N. America anachronisms are already fixed:** ALC (Alta California, colonised 1769) and
+  RUA (Russian America, settled 1784) are both INERT (0 cores, capital repointed) — matching
+  [[imp19c-1763-border-audit-done]]. Miskito (MSK) sits correctly on the Mosquito Coast; the Mapuche
+  butalmapu are modelled (LFQ Lafquenmapu@Temuco, INP Inapiremapu, plus LFP/PMO). DIN/DNE carve done.
+- **VNZ** already carries a `[bookmark-1763 #232]` note: "1763 Venezuela is a Spanish colony … NOT
+  Bolivar's 1810s revolutionary republic" — the established convention for folding independence-era
+  tags back into the Spanish structure.
+So the audit's job is NOT a mass rebuild; it is (a) recording the per-province verdict in the CSV and
+(b) catching the residual anachronisms the earlier passes missed.
+
+### 2026-07-20 — Batch: 6 South-American independence-junta anachronisms folded (inert-tag playbook)
+Government-type scan for live republics surfaced 6 genuine 1763 anachronisms — all `revolutionary_republic`,
+1 province each, no ruler/char, in no arc/event (verified via rg over events/ + common/):
+- **AYP Ayopaya, LRC Larecaja, LAG Chuquisaca, SCZ Santa Cruz de la Sierra, VLG Vallegrande** — the
+  1809–25 Upper-Peru independence juntas. In 1763 all are the Spanish **Audiencia de Charcas**
+  (seat Chuquisaca/La Plata). → absorbed their 5 provinces into **CHR**; emptied each junta (0 cores,
+  capital repointed to CHR's 1532 La Plata).
+- **VLL Valledupar** — 1810s New-Granadan junta; in 1763 Spanish New Granada. → 5900 folded into
+  **SFB**; VLL emptied, capital repointed to SFB's 5677 Santa Marta.
+- Source: standard Spanish-American independence chronology (juntas all post-1809; Charcas & New
+  Granada firmly Bourbon Spanish in 1763). Consistent with the existing VNZ #232 convention.
+- Invariant gate: 0 new ownerless capitals, 0 new double-owned; inert-tags 10→16. Brace delta 0.
+  No set_as_ruler/create_character on any of the 6 → no construction-crash class.
+
+### 2026-07-20 — DEFERRED (documented, not a blind fix): USA at a 1763 start
+The single largest raw anachronism is **USA** — a `constitutional_republic` governed from Washington
+holding all **173 Thirteen-Colonies seaboard provinces**, when in 1763 those are British (GBR). This is
+NOT a safe flip: the USA tag is the load-bearing anchor of the **AI-autonomous US sectional-crisis →
+Civil War arc** (task #93, `se_USA_SECTION.txt` / `usa_section_on_actions.txt`), which seeds state on
+`c:USA` at `on_game_initialized` with NO is_ai guard specifically so it runs for an AI USA. Emptying
+USA→GBR would be historically correct for 1763 but would break a deliberately-built subsystem the mod
+depends on — the same telescoped-anachronism design that lets the player run late-Qing mechanics at a
+1763 start. This is a genuine design contradiction (historical accuracy vs. a wired gameplay arc), so
+per the mandate it is DEFERRED and recorded here rather than fixed blind. Resolving it properly would
+mean either (a) a startup transform that hands the 13 colonies to GBR and spawns USA later on the
+independence beat, or (b) accepting the anachronism as intended. Needs an operator call + boot.
