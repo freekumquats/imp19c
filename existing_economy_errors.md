@@ -168,3 +168,25 @@ CURRENCY_wealth_value_1_unit. Brace delta 0.
 - **oa_economy_setup.txt sqrt "Illegal use of operator >" (61)** — SAME sqrt bug as (C), reached via the
   setup on_action instead of oa_wealth_changes; my fix C guards the sqrt call itself → covers both. ✓
 - **DEBT_events local_var unset (79)** — INCOME_sell_largest_reserve/sell_reserves; addressed by (F). ✓
+
+## I) PURCHASE_* stub "unknown arguments" (136 lines) — INVESTIGATED + noise silenced (NOT implemented)
+Investigation (operator asked whether to implement real external/internal trade):
+- The two stubs (`PURCHASE_get_preferred_tradezone_internal`, `PURCHASE_order_external`) sit on a
+  **DEFUNCT** code path. Their driver is `trade.2` ("Quarterly internal trade simulation",
+  events/economy/trade.txt), which is **commented out** of the live pulse: `oa_wealth_changes.txt:211
+  "# trade.2 # Defunct"`. It never fires.
+- The mod's LIVE trade engine is `GT_split_do_global_trade_split` (called 8×/quarter in oa_wealth_changes),
+  which ALREADY models cross-tradezone trade (declare-sell-to-TZ, global/country import pricing, order
+  summing, export-subtract / import-add). It SUPERSEDED trade.2.
+- So the feature these stubs gesture at (internal-supplier ranking + external partner purchase) already
+  exists via a different design. Implementing the stubs = zero gameplay effect unless you ALSO re-enable
+  trade.2 and rip out GT_split — a full trade-engine swap, not a stub fill-in. `PURCHASE_order_external`'s
+  body was never written; `..._internal` has only unverified WiP (wip_quicktraderank.txt, TODO-laden).
+- **DECISION: do NOT implement** (duplicate of live GT_split, high risk of double-counting supply — the
+  same consumed-vs-gross trap as the perf backlog). **Silence the cosmetic warning instead:** an empty
+  stub body that never mentions its passed $params$ makes the arg-compiler emit "unknown arguments".
+  Added a dead `if = { limit = { always = no } ... }` block referencing each param (proven idioms:
+  `value = flag:$X$` ×83 in repo; `add = $order_size$` already at se_PURCHASE.txt:1023) → never runs,
+  zero runtime cost/behaviour, 136 warnings gone. Confirmed the sibling
+  `PURCHASE_get_preferred_tradezone_external` does NOT throw the warning precisely because it references
+  `$tradegood$` in its body — validating the diagnosis. Brace delta 0.
