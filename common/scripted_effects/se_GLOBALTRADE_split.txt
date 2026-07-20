@@ -753,6 +753,16 @@ GT_split_declare_sell_amount = {
 	}
 	if = {
 		limit = {
+			# [logfix #19] guard the stockpile read: GOODS_setup_governorship_stockpiles
+			# only sets var:$tradegood$_stockpile for goods the governorship PRODUCES
+			# (raw goods behind has_variable = produces_X). This effect iterates EVERY
+			# tradegood, so an unproduced good's stockpile var is unset -> reading it threw
+			# "Event target link 'var' returned an unset scope" / "Invalid left side during
+			# comparison 'var'" / "Type: empty" once per (governorship x non-produced good)
+			# = the ~4000-line oa_wealth_changes flood (#19). Unset stockpile == produced 0,
+			# which is never > DEMAND, so skipping is behaviour-exact (for_sale_$tradegood$
+			# stays at the 0 default set just above).
+			has_variable = $tradegood$_stockpile
 			var:$tradegood$_stockpile > DEMAND_$tradegood$
 		}
 		set_variable = {
@@ -2084,6 +2094,16 @@ GT_split_create_order_tradegood = {
 	}
 	if = {
 		limit = {
+			# [logfix #19] guard the stockpile read (see GT_split_declare_sell_amount).
+			# var:$tradegood$_stockpile is only set for goods the governorship PRODUCES;
+			# iterating every tradegood reads it unset for non-produced goods -> the
+			# unset-scope / empty-type flood. When unset, the engine already evaluated
+			# this comparison as false (error->false), so no order was submitted and
+			# order_size_$tradegood$ stayed at the 0 default; the guard reproduces that
+			# outcome EXACTLY (limit false -> skip) without the error. (Whether a
+			# non-producing governorship SHOULD raise a buy order is a separate design
+			# question, deliberately not changed here.)
+			has_variable = $tradegood$_stockpile
 			var:$tradegood$_stockpile < DEMAND_$tradegood$
 		}
 		set_variable = {
@@ -2662,12 +2682,22 @@ GT_split_get_global_import_unit_price_tradegood = {
 	# operator: it takes a named `input = <value>` arg and returns local_var:result. The old call passed a
 	# bare `global_var:...` with no input= key, so the compiler read `sqrt` as an unknown effect (error.log:
 	# "Compiling source for sqrt failed for unknown arguments: global_var:..., set_global_variable, name, value").
-	sqrt = {
-		input = global_var:global_base_import_price_$tradegood$
-	}
-	set_global_variable = {
-		name = global_base_import_price_$tradegood$
-		value = local_var:result
+	# [logfix #19] Only run sqrt when the base price is > 0. For a good with no global trade the summed
+	# base price is 0 (or the TZ price vars were unset), and Tobbzn's Newton-method sqrt then iterates on
+	# an empty/zero `condition`, throwing "Illegal use of operator >" at its while-limit (sqrt line 27),
+	# ~157 lines/session. sqrt(0)=0 and the global already holds 0, so skipping is value-exact; guarding
+	# HERE (call site) rather than inside the shared sqrt primitive keeps the blast radius to this caller.
+	if = {
+		limit = {
+			global_var:global_base_import_price_$tradegood$ > 0
+		}
+		sqrt = {
+			input = global_var:global_base_import_price_$tradegood$
+		}
+		set_global_variable = {
+			name = global_base_import_price_$tradegood$
+			value = local_var:result
+		}
 	}
 }
 
