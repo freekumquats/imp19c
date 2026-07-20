@@ -146,7 +146,11 @@ Upstream ports (c87e8156b, 6e0c11604) NOT in scope for this test per user.
   sorted by AGE, youngest first.
 - File (likely): the harem take-consort picker builder (QING_harem_* refresh effect
   feeding qing_harem_candidates) + gui/imp19c_windows.gui qing_harem_take_window.
-- Status: OPEN, uninvestigated.
+- Status: ABANDONED (user decision 2026-07-19). True youngest-first needs either an
+  ordered_character order_by=age sorting iterator (the #443/#9 compile-inline boot-crash
+  class in the scripted_gui Execute path — QING_harem_refresh already trampolines its
+  ordered_character through qing_harem.3 for exactly this reason) or age-band multi-pass
+  plumbing (as BT-F did). Not worth the churn for a cosmetic sort on this picker. WON'T FIX.
 
 ### BT-N: Minister of War & Commandant of the Guard have civil Presented Scholar trait (#5, NOT fixed)
 - Symptom: the Minister of War and Commandant of the Guard STILL carry the civil
