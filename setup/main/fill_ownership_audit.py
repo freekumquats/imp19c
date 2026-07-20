@@ -56,34 +56,38 @@ def tag_name(tag):
     return base.title()
 
 def tag_region(tag):
+    # path is setup/countries/<region>/<file>.txt  -> region is index 2
     p = tagfile.get(tag)
-    return p.split("/")[1] if p and len(p.split("/")) > 2 else "?"
+    parts = p.split("/") if p else []
+    return parts[2] if len(parts) >= 4 else "?"
 
-# region folder -> (report file, one-line grounding). Reports live in audit_worklists/research/.
+# region folder (setup/countries/<region>/) -> (report file, one-line grounding).
+# Folder set verified against setup/countries.txt on 2026-07-20. Reports in audit_worklists/research/.
 REGION_SRC = {
-    "w_europe":   ("europe_1763.md",              "W. Europe 1763 state system (Treaty of Paris settlement)"),
-    "c_europe":   ("europe_1763.md",              "Central Europe / HRE 1763 (abstracted per operator HRE rule)"),
-    "e_europe":   ("europe_1763.md",              "E. Europe 1763 (Russia/PLC/Ottoman partition-era borders)"),
-    "s_europe":   ("europe_1763.md",              "S. Europe 1763 (Iberia/Italy pre-unification states)"),
-    "n_europe":   ("europe_1763.md",              "N. Europe / Scandinavia 1763"),
-    "britain":    ("europe_1763.md",              "British Isles 1763"),
-    "c_asia":     ("asia_middleeast_1763.md",     "Central Asia 1763 (khanates / Qing frontier)"),
-    "e_asia":     ("asia_middleeast_1763.md",     "East Asia 1763 (Qing empire + tributaries)"),
-    "s_asia":     ("asia_middleeast_1763.md",     "South Asia 1763 (post-Mughal successor + EIC)"),
-    "se_asia":    ("oceania_sea_maghreb_1763.md", "Mainland/maritime SE Asia 1763"),
-    "m_archipelago": ("oceania_sea_maghreb_1763.md", "Maritime SE Asia archipelago 1763 (sultanates + VOC)"),
-    "mid_east":   ("asia_middleeast_1763.md",     "Middle East 1763 (Ottoman/Persian spheres)"),
-    "persia":     ("asia_middleeast_1763.md",     "Persia 1763 (Zand/Afsharid successor era)"),
-    "n_africa":   ("oceania_sea_maghreb_1763.md", "N. Africa / Maghreb 1763 (Ottoman regencies + Morocco)"),
-    "w_africa":   ("africa_1763.md",              "West Africa 1763 (Asante/Oyo/Dahomey + Sahelian states)"),
-    "e_africa":   ("africa_1763.md",              "East Africa 1763 (Ethiopia/Swahili coast/interlacustrine)"),
-    "c_africa":   ("africa_1763.md",              "Central Africa 1763 (Kongo/Lunda/Luba)"),
-    "s_africa":   ("africa_1763.md",              "Southern Africa 1763 (Cape + Bantu polities)"),
-    "n_america":  ("north_america_1763.md",       "North America 1763 (post-Paris colonies + Native nations)"),
-    "s_america":  ("latin_america_1763.md",       "Latin America 1763 (Spanish viceroyalties / Portuguese Brazil)"),
-    "n_zealand":  ("oceania_sea_maghreb_1763.md", "Aotearoa/NZ 1763 (Maori iwi)"),
-    "oceania":    ("oceania_sea_maghreb_1763.md", "Oceania 1763 (Pacific polities)"),
-    "?":          (None,                          "region unclassified"),
+    "w_europe":      ("europe_1763.md",              "W. Europe 1763 state system (Treaty of Paris settlement)"),
+    "c_europe":      ("europe_1763.md",              "Central Europe / HRE 1763 (abstracted per operator HRE rule)"),
+    "e_europe":      ("europe_1763.md",              "E. Europe 1763 (Russia / Poland-Lithuania partition-era)"),
+    "italy":         ("europe_1763.md",              "Italy 1763 (pre-unification states + republics)"),
+    "scandinavia":   ("europe_1763.md",              "Scandinavia 1763 (Sweden/Denmark-Norway)"),
+    "caucasus":      ("asia_middleeast_1763.md",     "Caucasus 1763 (Ottoman/Persian frontier khanates + Georgia)"),
+    "c_asia":        ("asia_middleeast_1763.md",     "Central Asia 1763 (khanates / Qing frontier)"),
+    "e_asia":        ("asia_middleeast_1763.md",     "East Asia 1763 (Qing empire + tributaries)"),
+    "japan":         ("asia_middleeast_1763.md",     "Japan 1763 (Tokugawa bakuhan domains)"),
+    "india":         ("asia_middleeast_1763.md",     "South Asia 1763 (post-Mughal successors + EIC)"),
+    "indo_china":    ("oceania_sea_maghreb_1763.md", "Mainland SE Asia 1763 (Burma/Siam/Vietnam/Khmer)"),
+    "m_archipelago": ("oceania_sea_maghreb_1763.md", "Maritime SE Asia 1763 (sultanates + VOC)"),
+    "m_east":        ("asia_middleeast_1763.md",     "Middle East 1763 (Ottoman / Persian / Arabian spheres)"),
+    "n_africa":      ("oceania_sea_maghreb_1763.md", "N. Africa / Maghreb 1763 (Ottoman regencies + Morocco)"),
+    "w_africa":      ("africa_1763.md",              "West Africa 1763 (Asante/Oyo/Dahomey + Sahelian states)"),
+    "e_africa":      ("africa_1763.md",              "East Africa 1763 (Ethiopia / Swahili coast / interlacustrine)"),
+    "c_africa":      ("africa_1763.md",              "Central Africa 1763 (Kongo / Lunda / Luba)"),
+    "s_africa":      ("africa_1763.md",              "Southern Africa 1763 (Cape + Bantu polities)"),
+    "n_america":     ("north_america_1763.md",       "North America 1763 (post-Paris colonies + Native nations)"),
+    "s_america":     ("latin_america_1763.md",       "Latin America 1763 (Spanish viceroyalties / Portuguese Brazil)"),
+    "n_zealand":     ("oceania_sea_maghreb_1763.md", "Aotearoa/NZ 1763 (Maori iwi)"),
+    "australasia":   ("oceania_sea_maghreb_1763.md", "Australia 1763 (pre-colonial; Aboriginal — culture-only)"),
+    "polynesia":     ("oceania_sea_maghreb_1763.md", "Polynesia 1763 (Pacific island polities)"),
+    "?":             (None,                          "region unclassified"),
 }
 
 # Explicit overrides for KNOWN divergences (province-id -> (owner_tag, name, justification, confidence)).
