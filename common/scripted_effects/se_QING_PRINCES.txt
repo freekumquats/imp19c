@@ -368,3 +368,36 @@ QING_princes_reopen = {
 	}
 	LOG_exit = { sys = QING  fn = "QING_princes_reopen"  result = OK }
 }
+
+# ======================================================================
+# [#23 §1c BT-Q 2026-07-20] RE-ASSERT / HEAL THE SEAL after a ruling-family death.
+# The 秘密立儲 seal (QING_princes_seal_succession) rests entirely on the vanilla
+# nominated_heir_modifier (support_for_character_as_heir = 50, duration = -1 permanent):
+# vanilla recalc_succession respects that +50 and keeps re-picking the sealed heir, so a
+# later recalc does NOT silently overwrite him — the modifier does its job. The ONE gap is
+# a STALE seal: if the sealed heir DIES, the permanent modifier dies with him, but the
+# qing_secret_succession_sealed FLAG persists — and the accession (qing_succession.2) reads
+# only that flag, so it would deliver a "smooth sealed transfer" to a sealed heir who no
+# longer exists. This heals that: if the flag is set but NO living character holds the
+# nominated_heir_modifier, the seal is broken — clear the stale flag and reopen the jockeying
+# (the correct state: the throne must re-designate). Idempotent no-op when the seal is intact
+# (living holder exists) or was never sealed. Does NOT touch recalc_succession — vanilla's
+# +50 handling is left to run. Country scope (ROOT = CHI). Fired from on_character_death.
+# ======================================================================
+QING_princes_reassert_seal = {
+	if = {
+		limit = {
+			has_variable = qing_secret_succession_sealed
+			# seal is BROKEN if no living character still carries the nominee modifier
+			NOT = { any_character = { has_triggered_character_modifier = nominated_heir_modifier } }
+		}
+		LOG_line = { sys = QING  msg = "princes: sealed heir lost (died) — seal broken, reopening the succession for" }
+		remove_variable = qing_secret_succession_sealed
+		set_variable = { name = qing_succession_jockeying  value = 1 }
+		# a broken seal is a shock to the house: mild legitimacy + harmony hit (less than the
+		# deliberate 廢儲 reopen, which is a political act; this is an accident of mortality).
+		add_legitimacy = -4
+		QING_dynasty_harmony_nudge = { amount = -3 }
+		QING_seat_refresh_all = yes
+	}
+}
