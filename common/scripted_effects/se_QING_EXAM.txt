@@ -566,3 +566,40 @@ QING_exam_pool_remove_on_death = {
 		}
 	}
 }
+
+########################################################################
+# QING_grant_martial_degree — [BT-N fix 2026-07-20] stamp the martial 進士 (wu_jinshi) on the
+# CURRENT character, stripping any held CIVIL exam degree first. Scope: CHARACTER (the office holder).
+#
+# WHY A SHARED HELPER: the martial-office exam congruence (War Minister 兵部, Guard Commandant
+# 領侍衛內大臣, and field/naval commanders) must read as 武科 laureates, not civil 進士. The grant was
+# previously duplicated inline in qing_force_setup.1/.11 (one-shot day-30/31 events); because the
+# war/guard SEATS ROTATE, later holders never got it (BT-N). It is now also called per-appointment
+# via the qing_office.41 runtime trampoline (qing_office_events.txt) fired by QING_office_appoint.
+#
+# SELF-GUARD: no-op if the character already holds ANY wuju rank (so re-seating a laureate, or a
+# commander who already earned his degree, does nothing). STRIP-THEN-ADD: remove any held civil
+# degree explicitly before add_trait — the proven Invictus mutually-exclusive-status swap idiom
+# (opposite-resolution alone proved unreliable here). MUST run at RUNTIME only (add_trait on the
+# trait/opposites machinery access-violates at gamestate construction — see se_QING_COUNCIL.txt
+# ~1284); every caller is a deferred/runtime path (day-30 event, or the qing_office.41 trampoline).
+########################################################################
+QING_grant_martial_degree = {
+	if = {
+		limit = {
+			NOT = { has_trait = wu_shengyuan }
+			NOT = { has_trait = wu_juren }
+			NOT = { has_trait = wu_jinshi }
+			NOT = { has_trait = wu_zhuangyuan }
+		}
+		if = { limit = { has_trait = shengyuan }     remove_trait = shengyuan }
+		if = { limit = { has_trait = juren }         remove_trait = juren }
+		if = { limit = { has_trait = gongshi }       remove_trait = gongshi }
+		if = { limit = { has_trait = jinshi }        remove_trait = jinshi }
+		if = { limit = { has_trait = hanlin }        remove_trait = hanlin }
+		if = { limit = { has_trait = fanyi_jinshi }  remove_trait = fanyi_jinshi }
+		if = { limit = { has_trait = jiansheng }     remove_trait = jiansheng }
+		add_trait = wu_jinshi
+		LOG_line = { sys = QING  msg = "martial-office exam congruence: granted 武進士 to" }
+	}
+}

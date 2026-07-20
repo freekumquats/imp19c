@@ -73,69 +73,27 @@ qing_force_setup.1 = {
 			#       Presented Scholar. Grant 武進士 (wu_jinshi) to any such man lacking a wuju degree.
 			# Does NOT strip a civil degree beyond the trait's own opposite-resolution; skips men who
 			# already hold a wuju rank. is_general/is_admiral = proven commander triggers.
-			every_character = {
-				limit = {
-					employer = ROOT
-					is_alive = yes
-					OR = {
-						is_general = yes
-						is_admiral = yes
-						AND = {
-							has_variable = qing_office_held
-							OR = { var:qing_office_held = flag:war  var:qing_office_held = flag:guard_commandant }
+				# [BT-N fix 2026-07-20] Grant the martial degree (武進士) to the serving field/naval COMMANDERS +
+				# the two martial-office holders present at day 30, via the shared QING_grant_martial_degree helper
+				# (se_QING_EXAM.txt: strip-civil-then-add, self-guarded on already-holding-a-wuju-rank). The War/Guard
+				# SEATS also get it on every later re-seating via the qing_office.41 trampoline (QING_office_appoint),
+				# which fixes the rotation gap that left post-day-30 holders civil (BT-N). Runtime event, so add_trait
+				# stays off the construction path.
+				every_character = {
+					limit = {
+						employer = ROOT
+						is_alive = yes
+						OR = {
+							is_general = yes
+							is_admiral = yes
+							AND = {
+								has_variable = qing_office_held
+								OR = { var:qing_office_held = flag:war  var:qing_office_held = flag:guard_commandant }
+							}
 						}
 					}
-					NOT = { has_trait = wu_shengyuan }
-					NOT = { has_trait = wu_juren }
-					NOT = { has_trait = wu_jinshi }
-					NOT = { has_trait = wu_zhuangyuan }
+					QING_grant_martial_degree = yes
 				}
-				# [BT-N fix 2026-07-19] REMOVE any held civil exam degree FIRST, then grant the martial one.
-				# wu_jinshi lists the civil degrees as opposites, but relying on the engine's opposite-
-				# resolution to strip the held civil trait on add_trait proved unreliable here (the War
-				# Minister / Guard Commandant kept showing the civil Presented Scholar). Proven idiom
-				# (Invictus 00_event_effects_inv_1_0.txt:4312+ swaps mutually-exclusive status traits via
-				# remove_trait-then-add_trait) is to strip explicitly. A martial official should read as a
-				# 武科 laureate, so dropping his civil degree here is intended.
-				# [BT-N DIAGNOSTIC 2026-07-19 — REMOVE after the War/Guard grant is fixed] name who matched
-				# and via which branch, then whether wu_jinshi actually stuck after add_trait.
-				save_scope_as = btn_grantee
-				if = { limit = { is_general = yes }  LOG_line = { sys = QING  msg = "BT-N grant MATCH via is_general: [scope:btn_grantee.GetName]" } }
-				if = { limit = { is_admiral = yes }  LOG_line = { sys = QING  msg = "BT-N grant MATCH via is_admiral: [scope:btn_grantee.GetName]" } }
-				if = { limit = { has_variable = qing_office_held  var:qing_office_held = flag:war }               LOG_line = { sys = QING  msg = "BT-N grant MATCH via office=war: [scope:btn_grantee.GetName]" } }
-				if = { limit = { has_variable = qing_office_held  var:qing_office_held = flag:guard_commandant }   LOG_line = { sys = QING  msg = "BT-N grant MATCH via office=guard_commandant: [scope:btn_grantee.GetName]" } }
-				if = { limit = { has_trait = shengyuan }     remove_trait = shengyuan }
-				if = { limit = { has_trait = juren }         remove_trait = juren }
-				if = { limit = { has_trait = gongshi }       remove_trait = gongshi }
-				if = { limit = { has_trait = jinshi }        remove_trait = jinshi }
-				if = { limit = { has_trait = hanlin }        remove_trait = hanlin }
-				if = { limit = { has_trait = fanyi_jinshi }  remove_trait = fanyi_jinshi }
-				if = { limit = { has_trait = jiansheng }     remove_trait = jiansheng }
-				add_trait = wu_jinshi
-				# [BT-N DIAGNOSTIC] did it stick?
-				if = { limit = { has_trait = wu_jinshi }         LOG_line = { sys = QING  msg = "BT-N post-grant: wu_jinshi STUCK on [scope:btn_grantee.GetName]" } }
-				if = { limit = { NOT = { has_trait = wu_jinshi } }  LOG_line = { sys = QING  msg = "BT-N post-grant: wu_jinshi FAILED TO STICK on [scope:btn_grantee.GetName]" } }
-			}
-			# [BT-N DIAGNOSTIC] independently name the two martial-office HOLDERS (via the country holder
-			# vars, the robust pointer) and report their current degree trait — this reveals whether the
-			# every_character grant even reached them (Guard Commandant reportedly kept the civil degree).
-			if = {
-				limit = { has_variable = qing_office_war_holder }
-				var:qing_office_war_holder = {
-					save_scope_as = btn_war
-					if = { limit = { has_trait = wu_jinshi }  LOG_line = { sys = QING  msg = "BT-N WAR holder [scope:btn_war.GetName] has wu_jinshi" } }
-					if = { limit = { has_trait = jinshi }     LOG_line = { sys = QING  msg = "BT-N WAR holder [scope:btn_war.GetName] STILL has civil jinshi" } }
-				}
-			}
-			if = {
-				limit = { has_variable = qing_office_guard_commandant_holder }
-				var:qing_office_guard_commandant_holder = {
-					save_scope_as = btn_guard
-					if = { limit = { has_trait = wu_jinshi }  LOG_line = { sys = QING  msg = "BT-N GUARD holder [scope:btn_guard.GetName] has wu_jinshi" } }
-					if = { limit = { has_trait = jinshi }     LOG_line = { sys = QING  msg = "BT-N GUARD holder [scope:btn_guard.GetName] STILL has civil jinshi" } }
-					if = { limit = { NOT = { is_general = yes }  NOT = { is_admiral = yes }  NOT = { AND = { has_variable = qing_office_held  OR = { var:qing_office_held = flag:war  var:qing_office_held = flag:guard_commandant } } } }  LOG_line = { sys = QING  msg = "BT-N GUARD holder [scope:btn_guard.GetName] would NOT match the grant limit (no general/admiral/office flag)" } }
-				}
-			}
 		}
 	}
 }
@@ -175,29 +133,18 @@ qing_force_setup.11 = {
 		SE_qing_navy_guangdong = yes
 		SE_qing_navy_fujian = yes
 		SE_qing_navy_zhejiang = yes
-		# [BT-P fix 2026-07-19] grant the martial exam degree (武進士) to the NAVAL commanders the three
-		# squadrons above just created. This MUST be here, not in qing_force_setup.1: the land grant runs
-		# at day 30 but the navies raise at day 31 (this event), so at day 30 no admiral exists yet and
-		# is_admiral matched nobody — naval commanders were left with no martial degree (BT-P). Same
-		# remove-civil-first idiom as the day-30 land grant (BT-N). CHI-only (ROOT = c:CHI here).
+		# [BT-P fix 2026-07-19; BT-N refactor 2026-07-20] grant the martial degree to the NAVAL commanders
+		# the three squadrons above just created. This MUST be here, not in qing_force_setup.1: the land
+		# grant runs at day 30 but the navies raise at day 31 (this event), so at day 30 no admiral exists
+		# yet and is_admiral matched nobody — naval commanders were left with no martial degree (BT-P).
+		# Now via the shared QING_grant_martial_degree helper (se_QING_EXAM.txt). CHI-only (ROOT = c:CHI).
 		every_character = {
 			limit = {
 				employer = ROOT
 				is_alive = yes
 				is_admiral = yes
-				NOT = { has_trait = wu_shengyuan }
-				NOT = { has_trait = wu_juren }
-				NOT = { has_trait = wu_jinshi }
-				NOT = { has_trait = wu_zhuangyuan }
 			}
-			if = { limit = { has_trait = shengyuan }     remove_trait = shengyuan }
-			if = { limit = { has_trait = juren }         remove_trait = juren }
-			if = { limit = { has_trait = gongshi }       remove_trait = gongshi }
-			if = { limit = { has_trait = jinshi }        remove_trait = jinshi }
-			if = { limit = { has_trait = hanlin }        remove_trait = hanlin }
-			if = { limit = { has_trait = fanyi_jinshi }  remove_trait = fanyi_jinshi }
-			if = { limit = { has_trait = jiansheng }     remove_trait = jiansheng }
-			add_trait = wu_jinshi
+			QING_grant_martial_degree = yes
 		}
 	}
 }
