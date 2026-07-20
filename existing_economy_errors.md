@@ -92,3 +92,34 @@ inside the shared sqrt primitive) to keep blast radius to this one caller. Brace
 Together these target the dominant LIVE economy flood families (~1900 GT_split + 180 DEMAND_luxury +
 157 sqrt lines). The single largest raw count (1866 ECON_LOG lines) was already fixed 2026-07-11 (stale
 in this log). No high-risk perf work touched.
+
+## F) LIVE: INCOME_sell_largest_reserve unset reserve vars (84 lines) — FIX
+`INCOME_mitigate_deficit` (se_INCOME.txt, fired from DEBT_events.txt) falls back to
+`INCOME_sell_largest_reserve` when the currency is not clearly gold/silver-standard. That effect
+computes `local_var:gold_reserve_value_greater_than_silver` from `var:gold_reserve_size`,
+`var:silver_reserve_size` × the global metal prices. A country with **no reserves** has neither
+reserve_size var set, so the value never computes → the local var is unset → line 612's `> 0`
+comparison threw "Invalid left side during comparison 'local_var'" / "returned an unset scope"
+("gold_reserve_value_greater_than_silver" / "silver_needed_for_deficit" not set).
+**FIX:** wrap the whole body in `if = { limit = { OR = { has_variable gold_reserve_size, silver_reserve_size } } ... }`
+(sell only when a reserve exists — else nothing to sell, deficit handled elsewhere next tick), and inside
+treat a missing reserve as size 0 via `l_gold/l_silver_reserve_size` locals so the comparison is always
+well-defined. Used the proven `if/OR/has_variable/local_var` idiom — NOT `return = yes` (that verb is
+unused anywhere in this codebase / not an Imperator effect; introducing it would be a NEW error).
+Brace delta 0.
+
+## G) ASSESSED, DEFERRED — piechart_update 'none'-type (96 lines)
+`events/piechart/piechart_update.txt:32` in `TRADE_order_consumers` reads a scriptvalue that resolves to
+type 'none' for some tradegoods (a GUI pie-chart data feed). Display-only (chart rendering), low count,
+and the fix would touch the piechart value path blind. Per the "low-med risk only" bound this is
+DEFERRED — flagged, not fixed. Likely the same unset-trade-var family; may already be reduced once the
+GT_split guards (B) stop the upstream unset-scope cascade. Re-measure after a boot.
+
+## Fixes this session (final): 5 effect groups, all low-risk / behaviour-preserving / brace delta 0
+1. GT_split_declare_sell_amount — has_variable guard on stockpile read.
+2. GT_split_create_order_tradegood — same.
+3. GT_split_get_global_import_unit_price_tradegood — sqrt only when price > 0.
+4. DEMAND_luxury_svalues.txt ×17 — local has_variable guard.
+5. INCOME_sell_largest_reserve — OR-guard on reserve existence + zero-default locals.
+DEFERRED: piechart 'none' (display, low-risk-uncertain), the ~130-file ancient-galley navy keys
+(cosmetic, out of scope), and the entire perf backlog (high-risk correctness trap).

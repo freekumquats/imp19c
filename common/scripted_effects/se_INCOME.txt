@@ -596,46 +596,65 @@ INCOME_mitigate_deficit = {
 }
 
 INCOME_sell_largest_reserve = {
-	set_local_variable = {
-		name = gold_reserve_value_greater_than_silver
-		value = {
-			value = var:gold_reserve_size
-			multiply = global_var:global_base_import_price_gold
-			subtract = {
-				value = var:silver_reserve_size
-				multiply = global_var:global_base_import_price_silver
-			}
-		}
-	}
+	# [logfix #19] A country with no precious-metal reserves has neither var:gold_reserve_size nor
+	# var:silver_reserve_size set. The value math then failed to compute, leaving
+	# local_var:gold_reserve_value_greater_than_silver unset -> the `> 0` comparison threw "Invalid left
+	# side during comparison 'local_var'" / "returned an unset scope" (DEBT_events flood via
+	# INCOME_mitigate_deficit). Wrap the whole body in a guard: only attempt to sell when at least one
+	# reserve exists (nothing to sell otherwise — the deficit is handled by the caller's other branches
+	# next tick). Inside, treat a missing reserve as size 0 so the comparison is always well-defined.
 	if = {
 		limit = {
-			local_var:gold_reserve_value_greater_than_silver > 0
-		}
-		set_local_variable = {
-			name = gold_needed_for_deficit
-			value = {
-				value = treasury # Amount of deficit
-				divide = global_var:global_base_import_price_gold
-				multiply = -1
+			OR = {
+				has_variable = gold_reserve_size
+				has_variable = silver_reserve_size
 			}
 		}
-		INCOME_sell_reserves = {
-			metal = gold
-			amount = local_var:gold_needed_for_deficit
-		}
-	}
-	else = {
+		set_local_variable = { name = l_gold_reserve_size   value = 0 }
+		set_local_variable = { name = l_silver_reserve_size value = 0 }
+		if = { limit = { has_variable = gold_reserve_size }   set_local_variable = { name = l_gold_reserve_size   value = var:gold_reserve_size } }
+		if = { limit = { has_variable = silver_reserve_size } set_local_variable = { name = l_silver_reserve_size value = var:silver_reserve_size } }
 		set_local_variable = {
-			name = silver_needed_for_deficit
+			name = gold_reserve_value_greater_than_silver
 			value = {
-				value = treasury # Amount of deficit
-				divide = global_var:global_base_import_price_silver
-				multiply = -1
+				value = local_var:l_gold_reserve_size
+				multiply = global_var:global_base_import_price_gold
+				subtract = {
+					value = local_var:l_silver_reserve_size
+					multiply = global_var:global_base_import_price_silver
+				}
 			}
 		}
-		INCOME_sell_reserves = {
-			metal = silver
-			amount = local_var:silver_needed_for_deficit
+		if = {
+			limit = {
+				local_var:gold_reserve_value_greater_than_silver > 0
+			}
+			set_local_variable = {
+				name = gold_needed_for_deficit
+				value = {
+					value = treasury # Amount of deficit
+					divide = global_var:global_base_import_price_gold
+					multiply = -1
+				}
+			}
+			INCOME_sell_reserves = {
+				metal = gold
+				amount = local_var:gold_needed_for_deficit
+			}
+		}
+		else = {
+			set_local_variable = {
+				name = silver_needed_for_deficit
+				value = {
+					value = treasury # Amount of deficit
+					divide = global_var:global_base_import_price_silver
+					multiply = -1
+				}
+			}
+			INCOME_sell_reserves = {
+				metal = silver
+				amount = local_var:silver_needed_for_deficit
+			}
 		}
 	}
 }
