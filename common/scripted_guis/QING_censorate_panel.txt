@@ -208,12 +208,18 @@ qing_censorate_impeach_selected = {
 		}
 	}
 	effect = {
-		save_scope_as = qing_censorate_target
-		scope:player = {
-			QING_censorate_impeach_uphold = yes
-			set_variable = { name = qing_censorate_impeach_cooldown  days = 90 }
-			QING_ministry_recompute_perf_censor = yes
-		}
+		# [#9 boot-crash fix] Route the impeachment through the hidden CHARACTER event qing_censorate.7
+		# (a RUNTIME trigger_event, never compile-inlined) — DO NOT call QING_censorate_impeach_uphold
+		# inline here. That effect reaches QING_office_vacate_dispatch -> QING_office_vacate, whose body
+		# fires a nested trigger_event ( qing_office.40 ), plus QING_ministry_recompute_perf_censor (an
+		# iterator-heavy recompute). A scripted_gui compile-inlines its button's entire effect chain at
+		# PARSE time, so inlining that chain into this row button reproduced the #443 EXCEPTION_ACCESS_
+		# VIOLATION load crash (same class as the guard legion iterator -> qing_guard.10 and the .5 auto-
+		# pick trampoline). The #443 class is NOT limited to sorting iterators: any nested trigger_event /
+		# office-vacate chain inlined into a button crashes the loader. The proven-booting sibling this was
+		# cloned from ( qing_justice_accuse_selected ) already routes through qing_justice.8 for exactly this
+		# reason; this now mirrors it. ROOT = the selected man; the saved player scope carries into the event.
+		trigger_event = { id = qing_censorate.7 }
 		LOG_line = { sys = QING  msg = "censorate: the venal impeached via the picker for" }
 	}
 }

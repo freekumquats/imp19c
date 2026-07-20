@@ -386,3 +386,53 @@ qing_censorate.6 = {
 		QING_censorate_refresh_venal = yes
 	}
 }
+
+# [#9 boot-crash fix] qing_censorate.7 — the IMPEACH-A-SELECTED-OFFICIAL trampoline. The picker row lever
+# qing_censorate_impeach_selected (QING_censorate_panel.txt) fires this hidden CHARACTER event instead of
+# calling QING_censorate_impeach_uphold inline: that uphold chain reaches QING_office_vacate_dispatch ->
+# QING_office_vacate (which itself fires a nested trigger_event, qing_office.40) plus the iterator-heavy
+# QING_ministry_recompute_perf_censor, and a scripted_gui compile-inlines its button's whole effect chain
+# at PARSE time — inlining that reproduced the #443 EXCEPTION_ACCESS_VIOLATION load crash (nested
+# trigger_event / office-vacate chain in a compiled button; NOT only sorting iterators). trigger_event is
+# a RUNTIME ref, never compile-inlined, so the heavy chain lives in an event unit the parser never expands.
+# Mirrors the proven qing_justice.8 charge trampoline. ROOT = the selected man; scope:player carried from
+# the row's saved_scopes. Re-guards at fire time (is_valid and the trampoline are two separate evaluations,
+# so a stale/double click must no-op rather than double-disgrace or re-spend the cooldown).
+qing_censorate.7 = {
+	type = character_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_censorate.7 (impeach-selected trampoline) [ROOT.GetTag]" }
+		if = {
+			limit = {
+				# a present Grand Inspector must still be seated + not within the impeachment cooldown,
+				# and the selected man must still be a valid target (mirror the row's is_valid gate).
+				scope:player = {
+					has_variable = qing_office_censor_holder
+					var:qing_office_censor_holder = { is_alive = yes  employer = scope:player }
+					NOT = { has_variable = qing_censorate_impeach_cooldown }
+				}
+				employer = scope:player
+				is_ruler = no
+				is_adult = yes
+				is_alive = yes
+				NOT = { has_variable = qing_rebel_foil }
+				OR = {
+					corruption >= 30
+					has_trait = corrupt
+					loyalty < 40
+				}
+			}
+			save_scope_as = qing_censorate_target
+			scope:player = {
+				QING_censorate_impeach_uphold = yes
+				set_variable = { name = qing_censorate_impeach_cooldown  days = 90 }
+				QING_ministry_recompute_perf_censor = yes
+			}
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "qing_censorate.7"  reason = "selected man no longer a valid impeachment target for" }
+		}
+	}
+}
