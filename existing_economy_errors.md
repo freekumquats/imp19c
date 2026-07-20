@@ -250,3 +250,29 @@ The error "Value of wrong type ... Got 'none'" means DEMAND_country_$tradegood$ 
 **VERDICT: NOT a separate open item. Fix D (DEMAND_luxury_svalues has_variable guards, committed
 fd56c2352) eliminates the root none; the piechart error should be gone on the next boot. No new code
 needed. Boot-pending confirmation like the rest of #19.**
+
+## REVIEW (2026-07-20, independent code-review agent) — all 6 CONFIRMED behaviour-preserving
+Cold review of the full #19 diff (checked against CURRENCY_svalues backing-type→price map, se_GOODS
+stockpile setup, engine trigger-vs-value read semantics). Verdict: all six guards behaviour-preserving,
+no new script errors, no blockers. Three notes, two actioned:
+- **#5 CURRENCY guard — hardened (ACTIONED).** Review confirmed the guard is neither too weak nor too
+  strict (new pass = strict subset of old; never blocks a would-succeed grant). Latent-invariant note:
+  the bimetallic branch read only country_unit_price_gold, safe ONLY because gold+silver prices are
+  written atomically in the same price-pass. Made it self-contained: bimetallic now requires BOTH prices
+  (its own AND branch), so it no longer depends on that atomicity invariant. Also confirmed: the
+  `else=999 # TEST` fall-through for an unrecognised backing_type is now skipped (LOG_fail) instead of
+  granting garbage — unreachable in practice (only 3 backing types), arguably an improvement.
+- **#2 GT_split comment — corrected (ACTIONED).** Guard is correct; my comment misstated the mechanism
+  (said the var is unset because of the produces_X gate; actually GOODS_setup sets raw goods with an
+  else->0, so the unset-ness is for goods the setup pass doesn't cover / before it runs). Comment
+  rewritten to the accurate mechanism. No code change.
+- **#6 third stub — investigated, NO change needed.** Review asked why PURCHASE_check_shopping_external
+  (empty body, declared params) does NOT warn while the two I guarded do. Discriminator found: the
+  warning fires on a SCOPE-REFERENCE-valued arg (order_size = scope:...var:l_order_size) passed to an
+  unreferenced param; the third stub is called with LITERAL args (tradegood = grain), which don't trip
+  it. So my always=no param-reference blocks ARE the correct fix for the two warning stubs, and the
+  third correctly needs nothing. Confirmed empirically: only the 2 scope-ref-called stubs appear in the
+  log's "unknown arguments" list.
+Review also independently re-confirmed #1 (ECON_LOG scope fix mirrors the working sibling; debug_log-gated
+so cannot alter economy), #3 (sqrt(0)=0 value-exact), #4 (INCOME reserve selection byte-identical with
+reserves present, correct no-op without).

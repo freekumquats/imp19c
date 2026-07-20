@@ -753,15 +753,17 @@ GT_split_declare_sell_amount = {
 	}
 	if = {
 		limit = {
-			# [logfix #19] guard the stockpile read: GOODS_setup_governorship_stockpiles
-			# only sets var:$tradegood$_stockpile for goods the governorship PRODUCES
-			# (raw goods behind has_variable = produces_X). This effect iterates EVERY
-			# tradegood, so an unproduced good's stockpile var is unset -> reading it threw
-			# "Event target link 'var' returned an unset scope" / "Invalid left side during
-			# comparison 'var'" / "Type: empty" once per (governorship x non-produced good)
-			# = the ~4000-line oa_wealth_changes flood (#19). Unset stockpile == produced 0,
-			# which is never > DEMAND, so skipping is behaviour-exact (for_sale_$tradegood$
-			# stays at the 0 default set just above).
+			# [logfix #19] guard the stockpile read. This effect iterates EVERY tradegood in the
+			# complex, but var:$tradegood$_stockpile is only present for goods covered by
+			# GOODS_setup_governorship_stockpiles this quarter (manufactured goods set
+			# unconditionally; raw goods behind has_variable = produces_X with an else->0). A good
+			# in the iterated complex that the setup pass didn't cover (or before it runs) has the
+			# var UNSET -> reading it threw "Event target link 'var' returned an unset scope" /
+			# "Invalid left side during comparison 'var'" / "Type: empty" once per (governorship x
+			# such good) = the oa_wealth_changes flood (#19). Engine semantics: an unset var in a
+			# limit comparison already evaluates FALSE (and errors), so guarding with has_variable
+			# reproduces the exact skip minus the error; for_sale_$tradegood$ stays at the 0 default
+			# set just above. Behaviour-exact whether the var is unset or set-to-0.
 			has_variable = $tradegood$_stockpile
 			var:$tradegood$_stockpile > DEMAND_$tradegood$
 		}
