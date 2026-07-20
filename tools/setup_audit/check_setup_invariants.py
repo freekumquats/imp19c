@@ -16,7 +16,7 @@
 
 import re, sys, glob, os
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # tools/setup_audit/<file> -> repo root
 SETUP = os.path.join(ROOT, "setup", "main", "00_default.txt")
 
 def strip_comments(s):

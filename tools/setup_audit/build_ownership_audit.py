@@ -12,7 +12,7 @@
 # and should be merged, not overwritten (this writes only blank research columns for NEW ids).
 
 import re, csv, os
-ROOT=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # tools/setup_audit/<file> -> repo root
 def load(p): return open(os.path.join(ROOT,p),encoding="utf-8",errors="replace").read()
 
 names={}

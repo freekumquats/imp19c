@@ -20,7 +20,7 @@
 # Re-run is idempotent: reads the current setup + countries.txt, rewrites the CSV in place.
 
 import re, csv, os
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # tools/setup_audit/<file> -> repo root
 def load(p): return open(os.path.join(ROOT, p), encoding="utf-8", errors="replace").read()
 
 # --- province names ---
