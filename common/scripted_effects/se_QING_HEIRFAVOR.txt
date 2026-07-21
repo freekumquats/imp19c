@@ -1,0 +1,225 @@
+########################################################################
+# se_QING_HEIRFAVOR.txt — [GC heir-favor 2026-07-21] Grand-Council officials favour an heir.
+#
+# USER REQUEST: in vanilla, governors/commanders hold an ATTITUDE toward the different HEIRS and
+# can favour one, shown on their character card. Extend that to the Grand Council POSITIONS and
+# SUB-POSITIONS and wire it into the existing Qing succession mechanics.
+#
+# WHY THIS IS SCRIPTED (not the engine mechanic): vanilla heir-attraction is ENGINE-NATIVE
+# (primary_heir_attraction / support_for_character_as_heir, surfaced by the C++ GetHeirSupport /
+# GetPreferredHeir datafunctions). Those cannot be redefined, and the engine only gives an attitude
+# toward the vanilla primary_heir — it knows nothing of the mod's SCRIPTED candidate princes
+# (qing_princes / qing_prince_backing, se_QING_PRINCES.txt #368). So, exactly as the mod already did
+# for qing_char_affinity (Imperial Favor) and qing_char_stance (reform faction), this models the
+# attitude in script and surfaces it on the card via the qing_favor_square-style chip idiom, not the
+# native heir-support glue.
+#
+# THE MECHANIC. During an OPEN succession contest (>=2 adult princes, not yet 秘密立儲-sealed) each
+# GC office-holder + sub-position holder takes a side between the two leading princes:
+#   • the FRONT-RUNNER  = the prince with the highest qing_prince_backing (the throne's presumptive man)
+#   • the DARK-HORSE    = the runner-up (the rival clique's candidate)
+# A LOYAL official (high qing_char_affinity toward the throne) backs the front-runner; a DISAFFECTED
+# one (low affinity) backs the dark-horse; a middling one stays neutral. Stored per-character in
+# qing_favored_heir (a REF to the backed prince), displayed on the card.
+#
+# WIRE-IN (the succession teeth): the council's collective favour feeds qing_prince_backing — a
+# council rallying to the dark-horse pushes his backing up (he can climb toward overtaking the
+# front-runner, changing whom QING_princes_seal_succession would name), and a COURT SPLIT between two
+# princes docks qing_dynastic_harmony (a house divided). Bounded per pulse + clamped, so no runaway.
+#
+# Once the succession is SEALED (or the field drops below 2 princes) the contest is over and the
+# officials fall in line — qing_favored_heir is cleared so no stale favour lingers on the card.
+#
+#   ROOT / this = CHI (guarded by the caller). Prefix = QING_heirfavor · sys tag = QING.
+#   State:
+#     qing_favored_heir   char var on an OFFICIAL: the prince (character ref) he backs; unset = neutral.
+#     qing_hf_backers     char scratch var on a PRINCE: how many officials back him this pulse (reset each pulse).
+#     qing_hf_front_ct / qing_hf_dark_ct : CHI scratch, the two leaders' backer tallies (removed at end).
+# Called by QING_heirfavor_pulse from QING_princes_pulse (se_QING_PRINCES.txt) after the roster recompute.
+########################################################################
+
+# ======================================================================
+# QING_heirfavor_pulse — recompute every GC official's favoured heir + wire the tally into the
+# succession contest. Scope: COUNTRY (CHI). Assumes qing_princes is freshly recomputed (the caller
+# QING_princes_pulse does this). Self-throttling is inherited from the quarterly princes pulse.
+# ======================================================================
+QING_heirfavor_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_heirfavor_pulse" }
+	if = {
+		# an OPEN contest: >=2 adult princes and no sealed tablet.
+		limit = {
+			var:qing_prince_count >= 2
+			has_variable_list = qing_princes
+			NOT = { has_variable = qing_secret_succession_sealed }
+		}
+		# --- rank the field: front-runner (max backing) and dark-horse (runner-up) ------------
+		ordered_in_list = {
+			variable = qing_princes
+			order_by = var:qing_prince_backing
+			max = 1
+			save_scope_as = qing_hf_frontrunner
+		}
+		# dark-horse = highest-backing prince who is NOT the front-runner (char equality via the
+		# proven saved-scope compare, NOT bare this=prev). max = 1 picks the runner-up.
+		ordered_in_list = {
+			variable = qing_princes
+			limit = { NOT = { this = scope:qing_hf_frontrunner } }
+			order_by = var:qing_prince_backing
+			max = 1
+			save_scope_as = qing_hf_darkhorse
+		}
+		# --- reset every prince's per-pulse backer tally ---------------------------------------
+		every_in_list = {
+			variable = qing_princes
+			set_variable = { name = qing_hf_backers  value = 0 }
+		}
+		# --- each GC office-holder + sub-position holder + figurehead seat takes a side ---------
+		# The 13 appointable great offices (chancellor..guard_commandant) live in qing_council_members.
+		every_in_list = {
+			variable = qing_council_members
+			QING_heirfavor_assign_one = yes
+		}
+		# figurehead seats not in the council roster (regent / empress / emeritus). The crown-prince
+		# seat IS the heir and the emperor cannot favour an heir over himself — both excluded.
+		QING_heirfavor_assign_seat = { seatvar = qing_office_regent_holder }
+		QING_heirfavor_assign_seat = { seatvar = qing_office_empress_holder }
+		QING_heirfavor_assign_seat = { seatvar = qing_office_emeritus_holder }
+		# the three sub-position corps (駐外使臣 / 御史 / 侍衛).
+		every_in_list = { variable = qing_zongli_diplomats  QING_heirfavor_assign_one = yes }
+		every_in_list = { variable = qing_censor_inspectors  QING_heirfavor_assign_one = yes }
+		every_in_list = { variable = qing_guard_corps        QING_heirfavor_assign_one = yes }
+
+		# --- wire the tally into the succession contest ----------------------------------------
+		# read the two leaders' backer counts onto CHI scratch (RHS var-ref on a relational compare
+		# is illegal, so the count compare below wraps the RHS in { value = var:X }).
+		set_variable = { name = qing_hf_front_ct  value = scope:qing_hf_frontrunner.var:qing_hf_backers }
+		set_variable = { name = qing_hf_dark_ct   value = scope:qing_hf_darkhorse.var:qing_hf_backers }
+		if = {
+			# the council has swung behind the RIVAL. This MUST out-pace the princes pulse's own
+			# unconditional +3-to-the-leader drift (se_QING_PRINCES.txt:182-187, which runs BEFORE this
+			# each pulse), or the dark-horse could never actually overtake — [code-review F1]. So a
+			# decisive swing is a RELATIVE TRANSFER: the dark-horse gains +4 AND the front-runner is
+			# docked -2, closing the gap by 6/pulse net of the +3 drift. A sustained court rebellion can
+			# thus genuinely lift the rival past the throne's man — and once he leads, the drift and the
+			# seal-on-top-backing follow HIM. Backing the rival against the throne is destabilising: a
+			# harmony dock too.
+			limit = { var:qing_hf_dark_ct > { value = var:qing_hf_front_ct } }
+			scope:qing_hf_darkhorse   = { QING_prince_backing_nudge = { amount = 4 } }
+			scope:qing_hf_frontrunner = { QING_prince_backing_nudge = { amount = -2 } }
+			QING_dynasty_harmony_nudge = { amount = -1 }
+			LOG_line = { sys = QING  msg = "heir-favour: the council swung behind the dark-horse prince for" }
+		}
+		else_if = {
+			# the council stands with the throne's man: a modest institutional lift to the front-runner
+			# (on top of his existing drift — the court closing ranks entrenches him further).
+			limit = { var:qing_hf_front_ct >= 1 }
+			scope:qing_hf_frontrunner = { QING_prince_backing_nudge = { amount = 1 } }
+			LOG_line = { sys = QING  msg = "heir-favour: the council backs the front-runner prince for" }
+		}
+		# a SPLIT court (both leaders hold backers) frays the house even when the front-runner still
+		# leads — the great offices pulling different ways. One extra harmony dock, band-gated.
+		if = {
+			limit = { var:qing_hf_front_ct >= 1  var:qing_hf_dark_ct >= 1 }
+			QING_dynasty_harmony_nudge = { amount = -1 }
+		}
+		remove_variable = qing_hf_front_ct
+		remove_variable = qing_hf_dark_ct
+	}
+	else = {
+		# no open contest (sealed, or <2 princes): the officials fall in line — clear stale favour.
+		QING_heirfavor_clear_all = yes
+	}
+	LOG_exit = { sys = QING  fn = "QING_heirfavor_pulse"  result = OK }
+}
+
+# ======================================================================
+# QING_heirfavor_assign_core — the actual side-picking. Scope: CHARACTER (a validated CHI
+# official/figure). Reads scope:qing_hf_frontrunner / scope:qing_hf_darkhorse (set by the pulse)
+# and the official's own qing_char_affinity (toward the throne); ROOT = CHI. Callers (assign_one for
+# rostered officials, assign_seat for figureheads) do the eligibility validation before delegating
+# here, so this never re-checks employ/alive/contender — it just tallies the vote.
+# ======================================================================
+QING_heirfavor_assign_core = {
+	# ensure the affinity score exists (council members are scored each recompute, but a
+	# sub-position holder / figurehead may not be — self-init via the proven affinity effect).
+	if = {
+		limit = { NOT = { has_variable = qing_char_affinity } }
+		QING_char_affinity = yes
+	}
+	if = {
+		# LOYAL (affinity >= 60): backs the throne's presumptive heir (the front-runner).
+		limit = { var:qing_char_affinity >= 60 }
+		set_variable = { name = qing_favored_heir  value = scope:qing_hf_frontrunner }
+		scope:qing_hf_frontrunner = { change_variable = { name = qing_hf_backers  add = 1 } }
+	}
+	else_if = {
+		# DISAFFECTED (affinity < 40): throws in with the rival clique (the dark-horse).
+		limit = { var:qing_char_affinity < 40 }
+		set_variable = { name = qing_favored_heir  value = scope:qing_hf_darkhorse }
+		scope:qing_hf_darkhorse = { change_variable = { name = qing_hf_backers  add = 1 } }
+	}
+	else = {
+		# middling: stays out of the succession quarrel.
+		if = { limit = { has_variable = qing_favored_heir } remove_variable = qing_favored_heir }
+	}
+}
+
+# ======================================================================
+# QING_heirfavor_assign_one — a ROSTERED official picks a side. Scope: CHARACTER, called from an
+# every_in_list over a holder roster (qing_council_members / the sub-position corps). Validates the
+# official (alive, employed by CHI, not himself a leading contender) then delegates to _core.
+# ======================================================================
+QING_heirfavor_assign_one = {
+	if = {
+		limit = {
+			is_alive = yes
+			employer = ROOT
+			# do not let a leading prince (if he somehow holds a post) vote in his own contest.
+			NOT = { this = scope:qing_hf_frontrunner }
+			NOT = { this = scope:qing_hf_darkhorse }
+		}
+		QING_heirfavor_assign_core = yes
+	}
+}
+
+# ======================================================================
+# QING_heirfavor_assign_seat — a FIGUREHEAD seat held in a country var (regent/empress/emeritus)
+# picks a side. Scope: COUNTRY (CHI). $seatvar$ = the qing_office_*_holder var name. A figurehead is
+# a CHI dynastic figure, NOT necessarily an "employee" (the empress/dowager is the classic Qing
+# succession power-broker — Cixi), so there is deliberately NO employer=ROOT gate here (that gate was
+# why the empress silently never voted). Guards: filled by a living character, not himself a leading
+# contender, and NOT already on the council roster (else his backing would be double-counted by the
+# council walk — [code-review F3]). Delegates to _core in the holder's char scope.
+# ======================================================================
+QING_heirfavor_assign_seat = {
+	if = {
+		limit = { has_variable = $seatvar$  var:$seatvar$ = { is_alive = yes } }
+		var:$seatvar$ = { save_scope_as = qing_hf_seat_holder }
+		if = {
+			limit = {
+				NOT = { scope:qing_hf_seat_holder = { this = scope:qing_hf_frontrunner } }
+				NOT = { scope:qing_hf_seat_holder = { this = scope:qing_hf_darkhorse } }
+				# CHI holds qing_council_members (current scope = CHI), so this reads the list directly;
+				# target = scope:X is the proven is_target_in_variable_list form (se_QING_SPHERE.txt).
+				NOT = { is_target_in_variable_list = { name = qing_council_members  target = scope:qing_hf_seat_holder } }
+			}
+			scope:qing_hf_seat_holder = { QING_heirfavor_assign_core = yes }
+		}
+	}
+}
+
+# ======================================================================
+# QING_heirfavor_clear_all — wipe qing_favored_heir off EVERYONE who carries it (the contest is over
+# or absent). Scope: COUNTRY (CHI). [code-review F2/F6] A PRESENCE-BASED sweep, not a roster mirror:
+# clearing by roster membership would strand the var on an official who was assigned in an earlier
+# pulse and has since left every roster (dismissed / rotated out / demoted) — his chip would linger
+# forever. Sweeping by the var itself catches exactly the set that could hold it, ex-officials
+# included, and is far simpler than the 7-way holder walk. Runs only when the contest is settled
+# (not a hot path), so the every_character cost is fine.
+# ======================================================================
+QING_heirfavor_clear_all = {
+	every_character = {
+		limit = { has_variable = qing_favored_heir }
+		remove_variable = qing_favored_heir
+	}
+}
