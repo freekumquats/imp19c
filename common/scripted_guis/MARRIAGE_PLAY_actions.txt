@@ -27,7 +27,8 @@ marriage_play_open = {
 		# clear any stale selection from a prior open.
 		if = { limit = { has_variable = marriage_play_target }      remove_variable = marriage_play_target }
 		if = { limit = { has_variable = marriage_play_our_pick }    remove_variable = marriage_play_our_pick }
-		if = { limit = { has_variable = marriage_play_their_pick }  remove_variable = marriage_play_their_pick }
+		# [#356 row-highlight] also clear the per-char selection marker off the prior their-pick before dropping the var.
+		if = { limit = { has_variable = marriage_play_their_pick }  var:marriage_play_their_pick = { remove_variable = qing_marriage_their_selected }  remove_variable = marriage_play_their_pick }
 		MARRIAGE_PLAY_build_realms = yes
 		MARRIAGE_PLAY_build_own = yes
 		# [BT-F] their-candidate lists are now age-banded (adults + children); clear both until a realm is picked.
@@ -61,7 +62,8 @@ marriage_play_diplo_open = {
 		# clear any stale selection from a prior open (as marriage_play_open does).
 		if = { limit = { has_variable = marriage_play_target }      remove_variable = marriage_play_target }
 		if = { limit = { has_variable = marriage_play_our_pick }    remove_variable = marriage_play_our_pick }
-		if = { limit = { has_variable = marriage_play_their_pick }  remove_variable = marriage_play_their_pick }
+		# [#356 row-highlight] clear the per-char selection marker off the prior their-pick before dropping the var.
+		if = { limit = { has_variable = marriage_play_their_pick }  var:marriage_play_their_pick = { remove_variable = qing_marriage_their_selected }  remove_variable = marriage_play_their_pick }
 		# fix the target to the viewed realm (what marriage_play_pick_realm would have done).
 		set_variable = { name = marriage_play_target  value = scope:target }
 		# build our own unmarried candidates (screen 2) + the target's opposite-... (all sexes until
@@ -87,7 +89,9 @@ marriage_play_pick_realm = {
 	effect = {
 		set_variable = { name = marriage_play_target  value = scope:target }
 		# a fresh realm pick invalidates any prior their-char pick.
-		if = { limit = { has_variable = marriage_play_their_pick }  remove_variable = marriage_play_their_pick }
+		# [#356 row-highlight] clear the per-char selection marker off the prior their-pick too (matches the
+		# other three entry points), so no stale row stays highlighted when the realm changes.
+		if = { limit = { has_variable = marriage_play_their_pick }  var:marriage_play_their_pick = { remove_variable = qing_marriage_their_selected }  remove_variable = marriage_play_their_pick }
 		MARRIAGE_PLAY_build_their = yes
 		LOG_line = { sys = MARRIAGE  msg = "marriage picker: target realm chosen" }
 	}
@@ -116,6 +120,8 @@ marriage_play_pick_own = {
 						AND = { var:marriage_play_our_pick = { is_male = yes }    var:marriage_play_their_pick = { is_male = yes } }
 					}
 				}
+				# [#356 row-highlight] clear the per-char marker off the dropped pick so no stale row stays lit.
+				var:marriage_play_their_pick = { remove_variable = qing_marriage_their_selected }
 				remove_variable = marriage_play_their_pick
 			}
 		}
@@ -146,7 +152,16 @@ marriage_play_pick_their = {
 		employer = scope:player.var:marriage_play_target
 	}
 	effect = {
+		# [#356 row-highlight 2026-07-21] clear the per-character selection marker from the PREVIOUS
+		# pick (if any) so only one row is highlighted, then set marriage_play_their_pick + mark THIS
+		# character. The screen-3 row reads this marker in its `down=` to highlight the selected row
+		# (Character.MakeScope.Var(...).IsSet idiom, imp19c_windows.gui:110). ROOT here = the clicked char.
+		if = {
+			limit = { scope:player = { has_variable = marriage_play_their_pick } }
+			scope:player.var:marriage_play_their_pick = { remove_variable = qing_marriage_their_selected }
+		}
 		scope:player = { set_variable = { name = marriage_play_their_pick  value = prev } }
+		set_variable = { name = qing_marriage_their_selected  value = 1 }
 		LOG_line = { sys = MARRIAGE  msg = "marriage picker: their character chosen" }
 	}
 }
