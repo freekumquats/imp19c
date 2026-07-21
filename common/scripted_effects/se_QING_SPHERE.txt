@@ -560,6 +560,10 @@ QING_sphere_flip_reaction = {
 		if = { limit = { var:qing_sphere_dominant = 2 } scope:sphere_owner = { QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = 3 } } }
 		else_if = { limit = { var:qing_sphere_dominant = 3 } scope:sphere_owner = { QING_DECLINE_nudge = { var = qing_gp_tension_france   amount = 3 } } }
 		else_if = { limit = { var:qing_sphere_dominant = 4 } scope:sphere_owner = { QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = 3 } } }
+		# [CROSSWIRE T2/T1 2026-07-21] give the contest REAL stakes: a march slipping from China's
+		# sphere loosens the Qing tie to the subject that holds it — demote that subject one rung on
+		# the real control ladder (and lower the derived suzerain-prestige counter). See helper below.
+		QING_sphere_subject_demote = yes
 		LOG_line = { sys = QING  msg = "sphere: China lost a march to a rival" }
 	}
 	# China WON this state back from a European rival -> that rival's tension eases.
@@ -568,6 +572,113 @@ QING_sphere_flip_reaction = {
 		if = { limit = { var:qing_sphere_dominant_prev = 2 } scope:sphere_owner = { QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = -2 } } }
 		else_if = { limit = { var:qing_sphere_dominant_prev = 3 } scope:sphere_owner = { QING_DECLINE_nudge = { var = qing_gp_tension_france   amount = -2 } } }
 		else_if = { limit = { var:qing_sphere_dominant_prev = 4 } scope:sphere_owner = { QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = -2 } } }
+		# [CROSSWIRE T2/T1 2026-07-21] winning a march back tightens the tie — promote the holding
+		# subject one rung (and raise suzerain prestige). See helper below.
+		QING_sphere_subject_promote = yes
 		LOG_line = { sys = QING  msg = "sphere: China won a march back from a rival" }
+	}
+}
+
+# ======================================================================
+# [CROSSWIRE T2/T1 2026-07-21] Sphere flip -> real subject-graph change.
+# QING_sphere_subject_demote / _promote — shift the DIRECT Qing subject that owns
+# THIS contested march one rung on the real control ladder (se_SUBJECT_QING.txt),
+# then move the abstract qing_suzerain_prestige counter the same direction so the
+# two suzerain models (real ladder + abstract prestige) stop diverging (T1).
+# Scope: STATE (called from QING_sphere_flip_reaction). ROOT = CHI (the on_action
+# country), so SUBJ_QING_change_type's internal `overlord = ROOT` resolves to CHI.
+#
+# GATES (all must hold, else a clean no-op + skip — most frontier marches are held
+# by NON-subjects and fall through harmlessly):
+#   • the march has an owner that is a DIRECT subject of CHI. DIRECT only: the
+#     change-type wrapper reparents the target to overlord = ROOT(CHI), so acting on
+#     a NESTED sub-subject (e.g. XNG under ILI) would yank it out of its mid-tier
+#     overlord — we must not restructure the tree as a side effect. A direct subject's
+#     overlord IS scope:sphere_owner (= CHI).
+#   • the subject is not on the shared 730-day change cooldown (qing_recently_changed_type,
+#     set by the manual GUI verbs too) — so a yearly sphere pulse cannot thrash a subject
+#     nor override a change the player just made by hand.
+#   • the subject is on a shiftable rung (demote: not already the bottom tributary rung;
+#     promote: not already autonomous_governorship). Off-rung => log + skip.
+# The rung->new_type branch mirrors qing_subject_(promote|demote)_button verbatim
+# (SUB_QING_subject_interactions.txt), the proven "one rung" mapping.
+# ======================================================================
+QING_sphere_subject_demote = {
+	if = {
+		limit = {
+			exists = owner
+			owner = {
+				is_subject_of = scope:sphere_owner
+				overlord = scope:sphere_owner
+				NOT = { has_variable = qing_recently_changed_type }
+				OR = {
+					is_subject_type = nominal_vassal
+					is_subject_type = feudatory
+					is_subject_type = autonomous_governorship
+				}
+			}
+		}
+		owner = { save_scope_as = target }
+		scope:target = { set_variable = { name = qing_recently_changed_type  days = 730  value = 1 } }
+		scope:sphere_owner = {
+			scope:target = { SUBJ_QING_derive_rung = yes }
+			if = {
+				limit = { scope:target = { is_subject_type = autonomous_governorship } }
+				SUBJ_QING_change_type = { direction = demote  new_type = feudatory }
+			}
+			else_if = {
+				limit = { scope:target = { is_subject_type = feudatory } }
+				SUBJ_QING_change_type = { direction = demote  new_type = nominal_vassal }
+			}
+			else_if = {
+				limit = { scope:target = { is_subject_type = nominal_vassal } }
+				SUBJ_QING_change_type = { direction = demote  new_type = sinosphere_tributary }
+			}
+			# a lost march loosens the overlordship: lower the abstract suzerain-prestige counter
+			# (QING_vassal_init first so it exists at its 70 seed before the nudge; clamped 0..100).
+			QING_vassal_init = yes
+			QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = -4 }
+			LOG_line = { sys = QING  msg = "sphere: a lost march demoted the holding Qing subject a rung" }
+		}
+	}
+}
+
+QING_sphere_subject_promote = {
+	if = {
+		limit = {
+			exists = owner
+			owner = {
+				is_subject_of = scope:sphere_owner
+				overlord = scope:sphere_owner
+				NOT = { has_variable = qing_recently_changed_type }
+				OR = {
+					is_subject_type = sinosphere_tributary
+					is_subject_type = tributary
+					is_subject_type = nominal_vassal
+					is_subject_type = feudatory
+				}
+			}
+		}
+		owner = { save_scope_as = target }
+		scope:target = { set_variable = { name = qing_recently_changed_type  days = 730  value = 1 } }
+		scope:sphere_owner = {
+			scope:target = { SUBJ_QING_derive_rung = yes }
+			if = {
+				limit = { scope:target = { OR = { is_subject_type = sinosphere_tributary  is_subject_type = tributary } } }
+				SUBJ_QING_change_type = { direction = promote  new_type = nominal_vassal }
+			}
+			else_if = {
+				limit = { scope:target = { is_subject_type = nominal_vassal } }
+				SUBJ_QING_change_type = { direction = promote  new_type = feudatory }
+			}
+			else_if = {
+				limit = { scope:target = { is_subject_type = feudatory } }
+				SUBJ_QING_change_type = { direction = promote  new_type = autonomous_governorship }
+			}
+			# a won-back march tightens the overlordship: raise the abstract suzerain-prestige counter.
+			QING_vassal_init = yes
+			QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = 3 }
+			LOG_line = { sys = QING  msg = "sphere: a won-back march promoted the holding Qing subject a rung" }
+		}
 	}
 }
