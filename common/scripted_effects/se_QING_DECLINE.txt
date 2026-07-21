@@ -110,6 +110,13 @@ QING_DECLINE_init = {
 	# nation. Rises only as the Self-Strengthening movement forges the connective
 	# institutions of a nation (schools, telegraph, press) — see the drift below.
 	if = { limit = { NOT = { has_variable = qing_civic_identity } }    set_variable = { name = qing_civic_identity  value = 0 } }
+	# [CROSSWIRE 2026-07-21 rites->mandate] 天命 — the Mandate of Heaven as a standing 0..100 meter.
+	# Previously the mandate lived only as vanilla legitimacy (se_QING_MANDATE.txt disaster hook); this
+	# gives it a persistent counter so ritual efficacy (祭天, se_QING_RITES) can RAISE it and dynastic
+	# crisis can erode it, and so it can GATE heterodox rebellion (a lost mandate invites rising — the
+	# consumer is in QING_rebellion_roll below). Seeded HIGH (80) at the High-Qing zenith: the dynasty's
+	# fitness to rule is unquestioned in 1763/1815. Erodes in the pulse when decline runs deep.
+	if = { limit = { NOT = { has_variable = qing_mandate_strength } }  set_variable = { name = qing_mandate_strength  value = 80 } }
 	LOG_exit = { sys = QING  fn = "QING_DECLINE_init"  result = OK }
 }
 
@@ -995,6 +1002,21 @@ QING_DECLINE_pulse = {
 		limit = { has_variable = qing_granary_stock  var:qing_granary_stock >= 70  has_variable = qing_sect_pressure  var:qing_sect_pressure > 0 }
 		QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -1 }
 	}
+	# (5) [CROSSWIRE 2026-07-21 rites->mandate] deep dynastic crisis erodes the Mandate of Heaven: heavy
+	#     entrenched corruption OR a raging heterodox tide reads as Heaven withdrawing its favour, so the
+	#     mandate meter drifts DOWN a point. Band-gated (only fires in a high crisis tier) and clamped 0..100;
+	#     the RECOVERY lever is the 祭天 sacrifice (QING_rites_sacrifice_heaven raises it), so this is not a
+	#     runaway ratchet — a well-run, ritually-attentive court holds its mandate. Negative nudge only.
+	if = {
+		limit = {
+			has_variable = qing_mandate_strength
+			OR = {
+				AND = { has_variable = qing_corruption_level  var:qing_corruption_level >= 65 }
+				AND = { has_variable = qing_sect_pressure     var:qing_sect_pressure >= 50 }
+			}
+		}
+		QING_DECLINE_nudge = { var = qing_mandate_strength  amount = -1 }
+	}
 
 	# Unlock the reform track once pressure is high enough (and not already on).
 	if = {
@@ -1810,6 +1832,11 @@ QING_rebellion_roll = {
 						var:qing_corruption_level >= 35
 						var:qing_mission_social_friction >= 35
 						var:qing_antichristian_sentiment >= 50
+						# [CROSSWIRE 2026-07-21 rites->mandate] a withdrawn Mandate of Heaven is itself an
+						# ignition path: when the dynasty's mandate has visibly failed (< 30), the millenarian
+						# panic needs no other spark. This is the consumer that gives the mandate meter teeth —
+						# a court that neglects the 祭天 rites (which raise it) courts the archetypal 邪教 rising.
+						var:qing_mandate_strength < 30
 					}
 				}
 				trigger_event = { id = qing_rebellion.1  days = { 3 12 } }
@@ -1827,7 +1854,14 @@ QING_rebellion_roll = {
 			10 = {
 				trigger = {
 					NOT = { has_variable = qing_rebel_taiping_risen }
-					var:qing_sect_pressure >= 45
+					OR = {
+						var:qing_sect_pressure >= 45
+						# [CROSSWIRE 2026-07-21 rites->mandate] a collapsed Mandate (< 25) lets the great
+						# heterodox war ignite at a lower sect tide: with Heaven's favour openly forfeit, a
+						# merely elevated sect pressure (>= 35) suffices. Ritual attentiveness (祭天) that
+						# keeps the mandate up therefore raises the bar the Taiping must clear.
+						AND = { var:qing_mandate_strength < 25  var:qing_sect_pressure >= 35 }
+					}
 				}
 				trigger_event = { id = qing_rebellion.3  days = { 3 12 } }
 			}
