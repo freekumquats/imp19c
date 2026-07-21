@@ -211,24 +211,28 @@ base_window = {
 # ======================================================================
 # SCREEN 3 — pick THEIR character, then Propose.
 # ======================================================================
+# [BT-G fix R5 2026-07-21] BYTE-FOR-BYTE CLONE of the proven-instantiating screen 2
+# (marriage_play_own_window). Four prior fixes (R1 footer-outside-scroll, R2 buttons-in-scroll,
+# R3 inline scripted_gui, R4 plain-button bar) ALL failed identically — screen 3 silently never
+# instantiated (script completes per debug.log, engine logs NOTHING). A cold differential + log
+# read could not isolate a markup cause, so static analysis is exhausted. Per the user's call:
+# STOP diffing and make screen 3 structurally IDENTICAL to screen 2, which provably instantiates.
+# The ONLY differences from screen 2 now are: window name + title, own_->their_ list names, the
+# row scripted_gui (pick_their vs pick_own), and — instead of screen 2's row-click window-advance —
+# the Propose + Cancel actions rendered as TWO extra FULL-WIDTH LIST-ROW BUTTONS (the SAME
+# `button {588 72} + background_widget + inner flowcontainer(cpt/textbox)` shape as a character row),
+# appended after the children grid. NO button bar, NO text_button_square_highlighted, NO new widget
+# type or container — screen 3's widget vocabulary is now EXACTLY screen 2's. Propose uses the same
+# plain-button `enabled`+inline-GetScriptedGui idiom proven by the clone-source office picker.
 base_window = {
 	name = "marriage_play_their_window"
 	gfxtype = windowgfx
 	parentanchor = center
 	movable = yes
-	# [BT-G fix R4] size aligned to 720 to match the proven-instantiating siblings (screens 1/2 +
-	# clone-source qing_office_picker_window are all { 640 720 }); the trailing button bar scrolls with
-	# the list, so the taller window was unnecessary and the one remaining size divergence from proven.
 	size = { 640 720 }
 	vbox = {
 		using = MainWindowHeaderBoxCentered
 		blockoverride "Title_text" { text = "MARRIAGE_PLAY_COL_THEIR" }
-		# [BT-G fix R4 2026-07-20] Structure is the proven single-scrollarea-under-header shape (kept from
-		# R2). The remaining fault was NOT structural: the Propose/Cancel bar used the
-		# text_button_square_highlighted template, which NO instantiating window under the
-		# MainWindowHeaderBoxCentered shell uses (screens 1/2 use plain buttons; every panel that uses
-		# text_button_square_highlighted is on the main_window_template shell). The buttons are now plain
-		# `button` + background_widget, matching screens 1/2 — see the detailed note on the Propose button below.
 		scrollarea = {
 			size = { 620 660 }
 			scrollbarpolicy_horizontal = always_off
@@ -314,58 +318,43 @@ base_window = {
 							}
 						}
 					}
-					# ---- PROPOSE / CANCEL bar (INSIDE the scroll content, as the final items) ----
-					flowcontainer = {
-						direction = horizontal
-						spacing = 10
-						margin = { 8 12 }
-						# [BT-G fix R4 2026-07-20] ROOT CAUSE FOUND — the prior 3 fixes (R1 footer-outside-scroll,
-						# R2 buttons-inside-scroll, R3 inline-scripted_gui) all kept `text_button_square_highlighted`
-						# and only moved it / changed its scripted_gui idiom, so the ONE genuinely-divergent element
-						# was never touched. Evidence: screen 3 is the ONLY window in the whole mod pairing the
-						# MainWindowHeaderBoxCentered header shell with a text_button_square_highlighted widget.
-						# Proven-instantiating screens 1/2 (SAME file, SAME shell) use only PLAIN `button` rows and
-						# NEVER text_button_square_highlighted; every proven panel that DOES use it (southern study,
-						# guard, censorate…) is on a DIFFERENT shell (main_window_template + MainWindowHeaderBox). The
-						# widget-vocabulary diff was exactly: screen3 == screen2 + text_button_square_highlighted.
-						# FIX = rebuild Propose/Cancel from PLAIN `button` + background_widget + a centered label —
-						# the row idiom screens 1/2 already prove instantiate under this shell. A plain button with a
-						# bare `enabled="[…IsValid…]"` under THIS shell, opened via createwidget, is proven by the
-						# clone-source qing_office_picker_window (imp19c_windows.gui:91); the explicit
-						# `GetScriptedGui('marriage_play_launch').IsValid/.Execute` form (vs the clone's ambient-datacontext
-						# `ScriptedGui.*`) is proven in province_window.gui and the diplomatic templates. Screen 3's widget
-						# set is now a strict SUBSET of the proven siblings — no reliance on any theory of WHY it failed.
-						button = {
-							size = { 380 32 }
-							using = background_widget
-							enabled = "[GetScriptedGui('marriage_play_launch').IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-							onclick = "[GetScriptedGui('marriage_play_launch').Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-							onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_their_window')]"
-							tooltip = "MARRIAGE_PLAY_LAUNCH_TT"
-							textbox = {
-								parentanchor = center
-								size = { 360 30 }
-								align = center
-								max_width = 360
-								using = BaseFontM
-								using = Default_FontColor
-								text = "MARRIAGE_PLAY_LAUNCH_BTN"
-							}
+					# ---- PROPOSE (a full-width LIST-ROW button, identical shape to a character row) ----
+					button = {
+						size = { 588 72 }
+						margin = { 2 3 }
+						using = background_widget
+						blockoverride "Margin" { margin = { 2 2 } }
+						# [BT-G R5 2026-07-21] NO `enabled` here — deliberately. `enabled`/`visible`/`datamodel` are
+						# the attributes the engine evaluates AT INSTANTIATION (onclick is only evaluated on click).
+						# Screen 2 (proven) has NO `enabled` anywhere; an `enabled` carrying an explicit
+						# GetScriptedGui('marriage_play_launch').IsValid on a createwidget'd window is the single
+						# remaining render-time divergence and the prime suspect for the silent non-instantiation.
+						# Dropping it makes screen 3 a true render-time SUBSET of screen 2. Safe: marriage_play_launch's
+						# own is_valid fully guards Execute (both picks set, alive, unmarried, unbetrothed, opposite-sex),
+						# so clicking Propose while ineligible is a harmless no-op — the tooltip states the requirement.
+						onclick = "[GetScriptedGui('marriage_play_launch').Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+						onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_their_window')]"
+						tooltip = "MARRIAGE_PLAY_LAUNCH_TT"
+						flowcontainer = {
+							parentanchor = vcenter
+							spacing = 8
+							margin = { 8 6 }
+							textbox = { size = { 560 64 }  parentanchor = vcenter  align = center|nobaseline  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "MARRIAGE_PLAY_LAUNCH_BTN" }
 						}
-						button = {
-							size = { 200 32 }
-							using = background_widget
-							onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_their_window')]"
-							tooltip = "MARRIAGE_PLAY_CANCEL_TT"
-							textbox = {
-								parentanchor = center
-								size = { 190 30 }
-								align = center
-								max_width = 190
-								using = BaseFontM
-								using = Default_FontColor
-								text = "MARRIAGE_PLAY_CANCEL_BTN"
-							}
+					}
+					# ---- CANCEL (a full-width LIST-ROW button, identical shape) ----
+					button = {
+						size = { 588 72 }
+						margin = { 2 3 }
+						using = background_widget
+						blockoverride "Margin" { margin = { 2 2 } }
+						onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_their_window')]"
+						tooltip = "MARRIAGE_PLAY_CANCEL_TT"
+						flowcontainer = {
+							parentanchor = vcenter
+							spacing = 8
+							margin = { 8 6 }
+							textbox = { size = { 560 64 }  parentanchor = vcenter  align = center|nobaseline  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "MARRIAGE_PLAY_CANCEL_BTN" }
 						}
 					}
 				}
