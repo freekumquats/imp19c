@@ -72,7 +72,7 @@ base_window = {
 								# government-view entry path where screen 1 IS used.)
 								onclick = "[GetScriptedGui('marriage_play_pick_realm').Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', Country.MakeScope ).End )]"
 								onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_own_window')]"
-								onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_window')]"
+								onclick = "[ExecuteConsoleCommand('gui.ClearWidgets marriage_play_window')]"
 								tooltip = "MARRIAGE_PLAY_PICK_REALM_TT"
 								flowcontainer = {
 									parentanchor = vcenter
@@ -92,7 +92,7 @@ base_window = {
 		}
 	}
 	button_close = {
-		onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_window')]"
+		onclick = "[ExecuteConsoleCommand('gui.ClearWidgets marriage_play_window')]"
 		tooltip = "CLOSE"
 		parentanchor = top|right
 		position = { -7 10 }
@@ -165,7 +165,7 @@ base_window = {
 								# nothing after, so it never exposed this. Order now: Execute -> createwidget(next) -> ClearWidgets(self).
 								onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
 								onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_their_window')]"
-								onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
+								onclick = "[ExecuteConsoleCommand('gui.ClearWidgets marriage_play_own_window')]"
 								tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
 								flowcontainer = {
 									parentanchor = vcenter
@@ -197,7 +197,7 @@ base_window = {
 								# [BT-G R6 2026-07-21] createwidget NEXT before ClearWidgets SELF (see the adults-row note above).
 								onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
 								onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_their_window')]"
-								onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
+								onclick = "[ExecuteConsoleCommand('gui.ClearWidgets marriage_play_own_window')]"
 								tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
 								flowcontainer = {
 									parentanchor = vcenter
@@ -214,7 +214,7 @@ base_window = {
 		}
 	}
 	button_close = {
-		onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
+		onclick = "[ExecuteConsoleCommand('gui.ClearWidgets marriage_play_own_window')]"
 		tooltip = "CLOSE"
 		parentanchor = top|right
 		position = { -7 10 }
@@ -291,6 +291,9 @@ base_window = {
 								using = background_widget
 								blockoverride "Margin" { margin = { 2 2 } }
 								onclick = "[GetScriptedGui('marriage_play_pick_their').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+								# [#356 row-highlight 2026-07-21] highlight the selected their-char row: down= reads the
+								# per-character marker pick_their stamps on the chosen char (cleared from the prior pick).
+								down = "[Character.MakeScope.Var('qing_marriage_their_selected').IsSet]"
 								tooltip = "MARRIAGE_PLAY_PICK_THEIR_TT"
 								flowcontainer = {
 									parentanchor = vcenter
@@ -320,6 +323,9 @@ base_window = {
 								using = background_widget
 								blockoverride "Margin" { margin = { 2 2 } }
 								onclick = "[GetScriptedGui('marriage_play_pick_their').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+								# [#356 row-highlight 2026-07-21] highlight the selected their-char row: down= reads the
+								# per-character marker pick_their stamps on the chosen char (cleared from the prior pick).
+								down = "[Character.MakeScope.Var('qing_marriage_their_selected').IsSet]"
 								tooltip = "MARRIAGE_PLAY_PICK_THEIR_TT"
 								flowcontainer = {
 									parentanchor = vcenter
@@ -331,51 +337,36 @@ base_window = {
 							}
 						}
 					}
-					# ---- PROPOSE (a full-width LIST-ROW button, identical shape to a character row) ----
-					button = {
-						size = { 588 72 }
-						margin = { 2 3 }
-						using = background_widget
-						blockoverride "Margin" { margin = { 2 2 } }
-						# [BT-G R5 2026-07-21] NO `enabled` here — deliberately. `enabled`/`visible`/`datamodel` are
-						# the attributes the engine evaluates AT INSTANTIATION (onclick is only evaluated on click).
-						# Screen 2 (proven) has NO `enabled` anywhere; an `enabled` carrying an explicit
-						# GetScriptedGui('marriage_play_launch').IsValid on a createwidget'd window is the single
-						# remaining render-time divergence and the prime suspect for the silent non-instantiation.
-						# Dropping it makes screen 3 a true render-time SUBSET of screen 2. Safe: marriage_play_launch's
-						# own is_valid fully guards Execute (both picks set, alive, unmarried, unbetrothed, opposite-sex),
-						# so clicking Propose while ineligible is a harmless no-op — the tooltip states the requirement.
-						onclick = "[GetScriptedGui('marriage_play_launch').Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-						onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_their_window')]"
+					# ---- PROPOSE / CANCEL bar (red styled action buttons) ----
+					# [#9 red-style 2026-07-21] Restored the red text_button_square_highlighted style (was plain
+					# background_widget buttons from the R5 clone). R6 proved the screen-3 no-show was the OPENER's
+					# onclick ORDER (createwidget-before-clear), NOT the button widget type — so the styled button is
+					# safe now. Propose regains its `enabled` gate (greyed until a valid opposite-sex unmarried pair is
+					# picked); harmless per R5 — marriage_play_launch.is_valid still fully guards Execute.
+					text_button_square_highlighted = {
+						size = { 380 32 }
+						blockoverride "Center_text" { text = "MARRIAGE_PLAY_LAUNCH_BTN"  max_width = 360 }
+						blockoverride "On_click" {
+							enabled = "[GetScriptedGui('marriage_play_launch').IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+							onclick = "[GetScriptedGui('marriage_play_launch').Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+							onclick = "[ExecuteConsoleCommand('gui.ClearWidgets marriage_play_their_window')]"
+						}
 						tooltip = "MARRIAGE_PLAY_LAUNCH_TT"
-						flowcontainer = {
-							parentanchor = vcenter
-							spacing = 8
-							margin = { 8 6 }
-							textbox = { size = { 560 64 }  parentanchor = vcenter  align = center|nobaseline  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "MARRIAGE_PLAY_LAUNCH_BTN" }
-						}
 					}
-					# ---- CANCEL (a full-width LIST-ROW button, identical shape) ----
-					button = {
-						size = { 588 72 }
-						margin = { 2 3 }
-						using = background_widget
-						blockoverride "Margin" { margin = { 2 2 } }
-						onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_their_window')]"
-						tooltip = "MARRIAGE_PLAY_CANCEL_TT"
-						flowcontainer = {
-							parentanchor = vcenter
-							spacing = 8
-							margin = { 8 6 }
-							textbox = { size = { 560 64 }  parentanchor = vcenter  align = center|nobaseline  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "MARRIAGE_PLAY_CANCEL_BTN" }
+					text_button_square_highlighted = {
+						size = { 200 32 }
+						blockoverride "Center_text" { text = "MARRIAGE_PLAY_CANCEL_BTN"  max_width = 190 }
+						blockoverride "On_click" {
+							onclick = "[ExecuteConsoleCommand('gui.ClearWidgets marriage_play_their_window')]"
 						}
+						tooltip = "MARRIAGE_PLAY_CANCEL_TT"
 					}
 				}
 			}
 		}
 	}
 	button_close = {
-		onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_their_window')]"
+		onclick = "[ExecuteConsoleCommand('gui.ClearWidgets marriage_play_their_window')]"
 		tooltip = "CLOSE"
 		parentanchor = top|right
 		position = { -7 10 }
