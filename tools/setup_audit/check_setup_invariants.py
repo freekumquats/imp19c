@@ -8,6 +8,9 @@
 #   2. DOUBLE-OWNED: no province id appears in two tags' own_control_core.
 #   3. REFS EXIST: every tag's primary_culture exists in common/cultures/, religion in common/religions/.
 #   4. BRACE BALANCE of the setup file.
+#   5. LANDLESS SUBJECT: no `dependency = { first=A second=B }` where B has ZERO own_control_core.
+#      (An emptied/inert tag left wired as a live subject = class-4 construction AV — the crash that the
+#      #40 South-American-junta + NSW inert folds introduced. Inert-tag playbook step 3 = drop dependency.)
 # Reports every violation with the offending tag(s)/province(s). Exit 0 = clean, 1 = violations.
 #
 # Usage: python3 setup/main/check_setup_invariants.py
@@ -137,6 +140,19 @@ def main():
             mr = re.search(r'religion\s*=\s*([a-z_][a-z0-9_]*)', body)
             if mr and mr.group(1) not in religions:
                 violations.append(f"MISSING RELIGION: {tag} religion={mr.group(1)} not found in common/religions/")
+
+    # 5. LANDLESS SUBJECT: a dependency whose `second` (subject) tag owns zero provinces. Scan the whole
+    # setup text for dependency blocks; a subject with empty/absent own_control_core is a construction AV.
+    landless = set()
+    for tag, body in blocks.items():
+        if len(parse_cores(body)) == 0:
+            landless.add(tag)
+    stext = strip_comments(text)
+    for dm in re.finditer(r'dependency\s*=\s*\{[^}]*?\bsecond\s*=\s*([A-Z]{2,3})\b[^}]*?\}', stext):
+        subj = dm.group(1)
+        # only flag subjects that appear as an emptied/known setup block (avoid noise from non-setup refs)
+        if subj in landless:
+            violations.append(f"LANDLESS SUBJECT: dependency second={subj} but {subj} has ZERO own_control_core (emptied/inert tag left wired as a live subject — class-4 construction crash; drop the dependency)")
 
     print(f"checked {len(blocks)} country setup blocks; {len(owner_of)} owned provinces; {len(inert)} inert (empty-cores) tags")
 
