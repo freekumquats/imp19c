@@ -38,8 +38,10 @@ def extract_country_blocks(text):
     `capital` and/or `own_control_core` (i.e. a real country setup block, not a random 3-char key)."""
     t = strip_comments(text)
     blocks = {}
-    # find 'TAG = {' openings where TAG is exactly 3 uppercase letters (Imperator tag convention)
-    for m in re.finditer(r'\b([A-Z]{3})\s*=\s*\{', t):
+    # find 'TAG = {' openings. Imperator tags are 2-3 chars, uppercase-letter-led, and MAY contain digits
+    # (PR1, PR2, AR1, C3F). Must match the same alphabet as the dependency-endpoint scan below, else a
+    # land-owning numeric tag is absent from owner_of/landed and gets false-flagged as a landless endpoint.
+    for m in re.finditer(r'\b([A-Z][A-Z0-9]{1,2})\s*=\s*\{', t):
         tag = m.group(1)
         # brace-match to find the block end
         i = m.end() - 1
@@ -141,18 +143,23 @@ def main():
             if mr and mr.group(1) not in religions:
                 violations.append(f"MISSING RELIGION: {tag} religion={mr.group(1)} not found in common/religions/")
 
-    # 5. LANDLESS SUBJECT: a dependency whose `second` (subject) tag owns zero provinces. Scan the whole
-    # setup text for dependency blocks; a subject with empty/absent own_control_core is a construction AV.
-    landless = set()
-    for tag, body in blocks.items():
-        if len(parse_cores(body)) == 0:
-            landless.add(tag)
+    # 5. LANDLESS DEPENDENCY ENDPOINT: a `dependency = { first=A second=B }` where EITHER endpoint owns
+    # zero provinces is a class-4 construction-AV risk (an emptied/inert tag left wired in the dependency
+    # tree). This crashed New Game init when the #40 folds emptied SCZ (a landless OVERLORD, first=) and
+    # NSW/VLL (landless SUBJECTS, second=). Key off the LANDED set (tags with >=1 owned province, from the
+    # owner_of map above) rather than the block set, so this ALSO catches: landless overlorders (first=),
+    # tags whose whole setup block was deleted (no block => not landed => flagged), and numeric tags
+    # (AR1/PR1 — matched by [A-Z0-9]{2,3}, which the old [A-Z]{2,3}\b missed at the letter->digit boundary).
+    landed = set(owner_of.values())
     stext = strip_comments(text)
-    for dm in re.finditer(r'dependency\s*=\s*\{[^}]*?\bsecond\s*=\s*([A-Z]{2,3})\b[^}]*?\}', stext):
-        subj = dm.group(1)
-        # only flag subjects that appear as an emptied/known setup block (avoid noise from non-setup refs)
-        if subj in landless:
-            violations.append(f"LANDLESS SUBJECT: dependency second={subj} but {subj} has ZERO own_control_core (emptied/inert tag left wired as a live subject — class-4 construction crash; drop the dependency)")
+    for dm in re.finditer(r'dependency\s*=\s*\{([^}]*)\}', stext):
+        inner = dm.group(1)
+        fm = re.search(r'\bfirst\s*=\s*([A-Z0-9]{2,3})\b', inner)
+        sm = re.search(r'\bsecond\s*=\s*([A-Z0-9]{2,3})\b', inner)
+        for role, m in (("first/overlord", fm), ("second/subject", sm)):
+            if m and m.group(1) not in landed:
+                tg = m.group(1)
+                violations.append(f"LANDLESS {role.upper()}: dependency {role.split('/')[0]}={tg} but {tg} owns ZERO provinces (emptied/inert tag left wired in the dependency tree — class-4 construction crash; drop the dependency)")
 
     print(f"checked {len(blocks)} country setup blocks; {len(owner_of)} owned provinces; {len(inert)} inert (empty-cores) tags")
 
