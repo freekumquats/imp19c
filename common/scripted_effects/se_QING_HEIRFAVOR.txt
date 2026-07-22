@@ -156,17 +156,45 @@ QING_heirfavor_assign_core = {
 		limit = { var:qing_char_affinity >= 60 }
 		set_variable = { name = qing_favored_heir  value = scope:qing_hf_frontrunner }
 		scope:qing_hf_frontrunner = { change_variable = { name = qing_hf_backers  add = 1 } }
+		QING_heirfavor_mirror_slot = { prince = scope:qing_hf_frontrunner }
 	}
 	else_if = {
 		# DISAFFECTED (affinity < 40): throws in with the rival clique (the dark-horse).
 		limit = { var:qing_char_affinity < 40 }
 		set_variable = { name = qing_favored_heir  value = scope:qing_hf_darkhorse }
 		scope:qing_hf_darkhorse = { change_variable = { name = qing_hf_backers  add = 1 } }
+		QING_heirfavor_mirror_slot = { prince = scope:qing_hf_darkhorse }
 	}
 	else = {
 		# middling: stays out of the succession quarrel.
 		if = { limit = { has_variable = qing_favored_heir } remove_variable = qing_favored_heir }
+		QING_heirfavor_clear_slot = yes
 	}
+}
+
+# ======================================================================
+# [BT-3 redesign 2026-07-22] QING_heirfavor_mirror_slot — mirror the BACKED prince's stable
+# birth-order slot flag (qing_prince_slotN, stamped in QING_princes_recompute_roster) onto THIS
+# official as qing_hf_slotN, so the colour-coded succession chip can show WHICH prince he backs.
+# Scope: CHARACTER (the official). $prince$ = the backed prince char scope. Clears all four first
+# (an official may switch sides between pulses), then copies exactly the one the prince carries.
+# All reads use has_variable (presence), the proven idiom — no GUI value-compare. A prince beyond
+# slot 4 carries no slotN flag, so the official gets none and the chip shows the neutral/other colour.
+# ======================================================================
+QING_heirfavor_mirror_slot = {
+	QING_heirfavor_clear_slot = yes
+	if = { limit = { $prince$ = { has_variable = qing_prince_slot1 } }  set_variable = { name = qing_hf_slot1  value = 1 } }
+	else_if = { limit = { $prince$ = { has_variable = qing_prince_slot2 } }  set_variable = { name = qing_hf_slot2  value = 1 } }
+	else_if = { limit = { $prince$ = { has_variable = qing_prince_slot3 } }  set_variable = { name = qing_hf_slot3  value = 1 } }
+	else_if = { limit = { $prince$ = { has_variable = qing_prince_slot4 } }  set_variable = { name = qing_hf_slot4  value = 1 } }
+}
+
+# QING_heirfavor_clear_slot — wipe the four mirrored slot flags off THIS official. Scope: CHARACTER.
+QING_heirfavor_clear_slot = {
+	if = { limit = { has_variable = qing_hf_slot1 } remove_variable = qing_hf_slot1 }
+	if = { limit = { has_variable = qing_hf_slot2 } remove_variable = qing_hf_slot2 }
+	if = { limit = { has_variable = qing_hf_slot3 } remove_variable = qing_hf_slot3 }
+	if = { limit = { has_variable = qing_hf_slot4 } remove_variable = qing_hf_slot4 }
 }
 
 # ======================================================================
@@ -226,5 +254,12 @@ QING_heirfavor_clear_all = {
 	every_character = {
 		limit = { has_variable = qing_favored_heir }
 		remove_variable = qing_favored_heir
+	}
+	# [BT-3 redesign 2026-07-22] also wipe the mirrored colour-slot flags off anyone who carries one,
+	# so the succession chip drops back to its neutral (grey) state when the contest is settled/absent.
+	# Presence-based sweep (same rationale as the qing_favored_heir sweep above).
+	every_character = {
+		limit = { OR = { has_variable = qing_hf_slot1  has_variable = qing_hf_slot2  has_variable = qing_hf_slot3  has_variable = qing_hf_slot4 } }
+		QING_heirfavor_clear_slot = yes
 	}
 }
