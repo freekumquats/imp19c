@@ -234,10 +234,26 @@ imp19c_setup.10 = {
 	hidden = yes
 	is_triggered_only = yes
 	immediate = {
+		# [C2 boot-fix 2026-07-22] Divorce whoever is CURRENTLY auto-married, then SELF-RESCHEDULE if
+		# any target is still single. The engine's gamestart auto-marriage does NOT resolve on a fixed,
+		# known tick — a single day-2 shot can fire BEFORE a ruler is auto-married (the divorce then
+		# no-ops and he stays married; this is the class of the reported "Catherine still married"
+		# failure). Re-firing over a ~6-month window (re-arm every 30 days until qing_setup10_passes
+		# hits 6) makes the sweep robust regardless of when the engine pairs each ruler. Each divorce
+		# is guarded is_alive+is_married so it only ever undoes an UNWANTED auto-pairing; a target the
+		# engine leaves single is simply skipped. Idempotent: once a ruler is divorced he reads single
+		# and is skipped on later passes. char:N absolute-scoped; ROOT is only a carrier.
 		if = { limit = { exists = char:616  char:616 = { is_alive = yes  is_married = yes } }  char:616 = { divorce_character = spouse } }
 		if = { limit = { exists = char:617  char:617 = { is_alive = yes  is_married = yes } }  char:617 = { divorce_character = spouse } }
 		if = { limit = { exists = char:622  char:622 = { is_alive = yes  is_married = yes } }  char:622 = { divorce_character = spouse } }
 		if = { limit = { exists = char:572  char:572 = { is_alive = yes  is_married = yes } }  char:572 = { divorce_character = spouse } }
 		LOG_line = { sys = SETUP  msg = "EVENT imp19c_setup.10: undid gamestart auto-marriage of historically-single 1763 rulers (Pope Clement XIII, Carlo Emanuele III, Amat, Augustus III)" }
+		# re-arm: count passes on the carrier, re-fire for ~6 months so a late auto-marriage is caught.
+		if = { limit = { NOT = { has_variable = qing_setup10_passes } }  set_variable = { name = qing_setup10_passes  value = 0 } }
+		change_variable = { name = qing_setup10_passes  add = 1 }
+		if = {
+			limit = { var:qing_setup10_passes < 6 }
+			trigger_event = { id = imp19c_setup.10  days = 30 }
+		}
 	}
 }

@@ -199,16 +199,35 @@ rus_expansion.10 = {
 	hidden = yes
 	is_triggered_only = yes
 
+	# [C2 boot-fix 2026-07-22] The trigger must NOT gate on is_married — if it did, a day-1 fire before
+	# the engine auto-marries Catherine would find her single, the event would be BLOCKED, and the
+	# self-reschedule below would never arm (she then stays married for good — the reported failure).
+	# Gate only on tag/exists/alive; the divorce itself is guarded is_married in the immediate.
 	trigger = {
 		tag = RUS
 		exists = char:144
-		char:144 = { is_alive = yes  is_married = yes }
+		char:144 = { is_alive = yes }
 	}
 
 	immediate = {
-		char:144 = {
-			divorce_character = spouse
+		# divorce only if she is CURRENTLY auto-married (safe no-op otherwise).
+		if = {
+			limit = { char:144 = { is_married = yes } }
+			char:144 = { divorce_character = spouse }
+			LOG_line = { sys = RUS  msg = "EVENT rus_expansion.10: undid the gamestart auto-marriage of Catherine II (widow-empress) for [ROOT.GetTag]" }
 		}
-		LOG_line = { sys = RUS  msg = "EVENT rus_expansion.10: undid the gamestart auto-marriage of Catherine II (widow-empress) for [ROOT.GetTag]" }
+		# SELF-RESCHEDULE: the engine's gamestart auto-marriage does not resolve on a fixed tick, so a
+		# single day-1 shot can fire BEFORE Catherine is paired (the divorce no-ops and she stays wed —
+		# the "Catherine married Boris Ryzhkov" failure). Re-fire every 30 days for ~6 months until she
+		# is confirmed single; the pass counter caps the loop.
+		if = { limit = { NOT = { has_variable = qing_rus10_passes } }  set_variable = { name = qing_rus10_passes  value = 0 } }
+		change_variable = { name = qing_rus10_passes  add = 1 }
+		if = {
+			limit = {
+				var:qing_rus10_passes < 6
+				char:144 = { is_alive = yes  is_married = yes }
+			}
+			trigger_event = { id = rus_expansion.10  days = 30 }
+		}
 	}
 }
