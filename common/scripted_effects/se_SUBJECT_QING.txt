@@ -236,12 +236,14 @@ SUBJ_QING_advance_integration = {
 
 			# [#111/#112 SOLUTION A] At the threshold, DO NOT silently absorb. Fire the
 			# 改土歸流 capstone (qing_integ.30) so the player chooses the MANNER of
-			# incorporation (solemn / bureaucratic / coercive) — each capstone option
-			# calls SUBJ_QING_absorb_subject itself. This makes the capstone the actual
-			# absorption moment (a concrete, player-chosen act) rather than a hollow
-			# post-hoc ceremony. The event's own trigger re-checks progress>=5, so the
-			# capstone pulse's safety-net fire cannot double-resolve (once the first .30
-			# absorbs and clears the progress var, any queued .30 discards silently).
+			# incorporation (solemn / bureaucratic / coercive). [#subj-integ-rework 2026-07-22]
+			# Each capstone option now calls SUBJ_QING_authorize_integration (NOT the old inline
+			# SUBJ_QING_absorb_subject): the capstone AUTHORIZES the engine handoff and the engine
+			# absorbs the provinces gradually — the meter (this progress var, filled by the push
+			# button + reaction/frontier events) is the political LEAD-UP to that decision. The
+			# event's own trigger re-checks progress>=5 so a queued .30 cannot double-resolve (once
+			# the first .30 authorizes, it converts the type off autonomous_governorship and clears
+			# the progress var, so any queued .30 discards silently).
 			if = {
 				limit = {
 					var:SUBJ_integration_progress >= 5
@@ -251,9 +253,12 @@ SUBJ_QING_advance_integration = {
 				root = { trigger_event = { id = qing_integ.30  days = { 1 5 } } }
 			}
 			else_if = {
-				# Fallback: a subject at threshold that is NOT an autonomous_governorship
-				# (so the capstone's own trigger would reject it) absorbs directly, exactly
-				# as before Solution A — no behavioural change for that path.
+				# SAFETY NET (unreachable in normal play): a subject at threshold that is NOT an
+				# autonomous_governorship. Every progress-driver (push button, frontier/Xinjiang/
+				# caravan events, reactions) gates on autonomous_governorship, so this branch should
+				# never fire. It CANNOT use the engine handoff (only a governorship is converted to
+				# integrating_governorship), so a direct absorb is the only way to avoid stranding
+				# such an edge subject at a full meter forever. Left as the pre-rework direct absorb.
 				limit = { var:SUBJ_integration_progress >= 5 }
 				root = { SUBJ_QING_absorb_subject = yes }
 			}
@@ -347,6 +352,69 @@ SUBJ_QING_add_integration = {
 	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_add_integration" }
 	SUBJ_QING_advance_integration = { steps = 1 }
 	LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_add_integration"  result = OK }
+}
+
+########################################################################
+# [#subj-integ-rework 2026-07-22] AUTHORIZE VANILLA INTEGRATION
+# The 改土歸流 capstone (qing_integ.30) no longer instant-annexes. Instead it
+# AUTHORIZES the final absorption by handing off to the engine's native subject-
+# integration: the subject (an autonomous_governorship at threshold) is converted
+# to the transient `integrating_governorship` type (can_be_integrated = yes), which
+# lights up the engine's hardcoded "Integrate" diplomatic action. The player then
+# clicks it and the ENGINE absorbs the subject GRADUALLY. Completion is caught by
+# on_diplomatic_annex (00_specific_from_code.txt), which runs the sub-subject
+# reparenting + character cleanup the old instant absorb did inline.
+#
+# WHY the flag flip, not a "start integration" verb: neither vanilla, TI, nor
+# Invictus exposes a script effect to START engine subject-integration (confirmed
+# by both oracles — start_integrating_subject / integrate_subject do NOT exist). The
+# ONLY interface is the can_be_integrated subject-type flag + the engine button +
+# the on_diplomatic_annex completion hook. So "authorize" = flip the type; the player
+# finishes via the now-visible native action.
+#
+# Scope: country (overlord / ROOT). scope:target = the subject at the capstone.
+########################################################################
+SUBJ_QING_authorize_integration = {
+	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_authorize_integration" }
+
+	if = {
+		limit = {
+			exists = scope:target
+			scope:target = { is_subject_of = ROOT }
+			scope:target = { any_owned_province = { count >= 1 } }
+		}
+
+		# SUB-SUBJECT REPARENTING happens HERE, at authorize time — NOT on completion.
+		# Rationale: (a) scoping is correct — ROOT = overlord, scope:target = subject, exactly
+		# what SUBJ_QING_reparent_sub_subjects expects (the same scope the old inline absorb used);
+		# (b) the engine deletes the subject when IT completes annexation, taking its sub-subject
+		# links with it, so there is no safe post-annex window to read them. Reparenting now (while
+		# the intermediary still exists) hands e.g. Tibet's sub-subjects straight to CHI with no
+		# orphan gap, and the intermediary is then absorbed gradually by the engine with no children
+		# left to strand. No-op when the subject holds no sub-subjects (the common case).
+		SUBJ_QING_reparent_sub_subjects = yes
+
+		# Convert to the integrable transient type (lights up the engine's native
+		# Integrate action). FUNC_make_subject preserves the overlord bond + latest_overlord.
+		FUNC_make_subject = { overlord = ROOT  target = scope:target  type = integrating_governorship }
+		scope:target = { SUBJ_QING_derive_rung = yes }
+
+		# The custom political lead-up is complete; the engine now owns the absorption.
+		# Clear the custom 5-step progress/active/suspended state so the old progress bar
+		# and the ambient reaction pulse stop acting on it (both also gate on the type, which
+		# is no longer autonomous_governorship — belt and braces). The diplomatic-view label
+		# reads the type itself (is_subject_type = integrating_governorship), so no marker var
+		# is needed; the subject is deleted by the engine when it completes annexation anyway.
+		scope:target = {
+			SUBJ_QING_clear_integration_state = yes
+		}
+
+		LOG_line = { sys = SUBJ  msg = "AUTHORIZE integration (handoff to engine) overlord= subject= converted to integrating_governorship" }
+		LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_authorize_integration"  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_authorize_integration"  reason = "target missing / not our subject / no provinces" }
+	}
 }
 
 ########################################################################
