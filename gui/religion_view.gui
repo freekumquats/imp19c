@@ -415,63 +415,29 @@ base_window = {
 		################################
 		# PANTHEON
 		################################
-		flowcontainer = {
-			# [#44 fix R2 2026-07-21] direction=vertical is the REAL spill fix. This flowcontainer had NO
-			# direction (-> horizontal default), so it grew to the scrollwidget's full ~1920px content height
-			# instead of bounding the scrollarea to its 600px viewport — the scrollarea never established a
-			# clipping region, so the deity list ran off the screen bottom with no scrollbar. The prior
-			# 620->600 height change was inert for the same reason (an unbounded parent ignores the height).
-			# The WORKING Holy Sites tab wraps its scrollarea in a direction=vertical flowcontainer, and the
-			# proven office-picker uses a vbox (implicitly vertical) — a vertical parent treats the scrollarea
-			# size as a FIXED clip boundary. This flowcontainer's only child is the scrollarea, so setting
-			# direction is safe (nothing to reorder).
-			direction = vertical
-			margin = { 10 10 }
+		# [#44 fix R5 2026-07-21 — boot B3] COPIED VERBATIM from the PROVEN-scrolling Terra Indomita
+		# religion_view.gui pantheon body (github.com/dementive/Terra-Indomita, gui/religion_view.gui:656-679).
+		# Prior R1-R4 all failed (list still spilled off the window bottom, no scrollbar): the real cause was a
+		# FIXED-height scrollarea (620x600) inside a fixed-margin flowcontainer, which sat below ~400px of
+		# summary/faith/tab-bar content and so overran the 900px window. TI's structure = vbox with
+		# layoutpolicy_vertical=expanding wrapping a scrollarea size={0 700} layoutpolicy_horizontal=expanding:
+		# the expanding vbox bounds the scrollarea to the ACTUAL remaining window height (so it always fits and
+		# the scrollbar appears), and scrollwidget > dynamicgridbox DIRECTLY (no intermediate flowcontainer).
+		# Kept imp19c's VerticalScrollBar (TI's VerticalScrollBarForBox is not defined here) and the existing item block.
+		vbox = {
+			layoutpolicy_vertical = expanding
+			layoutpolicy_horizontal = expanding
+			margin_top = 12
 			visible = "[Or( GetVariableSystem.HasValue( 'religion_tabs', 'omens'), Not( GetVariableSystem.Exists('religion_tabs') ) )]"
 			scrollarea = {
 				name = "pantheon_scroller"
-				# [BT-A scroll-geom fix 2026-07-20] The B6 wrap left two geometry bugs the user reported:
-				# (1) 660 wide inside a 640-wide window with a {10 10} margin (usable interior = 620) pushed
-				# the vertical scrollbar ~40px PAST the right edge — "scrollbar too far right, spilling over".
-				# Fit it to the 620 interior. (2) datamodel_wrap = 4 tiled the 620-wide deity items FOUR
-				# columns across: the content became 4×620 wide (3 columns clipped off-screen right) but only
-				# ~2 rows TALL, so it fit inside the 620 viewport and the vertical scrollbar had nothing to
-				# move — "it scrolls but no more gods become visible". A pantheon is a vertical LIST; wrap = 1
-				# stacks the items in one column so the height exceeds the viewport and the scrollbar reveals
-				# them all. (Item narrowed to 600 below so the scrollbar doesn't overlay the row content.)
-				# [#44 fix 2026-07-21] Height 620 -> 600. The deity list spilled off the window bottom (last
-				# row half-cut). Both religion tab bodies start at the same y (siblings under the top vbox), and
-				# the SISTER tab's scrollarea (holy_sites_scroller) is 600 tall and renders fully in-window — so
-				# 600 is the empirically-correct vertical budget here; 620 overran the bottom edge. Width kept 620.
-				size = { 620 600 }
+				size = { 0 700 }
+				layoutpolicy_horizontal = expanding
 				scrollbarpolicy_horizontal = always_off
 				scrollbar_vertical = { using = VerticalScrollBar }
 				scrollwidget = {
-					# [#44 fix R4 2026-07-21] WHOLESALE match to the PROVEN-scrolling office picker
-					# (qing_office_picker_window, imp19c_windows.gui:49-51) — the correct reference for a
-					# too-big TALL-item list (Holy Sites was a BAD reference: its list never overflows, so it
-					# never proved it can scroll). The proven scroller = scrollwidget > flowcontainer(vertical)
-					# > dynamicgridbox with NO gridbox size and NO VerticalScrollAreaCutOff. Prior fixes each
-					# changed ONE property; this transplants the whole structure. (The removed size={600 160}
-					# clamped the gridbox to one row's height, so the scrollarea saw 'content fits' and the list
-					# spilled instead of scrolling.)
-					flowcontainer = {
-						direction = vertical
-						dynamicgridbox = {
+					dynamicgridbox = {
 						name = "omens_grid"
-						# [#44 fix R3 2026-07-21] THE REAL SPILL FIX (found by differential read vs the WORKING
-						# Holy Sites tab). The scrollwidget's child gridbox had NO explicit size, so it auto-grew
-						# to the full content height (N deities x 160px) and reported THAT back to the scrollarea,
-						# which then expanded to the content height instead of clipping at its 600px viewport — the
-						# list ran off the window bottom with no working scrollbar. The WORKING sites_grid declares
-						# size = { 400 190 } (religion_view.gui:880); a declared size makes the gridbox a BOUNDED
-						# widget whose overflow scrolls. Height is nominal (the gridbox still lays out all items);
-						# what matters is that a size is declared at all. Prior R1/R2 edited the scrollarea+parent
-						# (inert) — the fault was HERE, on the list widget. Matches the sibling: {width height}.
-						# [BT-A scroll R2 2026-07-20] NO datamodel_wrap — matches the proven office-picker
-						# idiom (qing_office_picker_window): a full-width item with no wrap stacks exactly one
-						# per row, vertically. datamodel_wrap = 1 instead flowed items HORIZONTALLY (regression:
-						# gods left-to-right). = 4 was the original spill bug. Drop the key entirely.
 						datamodel = "[ReligionView.GetPantheon]"
 				
 						item = {
@@ -833,7 +799,6 @@ base_window = {
 								#}
 						
 							}
-						}
 						}
 					}
 				}
