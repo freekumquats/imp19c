@@ -177,6 +177,37 @@ QING_council_autofill_office = {
 # Also detects the "overmighty grandee" state (a Heshen-style Grand Chancellor)
 # for the band applier. All O(offices) counter maths; no pop or province sweeps.
 # ======================================================================
+# ======================================================================
+# [1:1 fix 2026-07-21] QING_validate_one_position — VALIDATION SWEEP for the 1:1 character:position
+# rule. That rule is SUPPOSED to be enforced by the appointment/enrol gates, but has been broken by
+# accident (boot-test: a Lifan Yuan director ALSO marked Palace Eunuch; a Works minister ALSO an
+# Inspecting Censor). This LOGs any CHI character carrying MORE THAN ONE position marker, so a
+# violation is CAUGHT + visible in the log rather than silently masked by the card's first-match
+# display. Read-only (LOG only — does NOT auto-strip; a strip could hide the real assignment bug).
+# Scope: COUNTRY (CHI), called from QING_GOV_pulse. O(court); the count compare uses a LITERAL RHS
+# (> 1), the only legal relational-RHS form (see the RHS-comparison rule). Scratch var removed per char.
+# ======================================================================
+QING_validate_one_position = {
+	every_character = {
+		limit = { employer = ROOT  is_alive = yes }
+		set_variable = { name = qing_pos_marker_ct  value = 0 }
+		if = { limit = { has_variable = qing_office_held }           change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_zongli_diplomat }       change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_is_censor_inspector }   change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_is_imperial_guardsman } change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_is_southernstudy }      change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_is_upperstudy }         change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_amban_marker }          change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_is_palace_eunuch }      change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_is_harem_consort }      change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = {
+			limit = { var:qing_pos_marker_ct > 1 }
+			LOG_line = { sys = QING  msg = "1:1 VIOLATION — character holds MORE THAN ONE court position (count above); check appointment/enrol gates for" }
+		}
+		remove_variable = qing_pos_marker_ct
+	}
+}
+
 QING_council_recompute = {
 	# [#103] se_LOG enter/exit wiring (council-is-offices rewrite)
 	LOG_enter = { sys = QING  fn = "QING_council_recompute" }
@@ -1281,6 +1312,13 @@ QING_office_appoint = {
 	# a later dismissal, bypassing the cap (the 擢用 Elevate lever is exactly that promote-out path).
 	if = { limit = { has_variable = qing_is_southernstudy }      remove_variable = qing_is_southernstudy }
 	if = { limit = { has_variable = qing_is_upperstudy }         remove_variable = qing_is_upperstudy }
+	# [1:1 fix 2026-07-21] ALSO strip the palace-eunuch (內廷太監) + amban (駐紮大臣) markers — the two
+	# sub-position markers the strip block above MISSED. Boot-test: the Grand Director of the Lifan Yuan
+	# rendered ALSO as "Palace Eunuch"; a man promoted INTO a great office kept his old sub-post marker,
+	# so the character-card court-position title (which reads these raw markers) showed two positions (a
+	# 1:1 violation). Strip both here so the rule holds. Self-guarded no-ops for non-eunuch/non-amban appointees.
+	if = { limit = { has_variable = qing_is_palace_eunuch }      remove_variable = qing_is_palace_eunuch }
+	if = { limit = { has_variable = qing_amban_marker }          remove_variable = qing_amban_marker }
 	# [#5 fix 2026-07-17; BOOT-CRASHFIX 2026-07-18] MARTIAL-OFFICE EXAM CONGRUENCE — the wu_jinshi
 	# grant that USED to live here was REMOVED. QING_office_appoint is reached at GAMESTATE
 	# CONSTRUCTION (on_game_initialized -> QING_council_autofill -> QING_council_autofill_office{war,
