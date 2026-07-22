@@ -5989,26 +5989,37 @@ types Base_GUI_Types
 					flowcontainer = {
 						spacing = 5
 						parentanchor = right
-						# [#4 title-slot fix R2 2026-07-21] ONE shared title slot (was TWO competing icon_and_text — the vanilla
-						# "+ Huangdi +" line AND a separate Qing line — which BOTH reserved 240px in this no-ignoreinvisible
-						# flowcontainer, overflowing the row and shoving Huangdi/Primary Heir/Governor/Commander left + off).
-						# The 1:1 char:position rule means a character has EITHER an engine title OR a Qing court position,
-						# never both, so a single widget suffices: show the engine title when HasTitle, else the Qing court
-						# position. SelectLocalization picks the passthrough loc key (each wraps its datafunction). Visible when
-						# EITHER exists. The both-at-once case (a 1:1 VIOLATION — happens by accident, see se_QING logs) shows
-						# the vanilla title (HasTitle wins the Select) and is caught by the startup validation LOG, not here.
+						ignoreinvisible = yes
+						# [#4 title R3 boot-B1] datafunction DIRECT in text, NOT behind a loc key. R2 used SelectLocalization of
+						# QING_TITLE_SLOT_VANILLA/COURT whose loc VALUES embed [Character.GetTitleNameShort]/[Character.Custom(...)];
+						# the engine does NOT re-resolve a datafunction inside a key returned by SelectLocalization (boot log:
+						# "Data error in loc key QING_TITLE_SLOT_VANILLA") -> every title blank. Restore the original vanilla
+						# direct-datafunction widget + a SECOND widget for the Qing court position (Character.Custom DOES resolve).
+						# Parent flowcontainer is ignoreinvisible=yes so the hidden one reserves no width. 1:1 => at most one visible.
 						icon_and_text = {
-							visible = "[Or( Character.HasTitle, Not( StringIsEmpty( Character.Custom('QING_court_position_or_empty') ) ) )]"
+							visible = "[Character.HasTitle]"
 							size = { 240 32 }
 							blockoverride "Icon" {
 								icon = {
 									texture = "gfx/interface/base_parts/plus.dds"
 									size = { 30 30 }
-									visible = "[Or( Character.HasTitle, Not( StringIsEmpty( Character.Custom('QING_court_position_or_empty') ) ) )]"
+									visible = "[Character.HasTitle]"
 								}
 							}
-							blockoverride "Text" { text = "[SelectLocalization( Character.HasTitle, 'QING_TITLE_SLOT_VANILLA', 'QING_TITLE_SLOT_COURT' )]" }
+							blockoverride "Text" { text = "[Character.GetTitleNameShort]" }
 							tooltip = "[Character.GetTitle.GetTooltip]"
+						}
+						icon_and_text = {
+							visible = "[Not( StringIsEmpty( Character.Custom('QING_court_position_or_empty') ) )]"
+							size = { 240 32 }
+							blockoverride "Icon" {
+								icon = {
+									texture = "gfx/interface/base_parts/plus.dds"
+									size = { 30 30 }
+									visible = "[Not( StringIsEmpty( Character.Custom('QING_court_position_or_empty') ) )]"
+								}
+							}
+							blockoverride "Text" { text = "[Character.Custom('QING_court_position_or_empty')]" }
 						}
 						icon_and_text = {
 							name = "Religion"
@@ -9786,12 +9797,15 @@ types Base_GUI_Types
 	# datacontext the parent MUST supply). Read idiom = the proven .MakeScope.GetVariable(...) form.
 	type qing_heir_favor_square = widget {
 		size = { 24 24 }
-		# [code-review F5] gate on the backed prince still being ALIVE, not just the var being set: a
-		# backed prince who dies mid-contest leaves a dangling ref on his backers until the next quarterly
-		# pulse reassigns them, and the tooltip below dereferences GetCharacter.GetName — so hide the chip
-		# (and its dead-ref tooltip) the instant the referenced prince is gone. IsValid guards the ref
-		# before IsAlive is read.
-		visible = "[And( Character.MakeScope.GetVariable('qing_favored_heir').IsSet, And( Character.MakeScope.GetVariable('qing_favored_heir').GetCharacter.IsValid, Character.MakeScope.GetVariable('qing_favored_heir').GetCharacter.IsAlive ) )]"
+		# [#30 boot-B5 2026-07-21] gate on JUST .IsSet — the proven var-gated-chip idiom (qing_favor_square /
+		# qing_bayara_guard_raised / shortage_* all gate on `...GetVariable('x').IsSet`). The R1 chain
+		# `And( IsSet, And( GetVariable('qing_favored_heir').GetCharacter.IsValid, ....GetCharacter.IsAlive ) )`
+		# read a CHARACTER out of a variable then called .IsValid/.IsAlive on it — a chain with NO working
+		# precedent in this repo; it evaluated to false (no error logged) so the chip NEVER showed, even though
+		# the log confirms qing_favored_heir IS set ("heir-favour: the council backs the front-runner" fired).
+		# The dead-prince case the R1 guards chased is ALREADY handled in script: the pulse clears qing_favored_heir
+		# (QING_heirfavor_clear_all + the middling-branch remove) so a stale/dead ref does not persist to the next pulse.
+		visible = "[Character.MakeScope.GetVariable('qing_favored_heir').IsSet]"
 		tooltip = "QING_GC_HEIR_FAVOR_TT"
 		icon = {
 			size = { 100% 100% }
