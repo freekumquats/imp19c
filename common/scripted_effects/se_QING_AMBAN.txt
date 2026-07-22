@@ -301,6 +301,10 @@ QING_amban_evaluate = {
 		}
 		var:qing_office_lifanyuan_holder = { save_scope_as = qing_lifan_holder }
 	}
+	# [#subj-integ-rework 2026-07-22] Track the BEST posted amban's combined skill this pulse,
+	# to drive the skill-scaled integrate_speed bonus (able/exemplary frontier admin) applied
+	# after the loop. Reset the scratch to 0 each pulse (recomputed from the live roster).
+	set_variable = { name = qing_amban_top_skill_tmp  value = 0 }
 	# [#113 integ-fix] iterate every subject; for each with a posted amban (stored in
 	# the subject's OWN fixed-name var qing_amban_here), evaluate. No tag interpolation.
 	every_subject = {
@@ -365,6 +369,18 @@ QING_amban_evaluate = {
 			# a pillar; a disloyal one is a risk). Already scored at post time, but
 			# re-score quarterly as the character's loyalty/stats shift.
 			scope:qing_amban_current = { QING_char_affinity = yes }
+			# [#subj-integ-rework 2026-07-22] running MAX of posted-amban combined skill (for the
+			# skill-scaled integrate_speed bonus applied after the loop). Only a LOYAL amban counts
+			# (affinity >= 40) — an estranged resident is not helping absorption. ROOT (CHI) holds the
+			# scratch qing_amban_top_skill_tmp; comparison RHS uses the root-reading passthrough svalue
+			# (a bare var: on a comparison RHS is illegal — the RHS-comparison rule).
+			if = {
+				limit = {
+					scope:qing_amban_current = { var:qing_char_affinity >= 40 }
+					scope:qing_amban_current = { combined_stats_council_svalue > qing_amban_top_skill_root_cmpsvalue }
+				}
+				set_variable = { name = qing_amban_top_skill_tmp  value = scope:qing_amban_current.combined_stats_council_svalue }
+			}
 			if = {
 				limit = { scope:qing_amban_current = { var:qing_char_affinity < 40 } }
 				# LOW AFFINITY: the resident is estranged from the throne — a risk.
@@ -448,6 +464,37 @@ QING_amban_evaluate = {
 			}
 		}
 	}
+	# [#subj-integ-rework 2026-07-22] SKILL-SCALED FRONTIER-ADMIN integrate_speed bonus.
+	# "If the amban and Lifan Yuan director are sufficiently skilled, that speeds integration."
+	# Refresh idiom: remove both tiers, then add at most one (duration -1, held only while the
+	# skill bar is met). Requires BOTH a competent Lifan Yuan holder (the Peking supervisor) AND
+	# a competent posted amban (the man on the ground, tracked as the best loyal resident this
+	# pulse in qing_amban_top_skill_tmp). combined_stats_council_svalue sums martial/finesse/
+	# charisma/zeal + degree prestige, so a strong official scores ~30-45+. Tiers: BOTH >= 25 =
+	# able (+15% integrate_speed); BOTH >= 38 = exemplary (+30% + a little subject loyalty). A
+	# vacant Lifan Yuan (no scope:qing_lifan_holder) grants nothing — no supervisor, no bonus.
+	remove_country_modifier = qing_integ_able_frontier_admin
+	remove_country_modifier = qing_integ_exemplary_frontier_admin
+	if = {
+		limit = {
+			exists = scope:qing_lifan_holder
+			scope:qing_lifan_holder = { combined_stats_council_svalue >= qing_frontier_admin_exemplary_svalue }
+			var:qing_amban_top_skill_tmp >= qing_frontier_admin_exemplary_svalue
+		}
+		add_country_modifier = { name = qing_integ_exemplary_frontier_admin  duration = -1 }
+		LOG_line = { sys = QING  msg = "frontier-admin: EXEMPLARY Lifan Yuan + amban -> +30% integrate_speed for" }
+	}
+	else_if = {
+		limit = {
+			exists = scope:qing_lifan_holder
+			scope:qing_lifan_holder = { combined_stats_council_svalue >= qing_frontier_admin_able_svalue }
+			var:qing_amban_top_skill_tmp >= qing_frontier_admin_able_svalue
+		}
+		add_country_modifier = { name = qing_integ_able_frontier_admin  duration = -1 }
+		LOG_line = { sys = QING  msg = "frontier-admin: ABLE Lifan Yuan + amban -> +15% integrate_speed for" }
+	}
+	# tidy the per-pulse scratch so it does not linger as stale state.
+	if = { limit = { has_variable = qing_amban_top_skill_tmp }  remove_variable = qing_amban_top_skill_tmp }
 	LOG_exit = { sys = QING  fn = "QING_amban_evaluate"  result = OK }
 }
 
