@@ -1,41 +1,16 @@
 ﻿########################################################################
-# MARRIAGE_PLAY_actions.txt — [#356] the two-step marriage-proposal picker.
+# MARRIAGE_PLAY_actions.txt — [#356] the marriage-proposal picker's scripted_guis.
 #
-# Replaces the old Dynastic Match builder. The flow:
-#   0. OPEN — build the list of eligible TARGET REALMS (marriage_play_realms) + our own
-#      unmarried characters (marriage_play_own_candidates), open the window.
-#   1. pick a TARGET REALM  -> store marriage_play_target (a country var) + build that realm's
-#      opposite-gender unmarried characters into marriage_play_their_candidates.
-#   2. pick OUR character    -> store scope-var marriage_play_our_pick + (re)build the target
-#      list filtered to the OPPOSITE gender of our pick.
-#   3. pick THEIR character  -> store marriage_play_their_pick.
-#   4. LAUNCH — with both picks set, open the proposal play (MARRIAGE_PLAY_begin).
-# In BOTH character lists the ruling family sorts to the TOP (an is_close_relative-of-ruler
-# display key drives the ordered pass). Minors are INCLUDED (betrothal path).
+# [2026-07-21] The target-realm picker (screen 1) was DELETED as dead code — nothing opened it.
+# With it went its scripted_guis marriage_play_open + marriage_play_pick_realm and the
+# MARRIAGE_PLAY_build_realms effect (se_MARRIAGE_PLAY.txt). The ONLY entry point is the Diplomatic
+# View's "Royal Marriage" button -> marriage_play_diplo_open, which knows the target (the viewed
+# realm) and opens screen 2 directly. Remaining flow:
+#   marriage_play_diplo_open -> pick OWN char (marriage_play_pick_own) -> pick THEIR char
+#   (marriage_play_pick_their) -> LAUNCH (marriage_play_launch -> MARRIAGE_PLAY_begin).
 #
 # Scope: COUNTRY (ROOT = CHI, the player). se_LOG sys = MARRIAGE. Prefix = marriage_play_.
 ########################################################################
-
-# ---- OPEN THE PROPOSAL PICKER ----------------------------------------------
-marriage_play_open = {
-	scope = country
-	ai_is_valid = { always = no }
-	is_shown = { tag = CHI }
-	is_valid = { always = yes }
-	effect = {
-		LOG_line = { sys = MARRIAGE  msg = "marriage-proposal picker opened by" }
-		# clear any stale selection from a prior open.
-		if = { limit = { has_variable = marriage_play_target }      remove_variable = marriage_play_target }
-		if = { limit = { has_variable = marriage_play_our_pick }    remove_variable = marriage_play_our_pick }
-		# [#356 row-highlight] also clear the per-char selection marker off the prior their-pick before dropping the var.
-		if = { limit = { has_variable = marriage_play_their_pick }  var:marriage_play_their_pick = { remove_variable = qing_marriage_their_selected }  remove_variable = marriage_play_their_pick }
-		MARRIAGE_PLAY_build_realms = yes
-		MARRIAGE_PLAY_build_own = yes
-		# [BT-F] their-candidate lists are now age-banded (adults + children); clear both until a realm is picked.
-		clear_variable_list = marriage_play_their_adults
-		clear_variable_list = marriage_play_their_children
-	}
-}
 
 # ---- OPEN FROM THE DIPLOMATIC VIEW ("Royal Marriage" action) ---------------
 # [B1] The realm-picker window (screen 1) is bypassed: the diplomatic view already knows the
@@ -70,30 +45,6 @@ marriage_play_diplo_open = {
 		# our pick fixes the filter) candidates (screen 3). Same builders marriage_play_open uses.
 		MARRIAGE_PLAY_build_own = yes
 		MARRIAGE_PLAY_build_their = yes
-	}
-}
-
-# ---- STEP 1: pick a TARGET REALM -------------------------------------------
-# Row action on the realms list (scope:target = the clicked realm, via the row datacontext).
-marriage_play_pick_realm = {
-	scope = country
-	saved_scopes = { target }
-	ai_is_valid = { always = no }
-	# [logfix 2026-07-17] guard scope:target with exists — the engine evaluates is_shown/is_valid
-	# ambiently (row datacontext, tooltip refresh) WITHOUT the AddScope('target') the onclick supplies,
-	# so an unguarded scope:target read flooded error.log ~2400×/boot with "Undefined event target
-	# 'target'" + "Failed context switch". exists=scope:target short-circuits cleanly when absent
-	# (mirrors marriage_play_diplo_open's is_valid guard).
-	is_shown = { exists = scope:target  scope:target = { exists = current_ruler } }
-	is_valid = { exists = scope:target  NOT = { scope:target = { this = ROOT } } }
-	effect = {
-		set_variable = { name = marriage_play_target  value = scope:target }
-		# a fresh realm pick invalidates any prior their-char pick.
-		# [#356 row-highlight] clear the per-char selection marker off the prior their-pick too (matches the
-		# other three entry points), so no stale row stays highlighted when the realm changes.
-		if = { limit = { has_variable = marriage_play_their_pick }  var:marriage_play_their_pick = { remove_variable = qing_marriage_their_selected }  remove_variable = marriage_play_their_pick }
-		MARRIAGE_PLAY_build_their = yes
-		LOG_line = { sys = MARRIAGE  msg = "marriage picker: target realm chosen" }
 	}
 }
 
@@ -199,19 +150,3 @@ marriage_play_launch = {
 	}
 }
 
-# ---- [#6 TRACER 2026-07-21 — REMOVE once screen-2 auto-close is localised] --------------------
-# Screen 2 (marriage_play_own_window) does not auto-close on advancing to screen 3, and TWO fixes
-# (onclick reorder, list_button overlay restructure) were both inert. This tracer resolves the
-# ambiguity: it is wired as the LAST onclick on the screen-2 row, AFTER the GUI.ClearWidgets. If
-# "BT-6 screen-2 onclick chain END reached" appears in the log, the chain COMPLETED (so ClearWidgets
-# ran but did not close the window — an engine/semantics issue). If it is ABSENT while pick_own's
-# "BT-G pick_own DONE" IS present, the chain aborts between the createwidget and here. COUNTRY scope.
-marriage_play_trace_screen2_end = {
-	scope = country
-	ai_is_valid = { always = no }
-	is_shown = { always = yes }
-	is_valid = { always = yes }
-	effect = {
-		LOG_line = { sys = MARRIAGE  msg = "BT-6 screen-2 onclick chain END reached (after GUI.ClearWidgets marriage_play_own_window)" }
-	}
-}

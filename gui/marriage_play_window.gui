@@ -1,105 +1,27 @@
 ########################################################################
-# marriage_play_window.gui — [#356 / rebuild 2026-07-16] the marriage-proposal picker,
-# as THREE SEQUENTIAL SINGLE-COLUMN windows (user directive: the old 3-column layout kept
-# rendering as a blank black frame + grey overspill; per the religion-panel lesson, stop
-# rebuilding the 3-column layout and clone the PROVEN single-column picker instead).
+# marriage_play_window.gui — [#356] the marriage-proposal picker, as TWO SEQUENTIAL SINGLE-COLUMN
+# windows (cloned from the PROVEN single-column qing_office_picker_window, imp19c_windows.gui:36 —
+# single fixed scrollarea under the header + a window-level button_close).
 #
-# Flow (each screen is a standalone createwidget window, cloned from qing_office_picker_window,
-# imp19c_windows.gui:36 — single fixed scrollarea under the header + a window-level button_close):
-#   1. marriage_play_window       — pick the TARGET REALM (marriage_play_realms). On click:
-#      Execute pick_realm (sets target + builds their-candidates), close this, open screen 2.
-#   2. marriage_play_own_window   — pick OUR character (marriage_play_own_candidates). On click:
-#      Execute pick_own (sets our pick + re-filters their-candidates by sex), close this, open 3.
-#   3. marriage_play_their_window — pick THEIR character (marriage_play_their_candidates), then a
-#      Propose/Cancel bar. Row click selects (down= highlight); Propose runs the validated launch.
+# [2026-07-21] SCREEN 1 (the target-realm picker, base_window "marriage_play_window") was DELETED:
+# it was DEAD — nothing ever createwidget'd it. The ONLY entry point is the Diplomatic View's "Royal
+# Marriage" button (diplomatic_view.gui:1601), which runs marriage_play_diplo_open (it already knows
+# the viewed realm = the target) and opens SCREEN 2 directly. There is NO government-view entry.
 #
-# Opened by marriage_play_open (MARRIAGE_PLAY_actions.txt) from a government_view button, which
-# builds the realm + own lists first. Rows keep their Country/Character datacontext and inline the
-# GetScriptedGui in onclick (the #8 boot-fix: a ScriptedGui datacontext override shadows the row
-# scope and blanks the row). TAB indentation throughout.
+# Flow (each screen is a standalone createwidget window):
+#   1. marriage_play_own_window   — pick OUR character (marriage_play_own_candidates). On click:
+#      Execute pick_own (sets our pick + builds/filters their-candidates by sex), open screen 2's
+#      next window (marriage_play_their_window), then close self. All onclicks live in a
+#      blockoverride "On_click" block so the createwidget AND the self-ClearWidgets both fire.
+#   2. marriage_play_their_window — pick THEIR character (marriage_play_their_candidates); a checkmark
+#      marks the selected row; the Propose/Cancel bar runs the validated launch (marriage_play_launch).
+#
+# Rows keep their Character datacontext and inline the GetScriptedGui in onclick (the #8 boot-fix: a
+# ScriptedGui datacontext override shadows the row scope and blanks the row). TAB indentation throughout.
+# (Screen 1's scripted_guis marriage_play_pick_realm + marriage_play_open and the MARRIAGE_PLAY_build_realms
+# / marriage_play_realms builders were DELETED with it — dead code, no live caller.)
 ########################################################################
 
-# ======================================================================
-# SCREEN 1 — pick the TARGET REALM.
-# ======================================================================
-base_window = {
-	name = "marriage_play_window"
-	gfxtype = windowgfx
-	parentanchor = center
-	movable = yes
-	size = { 640 720 }
-	vbox = {
-		using = MainWindowHeaderBoxCentered
-		blockoverride "Title_text" { text = "MARRIAGE_PLAY_COL_REALM" }
-		scrollarea = {
-			size = { 620 660 }
-			scrollbarpolicy_horizontal = always_off
-			scrollbar_vertical = { using = VerticalScrollBar }
-			scrollwidget = {
-				flowcontainer = {
-					direction = vertical
-					spacing = 6
-					margin = { 8 6 }
-					textbox = {
-						using = BaseFontS
-						using = Default_FontColor
-						size = { 590 44 }
-						multiline = yes
-						alpha = 0.75
-						fontsize_min = 11
-						text = "MARRIAGE_PLAY_INSTR_REALM"
-					}
-					textbox = {
-						visible = "[IsDataModelEmpty( Player.MakeScope.GetList('marriage_play_realms') )]"
-						using = BaseFontS
-						using = Default_FontColor
-						size = { 590 26 }
-						alpha = 0.6
-						text = "MARRIAGE_PLAY_NO_REALMS"
-					}
-					dynamicgridbox = {
-						datamodel = "[Player.MakeScope.GetList('marriage_play_realms')]"
-						item = {
-							# [#6 fix 2026-07-21] Same standalone-overlay restructure as screen 2 (see that note): the
-							# clickable is a list_button OVERLAY carrying the onclick chain, not the row that hosts the
-							# content, so ClearWidgets(self) does not tear down the click target mid-onclick. Screen 1 is
-							# bypassed by the diplo-view entry but used by the government-view path. Order kept
-							# Execute -> createwidget(screen 2) -> ClearWidgets(self); uppercase GUI.ClearWidgets.
-							widget = {
-								size = { 588 60 }
-								margin = { 2 3 }
-								datacontext = "[Scope.GetCountry]"
-								list_button = {
-									size = { 100% 100% }
-									onclick = "[GetScriptedGui('marriage_play_pick_realm').Execute( GuiScope.SetRoot( Player.MakeScope ).AddScope('target', Country.MakeScope ).End )]"
-									onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_own_window')]"
-									onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_window')]"
-									tooltip = "MARRIAGE_PLAY_PICK_REALM_TT"
-								}
-								flowcontainer = {
-									parentanchor = vcenter
-									spacing = 8
-									margin = { 8 6 }
-									new_country_flag = {
-										parentanchor = vcenter
-										blockoverride "Size" { size = { 40 40 } }
-									}
-									textbox = { size = { 500 40 }  parentanchor = vcenter  using = BaseFontM  using = Default_FontColor  text = "[Country.GetName]" }
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	button_close = {
-		onclick = "[ExecuteConsoleCommand('gui.ClearWidgets marriage_play_window')]"
-		tooltip = "CLOSE"
-		parentanchor = top|right
-		position = { -7 10 }
-	}
-}
 
 # ======================================================================
 # SCREEN 2 — pick OUR character.
@@ -164,11 +86,16 @@ base_window = {
 								datacontext = "[Scope.GetCharacter]"
 								list_button = {
 									size = { 100% 100% }
-									onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-									onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_their_window')]"
-									onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
-										# [#6 TRACER] confirm whether this onclick chain reaches its END after the ClearWidgets.
-										onclick = "[GetScriptedGui('marriage_play_trace_screen2_end').Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									# [#6 fix R3 2026-07-21] PROVEN blockoverride "On_click" form (list_button defines block
+									# "On_click"). Screen 2 closed fine PRE-R6 with ClearWidgets-first; my R6 createwidget-first as
+									# BARE onclicks broke the close (a bare onclick after a mid-chain self-ClearWidgets aborts). The
+									# province-reports hub (qing_province_reports.gui:646-647) proves createwidget-child-THEN-
+									# ClearWidgets-self BOTH fire when queued inside an On_click block. Match it. Tracer removed.
+									blockoverride "On_click" {
+										onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+										onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_their_window')]"
+										onclick = "[ExecuteConsoleCommand('gui.ClearWidgets marriage_play_own_window')]"
+									}
 									tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
 								}
 								flowcontainer = {
@@ -214,11 +141,16 @@ base_window = {
 								datacontext = "[Scope.GetCharacter]"
 								list_button = {
 									size = { 100% 100% }
-									onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-									onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_their_window')]"
-									onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
-										# [#6 TRACER] confirm whether this onclick chain reaches its END after the ClearWidgets.
-										onclick = "[GetScriptedGui('marriage_play_trace_screen2_end').Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+									# [#6 fix R3 2026-07-21] PROVEN blockoverride "On_click" form (list_button defines block
+									# "On_click"). Screen 2 closed fine PRE-R6 with ClearWidgets-first; my R6 createwidget-first as
+									# BARE onclicks broke the close (a bare onclick after a mid-chain self-ClearWidgets aborts). The
+									# province-reports hub (qing_province_reports.gui:646-647) proves createwidget-child-THEN-
+									# ClearWidgets-self BOTH fire when queued inside an On_click block. Match it. Tracer removed.
+									blockoverride "On_click" {
+										onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+										onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_their_window')]"
+										onclick = "[ExecuteConsoleCommand('gui.ClearWidgets marriage_play_own_window')]"
+									}
 									tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
 								}
 								flowcontainer = {
