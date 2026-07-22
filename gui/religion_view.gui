@@ -415,30 +415,44 @@ base_window = {
 		################################
 		# PANTHEON
 		################################
-		# [#44 fix R5 2026-07-21 — boot B3] COPIED VERBATIM from the PROVEN-scrolling Terra Indomita
-		# religion_view.gui pantheon body (github.com/dementive/Terra-Indomita, gui/religion_view.gui:656-679).
-		# Prior R1-R4 all failed (list still spilled off the window bottom, no scrollbar): the real cause was a
-		# FIXED-height scrollarea (620x600) inside a fixed-margin flowcontainer, which sat below ~400px of
-		# summary/faith/tab-bar content and so overran the 900px window. TI's structure = vbox with
-		# layoutpolicy_vertical=expanding wrapping a scrollarea size={0 700} layoutpolicy_horizontal=expanding:
-		# the expanding vbox bounds the scrollarea to the ACTUAL remaining window height (so it always fits and
-		# the scrollbar appears), and scrollwidget > dynamicgridbox DIRECTLY (no intermediate flowcontainer).
-		# Kept imp19c's VerticalScrollBar (TI's VerticalScrollBarForBox is not defined here) and the existing item block.
-		vbox = {
-			layoutpolicy_vertical = expanding
-			layoutpolicy_horizontal = expanding
-			margin_top = 12
+		# [BT-2 fix 2026-07-22] The R5 TI-VERBATIM transplant (scrollarea size={0 700} +
+		# layoutpolicy_horizontal=expanding) rendered the pantheon body COMPLETELY BLANK. Root cause,
+		# finally isolated by diffing the real TI source against this file: TI's size-width-0 +
+		# horizontal-EXPANDING scrollarea inherits its WIDTH from a width-bounded parent vbox chain.
+		# THIS file's pantheon body sits in a plain `flowcontainer direction=vertical` (top of the
+		# window) which does NOT propagate a bounded width down — so width resolved to ~0 and the list
+		# had zero render area = blank. TI works in TI; the transplant could not because the parent
+		# differs. FIX = the imp19c-native proven-scrolling idiom instead: a FIXED-size scrollarea +
+		# using=VerticalScrollAreaCutOff + an EXPLICIT-size dynamicgridbox with NO datamodel_wrap (one
+		# full-width item per row = vertical stack). This is exactly the office-picker
+		# (imp19c_windows.gui qing_office_picker_window, a LARGE list that provably scrolls) and the
+		# Holy-Sites sibling in THIS file (renders + clips in this same parent). It also matches the
+		# earlier a212e310e that DID render — the reason a212e310e still spilled off the bottom was the
+		# INVISIBLE sibling tab-body reserving layout space, which the LATER #45 `ignoreinvisible = yes`
+		# on the shared parent flowcontainer now fixes. So this is a changed environment, not a repeat.
+		# 600 height is the empirically-correct vertical budget here (the Holy-Sites scrollarea is 600
+		# and clips fully in-window); width 620 = the window's usable interior (640 - margins).
+		flowcontainer = {
+			margin = { 10 10 }
 			visible = "[Or( GetVariableSystem.HasValue( 'religion_tabs', 'omens'), Not( GetVariableSystem.Exists('religion_tabs') ) )]"
-			scrollarea = {
-				name = "pantheon_scroller"
-				size = { 0 700 }
-				layoutpolicy_horizontal = expanding
-				scrollbarpolicy_horizontal = always_off
-				scrollbar_vertical = { using = VerticalScrollBar }
-				scrollwidget = {
-					dynamicgridbox = {
-						name = "omens_grid"
-						datamodel = "[ReligionView.GetPantheon]"
+			flowcontainer = {
+				direction = vertical
+				scrollarea = {
+					name = "pantheon_scroller"
+					size = { 620 600 }
+					scrollbarpolicy_horizontal = always_off
+					using = VerticalScrollAreaCutOff
+					scrollbar_vertical = { using = VerticalScrollBar }
+					scrollwidget = {
+						dynamicgridbox = {
+							name = "omens_grid"
+							# [BT-2] NO size on the gridbox — the PROVEN-scrolling office picker
+							# (imp19c_windows.gui qing_office_picker_window) gives its dynamicgridbox NO
+							# size: the gridbox auto-grows to full content height and the FIXED-size
+							# scrollarea (620x600 above) is what clips+scrolls it. A size here would clamp
+							# the content and hide rows. NO datamodel_wrap = one full-width item per row,
+							# stacked vertically (item margin_widget is 600 wide in the 620 area).
+							datamodel = "[ReligionView.GetPantheon]"
 				
 						item = {
 							margin_widget = {
@@ -802,6 +816,7 @@ base_window = {
 						}
 					}
 				}
+			}
 			}
 		}
 		################################
