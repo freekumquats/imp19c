@@ -108,8 +108,18 @@ QING_council_prune_seat = {
 	# symptom's cure at the START STATE: the 1763 OOB attach (qing_force_setup.1, day 30) makes
 	# commanders AFTER the game-start autofill already seated the ablest men, so those councillors
 	# are also commanders until this prune (run each recompute + right after the OOB attach) relieves
-	# them. Vacated cleanly via the shared dispatch (office var + officeholder modifier + power base
-	# all torn down); a following autofill re-fills the seat with an eligible man.
+	# them.
+	# [BT-recursion-fix 2026-07-23] MUST use the NO-BACKFILL vacate twin here, NOT QING_office_vacate_dispatch.
+	# The appointment redesign made QING_office_vacate_dispatch auto-refill a vacated seat via
+	# QING_council_autofill_office — and QING_council_autofill_office calls THIS effect (QING_council_prune_seat)
+	# at its top. So `prune_seat -> QING_office_vacate_dispatch -> QING_council_autofill_office -> prune_seat`
+	# is an infinite cycle: at a 1763 start the OOB seats commander-ministers, so this branch fires, and the
+	# loop recursed past the engine's 16-deep scripted-block limit → startup HANG (error.log:
+	# "Too deeply nested scripted block", chain vacate_dispatch->autofill_office->prune_seat repeating).
+	# The no-backfill twin only tears the seat down (no autofill_office call), breaking the cycle. Refill is
+	# not lost: when prune runs inside QING_council_autofill_office the very next block re-fills the now-empty
+	# seat with a fresh created official; when prune runs from a recompute/prune_all sweep the seat is left
+	# for re-staffing (consistent with the redesign's "only death/departure auto-creates" rule).
 	if = {
 		limit = {
 			has_variable = qing_office_$office$_holder
@@ -119,7 +129,7 @@ QING_council_prune_seat = {
 				OR = { is_general = yes  is_admiral = yes  is_governor = yes }
 			}
 		}
-		var:qing_office_$office$_holder = { QING_office_vacate_dispatch = yes }
+		var:qing_office_$office$_holder = { QING_office_vacate_dispatch_nobackfill = yes }
 	}
 }
 
