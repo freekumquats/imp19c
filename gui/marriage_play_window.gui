@@ -82,16 +82,18 @@ base_window = {
 								margin = { 2 3 }
 								datacontext = "[Scope.GetCharacter]"
 								using = background_widget
-								# [BT-1 fix R2 2026-07-22] onclick ORDER: Execute -> createwidget(screen 3) -> ClearWidgets(self).
-								# The R1 fix wrongly put ClearWidgets(own_window) BEFORE createwidget — but ClearWidgets destroys
-								# the window this very button lives in, so the chain dies there and onclick-3 (createwidget) never
-								# runs: screen 2 closed but screen 3 NEVER APPEARED (regression). The ORIGINAL reason screen 2
-								# would not close was the margin-on-bare-widget flood aborting the chain (now fixed on the screen-3
-								# widgets below), NOT the order. With margin fixed, createwidget succeeds first, THEN we close self
-								# LAST — matching the proven office-picker idiom (Execute then ClearWidgets(self) as the final act).
+								# [BT-marriage-screen2-close fix 2026-07-23] The row does the PROVEN 2-onclick office-picker form
+								# ONLY: Execute the pick, then createwidget screen 3. It does NOT self-close here. Reason (confirmed
+								# by boot: the OWN-character window stayed open behind screen 3): a 3rd onclick
+								# `GUI.ClearWidgets marriage_play_own_window` destroys the widget tree that owns THIS button while
+								# its own onclick list is still dispatching — with a createwidget in between, that self-close did not
+								# take (no proven window does createwidget(other)->ClearWidgets(self) in one chain; the office picker
+								# only ever does Execute->ClearWidgets(self), 2 onclicks, no intervening createwidget). Screen 2 is now
+								# closed from SCREEN 3's side instead: their_window has a state{ on_start } that clears own_window when it
+								# opens (the proven trade_view/overview_view on_start=ExecuteConsoleCommand idiom). So the close no longer
+								# depends on this dying button.
 								onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
 								onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_their_window')]"
-								onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
 								tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
 								flowcontainer = {
 									parentanchor = vcenter
@@ -129,16 +131,18 @@ base_window = {
 								margin = { 2 3 }
 								datacontext = "[Scope.GetCharacter]"
 								using = background_widget
-								# [BT-1 fix R2 2026-07-22] onclick ORDER: Execute -> createwidget(screen 3) -> ClearWidgets(self).
-								# The R1 fix wrongly put ClearWidgets(own_window) BEFORE createwidget — but ClearWidgets destroys
-								# the window this very button lives in, so the chain dies there and onclick-3 (createwidget) never
-								# runs: screen 2 closed but screen 3 NEVER APPEARED (regression). The ORIGINAL reason screen 2
-								# would not close was the margin-on-bare-widget flood aborting the chain (now fixed on the screen-3
-								# widgets below), NOT the order. With margin fixed, createwidget succeeds first, THEN we close self
-								# LAST — matching the proven office-picker idiom (Execute then ClearWidgets(self) as the final act).
+								# [BT-marriage-screen2-close fix 2026-07-23] The row does the PROVEN 2-onclick office-picker form
+								# ONLY: Execute the pick, then createwidget screen 3. It does NOT self-close here. Reason (confirmed
+								# by boot: the OWN-character window stayed open behind screen 3): a 3rd onclick
+								# `GUI.ClearWidgets marriage_play_own_window` destroys the widget tree that owns THIS button while
+								# its own onclick list is still dispatching — with a createwidget in between, that self-close did not
+								# take (no proven window does createwidget(other)->ClearWidgets(self) in one chain; the office picker
+								# only ever does Execute->ClearWidgets(self), 2 onclicks, no intervening createwidget). Screen 2 is now
+								# closed from SCREEN 3's side instead: their_window has a state{ on_start } that clears own_window when it
+								# opens (the proven trade_view/overview_view on_start=ExecuteConsoleCommand idiom). So the close no longer
+								# depends on this dying button.
 								onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
 								onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_their_window')]"
-								onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
 								tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
 								flowcontainer = {
 									parentanchor = vcenter
@@ -190,6 +194,17 @@ base_window = {
 	parentanchor = center
 	movable = yes
 	size = { 640 720 }
+	# [BT-marriage-screen2-close fix 2026-07-23] Close the OWN-character picker (screen 2,
+	# marriage_play_own_window) the moment THIS window (screen 3) opens. This replaces the unreliable
+	# self-close that used to live on screen 2's dying row button (a createwidget-then-ClearWidgets-self
+	# chain that did not take, leaving screen 2 open behind screen 3). on_start = ExecuteConsoleCommand is
+	# the proven window-open hook (trade_view.gui / overview_view.gui / economy_view.gui fire a console
+	# command from a _show state on_start). By the time this fires, screen 3 already exists, so screen 2
+	# closing cannot abort the handoff.
+	state = {
+		name = _show
+		on_start = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
+	}
 	vbox = {
 		using = MainWindowHeaderBoxCentered
 		blockoverride "Title_text" { text = "MARRIAGE_PLAY_COL_THEIR" }

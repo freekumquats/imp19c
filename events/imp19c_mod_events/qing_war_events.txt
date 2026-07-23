@@ -171,7 +171,14 @@ qing_war.2 = {
 
 	trigger = {
 		tag = CHI
-		# at least one commander with significant power_base and low loyalty
+		# [BT-warlord-spam fix 2026-07-23] require at least one wayward commander NOT already under a
+		# recent-warlord-review cooldown (qing_warlord_review_cd). The pulse (se_QING_WAR.txt) queues one
+		# qing_war.2 PER estranged commander each pulse, but this event's immediate always picks the SINGLE
+		# highest-power_base wayward commander — so several queued copies collapsed onto the same man and
+		# fired as 6 identical popups (reported: "A Commander's Private Following" ×6 for Zhang Xu). Gating
+		# the trigger on an UNFLAGGED candidate means: the first copy fires, stamps the cooldown on the man
+		# it picks, and every remaining queued copy — whose only candidate is now that flagged man — fails
+		# this trigger and does NOT fire (is_triggered_only events re-check trigger at fire time). One popup.
 		any_character = {
 			employer = ROOT
 			is_alive = yes
@@ -180,12 +187,14 @@ qing_war.2 = {
 			martial >= 8
 			power_base >= 8
 			loyalty < 50
+			NOT = { has_variable = qing_warlord_review_cd }
 		}
 	}
 
 	immediate = {
 		LOG_line = { sys = QING  msg = "EVENT qing_war.2 (wayward commander) [ROOT.GetTag]" }
-		# find the most dangerous wayward commander (high power_base, low loyalty)
+		# find the most dangerous wayward commander (high power_base, low loyalty) NOT already reviewed
+		# recently (the cooldown gate above; exclude flagged men here too so we never re-pick one).
 		ordered_character = {
 			limit = {
 				employer = ROOT
@@ -195,12 +204,17 @@ qing_war.2 = {
 				martial >= 8
 				power_base >= 8
 				loyalty < 50
+				NOT = { has_variable = qing_warlord_review_cd }
 			}
 			order_by = power_base
 			check_range_bounds = no
 			max = 1
 			save_scope_as = wayward_commander
 		}
+		# [BT-warlord-spam fix 2026-07-23] stamp the per-commander cooldown so no further qing_war.2 fires
+		# on this man for ~2 years (auto-expiring var). This is what makes the extra queued copies no-op via
+		# the trigger above. 730-day cooldown = a wayward commander resurfaces at most biennially, not every pulse.
+		scope:wayward_commander = { set_variable = { name = qing_warlord_review_cd  value = 1  days = 730 } }
 		# if War minister exists, score friction
 		if = {
 			limit = {
