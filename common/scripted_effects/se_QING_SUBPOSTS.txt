@@ -81,6 +81,65 @@ QING_subpost_fill_one = {
 }
 
 # ======================================================================
+# QING_subpost_fill_one_minted — [BT-diplomat fix 2026-07-22] staff ONE seat by ALWAYS MINTING a
+# BRAND-NEW character (never drawing an existing courtier). Country scope (ROOT = CHI).
+# Params: $marker$, $count$ (as QING_subpost_fill_one).
+# WHY THIS EXISTS: the "diplomats are also Grand Council ministers" double-booking bug was tried and
+# FIXED REPEATEDLY (diplomat=commander strip + R2, qing_officer_marker BT-7 + R2, shared-picker
+# eligibility guards, roster-rebuild strip, quarterly un-double-book sweep) and KEPT RETURNING every
+# boot test — an existing courtier drawn into the corps could always later take (or already hold) an
+# office through some ordering the strip missed. The user's decision: fill diplomat seats with
+# BRAND-NEW characters, GUARANTEED to hold no other office. This effect skips branch (A) entirely and
+# always runs the mint path — a fresh exam scholar who exists only to serve, so double-booking is
+# structurally impossible. (Same mint mechanism QING_subpost_fill_one branch B uses; #90-safe — the
+# corps marker is stamped in a FOLLOW-UP scope, never inside create_character.)
+QING_subpost_fill_one_minted = {
+	QING_exam_mint_scholar = { degree = juren }
+	scope:qing_new_scholar = { save_scope_as = qing_subpost_new }
+	scope:qing_subpost_new = {
+		QING_exam_pool_drop_member = yes
+		set_variable = { name = qing_is_above_exp_student  value = 1 }
+	}
+	change_variable = { name = qing_above_exp_student_count  add = 1 }
+	scope:qing_subpost_new = { set_variable = { name = $marker$  value = 1 } }
+	change_variable = { name = $count$  add = 1 }
+	LOG_line = { sys = QING  msg = "subpost: minted a BRAND-NEW diplomat (holds no other office) for" }
+}
+
+# ======================================================================
+# QING_subpost_staff_corps_minted — [BT-diplomat fix 2026-07-22] fill a corps up to $target$ using
+# ONLY freshly-minted characters (QING_subpost_fill_one_minted). Country scope (ROOT = CHI).
+# Params: $marker$, $count$, $target$. Recomputes the live count first (dropping any member who has
+# since taken an office/command — same disqualifier set as QING_subpost_staff_corps), then mints new
+# men for the remaining vacancies. Used for the DIPLOMAT corps so its members never double-book.
+# ======================================================================
+QING_subpost_staff_corps_minted = {
+	# LIVE recount: rebuild $count$ from the marker, stripping anyone now disqualified (took an
+	# office/command/governorship/harem/officer role since being posted). Mirror of
+	# QING_subpost_staff_corps's recount pass.
+	set_variable = { name = $count$  value = 0 }
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			has_variable = $marker$
+		}
+		if = {
+			limit = { OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_office_held  has_variable = qing_is_harem_consort  has_variable = qing_officer_marker } }
+			remove_variable = $marker$
+		}
+		else = {
+			ROOT = { change_variable = { name = $count$  add = 1 } }
+		}
+	}
+	# mint new men up to $target$ — one per guarded rung (corps cap is small; 4 rungs).
+	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$ } }
+	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$ } }
+	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$ } }
+	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$ } }
+}
+
+# ======================================================================
 # QING_subpost_staff_corps — fill a corps up to its establishment target. Country scope.
 # Params: $marker$, $count$ (as above); $target$ = how many the corps should carry.
 # Recomputes the LIVE count first (so a dead/departed member's seat is seen as vacant),
@@ -184,10 +243,21 @@ QING_subpost_seed_gamestart = {
 	# here first. Idempotent (guards on qing_exam_initialized), so the later init call no-ops.
 	QING_exam_init = yes
 	if = { limit = { NOT = { has_variable = qing_above_exp_student_count } }  set_variable = { name = qing_above_exp_student_count  value = 0 } }
-	QING_subpost_staff_corps = { marker = qing_zongli_diplomat        count = qing_zongli_diplomat_count  target = 4 }
+	# [BT-diplomat fix 2026-07-22] The DIPLOMAT corps (駐外使臣) is staffed with BRAND-NEW MINTED
+	# characters (QING_subpost_staff_corps_minted), NOT drawn from the existing court.
+	# HISTORY — READ BEFORE CHANGING THIS BACK to the ordinary draw-from-court fill: the "diplomats are
+	# also Grand Council ministers" double-booking bug (e.g. Zhao Yi, Minister of War, appearing in the
+	# Diplomat Corps) was TRIED AND FIXED REPEATEDLY over many sessions and KEPT COMING BACK every boot
+	# test — the diplomat=commander strip (fix + R2), the qing_officer_marker addition (BT-7 + R2), the
+	# shared-picker eligibility guards, the roster-rebuild strip, AND the quarterly un-double-book sweep
+	# were ALL added in turn, and a sitting minister STILL surfaced in the corps through some fill/strip
+	# ordering. Per the user's decision, diplomats are now GUARANTEED fresh-minted characters that hold
+	# no other office, so double-booking is STRUCTURALLY impossible (a brand-new man cannot already be a
+	# minister/commander/governor). Censors + guard keep the ordinary draw-from-court fill below.
+	QING_subpost_staff_corps_minted = { marker = qing_zongli_diplomat  count = qing_zongli_diplomat_count  target = 4 }
 	QING_subpost_staff_corps = { marker = qing_is_censor_inspector    count = qing_censor_inspector_count  target = 4 }
 	QING_subpost_staff_corps = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count       target = 4 }
-	LOG_line = { sys = QING  msg = "subpost: game-start ministry corps staffed for" }
+	LOG_line = { sys = QING  msg = "subpost: game-start ministry corps staffed (diplomats minted fresh; censors + guard from court) for" }
 	LOG_exit = { sys = QING  fn = "QING_subpost_seed_gamestart"  result = OK }
 }
 
@@ -219,13 +289,16 @@ QING_subpost_refill_sweep = {
 		QING_subpost_strip_double_booked = { marker = qing_is_censor_inspector    count = qing_censor_inspector_count }
 		QING_subpost_strip_double_booked = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count }
 		# FILL to establishment — only while the relevant office has a serving director.
-		# diplomats — only while the Zongli Yamen has a Director.
+		# [BT-diplomat fix 2026-07-22] DIPLOMATS refill with BRAND-NEW MINTED characters
+		# (QING_subpost_staff_corps_minted), never drawn from the existing court, so a refilled seat can
+		# never be a sitting minister/commander (the recurring double-booking bug). Only while the Zongli
+		# Yamen has a Director (a headless ministry conjures no new staff).
 		if = {
 			limit = {
 				has_variable = qing_office_zongli_holder
 				var:qing_office_zongli_holder = { is_alive = yes  employer = ROOT }
 			}
-			QING_subpost_staff_corps = { marker = qing_zongli_diplomat  count = qing_zongli_diplomat_count  target = 4 }
+			QING_subpost_staff_corps_minted = { marker = qing_zongli_diplomat  count = qing_zongli_diplomat_count  target = 4 }
 		}
 		# investigating censors — only while the Censorate has a Grand Inspector.
 		if = {

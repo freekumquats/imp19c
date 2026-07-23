@@ -182,56 +182,5 @@ rus_expansion.6 = {
 	}
 }
 
-# ======================================================================
-# [BT-5 fix 2026-07-22] .10 UNDO THE GAMESTART AUTO-MARRIAGE OF CATHERINE II.
-# The engine auto-marries single adult rulers at gamestart to a RANDOM generated
-# stray (the boot showed Catherine wed to an invented "Viktor Goncharov"). Catherine
-# (char 144) carries NO setup marry_character — she was famously NOT remarried after
-# Peter III (murdered 1762); she reigned as a widow-empress. So any spouse she holds
-# at the start is the unwanted engine auto-pairing. Fired at day 1 from the RUS
-# on_game_initialized hook (after gamestate construction + auto-marriage resolve).
-# hidden_effect: purely mechanical, no player dialog. Guarded on is_married so it is a
-# safe no-op if the engine happened to leave her single. divorce_character = spouse is
-# the proven clear-spouse verb (00_ambitions.txt:2841/2848).
-# ======================================================================
-rus_expansion.10 = {
-	type = country_event
-	hidden = yes
-	is_triggered_only = yes
-
-	# [C2 boot-fix 2026-07-22] The trigger must NOT gate on is_married — if it did, a day-1 fire before
-	# the engine auto-marries Catherine would find her single, the event would be BLOCKED, and the
-	# self-reschedule below would never arm (she then stays married for good — the reported failure).
-	# Gate only on tag/exists/alive; the divorce itself is guarded is_married in the immediate.
-	trigger = {
-		tag = RUS
-		exists = char:144
-		char:144 = { is_alive = yes }
-	}
-
-	immediate = {
-		# divorce only if she is CURRENTLY auto-married (safe no-op otherwise).
-		if = {
-			limit = { char:144 = { is_married = yes } }
-			char:144 = { divorce_character = spouse }
-			LOG_line = { sys = RUS  msg = "EVENT rus_expansion.10: undid the gamestart auto-marriage of Catherine II (widow-empress) for [ROOT.GetTag]" }
-		}
-		# SELF-RESCHEDULE: the engine's gamestart auto-marriage does not resolve on a fixed tick, so a
-		# single day-1 shot can fire BEFORE Catherine is paired (the divorce no-ops and she stays wed —
-		# the "Catherine married Boris Ryzhkov" failure). Re-fire every 30 days for ~6 months until she
-		# is confirmed single; the pass counter caps the loop.
-		if = { limit = { NOT = { has_variable = qing_rus10_passes } }  set_variable = { name = qing_rus10_passes  value = 0 } }
-		change_variable = { name = qing_rus10_passes  add = 1 }
-		# [C2 review-fix 2026-07-22] re-arm gated ONLY on the pass counter — NOT on is_married. The
-		# earlier version also required char:144 is_married=yes to re-fire, which DEFEATED the window:
-		# if Catherine is single at pass 1 (engine auto-marriage not yet resolved) the loop terminated
-		# and never caught the LATER marriage (the exact "married Boris Ryzhkov" failure). Fire all 6
-		# passes unconditionally (every 30d, ~6 months); the divorce itself is guarded is_married above
-		# so each pass safe-no-ops when she is single, and divorces her on whichever pass finds her wed.
-		# Matches imp19c_setup.10's proven unconditional 6-pass window.
-		if = {
-			limit = { var:qing_rus10_passes < 6 }
-			trigger_event = { id = rus_expansion.10  days = 30 }
-		}
-	}
-}
+# [2026-07-22] rus_expansion.10 (Catherine divorce event) removed — she is kept single via a setup
+# spouse instead (Grigory Orlov, char 632; see setup/characters/00_Russian Empire.txt char 144).
