@@ -415,41 +415,25 @@ base_window = {
 		################################
 		# PANTHEON
 		################################
-		# [BT-2 fix 2026-07-22] The R5 TI-VERBATIM transplant (scrollarea size={0 700} +
-		# layoutpolicy_horizontal=expanding) rendered the pantheon body COMPLETELY BLANK. Root cause,
-		# finally isolated by diffing the real TI source against this file: TI's size-width-0 +
-		# horizontal-EXPANDING scrollarea inherits its WIDTH from a width-bounded parent vbox chain.
-		# THIS file's pantheon body sits in a plain `flowcontainer direction=vertical` (top of the
-		# window) which does NOT propagate a bounded width down — so width resolved to ~0 and the list
-		# had zero render area = blank. TI works in TI; the transplant could not because the parent
-		# differs. FIX = the imp19c-native proven-scrolling idiom instead: a FIXED-size scrollarea +
-		# using=VerticalScrollAreaCutOff + an EXPLICIT-size dynamicgridbox with NO datamodel_wrap (one
-		# full-width item per row = vertical stack). This is exactly the office-picker
-		# (imp19c_windows.gui qing_office_picker_window, a LARGE list that provably scrolls) and the
-		# Holy-Sites sibling in THIS file (renders + clips in this same parent). It also matches the
-		# earlier a212e310e that DID render — the reason a212e310e still spilled off the bottom was the
-		# INVISIBLE sibling tab-body reserving layout space, which the LATER #45 `ignoreinvisible = yes`
-		# on the shared parent flowcontainer now fixes. So this is a changed environment, not a repeat.
-		# 600 height is the empirically-correct vertical budget here (the Holy-Sites scrollarea is 600
-		# and clips fully in-window); width 620 = the window's usable interior (640 - margins).
-		flowcontainer = {
+		# [D1 fix R7 2026-07-23] The tab body is a SIZED `widget` (620x600), holding a standard_list
+		# scrollarea. History (all superseded): R2-R5 hand-rolled scrollarea chains + a TI transplant, R6
+		# rewrote the inner list to the proven standard_list idiom — every one still SPILLED past the window
+		# bottom because the tab-body WRAPPER was a `flowcontainer`, a container that shrink-wraps to its
+		# content and gives its scrollarea child no bounded height to clip against. The engine's own missions
+		# error ("You should not set a size on a container!") named the real rule: containers ignore size, so
+		# the frame must be a non-container `widget`. See the widget's inline note below.
+		widget = {
+			# [D1 fix R7 2026-07-23] TAB BODY = a sized `widget`, NOT a flowcontainer. This is the SAME fix the
+			# engine's own error proved on missions: "gui/mission_view.gui:101 - You should not set a size on a
+			# container! Containers resize to contain all of their children." A flowcontainer (like the one that
+			# used to wrap this tab body) is a CONTAINER — it shrink-wraps to its content and gives its scrollarea
+			# child NO bounded height to clip against, so the deity list ran straight past the window bottom
+			# (confirmed on the 00:21 boot: pantheon still spilled with no scrollbar, despite the R6 standard_list
+			# rewrite inside). A bare `widget` is NOT a container: it honors an explicit size, so the scrollarea
+			# now has a real 620x600 frame to clip + scroll within. The standard_list scrollarea below is kept.
+			size = { 620 600 }
 			margin = { 10 10 }
 			visible = "[Or( GetVariableSystem.HasValue( 'religion_tabs', 'omens'), Not( GetVariableSystem.Exists('religion_tabs') ) )]"
-			# [D1 fix R6 2026-07-22] REWRITTEN to the PROVEN standard_list idiom. Every prior attempt
-			# (R3 flowcontainer-wrapper, R4 sized-vbox bounded ancestor, R5 scissor=yes) hand-rolled a
-			# `scrollarea > scrollwidget > flowcontainer > dynamicgridbox` chain and ALL of them spilled
-			# past the window bottom. The ONE list in this game that provably scrolls a LONG collection —
-			# select_character_list / select_character_list_deity (gui/shared/select_character_template.gui),
-			# used by select_office_window — does NOT use that chain. It uses `using = standard_list` (the
-			# lists.gui template): a scrollarea whose scrollwidget>container is supplied via blockoverride
-			# "ss_container", holding a SIZED fixedgridbox with addcolumn/addrow. standard_list is what makes
-			# the engine clip+scroll; the bare scrollwidget+dynamicgridbox does not. This mirrors
-			# select_character_list_deity block-for-block: same scrollarea{using=standard_list +
-			# VerticalScrollAreaCutOff}, same blockoverride "ss_scrollarea" size, same blockoverride
-			# "ss_container" > fixedgridbox{sized, addcolumn/addrow}. Only difference: an explicit
-			# datamodel=[ReligionView.GetPantheon] on the gridbox (the deity template's window feeds its list
-			# implicitly; ours reads the pantheon accessor). fixedgridbox+explicit datamodel is proven across
-			# ~25 files (characters_view.gui:822 uses the identical addrow=94 character grid inside a scroll).
 			scrollarea = {
 				name = "pantheon_scroller"
 				size = { 620 600 }
