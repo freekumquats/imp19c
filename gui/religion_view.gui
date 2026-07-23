@@ -415,403 +415,685 @@ base_window = {
 		################################
 		# PANTHEON
 		################################
-		# [D1 fix R7 2026-07-23] The tab body is a SIZED `widget` (620x600), holding a standard_list
-		# scrollarea. History (all superseded): R2-R5 hand-rolled scrollarea chains + a TI transplant, R6
-		# rewrote the inner list to the proven standard_list idiom — every one still SPILLED past the window
-		# bottom because the tab-body WRAPPER was a `flowcontainer`, a container that shrink-wraps to its
-		# content and gives its scrollarea child no bounded height to clip against. The engine's own missions
-		# error ("You should not set a size on a container!") named the real rule: containers ignore size, so
-		# the frame must be a non-container `widget`. See the widget's inline note below.
-		# [D1 fix R8 2026-07-23] Pantheon scroll = Terra Indomita's proven omens-tab scaffold, copied
-		# byte-for-byte (TI religion_view.gui:656-681): a vbox with BOTH layoutpolicy expanding, holding a
-		# scrollarea sized { 0 700 } + layoutpolicy_horizontal = expanding, then scrollwidget > dynamicgridbox
-		# with the GetPantheon datamodel. THIS is the winning idiom every prior attempt abandoned: the
-		# EXPANDING vbox fills the window's real remaining height and hands the scrollarea a bounded height to
-		# clip + scroll within; size width 0 + horizontal-expanding lets it inherit the panel width. NOT a
-		# fixed-size scrollarea (R3/R7), NOT standard_list+fixedgridbox (R6) — those all spilled because a
-		# fixed size in an unbounded parent overruns instead of clipping. Only imp19c's deity ITEM body below
-		# is kept (our ReligionView deity display, not TI's treasure-slot item). TI's dynamicgridbox uses
-		# datamodel_wrap=6 for a 6-wide grid; ours is one full-width row per deity, so no wrap.
+		# [D1 fix R9 2026-07-23] Pantheon = Terra Indomita omens tab, COPIED VERBATIM (TI
+		# religion_view.gui:656-1330), re-indented one tab to sit in this file. TI is the vanilla religion
+		# screen with its own deities and it scrolls correctly; every hand-rolled/partial port failed, so
+		# this is the whole block as-is (GetPantheon + DeityItem are vanilla Imperator accessors).
 		vbox = {
 			layoutpolicy_vertical = expanding
 			layoutpolicy_horizontal = expanding
 			margin_top = 12
+			################################
+			# PANTHEON
+			################################
 			visible = "[Or( GetVariableSystem.HasValue( 'religion_tabs', 'omens'), Not( GetVariableSystem.Exists('religion_tabs') ) )]"
 			scrollarea = {
 				name = "omens_content"
 				size = { 0 700 }
 				layoutpolicy_horizontal = expanding
 				scrollbarpolicy_horizontal = always_off
-				scrollbar_vertical = { using = VerticalScrollBar }
+
+				scrollbar_vertical = {
+					using = VerticalScrollBarForBox
+				}
 				scrollwidget = {
 					dynamicgridbox = {
 						name = "omens_grid"
+						position = { -2 0 }
+
+						datamodel_wrap = 6
 						datamodel = "[ReligionView.GetPantheon]"
 
-							item = {
-									margin_widget = {
-										# [BT-A scroll-geom fix 2026-07-20] 620 -> 600 so the vertical scrollbar (now inside
-										# the 620 scrollarea) sits beside the row rather than overlaying its right edge.
-										size = { 600 160 }
-										margin_bottom = 5
-										widget = {
-											size = { 100% 100% }
-											using = background_widget
-										}
-										flowcontainer = {
-											flowcontainer = {
-												direction = vertical
-												flowcontainer = {
-													margin = { 5 5 }
-													spacing = 5
-													omen_button = {
-														visible = "[And( Not(DeityItem.IsOmenActive), Not(DeityItem.GetDeity.IsDeifiedRuler))]"
-														blockoverride "On_click"
-														{
-															onclick = "[DeityItem.Invoke]"
-															onclick = "[ClickHighlight(DeityItem.GetHighlightKey('invoke_'))]"
-															enabled = "[DeityItem.CanInvoke]"
-														}
-														blockoverride "ClickSound" { 
-															clicksound = "event:/SFX/UI/Actions/sfx_ui_action_invoke_omen"
-															oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
-														}
-														icon = {
-															using = highlight_button_square_100
-															visible = "[And(ShouldHighlight(DeityItem.GetHighlightKey('invoke_')),DeityItem.CanInvoke)]"
-														}
-													}
-													flowcontainer = {
-														direction = vertical
-														flowcontainer = {
-															spacing = 5
-															icon_button_square = {
-																size = { 40 40 } 
-																blockoverride "On_click"
-																{
-																	onclick = "[DeityItem.ToggleSelectPantheonWindow]"
-																	enabled = "[DeityItem.CanChangePantheon]"
-																}
-																blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Religion/sfx_ui_religion_select_deity" }
-																blockoverride "Icon" 
-																{ 
-																	texture = "gfx/interface/icons/shared_icons/change.dds"
-																	size = { 28 28 }
-																}
-																tooltip = "CHANGE_DEITY_TT"
-															}
-															textbox = {
-																using = BaseFontM
-																using = Default_FontColor
-																text = "DEITY_NAME_TEXT"
-																size = { 215 40 }
-																align = left
-																elide = right
-															}
-														}
-														tag = {
-															using = BaseFontS
-															using = Default_FontColor
-															text = "DEITY_RELIGION_TEXT"
-															size = { 260 40 }
-															align = left
-															elide = right
-															multiline = yes
-															maximumsize = { 240 40 }
-															blockoverride "LineVisibility" { visible = no }
-														}
-													}
-												}
-												flowcontainer = {
-													direction = vertical
-													margin_left = 10
-													spacing = 2
-													ignoreinvisible = yes
-													datacontext = "[DeityItem.GetDeity]"
+						item = {
 
-													textbox = {
-														using = BaseFontS
-														using = Default_FontColor
-														text = "[DeityItem.GetDeity.GetPassiveEffect]"
-														size = { 313 24 }
-														align = left
-														elide = left
-														maximumsize = { 313 -1 }							
-														fontsize = 14
-													}
-									
-													textbox = {
-														using = BaseFontS
-														using = Default_FontColor
-														visible = "[DeityItem.IsOmenActive]"
-														text = "[DeityItem.GetDeity.GetOmenEffect]"
-														size = { 313 24 }
-														align = left
-														fontsize = 14
-														elide = left
-														maximumsize = { 313 -1 }
-													}
-
-													textbox = {
-														using = BaseFontS
-														using = Default_FontColor
-														visible = "[Not(DeityItem.IsOmenActive)]"
-														text = "[DeityItem.GetDeity.GetOmenEffect]"
-														size = { 313 24 }
-														align = left
-														fontsize = 14
-														elide = left
-														alpha = 0.4
-														maximumsize = { 313 -1 }
-													}
-												}
-											}
-											flowcontainer = {
-												ignoreinvisible = yes
-												flowcontainer = {
-													visible = "[Not(DeityItem.GetDeity.HasHolySite)]"
-													tooltip = "HOLY_SITE_BUILD_INFO"
-													widget = { size = { 6 32 } }
-													textbox = { 
-														text = "NO_HOLY_SITE_FOR_GOD"
-														size = { 250 162 }												
-														using = BaseFontS
-														multiline = yes
-														using = Default_FontColor
-														align = center
-														max_width = 250
-														elide = right
-														alpha = 0.5
-													}
-												}
-												widget = {
-													size = { 270 150 }
-													visible = "[DeityItem.GetDeity.HasHolySite]"
-													icon = {
-														name = "holy_site_icon"
-														parentanchor = vcenter|left
-														size = { 32 32 }
-														texture = "[GetHolySiteRankIcon(DeityItem.GetDeity.GetHolySite.GetRank)]"
-														framesize = { 50 50 }
-													}
-													margin_widget = {
-														size = { 260 140 }
-														parentanchor = left|vcenter
-														scissor = yes
-														visible = "[DeityItem.GetDeity.GetHolySite.HasOwner]"
-														datacontext = "[DeityItem.GetDeity.GetHolySite]"
-														container = {
-															visible = "[EqualTo_string( Province.GetRank.GetKey, 'settlement' )]"
-															icon = {
-																size = { 260 140 }
-																visible = "[Not( Or( EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'latin' ), EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'hellenic' ) ) )]"
-																texture = "gfx/interface/religion/rotw_tier1.dds"
-																alpha = 0.85
-															}
-															icon = {
-																size = { 260 140 }
-																visible = "[Or( EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'latin' ), EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'hellenic' ) )]"
-																texture = "gfx/interface/religion/hellenic_tier1.dds"
-																alpha = 0.85
-															}
-														}
-														container = {
-															visible = "[EqualTo_string( Province.GetRank.GetKey, 'city' )]"
-															icon = {
-																size = { 260 140 }
-																visible = "[Not( Or( EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'latin' ), EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'hellenic' ) ) )]"
-																texture = "gfx/interface/religion/rotw_tier2.dds"
-																alpha = 0.85
-															}
-															icon = {
-																size = { 260 140 }
-																visible = "[Or( EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'latin' ), EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'hellenic' ) )]"
-																texture = "gfx/interface/religion/hellenic_tier2.dds"
-																alpha = 0.85
-															}
-														}
-														container = {
-															visible = "[EqualTo_string( Province.GetRank.GetKey, 'city_metropolis' )]"
-															icon = {
-																size = { 260 140 }
-																visible = "[Not( Or( EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'latin' ), EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'hellenic' ) ) )]"
-																texture = "gfx/interface/religion/rotw_tier3.dds"
-																alpha = 0.85
-															}
-															icon = {
-																size = { 260 140 }
-																visible = "[Or( EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'latin' ), EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'hellenic' ) )]"
-																texture = "gfx/interface/religion/hellenic_tier3.dds"
-																alpha = 0.85
-															}
-														}
-														goto_button = {
-															position = { -8 8 }
-															name = "find_holy_site"
-															onmousehierarchyenter = "[SetHighlightProvince(DeityItem.GetDeity.GetHolySite.GetId)]"
-															onmousehierarchyleave = "[ClearHighlightColors]"
-															blockoverride "On_click" { onclick = "[DeityItem.GoToHolySite]" }
-															tooltip = "[DeityItem.GetDeity.GetHolySite.GetHolySiteTooltip]"
-															parentanchor = top|right
-														}
-														#Holy Site Stuff
-														### Artifact Buttons
-														flowcontainer = {
-															parentanchor = bottom
-															margin_bottom = 10
-															flowcontainer = {
-																ignoreinvisible = yes
-																spacing = 5
-																visible = "[EqualTo_int32( DeityItem.GetDeity.GetHolySite.GetOwner.GetId, ReligionView.GetPlayer.GetId )]"
-																datamodel = "[DeityItem.GetTreasureSlots]"
-																item = {
-																	icon_button_square = {
-																		size = { 40 40 }
-																		layoutpolicy_horizontal = expanding
-																		layoutpolicy_vertical = expanding
-																		tooltip = "[TreasureSlotItem.GetTooltip]"
-																		blockoverride "Icon"
-																		{
-																			visible = "[TreasureSlotItem.HasTreasure]"
-																			texture = "gfx/interface/base_parts/national_treasure_button_texture.dds"
-																			size = { 34 34 }
-																			icon = {		
-																				texture = "[GetTreasureIcon( TreasureSlotItem.GetTreasure )]"
-																				size = { 38 38 }
-																				parentanchor = center
-																			}
-
-																		}
-													
-																		blockoverride "On_click"
-																		{
-																			enabled = "[TreasureSlotItem.IsAvailable]"
-																			onrightclick ="[TreasureSlotItem.RemoveSelectedTreasure]"
-																			onclick = "[TreasureSlotItem.ToggleSelectTreasureWindow]"
-																		}
-																		icon = {
-																			name = "lock_icon"
-																			size = { 36 36 }
-																			parentanchor = center
-																			visible = "[And( Not( TreasureSlotItem.HasTreasure ) , Not( TreasureSlotItem.IsAvailable ) )]"
-																			texture = "gfx/interface/icons/shared_icons/locked.dds"
-																		}
-																	}
-																}
-															}
-															flowcontainer = {
-																name = "no_cannot_has"
-																ignoreinvisible = yes
-																visible = "[And( DeityItem.GetDeity.HasHolySite, And( DeityItem.GetDeity.GetHolySite.HasOwner, Not( EqualTo_int32( DeityItem.GetDeity.GetHolySite.GetOwner.GetId , ReligionView.GetPlayer.GetId ) ) ) ) ]" 
-																datamodel = "[DeityItem.GetTreasureSlots]"	
-																spacing = 5
-																item = {
-																	icon_card = {
-																		layoutpolicy_horizontal = expanding
-																		layoutpolicy_vertical = expanding
-																		blockoverride "Size" { size = { 40 40 } }
-																		blockoverride "Icon" 
-																		{ 
-																			visible = "[TreasureSlotItem.HasTreasure]"
-																			texture = "[GetTreasureIcon( TreasureSlotItem.GetTreasure )]"
-																			tooltip = "[TreasureSlotItem.GetTooltipNoAction]"
-																		}
-																	}
-																}
-																tooltip = "NO_CANNOT_HAS"
-															}
-														}
-													}
-													# [#46 fix 2026-07-21] "Shrine of <place>" caption relocated to draw AFTER the tier photo (pdx_gui
-													# draws later siblings ON TOP) — it previously sat BEFORE the photo and was occluded/washed out
-													# (near-white vanished into bright art; a flat black flip vanished too). Dark semi-transparent
-													# backing bar + light text = readable over any tier image; pinned to the card top.
-													widget = {
-														# [#46 review-fix] left-anchored + narrowed to 214 so the bar clears the top-right
-														# goto (eye) button (~x220-252) instead of tinting it; bar 28 tall so BaseFontM isn't clipped.
-														size = { 214 28 }
-														parentanchor = top|left
-														visible = "[DeityItem.GetDeity.HasHolySite]"
-														background = { texture = "gfx/interface/base_parts/base_color.dds"  color = { 0.02 0.02 0.02 0.65 } }
-														textbox = {
-															text = "HOLY_SITE_OF"
-															using = BaseFontM
-															using = Default_FontColor
-															parentanchor = vcenter|left
-															size = { 208 26 }
-															margin = { 6 0 }
-															elide = right
-															max_width = 202
-														}
-													}
-
-												}
-											}
-										}
-										#flowcontainer = {
-										#	position = { 112 71 }
-										#	spacing = 4
-							
-										#	goto_button = {
-										#		parentanchor = vcenter
-										#		size = { 32 32 }
-										#		name = "open_character_window"
-										#		datacontext = "[DeityItem]"
-										#		blockoverride "On_click" 
-										#		{ 
-										#			onclick = "[DefaultOnCharacterClick( DeityItem.GetDeity.GetDeifiedRuler.GetID )]" 
-										#		}
-										#		tooltip = "GOTO_CHARACTER"
-										#		visible = "[DeityItem.GetDeity.IsDeifiedRuler]"
-										#	}
-										#}
-
-										#icon_card = {
-										#	position = { 5 4 }
-										#	size = { 100 100 }
-										#	blockoverride "Icon"
-										#	{
-										#		texture = "[GetOmenIcon(DeityItem.GetDeity)]"
-										#		framesize = { 200 200 }
-										#		frame = 2
-										#		size = { 188 188 }
-										#		scale = 0.5
-										#		modify_texture = {
-										#			name = "glow_1"
-										#			texture = "gfx/interface/icons/deities/deity_glow_1.dds"
-										#			blend_mode = colordodge
-										#		}
-										#		modify_texture = {
-										#			name = "glow_2"
-										#			texture = "gfx/interface/icons/deities/deity_glow_2.dds"
-										#			blend_mode = colordodge
-										#		}
-										#		glow = {
-										#			glow_radius = 8
-										#			color = { 0.89 0.82 0.1 1 }
-										#			visible = "[DeityItem.IsOmenActive]"
-										#		}
-										#	}
-										#	visible = "[And( DeityItem.IsOmenActive, Not( DeityItem.GetDeity.IsDeifiedRuler ))]"
-										#	tooltip = "[DeityItem.GetFlavor]"
-							
-										#	progressbar = {
-										#		name = "progress_value"
-										#		size = { 100% 100% }
-										#		direction = vertical
-										#		progresstexture = "gfx/interface/base_parts/background_texture_x60bd.dds"
-										#		color = { 0.4 0.4 0.4 1 }
-										#		value = "[DeityItem.GetActiveOmenDuration]"
-										#		alpha = 0.6
-										#	}
-										#}
-						
+							widget = {
+								list_entry = {
+									size = { 100% 100% }
+									blockoverride "texture" {
+										texture = "gfx/interface/base_parts/entry_background_x80y52bd_alpha0.dds"
 									}
 								}
+								size = { 606 174 }
+								flowcontainer = {
+									position = { 112 6 }
+									direction = vertical
+									spacing = 0
+
+									flowcontainer = {
+										textbox = {
+											using = BaseFontM
+											using = Black_FontColor
+											text = "DEITY_NAME_TEXT"
+											size = { 296 20 }
+											align = left
+											elide = right
+										}
+									}
+
+									tag = {
+										using = BaseFontS
+										using = Black_FontColor
+										text = "DEITY_RELIGION_TEXT"
+										size = { 260 20 }
+										align = left
+										elide = right
+										multiline = yes
+										maximumsize = { 240 60 }
+									}
+
+									widget = { size = { 0 30 } }
+
+								}
+
+								flowcontainer = {
+									position = { 112 71 }
+									spacing = 4
+									icon_button_square = {
+										size = { 32 32 }
+										blockoverride "On_click"
+										{
+											onclick = "[DeityItem.ToggleSelectPantheonWindow]"
+											enabled = "[DeityItem.CanChangePantheon]"
+										}
+										blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Religion/sfx_ui_religion_select_deity" }
+										blockoverride "Icon"
+										{
+											texture = "gfx/interface/icons/shared_icons/change.dds"
+											size = { 28 28 }
+										}
+										tooltip = "CHANGE_DEITY_TT"
+									}
+
+									goto_button = {
+										parentanchor = vcenter
+										size = { 32 32 }
+										name = "open_character_window"
+										datacontext = "[DeityItem]"
+										blockoverride "On_click"
+										{
+											onclick = "[DefaultOnCharacterClick( DeityItem.GetDeity.GetDeifiedRuler.GetID )]"
+										}
+										tooltip = "GOTO_CHARACTER"
+										visible = "[DeityItem.GetDeity.IsDeifiedRuler]"
+									}
+								}
+
+								widget = {
+									position = { 314 -2 }
+									size = { 298 100% }
+									scissor = yes
+									widget = {
+										size = { 490 152 }
+										container = {
+											position = { 10 0 }
+											visible = "[DeityItem.GetDeity.HasHolySite]"
+											margin_widget = {
+												size = { 490 174 }
+												scissor = yes
+												visible = "[DeityItem.GetDeity.GetHolySite.HasOwner]"
+												datacontext = "[DeityItem.GetDeity.GetHolySite]"
+												container = {
+													visible = "[EqualTo_string( Province.GetRank.GetKey, 'settlement' )]"
+													icon = {
+														size = { 286 176 }
+														visible = "[Not( Or( EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'latin' ), EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'hellenic' ) ) )]"
+														texture = "gfx/interface/religion/rotw_tier1.dds"
+														alpha = 0.85
+														modify_texture = {
+															name = "Alpha"
+															texture = "gfx/interface/base_parts/background_x60bd_alpha.dds"
+															blend_mode = alphamultiply
+															spriteType = Corneredtiled
+															spriteborder = { 60 60 }
+														}
+													}
+													icon = {
+														size = { 286 176 }
+														visible = "[Or( EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'latin' ), EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'hellenic' ) )]"
+														texture = "gfx/interface/religion/hellenic_tier1.dds"
+														alpha = 0.85
+														modify_texture = {
+															name = "Alpha"
+															texture = "gfx/interface/base_parts/background_x60bd_alpha.dds"
+															blend_mode = alphamultiply
+															spriteType = Corneredtiled
+															spriteborder = { 60 60 }
+														}
+													}
+												}
+												container = {
+													visible = "[EqualTo_string( Province.GetRank.GetKey, 'city' )]"
+													icon = {
+														size = { 286 176 }
+														visible = "[Not( Or( EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'latin' ), EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'hellenic' ) ) )]"
+														texture = "gfx/interface/religion/rotw_tier2.dds"
+														alpha = 0.85
+														modify_texture = {
+															name = "Alpha"
+															texture = "gfx/interface/base_parts/background_x60bd_alpha.dds"
+															blend_mode = alphamultiply
+															spriteType = Corneredtiled
+															spriteborder = { 60 60 }
+														}
+													}
+													icon = {
+														size = { 286 176 }
+														visible = "[Or( EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'latin' ), EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'hellenic' ) )]"
+														texture = "gfx/interface/religion/hellenic_tier2.dds"
+														alpha = 0.85
+														modify_texture = {
+															name = "Alpha"
+															texture = "gfx/interface/base_parts/background_x60bd_alpha.dds"
+															blend_mode = alphamultiply
+															spriteType = Corneredtiled
+															spriteborder = { 60 60 }
+														}
+													}
+												}
+												container = {
+													visible = "[EqualTo_string( Province.GetRank.GetKey, 'city_metropolis' )]"
+													icon = {
+														size = { 286 176 }
+														visible = "[Not( Or( EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'latin' ), EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'hellenic' ) ) )]"
+														texture = "gfx/interface/religion/rotw_tier3.dds"
+														alpha = 0.85
+														modify_texture = {
+															name = "Alpha"
+															texture = "gfx/interface/base_parts/background_x60bd_alpha.dds"
+															blend_mode = alphamultiply
+															spriteType = Corneredtiled
+															spriteborder = { 60 60 }
+														}
+													}
+													icon = {
+														size = { 286 176 }
+														visible = "[Or( EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'latin' ), EqualTo_string( Province.GetDominantCulture.GetCultureGroup.GetKey, 'hellenic' ) )]"
+														texture = "gfx/interface/religion/hellenic_tier3.dds"
+														alpha = 0.85
+														modify_texture = {
+															name = "Alpha"
+															texture = "gfx/interface/base_parts/background_x60bd_alpha.dds"
+															blend_mode = alphamultiply
+															spriteType = Corneredtiled
+															spriteborder = { 60 60 }
+														}
+													}
+												}
+											}
+										}
+									}
+									goto_button = {
+										position = { -8 8 }
+										name = "find_holy_site"
+										onmousehierarchyenter = "[SetHighlightProvince(DeityItem.GetDeity.GetHolySite.GetId)]"
+										onmousehierarchyleave = "[ClearHighlightColors]"
+										blockoverride "On_click" { onclick = "[DeityItem.GoToHolySite]" }
+										tooltip = "[DeityItem.GetDeity.GetHolySite.GetHolySiteTooltip]"
+										parentanchor = top|right
+										visible = "[DeityItem.GetDeity.HasHolySite]"
+									}
+									flowcontainer = {
+										ignoreinvisible = yes
+										position = { 20 6 }
+										flowcontainer = {
+											visible = "[Not(DeityItem.GetDeity.HasHolySite)]"
+											tooltip = "HOLY_SITE_BUILD_INFO"
+											widget = { size = { 6 32 } }
+											textbox = {
+												text = "NO_HOLY_SITE_FOR_GOD"
+												size = { 280 162 }
+												using = BaseFontS
+												autoresize = no
+												using = Black_FontColor
+												align = hcenter|vcenter
+												max_width = 260
+												elide = right
+												alpha = 0.55
+											}
+
+
+										}
+										flowcontainer = {
+											visible = "[DeityItem.GetDeity.HasHolySite]"
+											spacing = 4
+											icon = {
+												name = "holy_site_icon"
+												parentanchor = vcenter|left
+												size = { 32 32 }
+												texture = "[GetHolySiteRankIcon(DeityItem.GetDeity.GetHolySite.GetRank)]"
+												framesize = { 50 50 }
+											}
+
+											widget = {
+												size = { 204 38 }
+												tag = {
+													text = "HOLY_SITE_OF"
+													using = BaseFontM
+													using = Button_FontColor
+													align = left
+													max_width = 203
+												}
+											}
+										}
+									}
+
+								}
+
+								widget = {
+									#Holy Site Stuff
+									### Artifact Buttons
+									visible = "[DeityItem.GetDeity.HasHolySite]"
+									size = { 260 64 }
+									position = { 338 12 }
+									parentanchor = bottom
+
+									flowcontainer = {
+										visible = "[DeityItem.GetDeity.GetHolySite.HasOwner]"
+										#layoutpolicy_horizontal = expanding
+										flowcontainer = {
+											#layoutpolicy_horizontal = expanding
+											visible = "[EqualTo_int32( DeityItem.GetDeity.GetHolySite.GetOwner.GetId, ReligionView.GetPlayer.GetId )]"
+											datamodel = "[DeityItem.GetTreasureSlots]"
+											margin_right = 4
+											spacing = 10
+
+											item = {
+												icon = {
+													size = { 83 40 }
+													icon = {
+														size = { 83 44 }
+														texture = "gfx/interface/map/on_map_holy_site_bg_x68bd_alpha.dds"
+														alpha = 0.7
+														spritetype = corneredstretched
+														spriteborder = { 34 0 }
+													}
+
+													icon = { #glow
+														size = { 83 43 }
+														texture = "gfx/interface/map/on_map_holy_site_bg_x68bd_alpha.dds"
+
+														spritetype = corneredstretched
+														spriteborder = { 34 0 }
+														visible = "[Or( TreasureSlotItem.HasTreasure,  TreasureSlotItem.IsAvailable )]"
+														tintcolor = { 1 0.95 0.85 0.5 }
+
+														modify_texture = {
+															name = "Alpha"
+															texture = "gfx/interface/map/on_map_unit_type_x80bd_alpha_right.dds"
+															blend_mode = alphamultiply
+															spriteType = Corneredtiled
+															spriteborder = { 34 0 }
+														}
+														modify_texture = {
+															name = "Alpha"
+															texture = "gfx/interface/map/on_map_holy_site_bg_x68bd_alpha.dds"
+															blend_mode = alphamultiply
+															spriteType = Corneredtiled
+															spriteborder = { 34 2 }
+														}
+													}
+
+													button = {
+														using = button_tiled_texture
+														spriteType = Corneredtiled
+														spriteborder = { 200 200 }
+														framesize = { 200 200 }
+														gfxtype = framedbuttongfx
+														size = { 83 40 }
+														#onclick = "[OpenGameView('religion')]"
+														enabled = "[TreasureSlotItem.IsAvailable]"
+														onrightclick ="[TreasureSlotItem.RemoveSelectedTreasure]"
+														onclick = "[TreasureSlotItem.ToggleSelectTreasureWindow]"
+														tooltip = "[TreasureSlotItem.GetTooltip]"
+
+
+														modify_texture = {
+															name = "Alpha"
+															texture = "gfx/interface/map/on_map_unit_type_x80bd_alpha_right.dds"
+															blend_mode = alphamultiply
+															spriteType = Corneredtiled
+															spriteborder = { 34 0 }
+														}
+														modify_texture = {
+															name = "Alpha"
+															texture = "gfx/interface/map/on_map_holy_site_bg_x68bd_alpha.dds"
+															blend_mode = alphamultiply
+															spriteType = Corneredtiled
+															spriteborder = { 34 0 }
+														}
+
+														icon = {
+															size = { 50 50 }
+															position = { 0 -14 }
+															parentanchor = hcenter
+															visible = "[TreasureSlotItem.HasTreasure]"
+															texture = "[GetTreasureIcon( TreasureSlotItem.GetTreasure )]"
+															glow = {
+																glow_radius = 10
+																color = { 1 0.95 0.8 0.25 }
+															}
+															#tooltip = "[TreasureSlotItem.GetTooltipNoAction]"
+														}
+
+														icon = {
+															name = "lock_icon"
+															size = { 25 25 }
+															position = { 0 2 }
+															parentanchor = center
+															visible = "[And( Not( TreasureSlotItem.HasTreasure ) , Not( TreasureSlotItem.IsAvailable ) )]"
+															texture = "gfx/interface/icons/shared_icons/locked.dds"
+														}
+
+													}
+
+													# tag = {
+													# 	text = "+"
+													# 	using = FontSizeL
+													# 	using = Blue_FontColor
+													# 	position = { 0 2 }
+													# 	visible = "[And(And(Not(TreasureSlotItem.HasTreasure), TreasureSlotItem.IsAvailable), GreaterThan_int32(ReligionView.CalcTotalReliquarySize, '(int32)0'))]"
+													# 	parentanchor = center
+													# }
+												}
+											}
+										}
+										flowcontainer = {
+											name = "no_cannot_has"
+											ignoreinvisible = yes
+											visible = "[And( DeityItem.GetDeity.HasHolySite, And( DeityItem.GetDeity.GetHolySite.HasOwner, Not( EqualTo_int32( DeityItem.GetDeity.GetHolySite.GetOwner.GetId , ReligionView.GetPlayer.GetId ) ) ) ) ]"
+											datamodel = "[DeityItem.GetTreasureSlots]"
+											#layoutpolicy_horizontal = expanding
+											margin_right = 4
+											spacing = 10
+											item = {
+												icon = {
+													size = { 83 40 }
+													visible = "[Or( TreasureSlotItem.HasTreasure,  TreasureSlotItem.IsAvailable )]"
+													icon = {
+														scale = 0.8
+														parentanchor = hcenter|bottom
+														size = { 83 44 }
+														texture = "gfx/interface/map/on_map_holy_site_bg_x68bd_alpha.dds"
+														alpha = 0.5
+														spritetype = corneredstretched
+														spriteborder = { 34 0 }
+
+														icon = { #glow
+															size = { 83 43 }
+															texture = "gfx/interface/map/on_map_holy_site_bg_x68bd_alpha.dds"
+
+															spritetype = corneredstretched
+															spriteborder = { 34 0 }
+															visible = "[Or( TreasureSlotItem.HasTreasure,  TreasureSlotItem.IsAvailable )]"
+															tintcolor = { 1 0.95 0.85 0.5 }
+
+															modify_texture = {
+																name = "Alpha"
+																texture = "gfx/interface/map/on_map_unit_type_x80bd_alpha_right.dds"
+																blend_mode = alphamultiply
+																spriteType = Corneredtiled
+																spriteborder = { 34 0 }
+															}
+															modify_texture = {
+																name = "Alpha"
+																texture = "gfx/interface/map/on_map_holy_site_bg_x68bd_alpha.dds"
+																blend_mode = alphamultiply
+																spriteType = Corneredtiled
+																spriteborder = { 34 2 }
+															}
+														}
+													}
+
+													icon = {
+														size = { 50 50 }
+														position = { 0 -14 }
+														parentanchor = hcenter
+														visible = "[TreasureSlotItem.HasTreasure]"
+														texture = "[GetTreasureIcon( TreasureSlotItem.GetTreasure )]"
+														tooltip = "[TreasureSlotItem.GetTooltip]"
+
+														glow = {
+															glow_radius = 10
+															color = { 1 0.95 0.8 0.25 }
+														}
+
+													}
+													#tooltip = "[TreasureSlotItem.GetTooltipNoAction]"
+
+												}
+											}
+											tooltip = "NO_CANNOT_HAS"
+										}
+									}
+
+								}
+
+								container = {
+									visible = "[And( Not(DeityItem.IsOmenActive), Not(DeityItem.GetDeity.IsDeifiedRuler))]"
+
+									omen_button = {
+										position = { 4 4 }
+
+										blockoverride "On_click"
+										{
+											onclick = "[DeityItem.Invoke]"
+											onclick = "[ClickHighlight(DeityItem.GetHighlightKey('invoke_'))]"
+											enabled = "[DeityItem.CanInvoke]"
+										}
+										blockoverride "ClickSound" {
+											clicksound = "event:/SFX/UI/Actions/sfx_ui_action_invoke_omen"
+											oversound = "event:/SFX/UI/Generic/sfx_ui_generic_mouse_over"
+										}
+									}
+
+									icon = {
+										using = highlight_button_square_100
+										visible = "[And(ShouldHighlight(DeityItem.GetHighlightKey('invoke_')),DeityItem.CanInvoke)]"
+									}
+								}
+
+								container = {
+									visible = "[DeityItem.GetDeity.IsDeifiedRuler]"
+									position = { 20 8 }
+									scale = 0.9
+
+									cpt_button = {
+										visible = "[Not( DeityItem.IsOmenActive )]"
+										size = { 70 103 }
+										position = { 5 2 }
+										blockoverride "Context" { datacontext = [DeityItem.GetDeity.GetDeifiedRuler] }
+										blockoverride "portrait_button_template_onclick"
+										{
+											enabled = "[DeityItem.CanInvoke]"
+											onclick = "[DeityItem.Invoke]"
+										}
+										blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_invoke_omen" }
+										blockoverride "portrait_button_template_tooltip" { tooltip = "DEITY_DESC_TT" }
+									}
+
+									cpt_button = {
+										visible = "[DeityItem.IsOmenActive]"
+										size = { 70 103 }
+										position = { 5 2 }
+										#size = { 100 100 }
+										#framesize = { 100 100 }
+										#frame = 1
+										blockoverride "Context" { datacontext = [DeityItem.GetDeity.GetDeifiedRuler] }
+										blockoverride "portrait_button_template_onclick"
+										{
+										}
+										blockoverride "ClickSound" { clicksound = "event:/SFX/UI/Actions/sfx_ui_action_invoke_omen" }
+										blockoverride "portrait_button_template_tooltip" { tooltip = "DEITY_DESC_TT" }
+
+										progressbar = {
+											name = "progress_value"
+											size = { 100% 100% }
+											direction = vertical
+											progresstexture = "gfx/interface/base_parts/background_texture_x60bd.dds"
+											color = { 0.87 0.9 0 1 }
+											value = "[DeityItem.GetActiveOmenDuration]"
+											alpha = 0.6
+										}
+
+									}
+
+									icon = {
+										using = highlight_button_jew
+										visible = "[And(ShouldHighlight(DeityItem.GetHighlightKey('invoke_')),DeityItem.CanInvoke)]"
+									}
+
+									icon = {
+										name = "deification_frame"
+										position = { -22 -8 }
+										parentanchor = center
+										visible = "[DeityItem.IsOmenActive]"
+										alwaystransparent = yes
+										texture = "gfx/interface/icons/deities/deified_ruler_frame.dds"
+
+										modify_texture = {
+											name = "glow_1"
+											texture = "gfx/interface/icons/deities/deified_ruler_frame.dds"
+											blend_mode = colordodge
+										}
+
+										state = {
+											name = down_anim
+
+											animation = {
+												modify_texture = {
+													name = "glow_1"
+													alpha = 0.2
+												}
+											}
+
+											duration = 1
+
+											trigger_on_create = yes
+											next = up_anim
+										}
+
+										state = {
+											name = up_anim
+
+											animation = {
+												modify_texture = {
+													name = "glow_1"
+													alpha = 0.7
+												}
+											}
+
+											duration = 1
+
+											next = down_anim
+										}
+
+									}
+
+									icon = {
+										name = "deification_frame_na"
+										position = { -22 -8 }
+										parentanchor = center
+										visible = "[Not(DeityItem.IsOmenActive)]"
+										alwaystransparent = yes
+										texture = "gfx/interface/icons/deities/deified_ruler_frame.dds"
+									}
+
+								}
+
+								icon_card = {
+									position = { 5 4 }
+									size = { 100 100 }
+									blockoverride "Icon"
+									{
+										texture = "[GetOmenIcon(DeityItem.GetDeity)]"
+										framesize = { 200 200 }
+										frame = 2
+										size = { 188 188 }
+										scale = 0.5
+										modify_texture = {
+											name = "glow_1"
+											texture = "gfx/interface/icons/deities/deity_glow_1.dds"
+											blend_mode = colordodge
+										}
+										modify_texture = {
+											name = "glow_2"
+											texture = "gfx/interface/icons/deities/deity_glow_2.dds"
+											blend_mode = colordodge
+										}
+										glow = {
+											glow_radius = 8
+											color = { 0.89 0.82 0.1 1 }
+											visible = "[DeityItem.IsOmenActive]"
+										}
+									}
+									visible = "[And( DeityItem.IsOmenActive, Not( DeityItem.GetDeity.IsDeifiedRuler ))]"
+									tooltip = "[DeityItem.GetFlavor]"
+
+									progressbar = {
+										name = "progress_value"
+										size = { 100% 100% }
+										direction = vertical
+										progresstexture = "gfx/interface/base_parts/background_texture_x60bd.dds"
+										color = { 0.4 0.4 0.4 1 }
+										value = "[DeityItem.GetActiveOmenDuration]"
+										alpha = 0.6
+									}
+								}
+
+								flowcontainer = {
+									position = { 8 109 }
+									direction = vertical
+									spacing = 2
+									ignoreinvisible = yes
+									datacontext = "[DeityItem.GetDeity]"
+
+									textbox = {
+										using = BaseFontS
+										using = Black_FontColor
+										text = "[DeityItem.GetDeity.GetPassiveEffect]"
+										size = { 313 24 }
+										align = left
+										elide = left
+										maximumsize = { 313 -1 }
+										fontsize = 14
+										tooltip = "[DeityItem.GetDeity.GetPassiveEffect]"
+									}
+
+									textbox = {
+										using = BaseFontS
+										using = Black_FontColor
+										visible = "[DeityItem.IsOmenActive]"
+										text = "[DeityItem.GetDeity.GetOmenEffect]"
+										size = { 313 24 }
+										align = left
+										fontsize = 14
+										elide = left
+										maximumsize = { 313 -1 }
+										tooltip = "[DeityItem.GetDeity.GetOmenEffect]"
+									}
+
+									textbox = {
+										using = BaseFontS
+										using = Black_FontColor
+										visible = "[Not(DeityItem.IsOmenActive)]"
+										text = "[DeityItem.GetDeity.GetOmenEffect]"
+										size = { 313 24 }
+										align = left
+										fontsize = 14
+										elide = left
+										alpha = 0.4
+										maximumsize = { 313 -1 }
+										tooltip = "[DeityItem.GetDeity.GetOmenEffect]"
+									}
+								}
+							}
 						}
 					}
 				}
 			}
+
+			vbox = { layoutpolicy_vertical = preferred }
+		}
 		################################
 		# HOLY SITES
 		################################
