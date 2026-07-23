@@ -65,19 +65,23 @@ QING_council_autofill = {
 	# [#103] se_LOG enter/exit wiring (council-is-offices rewrite)
 	LOG_enter = { sys = QING  fn = "QING_council_autofill" }
 	QING_council_init = yes
-	QING_council_autofill_office = { office = chancellor }
-	QING_council_autofill_office = { office = personnel }
-	QING_council_autofill_office = { office = revenue }
-	QING_council_autofill_office = { office = rites }
-	QING_council_autofill_office = { office = war }
-	QING_council_autofill_office = { office = justice }
-	QING_council_autofill_office = { office = works }
-	QING_council_autofill_office = { office = censor }
-	QING_council_autofill_office = { office = lifanyuan }
-	QING_council_autofill_office = { office = chamberlain }
-	QING_council_autofill_office = { office = zongli }
-	QING_council_autofill_office = { office = grand_secretariat } # [#273]
-	QING_council_autofill_office = { office = guard_commandant }  # [#273]
+	# [BT-appointment-redesign 2026-07-22] $degree$ per office: the two MARTIAL seats — War (兵部) and
+	# the Commandant of the Imperial Guard (領侍衛內大臣) — get the martial degree 武進士 (wu_jinshi);
+	# the eleven civil offices get the civil 進士 (jinshi). So an autofilled War minister reads as a
+	# martial-degree holder, not a mis-assigned civil scholar (the BT-N congruence, done at CREATION now).
+	QING_council_autofill_office = { office = chancellor        degree = jinshi }
+	QING_council_autofill_office = { office = personnel         degree = jinshi }
+	QING_council_autofill_office = { office = revenue           degree = jinshi }
+	QING_council_autofill_office = { office = rites             degree = jinshi }
+	QING_council_autofill_office = { office = war               degree = wu_jinshi }
+	QING_council_autofill_office = { office = justice           degree = jinshi }
+	QING_council_autofill_office = { office = works             degree = jinshi }
+	QING_council_autofill_office = { office = censor            degree = jinshi }
+	QING_council_autofill_office = { office = lifanyuan         degree = jinshi }
+	QING_council_autofill_office = { office = chamberlain       degree = jinshi }
+	QING_council_autofill_office = { office = zongli            degree = jinshi }
+	QING_council_autofill_office = { office = grand_secretariat degree = jinshi } # [#273]
+	QING_council_autofill_office = { office = guard_commandant  degree = wu_jinshi }  # [#273]
 	QING_council_recompute = yes
 	LOG_line = { sys = QING  msg = "council autofilled (offices staffed) for" }
 	LOG_exit = { sys = QING  fn = "QING_council_autofill"  result = OK }
@@ -144,21 +148,45 @@ QING_council_prune_all_seats = {
 # skill is what then MATTERS for effectiveness (QING_council_recompute), but a
 # well-rounded man is the sensible default pick when the throne fills a post.
 QING_council_autofill_office = {
+	# [BT-appointment-redesign review-fix 2026-07-22] capture the COUNTRY from `this` (CHI in EVERY call
+	# path: the day-32 country_event, and inside QING_office_vacate_dispatch's `employer = {}` block). The
+	# created official's set_home_country below MUST use this saved country, NOT ROOT — on the runtime
+	# backfill paths (on_character_death → QING_office_vacate_dispatch; QING_justice_strip_for_trial) ROOT
+	# is the DYING/ACCUSED CHARACTER, not CHI, so `set_home_country = ROOT` would hand a character to a
+	# country arg → the new official gets no employer → the following QING_office_appoint's `employer = {}`
+	# no-ops and the seat silently fails to refill (the headline death-backfill would be dead). `this` is
+	# CHI on all paths, so saving it here is correct and path-agnostic.
+	save_scope_as = qing_autofill_country
 	# [#352 F3/F8] prune a stale-set seat (holder dead / left CHI employ) before filling,
 	# so a var pointing at an invalid character does not read as "already filled" and block
 	# the autofill (the "1 Unassigned that Convene never cleared" boot-test bug).
 	QING_council_prune_seat = { office = $office$ }
 	if = {
 		limit = { NOT = { has_variable = qing_office_$office$_holder } }
-		ordered_character = {
-			# [BT-50 / #396] the shared eligibility gate — excludes the ruler, the heir, serving
-			# governors, army/navy commanders, and vanilla office-holders (as well as sitting GC
-			# members), so autofill never seats a man who already holds a conflicting role. Was an
-			# inline (employer + adult + alive + NOT qing_office_held) that let commanders in.
-			limit = { QING_office_eligible_candidate = yes }
-			order_by = combined_stats_council_svalue
-			check_range_bounds = no
-			max = 1
+		# [BT-appointment-redesign 2026-07-22] CREATE a purpose-built official for the vacant seat and
+		# assign him — do NOT draw an existing courtier. Assigning existing people is what caused the
+		# double-booking mess (autofill running more than once, or grabbing minted/court characters,
+		# seated men who were or later became diplomats/censors/commanders). A freshly-created official
+		# exists ONLY for this office and is added to NO pool, so nothing else can ever pick him and he
+		# can never double-book. Autofill runs EXACTLY ONCE at game start (deferred to day 32, AFTER the
+		# historical figures are assigned); a later vacancy is refilled one seat at a time by the vacate
+		# handler the same way. $degree$ = the exam degree the office requires (wu_jinshi for the martial
+		# War/Guard seats, jinshi for the civil offices) — add_trait inside create_character is #90-safe
+		# and off the construction crash path (this runs in a runtime event). religion=confucianism (a
+		# scope-chain religion field like root.religion is an invalid create_character field — floods).
+		create_character = {
+			age = 40
+			culture = han
+			religion = confucianism
+			add_finesse = 6
+			add_charisma = 5
+			add_martial = 3
+			add_zeal = 4
+			add_trait = $degree$
+			save_scope_as = qing_autofill_official
+		}
+		scope:qing_autofill_official = {
+			set_home_country = scope:qing_autofill_country
 			QING_office_appoint = { office = $office$ }
 		}
 	}
@@ -1305,7 +1333,12 @@ QING_office_appoint = {
 			has_variable = qing_office_held
 			NOT = { var:qing_office_held = flag:$office$ }
 		}
-		QING_office_vacate_dispatch = yes
+		# [BT-appointment-redesign 2026-07-22] use the NO-BACKFILL dispatcher: appointing a sitting
+		# minister to another seat is a MANUAL reshuffle, and the user's rule is "clicking Appoint
+		# creates NO characters." The backfilling QING_office_vacate_dispatch would spawn a fresh
+		# official for the seat this man just left; the no-backfill twin tears it down and leaves it
+		# empty for the player to fill by hand (only death/departure auto-creates a replacement).
+		QING_office_vacate_dispatch_nobackfill = yes
 	}
 	employer = {
 		# vacate the previous holder of this office if any
@@ -1464,12 +1497,21 @@ QING_office_vacate = {
 	LOG_exit = { sys = QING  fn = "QING_office_vacate"  result = OK }
 }
 
-# Character-scope dispatcher: vacate whatever office `this` holds. Lets a single
-# vacate GUI serve all offices — it branches on the holder's qing_office_held
-# flag and calls the parameterised country-scope vacate with the right literal.
-QING_office_vacate_dispatch = {
-	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
-	LOG_enter = { sys = QING  fn = "QING_office_vacate_dispatch" }
+# ======================================================================
+# [BT-appointment-redesign 2026-07-22] QING_office_vacate_dispatch_nobackfill — vacate whatever
+# office `this` holds, WITHOUT auto-creating a replacement. Character scope (this = the holder).
+# WHY A SEPARATE TWIN: a vacated seat is normally auto-refilled with one CREATED official (rule 5 —
+# death/departure of an office-holder leaves the state to staff its own bench, via the backfilling
+# QING_office_vacate_dispatch below). But a MANUAL RESHUFFLE is different: when the player Appoints a
+# SITTING minister to another office, QING_office_appoint relieves his prior seat as a SIDE EFFECT of
+# that click — and the user's rule is "when the player clicks Appoint, NO characters are created."
+# Auto-backfilling the relieved seat there would spawn a fresh official off a manual appoint, which is
+# exactly what this twin avoids: it tears the prior seat down (identical teardown to the backfilling
+# dispatch) and leaves it EMPTY for the player to fill by hand. Same 13-office + emeritus/regent branch
+# set as QING_office_vacate_dispatch, MINUS the trailing QING_council_autofill_office call. Keep the two
+# in lockstep if an office is ever added.
+QING_office_vacate_dispatch_nobackfill = {
+	LOG_enter = { sys = QING  fn = "QING_office_vacate_dispatch_nobackfill" }
 	if = { limit = { var:qing_office_held = flag:chancellor } employer = { QING_office_vacate = { office = chancellor } } }
 	else_if = { limit = { var:qing_office_held = flag:personnel }  employer = { QING_office_vacate = { office = personnel } } }
 	else_if = { limit = { var:qing_office_held = flag:revenue }   employer = { QING_office_vacate = { office = revenue } } }
@@ -1481,8 +1523,41 @@ QING_office_vacate_dispatch = {
 	else_if = { limit = { var:qing_office_held = flag:lifanyuan } employer = { QING_office_vacate = { office = lifanyuan } } }
 	else_if = { limit = { var:qing_office_held = flag:chamberlain }     employer = { QING_office_vacate = { office = chamberlain } } }
 	else_if = { limit = { var:qing_office_held = flag:zongli }    employer = { QING_office_vacate = { office = zongli } } }
-	else_if = { limit = { var:qing_office_held = flag:grand_secretariat } employer = { QING_office_vacate = { office = grand_secretariat } } } # [#273]
-	else_if = { limit = { var:qing_office_held = flag:guard_commandant }  employer = { QING_office_vacate = { office = guard_commandant } } }  # [#273]
+	else_if = { limit = { var:qing_office_held = flag:grand_secretariat } employer = { QING_office_vacate = { office = grand_secretariat } } }
+	else_if = { limit = { var:qing_office_held = flag:guard_commandant }  employer = { QING_office_vacate = { office = guard_commandant } } }
+	else_if = {
+		limit = { var:qing_office_held = flag:emeritus }
+		employer = {
+			QING_office_vacate = { office = emeritus }
+			remove_country_modifier = qing_emeritus_conservative_backlash
+		}
+	}
+	else_if = {
+		limit = { var:qing_office_held = flag:regent }
+		employer = { QING_seat_regent_clear = yes }
+	}
+	LOG_exit = { sys = QING  fn = "QING_office_vacate_dispatch_nobackfill"  result = OK }
+}
+
+# Character-scope dispatcher: vacate whatever office `this` holds. Lets a single
+# vacate GUI serve all offices — it branches on the holder's qing_office_held
+# flag and calls the parameterised country-scope vacate with the right literal.
+QING_office_vacate_dispatch = {
+	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
+	LOG_enter = { sys = QING  fn = "QING_office_vacate_dispatch" }
+	if = { limit = { var:qing_office_held = flag:chancellor } employer = { QING_office_vacate = { office = chancellor }  QING_council_autofill_office = { office = chancellor  degree = jinshi } } }
+	else_if = { limit = { var:qing_office_held = flag:personnel }  employer = { QING_office_vacate = { office = personnel }  QING_council_autofill_office = { office = personnel  degree = jinshi } } }
+	else_if = { limit = { var:qing_office_held = flag:revenue }   employer = { QING_office_vacate = { office = revenue }  QING_council_autofill_office = { office = revenue  degree = jinshi } } }
+	else_if = { limit = { var:qing_office_held = flag:rites }     employer = { QING_office_vacate = { office = rites }  QING_council_autofill_office = { office = rites  degree = jinshi } } }
+	else_if = { limit = { var:qing_office_held = flag:war }       employer = { QING_office_vacate = { office = war }  QING_council_autofill_office = { office = war  degree = wu_jinshi } } }
+	else_if = { limit = { var:qing_office_held = flag:justice }   employer = { QING_office_vacate = { office = justice }  QING_council_autofill_office = { office = justice  degree = jinshi } } }
+	else_if = { limit = { var:qing_office_held = flag:works }     employer = { QING_office_vacate = { office = works }  QING_council_autofill_office = { office = works  degree = jinshi } } }
+	else_if = { limit = { var:qing_office_held = flag:censor }    employer = { QING_office_vacate = { office = censor }  QING_council_autofill_office = { office = censor  degree = jinshi } } }
+	else_if = { limit = { var:qing_office_held = flag:lifanyuan } employer = { QING_office_vacate = { office = lifanyuan }  QING_council_autofill_office = { office = lifanyuan  degree = jinshi } } }
+	else_if = { limit = { var:qing_office_held = flag:chamberlain }     employer = { QING_office_vacate = { office = chamberlain }  QING_council_autofill_office = { office = chamberlain  degree = jinshi } } }
+	else_if = { limit = { var:qing_office_held = flag:zongli }    employer = { QING_office_vacate = { office = zongli }  QING_council_autofill_office = { office = zongli  degree = jinshi } } }
+	else_if = { limit = { var:qing_office_held = flag:grand_secretariat } employer = { QING_office_vacate = { office = grand_secretariat }  QING_council_autofill_office = { office = grand_secretariat  degree = jinshi } } } # [#273]
+	else_if = { limit = { var:qing_office_held = flag:guard_commandant }  employer = { QING_office_vacate = { office = guard_commandant }  QING_council_autofill_office = { office = guard_commandant  degree = wu_jinshi } } }  # [#273]
 	# #65 the Emperor Emeritus (太上皇): when Napoleon vacates the seat (death or
 	# removal) strip the office bonus AND lift the conservative backlash that only
 	# rode while the divisive foreigner sat above the banners.

@@ -435,55 +435,44 @@ base_window = {
 		flowcontainer = {
 			margin = { 10 10 }
 			visible = "[Or( GetVariableSystem.HasValue( 'religion_tabs', 'omens'), Not( GetVariableSystem.Exists('religion_tabs') ) )]"
-			# [D1 fix R4 2026-07-22] BOUNDED ANCESTOR + wrapper — the FULL office-picker configuration.
-			# Verified by comparing the pantheon against the ONE proven long-scroll list, the office picker
-			# (imp19c_windows.gui:42 qing_office_picker_window), leg by leg:
-			#   office picker (clips a long list): FIXED base_window{640x720} > vbox > scrollarea{fixed} >
-			#       scrollwidget > flowcontainer{vertical} > UNSIZED gridbox{sized items}
-			#   pantheon R3 (spilled): UNSIZED vbox > UNSIZED flowcontainer > scrollarea{fixed} > ... same tail
-			# The R3 spill ran all the way to the WINDOW bottom (900px), NOT to the scrollarea's 600 — proof
-			# the scrollarea was NOT held to 600px. The one leg R3 dropped (on a review "uncertain" flag) was
-			# the BOUNDED ANCESTOR: the office picker's scrollarea is capped by a FIXED-size base_window, but
-			# the pantheon's ancestors (vbox, outer flowcontainer) were all unsized, so the scrollarea grew to
-			# its content height and overflowed the window. FIX = restore the explicit size on the vbox so it
-			# CAPS the scrollarea at 620x600 (the role the office-picker base_window plays), AND keep the R3
-			# `flowcontainer{direction=vertical}` wrapper. Both legs are now present, matching the proven
-			# reference. Gridbox stays UNSIZED (sizing it would CLAMP a long list — the old "only 4 show" bug;
-			# and Holy Sites, whose SIZED gridbox merely fits its short list, is NOT a valid scroll reference).
-			vbox = {
+			# [D1 fix R6 2026-07-22] REWRITTEN to the PROVEN standard_list idiom. Every prior attempt
+			# (R3 flowcontainer-wrapper, R4 sized-vbox bounded ancestor, R5 scissor=yes) hand-rolled a
+			# `scrollarea > scrollwidget > flowcontainer > dynamicgridbox` chain and ALL of them spilled
+			# past the window bottom. The ONE list in this game that provably scrolls a LONG collection —
+			# select_character_list / select_character_list_deity (gui/shared/select_character_template.gui),
+			# used by select_office_window — does NOT use that chain. It uses `using = standard_list` (the
+			# lists.gui template): a scrollarea whose scrollwidget>container is supplied via blockoverride
+			# "ss_container", holding a SIZED fixedgridbox with addcolumn/addrow. standard_list is what makes
+			# the engine clip+scroll; the bare scrollwidget+dynamicgridbox does not. This mirrors
+			# select_character_list_deity block-for-block: same scrollarea{using=standard_list +
+			# VerticalScrollAreaCutOff}, same blockoverride "ss_scrollarea" size, same blockoverride
+			# "ss_container" > fixedgridbox{sized, addcolumn/addrow}. Only difference: an explicit
+			# datamodel=[ReligionView.GetPantheon] on the gridbox (the deity template's window feeds its list
+			# implicitly; ours reads the pantheon accessor). fixedgridbox+explicit datamodel is proven across
+			# ~25 files (characters_view.gui:822 uses the identical addrow=94 character grid inside a scroll).
+			scrollarea = {
+				name = "pantheon_scroller"
 				size = { 620 600 }
-				# [D1 fix R5 2026-07-22] scissor = yes — the MISSING clip. Differential-debug (two cold
-				# agents + empirical falsification) isolated this: R4 already sized this vbox AND the
-				# scrollarea to 620x600, yet the list STILL spilled — proving a bounded parent alone does
-				# NOT force the scrollarea to clip. The office picker clips an equally-long list WITHOUT
-				# scissor ONLY because it lives directly inside a base_window, which clips its content
-				# implicitly; a plain vbox/flowcontainer (this tab body's ancestry) does NOT. scissor = yes
-				# makes this fixed 620x600 box clip its descendants explicitly — the overflowing deity rows
-				# are cut at 600 and the scrollarea scrolls them, instead of rendering past the window
-				# bottom. scissor is a proven engine property (mission_view.gif:286, military_view.gui,
-				# diplomatic_view.gui:952, characterwindow.gui). Holy Sites is NOT the reference (its list
-				# is too short to ever exercise clip/scroll).
-				scissor = yes
-				scrollarea = {
-					name = "pantheon_scroller"
+				scrollbarpolicy_horizontal = always_off
+				using = VerticalScrollAreaCutOff
+				using = standard_list
+				scrollbar_vertical = { using = VerticalScrollBar }
+				blockoverride "ss_scrollarea" {
+					position = { 0 0 }
 					size = { 620 600 }
-					scrollbarpolicy_horizontal = always_off
-					using = VerticalScrollAreaCutOff
-					scrollbar_vertical = { using = VerticalScrollBar }
-					scrollwidget = {
-						# [D1 R3] The proven office-picker/select_character_list wrapper: a vertical
-						# flowcontainer establishes the stacking context the bare scrollwidget lacks. One
-						# full-width item per row (no datamodel_wrap) => the deities stack vertically and the
-						# fixed-size scrollarea clips + scrolls the overflow instead of spilling.
-						flowcontainer = {
-							direction = vertical
-							dynamicgridbox = {
-								name = "omens_grid"
-								# UNSIZED gridbox (the proven idiom; the user ruled out sizing the gridbox and ruled
-								# out Holy Sites as a reference). NO datamodel_wrap = one full-width item per row.
-								datamodel = "[ReligionView.GetPantheon]"
+				}
+				blockoverride "ss_container" {
+					fixedgridbox = {
+						name = "omens_grid"
+						position = { 0 0 }
+						size = { 620 600 }
+						# one full-width column, one deity per row (item is 600 wide + 160 tall + 5 margin ≈ 165);
+						# addcolumn = row width so exactly one item per row (vertical stack), addrow = row pitch.
+						addcolumn = 610
+						addrow = 165
+						datamodel = "[ReligionView.GetPantheon]"
 
-								item = {
+							item = {
 									margin_widget = {
 										# [BT-A scroll-geom fix 2026-07-20] 620 -> 600 so the vertical scrollbar (now inside
 										# the 620 scrollarea) sits beside the row rather than overlaying its right edge.
@@ -847,8 +836,6 @@ base_window = {
 					}
 				}
 			}
-			}
-		}
 		################################
 		# HOLY SITES
 		################################

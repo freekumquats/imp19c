@@ -56,23 +56,13 @@ qing_force_setup.1 = {
 		# the effectiveness read. CHI-only (this event is ROOT = c:CHI).
 		if = {
 			limit = { tag = CHI }
-			QING_council_prune_all_seats = yes
-			QING_council_autofill = yes
-			QING_council_recompute = yes
-			# [diplomat=commander fix 2026-07-20] The SUB-POST corps (Zongli diplomats / Censorate
-			# inspectors / Guard captains) need the SAME reconcile the great-office seats just got.
-			# QING_subpost_seed_gamestart staffed them at day 0 from free courtiers — but this OOB
-			# attach (SE_qing_armies above) has just made some of those very courtiers into garrison
-			# COMMANDERS, so they are now double-booked (the reported "several diplomats are also
-			# commanders"). The appoint GATE (QING_office_eligible_candidate) only excludes commanders
-			# at HIRE; nothing strips the marker when a sitting diplomat LATER takes a command. That
-			# reconcile lives in QING_subpost_staff_corps (strip-marker-from-commander/governor, then
-			# refill the vacancy with a free civilian) but only ran on the quarterly GOV pulse — too
-			# late, the player sees the clash on turn 1. Run it here, right after the OOB attach, to
-			# close the window immediately. Same targets/markers as the game-start seed.
-			QING_subpost_staff_corps = { marker = qing_zongli_diplomat        count = qing_zongli_diplomat_count  target = 4 }
-			QING_subpost_staff_corps = { marker = qing_is_censor_inspector    count = qing_censor_inspector_count  target = 4 }
-			QING_subpost_staff_corps = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count       target = 4 }
+			# [BT-officeholder 2026-07-22] REMOVED the second council autofill + the sub-post re-staff
+			# reconcile that used to run here. They existed only to un-double-book councillors who became
+			# commanders via the OOB attach above — a problem that CANNOT occur any more: every post now
+			# stamps the single qing_officeholder flag, and QING_office_eligible_candidate rejects anyone
+			# who holds it, so a commander can never be picked for a seat (and vice-versa). Autofill runs
+			# EXACTLY ONCE, at game start, AFTER the historical figures are assigned — never again here.
+			# Only the martial-degree grant (unrelated, add_trait kept off the construction path) remains.
 			# [#5 fix 2026-07-17; BOOT-CRASHFIX 2026-07-18] MARTIAL EXAM CONGRUENCE — granted HERE, at
 			# RUNTIME (day 30, is_triggered_only), NOT inside QING_office_appoint. The appoint verb is
 			# reached at gamestate CONSTRUCTION via the game-start council autofill, and an add_trait
@@ -160,15 +150,40 @@ qing_force_setup.11 = {
 			}
 			QING_grant_martial_degree = yes
 		}
-		# [diplomat=commander fix 2026-07-20] Re-run the sub-post reconcile AGAIN here (it also ran
-		# at day 30 in qing_force_setup.1). The naval squadrons above raise on day 31, one day AFTER
-		# the land reconcile; a courtier the day-30 refill seated as a diplomat could be exactly the
-		# man just made an ADMIRAL, re-opening the double-booking the land sweep closed. QING_subpost_
-		# staff_corps strips the marker from the new commander and refills with a free civilian, so a
-		# second pass after the naval attach leaves no diplomat/censor/guardsman who is also a commander.
-		# CHI-only (ROOT = c:CHI throughout this event).
-		QING_subpost_staff_corps = { marker = qing_zongli_diplomat        count = qing_zongli_diplomat_count  target = 4 }
-		QING_subpost_staff_corps = { marker = qing_is_censor_inspector    count = qing_censor_inspector_count  target = 4 }
-		QING_subpost_staff_corps = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count       target = 4 }
+		# [BT-officeholder 2026-07-22] REMOVED the sub-post re-staff reconcile that used to run here
+		# (and at day 30). It only existed to un-double-book a diplomat/censor/guardsman who became a
+		# commander — impossible now: every post stamps qing_officeholder and the eligibility gate
+		# rejects anyone who holds it, so a commander is never in a corps and vice-versa.
+	}
+}
+
+# ======================================================================
+# [BT-officeholder 2026-07-22] .12 — THE SINGLE game-start council autofill, DEFERRED to day 32.
+# Runs ONCE, and ONLY here. Sequencing: historical figures are seated at construction (setup) and
+# the land/naval OOB creates the 1763 commanders at days 30/31 (qing_force_setup.1/.11 above).
+# Running the autofill AFTER them (day 32) means every seat still vacant is one no historical figure
+# or commander holds, and QING_council_autofill CREATES a fresh purpose-built official per vacant seat
+# (never grabs an existing person; the created official is added to NO pool, so nothing can re-grab
+# him for a second post). Deferred to a runtime event because create_character + add_trait at
+# on_game_initialized (construction) is a known boot-crash class. CHI-only (ROOT = c:CHI).
+# ======================================================================
+qing_force_setup.12 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_force_setup.12 (single deferred council + sub-post autofill — fill seats no historical figure holds)" }
+		if = {
+			limit = { tag = CHI }
+			# GC great offices: create a fresh official for each seat no historical figure holds.
+			QING_council_autofill = yes
+			QING_council_recompute = yes
+			# Ministry SUB-POST corps (Zongli diplomats / Censorate inspectors / Guard captains) — the
+			# SAME model: create fresh officials for the vacancies, degree-appropriate, officeholder-
+			# flagged. Moved here off construction (create_character + add_trait crash class). Runs after
+			# the council autofill so a created official is never contended between the two layers.
+			QING_subpost_seed_gamestart = yes
+			QING_ministry_recompute_all_perf = yes
+		}
 	}
 }

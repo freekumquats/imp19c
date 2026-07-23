@@ -32,55 +32,6 @@
 ########################################################################
 
 # ======================================================================
-# QING_subpost_fill_one — staff ONE vacancy in a corps. Country scope (ROOT = CHI).
-# Params:
-#   $marker$ = the character-scope flag stamped on a serving member (qing_zongli_diplomat,
-#              qing_is_censor_inspector, qing_is_imperial_guardsman).
-#   $count$  = the corps count var the panel + perf recompute read.
-# Prefers the ablest FREE eligible courtier; mints an above-expectations provincial
-# student through the exam process when none is free. Stamps the marker + bumps the
-# count on whichever man is chosen. Idempotent per call (fills exactly one seat).
-# ======================================================================
-QING_subpost_fill_one = {
-	if = {
-		# (A) a free eligible courtier exists — post the ablest.
-		limit = {
-			any_character = { QING_subpost_eligible_candidate = yes }
-		}
-		ordered_character = {
-			limit = { QING_subpost_eligible_candidate = yes }
-			order_by = combined_stats_council_svalue
-			check_range_bounds = no
-			max = 1
-			save_scope_as = qing_subpost_new
-		}
-		# if the drawn man is a hiring-pool scholar, drop him from the pool as he takes the
-		# post (the same exit path QING_office_appoint / the amban poster use).
-		scope:qing_subpost_new = { QING_exam_pool_drop_member = yes }
-		LOG_line = { sys = QING  msg = "subpost: staffed from a free courtier for" }
-	}
-	else = {
-		# (B) no free man — mint an EXTRAORDINARY PROVINCIAL STUDENT through the exam. He is a
-		# juren graduate (the rank that supplied the lesser posts) who performed above expectations;
-		# QING_exam_mint_scholar creates him into the hiring pool + saves scope:qing_new_scholar. We
-		# then immediately claim him (drop from pool, tag him the above-expectations student for the
-		# Rites counter) and post him — so the mint's net effect is one new officeholder, not a pool
-		# scholar left waiting. Marked here in a FOLLOW-UP scope (never inside create_character, #90).
-		QING_exam_mint_scholar = { degree = juren }
-		scope:qing_new_scholar = { save_scope_as = qing_subpost_new }
-		scope:qing_subpost_new = {
-			QING_exam_pool_drop_member = yes
-			set_variable = { name = qing_is_above_exp_student  value = 1 }
-		}
-		change_variable = { name = qing_above_exp_student_count  add = 1 }
-		LOG_line = { sys = QING  msg = "subpost: minted an above-expectations provincial student to staff a post for" }
-	}
-	# stamp the corps marker + bump the count on the chosen man.
-	scope:qing_subpost_new = { set_variable = { name = $marker$  value = 1 } }
-	change_variable = { name = $count$  add = 1 }
-}
-
-# ======================================================================
 # QING_subpost_fill_one_minted — [BT-diplomat fix 2026-07-22] staff ONE seat by ALWAYS MINTING a
 # BRAND-NEW character (never drawing an existing courtier). Country scope (ROOT = CHI).
 # Params: $marker$, $count$ (as QING_subpost_fill_one).
@@ -94,16 +45,42 @@ QING_subpost_fill_one = {
 # structurally impossible. (Same mint mechanism QING_subpost_fill_one branch B uses; #90-safe — the
 # corps marker is stamped in a FOLLOW-UP scope, never inside create_character.)
 QING_subpost_fill_one_minted = {
-	QING_exam_mint_scholar = { degree = juren }
-	scope:qing_new_scholar = { save_scope_as = qing_subpost_new }
-	scope:qing_subpost_new = {
-		QING_exam_pool_drop_member = yes
-		set_variable = { name = qing_is_above_exp_student  value = 1 }
+	# [BT-appointment-redesign review-fix 2026-07-22] capture the COUNTRY from `this` (CHI in every current
+	# caller: the day-32 seed event + the country-scope QING_GOV_pulse sweep) and use it for set_home_country
+	# below, NOT ROOT — the GC-office twin (QING_council_autofill_office) had a real bug where ROOT was a
+	# character on the runtime backfill path; this helper is currently only reached in country-ROOT contexts,
+	# but saving `this` makes it path-agnostic and matches the council helper, so a future vacate-style caller
+	# can't reintroduce the character-to-country-arg mismatch.
+	save_scope_as = qing_subpost_country
+	# [BT-officeholder 2026-07-22] CREATE a purpose-built official for the seat and assign him — like the
+	# GC-office autofill (QING_council_autofill_office). Do NOT route through the exam POOL: the old
+	# version called QING_exam_mint_scholar, which adds the new man to qing_scholar_pool as an eligible
+	# FREE body — so the council autofill (or another corps) could then grab him, and he double-booked
+	# (a minted diplomat seated as Minister of War — the reported regression). Creating him directly and
+	# adding him to NO pool, then stamping only his corps marker, means
+	# nothing can ever pick him for a second post. #90-safe: markers stamped in a FOLLOW-UP scope, never
+	# inside create_character. Age/stats mirror the exam-scholar profile (a fresh juren-grade official).
+	# $degree$ = the exam degree the post requires (juren/jinshi for civil corps, wu_jinshi for the
+	# martial Guard). Granted via add_trait INSIDE create_character — the #90-safe placement (a trait
+	# set during creation, not granted to a just-made char afterward), and this whole path is deferred
+	# to a runtime event so it is off the construction crash path regardless.
+	create_character = {
+		age = 30
+		culture = han
+		religion = confucianism
+		add_finesse = 7
+		add_charisma = 5
+		add_martial = 1
+		add_zeal = 4
+		add_trait = $degree$
+		save_scope_as = qing_subpost_new
 	}
-	change_variable = { name = qing_above_exp_student_count  add = 1 }
-	scope:qing_subpost_new = { set_variable = { name = $marker$  value = 1 } }
+	scope:qing_subpost_new = {
+		set_home_country = scope:qing_subpost_country
+		set_variable = { name = $marker$  value = 1 }
+	}
 	change_variable = { name = $count$  add = 1 }
-	LOG_line = { sys = QING  msg = "subpost: minted a BRAND-NEW diplomat (holds no other office) for" }
+	LOG_line = { sys = QING  msg = "subpost: created a BRAND-NEW official (holds no other office) for" }
 }
 
 # ======================================================================
@@ -132,20 +109,22 @@ QING_subpost_staff_corps_minted = {
 			ROOT = { change_variable = { name = $count$  add = 1 } }
 		}
 	}
-	# mint new men up to $target$ — one per guarded rung (corps cap is small; 4 rungs).
-	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$ } }
-	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$ } }
-	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$ } }
-	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$ } }
+	# mint new men up to $target$ — one per guarded rung (corps cap is small; 4 rungs). $degree$ threads
+	# through so each created official gets the civil/martial degree its post requires.
+	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$ } }
+	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$ } }
+	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$ } }
+	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$ } }
 }
 
 # ======================================================================
-# QING_subpost_staff_corps — fill a corps up to its establishment target. Country scope.
-# Params: $marker$, $count$ (as above); $target$ = how many the corps should carry.
-# Recomputes the LIVE count first (so a dead/departed member's seat is seen as vacant),
-# then fills one seat at a time up to the target. Unrolled to the target ceiling (the
-# engine `while` counts only a literal, not a var) — the ministry corps caps are small
-# (target 4, cap 6), so a fixed ladder of guarded fills is clean and bounded.
+# QING_subpost_strip_double_booked — the un-double-booking pass (STRIP ONLY, no fill).
+# Params: $marker$, $count$. Rebuilds $count$ from the marker, removing it from any member
+# who has since taken a role that breaks the 1:1 court-position rule (army/navy commander,
+# provincial governor, a Grand Council great office, garrison field officer, or — legacy —
+# a harem consort), and leaving the count reflecting the survivors. The quarterly sweep runs
+# this UNGATED (a headless ministry must not keep a commander on its rolls), then does the
+# minted fill-to-target separately, gated on a serving director. Country scope (ROOT = CHI).
 # ======================================================================
 QING_subpost_strip_double_booked = {
 	# [diplomat=commander fix R2 2026-07-20] STRIP-ONLY reconcile: remove the corps marker from any
@@ -177,58 +156,6 @@ QING_subpost_strip_double_booked = {
 	}
 }
 
-QING_subpost_staff_corps = {
-	# LIVE recount: rebuild the count from the marker so stale seats (holder dead / left
-	# CHI employ / promoted to a great office) read vacant and get refilled. The
-	# NOT=qing_office_held guard MATCHES the sibling perf recomputes exactly
-	# (QING_ministry_recompute_perf_censor / _guard_commandant), so the count this sweep
-	# stores agrees with the count the meter scores: a corps member promoted onto the Grand
-	# Council (QING_office_appoint strips his corps marker at seating, but this guards belt-
-	# and-suspenders in case the marker ever lingers) reads as a VACANCY and is refilled,
-	# rather than permanently occupying a slot the working bench can no longer use.
-	# [B20] RELEASE members who have since taken a role that breaks the 1:1 court-position rule:
-	# a diplomat/censor/guardsman who later became an ARMY/NAVY COMMANDER or a provincial GOVERNOR
-	# is now double-booked (the appointment gate QING_office_eligible_candidate excludes commanders
-	# at HIRE, but nothing stripped the marker if he took a command AFTER being posted — the reported
-	# bug: Zongli diplomats who are also commanders). Strip the sub-post marker from any such man FIRST
-	# so he reads as a vacancy below and the seat refills with a free civilian courtier. (office-holders
-	# already have their marker stripped at seating by QING_office_appoint; guarded here too.)
-	# [PERF-AUDIT 2026-07-18 M1] MERGED the former two global every_character passes (strip-then-recount)
-	# into ONE pass over the world's characters. Per member holding the marker: if he has since taken a
-	# disqualifying role (commander / governor / great-office holder) strip the marker and DO NOT count him;
-	# otherwise count him. Behaviour-equivalent to the old two passes (the old strip removed the marker from
-	# every qing_office_held man BEFORE the recount, so the recount's NOT=qing_office_held guard was redundant
-	# once the strip had run) at half the global-iterator cost.
-	set_variable = { name = $count$  value = 0 }
-	every_character = {
-		limit = {
-			employer = ROOT
-			is_alive = yes
-			has_variable = $marker$
-		}
-		if = {
-			# [BT-L fix 2026-07-19] also strip a HAREM CONSORT who somehow holds a corps marker (from a
-			# pre-fix save, before QING_office_eligible_candidate excluded consorts) — she reads as a vacancy
-			# and the seat refills with a proper courtier, self-healing the 'harem women in the corps' bug.
-			# [BT-7 fix R2 2026-07-22] ADDED qing_officer_marker — this staff-sweep strip was the ONE
-			# BT-7 chokepoint (of 4) that commit 606ea8742 missed. A garrison FIELD OFFICER (set_as_commander,
-			# stamped qing_officer_marker at imp19c_effects_legion_setup.txt:182, e.g. Tsedan 612 "General of
-			# Tibet Garrison") is NOT reliably is_general, so without this he read as a valid member here and
-			# lingered in the corps. Now matches the other three chokepoints' disqualifier set exactly.
-			limit = { OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_office_held  has_variable = qing_is_harem_consort  has_variable = qing_officer_marker } }
-			remove_variable = $marker$
-		}
-		else = {
-			ROOT = { change_variable = { name = $count$  add = 1 } }
-		}
-	}
-	# fill up to $target$ — one guarded seat per rung (at most 4 rungs; a small select corps).
-	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one = { marker = $marker$  count = $count$ } }
-	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one = { marker = $marker$  count = $count$ } }
-	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one = { marker = $marker$  count = $count$ } }
-	if = { limit = { var:$count$ < $target$ }  QING_subpost_fill_one = { marker = $marker$  count = $count$ } }
-}
-
 # ======================================================================
 # QING_subpost_seed_gamestart — [#77] staff the three ministry corps at game start
 # (called once from imp19c_qing_on_game_initialized, CHI only, BEFORE the ministry perf
@@ -243,21 +170,19 @@ QING_subpost_seed_gamestart = {
 	# here first. Idempotent (guards on qing_exam_initialized), so the later init call no-ops.
 	QING_exam_init = yes
 	if = { limit = { NOT = { has_variable = qing_above_exp_student_count } }  set_variable = { name = qing_above_exp_student_count  value = 0 } }
-	# [BT-diplomat fix 2026-07-22] The DIPLOMAT corps (駐外使臣) is staffed with BRAND-NEW MINTED
-	# characters (QING_subpost_staff_corps_minted), NOT drawn from the existing court.
-	# HISTORY — READ BEFORE CHANGING THIS BACK to the ordinary draw-from-court fill: the "diplomats are
-	# also Grand Council ministers" double-booking bug (e.g. Zhao Yi, Minister of War, appearing in the
-	# Diplomat Corps) was TRIED AND FIXED REPEATEDLY over many sessions and KEPT COMING BACK every boot
-	# test — the diplomat=commander strip (fix + R2), the qing_officer_marker addition (BT-7 + R2), the
-	# shared-picker eligibility guards, the roster-rebuild strip, AND the quarterly un-double-book sweep
-	# were ALL added in turn, and a sitting minister STILL surfaced in the corps through some fill/strip
-	# ordering. Per the user's decision, diplomats are now GUARANTEED fresh-minted characters that hold
-	# no other office, so double-booking is STRUCTURALLY impossible (a brand-new man cannot already be a
-	# minister/commander/governor). Censors + guard keep the ordinary draw-from-court fill below.
-	QING_subpost_staff_corps_minted = { marker = qing_zongli_diplomat  count = qing_zongli_diplomat_count  target = 4 }
-	QING_subpost_staff_corps = { marker = qing_is_censor_inspector    count = qing_censor_inspector_count  target = 4 }
-	QING_subpost_staff_corps = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count       target = 4 }
-	LOG_line = { sys = QING  msg = "subpost: game-start ministry corps staffed (diplomats minted fresh; censors + guard from court) for" }
+	# [BT-officeholder 2026-07-22] ALL THREE corps are staffed by CREATING brand-new officials (never
+	# drawing existing courtiers) — the same model as the GC offices. Each created man is stamped its
+	# corps marker and added to NO pool, so nothing can ever grab
+	# him for a second post: double-booking (diplomats/censors as ministers/commanders) is structurally
+	# impossible. Each corps gets the DEGREE its post requires: civil (juren) for the Zongli diplomats
+	# and Censorate inspectors (civil-service posts), martial (wu_jinshi) for the Imperial Guard captains
+	# (a martial corps). The degree is granted via add_trait inside QING_subpost_fill_one_minted — SAFE
+	# because this whole seed is now DEFERRED to a day-32 runtime event (add_trait at construction is the
+	# known boot-crash class), and runs AFTER any historical figures already hold their posts.
+	QING_subpost_staff_corps_minted = { marker = qing_zongli_diplomat        count = qing_zongli_diplomat_count  target = 4  degree = juren }
+	QING_subpost_staff_corps_minted = { marker = qing_is_censor_inspector    count = qing_censor_inspector_count  target = 4  degree = juren }
+	QING_subpost_staff_corps_minted = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count       target = 4  degree = wu_jinshi }
+	LOG_line = { sys = QING  msg = "subpost: game-start ministry corps staffed (all three corps minted fresh) for" }
 	LOG_exit = { sys = QING  fn = "QING_subpost_seed_gamestart"  result = OK }
 }
 
@@ -298,23 +223,30 @@ QING_subpost_refill_sweep = {
 				has_variable = qing_office_zongli_holder
 				var:qing_office_zongli_holder = { is_alive = yes  employer = ROOT }
 			}
-			QING_subpost_staff_corps_minted = { marker = qing_zongli_diplomat  count = qing_zongli_diplomat_count  target = 4 }
+			QING_subpost_staff_corps_minted = { marker = qing_zongli_diplomat  count = qing_zongli_diplomat_count  target = 4  degree = juren }
 		}
 		# investigating censors — only while the Censorate has a Grand Inspector.
+		# [BT-officeholder 2026-07-22] refill with BRAND-NEW MINTED civil (juren) officials, never drawn from
+		# the existing court/pool — the same rule as the diplomats and the GC offices: a vacated seat is filled
+		# by a CREATED character who holds no other post, so a refilled censor can never be a sitting minister/
+		# commander (the recurring double-booking bug) and nothing is ever drawn from the exam pool automatically.
 		if = {
 			limit = {
 				has_variable = qing_office_censor_holder
 				var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
 			}
-			QING_subpost_staff_corps = { marker = qing_is_censor_inspector  count = qing_censor_inspector_count  target = 4 }
+			QING_subpost_staff_corps_minted = { marker = qing_is_censor_inspector  count = qing_censor_inspector_count  target = 4  degree = juren }
 		}
 		# guard captains — only while the Guard has a Commandant.
+		# [BT-officeholder 2026-07-22] refill with BRAND-NEW MINTED martial (wu_jinshi) officers, never drawn
+		# from the existing court/pool — same rule as above; the Guard is a martial corps so its created men
+		# carry the martial degree.
 		if = {
 			limit = {
 				has_variable = qing_office_guard_commandant_holder
 				var:qing_office_guard_commandant_holder = { is_alive = yes  employer = ROOT }
 			}
-			QING_subpost_staff_corps = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count  target = 4 }
+			QING_subpost_staff_corps_minted = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count  target = 4  degree = wu_jinshi }
 		}
 	}
 }
