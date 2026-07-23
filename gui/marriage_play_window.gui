@@ -82,16 +82,13 @@ base_window = {
 								margin = { 2 3 }
 								datacontext = "[Scope.GetCharacter]"
 								using = background_widget
-								# [BT-marriage-screen2-close fix R2 2026-07-23] onclick ORDER = Execute -> createwidget(screen 3)
-								# -> ClearWidgets(SELF), self-close LAST. This matches the PROVEN office-picker row
-								# (imp19c_windows.gui: Execute -> ClearWidgets(self)); the only addition is the createwidget in the
-								# MIDDLE, so by the time the self-close runs, screen 3 already exists. The prior on_start-on-screen-3
-								# approach did NOT fire (that _show/on_start idiom works for tab-toggle views like trade_view, not for
-								# a window instantiated via gui.createwidget), which is why screen 2 lingered. Closing self LAST is the
-								# reliable form now that the old margin-on-bare-widget flood (which used to abort this chain) is gone.
+								# [BT-marriage-screen2-close fix R3 2026-07-23] The row ONLY: Execute pick_own, then createwidget
+								# screen 3. It does NOT self-close — a gui.createwidget in an onclick chain BREAKS the remaining
+								# onclicks, so any ClearWidgets AFTER the createwidget (R1/R2 tried this) is dead (log confirms the
+								# flow runs but screen 2 lingers). Screen 2 is instead closed from SCREEN 3's exit buttons
+								# (Propose/Cancel/X all ClearWidgets marriage_play_own_window), which fire cleanly.
 								onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
 								onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_their_window')]"
-								onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
 								tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
 								flowcontainer = {
 									parentanchor = vcenter
@@ -129,16 +126,13 @@ base_window = {
 								margin = { 2 3 }
 								datacontext = "[Scope.GetCharacter]"
 								using = background_widget
-								# [BT-marriage-screen2-close fix R2 2026-07-23] onclick ORDER = Execute -> createwidget(screen 3)
-								# -> ClearWidgets(SELF), self-close LAST. This matches the PROVEN office-picker row
-								# (imp19c_windows.gui: Execute -> ClearWidgets(self)); the only addition is the createwidget in the
-								# MIDDLE, so by the time the self-close runs, screen 3 already exists. The prior on_start-on-screen-3
-								# approach did NOT fire (that _show/on_start idiom works for tab-toggle views like trade_view, not for
-								# a window instantiated via gui.createwidget), which is why screen 2 lingered. Closing self LAST is the
-								# reliable form now that the old margin-on-bare-widget flood (which used to abort this chain) is gone.
+								# [BT-marriage-screen2-close fix R3 2026-07-23] The row ONLY: Execute pick_own, then createwidget
+								# screen 3. It does NOT self-close — a gui.createwidget in an onclick chain BREAKS the remaining
+								# onclicks, so any ClearWidgets AFTER the createwidget (R1/R2 tried this) is dead (log confirms the
+								# flow runs but screen 2 lingers). Screen 2 is instead closed from SCREEN 3's exit buttons
+								# (Propose/Cancel/X all ClearWidgets marriage_play_own_window), which fire cleanly.
 								onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
 								onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_their_window')]"
-								onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
 								tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
 								flowcontainer = {
 									parentanchor = vcenter
@@ -345,6 +339,14 @@ base_window = {
 							enabled = "[GetScriptedGui('marriage_play_launch').IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
 							onclick = "[GetScriptedGui('marriage_play_launch').Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
 							onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_their_window')]"
+							# [BT-marriage-screen2-close fix R3 2026-07-23] ALSO clear screen 2 (own_window). The log
+							# proves the whole flow runs (pick_own -> createwidget screen 3 -> pick_their -> launch), but
+							# screen 2's own row-onclick self-close never took: a gui.createwidget in an onclick chain
+							# BREAKS the remaining onclicks, so the ClearWidgets(own) after it (R1/R2) was dead. Screen 2
+							# just sits behind screen 3. Fix: close it from SCREEN 3's exit paths (Propose/Cancel/X), which
+							# fire cleanly (no createwidget after them). own_window may already be gone; ClearWidgets on a
+							# nonexistent window is a harmless no-op.
+							onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
 						}
 						tooltip = "MARRIAGE_PLAY_LAUNCH_TT"
 					}
@@ -353,6 +355,8 @@ base_window = {
 						blockoverride "Center_text" { text = "MARRIAGE_PLAY_CANCEL_BTN"  max_width = 190 }
 						blockoverride "On_click" {
 							onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_their_window')]"
+							# [BT-marriage-screen2-close fix R3 2026-07-23] also close screen 2 (see Propose note above).
+							onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
 						}
 						tooltip = "MARRIAGE_PLAY_CANCEL_TT"
 					}
@@ -361,7 +365,9 @@ base_window = {
 		}
 	}
 	button_close = {
+		# [BT-marriage-screen2-close fix R3 2026-07-23] closing screen 3 also closes screen 2 behind it.
 		onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_their_window')]"
+		onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
 		tooltip = "CLOSE"
 		parentanchor = top|right
 		position = { -7 10 }
