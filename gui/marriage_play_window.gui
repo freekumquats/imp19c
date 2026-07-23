@@ -1,30 +1,30 @@
 ########################################################################
-# marriage_play_window.gui — [#356] the marriage-proposal picker, as TWO SEQUENTIAL SINGLE-COLUMN
-# windows (cloned from the PROVEN single-column qing_office_picker_window, imp19c_windows.gui:36 —
-# single fixed scrollarea under the header + a window-level button_close).
+# marriage_play_window.gui — [#356] the marriage-proposal picker, as ONE window whose body swaps
+# between two steps via the GUI variable `marriage_step` (like the omens/sites tabs in religion_view).
 #
-# [2026-07-21] SCREEN 1 (the target-realm picker, base_window "marriage_play_window") was DELETED:
-# it was DEAD — nothing ever createwidget'd it. The ONLY entry point is the Diplomatic View's "Royal
-# Marriage" button (diplomatic_view.gui:1601), which runs marriage_play_diplo_open (it already knows
-# the viewed realm = the target) and opens SCREEN 2 directly. There is NO government-view entry.
+# [BT-marriage-merge 2026-07-23] MERGED the former two sequential windows (own_window + their_window)
+# into a SINGLE window. The two-window design could not be made to close reliably: the engine's
+# GUI.ClearWidgets only closes the button's OWN window (self-close), and a gui.createwidget in an
+# onclick chain BREAKS the later onclicks — so screen 2 could neither self-close (its createwidget
+# killed the following ClearWidgets) nor be closed from screen 3 (ClearWidgets of a non-topmost window
+# by name did not take). The log proved the whole flow ran while screen 2 visually lingered. One window
+# with a swapped body removes the second window entirely, so there is nothing to leave open.
 #
-# Flow (each screen is a standalone createwidget window):
-#   1. marriage_play_own_window   — pick OUR character (marriage_play_own_candidates). On click:
-#      Execute pick_own (sets our pick + builds/filters their-candidates by sex), open screen 2's
-#      next window (marriage_play_their_window), then close self. All onclicks live in a
-#      blockoverride "On_click" block so the createwidget AND the self-ClearWidgets both fire.
-#   2. marriage_play_their_window — pick THEIR character (marriage_play_their_candidates); a checkmark
-#      marks the selected row; the Propose/Cancel bar runs the validated launch (marriage_play_launch).
+# Flow (all in marriage_play_own_window; opened from Diplomatic View "Royal Marriage",
+# diplomatic_view.gui, via marriage_play_diplo_open):
+#   STEP OWN  (marriage_step unset or != 'their'): pick OUR character. Row click Executes
+#     marriage_play_pick_own, then sets marriage_step='their' -> the body swaps IN PLACE to the their-list.
+#   STEP THEIR (marriage_step == 'their'): pick THEIR character (marriage_play_pick_their); the
+#     Propose/Cancel bar runs the validated launch. Propose/Cancel/close all self-close the ONE window
+#     (proven office-picker idiom) and clear marriage_step so the next open starts on the own step.
 #
 # Rows keep their Character datacontext and inline the GetScriptedGui in onclick (the #8 boot-fix: a
 # ScriptedGui datacontext override shadows the row scope and blanks the row). TAB indentation throughout.
-# (Screen 1's scripted_guis marriage_play_pick_realm + marriage_play_open and the MARRIAGE_PLAY_build_realms
-# / marriage_play_realms builders were DELETED with it — dead code, no live caller.)
 ########################################################################
 
 
 # ======================================================================
-# SCREEN 2 — pick OUR character.
+# THE MARRIAGE PICKER — one window, two swappable body steps.
 # ======================================================================
 base_window = {
 	name = "marriage_play_own_window"
@@ -40,10 +40,15 @@ base_window = {
 			scrollbarpolicy_horizontal = always_off
 			scrollbar_vertical = { using = VerticalScrollBar }
 			scrollwidget = {
+				# ==============================================================
+				# STEP "OWN" — pick OUR character. Shown while marriage_step is NOT 'their'
+				# (unset on first open, or reset after a completed/cancelled flow).
+				# ==============================================================
 				flowcontainer = {
 					direction = vertical
 					spacing = 6
 					margin = { 8 6 }
+					visible = "[Not( GetVariableSystem.HasValue( 'marriage_step', 'their' ) )]"
 					textbox = {
 						using = BaseFontS
 						using = Default_FontColor
@@ -73,35 +78,25 @@ base_window = {
 					dynamicgridbox = {
 						datamodel = "[Player.MakeScope.GetList('marriage_play_own_adults')]"
 						item = {
-							# [#6 fix R7 2026-07-21 boot-B2] PROVEN self-closing office-picker row (imp19c_windows.gui:83-94):
-							# a single `button using=background_widget` with BARE onclicks + nested content, NOT a list_button
-							# + blockoverride "On_click". The R3-R6 list_button form left own_window OPEN (boot log: pick_own
-							# Execute + screen-3 createwidget both fired, no close). Bare Execute -> createwidget -> GUI.ClearWidgets(self).
-							button = {
+							# [BT-marriage-merge 2026-07-23] Row-click: Execute pick_own, then SWAP the body to the
+							# their-step by setting marriage_step='their' (NO createwidget, NO window close — the body
+							# below is just re-shown/hidden by the marriage_step var). This is the whole reason the merge
+							# fixes the close bug: there is no second window to leave open.
+							widget = {
 								size = { 588 72 }
-								margin = { 2 3 }
 								datacontext = "[Scope.GetCharacter]"
-								using = background_widget
-								# [BT-marriage-screen2-close fix R3 2026-07-23] The row ONLY: Execute pick_own, then createwidget
-								# screen 3. It does NOT self-close — a gui.createwidget in an onclick chain BREAKS the remaining
-								# onclicks, so any ClearWidgets AFTER the createwidget (R1/R2 tried this) is dead (log confirms the
-								# flow runs but screen 2 lingers). Screen 2 is instead closed from SCREEN 3's exit buttons
-								# (Propose/Cancel/X all ClearWidgets marriage_play_own_window), which fire cleanly.
-								onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-								onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_their_window')]"
-								tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
+								list_button = {
+									size = { 100% 100% }
+									onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+									onclick = "[GetVariableSystem.Set( 'marriage_step', 'their' )]"
+									tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
+								}
 								flowcontainer = {
 									parentanchor = vcenter
 									spacing = 8
 									margin = { 8 6 }
 									cpt_button = { parentanchor = vcenter  size = { 44 64 } }
 									textbox = { size = { 452 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
-									icon = {
-										parentanchor = vcenter
-										size = { 28 28 }
-										texture = "gfx/interface/base_parts/check_mark.dds"
-										visible = "[Character.MakeScope.Var('qing_marriage_their_selected').IsSet]"
-									}
 								}
 							}
 						}
@@ -117,89 +112,34 @@ base_window = {
 					dynamicgridbox = {
 						datamodel = "[Player.MakeScope.GetList('marriage_play_own_children')]"
 						item = {
-							# [#6 fix R7 2026-07-21 boot-B2] PROVEN self-closing office-picker row (imp19c_windows.gui:83-94):
-							# a single `button using=background_widget` with BARE onclicks + nested content, NOT a list_button
-							# + blockoverride "On_click". The R3-R6 list_button form left own_window OPEN (boot log: pick_own
-							# Execute + screen-3 createwidget both fired, no close). Bare Execute -> createwidget -> GUI.ClearWidgets(self).
-							button = {
+							widget = {
 								size = { 588 72 }
-								margin = { 2 3 }
 								datacontext = "[Scope.GetCharacter]"
-								using = background_widget
-								# [BT-marriage-screen2-close fix R3 2026-07-23] The row ONLY: Execute pick_own, then createwidget
-								# screen 3. It does NOT self-close — a gui.createwidget in an onclick chain BREAKS the remaining
-								# onclicks, so any ClearWidgets AFTER the createwidget (R1/R2 tried this) is dead (log confirms the
-								# flow runs but screen 2 lingers). Screen 2 is instead closed from SCREEN 3's exit buttons
-								# (Propose/Cancel/X all ClearWidgets marriage_play_own_window), which fire cleanly.
-								onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-								onclick = "[ExecuteConsoleCommand('gui.createwidget gui/marriage_play_window.gui marriage_play_their_window')]"
-								tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
+								list_button = {
+									size = { 100% 100% }
+									onclick = "[GetScriptedGui('marriage_play_pick_own').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+									onclick = "[GetVariableSystem.Set( 'marriage_step', 'their' )]"
+									tooltip = "MARRIAGE_PLAY_PICK_OWN_TT"
+								}
 								flowcontainer = {
 									parentanchor = vcenter
 									spacing = 8
 									margin = { 8 6 }
 									cpt_button = { parentanchor = vcenter  size = { 44 64 } }
 									textbox = { size = { 452 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
-									icon = {
-										parentanchor = vcenter
-										size = { 28 28 }
-										texture = "gfx/interface/base_parts/check_mark.dds"
-										visible = "[Character.MakeScope.Var('qing_marriage_their_selected').IsSet]"
-									}
 								}
 							}
 						}
 					}
 				}
-			}
-		}
-	}
-	button_close = {
-		onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
-		tooltip = "CLOSE"
-		parentanchor = top|right
-		position = { -7 10 }
-	}
-}
-
-# ======================================================================
-# SCREEN 3 — pick THEIR character, then Propose.
-# ======================================================================
-# [BT-G fix R5 2026-07-21] BYTE-FOR-BYTE CLONE of the proven-instantiating screen 2
-# (marriage_play_own_window). Four prior fixes (R1 footer-outside-scroll, R2 buttons-in-scroll,
-# R3 inline scripted_gui, R4 plain-button bar) ALL failed identically — screen 3 silently never
-# instantiated (script completes per debug.log, engine logs NOTHING). A cold differential + log
-# read could not isolate a markup cause, so static analysis is exhausted. Per the user's call:
-# STOP diffing and make screen 3 structurally IDENTICAL to screen 2, which provably instantiates.
-# The ONLY differences from screen 2 now are: window name + title, own_->their_ list names, the
-# row scripted_gui (pick_their vs pick_own), and — instead of screen 2's row-click window-advance —
-# the Propose + Cancel actions rendered as TWO extra FULL-WIDTH LIST-ROW BUTTONS (the SAME
-# `button {588 72} + background_widget + inner flowcontainer(cpt/textbox)` shape as a character row),
-# appended after the children grid. NO button bar, NO text_button_square_highlighted, NO new widget
-# type or container — screen 3's widget vocabulary is now EXACTLY screen 2's. Propose uses the same
-# plain-button `enabled`+inline-GetScriptedGui idiom proven by the clone-source office picker.
-base_window = {
-	name = "marriage_play_their_window"
-	gfxtype = windowgfx
-	parentanchor = center
-	movable = yes
-	size = { 640 720 }
-	# [BT-marriage-screen2-close fix R2 2026-07-23] The dead on_start-clears-own_window state was REMOVED:
-	# a _show/on_start hook does not fire when a window is instantiated via gui.createwidget (that idiom is
-	# for tab-toggle views), so it never closed screen 2. Screen 2 now self-closes from its row's final
-	# onclick instead (see marriage_play_own_window rows).
-	vbox = {
-		using = MainWindowHeaderBoxCentered
-		blockoverride "Title_text" { text = "MARRIAGE_PLAY_COL_THEIR" }
-		scrollarea = {
-			size = { 620 660 }
-			scrollbarpolicy_horizontal = always_off
-			scrollbar_vertical = { using = VerticalScrollBar }
-			scrollwidget = {
+				# ==============================================================
+				# STEP "THEIR" — pick THEIR character + Propose. Shown while marriage_step == 'their'.
+				# ==============================================================
 				flowcontainer = {
 					direction = vertical
 					spacing = 6
 					margin = { 8 6 }
+					visible = "[GetVariableSystem.HasValue( 'marriage_step', 'their' )]"
 					textbox = {
 						using = BaseFontS
 						using = Default_FontColor
@@ -208,6 +148,15 @@ base_window = {
 						alpha = 0.75
 						fontsize_min = 11
 						text = "MARRIAGE_PLAY_INSTR_THEIR"
+					}
+					# ---- BACK to the own-character step (re-pick our half) ----
+					text_button_square_highlighted = {
+						size = { 200 28 }
+						blockoverride "Center_text" { text = "MARRIAGE_PLAY_BACK_BTN"  max_width = 190 }
+						blockoverride "On_click" {
+							onclick = "[GetVariableSystem.Set( 'marriage_step', 'own' )]"
+						}
+						tooltip = "MARRIAGE_PLAY_BACK_TT"
 					}
 					# [BT-F] empty note when BOTH age bands are empty.
 					textbox = {
@@ -229,27 +178,12 @@ base_window = {
 					dynamicgridbox = {
 						datamodel = "[Player.MakeScope.GetList('marriage_play_their_adults')]"
 						item = {
-							# [#7 fix R2 2026-07-21] Row = a list_button SELECTION OVERLAY + content. The old button+
-							# background_widget showed NO highlight because down= only tints a list_button (it carries the
-							# state-responsive red_background frame; background_widget has only static layers). Proven idiom:
-							# diplomatic_view.gui Qing-subjects tab — list_button overlay (onclick+down=) behind the content.
 							widget = {
 								size = { 588 72 }
-								# [BT-1 fix 2026-07-22] `margin` is NOT a valid property on a BARE widget — the engine
-								# rejects it and FLOODS error.log ("marriage_play_window.gui:226 - Property 'margin'(630)
-								# not handled" + ":224 Error setting properties for (widget)"). That flood fires during the
-								# screen-2 row's onclick-2 `gui.createwidget marriage_play_their_window`, and the construction
-								# error aborts the onclick CHAIN before onclick-3 `GUI.ClearWidgets marriage_play_own_window`
-								# runs — which is exactly why screen 2 never closed (BT-1, 7 prior structural guesses missed
-								# the markup cause). margin on a bare widget is invalid; margin on a `button` is fine (the
-								# proven office-picker row uses button+margin). Remove it here (the row is spaced by the inner
-								# flowcontainer's own margin below); the office-picker note is explicit: "margin belongs on an
-								# inner widget, not the item root."
 								datacontext = "[Scope.GetCharacter]"
 								list_button = {
 									size = { 100% 100% }
 									onclick = "[GetScriptedGui('marriage_play_pick_their').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-									# down= reads the per-character marker pick_their stamps on the chosen char (cleared off the prior pick).
 									down = "[Character.MakeScope.Var('qing_marriage_their_selected').IsSet]"
 									tooltip = "MARRIAGE_PLAY_PICK_THEIR_TT"
 								}
@@ -259,9 +193,6 @@ base_window = {
 									margin = { 8 6 }
 									cpt_button = { parentanchor = vcenter  size = { 44 64 } }
 									textbox = { size = { 452 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
-									# [#7 fix R3 2026-07-21] explicit SELECTED checkmark — replaces reliance on list_button down= tinting
-									# (inert on this row). Gated on the proven visible=[...Var(marker).IsSet] idiom; the marker is set only
-									# on the picked their-character (MARRIAGE_PLAY_actions.txt), so it never shows on own-char rows.
 									icon = {
 										parentanchor = vcenter
 										size = { 28 28 }
@@ -283,27 +214,12 @@ base_window = {
 					dynamicgridbox = {
 						datamodel = "[Player.MakeScope.GetList('marriage_play_their_children')]"
 						item = {
-							# [#7 fix R2 2026-07-21] Row = a list_button SELECTION OVERLAY + content. The old button+
-							# background_widget showed NO highlight because down= only tints a list_button (it carries the
-							# state-responsive red_background frame; background_widget has only static layers). Proven idiom:
-							# diplomatic_view.gui Qing-subjects tab — list_button overlay (onclick+down=) behind the content.
 							widget = {
 								size = { 588 72 }
-								# [BT-1 fix 2026-07-22] `margin` is NOT a valid property on a BARE widget — the engine
-								# rejects it and FLOODS error.log ("marriage_play_window.gui:226 - Property 'margin'(630)
-								# not handled" + ":224 Error setting properties for (widget)"). That flood fires during the
-								# screen-2 row's onclick-2 `gui.createwidget marriage_play_their_window`, and the construction
-								# error aborts the onclick CHAIN before onclick-3 `GUI.ClearWidgets marriage_play_own_window`
-								# runs — which is exactly why screen 2 never closed (BT-1, 7 prior structural guesses missed
-								# the markup cause). margin on a bare widget is invalid; margin on a `button` is fine (the
-								# proven office-picker row uses button+margin). Remove it here (the row is spaced by the inner
-								# flowcontainer's own margin below); the office-picker note is explicit: "margin belongs on an
-								# inner widget, not the item root."
 								datacontext = "[Scope.GetCharacter]"
 								list_button = {
 									size = { 100% 100% }
 									onclick = "[GetScriptedGui('marriage_play_pick_their').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
-									# down= reads the per-character marker pick_their stamps on the chosen char (cleared off the prior pick).
 									down = "[Character.MakeScope.Var('qing_marriage_their_selected').IsSet]"
 									tooltip = "MARRIAGE_PLAY_PICK_THEIR_TT"
 								}
@@ -313,9 +229,6 @@ base_window = {
 									margin = { 8 6 }
 									cpt_button = { parentanchor = vcenter  size = { 44 64 } }
 									textbox = { size = { 452 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
-									# [#7 fix R3 2026-07-21] explicit SELECTED checkmark — replaces reliance on list_button down= tinting
-									# (inert on this row). Gated on the proven visible=[...Var(marker).IsSet] idiom; the marker is set only
-									# on the picked their-character (MARRIAGE_PLAY_actions.txt), so it never shows on own-char rows.
 									icon = {
 										parentanchor = vcenter
 										size = { 28 28 }
@@ -326,26 +239,17 @@ base_window = {
 							}
 						}
 					}
-					# ---- PROPOSE / CANCEL bar (red styled action buttons) ----
-					# [#9 red-style 2026-07-21] Restored the red text_button_square_highlighted style (was plain
-					# background_widget buttons from the R5 clone). R6 proved the screen-3 no-show was the OPENER's
-					# onclick ORDER (createwidget-before-clear), NOT the button widget type — so the styled button is
-					# safe now. Propose regains its `enabled` gate (greyed until a valid opposite-sex unmarried pair is
-					# picked); harmless per R5 — marriage_play_launch.is_valid still fully guards Execute.
+					# ---- PROPOSE / CANCEL bar ----
+					# Propose: launch the validated play, then self-close the ONE window (proven office-picker
+					# idiom: Execute -> GUI.ClearWidgets(self) as the final act) and clear marriage_step so the
+					# next open starts on the own step. No createwidget in the chain, so the self-close fires.
 					text_button_square_highlighted = {
 						size = { 380 32 }
 						blockoverride "Center_text" { text = "MARRIAGE_PLAY_LAUNCH_BTN"  max_width = 360 }
 						blockoverride "On_click" {
 							enabled = "[GetScriptedGui('marriage_play_launch').IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
 							onclick = "[GetScriptedGui('marriage_play_launch').Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-							onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_their_window')]"
-							# [BT-marriage-screen2-close fix R3 2026-07-23] ALSO clear screen 2 (own_window). The log
-							# proves the whole flow runs (pick_own -> createwidget screen 3 -> pick_their -> launch), but
-							# screen 2's own row-onclick self-close never took: a gui.createwidget in an onclick chain
-							# BREAKS the remaining onclicks, so the ClearWidgets(own) after it (R1/R2) was dead. Screen 2
-							# just sits behind screen 3. Fix: close it from SCREEN 3's exit paths (Propose/Cancel/X), which
-							# fire cleanly (no createwidget after them). own_window may already be gone; ClearWidgets on a
-							# nonexistent window is a harmless no-op.
+							onclick = "[GetVariableSystem.Clear( 'marriage_step' )]"
 							onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
 						}
 						tooltip = "MARRIAGE_PLAY_LAUNCH_TT"
@@ -354,8 +258,7 @@ base_window = {
 						size = { 200 32 }
 						blockoverride "Center_text" { text = "MARRIAGE_PLAY_CANCEL_BTN"  max_width = 190 }
 						blockoverride "On_click" {
-							onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_their_window')]"
-							# [BT-marriage-screen2-close fix R3 2026-07-23] also close screen 2 (see Propose note above).
+							onclick = "[GetVariableSystem.Clear( 'marriage_step' )]"
 							onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
 						}
 						tooltip = "MARRIAGE_PLAY_CANCEL_TT"
@@ -365,8 +268,8 @@ base_window = {
 		}
 	}
 	button_close = {
-		# [BT-marriage-screen2-close fix R3 2026-07-23] closing screen 3 also closes screen 2 behind it.
-		onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_their_window')]"
+		# self-close the one window + reset the step so a re-open starts fresh on the own step.
+		onclick = "[GetVariableSystem.Clear( 'marriage_step' )]"
 		onclick = "[ExecuteConsoleCommand('GUI.ClearWidgets marriage_play_own_window')]"
 		tooltip = "CLOSE"
 		parentanchor = top|right
