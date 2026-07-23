@@ -54,7 +54,10 @@ base_window = {
 						direction = vertical
 						spacing = 6
 						margin = { 8 6 }
-						visible = "[Not( GetVariableSystem.HasValue( 'marriage_step', 'their' ) )]"
+						# [BT-marriage-3screen 2026-07-23] own step shows only when NEITHER 'their' NOR 'review' is set
+						# (unset on first open / after reset). With the added review step, gating on Not('their') alone
+						# would leak the own list onto the review screen.
+						visible = "[And( Not( GetVariableSystem.HasValue( 'marriage_step', 'their' ) ), Not( GetVariableSystem.HasValue( 'marriage_step', 'review' ) ) )]"
 						textbox = {
 							using = BaseFontS
 							using = Default_FontColor
@@ -101,7 +104,16 @@ base_window = {
 										spacing = 8
 										margin = { 8 6 }
 										cpt_button = { parentanchor = vcenter  size = { 44 64 } }
-										textbox = { size = { 452 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
+										textbox = { size = { 404 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
+										# [BT-marriage-3screen 2026-07-23] own-court checkmark: shown once THIS character is the
+										# chosen own pick (qing_marriage_own_selected, set by marriage_play_pick_own). Mirrors the
+										# their-court checkmark. Widened 28 -> 44 per the fix request.
+										icon = {
+											parentanchor = vcenter
+											size = { 44 44 }
+											texture = "gfx/interface/base_parts/check_mark.dds"
+											visible = "[Character.MakeScope.Var('qing_marriage_own_selected').IsSet]"
+										}
 									}
 								}
 							}
@@ -130,7 +142,13 @@ base_window = {
 										spacing = 8
 										margin = { 8 6 }
 										cpt_button = { parentanchor = vcenter  size = { 44 64 } }
-										textbox = { size = { 452 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
+										textbox = { size = { 404 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
+										icon = {
+											parentanchor = vcenter
+											size = { 44 44 }
+											texture = "gfx/interface/base_parts/check_mark.dds"
+											visible = "[Character.MakeScope.Var('qing_marriage_own_selected').IsSet]"
+										}
 									}
 								}
 							}
@@ -189,7 +207,11 @@ base_window = {
 									datacontext = "[Scope.GetCharacter]"
 									list_button = {
 										size = { 100% 100% }
+										# [BT-marriage-3screen 2026-07-23] picking a their-character now ALSO swaps the body to the
+										# review step (marriage_step='review'), exactly as the own-step row swaps to 'their'. The
+										# Propose/Cancel bar lives on the review screen showing the chosen bride & groom.
 										onclick = "[GetScriptedGui('marriage_play_pick_their').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+										onclick = "[GetVariableSystem.Set( 'marriage_step', 'review' )]"
 										down = "[Character.MakeScope.Var('qing_marriage_their_selected').IsSet]"
 										tooltip = "MARRIAGE_PLAY_PICK_THEIR_TT"
 									}
@@ -198,10 +220,10 @@ base_window = {
 										spacing = 8
 										margin = { 8 6 }
 										cpt_button = { parentanchor = vcenter  size = { 44 64 } }
-										textbox = { size = { 452 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
+										textbox = { size = { 404 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
 										icon = {
 											parentanchor = vcenter
-											size = { 28 28 }
+											size = { 44 44 }
 											texture = "gfx/interface/base_parts/check_mark.dds"
 											visible = "[Character.MakeScope.Var('qing_marriage_their_selected').IsSet]"
 										}
@@ -226,6 +248,7 @@ base_window = {
 									list_button = {
 										size = { 100% 100% }
 										onclick = "[GetScriptedGui('marriage_play_pick_their').Execute( GuiScope.SetRoot( Character.MakeScope ).AddScope('player', Player.MakeScope ).End )]"
+										onclick = "[GetVariableSystem.Set( 'marriage_step', 'review' )]"
 										down = "[Character.MakeScope.Var('qing_marriage_their_selected').IsSet]"
 										tooltip = "MARRIAGE_PLAY_PICK_THEIR_TT"
 									}
@@ -234,10 +257,10 @@ base_window = {
 										spacing = 8
 										margin = { 8 6 }
 										cpt_button = { parentanchor = vcenter  size = { 44 64 } }
-										textbox = { size = { 452 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
+										textbox = { size = { 404 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
 										icon = {
 											parentanchor = vcenter
-											size = { 28 28 }
+											size = { 44 44 }
 											texture = "gfx/interface/base_parts/check_mark.dds"
 											visible = "[Character.MakeScope.Var('qing_marriage_their_selected').IsSet]"
 										}
@@ -245,10 +268,101 @@ base_window = {
 								}
 							}
 						}
-						# ---- PROPOSE / CANCEL bar ----
-						# Propose: launch the validated play, then self-close the ONE window (proven office-picker
-						# idiom: Execute -> GUI.ClearWidgets(self) as the final act) and clear marriage_step so the
-						# next open starts on the own step. No createwidget in the chain, so the self-close fires.
+					}
+					# ==============================================================
+					# STEP "REVIEW" — the proposed bride & groom + Propose/Cancel. Shown while marriage_step == 'review'
+					# (set by picking a their-character). Reached from the their step by a marriage_step swap, exactly as
+					# the their step is reached from the own step; a Back button returns to the their step.
+					# [BT-marriage-3screen 2026-07-23] The Propose/Cancel bar MOVED here from the their step.
+					# ==============================================================
+					flowcontainer = {
+						direction = vertical
+						spacing = 6
+						margin = { 8 6 }
+						visible = "[GetVariableSystem.HasValue( 'marriage_step', 'review' )]"
+						textbox = {
+							using = BaseFontS
+							using = Default_FontColor
+							size = { 590 44 }
+							multiline = yes
+							alpha = 0.75
+							fontsize_min = 11
+							text = "MARRIAGE_PLAY_INSTR_REVIEW"
+						}
+						# ---- BACK to the their-character step (re-pick their half) ----
+						text_button_square_highlighted = {
+							size = { 200 28 }
+							blockoverride "Center_text" { text = "MARRIAGE_PLAY_BACK_THEIR_BTN"  max_width = 190 }
+							blockoverride "On_click" {
+								onclick = "[GetVariableSystem.Set( 'marriage_step', 'their' )]"
+							}
+							tooltip = "MARRIAGE_PLAY_BACK_THEIR_TT"
+						}
+						# ---- the proposed pair. Each chosen character is rendered by filtering the already-built candidate
+						# list to the row carrying its selection marker (qing_marriage_own_selected / _their_selected) — the SAME
+						# proven marker the rows highlight on, avoiding a character-valued-var GUI read (the known .IsSet quirk). ----
+						textbox = { using = BaseFontM  using = Default_FontColor  size = { 590 24 }  text = "MARRIAGE_PLAY_REVIEW_OWN" }
+						dynamicgridbox = {
+							datamodel = "[Player.MakeScope.GetList('marriage_play_own_adults')]"
+							item = {
+								container = {
+									datacontext = "[Scope.GetCharacter]"
+									visible = "[Character.MakeScope.Var('qing_marriage_own_selected').IsSet]"
+									flowcontainer = {
+										parentanchor = vcenter  spacing = 8  margin = { 8 6 }
+										cpt_button = { parentanchor = vcenter  size = { 44 64 } }
+										textbox = { size = { 452 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
+									}
+								}
+							}
+						}
+						dynamicgridbox = {
+							datamodel = "[Player.MakeScope.GetList('marriage_play_own_children')]"
+							item = {
+								container = {
+									datacontext = "[Scope.GetCharacter]"
+									visible = "[Character.MakeScope.Var('qing_marriage_own_selected').IsSet]"
+									flowcontainer = {
+										parentanchor = vcenter  spacing = 8  margin = { 8 6 }
+										cpt_button = { parentanchor = vcenter  size = { 44 64 } }
+										textbox = { size = { 452 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
+									}
+								}
+							}
+						}
+						textbox = { using = BaseFontM  using = Default_FontColor  size = { 590 24 }  text = "MARRIAGE_PLAY_REVIEW_THEIR" }
+						dynamicgridbox = {
+							datamodel = "[Player.MakeScope.GetList('marriage_play_their_adults')]"
+							item = {
+								container = {
+									datacontext = "[Scope.GetCharacter]"
+									visible = "[Character.MakeScope.Var('qing_marriage_their_selected').IsSet]"
+									flowcontainer = {
+										parentanchor = vcenter  spacing = 8  margin = { 8 6 }
+										cpt_button = { parentanchor = vcenter  size = { 44 64 } }
+										textbox = { size = { 452 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
+									}
+								}
+							}
+						}
+						dynamicgridbox = {
+							datamodel = "[Player.MakeScope.GetList('marriage_play_their_children')]"
+							item = {
+								container = {
+									datacontext = "[Scope.GetCharacter]"
+									visible = "[Character.MakeScope.Var('qing_marriage_their_selected').IsSet]"
+									flowcontainer = {
+										parentanchor = vcenter  spacing = 8  margin = { 8 6 }
+										cpt_button = { parentanchor = vcenter  size = { 44 64 } }
+										textbox = { size = { 452 64 }  parentanchor = vcenter  multiline = yes  using = BaseFontM  using = Default_FontColor  text = "[Character.GetName]" }
+									}
+								}
+							}
+						}
+						# ---- PROPOSE / CANCEL bar (moved from the their step) ----
+						# Propose: launch the validated play, then self-close the ONE window (proven office-picker idiom:
+						# Execute -> GUI.ClearWidgets(self) as the final act) and clear marriage_step so the next open starts
+						# on the own step. No createwidget in the chain, so the self-close fires.
 						text_button_square_highlighted = {
 							size = { 380 32 }
 							blockoverride "Center_text" { text = "MARRIAGE_PLAY_LAUNCH_BTN"  max_width = 360 }

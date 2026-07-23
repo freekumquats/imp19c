@@ -36,7 +36,8 @@ marriage_play_diplo_open = {
 		LOG_line = { sys = MARRIAGE  msg = "marriage picker: opened from the diplomatic view for" }
 		# clear any stale selection from a prior open (as marriage_play_open does).
 		if = { limit = { has_variable = marriage_play_target }      remove_variable = marriage_play_target }
-		if = { limit = { has_variable = marriage_play_our_pick }    remove_variable = marriage_play_our_pick }
+		# [BT-marriage-3screen 2026-07-23] clear the per-char OWN marker off the prior own-pick before dropping the var (mirror of the their-pick clear below).
+		if = { limit = { has_variable = marriage_play_our_pick }    var:marriage_play_our_pick = { remove_variable = qing_marriage_own_selected }  remove_variable = marriage_play_our_pick }
 		# [#356 row-highlight] clear the per-char selection marker off the prior their-pick before dropping the var.
 		if = { limit = { has_variable = marriage_play_their_pick }  var:marriage_play_their_pick = { remove_variable = qing_marriage_their_selected }  remove_variable = marriage_play_their_pick }
 		# fix the target to the viewed realm (what marriage_play_pick_realm would have done).
@@ -56,6 +57,14 @@ marriage_play_pick_own = {
 	is_shown = { scope:player = { tag = CHI } }
 	is_valid = { is_alive = yes  is_married = no  employer = scope:player }
 	effect = {
+		# [BT-marriage-3screen 2026-07-23] clear the per-character OWN marker off any previous own-pick
+		# (mirrors the their-pick marker logic) so only the currently-chosen own row is checkmarked, then
+		# mark THIS character. The own-step row reads this in its `down=` + checkmark visible, exactly like
+		# the their-step rows read qing_marriage_their_selected. ROOT here = the clicked (own) character.
+		if = {
+			limit = { scope:player = { has_variable = marriage_play_our_pick } }
+			scope:player.var:marriage_play_our_pick = { remove_variable = qing_marriage_own_selected }
+		}
 		scope:player = {
 			set_variable = { name = marriage_play_our_pick  value = prev }
 			# our pick's sex fixes the opposite-gender filter for the target list; rebuild it.
@@ -76,18 +85,11 @@ marriage_play_pick_own = {
 				remove_variable = marriage_play_their_pick
 			}
 		}
+		# [BT-marriage-3screen 2026-07-23] mark THIS clicked own-character (ROOT) as the selected own pick,
+		# so the own-step row checkmarks + highlights it (down= reads this .IsSet). Set AFTER the scope:player
+		# block so the same-sex-drop above can't strip it. Mirrors qing_marriage_their_selected on the their side.
+		set_variable = { name = qing_marriage_own_selected  value = 1 }
 		LOG_line = { sys = MARRIAGE  msg = "marriage picker: our character chosen" }
-		# [BT-G DIAGNOSTIC 2026-07-19 — REMOVE after screen-3 dead-end is localised] confirm this effect
-		# completed and report the state screen 3 will read: this is the LAST script that runs before the
-		# button's second onclick fires `gui.createwidget ... marriage_play_their_window`. If this line is
-		# in the log but screen 3 never appears, the failure is in the WINDOW instantiation (GUI-layer),
-		# not the script; if target is unset here, build_their left the their-lists empty.
-		scope:player = {
-			LOG_line = { sys = MARRIAGE  msg = "BT-G pick_own DONE — about to createwidget marriage_play_their_window" }
-			if = { limit = { has_variable = marriage_play_target }        LOG_line = { sys = MARRIAGE  msg = "BT-G pick_own: target IS set" } }
-			if = { limit = { NOT = { has_variable = marriage_play_target } }  LOG_line = { sys = MARRIAGE  msg = "BT-G pick_own: target UNSET" } }
-			if = { limit = { has_variable = marriage_play_our_pick }      LOG_line = { sys = MARRIAGE  msg = "BT-G pick_own: our_pick IS set" } }
-		}
 	}
 }
 
