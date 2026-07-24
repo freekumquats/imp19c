@@ -1,0 +1,240 @@
+﻿########################################################################
+# se_QING_FOREIGNBUILD.txt — [#52 2026-07-23] AUTHORIZATION EFFECTS for the foreign-building
+# family (Design 1). These are the scripted verbs that PLANT a foreign building in a target
+# province and layer on the COUNTRY-level consequence (buildings carry only local modifiers;
+# the country modifier lives here, per the concrete-over-abstract rule). Each is called from a
+# subject-interaction / diplomatic-action scripted_gui or an event, is fully GUARDED (owner
+# non-null + building not already present, so re-entry never stacks — the #52 mirror of the
+# setup.11 concession seed guard), and is se_LOG-wired.
+#
+# add_building_level is the PROVEN vanilla province verb (border_forts.txt:125; used for the
+# Macau concession seed at imp19c_setup_events.txt and by the missionary stations). It bypasses
+# the building's `allow` tech/menu gate — so a treaty-port building whose allow = { always = no }
+# is still plantable here by treaty event. All these effects are runtime (called from GUI buttons
+# or is_triggered_only events), never from gamestate construction.
+#
+# Scope conventions per effect are documented at each. se_LOG sys = QING. Prefix = QING_fbuild_.
+#
+# Sources (Design 1 digest): Elman 2004 (arsenals / 洋務); Perdue 2005 (frontier 屯田); Hevia
+#   1995 (Macartney/Amherst embassies); Jackson 2020 (Shanghai settlement); Cohen 1963 (missions).
+########################################################################
+
+# ======================================================================
+# QING_fbuild_subject_works — plant a 洋務局 industrialization-aid building in a SUBJECT's own
+# city and take on the works-patron country modifier. Called INSIDE the overlord (ROOT = CHI)
+# scope; $subject$ = a saved country scope (the subject); $prov$ = a saved province scope (a
+# subject-owned city). Spends treasury + political influence. The subject KEEPS the province.
+# ======================================================================
+QING_fbuild_subject_works = {
+	# guard: the target province is owned by the subject and does not already carry the works building.
+	if = {
+		limit = {
+			exists = $prov$
+			$prov$ = {
+				owner = $subject$
+				has_city_status = yes
+				NOT = { has_building = qing_foreign_works_building }
+			}
+			treasury >= 80
+		}
+		add_treasury = -80
+		add_political_influence = -20
+		$prov$ = { add_building_level = qing_foreign_works_building }
+		# the standing patron modifier — applied once, not re-stacked while active.
+		if = {
+			limit = { NOT = { has_country_modifier = qing_fbuild_works_patron } }
+			add_country_modifier = { name = qing_fbuild_works_patron  duration = -1 }
+		}
+		LOG_line = { sys = QING  msg = "fbuild: planted a 洋務局 industrialization works in a subject for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_fbuild_subject_works"  reason = "target not a subject city / building present / treasury short" }
+	}
+}
+
+# ======================================================================
+# QING_fbuild_frontier_colony — plant a 屯田 frontier colony in an OWNED frontier province.
+# Called INSIDE ROOT (CHI); $prov$ = a saved province scope. No has_city_status requirement
+# (the colony precedes urban status). Guarded owner + not-already-present.
+# ======================================================================
+QING_fbuild_frontier_colony = {
+	if = {
+		limit = {
+			exists = $prov$
+			$prov$ = {
+				owner = ROOT
+				NOT = { has_building = qing_frontier_colony_building }
+			}
+			treasury >= 60
+		}
+		add_treasury = -60
+		$prov$ = { add_building_level = qing_frontier_colony_building }
+		LOG_line = { sys = QING  msg = "fbuild: established a 屯田 frontier colony for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_fbuild_frontier_colony"  reason = "target not owned / building present / treasury short" }
+	}
+}
+
+# ======================================================================
+# QING_fbuild_frontier_fort — plant a frontier fort in an OWNED frontier province. Called INSIDE
+# ROOT (CHI); $prov$ = a saved province scope. No has_city_status requirement. Guarded.
+# ======================================================================
+QING_fbuild_frontier_fort = {
+	if = {
+		limit = {
+			exists = $prov$
+			$prov$ = {
+				owner = ROOT
+				NOT = { has_building = qing_frontier_fort_building }
+			}
+			treasury >= 60
+		}
+		add_treasury = -60
+		$prov$ = { add_building_level = qing_frontier_fort_building }
+		LOG_line = { sys = QING  msg = "fbuild: raised a frontier fort for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_fbuild_frontier_fort"  reason = "target not owned / building present / treasury short" }
+	}
+}
+
+# ======================================================================
+# QING_fbuild_embassy — plant a 使館 legation in a Great Power's capital and take on the
+# diplomatic-representation country modifier. Called INSIDE ROOT (CHI); $power$ = a saved
+# country scope (the host power). The building goes on the host's CAPITAL province (the host
+# keeps it — an embassy sits in the host's own city). Guarded on the host existing + relations
+# floor + capital not already carrying our embassy.
+# ======================================================================
+QING_fbuild_embassy = {
+	if = {
+		limit = {
+			exists = $power$
+			$power$ = {
+				exists = capital_scope
+				capital_scope = { NOT = { has_building = qing_embassy_building } }
+			}
+		}
+		$power$ = { capital_scope = { add_building_level = qing_embassy_building } }
+		# the standing representation modifier — applied once, not re-stacked.
+		if = {
+			limit = { NOT = { has_country_modifier = qing_embassy_representation } }
+			add_country_modifier = { name = qing_embassy_representation  duration = -1 }
+		}
+		LOG_line = { sys = QING  msg = "fbuild: opened a resident legation (使館) abroad for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_fbuild_embassy"  reason = "host power missing / capital already has our embassy" }
+	}
+}
+
+# ======================================================================
+# QING_fbuild_plant_treaty_port — plant a FORCED foreign treaty port on Qing soil as an unequal-
+# treaty outcome, and take on the humiliation country modifier. Called INSIDE ROOT (CHI) from a
+# treaty/war-outcome event; $prov$ = a saved province scope (a Qing-owned coastal city). The
+# province STAYS Qing-owned (extraterritoriality, not cession) — the building is the foreign
+# quarter. Guarded owner + not-already-present.
+# ======================================================================
+QING_fbuild_plant_treaty_port = {
+	if = {
+		limit = {
+			exists = $prov$
+			$prov$ = {
+				owner = ROOT
+				NOT = { has_building = qing_treaty_port_building }
+			}
+		}
+		$prov$ = { add_building_level = qing_treaty_port_building }
+		# the standing humiliation modifier — applied once, not re-stacked.
+		if = {
+			limit = { NOT = { has_country_modifier = qing_treaty_port_humiliation } }
+			add_country_modifier = { name = qing_treaty_port_humiliation  duration = -1 }
+		}
+		LOG_line = { sys = QING  msg = "fbuild: a foreign treaty port was forced onto Qing soil for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_fbuild_plant_treaty_port"  reason = "target not Qing-owned / building present" }
+	}
+}
+
+# ======================================================================
+# QING_fbuild_mission_capstone — upgrade a mission province to the cathedral/seminary capstone
+# tier. Called INSIDE ROOT (CHI); $prov$ = a saved province scope. Gated on the treaty era
+# (full legal toleration) — mirrors the public-mission gate. Guarded not-already-present.
+# ======================================================================
+QING_fbuild_mission_capstone = {
+	if = {
+		limit = {
+			exists = $prov$
+			$prov$ = {
+				has_city_status = yes
+				NOT = { has_building = qing_mission_cathedral_building }
+			}
+		}
+		$prov$ = { add_building_level = qing_mission_cathedral_building }
+		LOG_line = { sys = QING  msg = "fbuild: raised a cathedral/seminary mission capstone for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_fbuild_mission_capstone"  reason = "target not a city / cathedral already present" }
+	}
+}
+
+# ======================================================================
+# QING_fbuild_upkeep_sweep — [#52] the has_building-keyed COUNTRY-modifier reconcile. Called from
+# the quarterly QING_GOV_pulse. Because a building can be lost (province ceded, torn down, subject
+# freed), the standing country modifiers must be RE-DERIVED from live building presence each pulse:
+# a modifier is held iff at least one matching building still stands under the Qing sphere. Country
+# scope (ROOT = CHI). Keeps modifier state honest without baking country effects into buildings.
+# ======================================================================
+QING_fbuild_upkeep_sweep = {
+	if = {
+		limit = { tag = CHI }
+		# WORKS PATRON — held iff any subject still carries a 洋務局.
+		if = {
+			limit = { any_subject = { any_owned_province = { has_building = qing_foreign_works_building } } }
+			if = {
+				limit = { NOT = { has_country_modifier = qing_fbuild_works_patron } }
+				add_country_modifier = { name = qing_fbuild_works_patron  duration = -1 }
+			}
+		}
+		else = {
+			if = {
+				limit = { has_country_modifier = qing_fbuild_works_patron }
+				remove_country_modifier = qing_fbuild_works_patron
+			}
+		}
+		# EMBASSY REPRESENTATION — held iff any country abroad still carries our legation. (We check
+		# any_country for the embassy building; an embassy sits in a host's capital, so a foreign
+		# capital carrying it means our legation stands there. Only CHI ever plants qing_embassy_building,
+		# so a match unambiguously means the Qing legation stands.)
+		# [PERF] this is an any_country->any_owned_province scan run once per quarter (not per tick),
+		# parallel to the QING_ethnic_tension_pulse heavy sweep; acceptable at quarterly cadence.
+		if = {
+			limit = { any_country = { any_owned_province = { has_building = qing_embassy_building } } }
+			if = {
+				limit = { NOT = { has_country_modifier = qing_embassy_representation } }
+				add_country_modifier = { name = qing_embassy_representation  duration = -1 }
+			}
+		}
+		else = {
+			if = {
+				limit = { has_country_modifier = qing_embassy_representation }
+				remove_country_modifier = qing_embassy_representation
+			}
+		}
+		# TREATY-PORT HUMILIATION — held iff any Qing-owned province still carries a forced treaty port.
+		if = {
+			limit = { any_owned_province = { has_building = qing_treaty_port_building } }
+			if = {
+				limit = { NOT = { has_country_modifier = qing_treaty_port_humiliation } }
+				add_country_modifier = { name = qing_treaty_port_humiliation  duration = -1 }
+			}
+		}
+		else = {
+			if = {
+				limit = { has_country_modifier = qing_treaty_port_humiliation }
+				remove_country_modifier = qing_treaty_port_humiliation
+			}
+		}
+	}
+}
