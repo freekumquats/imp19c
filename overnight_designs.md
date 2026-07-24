@@ -1209,3 +1209,54 @@ button is the follow-on. Logged so it's picked up deliberately.
   (add-in-if / remove-in-else, both modifier-guarded); all add_building_level targets exists+owner guarded; loc complete.
 Design 1 (task #52) COMPLETE — the effects/buildings are live via mission + treaty + missionary-pulse callers; a
 player-facing subject-view/diplomatic-view BUTTON surface is the logged follow-on (deferred, not blocking).
+
+---
+
+## Design 4 — Culture → Nationalism + citizenship (task #62) — EXECUTION
+
+### Chunk 4.1 — nationalism concept layer + citizenship decisions + loc (built together)
+Files: 00_nationalism_groups.txt (NEW triggers), 3 filled culture_decisions/*.txt, 00_cultural_modifiers.txt
+(+qing_naturalised_citizenship), qing_mechanics_modifiers.txt (+qing_national_awakening), qing_nationalism_l_english.yml
+(NEW), modifiers_l_english.yml (+modifier loc). All brace-balanced + BOM'd.
+
+KEY VERB DECISION (oracle-gated). The design leaned on change_pop_type_right for citizenship. An oracle sweep of
+vanilla + TI + Invictus found change_pop_type_right is GUI-ONLY — it has a price + icon but NO scriptable effect
+form anywhere. So citizenship is built on the PROVEN pair instead:
+- **Grant** = integrate_country_culture = scope:target_culture.culture (the real engine citizenship grant, already
+  used in se_QING_DECLINE.txt:640; TI form_miao) — flips is_integrated, admits the culture to the in-group.
+- **Graduated rights / revoke** = add/remove_country_culture_modifier (the TI/Invictus culture-decision pattern):
+  qing_naturalised_citizenship (new dividend modifier), rights_increased, integration_status_removed (vanilla).
+- There is NO unintegrate_country_culture verb → revoke is modeled as RIGHTS-revocation (strip the naturalised
+  modifier + apply integration_status_removed), NOT engine de-integration. Documented in the file header so it isn't
+  read as a bug. This is a truthful mapping of what the engine exposes, not a workaround.
+
+DECISIONS BUILT:
+- non_integrated: qing_grant_citizenship (歸化, integrate + dividend, -3 stab), qing_extend_local_rights (優容, lesser).
+- integrated: qing_revoke_citizenship (削籍, strip standing + penalty, -8 stab).
+- primary: qing_proclaim_nation (立國族, gated on has_recognised_nationalism + civic_identity>=50 + tag CHI; grants
+  qing_national_awakening + legitimacy).
+
+NATIONALISM CONCEPT = the group-level trigger layer (zhonghua/manchu/mongol/german/italian/french nation triggers over
+the existing culture GROUPS via country/pop/dominant_province_culture_group). NO culture-key renames (blast radius) —
+the relabel is a NEW loc layer (中華/滿族/Deutschtum…) ON TOP of the untouched culture ethnonyms ("Han" stays "Han",
+distinct from the invented pan-Han nation 中華 coined 1902). This is the design's "re-localize display names, don't
+rename internal keys" decision, executed as an additive concept layer rather than a destructive overwrite of chinese_group:1.
+
+DERIVED NATIONALISM METER — NOT separately built. The existing qing_civic_identity (National Integration meter, bands
+in QING_DECLINE_apply_civic_band) ALREADY is the derived civic/national-coherence read-out the design's ratchet-safe
+"pure derived" option called for; qing_proclaim_nation reads it directly. Adding a second parallel meter would be
+redundant. Logged as a deliberate scope call.
+
+RIGHTS-CLEANUP "NEEDS CHANGED" SEAMS — deliberately NOT touched. increased_rights_cleanup_effect /
+reduced_rights_cleanup_effect (called in on_action/00_specific_from_code.txt:556,610) are VANILLA base-game scripted
+effects — DEFINED NOWHERE in imp19c, TI, or Invictus (all three only CALL them), so they resolve from the base game and
+work as-is. The "IMP19C NOTE: NEEDS CHANGED" comment is an aspirational author note orthogonal to Design 4: my
+citizenship path uses integrate_country_culture + modifiers and does NOT route through these cleanup hooks, so
+redefining/overriding them would be a high-risk-low-value change. Left intact; decision logged.
+
+REVIEW: direct (200-agent cap hit — no subagent). Verified against code: integrate_country_culture arg form matches
+DECLINE:640 + working .culture accessor; all 6 culture-group keys exist; minor/major_cultural_decision_price defined;
+qing_naturalised_citizenship keys all proven culture-scope; qing_national_awakening keys all proven country-scope;
+custom_tooltip-as-gate matches the working language_recognition decision; var:qing_civic_identity has_variable-guarded +
+CHI-gated + init'd 5×; add_legitimacy/add_stability proven; all decisions ai_will_do=0 (player-only). No boot-crash class
+matched. **Design 4 (task #62) COMPLETE** (a culture_view.gui read-out panel is the logged optional follow-on).
