@@ -306,6 +306,12 @@ base_window = {
 						blockoverride "Title_text"  { text = "LOCAL_HOLY_SITES" }
 						blockoverride "Max_text_width" { max_width = 230 }
 					}
+					sub_header = {
+						position = { 0 3 }
+						visible = "[GetVariableSystem.HasValue('religion_tabs', 'faith')]"
+						blockoverride "Title_text"  { text = "QING_FAITH_SEDITION_HEADER" }
+						blockoverride "Max_text_width" { max_width = 230 }
+					}
 				}
 				category_tab = {
 					blockoverride "MinSize" { size = { @mincategorybuttonwidth @mincategorybuttonheight } }
@@ -335,6 +341,23 @@ base_window = {
 					blockoverride "ClickFunction"
 					{
 						onclick = "[GetVariableSystem.Set('religion_tabs', 'sites')]"
+					}
+				}
+
+				# [BT-D3-1 2026-07-24] third tab — FAITH & SEDITION (民教相爭), moved off the Holy Sites tab into
+				# its own body (gated religion_tabs='faith'). Pressed-state = exact-match on 'faith'.
+				category_tab = {
+					blockoverride "MinSize" { size = { @mincategorybuttonwidth @mincategorybuttonheight } }
+					blockoverride "MaxSize" { size = { @maxcategorybuttonwidth @maxcategorybuttonheight } }
+					blockoverride "MinVisible" { visible = "[Not( GetVariableSystem.HasValue('religion_tabs', 'faith'))]" }
+					blockoverride "MaxVisible" { visible = "[GetVariableSystem.HasValue('religion_tabs', 'faith')]" }
+					######## Shared Overrides
+					blockoverride "Center_text" { text = "QING_FAITH_SEDITION_TAB" }
+					blockoverride "Icon" { visible = no }
+					######## Small Button Overrides
+					blockoverride "ClickFunction"
+					{
+						onclick = "[GetVariableSystem.Set('religion_tabs', 'faith')]"
 					}
 				}
 			}
@@ -1036,11 +1059,22 @@ base_window = {
 		################################
 		# HOLY SITES
 		################################
-		flowcontainer = {
+		# [BT-D3-1 fix 2026-07-24] Tab-body root was a bare `flowcontainer { margin }` with NO layoutpolicy,
+		# so it shrink-wrapped to content; the LEFT column's fixed-height children (the 280 sites scrollarea +
+		# the ~170 Faith & Sedition block) overflowed and — with no bounded height anywhere in the chain —
+		# propagated up to the top-level expanding vbox, dislocating the header and detaching the list
+		# ("scattered"). Fix, differential vs the WORKING Pantheon sibling (L349): the root stays a HORIZONTAL
+		# container (hbox) so its two columns — left list + right detail pane (L1358) — sit SIDE BY SIDE, but it
+		# now carries expanding layoutpolicy so the bounded window height flows down; the left column becomes a
+		# `vbox` + expanding policy so its stacked scrollareas clip INSIDE the bounded height instead of pushing
+		# the layout apart. (Pantheon/office-picker bounded-parent idiom, not a re-guess.)
+		hbox = {
+			layoutpolicy_vertical = expanding
+			layoutpolicy_horizontal = expanding
 			margin = { 10 10 }
 			visible = "[GetVariableSystem.HasValue( 'religion_tabs', 'sites' )]"
-			flowcontainer = {
-				direction = vertical
+			vbox = {
+				layoutpolicy_vertical = expanding
 				flowcontainer = {
 					spacing = 4
 					text_button_sort = {
@@ -1186,161 +1220,6 @@ base_window = {
 									}
 								}
 							}
-						}
-					}
-				}
-				# [BT-faith-inline 2026-07-23] FAITH & SEDITION (民教相爭) — inline province list BELOW the Holy
-				# Sites list (option (a): the three former pop-up reports folded into one inline list styled like
-				# Holy Sites). Gated to CHI (qing_religion_overlay_shown) AND the sites tab. Rows come from
-				# qing_faith_report_provinces, rebuilt each pulse by QING_faith_report_build (se_QING_MISSIONARY.txt).
-				# Columns: Anti-Christian Sentiment (var qing_prov_missionary_tension), Social Friction (presence of
-				# the qing_mission_unrest province modifier), Mission Stations (QING_prov_has_mission). Each row's
-				# goto-button jumps/highlights the province, replacing the retired report windows' only extra feature.
-				vbox = {
-					visible = "[GetScriptedGui('qing_religion_overlay_shown').IsShown( GuiScope.SetRoot( ReligionView.GetPlayer.MakeScope ).End )]"
-					# [BT-holysites-layout 2026-07-23] ignoreinvisible so the gated empty-note (and any other hidden
-					# child) reserves NO column height — the cold scan flagged its ~40px reservation as padding the
-					# overflow budget that dislocated the header.
-					ignoreinvisible = yes
-					margin_top = 10
-					spacing = 2
-					icon = {
-						using = brighten_red_background
-						size = { 300 2 }
-					}
-					textbox = {
-						size = { 300 24 }
-						using = HeaderFont
-						using = Default_FontColor
-						text = "QING_FAITH_SEDITION_HEADER"
-					}
-					# column headers
-					hbox = {
-						margin = { 4 0 }
-						spacing = 4
-						textbox = {
-							size = { 120 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "QING_FAITH_COL_SITE"
-							align = left|vcenter
-						}
-						textbox = {
-							size = { 56 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "QING_FAITH_COL_ANTICHR"
-							align = center|vcenter
-							tooltip = "QING_FAITH_ANTICHR_TT"
-						}
-						textbox = {
-							size = { 56 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "QING_FAITH_COL_SOCIAL"
-							align = center|vcenter
-							tooltip = "QING_FAITH_SOCIAL_TT"
-						}
-						textbox = {
-							size = { 56 20 }
-							using = BaseFontS
-							using = Default_FontColor
-							text = "QING_FAITH_COL_MISSION"
-							align = center|vcenter
-							tooltip = "QING_FAITH_REACH_TT"
-						}
-					}
-					# empty-note when no province carries a faith footprint
-					textbox = {
-						visible = "[GetScriptedGui('qing_report_faith_empty').IsShown( GuiScope.SetRoot( ReligionView.GetPlayer.MakeScope ).End )]"
-						size = { 300 40 }
-						using = BaseFontS
-						using = Default_FontColor
-						text = "QING_FAITH_EMPTY"
-						multiline = yes
-						align = left
-					}
-					scrollarea = {
-						name = "qing_faith_scroller"
-						# [BT-holysites-layout 2026-07-23] 220 -> 170 so the left-column stack (28 sort + 250 list +
-						# header/cols/note ~80 + 170 F&S list + suppress button ~40 ≈ 568) fits the ~635 body with
-						# headroom, preventing the unbounded-overflow header dislocation the cold scan diagnosed.
-						size = { 300 170 }
-						scrollbarpolicy_horizontal = always_off
-						using = VerticalScrollAreaCutOff
-						scrollbar_vertical = {
-							using = VerticalScrollBar
-						}
-						scrollwidget = {
-							dynamicgridbox = {
-								name = "qing_faith_grid"
-								datamodel = "[ReligionView.GetPlayer.MakeScope.GetList('qing_faith_report_provinces')]"
-								item = {
-									widget = {
-										size = { 292 32 }
-										list_button = {
-											size = { 100% 30 }
-											onmousehierarchyenter = "[SetHighlightProvince(Scope.GetProvince.GetId)]"
-											onmousehierarchyleave = "[ClearHighlightColors]"
-											onclick = "[OnClickOnProvince(Scope.GetProvince)]"
-											tooltip = "go_to"
-										}
-										hbox = {
-											size = { 100% 100% }
-											margin = { 8 0 }
-											spacing = 4
-											textbox = {
-												size = { 116 100% }
-												text = "[Scope.GetProvince.GetName]"
-												using = BaseFontS
-												using = Default_FontColor
-												align = left|vcenter
-												elide = right
-											}
-											textbox = {
-												size = { 56 100% }
-												text = "[Scope.GetProvince.MakeScope.Var('qing_prov_missionary_tension').GetValue|0]"
-												using = BaseFontS
-												using = Default_FontColor
-												align = center|vcenter
-											}
-											textbox = {
-												size = { 56 100% }
-												using = BaseFontS
-												using = Default_FontColor
-												align = center|vcenter
-												text = "[SelectLocalization( GetScriptedGui('qing_prov_faith_unrest_gui').IsShown( GuiScope.SetRoot( Scope.GetProvince.MakeScope ).End ), 'QING_FAITH_MARK_YES', 'QING_FAITH_MARK_NO' )]"
-											}
-											textbox = {
-												size = { 56 100% }
-												using = BaseFontS
-												using = Default_FontColor
-												align = center|vcenter
-												text = "[SelectLocalization( GetScriptedGui('qing_prov_has_mission_gui').IsShown( GuiScope.SetRoot( Scope.GetProvince.MakeScope ).End ), 'QING_FAITH_MARK_YES', 'QING_FAITH_MARK_NO' )]"
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-					# [BT-faith-inline 2026-07-23] 查禁傳教 SUPPRESS-MISSIONS lever, re-homed here from the retired
-					# missions pop-up report (option (a) folded the reports inline, so the lever moves with them). Same
-					# scripted_gui (qing_action_suppress_missions) + Execute/IsValid idiom; disabled during its cooldown
-					# or when no mission stands. Its effect rebuilds the inline faith list so the shuttered node drops off.
-					margin_widget = {
-						size = { 300 34 }
-						margin_top = 6
-						text_button_square_highlighted = {
-							parentanchor = hcenter
-							size = { 290 30 }
-							datacontext = "[GetScriptedGui('qing_action_suppress_missions')]"
-							blockoverride "Center_text" { text = "QING_SUPPRESS_MISSIONS_BTN"  max_width = 270 }
-							blockoverride "On_click" {
-								enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( ReligionView.GetPlayer.MakeScope ).End )]"
-								onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( ReligionView.GetPlayer.MakeScope ).End )]"
-							}
-							tooltip = "QING_SUPPRESS_MISSIONS_TT"
 						}
 					}
 				}
@@ -1516,6 +1395,170 @@ base_window = {
 					}		
 				}
 			}
+		}
+		################################
+		# FAITH & SEDITION (民教相爭)  [BT-D3-1: moved to its own tab off Holy Sites]
+		################################
+		vbox = {
+			layoutpolicy_vertical = expanding
+			layoutpolicy_horizontal = expanding
+			margin = { 10 10 }
+			visible = "[GetVariableSystem.HasValue( 'religion_tabs', 'faith' )]"
+				# [BT-faith-inline 2026-07-23] FAITH & SEDITION (民教相爭) — inline province list BELOW the Holy
+				# Sites list (option (a): the three former pop-up reports folded into one inline list styled like
+				# Holy Sites). Gated to CHI (qing_religion_overlay_shown) AND the sites tab. Rows come from
+				# qing_faith_report_provinces, rebuilt each pulse by QING_faith_report_build (se_QING_MISSIONARY.txt).
+				# Columns: Anti-Christian Sentiment (var qing_prov_missionary_tension), Social Friction (presence of
+				# the qing_mission_unrest province modifier), Mission Stations (QING_prov_has_mission). Each row's
+				# goto-button jumps/highlights the province, replacing the retired report windows' only extra feature.
+				vbox = {
+					visible = "[GetScriptedGui('qing_religion_overlay_shown').IsShown( GuiScope.SetRoot( ReligionView.GetPlayer.MakeScope ).End )]"
+					# [BT-holysites-layout 2026-07-23] ignoreinvisible so the gated empty-note (and any other hidden
+					# child) reserves NO column height — the cold scan flagged its ~40px reservation as padding the
+					# overflow budget that dislocated the header.
+					ignoreinvisible = yes
+					margin_top = 10
+					spacing = 2
+					icon = {
+						using = brighten_red_background
+						size = { 300 2 }
+					}
+					textbox = {
+						size = { 300 24 }
+						using = HeaderFont
+						using = Default_FontColor
+						text = "QING_FAITH_SEDITION_HEADER"
+					}
+					# column headers
+					hbox = {
+						margin = { 4 0 }
+						spacing = 4
+						textbox = {
+							size = { 120 20 }
+							using = BaseFontS
+							using = Default_FontColor
+							text = "QING_FAITH_COL_SITE"
+							align = left|vcenter
+						}
+						textbox = {
+							size = { 56 20 }
+							using = BaseFontS
+							using = Default_FontColor
+							text = "QING_FAITH_COL_ANTICHR"
+							align = center|vcenter
+							tooltip = "QING_FAITH_ANTICHR_TT"
+						}
+						textbox = {
+							size = { 56 20 }
+							using = BaseFontS
+							using = Default_FontColor
+							text = "QING_FAITH_COL_SOCIAL"
+							align = center|vcenter
+							tooltip = "QING_FAITH_SOCIAL_TT"
+						}
+						textbox = {
+							size = { 56 20 }
+							using = BaseFontS
+							using = Default_FontColor
+							text = "QING_FAITH_COL_MISSION"
+							align = center|vcenter
+							tooltip = "QING_FAITH_REACH_TT"
+						}
+					}
+					# empty-note when no province carries a faith footprint
+					textbox = {
+						visible = "[GetScriptedGui('qing_report_faith_empty').IsShown( GuiScope.SetRoot( ReligionView.GetPlayer.MakeScope ).End )]"
+						size = { 300 40 }
+						using = BaseFontS
+						using = Default_FontColor
+						text = "QING_FAITH_EMPTY"
+						multiline = yes
+						align = left
+					}
+					scrollarea = {
+						name = "qing_faith_scroller"
+						# [BT-holysites-layout 2026-07-23] 220 -> 170 so the left-column stack (28 sort + 250 list +
+						# header/cols/note ~80 + 170 F&S list + suppress button ~40 ≈ 568) fits the ~635 body with
+						# headroom, preventing the unbounded-overflow header dislocation the cold scan diagnosed.
+						size = { 300 170 }
+						scrollbarpolicy_horizontal = always_off
+						using = VerticalScrollAreaCutOff
+						scrollbar_vertical = {
+							using = VerticalScrollBar
+						}
+						scrollwidget = {
+							dynamicgridbox = {
+								name = "qing_faith_grid"
+								datamodel = "[ReligionView.GetPlayer.MakeScope.GetList('qing_faith_report_provinces')]"
+								item = {
+									widget = {
+										size = { 292 32 }
+										list_button = {
+											size = { 100% 30 }
+											onmousehierarchyenter = "[SetHighlightProvince(Scope.GetProvince.GetId)]"
+											onmousehierarchyleave = "[ClearHighlightColors]"
+											onclick = "[OnClickOnProvince(Scope.GetProvince)]"
+											tooltip = "go_to"
+										}
+										hbox = {
+											size = { 100% 100% }
+											margin = { 8 0 }
+											spacing = 4
+											textbox = {
+												size = { 116 100% }
+												text = "[Scope.GetProvince.GetName]"
+												using = BaseFontS
+												using = Default_FontColor
+												align = left|vcenter
+												elide = right
+											}
+											textbox = {
+												size = { 56 100% }
+												text = "[Scope.GetProvince.MakeScope.Var('qing_prov_missionary_tension').GetValue|0]"
+												using = BaseFontS
+												using = Default_FontColor
+												align = center|vcenter
+											}
+											textbox = {
+												size = { 56 100% }
+												using = BaseFontS
+												using = Default_FontColor
+												align = center|vcenter
+												text = "[SelectLocalization( GetScriptedGui('qing_prov_faith_unrest_gui').IsShown( GuiScope.SetRoot( Scope.GetProvince.MakeScope ).End ), 'QING_FAITH_MARK_YES', 'QING_FAITH_MARK_NO' )]"
+											}
+											textbox = {
+												size = { 56 100% }
+												using = BaseFontS
+												using = Default_FontColor
+												align = center|vcenter
+												text = "[SelectLocalization( GetScriptedGui('qing_prov_has_mission_gui').IsShown( GuiScope.SetRoot( Scope.GetProvince.MakeScope ).End ), 'QING_FAITH_MARK_YES', 'QING_FAITH_MARK_NO' )]"
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+					# [BT-faith-inline 2026-07-23] 查禁傳教 SUPPRESS-MISSIONS lever, re-homed here from the retired
+					# missions pop-up report (option (a) folded the reports inline, so the lever moves with them). Same
+					# scripted_gui (qing_action_suppress_missions) + Execute/IsValid idiom; disabled during its cooldown
+					# or when no mission stands. Its effect rebuilds the inline faith list so the shuttered node drops off.
+					margin_widget = {
+						size = { 300 34 }
+						margin_top = 6
+						text_button_square_highlighted = {
+							parentanchor = hcenter
+							size = { 290 30 }
+							datacontext = "[GetScriptedGui('qing_action_suppress_missions')]"
+							blockoverride "Center_text" { text = "QING_SUPPRESS_MISSIONS_BTN"  max_width = 270 }
+							blockoverride "On_click" {
+								enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( ReligionView.GetPlayer.MakeScope ).End )]"
+								onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( ReligionView.GetPlayer.MakeScope ).End )]"
+							}
+							tooltip = "QING_SUPPRESS_MISSIONS_TT"
+						}
+					}
+				}
 		}
 	}
 }

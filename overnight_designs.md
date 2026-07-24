@@ -1430,3 +1430,57 @@ WATCH for the live boot test: (1) each ideology's Pantheon panel shows its 8 the
 generic keys) — this is the panel-break tell; (2) omen invocation + apotheosis tooltips render; (3) no
 "deity DB" / duplicate-key boot error. If the panel breaks, the fault is the generic-suppression NOR or the DB,
 not the bodies (proven-identical). Custom deities are the last Design-3 deferral — Design 3 is now feature-complete.
+
+---
+
+## BOOT TEST 2026-07-24 — fixes (Designs 1/3/4)
+
+Live boot test of the pushed build. Six findings; fixes below. Logs+screenshots confirmed roots where noted.
+
+### BT-D2-1 — Laws: PASS (screenshot). All 12 Qing Statutes (會典) render with 中文.
+### BT-D3-2 — Ideology deities: PASS (screenshot). Custom thinkers render (Karl Marx seen); no panel doubling.
+
+### BT-D4-1 — culture decisions not appearing — FIXED
+error.log:13187 pinned it: non_integrated_culture_decisions.txt:32 `integrate_country_culture =
+scope:target_culture.culture` — the effect wants a COUNTRY_CULTURE, `.culture` downgraded it to culture scope →
+PostValidate false → the decision (and its file-sibling) dropped at load. Fix: pass `scope:target_culture`
+directly (proven caller se_QING_DECLINE.txt:640). The `.culture` on the `primary_culture=` comparisons (lines
+21/58) is correct and left alone. Revoke/proclaim (integrated/primary files) logged NO errors — they were
+gated-not-shown, not broken.
+
+### BT-D1-1/3 — foreign buildings absent from build display — FIXED (needs boot confirm)
+User wants building types visible even at 0-built. Root: the 4 authorization-only buildings (works/embassy/
+treaty-port/cathedral) had `allow = { always = no }` which the engine hides. Fix: widened their `potential`
+from `has_city_status` to `always = yes` so the TYPE lists in every province (listing is governed by potential;
+allow still gates buildability). Also wrapped each `always = no` in a `custom_tooltip` (proven syntax, TI
+00_default.txt:1736 / qing_colonization_missions:90) so the greyed entry shows a reason — NOTE (per review): a
+custom_tooltip is transparent to the boolean, so it labels but does not itself un-hide; the potential widening is
+the actual visibility lever. The 3 genuinely player-buildable ones (2 missions + concession) KEPT has_city_status
+(widening would let them be built in non-cities — a gameplay change, not made unilaterally).
+
+### BT-D3-1 — Holy Sites tab scattered — FIXED (structural; user says F&S is the trigger)
+Screenshot confirmed the whole left column (holy-site list + Faith & Sedition block) rendered detached over the
+map. TWO changes: (a) bounded the Holy Sites tab body — root flowcontainer→hbox + expanding layoutpolicy, left
+column flowcontainer→vbox + expanding, mirroring the WORKING Pantheon sibling (L349), so the column clips inside
+the bounded window height instead of overflowing and dislocating; (b) per the user's call, MOVED Faith & Sedition
+(民教相爭) off the Holy Sites tab into its OWN third religion tab (new category_tab + sub_header, body gated
+religion_tabs='faith'). qing_faith_grid/scroller/suppress-button now live only in the faith body. Loc:
+QING_FAITH_SEDITION_TAB added. Braces 512/512; three tab bodies are proper siblings with exact-match gates
+(omens / sites / faith). Independent review (btreview): PASS on this change.
+
+### BT-D3-3 — holy sites for the 48 ideology deities — DONE (benefit/map-shrine model)
+Oracle check (Invictus/TI, paths now in [[imp19c-oracle-repo-paths]]): holy sites live in a deity's own-religion
+homeland provinces; the engine tolerates a mismatched province religion (that's the point of the
+holy_site_deity_check OR-branch). CORRECTED my earlier claim: the historical imp19c panel-break was the 12-deity/
+3-per-category COUNT, not religion-mismatch. Decisive LOCAL proof: imp19c's own Confucian pantheon uses
+`trigger={always=yes}` (NOT the Invictus holy_site_deity_check pattern — imp19c stripped that whole system) AND
+has working holy sites in daoism/buddhism provinces (Putian/Mazu etc.). So the benefit/map-shrine half works
+standalone with always=yes — NO trigger rewrite, zero regression risk (chosen over the full Invictus port, which
+would introduce vanilla triggers imp19c has never used and risk the working panel).
+BUILT: 48 `holy_site=omen_<thinker>` lines in 21 province files, each in a DISTINCT thematic-homeland province
+(Marx→Trier, Engels→Wuppertal, Smith→Fife, Montesquieu→Bordeaux, Kant→Königsberg, Hegel→Jena, Mazzini→Genoa,
+Bakunin→Tver, Yan Fu→Fuzhou, Feng Guifen→Suzhou, Zeng Guofan→Xiangtan, Liang Qichao→Guangzhou, Kang Youwei→
+Foshan, Li Dazhao→Tangshan, …). Verified: 48/48 resolved, ZERO duplicate provinces (one holy_site per province),
+all 21 files brace-balanced, insertions placed after religion= inside each block. Province files KEEP their BOM
+(common lexer, not the persistent reader — see [[imp19c-setup-reader-rejects-bom]] clarification). Deity triggers
+UNCHANGED (always=yes). WATCH on boot: the 48 shrines appear on the Holy Sites tab / map; no panel regression.
