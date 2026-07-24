@@ -658,7 +658,7 @@ task-tagged comments; brace/byte-convention check before commit; independent cod
 ---
 
 ## Implementation 1 — Foreign-building use cases
-**STATUS (2026-07-23): BUILT — see PART III — EXECUTION (Design 1 chunks 1.1–1.3). Deferred: a player-facing subject-view / diplomatic-view BUTTON surface for works-aid + embassy (effects are live via mission/treaty/pulse callers).**
+**STATUS (2026-07-24, CODE-VERIFIED): PARTIALLY BUILT. The 6 building types + modifiers + the 6 authorization EFFECTS (se_QING_FOREIGNBUILD.txt) exist, but a code check of actual CALLERS shows only 2 of the 6 effects are reachable: `QING_fbuild_subject_works` (called from qing_selfstrengthening_missions.txt:237) and `QING_fbuild_plant_treaty_port` (se_QING_TREATIES.txt:186). DEFERRED / NOT WIRED (zero callers anywhere — orphaned): `QING_fbuild_embassy`, `QING_fbuild_frontier_colony`, `QING_fbuild_frontier_fort`, `QING_fbuild_mission_capstone`. Also deferred: any player-facing button surface (no scripted_gui references any fbuild effect). NOTE: the buildings themselves are player-buildable in-menu after the BT-D1-3 fix (real gated allow: has_city_status + owner invention tech); the "authorization effect" path is what's mostly unwired.**
 
 **Files — new:**
 - `common/buildings/qing_foreign_buildings.txt` (EXTEND): add `qing_foreign_works_building`,
@@ -688,7 +688,7 @@ task-tagged comments; brace/byte-convention check before commit; independent cod
 never grant a building to a province whose owner is null.
 
 ## Implementation 2 — Engine-law expansion for Qing policy
-**STATUS (2026-07-23): BUILT — see PART III — EXECUTION (chunks 2.1–2.8). 12 law groups shipped. Deferred candidates classified with cause in chunk 2.8 (pulse-computed meters / net-new plumbing / one-way flags / subject-scoped).**
+**STATUS (2026-07-24, CODE-VERIFIED): BUILT — 12 law groups present in common/laws/00_qing_statutes_laws.txt. Deferred candidates (amban establishment law, tributary demand/cadence law, + the chunk-2.8 set) CONFIRMED ABSENT in code = deferrals real. Accurate.**
 
 Built on the NATIVE engine law system (schema resolved above), NOT a variable panel. Each Qing
 policy = a new law GROUP (nested options); the player enacts via the stock Laws tab (`LawItem.Enact`
@@ -740,7 +740,7 @@ option = current default (no-op start = byte-identical to today); any `on_enact`
 `change_law` targets must have a passing group `potential` or they silently no-op.
 
 ## Implementation 3 — Religion → Ideology
-**STATUS (2026-07-23): FEATURE-COMPLETE — all deferrals now built, see PART III — EXECUTION (chunks 3.1–3.4). Shipped: 6 ideology religions + is_ideology_religion triggers + migration guards + layered set_country_religion adoption via trampoline (3.1–3.2, 8790b03a3/cfa30f0b0); the player adoption DECISION + qing_ideology.2 choice event + migration items 4 & 5 (chunk 3.3, task #64, 485611f66); and the 48 custom thinker-deities (8 per ideology × 6) + DB registration + generic-suppression (chunk 3.4, task #63). #65 independent boot-crash review of 3.1/3.2 + Design 4 + Fix 19 ran DIRECTLY and PASSED. Agent reviews stalled in-session so 3.3/3.4 were self-reviewed directly; all want a live boot test (WATCH items logged per chunk) — the custom-deity Pantheon panel especially (8 not 16 per ideology = the panel-break tell).**
+**STATUS (2026-07-24, CODE-VERIFIED): NEARLY COMPLETE — one deferral remains. Verified present in code: 6 ideology religions, is_ideology_religion triggers, migration guards (items 4 missionary + 5 send_settlers confirmed), layered set_country_religion adoption, the adoption DECISION → qing_ideology.2 choice event → qing_ideology.1 trampoline chain (all wired), and the 48 custom thinker-deities + DB + holy-site shrines. STILL DEFERRED (NOT built — code check found no country/province seeded onto an ideology at 1763 start): Stage-4 targeted 1763-nascent ideology seeding (Design 3 Stage 4). So ideologies are adoptable at runtime via the decision, but the 1763 world starts with ZERO ideology holders. The earlier "FEATURE-COMPLETE" claim was inaccurate on this point.**
 
 **Files — new:**
 - `common/religions/01_ideologies.txt` (NEW): the ~6 ideology religions.
@@ -774,7 +774,7 @@ setup/deities reader rejects BOM (per memory) — write no-BOM. Ideology adoptio
 trampolined.
 
 ## Implementation 4 — Culture → Nationalism + citizenship
-**STATUS (2026-07-23): BUILT — see PART III — EXECUTION (Design 4 chunk 4.1). Shipped: nationalism-group triggers, 3 filled culture_decisions files (grant via integrate_country_culture — change_pop_type_right is GUI-only), modifiers + loc. Deferred: an optional culture_view.gui read-out panel.**
+**STATUS (2026-07-24, CODE-VERIFIED): BUILT — nationalism-group triggers, 3 filled culture_decisions files (grant via integrate_country_culture), modifiers + loc all present. NOTE: the grant-citizenship decision had a scope bug (integrate_country_culture = scope:target_culture.culture) that dropped the Qing decisions at load — FIXED 76d8c3df1 (now scope:target_culture). DEFERRED (code-verified absent — no nationalism/civic_identity/naturalised refs in gui/culture_view.gui): the optional culture_view.gui read-out panel. Deferral real.**
 
 **Files — new:**
 - `common/scripted_triggers/00_nationalism_groups.txt` (NEW): nationalism = culture-group
@@ -1124,16 +1124,66 @@ penal_code, ritual_orthodoxy (pure modifier-swap); opium_policy, caravan_customs
 office_selling, canton_regime, exam_cadence (var-selector/modifier read by pulse); ministry_estab, advisory_estab,
 canton_purse (policy-input head-count/share read by pulse).
 
-**DEFERRED — pulse-COMPUTED output meters (a law would fight the pulse; would need a decoupling redesign, out of scope):**
-- qing_wenzhi_patronage — decays -1/quarter in QING_wenzhi_pulse (a meter, not a knob).
-- qing_customs_efficiency / qing_customs_eff_target — QING_DECLINE_nudge'd; the target MIRRORS the meter.
+**DEFERRED — pulse-driven meters. [CORRECTION 2026-07-24: the earlier blanket "a law would fight the pulse" was
+imprecise. A fixed offset IS technically possible for most of these — the real cost differs by HOW the meter
+updates. Three sub-cases, verified against the update code:]**
+
+*Sub-case A — ACCUMULATORS (value persists; pulse NUDGES it via change_variable/QING_DECLINE_nudge). An offset is
+CLEAN here: a law can change the decay rate or grant a durable band-gated country modifier — NO pulse-formula edit
+needed. Deferral was OVER-CAUTIOUS; these are viable law candidates (only constraint = the no-restoring-drift
+ratchet rule, avoided with a band-gate):*
+- qing_wenzhi_patronage — init 40, QING_DECLINE_nudge -1/quarter (se_QING_WENZHI.txt:75). A "decay rate" or
+  "patronage subsidy" law is a legitimate knob. **RECLASSIFIED: viable, not a hard deferral — just unbuilt this pass.**
+
+*Sub-case B — RECOMPUTED TARGETS (pulse OVERWRITES the var each tick via `set_variable` from a formula of other
+vars, then the meter chases the target). An offset written ONTO the target var IS erased next pulse ("fights the
+recompute") — BUT threading the offset as a FORMULA INPUT the pulse reads works. That needs the pulse formula
+edited to consume a new law-input var = NET-NEW PLUMBING (the bucket below), not a standalone law. Deferred for
+that reason, not because it's impossible:*
+- qing_customs_efficiency / qing_customs_eff_target — target = set_variable from foreign_control*2 + bureau_integrity,
+  /3 each pulse (se_QING_CUSTOMS.txt:173-176); meter chases it ±3. Offset must enter the formula, not the target var.
 - qing_council_eff_target / qing_council_dyarchic_balance — recomputed from live councillor skills each pulse.
-- qing_modernarmy_share, qing_banner_decay*, qing_greenstandard_decay*, qing_han_provincial_power — decline-pulse
-  computed shares/decay; their modifiers (qing_banner_decay_mild etc.) are pulse-applied bands, not policy toggles.
-- qing_corruption_level, qing_sect_pressure, qing_reform_faction_balance, qing_selfstr_progress — decline/progress meters.
-- qing_canal_jiangnan_quota — recomputed from LIVE map region ownership every pulse (geography, not policy).
-- qing_currency_stress / qing_tariff_autonomy / qing_customs_foreign_control — event-driven crisis/treaty meters (output).
-- qing_xj_consolidation / qing_xinjiang_control — recomputed from the live beg corps + map each pulse.
+
+*Sub-case C — [RE-AUDITED 2026-07-24 against the actual compute code: the earlier "LIVE-DERIVED, no law knob"
+label was WRONG for most of these. Verified reality below. Almost all are accumulators (A) or recomputed targets
+(B) in disguise, and CAN take a law via the REUSABLE "law policy-bias" pattern — see rework note at the end.]*
+
+- **qing_banner_decay / qing_greenstandard_decay — ACTUALLY Sub-case A (accumulators), NOT live-derived.** Verified:
+  init 10/15 (se_QING_DECLINE.txt:81,85), then QING_DECLINE_nudge ±N from many sources (+1/pulse base :889/:892,
+  +2 canal, -5 colonization mission, -6/-20 reform events). The qing_banner_decay_mild/severe modifiers are just
+  band read-outs of the accumulator. **VIABLE law: a "Banner/Green-Standard Upkeep Policy" adds a decay-rate bias
+  at the pulse nudge site (see pattern). Reclassified viable — over-cautiously deferred.**
+- **qing_canal_jiangnan_quota — ACTUALLY Sub-case B (recomputed target), NOT map-derived.** Verified: recomputed
+  each pulse from THRESHOLDS (base 0.5, +0.25/+0.15/+0.10 on conditions, clamp 0.5-1.0; se_QING_CANAL.txt:209-229).
+  A law bias term added into that formula works. (Earlier "recomputed from live map region ownership" was wrong.)
+- **qing_xj_consolidation — ACTUALLY Sub-case B.** Recomputed via set_variable = accumulated scratch from
+  qing_xinjiang_control (se_QING_XINJIANG.txt:206,229). Law bias term into the scratch formula works.
+- **qing_modernarmy_share / qing_han_provincial_power — accumulators** (QING_DECLINE_nudge ±2, DECLINE:390/426).
+  Sub-case A; law-bias viable, though these are arguably better left AI/event-driven (see caveat).
+- **qing_corruption_level / qing_sect_pressure / qing_reform_faction_balance / qing_selfstr_progress — accumulators
+  (A).** Law-bias technically viable, BUT these are DECLINE/CRISIS meters whose whole design is to drift from play,
+  not policy — a law knob here would defeat the mechanic's intent. DEFER ON DESIGN GROUNDS (not technical), unless a
+  specific "anti-corruption drive" style policy is wanted (then a bias law is the tool).
+- **qing_currency_stress / qing_tariff_autonomy / qing_customs_foreign_control — genuinely EVENT/TREATY-state.**
+  Set by discrete crisis/treaty outcomes, not a per-tick knob. A law cannot sensibly override a treaty result; the
+  right tool is a standing country MODIFIER law (e.g. "resist foreign customs control"), not a var-write law.
+- **qing_xinjiang_control — genuinely EVENT-state.** Set to discrete values (0/80/10/90) by Ili event outcomes
+  (se_QING_ILI.txt). Same as above: a modifier law, not a var law.
+
+**REUSABLE REWORK PATTERN — "law policy-bias" (lets a law affect any A- or B-meter WITHOUT fighting the pulse):**
+The law never writes the meter (which the pulse nudges/overwrites). Instead the law's on_enact sets a standing
+policy-bias INPUT var, and the pulse APPLIES it at the exact site it already mutates the meter:
+- *Accumulator (A):* at the existing nudge, add one line — `QING_DECLINE_nudge = { var = <meter> amount = var:<law_bias> }`
+  (base decay + law bias net out; the nudge's 0-100 clamp keeps it safe; ratchet rule satisfied since base + bias
+  can be net-negative). Example: Banner Upkeep Policy → qing_banner_upkeep_law_bias ∈ {+1 lax, 0, -2 reformed drill}.
+- *Recomputed target (B):* add the law var as a term in the set_variable formula — e.g. customs_eff_target formula
+  gains `change_variable = { add = var:qing_customs_reform_law_bias }` before its /3. Survives because the recompute
+  READS it.
+- *Event/treaty-state (true C):* no var-write law; use a standing country modifier law instead.
+Cost per meter: ~1 pulse line + one law group + loc. Low risk for A, low-moderate for B (touches a pulse formula).
+This is the general answer to "can a law affect these" — YES, via bias-input, for every A and B meter; only the
+handful of genuine event/treaty-state meters (currency_stress, tariff_autonomy, customs_foreign_control,
+xinjiang_control) need the modifier-law form instead. NONE of these are built yet — candidates for a future pass.
 
 **DEFERRED — need NET-NEW plumbing beyond a var write (risk > value this pass):**
 - Exam PRACTICAL-SUBJECTS / ABOLITION tiers — no backing mechanic exists (only cadence, done); would need a whole
@@ -1484,3 +1534,63 @@ Foshan, Li Dazhao→Tangshan, …). Verified: 48/48 resolved, ZERO duplicate pro
 all 21 files brace-balanced, insertions placed after religion= inside each block. Province files KEEP their BOM
 (common lexer, not the persistent reader — see [[imp19c-setup-reader-rejects-bom]] clarification). Deity triggers
 UNCHANGED (always=yes). WATCH on boot: the 48 shrines appear on the Holy Sites tab / map; no panel regression.
+
+---
+
+# PART IV — 1763 FOLLOW-ON PLAN (scoped 2026-07-24, code-verified; NOTHING BUILT YET)
+
+Design threads surfaced during the boot-test session. Each verified against current code. These are
+SCOPED, not built — candidates for a future implementation pass, in priority order TBD by user.
+
+## P1 — Wire nationalism mechanics into the frontier/sinicization trees
+- `qing_settle_frontier_missions.txt` (定牧墾邊) is ALREADY 1763-native (written around the 1763 board, NO date
+  gate) and is the natural home. `qing_xinjiang_missions.txt` + `qing_central_asia_missions.txt` also 1763-native.
+- GAP: none of them touch the Design-4 nationalism hooks (all present, all unused by missions):
+  qing_civic_identity accumulator (nudge via QING_DECLINE_nudge), integrate_country_culture + qing_naturalised_
+  citizenship, qing_national_awakening modifier, the *_nation_country/pop/province_trigger family.
+- PLAN: settle_frontier ARC-N/ARC-E completion → nudge qing_civic_identity up + naturalise the frontier culture
+  (integrate_country_culture) + toward capstone grant qing_national_awakening / gate on zhonghua_nation_country_
+  trigger. Turns "settle the land" into "forge the nation" using the mechanics, not duplicating them.
+- (reform/selfstrengthening trees stay date-gated 1815 — inherently 19c, leave as-is.)
+
+## P2 — Plant works/arsenal buildings on settled frontier ground
+- settle_frontier + xinjiang currently grant NO buildings. qing_colonization_missions already grants frontier_
+  colony/fort directly via add_building_level — mirror that: plant a works/arsenal building on frontier provinces
+  the player brings under direct rule. NOTE: QING_fbuild_subject_works is SUBJECT-scoped (owner=$subject$) so it
+  does NOT fit direct-rule frontier ground — grant the building directly, not via that wrapper.
+
+## P3 — Embassy (使館) → Great Game
+- QING_fbuild_embassy is ORPHANED (no caller). It takes $power$, plants qing_embassy_building in that power's
+  capital, grants qing_embassy_representation. Great Game (se_QING_GREATGAME.txt) tracks qing_gp_tension_britain/
+  france/russia and already frames "wins concessions". PLAN: call QING_fbuild_embassy from a Great Game event
+  (legation-exchange / détente against a GP). This is the embassy's missing home.
+
+## P4 — Treaty ports as a two-sided Great Game instrument
+- TODAY: one-sided victimhood model. Building carries qing_treaty_port_humiliation on the BUILDER; planter
+  QING_fbuild_plant_treaty_port = "port forced onto Qing soil" (owner=ROOT, humiliation on ROOT). Only a
+  humiliation modifier exists — NO holder-benefit modifier. Building is buildable by any city+tech_monetary_theory
+  but wrongly stamps the Qing-victim modifier on whoever builds it.
+- PLAN (real rework): model imposer vs victim. New qing_treaty_port_concession (holder benefit: trade/influence)
+  modifier for the imposing power; keep humiliation for the victim. A Great-Game event where Qing OR a GP forces a
+  concession port in the other's / a third party's province → planter grants the port + humiliation on the owner +
+  concession benefit on the imposer. Lets Qing and Great Powers both play the treaty-port game.
+
+## P5 — Missions/events to embrace ideologies-as-religion (Design 3 follow-on)
+- Design 3 shipped the adoption DECISION (qing_embrace_political_creed → qing_ideology.2 → trampoline) but NO
+  mission/event CONTENT around adopting/spreading an ideology. GAP: no arc that motivates or dramatizes embracing
+  Liberalism/Nationalism/Socialism/etc.
+- PLAN: mission/event content — e.g. reformers memorialize the throne to adopt a creed; ideological adoption
+  triggers reaction events (conservative backlash, foreign recognition, pop conversion drift); tie to
+  qing_reform_pressure gating already used by the decision. Also (Design 3 Stage-4, still deferred) targeted 1763
+  ideology seeding — currently ZERO countries start on an ideology.
+
+## P6 — Design-1 orphaned effects + Stage-4 seeding (from the deferral re-audit)
+- QING_fbuild_frontier_colony / QING_fbuild_frontier_fort wrappers: NO caller (colonization missions grant the
+  buildings directly, so wrappers are redundant — either wire or delete).
+- Stage-4 1763-nascent ideology seeding (Design 3): not built.
+
+## P7 — Law policy-bias reworks (from the sub-case A/B re-audit, chunk 2.8)
+- The "law policy-bias" pattern (law sets a bias-input var; pulse applies it at its existing nudge/formula site)
+  makes ~a dozen more meters law-controllable. Viable candidates: Banner/Green-Standard Upkeep (accumulators, 1
+  nudge line each), customs efficiency / canal quota / xj_consolidation (recomputed targets, 1 formula term each).
+  Crisis meters (corruption/sect/faction) deferred on DESIGN grounds; event/treaty meters need modifier-laws.
