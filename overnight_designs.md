@@ -1006,3 +1006,40 @@ laws_widget_area structurally identical to siblings at correct depth (govt_view 
   principle already applied to the ritual tier.
 - Loc updated to match (reform tiers now say "reform current…taken hold", not "civic advancement").
 - Integrity re-checked: law braces 20/20. → COMMIT chunk 2.1.
+
+### Chunk 2.2 + 2.3 — var-driven + stance-driven law groups (5 groups)
+Files: `00_qing_statutes_laws.txt` (+5 groups), `government_view.gui` (+5 laws_widget), `laws_l_english.yml` (+~34 keys).
+Groups: **Opium Policy** (qing_opium_posture 0/1/2), **Frontier Caravan Customs** (qing_caravan_customs_rate 0/1/2),
+**Salt Administration** (qing_salt_gabelle_reformed 0/1), **Inter-Ethnic Governance** (via QING_set_ethnic_stance,
+dyarchy/banner/han), **Office-Selling** (toggles qing_office_purchased_ranks modifier).
+Decisions:
+- **on_enact drives the EXISTING backing var/modifier/effect** — each law becomes a parallel control surface
+  for a knob the domain pulse already reads. Every on_enact is trivial (set_variable, or add/remove_country_modifier,
+  or QING_set_ethnic_stance which is itself only modifier-swaps + set_variable) — NONE reach a heavy chain /
+  iterator / recompute, so all are trampoline-safe as-is (no is_triggered_only event needed).
+- **Every default option = the gamestart no-op**, VERIFIED against inits: caravan=1 (se_QING_CARAVAN:70),
+  opium=0 (se_QING_OPIUM:78), salt unset=0, ethnic=dyarchy (qing_mechanics_on_actions:86 seeds dyarchy),
+  office=no purchased-ranks modifier. So holding defaults is byte-identical to today.
+- **Gates:** opium-legalize on `has_variable = qing_treaty_track` (treaty system active; a flag var, but
+  has_variable is true once any treaty track starts — the intended gate); salt-reform + (chunk 2.1) reform
+  tiers on `has_variable = qing_reform_track_unlocked` (mid-game). Both verified real.
+- **Dual control surface accepted:** opium/caravan also have existing scripted-GUI panel setters; law + panel
+  both write the same var (last-writer-wins, harmless). Old panels left in place (not retired) this pass.
+- **Censorate deliberately NOT made a law** — qing_censorate_vigor is a pulse-COMPUTED metric (from the censor's
+  traits/loyalty), not a policy knob; a law overwriting it would fight the pulse. Matches the design's "derived,
+  not player-set" note.
+- Integrity: law braces 70/70, govt_view 1975/1975. Boot-crash+correctness review dispatched.
+
+**Chunk 2.2 review: no boot-crash risk; 1 MEDIUM fixed, 1 LOW noted.**
+- MEDIUM (fixed): SALT LOCKOUT. `qing_salt_farmed` default does set_variable value=0 which CREATES the
+  var; two legacy consumers gated on `NOT = { has_variable = qing_salt_gabelle_reformed }`
+  (se_QING_REVENUE.txt:289 reform-event offer + QING_revenue_ministry_panel.txt:111 reform button) would
+  then permanently lock out. FIX: migrated both to value-gated `OR = { NOT has_variable ; var = 0 }` —
+  has_variable-guarded (reading an unset var in a comparison is unsafe in this engine; the existing value
+  reads at :199/:258 all guard first). Now robust whether the var exists or not.
+- LOW (noted, not fixed): the caravan "Heavy Dues" law on_enact sets the var only, skipping the
+  qing_xj_kokand_emboldened opinion nudge the panel's QING_caravan_set_customs applies. DELIBERATE —
+  keeping law on_enact trivial/crash-safe; the scripted-GUI panel remains the full-effect path. Dual
+  control surface is last-writer-wins on the value (harmless).
+- Confirmed by review: on_enact set_variable is proven-safe (matches vanilla 00_social_laws on_enact),
+  no law auto-enacts at start (defaults never fire), all gate vars real, GUI regs render, loc complete.

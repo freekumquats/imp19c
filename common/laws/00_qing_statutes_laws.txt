@@ -109,3 +109,168 @@ qing_ritual_orthodoxy_law = {
 		}
 	}
 }
+
+# ======================================================================
+# CHUNK 2.2 — var-driven fiscal/frontier stance laws. These groups drive an
+# EXISTING backing var via on_enact = { set_variable ... }; the var is already
+# read by the domain pulse (se_QING_OPIUM / se_QING_CARAVAN / se_QING_REVENUE),
+# so the law simply becomes the player's control surface for it. The FIRST
+# option matches the var's init value (the pulse seeds it), so holding the
+# default is byte-identical to today; on_enact only runs on an active change.
+# set_variable is a trivial, safe on_enact (no heavy chain / iterator / recompute).
+# ======================================================================
+
+# OPIUM POLICY (鴉片) — 戶部/刑部. Drives qing_opium_posture (0 prohibit / 1
+# tolerate-for-revenue / 2 treaty-legalized), read by se_QING_OPIUM.txt.
+qing_opium_policy_law = {
+	potential = { tag = CHI }
+
+	# DEFAULT: prohibition (the 1729/1796/1839 bans) — matches init qing_opium_posture=0.
+	qing_opium_prohibit = {
+		on_enact = { set_variable = { name = qing_opium_posture  value = 0 } }
+	}
+	# Tolerate for the revenue (a licensed opium excise) — trades order/health for coin.
+	qing_opium_tolerate = {
+		on_enact = { set_variable = { name = qing_opium_posture  value = 1 } }
+	}
+	# Treaty legalization (post-1858 Tianjin tariff on opium) — full revenue, worst epidemic.
+	# Gated on the treaty system standing (the legalization was imposed by treaty, not chosen freely).
+	qing_opium_legalize = {
+		allow = { has_variable = qing_treaty_track }
+		on_enact = { set_variable = { name = qing_opium_posture  value = 2 } }
+	}
+}
+
+# FRONTIER CARAVAN CUSTOMS (定稅則) — 理藩院/戶部. Drives qing_caravan_customs_rate
+# (0 light / 1 moderate / 2 heavy), read by se_QING_CARAVAN.txt.
+qing_caravan_customs_law = {
+	potential = { tag = CHI }
+
+	# DEFAULT: moderate (中稅) — matches init qing_caravan_customs_rate=1.
+	qing_caravan_moderate = {
+		on_enact = { set_variable = { name = qing_caravan_customs_rate  value = 1 } }
+	}
+	# Light dues (輕稅): the caravans thrive, the treasury takes little.
+	qing_caravan_light = {
+		on_enact = { set_variable = { name = qing_caravan_customs_rate  value = 0 } }
+	}
+	# Heavy dues (重稅): maximal squeeze, but the oasis trade withers.
+	qing_caravan_heavy = {
+		on_enact = { set_variable = { name = qing_caravan_customs_rate  value = 2 } }
+	}
+}
+
+# SALT ADMINISTRATION (鹽政) — 戶部. Drives the qing_salt_gabelle_reformed 0/1 flag,
+# read by se_QING_REVENUE / se_QING_MINISTRY.
+qing_salt_admin_law = {
+	potential = { tag = CHI }
+
+	# DEFAULT: the inherited farmed-out monopoly (綱鹽法) — matches unset/0.
+	qing_salt_farmed = {
+		on_enact = { set_variable = { name = qing_salt_gabelle_reformed  value = 0 } }
+	}
+	# Reformed monopoly (票鹽法, the Tao Zhu / free-ticket reform) — cleaner revenue.
+	# A mid-game reform move.
+	qing_salt_reformed = {
+		allow = { has_variable = qing_reform_track_unlocked }
+		on_enact = { set_variable = { name = qing_salt_gabelle_reformed  value = 1 } }
+	}
+}
+
+# ======================================================================
+# CHUNK 2.3 — governance-stance laws.
+# ======================================================================
+
+# INTER-ETHNIC GOVERNANCE DOCTRINE (旗漢之辨) — the constitutional balance between
+# the Manchu banner establishment and the Han majority. Drives the existing
+# QING_set_ethnic_stance effect (se_QING_MECHANICS.txt), which swaps the three
+# qing_ethnic_stance_* country modifiers + sets qing_ethnic_stance_active. This is
+# the SAME control the scripted-GUI stance buttons use — the law is a parallel
+# surface. on_enact calls a proven effect that only add/removes country modifiers
+# (no heavy chain / iterator), so it is trampoline-safe as-is.
+qing_ethnic_governance_law = {
+	potential = { tag = CHI }
+
+	# DEFAULT: dyarchy (滿漢一體) — the balanced High-Qing settlement (stability,
+	# state loyalty). Matches the gamestart stance seeded by se_QING_MECHANICS.
+	qing_ethnic_doctrine_dyarchy = {
+		on_enact = { QING_set_ethnic_stance = { stance = dyarchy } }
+	}
+	# Banner supremacy (首崇滿洲): martial vigor + manpower, at a fiscal + unrest cost.
+	qing_ethnic_doctrine_banner = {
+		on_enact = { QING_set_ethnic_stance = { stance = banner } }
+	}
+	# Han conciliation (重用漢人): tax + promotion + assimilation, at a manpower +
+	# subject-loyalty cost.
+	qing_ethnic_doctrine_han = {
+		on_enact = { QING_set_ethnic_stance = { stance = han } }
+	}
+}
+
+# OFFICE-SELLING POLICY (捐納) — 吏部. Whether posts may be purchased. Toggles the
+# qing_office_purchased_ranks country modifier, whose presence the bureau-integrity
+# pulse (se_QING_GOVERNANCE.txt) reads (−20 to the integrity target). add/remove of
+# a country modifier is a trivial, safe on_enact.
+qing_office_selling_law = {
+	potential = { tag = CHI }
+
+	# DEFAULT: examination-only appointment (科舉正途) — no purchased ranks. Matches
+	# the gamestart (no qing_office_purchased_ranks modifier present).
+	qing_office_exam_only = {
+		on_enact = { remove_country_modifier = qing_office_purchased_ranks }
+	}
+	# Open sale of office (捐納廣開): a fast fiscal expedient — quick revenue via the
+	# purchase price, but the bureaucracy's integrity rots (the pulse docks it).
+	qing_office_open_sale = {
+		on_enact = { add_country_modifier = { name = qing_office_purchased_ranks  duration = -1 } }
+	}
+}
+
+# CANTON TRADE REGIME (廣州體制) — the maritime-trade stance at the southern port.
+# Drives qing_canton_regime (flag:open | flag:closed), read by se_QING_CANTON.txt.
+# (Tariff autonomy and censorate vigor are pulse-COMPUTED progress meters, not policy
+# knobs, so they are NOT exposed as laws — a law must not overwrite a computed value.)
+qing_canton_regime_law = {
+	potential = { tag = CHI }
+
+	# DEFAULT: the open Canton System (一口通商) — matches the flag:open seeded at 1763.
+	qing_canton_open = {
+		on_enact = { set_variable = { name = qing_canton_regime  value = flag:open } }
+	}
+	# Hard closure (閉關): shut the port to foreign trade — control and insulation up,
+	# commerce down (the se_QING_CANTON pulse swaps the qing_canton_* modifiers).
+	qing_canton_closed = {
+		on_enact = { set_variable = { name = qing_canton_regime  value = flag:closed } }
+	}
+}
+
+# ======================================================================
+# CHUNK 2.4 — ministry-cadence law (exam frequency). This group drives an
+# existing pulse literal (the exam cooldown) by setting a small selector var
+# the scheduler branches on. on_enact = set_variable (trivial/safe); the
+# BRANCHING lives in se_QING_EXAM.txt (proven if/else_if literal-days pattern,
+# cf. se_QING_TRIBUTE.txt:257-266), NOT a var-driven duration (unproven).
+# ======================================================================
+
+# EXAMINATION CADENCE (科舉) — 禮部. How often the metropolitan examination is held.
+# Sets qing_law_exam_cadence (0 triennial / 1 biennial / 2 sexennial); the exam
+# scheduler (QING_exam_schedule_triennial) reads it to pick the cooldown length.
+qing_exam_cadence_law = {
+	potential = { tag = CHI }
+
+	# DEFAULT: the triennial cadence (三年大比) — the historical norm. Selector 0 =
+	# the 1095-day cooldown the scheduler already used, so this is a no-op default.
+	qing_exam_triennial = {
+		on_enact = { set_variable = { name = qing_law_exam_cadence  value = 0 } }
+	}
+	# Frequent exams (增科取士): more sittings — a wider, faster-renewed literati pool
+	# and a legitimacy dividend, at a higher administrative burden. ~biennial.
+	qing_exam_frequent = {
+		on_enact = { set_variable = { name = qing_law_exam_cadence  value = 1 } }
+	}
+	# Sparse exams (減科): fewer sittings ease the burden but starve the ladder of
+	# advancement — a thinner degree-holding elite. ~sexennial.
+	qing_exam_sparse = {
+		on_enact = { set_variable = { name = qing_law_exam_cadence  value = 2 } }
+	}
+}
