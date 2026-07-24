@@ -1108,3 +1108,43 @@ Decisions:
   excess staff; the bench shrinks only by attrition. INTENTIONAL (auto-staffer only mints up; the strip pass
   removes only double-booked members). (2) qing_estab_target_tmp is a persistent country var never cleaned up —
   cosmetic (overwritten every call). → COMMIT chunks 2.5+2.6+2.7.
+
+### Chunk 2.8 — SCOPE DECISION: Design 2 finalized at 12 law groups. Remaining candidates classified + deferred with cause.
+After committing 2.5-2.7 I probed the rest of the ~40-candidate list (§A-H above) against the ONE hard rule that
+separates a law-safe knob from an unsafe one: **a law may only WRITE a policy-INPUT var that the pulse READS. It may
+NOT write a var the pulse itself COMPUTES/nudges** — doing so makes the law fight the recompute (the documented reason
+qing_censorate_vigor was excluded in chunk 2.2). Probing each remaining candidate's backing var's write-sites:
+
+**AUTHORED (12 groups, all policy-input or pure modifier-swap — SAFE):**
+penal_code, ritual_orthodoxy (pure modifier-swap); opium_policy, caravan_customs, salt_admin, ethnic_governance,
+office_selling, canton_regime, exam_cadence (var-selector/modifier read by pulse); ministry_estab, advisory_estab,
+canton_purse (policy-input head-count/share read by pulse).
+
+**DEFERRED — pulse-COMPUTED output meters (a law would fight the pulse; would need a decoupling redesign, out of scope):**
+- qing_wenzhi_patronage — decays -1/quarter in QING_wenzhi_pulse (a meter, not a knob).
+- qing_customs_efficiency / qing_customs_eff_target — QING_DECLINE_nudge'd; the target MIRRORS the meter.
+- qing_council_eff_target / qing_council_dyarchic_balance — recomputed from live councillor skills each pulse.
+- qing_modernarmy_share, qing_banner_decay*, qing_greenstandard_decay*, qing_han_provincial_power — decline-pulse
+  computed shares/decay; their modifiers (qing_banner_decay_mild etc.) are pulse-applied bands, not policy toggles.
+- qing_corruption_level, qing_sect_pressure, qing_reform_faction_balance, qing_selfstr_progress — decline/progress meters.
+- qing_canal_jiangnan_quota — recomputed from LIVE map region ownership every pulse (geography, not policy).
+- qing_currency_stress / qing_tariff_autonomy / qing_customs_foreign_control — event-driven crisis/treaty meters (output).
+- qing_xj_consolidation / qing_xinjiang_control — recomputed from the live beg corps + map each pulse.
+
+**DEFERRED — need NET-NEW plumbing beyond a var write (risk > value this pass):**
+- Exam PRACTICAL-SUBJECTS / ABOLITION tiers — no backing mechanic exists (only cadence, done); would need a whole
+  curriculum subsystem. Amban MIN count (理藩院) — QING_AMBAN_MIN is a hardcoded CONSTANT, not a var; threading it
+  as a law would mirror the ministry_estab work across the amban staffer (a separate careful chunk, deferred).
+- Eunuch-restrict cap, harem size — touch the harem/eunuch create paths (the #336/#90-sensitive construction area);
+  deferred as too risky for the value.
+
+**DEFERRED — one-way flags / accession state, not a reversible policy selector:**
+- qing_frontier_resettlement (panel only ever SETS the flag, never clears — a law that could turn it off is new
+  capability), qing_secret_succession_sealed (an accession-time flag set by the designation event, not a standing policy).
+
+**DEFERRED — SUBJECT-scoped, not a CHI country law:** tributary demand rate + tribute cadence (per-subject, se_SUBJECT_QING).
+
+Net: the engine-law expansion is DRAMATIC (0 → 12 native law groups spanning governance/fiscal/ritual/exam/military-
+establishment/diplomacy) AND correct — every group drives a genuine policy knob without fighting a pulse. The excluded
+set is excluded for a principled reason (output-meter or net-new-plumbing), documented here so a later pass can pick up
+the plumbing-heavy ones (amban min, exam curriculum) deliberately rather than by accident. **Design 2 (task #60) COMPLETE.**
