@@ -39,13 +39,28 @@ reviewed by a workflow before any code was touched.
 - **U4 — REAL UPSTREAM BUG, the actual ~99.4% flood. FIXED.** DIPLOMACY:100 (22,638) + CURRENCY cluster
   (653/505-560/910/381). CURRENCY_svalues.txt is byte-identical fork-vs-upstream (0 diff-lines); DIPLOMACY:100 +
   its currency gate are unchanged (the 56 DIPLOMACY diff-lines are additive elsewhere) → both Sobisonator's code.
-  **CORRECTED MECHANISM (both prior diagnoses had it wrong):** NOT "ungated reads on non-currency countries."
-  DIPLOMACY:100 is double-gated (has_variable=official_currency + THIS=originator_country); the CURRENCY sites
-  fire inside `every_in_list=currency_adopted_countries`. The real cause is currency-PARTICIPATING countries
-  reading var:official_currency sub-vars (CURRENCY_national_debt_*, amt_circulated_*, gold/silver_reserve_size,
-  reserve_actual_change, minting) that are UNSET / PRE-CACHE at read time = READ-BEFORE-SET on the currency scope
-  (the identical 18,228 counts across 7 lines confirm a shared iteration driver). Failed reads resolve to
-  engine-default 0 → no economy corruption, but the ~189k-line flood is the problem.
+  **CORRECTED MECHANISM (re-investigated 2026-07-24 — supersedes the earlier "read-before-set" label, which was
+  WRONG):** The reader `CURRENCY_total_country_cash_scaled_for_reserve_ratio` (CURRENCY_svalues.txt:660) does
+  `var:official_currency = { every_in_list = currency_adopted_countries { add = CURRENCY_total_country_cash_scaled } }`
+  — it iterates ALL members of the currency's `currency_adopted_countries` list (125 tags added at setup,
+  se_CURRENCY.txt:7-212) with NO `has_variable` re-gate on each member, and reads that member's
+  CURRENCY_national_debt_*/amt_circulated_*/gold_reserve_size (CURRENCY_total_country_cash_scaled →
+  national_debt_scaled + amt_circulated_scaled; the reserve branch reads gold/silver_reserve_size). The SEEDERS
+  (CURRENCY_create_starting_currencies amount-sweep se_CURRENCY.txt:932, CURRENCY_setup_all_reserves reserve-sweep)
+  seed via `every_country { has_variable = official_currency }`. So any adopter-list member that `every_country`
+  does NOT enumerate (a stale list entry / landless / dead-but-still-listed country) is never seeded, yet is
+  still iterated by the reader → the read fails.
+  DECISIVE EVIDENCE this is a COVERAGE/STALENESS gap, NOT a timing race: (a) setup ORDER puts both seeders
+  (setup lines 260 + 2254) BEFORE the CURRENCY_power/reserve reads (line 2280+), so seeded countries already have
+  their vars when read; (b) all 7 vars (6 debt/circulation + gold_reserve_size) error at an IDENTICAL 9,114 count,
+  and at BOTH 01:31 (setup) AND 01:41 (monthly CURRENCY_update_amt_circulated tick) — a timing race would give
+  varying per-var counts, whereas an identical fixed count = the same deterministic set of unseeded/stale list
+  members hit every pass. Failed reads resolve to engine-default 0 → no economy corruption; the ~189k-line flood
+  is the only harm. (DIPLOMACY:100 is a downstream reader of the same chain via CURRENCY_power.)
+  The has_variable guard fix is correct REGARDLESS of exactly why a member is unseeded: an unseeded member now
+  contributes 0 (== what the failed read already yielded). A deeper alternative fix — re-gate the reader's
+  every_in_list on has_variable, or prune stale adopters — is upstream-structural and out of scope for a
+  minimal flood-fix; noted for a possible upstream PR discussion.
 
 ---
 
