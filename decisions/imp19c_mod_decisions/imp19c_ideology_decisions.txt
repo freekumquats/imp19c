@@ -1,0 +1,34 @@
+# imp19c_ideology_decisions.txt — [#64 2026-07-23] IDEOLOGY ADOPTION decision (Design 3 — Religion → Ideology).
+#
+# The player-facing surface for the ideology-adoption flow. This decision is the ONLY entry point a
+# player uses; it fires the qing_ideology.2 CHOICE event (one option per creed, each era/reform-gated),
+# which stamps qing_pending_ideology and dispatches the qing_ideology.1 TRAMPOLINE, which runs the heavy
+# layered QING_adopt_ideology effect (set_country_religion + set_character_religion + bounded
+# set_pop_religion). The decision -> choice-event -> trampoline chain keeps the heavy effect a pure
+# runtime ref, never compile-inlined (the #443 scripted-gui / decision compile-inline crash class).
+#
+# Gates: CHI only (the mechanic is Qing-scoped for now), must have a ruler, must NOT already hold an
+# ideology (one adoption per state; re-adoption would need its own re-conversion decision), and the
+# reform crisis must have begun to ripen (qing_reform_pressure >= 40) so a modern creed cannot be
+# embraced anachronistically at the 1763 start. ai_will_do = 0 — player-only, like the culture decisions.
+
+country_decisions = {
+	qing_embrace_political_creed = {
+		potential = {
+			tag = CHI
+			exists = current_ruler
+			# not already converted to one of the six ideologies (coexisting religion entries).
+			NOT = { is_ideology_religion = yes }
+		}
+		allow = {
+			# the reform crisis must be under way — modern ideologies are not a 1763 option.
+			var:qing_reform_pressure >= 40
+			political_influence >= 30
+		}
+		effect = {
+			# hand the player the creed CHOICE (the actual adoption runs behind the trampoline).
+			trigger_event = { id = qing_ideology.2 }
+		}
+		ai_will_do = { factor = 0 }
+	}
+}

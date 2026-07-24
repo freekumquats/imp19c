@@ -1313,3 +1313,53 @@ matched. **Design 4 (task #62) COMPLETE** (a culture_view.gui read-out panel is 
 4. The Stage-4 targeted 1763-nascent seeding + generic-suppression edit for custom deities (only relevant once
    custom deities exist).
 Design 3's coexistence CORE is shipped + crash-safe; the deferred set is the review-gated + GUI-surface work.
+
+### Chunk 3.3 — player adoption decision/button + migration items 4 & 5 (task #64) — DONE (pending review+commit)
+Reopened the deferred Design-3 work as tracked tasks #63/#64/#65 (the task store was empty). This chunk
+closes #64 (the non-crash-gated deferrals); #63 (custom deities) stays BLOCKED on #65 (boot review).
+
+ADOPTION DECISION/button (deferred item 2) — the upstream trigger surface for the ready trampoline+effect:
+- decisions/imp19c_mod_decisions/imp19c_ideology_decisions.txt (NEW): qing_embrace_political_creed. potential =
+  tag=CHI + exists=current_ruler + NOT is_ideology_religion (one adoption per state; not already converted).
+  allow = var:qing_reform_pressure >= 40 + political_influence >= 30 (the reform crisis must be under way, so no
+  anachronistic 1763 adoption). effect = trigger_event qing_ideology.2. ai_will_do factor=0 (player-only, like the
+  Design-4 culture decisions). DECISION -> CHOICE EVENT -> TRAMPOLINE keeps the heavy QING_adopt_ideology effect a
+  pure runtime ref, never compile-inlined off a decision (the #443 compile-inline crash class — same reason the
+  trampoline exists). Var-read safety: qing_reform_pressure is initialised for CHI at on_game_initialized
+  (QING_DECLINE_init:97 sets it 0 if unset), so the allow read can never hit an unset var.
+- qing_ideology.2 (CHOICE event, appended to qing_ideology_events.txt): a real country_event, one option per
+  creed (a-f) + a decline option (g). Each creed option carries its OWN era/reform gate so a creed can't be
+  adopted anachronistically: liberalism/nationalism >=40, monarchism is_monarchy=yes, socialism >=55,
+  communism >=70, conservatism ungated (the reform-sceptic ordering). Chosen option sets qing_pending_ideology
+  = flag:<creed> + trigger_event qing_ideology.1 days=1 (the trampoline reads the flag and runs the layered
+  adoption). Reused the proven set_variable value=flag: idiom (qing_japan_missions:128) + var: >= comparison.
+- localization/english/qing_ideology_l_english.yml (NEW, BOM-carrying like every loc): decision title/desc + the
+  7 option strings + event title/desc, bilingual 中文 labels matching the religion_l creed names.
+
+MIGRATION ITEM 5 (send_settlers breakaway inherits an ideology as faith) — FIXED (was a documented WATCH):
+- send_settlers.txt:310 — branched the LAND_release_from_list on the instigator. When it holds an ideology
+  (is_ideology_religion=yes) the breakaway is released with country_religion = flag:as_capital (its own
+  capital-province faith — the PROVEN LAND_release_from_list fallback, se_SEPARATISM:155 / se_QING_PROTECTORATE:68),
+  so a secession never carries a foreign ideology as its state religion. The normal faith path (else branch) is
+  BYTE-IDENTICAL to the original — settler colonies still share the instigator's faith. Only the ideology case
+  diverges. Not a crash either way; this makes the released state's faith sensible.
+
+MIGRATION ITEM 4 (faith-group CONSUMERS audit — do NOT-faith-group consumers misclassify ideology holders?):
+Audited all 4 consumers of chinese_traditional/accepted_religion_trigger + the christian_group NOT-lists:
+- se_QING_MISSIONARY_STATIONS.txt (4 sites) — FIXED. The "any non-Christian pop" harvest branches (222/230 treaty,
+  463/470 pre-treaty) would drag an ideology-holding pop back onto a faith via QING_mission_convert_faith. Added
+  NOT = { is_ideology_religion_pop = yes } to all 4 — missionary work is faith-vs-faith, orthogonal to the
+  ideology channel. (The "traditional-faith pop" first branch already excludes ideologies, so no leak there.)
+- common/subject_types/00_default.txt:1009 (royal_union allow, NOT chinese_traditional_religion_trigger) — NO
+  CHANGE. It only ENABLES a rare subject action and is already gated by this.religion=root.religion equality; an
+  ideology-holder passing the NOT is a benign edge that also requires a matching-religion overlord. Documented.
+- common/heritage/00_mod_heritages.txt:99 (confucian_learning, OR chinese_traditional_religion_trigger) — NO
+  CHANGE. A converted state correctly loses the Confucian-learning heritage bonus (it is no longer Confucian);
+  that is the intended semantics of conversion, not a misfire.
+- common/customizable_localization/00_offices.txt (3 sites, OR chinese_traditional_religion_trigger) — NO CHANGE.
+  Each has a country_culture_group = chinese_group fallback, so Qing keeps its 六部 office labels after conversion.
+
+VERIFIED: braces balanced (ideology_events 48/48, decision 8/8, send_settlers 92/92, missionary 204/204); loc BOM
+present, decision no BOM; flag/var idioms proven in-codebase; qing_reform_pressure init guaranteed at boot.
+Reviewed directly + an independent boot-crash review (#65) dispatched over 3.1/3.2/Design-4/Fix-19 in parallel.
+STILL DEFERRED: #63 (48 custom deities + DB) — the DB-contiguity/panel crash class, blocked on #65 passing.
