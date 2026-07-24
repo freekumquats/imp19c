@@ -392,3 +392,218 @@ qing_greatgame.3 = {
 		}
 	}
 }
+
+# ======================================================================
+# .4 — [P3 2026-07-24] EXCHANGE OF LEGATIONS (互派使節). The missing HOME of the
+# orphaned QING_fbuild_embassy effect (se_QING_FOREIGNBUILD.txt): it plants a resident
+# Qing legation (使館) in a great power's capital and grants the standing
+# qing_embassy_representation modifier — but nothing called it. This event is that call.
+#
+# The Zongli Yamen's whole purpose after 1861 was to conduct RESIDENT diplomacy on the
+# Westphalian model the Qing had refused at Macartney/Amherst. When tension with a power
+# has been brought DOWN into a workable band (a détente the holder can build on), the court
+# may exchange permanent legations — the concrete institution of the modern diplomacy the
+# reformers wanted. This is a DÉTENTE payoff, so it fires when a pressing power's tension is
+# moderate (25..55: cooled enough to talk, warm enough to matter) and the Zongli office is
+# filled by a living holder. Picks that power, opens the legation, deepens the détente.
+#
+# Trigger: CHI, Zongli holder alive+employed, some power in the détente band, and we do NOT
+# already hold the representation modifier (the legation is opened once — the modifier is a
+# standing asset, not per-power, matching QING_fbuild_embassy's own single-grant guard).
+# ======================================================================
+qing_greatgame.4 = {
+	type = country_event
+	title = "qing_greatgame.4.t"
+	desc = "qing_greatgame.4.desc"
+	picture = senate
+	left_portrait = root.current_ruler
+	right_portrait = scope:qing_gg_zongli
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_zongli_holder
+		var:qing_office_zongli_holder = { is_alive = yes  employer = ROOT }
+		# the legation is a one-time standing asset — don't offer it if already opened.
+		NOT = { has_country_modifier = qing_embassy_representation }
+		# some power sits in the détente band (cooled enough to talk).
+		OR = {
+			AND = { has_variable = qing_gp_tension_britain  var:qing_gp_tension_britain >= 25  var:qing_gp_tension_britain <= 55  exists = c:GBR }
+			AND = { has_variable = qing_gp_tension_france   var:qing_gp_tension_france  >= 25  var:qing_gp_tension_france  <= 55  exists = c:FRA }
+			AND = { has_variable = qing_gp_tension_russia   var:qing_gp_tension_russia  >= 25  var:qing_gp_tension_russia  <= 55  exists = c:RUS }
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_greatgame.4 (exchange of legations) [ROOT.GetTag]" }
+		var:qing_office_zongli_holder = { save_scope_as = qing_gg_zongli }
+		# pick the détente-band power and save it BOTH as a flag (for tension routing) and as a
+		# country scope (QING_fbuild_embassy needs a country scope with a capital). Britain first,
+		# then France, then Russia — same priority order as the other greatgame pickers.
+		if = {
+			limit = { has_variable = qing_gp_tension_britain  var:qing_gp_tension_britain >= 25  var:qing_gp_tension_britain <= 55  exists = c:GBR }
+			set_variable = { name = qing_gg_legation_power  value = flag:britain }
+			c:GBR = { save_scope_as = qing_gg_legation_ctry }
+		}
+		else_if = {
+			limit = { has_variable = qing_gp_tension_france  var:qing_gp_tension_france >= 25  var:qing_gp_tension_france <= 55  exists = c:FRA }
+			set_variable = { name = qing_gg_legation_power  value = flag:france }
+			c:FRA = { save_scope_as = qing_gg_legation_ctry }
+		}
+		else = {
+			set_variable = { name = qing_gg_legation_power  value = flag:russia }
+			c:RUS = { save_scope_as = qing_gg_legation_ctry }
+		}
+	}
+
+	# OPTION A — EXCHANGE LEGATIONS (互派使節). Open the resident Qing legation in the power's
+	# capital (QING_fbuild_embassy — the standing representation modifier + the on-map building),
+	# and deepen the détente (tension down further). The modern-diplomacy path the reformers wanted:
+	# it BREAKS the tribute worldview (a small reform-pressure rise, the conservative unease) but
+	# wins a lasting diplomatic asset. Rewards the Zongli holder.
+	option = {
+		name = "qing_greatgame.4.a"
+		custom_tooltip = "qing_greatgame.4.a.tt"
+		# plant the resident legation in the chosen power's capital (the orphaned effect's home).
+		QING_fbuild_embassy = { power = scope:qing_gg_legation_ctry }
+		# deepen the détente with that power.
+		if = {
+			limit = { var:qing_gg_legation_power = flag:britain }
+			QING_gp_accommodate = { power = britain  tag = GBR  amount = -12 }
+		}
+		else_if = {
+			limit = { var:qing_gg_legation_power = flag:france }
+			QING_gp_accommodate = { power = france  tag = FRA  amount = -12 }
+		}
+		else = {
+			QING_gp_accommodate = { power = russia  tag = RUS  amount = -12 }
+		}
+		# accepting resident foreign diplomacy unsettles the tribute-world conservatives.
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 3 }
+		scope:qing_gg_zongli = {
+			QING_char_promote_standing = { pop = 5  prom = 3 }
+			QING_char_affinity = yes
+		}
+	}
+
+	# OPTION B — HOLD TO THE TRIBUTE FORMS (守朝貢舊制). Decline the resident legation; the
+	# court keeps the old ceremonial distance. No legation asset, but the conservatives are
+	# vindicated (reform pressure eases, a little legitimacy on the Mandate's dignity), and the
+	# détente does not advance (tension unchanged).
+	option = {
+		name = "qing_greatgame.4.b"
+		custom_tooltip = "qing_greatgame.4.b.tt"
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -3 }
+		add_legitimacy = 6
+	}
+}
+
+# ======================================================================
+# .5 — [P4 2026-07-24] THE QING DICTATES TERMS (反客為主). The treaty port as an instrument the
+# Qing WIELDS, not only suffers — the two-sided rework of the treaty-port model. When the Qing
+# stands strong (high legitimacy + stability) and a great power's enmity is HIGH (tension >= 55,
+# a power that has pressed the Qing), a moment arrives to turn the tables (反客為主 "the guest
+# becomes the host"): force a commercial CONCESSION PORT onto THAT power's own coast. The Qing
+# gains the standing concession advantage (qing_treaty_port_concession) and the power bears the
+# humiliation — the mirror image of the unequal treaties, playable because the mechanic is now
+# symmetric (QING_treaty_impose_concession).
+#
+# This is deliberately a HIGH BAR (a strong Qing humbling a hostile power is alternate-history,
+# not the historical norm) and only surfaces where the target power actually has a coastal
+# province to concede. Gated: CHI, legitimacy + stability high, a hostile power (tension>=55)
+# that exists and holds an un-stamped coastal city.
+# ======================================================================
+qing_greatgame.5 = {
+	type = country_event
+	title = "qing_greatgame.5.t"
+	desc = "qing_greatgame.5.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		# a strong throne dictating terms — both are engine country values (no var guard needed).
+		legitimacy >= 60
+		stability >= 50
+		# a hostile power with a coastal province to concede.
+		OR = {
+			AND = { has_variable = qing_gp_tension_britain  var:qing_gp_tension_britain >= 55  exists = c:GBR  c:GBR = { any_owned_province = { is_coastal = yes  NOT = { has_building = qing_treaty_port_building } } } }
+			AND = { has_variable = qing_gp_tension_france   var:qing_gp_tension_france  >= 55  exists = c:FRA  c:FRA = { any_owned_province = { is_coastal = yes  NOT = { has_building = qing_treaty_port_building } } } }
+			AND = { has_variable = qing_gp_tension_russia   var:qing_gp_tension_russia  >= 55  exists = c:RUS  c:RUS = { any_owned_province = { is_coastal = yes  NOT = { has_building = qing_treaty_port_building } } } }
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_greatgame.5 (Qing dictates terms) [ROOT.GetTag]" }
+		# pick the hostile power (highest-tension among the eligible), save it as a country scope,
+		# and pull its highest-population un-stamped coastal city into a province scope.
+		if = {
+			limit = { has_variable = qing_gp_tension_britain  var:qing_gp_tension_britain >= 55  exists = c:GBR  c:GBR = { any_owned_province = { is_coastal = yes  NOT = { has_building = qing_treaty_port_building } } } }
+			set_variable = { name = qing_gg_dictate_power  value = flag:britain }
+			c:GBR = { save_scope_as = qing_gg_dictate_ctry }
+		}
+		else_if = {
+			limit = { has_variable = qing_gp_tension_france  var:qing_gp_tension_france >= 55  exists = c:FRA  c:FRA = { any_owned_province = { is_coastal = yes  NOT = { has_building = qing_treaty_port_building } } } }
+			set_variable = { name = qing_gg_dictate_power  value = flag:france }
+			c:FRA = { save_scope_as = qing_gg_dictate_ctry }
+		}
+		else = {
+			set_variable = { name = qing_gg_dictate_power  value = flag:russia }
+			c:RUS = { save_scope_as = qing_gg_dictate_ctry }
+		}
+		# the concession city: the target's most-populous un-stamped coastal province.
+		scope:qing_gg_dictate_ctry = {
+			ordered_owned_province = {
+				limit = { is_coastal = yes  NOT = { has_building = qing_treaty_port_building } }
+				order_by = total_population
+				max = 1
+				save_scope_as = qing_gg_dictate_prov
+			}
+		}
+	}
+
+	# OPTION A — DICTATE THE CONCESSION (反客為主). Force the treaty port onto the power's coast:
+	# the Qing takes the standing concession advantage, the power bears the humiliation, tension
+	# with it SPIKES (a coerced power resents it), and the court exults at the reversal.
+	option = {
+		name = "qing_greatgame.5.a"
+		custom_tooltip = "qing_greatgame.5.a.tt"
+		trigger = { exists = scope:qing_gg_dictate_prov }
+		QING_treaty_impose_concession = { victim = scope:qing_gg_dictate_ctry  prov = scope:qing_gg_dictate_prov }
+		current_ruler = { add_popularity = 20 }
+		add_legitimacy = 8
+		# the coerced power's enmity spikes.
+		if = {
+			limit = { var:qing_gg_dictate_power = flag:britain }
+			QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = 12 }
+		}
+		else_if = {
+			limit = { var:qing_gg_dictate_power = flag:france }
+			QING_DECLINE_nudge = { var = qing_gp_tension_france  amount = 12 }
+		}
+		else = {
+			QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = 12 }
+		}
+	}
+
+	# OPTION B — STAY THE HAND (以德服人). Forgo the coercion; win no concession but no fresh enmity.
+	# The court styles it magnanimity (以德服人 "win men by virtue") — a little legitimacy, and the
+	# power's tension eases slightly (restraint noticed).
+	option = {
+		name = "qing_greatgame.5.b"
+		custom_tooltip = "qing_greatgame.5.b.tt"
+		add_legitimacy = 4
+		if = {
+			limit = { var:qing_gg_dictate_power = flag:britain }
+			QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = -6 }
+		}
+		else_if = {
+			limit = { var:qing_gg_dictate_power = flag:france }
+			QING_DECLINE_nudge = { var = qing_gp_tension_france  amount = -6 }
+		}
+		else = {
+			QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = -6 }
+		}
+	}
+}

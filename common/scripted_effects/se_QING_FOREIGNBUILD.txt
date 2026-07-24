@@ -53,51 +53,19 @@ QING_fbuild_subject_works = {
 }
 
 # ======================================================================
-# QING_fbuild_frontier_colony — plant a 屯田 frontier colony in an OWNED frontier province.
-# Called INSIDE ROOT (CHI); $prov$ = a saved province scope. No has_city_status requirement
-# (the colony precedes urban status). Guarded owner + not-already-present.
+# [P6 2026-07-24] DELETED QING_fbuild_frontier_colony / QING_fbuild_frontier_fort. These two
+# single-province wrappers (plant 屯田 colony / frontier fort in an owned province, treasury >= 60)
+# had ZERO callers (grep-confirmed across common/ + events/). Both consumers that plant these
+# buildings — the colonization missions (qing_colonization_missions.txt:192-193) and the new P2
+# settle-frontier plant (QING_settle_plant_works) — grant the buildings DIRECTLY via
+# add_building_level, deliberately as a FREE mission-completion texture (the mission already
+# charged treasury up front). Routing through these wrappers would (a) duplicate the
+# add_building_level + not-already-present guard, and (b) impose a second 60-treasury charge that
+# would silently no-op the texture when the treasury is short — wrong semantics for both callers.
+# So they are redundant dead code, not a missing wire: deleted per the P6 "wire OR delete" mandate.
+# (The buildings themselves — qing_frontier_colony_building / qing_frontier_fort_building — remain;
+# only the unused country-verb wrappers are gone.)
 # ======================================================================
-QING_fbuild_frontier_colony = {
-	if = {
-		limit = {
-			exists = $prov$
-			$prov$ = {
-				owner = ROOT
-				NOT = { has_building = qing_frontier_colony_building }
-			}
-			treasury >= 60
-		}
-		add_treasury = -60
-		$prov$ = { add_building_level = qing_frontier_colony_building }
-		LOG_line = { sys = QING  msg = "fbuild: established a 屯田 frontier colony for" }
-	}
-	else = {
-		LOG_fail = { sys = QING  fn = "QING_fbuild_frontier_colony"  reason = "target not owned / building present / treasury short" }
-	}
-}
-
-# ======================================================================
-# QING_fbuild_frontier_fort — plant a frontier fort in an OWNED frontier province. Called INSIDE
-# ROOT (CHI); $prov$ = a saved province scope. No has_city_status requirement. Guarded.
-# ======================================================================
-QING_fbuild_frontier_fort = {
-	if = {
-		limit = {
-			exists = $prov$
-			$prov$ = {
-				owner = ROOT
-				NOT = { has_building = qing_frontier_fort_building }
-			}
-			treasury >= 60
-		}
-		add_treasury = -60
-		$prov$ = { add_building_level = qing_frontier_fort_building }
-		LOG_line = { sys = QING  msg = "fbuild: raised a frontier fort for" }
-	}
-	else = {
-		LOG_fail = { sys = QING  fn = "QING_fbuild_frontier_fort"  reason = "target not owned / building present / treasury short" }
-	}
-}
 
 # ======================================================================
 # QING_fbuild_embassy — plant a 使館 legation in a Great Power's capital and take on the
@@ -155,6 +123,54 @@ QING_fbuild_plant_treaty_port = {
 	else = {
 		LOG_fail = { sys = QING  fn = "QING_fbuild_plant_treaty_port"  reason = "target not Qing-owned / building present" }
 	}
+}
+
+# ======================================================================
+# [P4 2026-07-24] QING_treaty_impose_concession — the IMPOSER side of the treaty-port
+# instrument. The old model was one-sided victimhood: the only planter
+# (QING_fbuild_plant_treaty_port) forced a port onto QING soil and stamped humiliation on the
+# Qing. This models the MIRROR: the Qing (ROOT, the imposing power) forces a commercial
+# concession port onto ANOTHER country's soil — the treaty port as an instrument the Qing WIELDS,
+# not only suffers. Symmetric enough that a great power could use the same verb against a third
+# party (the Great-Game two-sidedness the design calls for).
+#
+# Called INSIDE ROOT (the imposer). $victim$ = a saved COUNTRY scope (the country the port is
+# forced upon); $prov$ = a saved PROVINCE scope owned by $victim$ (the coastal city). Plants the
+# on-map treaty-port building on the victim's province, stamps the standing humiliation modifier
+# on the VICTIM (not on ROOT — the key asymmetry the old code got backwards for this direction),
+# and grants the standing concession benefit to ROOT the imposer. All three parts guarded.
+# ======================================================================
+QING_treaty_impose_concession = {
+	LOG_enter = { sys = QING  fn = "QING_treaty_impose_concession" }
+	if = {
+		limit = {
+			exists = $victim$
+			exists = $prov$
+			$prov$ = {
+				owner = $victim$
+				NOT = { has_building = qing_treaty_port_building }
+			}
+		}
+		# plant the concession port on the victim's coastal city (the on-map face of the concession).
+		$prov$ = { add_building_level = qing_treaty_port_building }
+		# the VICTIM bears the standing sovereignty grievance (once, not re-stacked).
+		$victim$ = {
+			if = {
+				limit = { NOT = { has_country_modifier = qing_treaty_port_humiliation } }
+				add_country_modifier = { name = qing_treaty_port_humiliation  duration = -1 }
+			}
+		}
+		# ROOT the imposer takes the standing commercial + prestige advantage (once).
+		if = {
+			limit = { NOT = { has_country_modifier = qing_treaty_port_concession } }
+			add_country_modifier = { name = qing_treaty_port_concession  duration = -1 }
+		}
+		LOG_line = { sys = QING  msg = "fbuild: forced a treaty-port concession onto a foreign power for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_treaty_impose_concession"  reason = "victim/prov missing / prov not victim-owned / port already present" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_treaty_impose_concession"  result = OK }
 }
 
 # ======================================================================

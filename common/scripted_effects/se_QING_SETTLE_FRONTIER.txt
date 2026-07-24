@@ -80,3 +80,89 @@ QING_settle_embrace_tannu = {
 	}
 	LOG_exit = { sys = QING  fn = "QING_settle_embrace_tannu"  result = OK }
 }
+
+# ======================================================================
+# [P1 2026-07-24] QING_settle_forge_nation — the nationalism half of "settle the frontier":
+# settling the land is also FORGING THE NATION out of its peoples. Turns the Design-4
+# nationalism hooks — which existed but were untouched by any mission — into the payoff of the
+# frontier arcs. Scope: COUNTRY (CHI). $group$ = a culture-group key (mongolic / jurchen) whose
+# frontier peoples this arc has brought under direct rule.
+#
+# Two mechanisms, chosen deliberately over a bare civic-identity nudge:
+#   (1) NATURALISE the frontier culture group — integrate_country_culture on every un-integrated
+#       country_culture of the group actually present in the realm. This is PERMANENT engine state
+#       (a culture, once integrated, stays integrated): it survives the decline pulse's restoring
+#       drift, where a one-shot QING_DECLINE_nudge on qing_civic_identity would simply decay back
+#       toward its self-strengthening-derived target (the no-restoring-drift ratchet rule — a nudge
+#       on a target-seeking meter is transient). This is exactly the civic-assimilation bridge's
+#       proven idiom (QING_DECLINE_civic_assimilation): any_country_culture{ is_integrated=no
+#       is_culture=scope } enumerates only cultures that EXIST in the realm, so a displaced/absent
+#       frontier people is correctly skipped.
+#   (2) LIFT THE CIVIC-IDENTITY TARGET, not the meter — qing_civic_identity_settle_bonus is added
+#       into the target at the drift site so the gain PERSISTS (see the drift rework in
+#       se_QING_DECLINE.txt). +8 per arc; the meter then drifts up to meet the raised ceiling.
+# ======================================================================
+QING_settle_forge_nation = {
+	LOG_enter = { sys = QING  fn = "QING_settle_forge_nation" }
+	if = { limit = { NOT = { has_variable = qing_civic_identity_settle_bonus } }  set_variable = { name = qing_civic_identity_settle_bonus  value = 0 } }
+	# naturalise every un-integrated culture of the arc's group that is actually present.
+	set_variable = { name = qing_settle_naturalise_done  value = 0 }
+	every_country_culture = {
+		limit = {
+			is_integrated = no
+			# proven country_culture -> culture -> culture_group path (se_CULTURE.txt uses
+			# scope.culture; a culture scope carries .culture_group). $group$ = mongolic / jurchen.
+			culture.culture_group = culture_group:$group$
+		}
+		save_scope_as = qing_settle_nat_c
+		ROOT = {
+			integrate_country_culture = scope:qing_settle_nat_c
+			change_variable = { name = qing_settle_naturalise_done  add = 1 }
+		}
+		LOG_line = { sys = QING  msg = "settle-frontier: naturalised a $group$ frontier culture for" }
+	}
+	# raise the civic-identity CEILING (target), not the meter — a persisting nation-building gain.
+	change_variable = { name = qing_civic_identity_settle_bonus  add = 8 }
+	if = { limit = { var:qing_civic_identity_settle_bonus > 40 }  set_variable = { name = qing_civic_identity_settle_bonus  value = 40 } }
+	if = {
+		limit = { var:qing_settle_naturalise_done = 0 }
+		LOG_fail = { sys = QING  fn = "QING_settle_forge_nation"  reason = "no un-integrated $group$ culture present (all already citizens / none in realm) - civic ceiling still raised" }
+	}
+	remove_variable = qing_settle_naturalise_done
+	LOG_exit = { sys = QING  fn = "QING_settle_forge_nation"  result = OK }
+}
+
+# ======================================================================
+# [P2 2026-07-24] QING_settle_plant_works — plant the industrial/garrison texture on the
+# directly-held frontier ground of a region: a frontier colony (屯田) + fort (駐防) on the Qing-
+# owned provinces of the region that do not yet carry them. Scope: COUNTRY (CHI). $region$ = a
+# region key. These buildings carry ONLY LOCAL modifiers (no country-modifier upkeep sweep), so
+# planting them directly on directly-ruled ground is safe and needs no subject wrapper — unlike
+# QING_fbuild_subject_works, which is owner=$subject$-scoped and does NOT fit direct-rule ground.
+# add_building_level is the proven province verb (colonization missions grant these same two
+# buildings the identical way). Guarded against double-plant; capped at 4 provinces per call via a
+# REAL engine cap (ordered_owned_province max=4), NOT a counter-in-limit — an every_ limit is
+# evaluated against a candidate list built ONCE up front and cannot see a mid-iteration counter
+# update (the documented rule at se_QING_DECLINE.txt:610-611, QING_DECLINE_civic_assimilation),
+# so a counter-in-limit would blanket the whole region. order_by total_population = plant on the
+# biggest settled centres first.
+# ======================================================================
+QING_settle_plant_works = {
+	LOG_enter = { sys = QING  fn = "QING_settle_plant_works" }
+	ordered_owned_province = {
+		limit = {
+			is_in_region = $region$
+			is_sea = no
+			OR = {
+				NOT = { has_building = qing_frontier_colony_building }
+				NOT = { has_building = qing_frontier_fort_building }
+			}
+		}
+		order_by = total_population
+		max = 4
+		if = { limit = { NOT = { has_building = qing_frontier_colony_building } }  add_building_level = qing_frontier_colony_building }
+		if = { limit = { NOT = { has_building = qing_frontier_fort_building } }    add_building_level = qing_frontier_fort_building }
+	}
+	LOG_line = { sys = QING  msg = "settle-frontier: planted colony/fort works on the held $region$ ground for" }
+	LOG_exit = { sys = QING  fn = "QING_settle_plant_works"  result = OK }
+}

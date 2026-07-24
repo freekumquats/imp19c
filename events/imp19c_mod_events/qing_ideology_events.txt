@@ -132,3 +132,119 @@ qing_ideology.2 = {
 		name = "qing_ideology.2.g"
 	}
 }
+
+########################################################################
+# .3  [P5 2026-07-24] THE REFORMERS MEMORIALIZE THE THRONE (公車上書). Design 3 shipped the
+# adoption DECISION (qing_embrace_political_creed) but nothing MOTIVATED or dramatized it. This
+# is the motivating arc: as the reform crisis ripens, a body of reform-minded officials and
+# literati memorializes the throne to embrace a modern political creed (the historical 公車上書 /
+# self-strengthening memorials). It fires from the flavour roll once reform pressure is real, and
+# either opens the CHOICE (dispatches qing_ideology.2, the adoption event) or is rebuffed.
+#
+# Gated (trigger + roll): CHI, reform pressure >= 40 (the same threshold the decision uses), and
+# NOT already on an ideology (nothing to memorialize for once converted).
+########################################################################
+qing_ideology.3 = {
+	type = country_event
+	title = "qing_ideology.3.t"
+	desc = "qing_ideology.3.desc"
+	picture = senate_debate
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_reform_pressure
+		var:qing_reform_pressure >= 40
+		NOT = { is_ideology_religion = yes }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_ideology.3 (reformers memorialize) [ROOT.GetTag]" }
+	}
+
+	# OPTION A — RECEIVE THE MEMORIAL. Hand the court the creed CHOICE — dispatch the adoption
+	# event (qing_ideology.2), whose options are each era/reform-gated. The reformers are heartened
+	# (a little reform pressure, the debate is now live) but nothing is decided here.
+	option = {
+		name = "qing_ideology.3.a"
+		custom_tooltip = "qing_ideology.3.a.tt"
+		trigger_event = { id = qing_ideology.2  days = 3 }
+		current_ruler = { add_popularity = -5 }
+	}
+
+	# OPTION B — REBUFF THE MEMORIALISTS. The throne stands on the ancestral order; the reformers
+	# are silenced for now. Reform pressure eases (the lid is held down) and legitimacy rises on the
+	# Mandate's dignity — but the underlying crisis is only deferred.
+	option = {
+		name = "qing_ideology.3.b"
+		custom_tooltip = "qing_ideology.3.b.tt"
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -5 }
+		add_legitimacy = 6
+	}
+}
+
+########################################################################
+# .4  [P5 2026-07-24] THE CONSERVATIVE BACKLASH (守舊反動). The reaction to a fresh ideological
+# conversion: the old order resents the new creed (the qing_ideology_recent_convert modifier is
+# on the country). The court's conservatives — princes, censors, the old degree-holding elite —
+# push back. Fires from the flavour roll while the recent-convert modifier stands. The player
+# chooses to face down the reaction (spend legitimacy to bed the creed in faster) or appease it
+# (ease the backlash at the cost of the creed's momentum).
+#
+# Gated (trigger + roll): CHI, on an ideology, and the recent-convert churn still active.
+########################################################################
+qing_ideology.4 = {
+	type = country_event
+	title = "qing_ideology.4.t"
+	desc = "qing_ideology.4.desc"
+	picture = chinese_throne_room
+	left_portrait = root.current_ruler
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		is_ideology_religion = yes
+		has_country_modifier = qing_ideology_recent_convert
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_ideology.4 (conservative backlash) [ROOT.GetTag]" }
+	}
+
+	# OPTION A — FACE DOWN THE REACTION (乾綱獨斷). The throne imposes the new creed over the old
+	# guard's objections: spend legitimacy, but the conversion beds in faster (accelerate the pop
+	# conversion drift by re-seeding a capital vanguard) and the court is cowed (stability holds).
+	option = {
+		name = "qing_ideology.4.a"
+		custom_tooltip = "qing_ideology.4.a.tt"
+		add_legitimacy = -8
+		add_stability = 1
+		# re-seed a small capital vanguard onto the state creed (accelerates the drift). Bounded, guarded.
+		if = {
+			limit = { exists = capital_scope }
+			capital_scope = {
+				ordered_pops_in_province = {
+					limit = { NOT = { pop_religion = ROOT.religion } }
+					order_by = pop_hapiness
+					max = 2
+					set_pop_religion = ROOT.religion
+				}
+			}
+		}
+	}
+
+	# OPTION B — APPEASE THE OLD GUARD (調和新舊). The throne softens the creed's edges to placate
+	# the conservatives: the backlash eases (remove the recent-convert churn early) but the creed's
+	# momentum is blunted (a step of reform pressure returns — the compromise satisfies no one fully).
+	option = {
+		name = "qing_ideology.4.b"
+		custom_tooltip = "qing_ideology.4.b.tt"
+		if = {
+			limit = { has_country_modifier = qing_ideology_recent_convert }
+			remove_country_modifier = qing_ideology_recent_convert
+		}
+		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 4 }
+		current_ruler = { add_popularity = 6 }
+	}
+}

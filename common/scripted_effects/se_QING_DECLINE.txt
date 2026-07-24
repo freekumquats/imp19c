@@ -847,6 +847,15 @@ QING_DECLINE_drift_civic_identity = {
 		}
 		change_variable = { name = qing_civic_target_tmp  subtract = 20 }
 	}
+	# [P1 2026-07-24] the frontier-settlement arcs raise the civic-identity CEILING durably:
+	# forging the nation out of the settled frontier peoples lifts the target the meter drifts to,
+	# so the gain persists (a one-shot nudge on the meter would decay back — the no-restoring-drift
+	# ratchet rule). qing_civic_identity_settle_bonus is accrued by QING_settle_forge_nation
+	# (+8/arc, capped 40 there). Guarded read (may be unset before any arc completes).
+	if = {
+		limit = { has_variable = qing_civic_identity_settle_bonus }
+		change_variable = { name = qing_civic_target_tmp  add = var:qing_civic_identity_settle_bonus }
+	}
 	if = { limit = { var:qing_civic_target_tmp < 0 }    set_variable = { name = qing_civic_target_tmp  value = 0 } }
 	if = { limit = { var:qing_civic_target_tmp > 100 }  set_variable = { name = qing_civic_target_tmp  value = 100 } }
 	# drift toward it, slowly.
@@ -899,6 +908,16 @@ QING_DECLINE_pulse = {
 			limit = { has_variable = qing_greenstandard_decay  var:qing_greenstandard_decay >= 40 }
 			QING_DECLINE_nudge = { var = qing_greenstandard_decay  amount = 1 }
 		}
+			# [P7 2026-07-24] LAW POLICY-BIAS. The military-upkeep law (qing_military_upkeep_law,
+			# 00_qing_statutes_laws.txt) sets a STANDING bias-input var per force; the pulse APPLIES it
+			# HERE, at the exact site it already nudges the decay meter -- so the law shapes the passive
+			# rot without ever writing the meter (which the pulse owns). A reformist drill stance biases
+			# NEGATIVE (rot slows); a frugal/neglectful stance biases POSITIVE (rot quickens). The nudge
+			# is self-clamping (0..100). Guarded reads: unset until the law is enacted (default stance leaves
+			# them unset -> skipped -> unchanged base behaviour). Inside the same not-fully-modernized /
+			# not-high-Qing guard as the base rot, so a modernized realm is not re-rotted by a stale bias.
+			if = { limit = { has_variable = qing_banner_upkeep_bias }        QING_DECLINE_nudge = { var = qing_banner_decay        amount = var:qing_banner_upkeep_bias } }
+			if = { limit = { has_variable = qing_greenstandard_upkeep_bias } QING_DECLINE_nudge = { var = qing_greenstandard_decay amount = var:qing_greenstandard_upkeep_bias } }
 	}
 
 	# task #88 — the modern national-army share drifts toward its self-strengthening
@@ -1716,6 +1735,57 @@ QING_frontier_flavour_roll = {
 					}
 				}
 				trigger_event = { id = qing_greatgame.3  days = { 3 12 } }
+			}
+			# --- [P3 2026-07-24] Exchange of legations (使館): the détente payoff that opens the
+			#     resident Qing embassy abroad. Gated on a living Zongli holder, a power in the
+			#     détente band (25..55), and the legation not yet opened (the event's own trigger
+			#     re-checks all of this — this weight just surfaces it in the roll).
+			7 = {
+				trigger = {
+					has_variable = qing_office_zongli_holder
+					var:qing_office_zongli_holder = { is_alive = yes  employer = ROOT }
+					NOT = { has_country_modifier = qing_embassy_representation }
+					OR = {
+						AND = { var:qing_gp_tension_britain >= 25  var:qing_gp_tension_britain <= 55 }
+						AND = { var:qing_gp_tension_france  >= 25  var:qing_gp_tension_france  <= 55 }
+						AND = { var:qing_gp_tension_russia  >= 25  var:qing_gp_tension_russia  <= 55 }
+					}
+				}
+				trigger_event = { id = qing_greatgame.4  days = { 3 12 } }
+			}
+			# --- [P4 2026-07-24] The Qing dictates terms (反客為主): force a treaty-port concession onto
+			#     a HOSTILE great power. Low weight (a strong Qing humbling a great power is alternate-
+			#     history, the exception not the rule). Gated on Qing strength + a hostile power (tension
+			#     >= 55) that exists; the event's own trigger re-checks strength AND that the target holds
+			#     an un-stamped coastal city, so this weight is a lightweight pre-filter.
+			4 = {
+				trigger = {
+					legitimacy >= 60
+					stability >= 50
+					OR = {
+						var:qing_gp_tension_britain >= 55
+						var:qing_gp_tension_france >= 55
+						var:qing_gp_tension_russia >= 55
+					}
+				}
+				trigger_event = { id = qing_greatgame.5  days = { 3 12 } }
+			}
+			# --- [P5 2026-07-24] Ideology arc (Design 3 follow-on). The reformers memorialize the
+			#     throne to embrace a modern creed (gated on reform pressure, not yet converted); and,
+			#     once converted, the conservative backlash. Both re-check their full gates in-event.
+			8 = {
+				trigger = {
+					var:qing_reform_pressure >= 40
+					NOT = { is_ideology_religion = yes }
+				}
+				trigger_event = { id = qing_ideology.3  days = { 3 12 } }
+			}
+			7 = {
+				trigger = {
+					is_ideology_religion = yes
+					has_country_modifier = qing_ideology_recent_convert
+				}
+				trigger_event = { id = qing_ideology.4  days = { 3 12 } }
 			}
 			# --- [#273] Central Secretariat 內閣: edict-mill / backlog / drafting scandal
 			#     (gated on the Grand Secretariat office filled by a living holder).

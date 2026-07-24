@@ -1594,3 +1594,63 @@ SCOPED, not built — candidates for a future implementation pass, in priority o
   makes ~a dozen more meters law-controllable. Viable candidates: Banner/Green-Standard Upkeep (accumulators, 1
   nudge line each), customs efficiency / canal quota / xj_consolidation (recomputed targets, 1 formula term each).
   Crisis meters (corruption/sect/faction) deferred on DESIGN grounds; event/treaty meters need modifier-laws.
+
+---
+
+# PART IV — IMPLEMENTATION LOG (BUILT 2026-07-24, on branch merge-overnight; pre-review)
+*STATUS: all seven phases coded; brace/quote-clean; full code-review + boot-crash review PENDING before commit.*
+
+**P1 — Nationalism wired into the frontier/Xinjiang trees.** New effect `QING_settle_forge_nation = { group=X }`
+(se_QING_SETTLE_FRONTIER.txt): naturalises every un-integrated country_culture of the group present in the realm
+via `integrate_country_culture` (PERMANENT engine state — chosen over a bare civic-identity nudge, which the
+decline pulse's restoring drift would decay back; the no-restoring-drift ratchet rule), and accrues
+`qing_civic_identity_settle_bonus` (+8/arc, cap 40). The bonus is consumed at the civic-identity DRIFT site
+(se_QING_DECLINE.txt QING_DECLINE_drift_civic_identity) as a TARGET lift, so the gain persists. Wired: settle_frontier
+ARC-N on_completion → forge_nation(mongolic); ARC-E → forge_nation(jurchen); CAPSTONE → the standing
+`qing_national_awakening` modifier (a previously-unused Design-4 hook). Xinjiang `QING_xj_integrate_fully` →
+forge_nation(east_turkic) — that task stripped tension modifiers but never extended citizenship. Idiom proof:
+`every_country_culture { is_integrated=no culture.culture_group=culture_group:X }` (se_CULTURE / seleukid mission).
+
+**P2 — Works/garrison buildings on settled frontier ground.** New effect `QING_settle_plant_works = { region=X }`:
+plants qing_frontier_colony_building + qing_frontier_fort_building directly (add_building_level) on up to 4 held
+provinces of the region, guarded not-already-present. DELIBERATELY direct (not via QING_fbuild_subject_works, which
+is owner=$subject$-scoped and does not fit direct-rule ground). Free mission-completion texture. Wired into ARC-N
+(Mongolia), ARC-E (Liaoning + Far_East).
+
+**P3 — Embassy (使館) → Great Game.** New event `qing_greatgame.4` (Exchange of Legations 互派使節): the missing HOME
+of the orphaned `QING_fbuild_embassy`. Fires from the flavour roll (weight 7) when a power sits in a DÉTENTE band
+(tension 25..55), Zongli office filled, legation not yet opened. Picks the power (saved as BOTH a flag and a country
+scope — the effect needs a country scope with a capital), option A opens the resident legation (calls the orphaned
+effect) + deepens détente + reform-pressure rise (breaks tribute worldview); option B holds to tribute forms.
+
+**P4 — Treaty ports as a TWO-SIDED instrument.** New modifier `qing_treaty_port_concession` (imposer benefit:
+diplomatic_reputation +1, global_commerce_modifier +0.05, PI +0.03 — mirror of the victim-side humiliation). New
+effect `QING_treaty_impose_concession = { victim= prov= }`: plants the treaty-port building on the VICTIM's coastal
+province, stamps humiliation on the victim, grants the concession benefit to ROOT the imposer (the asymmetry the old
+one-sided planter got backwards for this direction). New event `qing_greatgame.5` (The Guest Becomes the Host 反客為主):
+a STRONG Qing (legitimacy≥60, stability≥50) forces a concession onto a HOSTILE power (tension≥55) that holds an
+un-stamped coastal city. Low roll weight (4 — alternate-history exception). Option A dictates (imposer benefit +
+victim humiliation + tension spike); option B stays the hand.
+
+**P5 — Ideology missions/events (Design 3 follow-on).** Two new events in qing_ideology_events.txt: `qing_ideology.3`
+(Reformers Memorialize 公車上書 — motivates adoption; reform-pressure≥40, not yet converted; option A dispatches the
+existing choice event qing_ideology.2, option B rebuffs); `qing_ideology.4` (Conservative Backlash 守舊反動 — reaction
+gated on the qing_ideology_recent_convert modifier; option A faces down the reaction (re-seed capital vanguard),
+option B appeases (removes the churn early)). Both wired into the flavour roll (weights 8/7). **Stage-4 1763 ideology
+SEEDING: DELIBERATELY still deferred** — liberalism/socialism/etc. are post-1789/19c constructs, anachronistic at a
+1763 start, and set_country_religion at game-start carries boot-crash risk. The historically-correct model is exactly
+what Design 3 built: ideologies unlock mid-game as reform pressure ripens. Recorded as a design decision, not a gap.
+
+**P6 — Orphaned Design-1 wrappers: DELETED.** `QING_fbuild_frontier_colony` / `QING_fbuild_frontier_fort` had ZERO
+callers. Both consumers (colonization missions + the new P2 plant) grant the buildings directly as FREE texture;
+routing through the wrappers would duplicate the guard AND impose a second 60-treasury charge that silently no-ops
+when short — wrong semantics. Redundant dead code, deleted per the "wire OR delete" mandate. The buildings remain.
+
+**P7 — Law policy-bias: Military Upkeep (武備).** New law group `qing_military_upkeep_law` (00_qing_statutes_laws.txt,
+3 stances) sets standing bias-input vars `qing_banner_upkeep_bias` / `qing_greenstandard_upkeep_bias` via on_enact
+(the proven qing_opium_posture / qing_caravan_customs_rate pattern in this file). The decline pulse APPLIES them at
+its existing decay-nudge site (se_QING_DECLINE.txt), guarded (has_variable) so the default stance is byte-identical
+to today. Reformist Drills = -1 bias each (rot slows, +upkeep cost, +land morale); Frugal Neglect = +1 (rot quickens,
+-upkeep). `amount = var:X` proven at 5 existing nudge call-sites. Registered in the government_view.gui Laws tab
+(mandatory or invisible). Only the ONE representative meter-pair built this pass; the other candidates (customs/canal/
+xj_consolidation recomputed-target terms) remain scoped for a later pass.
