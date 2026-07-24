@@ -4,10 +4,10 @@
 @maxcategorybuttonheight = 34
 @sort_button_width = 68
 @window_width = 640
-# [BT-religion-layout 2026-07-23] trimmed 900 -> 872: the deity list's bottom spilled a touch past
-# the window's lower edge ("almost right, tiny bit shorter"). The scrollarea is vertical-expanding,
-# so shortening the fixed window pulls the clip line up to sit just under the last visible row.
-@window_height = 872
+# [BT-religion-layout 2026-07-23] trimmed 900 -> 872 -> 852: the deity list still spilled a touch past
+# the window's lower edge after the first trim. The scrollarea is vertical-expanding, so shortening the
+# fixed window pulls the clip line up to sit just under the last visible row.
+@window_height = 852
 
 base_window = {
 	name = "religion_view"
@@ -368,8 +368,8 @@ base_window = {
 				layoutpolicy_vertical = expanding
 				# [BT-religion-scrollbar 2026-07-23] margin_right insets the horizontally-expanding scrollarea's
 				# right edge so its vertical scrollbar pulls IN off the window border ("a bit more to the left,
-				# within the window"). The bar previously rendered flush on/past the 640px window edge.
-				margin_right = 18
+				# within the window"). 18 wasn't enough — bumped to 34 to seat the bar clearly inside the frame.
+				margin_right = 34
 				scrollbarpolicy_horizontal = always_off
 
 				scrollbar_vertical = {
@@ -1080,7 +1080,15 @@ base_window = {
 				}
 				scrollarea = {
 					name = "holy_sites_scroller"
-					size = { 300 600 }
+					# [BT-holysites-layout 2026-07-23] 600 -> 340 -> 250. The list + the inline Faith & Sedition
+					# block below it must BOTH fit the left column within the fixed window body (~635px under the
+					# 48 header + ~135 stats + tab row in the 852 window). Cold differential scan confirmed the
+					# regression cause: the column stack (28 sort + list + ~330 F&S) was unbounded and overflowed,
+					# and — no container in the vbox→left-column→outer-flow chain has a bounded height — the oversize
+					# propagated up to the top-level expanding vbox, dislocating the header + detaching the list.
+					# 340 was still too tall (28+340+330≈698>635); 250 fits (28+250+~250≈528) with headroom. The F&S
+					# qing_faith_scroller below is likewise trimmed to 170.
+					size = { 300 280 }
 					scrollbarpolicy_horizontal = always_off
 					using = VerticalScrollAreaCutOff
 					scrollbar_vertical = {
@@ -1190,6 +1198,10 @@ base_window = {
 				# goto-button jumps/highlights the province, replacing the retired report windows' only extra feature.
 				vbox = {
 					visible = "[GetScriptedGui('qing_religion_overlay_shown').IsShown( GuiScope.SetRoot( ReligionView.GetPlayer.MakeScope ).End )]"
+					# [BT-holysites-layout 2026-07-23] ignoreinvisible so the gated empty-note (and any other hidden
+					# child) reserves NO column height — the cold scan flagged its ~40px reservation as padding the
+					# overflow budget that dislocated the header.
+					ignoreinvisible = yes
 					margin_top = 10
 					spacing = 2
 					icon = {
@@ -1250,7 +1262,10 @@ base_window = {
 					}
 					scrollarea = {
 						name = "qing_faith_scroller"
-						size = { 300 220 }
+						# [BT-holysites-layout 2026-07-23] 220 -> 170 so the left-column stack (28 sort + 250 list +
+						# header/cols/note ~80 + 170 F&S list + suppress button ~40 ≈ 568) fits the ~635 body with
+						# headroom, preventing the unbounded-overflow header dislocation the cold scan diagnosed.
+						size = { 300 170 }
 						scrollbarpolicy_horizontal = always_off
 						using = VerticalScrollAreaCutOff
 						scrollbar_vertical = {
