@@ -1148,3 +1148,64 @@ Net: the engine-law expansion is DRAMATIC (0 → 12 native law groups spanning g
 establishment/diplomacy) AND correct — every group drives a genuine policy knob without fighting a pulse. The excluded
 set is excluded for a principled reason (output-meter or net-new-plumbing), documented here so a later pass can pick up
 the plumbing-heavy ones (amban min, exam curriculum) deliberately rather than by accident. **Design 2 (task #60) COMPLETE.**
+
+---
+
+## Design 1 — Foreign-building family (task #52) — EXECUTION
+
+### Chunk 1.1 — 6 building types + 3 country modifiers (COMMITTED 5e373427c)
+Files: qing_foreign_buildings.txt (+6 types), qing_foreignbuild_modifiers.txt (NEW), qing_dynasty_triggers.txt
+(cathedral into QING_prov_has_mission). All building keys verified building-scope (local_monthly_civilization,
+local_research_points_modifier, local_pop_promotion_speed_modifier, local_population_growth, local_migration_attraction,
+local_defensive, fort_level, local_state_trade_routes, local_population_happiness). Decisions:
+- concrete-over-abstract preserved: buildings carry ONLY local modifiers; country-level effects hung off has_building.
+- qing_treaty_port_building allow = { always = no } (event-planted only, never player-built on own soil).
+- frontier colony/fort: empty potential/allow {} (buildable on bare frontier — the concession's job-slot-drop precedent).
+
+### Chunk 1.2 — authorization effects + upkeep sweep (COMMITTED 89ce0d96c)
+Files: se_QING_FOREIGNBUILD.txt (NEW, 6 plant effects + QING_fbuild_upkeep_sweep), se_QING_GOVERNANCE.txt (pulse wire).
+- Every add_building_level is exists+owner guarded; every country modifier applied once (has_country_modifier guard),
+  and RE-DERIVED each quarter from live building presence by the upkeep sweep (drops on loss / cession / subject-freed).
+- All verbs verified proven: add_building_level, capital_scope, any_subject, any_country, has_country_modifier,
+  add_political_influence, LOG_fail. Effects are runtime-only (GUI/event/mission callers), never construction.
+- PERF note in-file: the embassy any_country->any_owned_province scan is quarterly (parallels QING_ethnic_tension_pulse).
+
+### Chunk 1.3 — loc + LIVE callers (mission trees + treaty/mission pulses) (IN REVIEW)
+Made the family LIVE rather than dead plumbing by wiring the plant-effects into real callers:
+- qing_mechanics_l_english.yml: loc for all 6 buildings + 3 modifiers (name + _desc).
+- qing_colonization_missions.txt (Amur task): plant 屯田 colony + frontier fort on p:6170 alongside the vanilla
+  fortress (guarded owns + not-present).
+- qing_selfstrengthening_missions.txt (merchant task): plant a 洋務局 in the largest subject's largest city via
+  nested ordered_subject{ordered_owned_province{save_scope}} + QING_fbuild_subject_works (guarded any_subject+city+treasury).
+- se_QING_TREATIES.txt (QING_treaty_stamp_port): plant the CONCRETE qing_treaty_port_building on the same coastal
+  province the treaty-port modifier is stamped on + take the humiliation modifier (QING_fbuild_plant_treaty_port).
+- se_QING_MISSIONARY_STATIONS.txt: (a) cathedral torn down FIRST in QING_mission_remove_station (it now counts as a
+  mission, so a crackdown must remove it too — a real gap the QING_prov_has_mission edit opened); (b) new
+  QING_mission_promote_to_cathedral (a mature, high-tension >=40 treaty-port public mission rises to the cathedral
+  capstone), wired into the post-treaty pulse branch. Rare by construction so the Boxer meter doesn't explode.
+DEFERRED (not this pass): a dedicated subject-view / diplomatic-view GUI BUTTON surface for player-initiated works-aid
+and embassy-opening (the design's GUI wiring) — the effects are complete + callable; the button panels are a separate
+GUI chunk. The embassy + works effects are currently reachable via the self-strengthening mission; a player-facing
+button is the follow-on. Logged so it's picked up deliberately.
+
+**Design 1 chunks 1.1-1.3 review: PASS (no boot-crash) — 1 MEDIUM + 2 LOW-MED fixed, perf noted.** (code-review agent, 12 tool-uses, traced.)
+- MEDIUM (FIXED): EMBASSY SELF-BUILD EXPLOIT. qing_embassy_building had open allow, so a player could
+  self-build it in a home city; the upkeep sweep's any_country{has_building} scan (CHI is a country) then held
+  qing_embassy_representation (+2 dip-rep, +0.05 PI) FOREVER for 60 coin. FIX: allow = { always = no } (planted
+  ONLY by QING_fbuild_embassy). Applied the SAME closure to qing_foreign_works_building (works-patron modifier,
+  same exploit shape) and qing_mission_cathedral_building (design-intent: effect-seeded only). Now the sweep
+  premise "only CHI plants these" is TRUE. Frontier colony/fort kept player-buildable (design intent; LOCAL-only
+  modifiers, no free country modifier) but made explicit potential/allow = { always = yes } (were empty {}).
+- LOW-MED (FIXED): QING_fbuild_mission_capstone missing owner=ROOT guard (every sibling has it). Added — a
+  cathedral can't be planted in a no-longer-owned province. Not a crash (exists-guarded) but a semantic gap.
+- LOW (verified non-issue): research_points_modifier + monthly_political_influence CONFIRMED valid country-scope
+  keys (qing_earlyindus_harbinger / 00_hardcoded). always=no confirmed valid allow form.
+- PERF (accepted): the quarterly any_country{any_owned_province} embassy scan is the heaviest of the 3 sweeps;
+  acceptable at 90-day cadence (parallels QING_ethnic_tension_pulse). Closing the exploit didn't remove the scan
+  (kept has_building-based for robustness against building loss); could swap to a counter later if it ever bites.
+- SOUND (traced by reviewer, not rubber-stamped): the nested ordered_subject{ordered_owned_province} in the
+  selfstr mission is scope-safe (inner ordered_subject limit guarantees a city-status province → prov scope always
+  saved before the effect call); unset scope:X resolves false under exists= (no crash); upkeep sweep can't thrash
+  (add-in-if / remove-in-else, both modifier-guarded); all add_building_level targets exists+owner guarded; loc complete.
+Design 1 (task #52) COMPLETE — the effects/buildings are live via mission + treaty + missionary-pulse callers; a
+player-facing subject-view/diplomatic-view BUTTON surface is the logged follow-on (deferred, not blocking).
