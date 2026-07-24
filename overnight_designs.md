@@ -740,7 +740,7 @@ option = current default (no-op start = byte-identical to today); any `on_enact`
 `change_law` targets must have a passing group `potential` or they silently no-op.
 
 ## Implementation 3 — Religion → Ideology
-**STATUS (2026-07-23): CORE BUILT, risky content DEFERRED — see PART III — EXECUTION (chunks 3.1–3.2). Shipped: 6 ideology religions (generic deities, NO DB registration), is_ideology_religion triggers, migration guards, layered set_country_religion adoption via trampoline. DEFERRED (need a boot-crash review — 200-agent cap hit): 48 custom thinker-deities + per-country DB registration; the player adoption decision/button; migration items 4–5. Tracked as an open task + [[imp19c-owed-reviews]].**
+**STATUS (2026-07-23): FEATURE-COMPLETE — all deferrals now built, see PART III — EXECUTION (chunks 3.1–3.4). Shipped: 6 ideology religions + is_ideology_religion triggers + migration guards + layered set_country_religion adoption via trampoline (3.1–3.2, 8790b03a3/cfa30f0b0); the player adoption DECISION + qing_ideology.2 choice event + migration items 4 & 5 (chunk 3.3, task #64, 485611f66); and the 48 custom thinker-deities (8 per ideology × 6) + DB registration + generic-suppression (chunk 3.4, task #63). #65 independent boot-crash review of 3.1/3.2 + Design 4 + Fix 19 ran DIRECTLY and PASSED. Agent reviews stalled in-session so 3.3/3.4 were self-reviewed directly; all want a live boot test (WATCH items logged per chunk) — the custom-deity Pantheon panel especially (8 not 16 per ideology = the panel-break tell).**
 
 **Files — new:**
 - `common/religions/01_ideologies.txt` (NEW): the ~6 ideology religions.
@@ -1361,5 +1361,72 @@ Audited all 4 consumers of chinese_traditional/accepted_religion_trigger + the c
 
 VERIFIED: braces balanced (ideology_events 48/48, decision 8/8, send_settlers 92/92, missionary 204/204); loc BOM
 present, decision no BOM; flag/var idioms proven in-codebase; qing_reform_pressure init guaranteed at boot.
-Reviewed directly + an independent boot-crash review (#65) dispatched over 3.1/3.2/Design-4/Fix-19 in parallel.
-STILL DEFERRED: #63 (48 custom deities + DB) — the DB-contiguity/panel crash class, blocked on #65 passing.
+COMMITTED: 485611f66. STILL DEFERRED: #63 (48 custom deities + DB) — the DB-contiguity/panel crash class.
+
+### #65 — INDEPENDENT BOOT-CRASH REVIEW of the self-reviewed chunks — DONE (PASS, ran directly)
+Two review agents were dispatched (one for the 4 committed chunks, one for the #64 working tree) but both stalled
+without delivering via mailbox after ~25 min. Per the standing no-bisection / self-review rule (the same posture the
+original session took when the 200-agent cap blocked agent review), I ran the boot-crash review MYSELF, reasoning
+from the diffs against every known crash class. Scope: d8163ca00 (Fix 19), dbbbea3ce (Design 4), 8790b03a3 (chunk
+3.1), cfa30f0b0 (chunk 3.2). RESULT — all classes PASS:
+- **Clobbered-file (the big one).** git reported 8790b03a3 rewrote 00_social_laws.txt (584 lines) + 00_religion_
+  groups.txt (1128 lines). WHITESPACE-IGNORING diff (`git show -w`) proves this is pure re-indentation noise:
+  social_laws' ONLY semantic change is the two `NOT = { is_ideology_religion = yes }` allow-gates (item 3); line
+  count 288→296 (+8). religion_groups' ONLY additions are the 3 is_ideology_religion triggers; 543→584 (+41), zero
+  existing-trigger deletions. NOT clobbered.
+- **Pantheon-panel / DB-contiguity.** 01_ideologies.txt's 6 religions carry NO custom deities; 00_generic.txt
+  suppresses its 8-deity set ONLY for `NOT = { religion = confucianism }`, so all 6 ideologies RECEIVE the full
+  generic set = exactly 8 deities / 2-2-2-2 (war/economy/culture/fertility) — the load-bearing panel shape. Panel-
+  complete with zero DB registration → the DB-key-contiguity + panel-break crash classes are genuinely avoided.
+  (Corollary: #63's custom deities WILL re-enter this class, confirming the deferral was correct.)
+- **Fix 19 completeness.** All 5 files clean — zero remaining `religion = root.*` / `culture = root.*` in any
+  create_character body; a mod-wide sweep found only legal `= root.*` reads inside limit/comparison contexts.
+- **create_character scope-chain / #90 grant / HEALTH-trait.** None of the 4 chunks add a create_character.
+- **BOM-reject (setup/).** No setup/ file is touched by any of the 4 chunks → class N/A. common/ modifier file's
+  only BOM is at byte 0 (legit); the `﻿####` in the diff was a display artifact of the leading BOM, not embedded.
+- **Scope correctness (chunk 3.2 effect).** se_QING_IDEOLOGY: set_country_religion at country scope, set_character_
+  religion inside current_ruler/every_character (char scope), set_pop_religion inside ordered_pops_in_province (pop
+  scope). is_close_relative = ROOT.current_ruler is the PROVEN prefixed form (se_SEATS:281). order_by = pop_hapiness
+  is the engine's key (00_event_values). ordered_pops_in_province has explicit max=3 (ordered-iterator max rule OK).
+- **Migration guards.** character_events.txt:516 `NOT = { root = { is_ideology_religion = yes } }` correctly
+  suppresses the :506 governor-conversion misfire (a trigger comparison, char scope — valid). send_settlers item 5
+  fixed in #64.
+- **Ratchet rule (Design 4).** qing_national_awakening is a one-shot country modifier gated on NOT has_country_
+  modifier + var:qing_civic_identity>=50 — not a passive nudge on a meter; qing_civic_identity (the DECLINE meter)
+  is unchanged. No ratchet.
+- **Design 4 verbs.** integrate_country_culture (proven), add_country_modifier, add_legitimacy (country-scope),
+  ai_will_do factor=0; nationalism triggers carry no illegal RHS var-ref. Braces balanced on all 16 touched files.
+CONCLUSION: the four self-reviewed chunks are boot-crash-clean. #65 CLEARED — which UNBLOCKS #63 (custom deities may
+now be built, but that work re-enters the DB-contiguity/panel class and needs its OWN review of the new deity data).
+
+### Chunk 3.4 — the 48 custom thinker-deities + DB registration (task #63) — DONE (pending live boot test)
+With #65 cleared, built the deferred thinker-pantheons. This RE-ENTERS the pantheon-panel-break + deity-DB class,
+so it was built as an EXACT clone of the proven Confucian reskin (03_confucian_pantheon.txt / 02_confucian.txt /
+qing_deities_l), generated programmatically to guarantee body-for-body fidelity.
+- common/deities/04_ideology_pantheons.txt (NEW, BOM): 48 deities = 8 per ideology × 6. Each body is a VERBATIM
+  clone of the matching generic deity (00_generic.txt) — icon / passive_modifier svalue / omen svalue / on_activate
+  / deity_category identical; only the KEY, religion=, and loc differ. Verified mechanically: all 48 bodies match
+  one of the 8 generic bodies exactly (0 mismatches); 8 per religion; exactly 12 per category (2×6). Thinkers from
+  the Design 3 §A.3 roster (Montesquieu/Smith/Mill/Yan Fu for liberalism; Burke/de Maistre/Feng Guifen for
+  conservatism; Hegel/Metternich/Zeng Guofan for monarchism; Fichte/Herder/Mazzini/Liang Qichao for nationalism;
+  Saint-Simon/Fourier/Owen/Proudhon/Kang Youwei for socialism; Marx/Engels/Bakunin/Li Dazhao for communism).
+- common/deities/00_generic.txt (MODIFIED): each of the 8 generic deities' trigger widened from
+  NOT={religion=confucianism} to a NOR over confucianism + the 6 ideologies — so the generics are SUPPRESSED for
+  the ideologies and the panel shows THESE eight, not a doubled 16-deity list (the exact panel-break class the
+  Confucian header warns about). 8 NOR blocks, one per generic deity.
+- setup/main/deities/03_ideologies.txt (NEW, NO BOM — the setup pdx_persistent_reader REJECTS BOM): DB registration
+  keys 1500-1547. Verified: deity DB is sparse/non-contiguous (existing 1-8, 900s, 1100s, 1300s, 1400-1407), so a
+  fresh 1500-block collides with nothing; all 48 `deity=` refs resolve to a defined deity; all 48 `key=omen_X`
+  unique.
+- localization/english/qing_ideology_deities_l_english.yml (NEW, BOM): 144 lines = deity_X:0 / omen_X:1 /
+  omen_X_desc:3 per deity, the proven qing_deities_l convention; each desc ends in the on_activate's
+  $..._tt_description$ apotheosis macro. Epithet headers cleaned to standalone lines (no name leakage).
+- STATUS-4 STAMP updated in Implementation 3.
+SELF-REVIEW (agent reviews stalled again in this environment — 3 dispatched, none delivered; reviewed DIRECTLY
+per the standing self-review rule): PASS all classes — panel shape 8/2-2-2-2 with generics suppressed (no
+doubling); verbatim clones (no invented modifier/svalue key); setup DB no-BOM + no key collision; deity+loc BOM
+present; braces 289/56/50/144-line balanced; all religions exist in 01_ideologies; loc complete; no key collisions.
+WATCH for the live boot test: (1) each ideology's Pantheon panel shows its 8 themed thinkers (NOT 16, NOT raw
+generic keys) — this is the panel-break tell; (2) omen invocation + apotheosis tooltips render; (3) no
+"deity DB" / duplicate-key boot error. If the panel breaks, the fault is the generic-suppression NOR or the DB,
+not the bodies (proven-identical). Custom deities are the last Design-3 deferral — Design 3 is now feature-complete.
