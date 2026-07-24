@@ -1260,3 +1260,52 @@ qing_naturalised_citizenship keys all proven culture-scope; qing_national_awaken
 custom_tooltip-as-gate matches the working language_recognition decision; var:qing_civic_identity has_variable-guarded +
 CHI-gated + init'd 5×; add_legitimacy/add_stability proven; all decisions ai_will_do=0 (player-only). No boot-crash class
 matched. **Design 4 (task #62) COMPLETE** (a culture_view.gui read-out panel is the logged optional follow-on).
+
+---
+
+## Design 3 — Religion → Ideology (task #61) — EXECUTION
+
+### SCOPE DECISION (up front). Design 3 is the highest-risk of the four (48 custom deities + per-country
+### DB registration = the DB-key-contiguity + pantheon-panel crash classes), and the 200-agent cap was hit
+### mid-session so NO independent boot-crash review is available. Per the standing boot-crash-review rule +
+### other-machine testing, the risky net-new content is DEFERRED to a reviewable follow-on; what ships here
+### is the bounded, self-verifiable, crash-class-free foundation of the coexistence model.
+
+### Chunk 3.1 — ideology religions + triggers + migration guards (COMMITTED 8790b03a3)
+- 01_ideologies.txt: 6 ideology religions (religion_category=pantheon, can_deify_ruler=no), SIBLINGS to the
+  faiths (coexistence — NO mass 00_default remap). NO custom deities → the generic set (00_generic.txt, which
+  suppresses ONLY for confucianism) covers them, so they are panel-complete with ZERO DB registration → the
+  DB-contiguity crash class is entirely avoided.
+- is_ideology_religion {,_province,_pop} triggers (3 scopes, kept in sync with the 6 entries).
+- Migration item 1 (create_character root.religion floods) fixed in a PRIOR standalone commit (d8163ca00, 19 sites).
+- Migration item 2 (character_events.21 governor-conversion) guarded NOT root is_ideology_religion.
+- Migration item 3 (state_secularism/atheism laws) allow gated NOT is_ideology_religion (belt-and-braces; the
+  laws already required religion=secular).
+
+### Chunk 3.2 — layered adoption flow (se_QING_IDEOLOGY + trampoline event + modifier + loc) (this commit)
+- QING_adopt_ideology: the PROVEN layered flow — set_country_religion=$ideology$ (oracle-confirmed; mirrors
+  se_QING_REFORM:114) + set_character_religion on ruler+close family (bounded every_character employer=ROOT) +
+  set_pop_religion over a BOUNDED capital sample (ordered_pops_in_province order_by=pop_hapiness max=3 — the
+  proven bounded-pop idiom, subject_focus_events:799; random_pops_in_province count= is NOT proven so avoided) +
+  qing_ideology_recent_convert modifier + PI cost. NO create_character, NO deities, NO DB → off every crash class.
+- qing_ideology.1: hidden is_triggered_only TRAMPOLINE (the layered flow is heavy-ish; a runtime event ref is
+  never compile-inlined into a scripted_gui button — the #443 class). Reads qing_pending_ideology flag var
+  (set by the upstream decision, to be wired) and dispatches to the matching creed; clears the marker after.
+- qing_ideology_recent_convert country modifier + religion loc (6 creeds) + modifier loc.
+- Verbs verified proven in-codebase: set_country_religion / set_character_religion / set_pop_religion,
+  is_close_relative=ROOT.current_ruler, ordered_pops_in_province{order_by,max}, var:X=flag:Y, hidden=yes on
+  country_event, remove_variable, add_political_influence, all modifier keys country-scope.
+- Reviewed DIRECTLY (agent cap hit). No boot-crash class matched; all brace/BOM clean.
+
+### DEFERRED to a reviewable follow-on (logged, NOT shipped this session):
+1. The 48 custom thinker-deities (8 per ideology × 6) + per-country setup/main/deities DB registration — the
+   DB-key-contiguity + pantheon-panel-break crash classes; MUST get a boot-crash review first. Until then the
+   ideologies wear the generic deity set (functional, just not the thinker theming).
+2. The player-facing ADOPTION DECISION/button that sets qing_pending_ideology + trigger_event qing_ideology.1
+   (with era/reform-state gates) — the trampoline + effect are ready; only the upstream trigger surface is unbuilt.
+3. Migration item 4 (00_religion_groups faith-group CONSUMERS audit — ensure NOT-faith-group consumers don't
+   misclassify ideology holders); item 5 (send_settlers breakaway inherits an ideology as faith — needs a verified
+   fallback-faith read into LAND_release_from_list, left as a documented WATCH in-file).
+4. The Stage-4 targeted 1763-nascent seeding + generic-suppression edit for custom deities (only relevant once
+   custom deities exist).
+Design 3's coexistence CORE is shipped + crash-safe; the deferred set is the review-gated + GUI-surface work.

@@ -1,0 +1,70 @@
+﻿########################################################################
+# se_QING_IDEOLOGY.txt — [#61 2026-07-23] IDEOLOGY ADOPTION (Design 3 — Religion → Ideology).
+#
+# The country "converts" to a modern political ideology (a coexisting religion entry from
+# 01_ideologies.txt). Adoption is the PROVEN layered set_country_religion flow — the same
+# mechanism se_QING_REFORM.txt:114 uses for the Taiping syncretic_christian conversion, and the
+# oracle-confirmed verb set (set_country_religion TI 569×/Invictus 739×; set_character_religion;
+# set_pop_religion). NO create_character, NO new deities, NO DB registration — so this is off every
+# boot-crash class (the ideology religions carry the generic deity set; custom thinker-pantheons +
+# DB registration are a separate reviewable follow-on).
+#
+# Scope: COUNTRY (ROOT = the converting country; currently wired for CHI). $ideology$ = one of
+# liberalism | conservatism | monarchism | nationalism | socialism | communism.
+#
+# Layering (country religion does NOT cascade to chars/pops on its own):
+#   1. set_country_religion — the state ideology.
+#   2. set_character_religion on the ruler + the ruling family — the court adopts the creed.
+#   3. set_pop_religion over a bounded sample of the CAPITAL's pops — the vanguard converts
+#      (bounded so it is O(1)-ish, not a realm-wide sweep; the rest drift via the engine over time).
+#   4. a recent-convert country modifier (instability of a fresh conversion) + a political cost.
+#
+# Called from a hidden is_triggered_only event (qing_ideology.1) so it is a RUNTIME ref, never
+# compile-inlined into a scripted_gui button (the compile-inline crash class). se_LOG sys = QING.
+# Sources: Design 3 digest (Schwartz 1964; Levenson 1953; Gentile 2006).
+########################################################################
+
+# ======================================================================
+# QING_adopt_ideology — convert the country to $ideology$. Country scope.
+# ======================================================================
+QING_adopt_ideology = {
+	LOG_enter = { sys = QING  fn = "QING_adopt_ideology" }
+	# 1. the state ideology (the proven verb; mirrors se_QING_REFORM.txt:114).
+	set_country_religion = $ideology$
+	# 2. the ruling court adopts the creed.
+	if = {
+		limit = { exists = current_ruler }
+		current_ruler = { set_character_religion = $ideology$ }
+	}
+	# the ruler's family + loyal prominent characters follow (bounded, not every character in the world).
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			OR = {
+				is_ruler = yes
+				is_close_relative = ROOT.current_ruler
+			}
+		}
+		set_character_religion = $ideology$
+	}
+	# 3. the capital's vanguard converts — a BOUNDED sample (max=3), the rest drift via the engine.
+	# ordered_pops_in_province { order_by max } is the proven bounded-pop idiom (subject_focus_events.txt:799);
+	# random_pops_in_province with count= is NOT proven in this codebase, so it is avoided.
+	if = {
+		limit = { exists = capital_scope }
+		capital_scope = {
+			ordered_pops_in_province = {
+				limit = { NOT = { pop_religion = $ideology$ } }
+				order_by = pop_hapiness
+				max = 3
+				set_pop_religion = $ideology$
+			}
+		}
+	}
+	# 4. the churn of a fresh conversion + the political price.
+	add_country_modifier = { name = qing_ideology_recent_convert  duration = 1825 }
+	add_political_influence = -30
+	LOG_line = { sys = QING  msg = "ideology: the state adopted a new political creed for" }
+	LOG_exit = { sys = QING  fn = "QING_adopt_ideology"  result = OK }
+}

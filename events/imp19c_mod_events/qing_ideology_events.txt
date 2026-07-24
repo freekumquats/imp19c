@@ -1,0 +1,61 @@
+﻿########################################################################
+# qing_ideology_events.txt — [#61 2026-07-23] IDEOLOGY ADOPTION events (Design 3 — Religion → Ideology).
+#
+# The TRAMPOLINE for the layered ideology-adoption flow. QING_adopt_ideology (se_QING_IDEOLOGY.txt)
+# runs set_country_religion + set_character_religion + a bounded set_pop_religion loop — a heavy-ish
+# chain that must NEVER be compile-inlined into a scripted_gui button (the #443 compile-inline crash
+# class). So a button/decision fires THIS is_triggered_only event (a runtime ref, never inlined), and
+# the event runs the effect. Each option is one ideology; the option's trigger gates on era/reform-state
+# so the creed cannot be adopted anachronistically at the 1763 start.
+#
+# All events hidden/is_triggered_only. Namespace = qing_ideology. ROOT = the adopting country (CHI).
+# Sources: Design 3 digest (the thinker roster + adoption model, §A.3).
+########################################################################
+
+namespace = qing_ideology
+
+########################################################################
+# .1  ADOPT AN IDEOLOGY — the dispatcher. Fired from a decision/button (to be wired), which first
+# stamps qing_pending_ideology (a flag var naming the chosen creed). This event reads it and runs the
+# proven layered adoption effect for that creed. Kept option-free + hidden so it is a pure trampoline;
+# the player's CHOICE happens upstream (the decision), not here.
+########################################################################
+qing_ideology.1 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_ideology.1 (adopt ideology dispatcher) for" }
+		# read the chosen creed from the flag var the upstream decision set, and run the layered adoption.
+		if = {
+			limit = { has_variable = qing_pending_ideology  var:qing_pending_ideology = flag:liberalism }
+			QING_adopt_ideology = { ideology = liberalism }
+		}
+		else_if = {
+			limit = { has_variable = qing_pending_ideology  var:qing_pending_ideology = flag:conservatism }
+			QING_adopt_ideology = { ideology = conservatism }
+		}
+		else_if = {
+			limit = { has_variable = qing_pending_ideology  var:qing_pending_ideology = flag:monarchism }
+			QING_adopt_ideology = { ideology = monarchism }
+		}
+		else_if = {
+			limit = { has_variable = qing_pending_ideology  var:qing_pending_ideology = flag:nationalism }
+			QING_adopt_ideology = { ideology = nationalism }
+		}
+		else_if = {
+			limit = { has_variable = qing_pending_ideology  var:qing_pending_ideology = flag:socialism }
+			QING_adopt_ideology = { ideology = socialism }
+		}
+		else_if = {
+			limit = { has_variable = qing_pending_ideology  var:qing_pending_ideology = flag:communism }
+			QING_adopt_ideology = { ideology = communism }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "qing_ideology.1"  reason = "no valid qing_pending_ideology flag set - adoption skipped" }
+		}
+		# clear the pending marker so a re-fire can't re-convert on a stale value.
+		remove_variable = qing_pending_ideology
+	}
+}
