@@ -658,6 +658,7 @@ task-tagged comments; brace/byte-convention check before commit; independent cod
 ---
 
 ## Implementation 1 — Foreign-building use cases
+**STATUS (2026-07-23): BUILT — see PART III — EXECUTION (Design 1 chunks 1.1–1.3). Deferred: a player-facing subject-view / diplomatic-view BUTTON surface for works-aid + embassy (effects are live via mission/treaty/pulse callers).**
 
 **Files — new:**
 - `common/buildings/qing_foreign_buildings.txt` (EXTEND): add `qing_foreign_works_building`,
@@ -687,6 +688,7 @@ task-tagged comments; brace/byte-convention check before commit; independent cod
 never grant a building to a province whose owner is null.
 
 ## Implementation 2 — Engine-law expansion for Qing policy
+**STATUS (2026-07-23): BUILT — see PART III — EXECUTION (chunks 2.1–2.8). 12 law groups shipped. Deferred candidates classified with cause in chunk 2.8 (pulse-computed meters / net-new plumbing / one-way flags / subject-scoped).**
 
 Built on the NATIVE engine law system (schema resolved above), NOT a variable panel. Each Qing
 policy = a new law GROUP (nested options); the player enacts via the stock Laws tab (`LawItem.Enact`
@@ -738,6 +740,7 @@ option = current default (no-op start = byte-identical to today); any `on_enact`
 `change_law` targets must have a passing group `potential` or they silently no-op.
 
 ## Implementation 3 — Religion → Ideology
+**STATUS (2026-07-23): CORE BUILT, risky content DEFERRED — see PART III — EXECUTION (chunks 3.1–3.2). Shipped: 6 ideology religions (generic deities, NO DB registration), is_ideology_religion triggers, migration guards, layered set_country_religion adoption via trampoline. DEFERRED (need a boot-crash review — 200-agent cap hit): 48 custom thinker-deities + per-country DB registration; the player adoption decision/button; migration items 4–5. Tracked as an open task + [[imp19c-owed-reviews]].**
 
 **Files — new:**
 - `common/religions/01_ideologies.txt` (NEW): the ~6 ideology religions.
@@ -771,6 +774,7 @@ setup/deities reader rejects BOM (per memory) — write no-BOM. Ideology adoptio
 trampolined.
 
 ## Implementation 4 — Culture → Nationalism + citizenship
+**STATUS (2026-07-23): BUILT — see PART III — EXECUTION (Design 4 chunk 4.1). Shipped: nationalism-group triggers, 3 filled culture_decisions files (grant via integrate_country_culture — change_pop_type_right is GUI-only), modifiers + loc. Deferred: an optional culture_view.gui read-out panel.**
 
 **Files — new:**
 - `common/scripted_triggers/00_nationalism_groups.txt` (NEW): nationalism = culture-group
