@@ -1,0 +1,59 @@
+########################################################################
+# zzz_PROBE_currency_unseeded.txt — [U4 PROBE 2026-07-24 — REMOVE after diagnosis]
+# ON BRANCH upstream_bugs (PRISTINE upstream/master) — the whole point: if the unseeded members
+# do NOT appear here, then U4 is NOT a product of upstream code (and my fix here was misclassified).
+#
+# Identifies the EXACT currency_adopted_countries members that lack the seeded currency vars
+# (CURRENCY_national_debt_thousands / gold_reserve_size) — the members the svalue reader iterates
+# but the every_country{has_variable=official_currency} seeders never cover.
+#
+# Enumerates every currency object the proven CURRENCY_cache_power way (every_province {
+# has_variable = currency_name } => each currency object is a province-scoped object), walks its
+# currency_adopted_countries list, and per member logs its name + territory signal (num_of_cities)
+# + which flooding var is UNSET. A member logged here is a flood source.
+#
+# Only-proven idioms: every_in_list (se_CURRENCY reader), [scope:x.GetName] in a LOG msg
+# (se_QING_EMERITUS), num_of_cities country trigger (se_AI). NO is_country_alive / GetTag-in-log.
+# sys = PROBE (grep-able, clearly removable). Boots are -debug_mode.
+# Read back: grep 'IMP19C PROBE: U4' debug.log
+########################################################################
+
+# Dump the unseeded adopters of ONE currency object. Scope: the currency object (province-scoped).
+PROBE_U4_dump_currency = {
+	save_scope_as = probe_ccy
+	LOG_line = { sys = PROBE  msg = "U4 currency object [scope:probe_ccy.GetName] — scanning currency_adopted_countries" }
+	every_in_list = {
+		variable = currency_adopted_countries
+		save_scope_as = probe_member
+		if = {
+			limit = { NOT = { has_variable = CURRENCY_national_debt_thousands } }
+			if = {
+				limit = { num_of_cities > 0 }
+				LOG_line = { sys = PROBE  msg = "U4 UNSEEDED-MEMBER [scope:probe_member.GetName] HAS-TERRITORY currency=[scope:probe_ccy.GetName] missing=CURRENCY_national_debt_thousands" }
+			}
+			else = {
+				LOG_line = { sys = PROBE  msg = "U4 UNSEEDED-MEMBER [scope:probe_member.GetName] LANDLESS(0 cities) currency=[scope:probe_ccy.GetName] missing=CURRENCY_national_debt_thousands" }
+			}
+		}
+		if = {
+			limit = { NOT = { has_variable = gold_reserve_size } }
+			if = {
+				limit = { num_of_cities > 0 }
+				LOG_line = { sys = PROBE  msg = "U4 UNSEEDED-MEMBER [scope:probe_member.GetName] HAS-TERRITORY currency=[scope:probe_ccy.GetName] missing=gold_reserve_size" }
+			}
+			else = {
+				LOG_line = { sys = PROBE  msg = "U4 UNSEEDED-MEMBER [scope:probe_member.GetName] LANDLESS(0 cities) currency=[scope:probe_ccy.GetName] missing=gold_reserve_size" }
+			}
+		}
+	}
+}
+
+# TOP-LEVEL: run the probe once at setup, AFTER currency setup + reserve seeding + power caching.
+PROBE_U4_dump_all = {
+	LOG_line = { sys = PROBE  msg = "U4 probe START — dumping currency-adopter members missing seeded vars (pristine upstream)" }
+	every_province = {
+		limit = { has_variable = currency_name }
+		PROBE_U4_dump_currency = yes
+	}
+	LOG_line = { sys = PROBE  msg = "U4 probe END" }
+}
