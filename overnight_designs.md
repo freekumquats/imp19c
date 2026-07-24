@@ -1043,3 +1043,68 @@ Decisions:
   control surface is last-writer-wins on the value (harmless).
 - Confirmed by review: on_enact set_variable is proven-safe (matches vanilla 00_social_laws on_enact),
   no law auto-enacts at start (defaults never fire), all gate vars real, GUI regs render, loc complete.
+
+### Chunk 2.5 — ministry ESTABLISHMENT-SIZE law (1 group, drives the auto-staffer target)
+Files: `00_qing_statutes_laws.txt` (+1 group, braces 102/102), `00_event_values.txt` (+1 svalue),
+`se_QING_SUBPOSTS.txt` (mint-target indirection + game-start seed, braces 82/82), `government_view.gui`
+(+1 laws_widget, 1985/1985), `laws_l_english.yml` (+8 keys).
+Group: **Ministry Establishment (定額)** — qing_law_ministry_estab_target = 3 lean / 4 standard(default) / 6 expanded.
+Decisions:
+- **This is the ONE group that drives a TARGET, not a pulse read.** The three ministry corps (Zongli
+  diplomats / Censorate inspectors / Imperial Guard captains) were staffed up to a hard literal `4` in
+  `QING_subpost_staff_corps_minted`. The law now sets that head-count.
+- **var-on-RHS is illegal → svalue indirection.** Added `qing_estab_target_tmp_cmpsvalue = { value =
+  var:qing_estab_target_tmp }` (matching the documented `_cmpsvalue` idiom). The helper first copies the
+  legislated target into a local temp (`qing_estab_target_tmp`), then compares `var:$count$ <
+  qing_estab_target_tmp_cmpsvalue` on each mint rung.
+- **Unset-var safety.** The helper's copy step is guarded: `if has_variable qing_law_ministry_estab_target
+  → temp = var; else → temp = $target$` (the caller's literal 4). So NO unset var is ever read on a
+  comparison RHS, and if neither law nor seed has run it falls back to byte-identical literal-4 behaviour.
+- **Game-start seed.** `QING_subpost_seed_gamestart` now seeds qing_law_ministry_estab_target=4 (idempotent,
+  NOT-has_variable guarded) so the default tier is explicit and the staffer always reads a set value.
+- **Rungs raised 4 → 6** so the EXPANDED tier (6) is reachable; lean/standard simply stop earlier. This is
+  adjacent to the #90-safe create_character path but does NOT change it — same QING_subpost_fill_one_minted
+  call, only two more guarded invocations of it. Each rung still re-checks the count, so it never overshoots.
+- **Manual enrol ceiling unchanged (< 6).** The panel enrol buttons already cap at 6; the expanded auto-staff
+  tier (6) equals that ceiling, so auto-staffing and manual enrolment can't fight. Lean/standard leave head-room.
+- Default tier = the gamestart no-op (4 = old literal). No law auto-enacts at start.
+- → boot-crash + correctness review, then COMMIT chunk 2.5.
+
+### Chunk 2.6 — ADVISORY ESTABLISHMENT law (1 group, zero plumbing change)
+Files: `00_qing_statutes_laws.txt` (+1 group, braces 113/113), `government_view.gui` (+1 laws_widget, 1987/1987),
+`laws_l_english.yml` (+8 keys). NO scripted-effect change — the backing var, its init, and its _cmpsvalue all pre-exist.
+Group: **Advisory Establishment (顧問)** — qing_advisor_slot_cap = 2 cautious / 3 measured(default) / 5 open.
+Decisions:
+- **The cleanest possible law group.** qing_advisor_slot_cap already inits to 3 (QING_advisor_init:48) and is
+  already consumed on the recruit gate's comparison RHS via qing_advisor_slot_cap_cmpsvalue
+  (se_QING_ADVISORS.txt:87). The law just writes the var the recruit routine already reads — no new svalue, no
+  helper edit, no seed. on_enact = set_variable (trivial/safe).
+- **Default (measured=3) = init value = byte-identical no-op.**
+- **Lowering below slots-used is safe:** the cap only gates the NEXT recruit (`slots_used < cap`); it never
+  un-hires a sitting advisor. So enacting Cautious mid-game with 3 advisors seated simply blocks new hires until
+  a slot frees — no negative/underflow, no crash.
+- → boot-crash + correctness review folds into the chunk 2.5 review (same pattern); COMMIT 2.5+2.6 together.
+
+### Chunk 2.7 — CANTON REVENUE ALLOCATION law (1 group, zero plumbing change)
+Files: `00_qing_statutes_laws.txt` (+1 group, braces 124/124), `government_view.gui` (+1 laws_widget, 1989/1989),
+`laws_l_english.yml` (+8 keys). NO scripted-effect change — qing_canton_purse_share pre-exists (init 50, pulse-read).
+Group: **Canton Revenue Allocation (內帑)** — qing_canton_purse_share = 0 treasury / 50 shared(default) / 100 purse.
+Decisions:
+- Backing var inits to 50 (se_QING_CANTON:61) and the quarterly Canton pulse already reads it to split the take
+  (se_QING_CANTON:120-132). Law writes the same var the existing 3-way GUI setter writes (QING_mechanics_actions
+  0/50/100). Default (shared=50) = init = no-op.
+- **Dual control surface** with the existing panel buttons (last-writer-wins on the value — harmless, same as
+  opium/caravan in chunk 2.2/2.3). Old panel left in place.
+- on_enact = set_variable (trivial/safe). No gate — Canton trade exists from game start.
+
+**Chunks 2.5–2.7 review: PASS — no boot-crash risk, no correctness bug.** (code-review agent, 6 tool-uses, verified against files.)
+- All crash classes cleared: degree add_trait is INSIDE create_character (#90-safe) and the whole mint path is
+  deferred to qing_force_setup.12 (day-32 hidden is_triggered_only), OFF construction; svalue-on-RHS is the
+  sanctioned idiom; qing_estab_target_tmp is written on BOTH guard branches before any rung reads it (no unset read).
+- No overshoot: 6 independent if-rungs each re-test count<target, +1 each; fires = min(6, target−count); converges
+  to target, never exceeds. Seed sets the law var (=4) BEFORE the 3 staff calls, so temp always resolves; literal
+  target=4 arg is the coherent else-fallback. Manual ceiling <6 == expanded tier 6 (hits, never exceeds).
+- 2 LOW notes (accepted, not bugs): (1) FILL-ONLY — lowering the tier (e.g. expanded→lean) does not discharge
+  excess staff; the bench shrinks only by attrition. INTENTIONAL (auto-staffer only mints up; the strip pass
+  removes only double-booked members). (2) qing_estab_target_tmp is a persistent country var never cleaned up —
+  cosmetic (overwritten every call). → COMMIT chunks 2.5+2.6+2.7.
