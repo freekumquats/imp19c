@@ -2781,3 +2781,27 @@ valid. Braces: statutes 443/443, CANTON 121/121, gov_view 2023/2023.
 Batch-4 progress: 4a-4g = 10 laws built (#44/#27/#45/#34/#18/#43/#39/#40/#30/#31). Remaining: #22 (no clean
 hook — deferred, needs a new backing-drift mechanic), #35 (directional regency echo), #15 (drill posture —
 needs own vars + already-fixed High-Qing era-guard), #17 (southern study — needs a new recruitment pulse).
+
+---
+## PART VI — Batch 4h IMPLEMENTED (2026-07-25): #35 Regency Rules
+
+**STATUS: BUILT + reviewed + committed.** The last of the tractable Batch-4 laws.
+
+- **#35 Regency Rules (攝政體制)** — `qing_regency_rules_law`, court domain. on_enact writes idempotent
+  qing_regency_authority_bias (0 customary / -1 conciliar / +1 unbound). Read once by
+  QING_dynasty_regency_screen (se_QING_DYNASTY.txt): it BRANCHES on the bias and passes a LITERAL reform-echo
+  scale each way (unbound = 4, conciliar = 2, base = 3) — deliberately NOT scale=var:X, because reform_echo
+  interpolates $scale$ into a LOG string and a var there would print raw macro text (the log-string-macro
+  rule). So the directional lurch of a regency (慈禧-blocks-reform vs a reforming regent) is amplified or
+  damped by the law. Modifiers: conciliar = +legit/-PI, unbound = +PI/-legit.
+
+REVIEW: idempotent on_enact; guarded reads (LHS var, literal RHS); literal scale (no var-in-LOG); the
+directional sign comes from the regent's OWN stance inside reform_echo (unchanged) — the law only scales
+MAGNITUDE, which is the correct semantics. Braces: statutes 457/457, DYNASTY 263/263, gov_view 2025/2025.
+
+BATCH 4 COMPLETE for the tractable items: 11 laws built (4a #44/#27/#45, 4b #34, 4c #18, 4d #43, 4e #39,
+4f #40, 4g #30/#31, 4h #35) + Task #32 (P7 fix + caravan rework). REMAINING (genuine net-new mechanics,
+NOT law-bias — deferred to their own build): #22 Deliberative (needs a new per-pulse backing-drift +
+ratchet-safe band gate), #15 Drill Posture (needs own drill vars + recruitment gate), #17 Southern Study
+(needs a brand-new recruitment pulse). These fold into future subsystem batches, per the "build the mechanic
+in the same batch as the law" rule.
