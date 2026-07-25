@@ -2739,3 +2739,24 @@ helper (tributary-prestige nudge + wealth via CURRENCY_grant_country_wealth + ru
 leg modifier). Reuses proven idioms only. Flavor names/text pending the Zheng-He research digest.
 REVIEW GATES: no new num_of_ships-on-RHS issues (num_of_ships>=N is a literal RHS, fine); each voyage
 country modifier distinct; treasury costs on_start; all CHI-only, player-only (inherit tree potential).
+
+---
+## PART VI — Batch 4f IMPLEMENTED (2026-07-25): #40 Frontier Settlement
+
+**STATUS: BUILT + reviewed + committed.** Tri-state bias-B on the population-pressure relief.
+
+- **#40 Frontier Settlement (移民實邊)** — `qing_frontier_settlement_law`, frontier domain. on_enact writes
+  idempotent qing_frontier_settle_policy (0 managed default / 1 open / 2 flood). Read once by
+  QING_pop_recompute_target (se_QING_POPULATION.txt) to scale the pressure relief: policy 1 = extra -8,
+  policy 2 = extra -16, ON TOP of the existing one-shot qing_frontier_resettlement panel-lever flag (-12,
+  UNCHANGED — no regression; the migration-guard concern resolved by layering, not replacing). Modifiers add
+  global_migration_speed_modifier (faster settlement) with a PI/stability cost.
+- Registered gov_view frontier area (beside national_integration). Full loc with callouts.
+
+REVIEW: idempotent on_enact; guarded read (LHS var, literal RHS); existing flag block untouched (no
+regression); if/else_if mutually exclusive on single-valued policy; all 3 modifier keys valid. Braces:
+statutes 429/429, POPULATION 100/100, gov_view 2021/2021.
+
+Batch-4 progress: 4a(#44/#27/#45) 4b(#34) 4c(#18) 4d(#43) 4e(#39) 4f(#40) = 9 laws built. Task #32 (P7
+dead-law fix + caravan real-goods rework) DONE. Remaining Batch-4: #22 (no clean hook — deferred), #35
+(directional regency echo), #15/#17/#30/#31 (the remaining Task-#32-adjacent cluster).
