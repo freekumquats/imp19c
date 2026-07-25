@@ -2583,3 +2583,33 @@ mechanism. Deferred to Batch 4 / a careful sub-step rather than forced into a ba
 NOTE: several of these (#43 loop, #17 new pulse, #15 era-guard) are heavier than "one read" — genuine
 net-new plumbing. Task #32 (caravan + P7 era-guard) should be done alongside #15/#30 since they share the
 DECLINE era-guard and Canton/caravan yield sites.
+
+---
+## PART VI — Batch 4a IMPLEMENTED (2026-07-24)
+
+**STATUS: BUILT + reviewed + committed.** First tranche of the Batch-4 net-new-lite list — the
+three LOWEST-RISK items authored first (two pure modifier-swap, one bias-B one-read):
+
+- **#44 Modernization Doctrine (自強綱領)** — `qing_modernization_doctrine_law`, military domain. Pure
+  modifier-swap, 3 options (statutory default / new-model drill / total rearmament) on discipline +
+  land_morale_modifier + research_points_modifier + army_maintenance_cost + global_tax_modifier. UNIT-UNLOCK
+  deliberately NOT attempted (unproven from a law — modifier-only per the open-item note).
+- **#27 Customs Regime (通商章程)** — `qing_customs_regime_law`, foreign domain. Pure modifier-swap, 3 options
+  (canton default / treaty tariff / customs autonomy) on the vanilla trade keys global_capital_trade_routes
+  (int ±1/±2, proven form) + global_commerce_modifier + global_tax_modifier. Governs the empire-wide vanilla
+  trade network; the bespoke Canton Purse / Caravan Customs laws still model the 廣州/絲路 yields separately.
+- **#45 Exam Curriculum (科舉科目)** — `qing_exam_curriculum_law`, culture domain. Bias-B: on_enact writes
+  qing_exam_curriculum_bias (0 classical / +10 practical); read ONCE (guarded on has_variable) inside
+  QING_exam_compute_pass_rate before the 0..100 clamp (se_QING_EXAM.txt). Classical/practical only —
+  ABOLITION deferred. Called from schedule/graduate/sit sites, so the bias is live.
+
+REVIEW: on_enacts use idempotent set_variable (no toggle-farm); bias read guarded; all 8 modifier keys
+verified valid in-TC; no var-ref on comparison RHS; all 3 registered in government_view.gui (military/
+culture/foreign areas) + full loc with #G/#R/#Y prereq callouts. Braces: statutes 359/359, gov_view
+2031/2031. Encodings preserved (BOM+LF statutes/loc).
+
+REMAINING Batch-4 open items (heavier plumbing, next tranches): #34/#35 succession/regency selectors,
+#39 tributary ritual cadence, #40 frontier-settlement tri-state migration, #43 amban fill-to-target loop,
+#15 drill-posture (needs own vars + High-Qing era-guard, pairs w/ Task #32), #17 southern-study (needs new
+recruit pulse), #18 canton-hoppo drift-bias, #22 deliberative-backing accrual bias, #30/#31 tariff (pairs
+w/ Task #32 caravan rework).
