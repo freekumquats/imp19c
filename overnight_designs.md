@@ -2516,3 +2516,33 @@ Authored 4 bias-A law groups in 00_qing_statutes_laws.txt (235/235 braces) + gua
   or recompute, not the event nudge.
 
 ### PENDING before Batch 2 commit: boot-crash review (dispatch), commit as freekumquats + push.
+
+### Batch 3 — BUILT (7 bias-B laws) — DONE (pre-commit review pending)
+7 law groups in 00_qing_statutes_laws.txt (333/333) + guarded bias-INTO-formula-before-clamp at each recompute:
+- **#24 Council Composition** → qing_council_comp_bias, COUNCIL before the eff_target clamp (:554). Manchu -5 /
+  balanced 0 / meritocratic +5.
+- **#25 Canal Quota** → qing_canal_quota_bias, CANAL before the 0.5..1.0 clamp (:228). relaxed -0.10 / std 0 /
+  maximal +0.15.
+- **#26 Xinjiang Admin** → qing_xj_admin_bias, XINJIANG into consol_scratch before the 0..100 clamp (:227).
+  beg 0 / military-farm +5 / provincialize +10.
+- **#28 Missionary Policy** → qing_missionary_tol_bias, MISSIONARY into SOCIAL-friction target before the 45
+  ceiling (added a floor-at-0 too, since prohibit -8 could go negative). prohibit -8 / tolerate 0 / open +8.
+  (Political/antichr target NOT touched — post-treaty.)
+- **#42 National Integration** → qing_civic_law_bias, DECLINE civic-identity TARGET-lift alongside settle-bonus
+  (:857). dynastic 0 / multi-ethnic +5 / civic-nation +10. Nationalism/citizenship focus (feeds assimilation +
+  ethnic-tension relief). NB qing_national_awakening is a modifier, not this var.
+- **#46 Censorate Empowerment** → qing_censorate_bias, CENSORATE into vigor recompute before the 0..50 clamp
+  (:66). weak -10 / active 0 / weaponized +10.
+- **#14 Provincial Militarization** (moved from Batch 2) → qing_provmil_bias, biases the han-provincial-power
+  TARGET (qing_han_prov_target_tmp) before its clamp (DECLINE:422), NOT the +/-2 chase nudge. centralized -10 /
+  sanctioned 0 / delegated +10.
+- All 7 registered in GUI domain columns (治道/財政/邊疆/文教/武備); 2025/2025 braces. Loc complete w/ effect
+  callouts. All bias vars wired set-by-law + read-by-effect (no orphans). New modifier keys verified
+  (global_manpower_modifier 32 files).
+
+### #22 Deliberative — DEFERRED from Batch 3 (needs a different hook)
+qing_delib_cohesion is a value-BLOCK recompute (set_variable = { value = { sum/count min max } }, DELIB:222-230)
+— no linear "before the clamp" add-site. The right hook is the BACKING (qing_delib_backing accrual), a distinct
+mechanism. Deferred to Batch 4 / a careful sub-step rather than forced into a bad fit.
+
+### PENDING before Batch 3 commit: boot-crash+correctness review (dispatch), commit as freekumquats + push.
