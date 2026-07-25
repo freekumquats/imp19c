@@ -243,6 +243,54 @@ QING_exam_graduate_cohort = {
 }
 
 # ======================================================================
+# QING_exam_seed_hanlin_pool — fill the waiting Hanlin/laureate pool UP TO the cap the
+# EXAMINATION-ADMISSION LAW sets (qing_law_hanlin_cap: the establishment of degree-holders the
+# throne keeps on the bench awaiting a post). Scope: COUNTRY (CHI). Populated the SAME way the
+# Grand Council is (QING_council_autofill_office): mint purpose-built pool scholars via the proven
+# QING_exam_mint_scholar (create_character age 28 / culture han / religion confucianism / add_trait
+# — #90-safe, runs from the DEFERRED day-32 event qing_force_setup.12, NOT construction). Called
+# once at game start and as a top-up in the quarterly pool tick, so the pool never sits empty (the
+# boot-test "No laureate waits" — the old autofill events that filled it were removed on purpose;
+# this seeds it by law instead of restoring them). Bounded by the cap; never drains it.
+# ======================================================================
+QING_exam_seed_hanlin_pool = {
+	QING_exam_init = yes
+	# The EXAMINATION-ADMISSION LAW (qing_law_hanlin_cap: 0 customary / 1 broad / 2 restricted) sets
+	# how many degree-holders the throne keeps on the bench. Resolve the target COUNT as a literal
+	# (RHS-comparison rule: never a var: on a comparison RHS — so we branch on the selector and use a
+	# literal `count`, NOT a var-driven cap comparison). Each branch tops the pool up to its target:
+	# `count` mints that many, but QING_exam_mint_scholar is only reached while the pool is below the
+	# target via the guarded while `limit` on the LITERAL threshold. Default (unset/0) = 4.
+	if = {
+		# BROAD establishment (廣額): a deep bench of 8.
+		limit = { has_variable = qing_law_hanlin_cap  var:qing_law_hanlin_cap = 1 }
+		while = {
+			limit = { var:qing_scholar_pool_count < 8 }
+			count = 8
+			QING_exam_mint_scholar = { degree = jinshi }
+		}
+	}
+	else_if = {
+		# RESTRICTED establishment (減額): a tight bench of 2.
+		limit = { has_variable = qing_law_hanlin_cap  var:qing_law_hanlin_cap = 2 }
+		while = {
+			limit = { var:qing_scholar_pool_count < 2 }
+			count = 2
+			QING_exam_mint_scholar = { degree = jinshi }
+		}
+	}
+	else = {
+		# CUSTOMARY establishment (循例), the default: a bench of 4.
+		while = {
+			limit = { var:qing_scholar_pool_count < 4 }
+			count = 4
+			QING_exam_mint_scholar = { degree = jinshi }
+		}
+	}
+	LOG_line = { sys = QING  msg = "exam: seeded the waiting Hanlin pool to the admission-law establishment for" }
+}
+
+# ======================================================================
 # QING_exam_pool_drop_member — [#321 review-fix] call in a SEATED scholar's scope.
 # THE single pool-exit path for a man who takes office. Hooked into the tail of
 # QING_office_appoint so EVERY appointment route (the GC-panel autofill, the manual
@@ -356,7 +404,11 @@ QING_exam_pool_tick = {
 			QING_char_bind = yes
 			remove_variable = qing_needs_bind
 		}
-		LOG_line = { sys = QING  msg = "exam: pool tick (retired the aged/dead un-placed) for" }
+		# [Hanlin pool 2026-07-25] top the waiting bench back up to the admission-law establishment
+		# after retirements/appointments drain it — the pool is LAW-governed, not filled by the old
+		# (removed) autofill events. QING_exam_seed_hanlin_pool only mints while below the law's target.
+		QING_exam_seed_hanlin_pool = yes
+		LOG_line = { sys = QING  msg = "exam: pool tick (retired the aged/dead un-placed, topped up to the establishment) for" }
 		LOG_exit = { sys = QING  fn = "QING_exam_pool_tick"  result = OK }
 	}
 }
