@@ -258,6 +258,80 @@ QING_household_eunuch_purge = {
 }
 
 # ======================================================================
+# [Batch 6 B3 2026-07-25] QING_household_eval_chief_eunuch — the Chief Eunuch seat (掌印太監). Scope:
+# COUNTRY (CHI). When the directorate stays powerful (power >= 70) for a sustained spell, its ablest man
+# entrenches as the 掌印太監 — the on-map face of 太監專權 (a 李蓮英-type; 1763 starts get an anonymous
+# holder, famous eunuchs being post-1763). This is a NON-APPOINTABLE, DISPLAY-ONLY seat: it sets its OWN
+# marker (qing_office_chief_eunuch_holder country var) + a standing modifier, and does NOT set
+# qing_office_held (which would trip the 1:1 position validator — the design's explicit rule; the holder
+# keeps only his qing_is_palace_eunuch marker). Entrenchment needs qing_eunuch_entrench_q >= 4 quarters.
+# ======================================================================
+QING_household_eval_chief_eunuch = {
+	if = { limit = { NOT = { has_variable = qing_eunuch_entrench_q } }  set_variable = { name = qing_eunuch_entrench_q  value = 0 } }
+	if = {
+		# sustained high power ratchets the entrenchment counter up; anything lower bleeds it back down.
+		limit = { has_variable = qing_eunuch_power  var:qing_eunuch_power >= 70 }
+		change_variable = { name = qing_eunuch_entrench_q  add = 1 }
+		if = { limit = { var:qing_eunuch_entrench_q > 8 }  set_variable = { name = qing_eunuch_entrench_q  value = 8 } }
+	}
+	else = {
+		if = { limit = { var:qing_eunuch_entrench_q > 0 }  change_variable = { name = qing_eunuch_entrench_q  subtract = 1 } }
+	}
+	# SEAT: entrenched (>=4 quarters sustained) + a living faction leader in the corps -> he takes the seat.
+	if = {
+		limit = {
+			var:qing_eunuch_entrench_q >= 4
+			any_character = { employer = ROOT  has_variable = qing_eunuch_faction_leader  is_alive = yes }
+		}
+		# mirror the ablest serving faction-leader eunuch onto the display-only seat var (NOT qing_office_held).
+		ordered_character = {
+			limit = { employer = ROOT  has_variable = qing_eunuch_faction_leader  is_alive = yes }
+			order_by = finesse
+			max = 1
+			ROOT = { set_variable = { name = qing_office_chief_eunuch_holder  value = prev } }
+		}
+		if = { limit = { NOT = { has_country_modifier = qing_chief_eunuch_seated } }  add_country_modifier = { name = qing_chief_eunuch_seated  duration = -1 } }
+		LOG_line = { sys = QING  msg = "household: the 掌印太監 (Chief Eunuch) entrenches at court for" }
+	}
+	else = {
+		# no longer entrenched (purged, or power fell) -> vacate the seat + drop the modifier.
+		if = { limit = { has_variable = qing_office_chief_eunuch_holder }  remove_variable = qing_office_chief_eunuch_holder }
+		if = { limit = { has_country_modifier = qing_chief_eunuch_seated }  remove_country_modifier = qing_chief_eunuch_seated }
+	}
+}
+
+# ======================================================================
+# [Batch 6 B4 2026-07-25] QING_household_eunuch_event_roll — fire ONE eunuch-intrigue event per pulse when
+# the band warrants, throttled by a cooldown so the court is not spammed. Scope: COUNTRY (CHI). Shares the
+# GC event slot via the standard throttle. High power -> the overreach beat (household.8 閹黨); a strong
+# chamberlain + elevated power -> the retrenchment opportunity (household.9). All is_triggered_only country
+# events (never inlined here — trigger_event is a runtime dispatch).
+# ======================================================================
+QING_household_eunuch_event_roll = {
+	if = {
+		limit = {
+			NOT = { has_variable = qing_eunuch_event_cd }
+			has_variable = qing_eunuch_power
+			var:qing_eunuch_power >= 60
+		}
+		set_variable = { name = qing_eunuch_event_cd  value = 1  days = 1460 }
+		if = {
+			# a strong chamberlain sees the chance to curb the corps (裁抑內宦).
+			limit = {
+				has_variable = qing_office_chamberlain_holder
+				var:qing_office_chamberlain_holder = { is_alive = yes  employer = ROOT  charisma >= 8 }
+			}
+			trigger_event = { id = qing_household.9  days = { 5 20 } }
+		}
+		else = {
+			# an unchecked directorate overreaches (閹黨).
+			trigger_event = { id = qing_household.8  days = { 5 20 } }
+		}
+		LOG_line = { sys = QING  msg = "household: a eunuch-intrigue beat arises at court for" }
+	}
+}
+
+# ======================================================================
 # [#424] QING_household_carryover_purse — the 內帑 is an institution of the throne: on a
 # change of sovereign it passes to the successor, not into the void with the dead emperor's
 # personal wealth. Called from on_ruler_change (scope:former_ruler is set there). Reads the
@@ -295,6 +369,10 @@ QING_household_pulse = {
 	# [Batch 6 B1/B2 2026-07-25] compute the eunuch power signal + let it consume into the court.
 	QING_household_compute_eunuch_power = yes
 	QING_household_eunuch_consume = yes
+	# [Batch 6 B3 2026-07-25] evaluate the Chief Eunuch seat (掌印太監) from sustained high power.
+	QING_household_eval_chief_eunuch = yes
+	# [Batch 6 B4 2026-07-25] the intrigue-event roll (閹黨 / retrenchment / overreach), throttled.
+	QING_household_eunuch_event_roll = yes
 
 	# --- PRIVY PURSE DRIFT: capable loyal high-charisma Grand Secretary fills it
 	# (+2/quarter), vacant or venal office drains it (-3/quarter).
