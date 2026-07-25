@@ -45,15 +45,62 @@ QING_harem_init = {
 		set_variable = { name = qing_harem_initialized  value = 1 }
 		set_variable = { name = qing_harem_consort_count  value = 0 }
 		clear_variable_list = qing_harem_consorts
-		# an opening inner court of three consorts (only if the throne is filled).
+		# an opening inner court (only if the throne is filled).
 		if = {
 			limit = { exists = current_ruler }
-			QING_harem_mint_consort = yes
-			QING_harem_mint_consort = yes
-			QING_harem_mint_consort = yes
+			# [BT-H 2026-07-24] seat Qianlong's REAL 1763 harem — the historical consorts
+			# minted as setup characters (00_Qing.txt char:637-640), at their 1763 ranks
+			# (Ling 令貴妃 = 貴妃 rank 3; Shu 舒妃 + Yu 愉妃 = 妃 rank 2; Rong 容妃/香妃 = entry
+			# 貴人 rank 1). Each enroll is guarded on the char existing + alive + CHI-employed +
+			# unmarried, so on any OTHER bookmark (1759/1815) where they are absent or dead it is
+			# a clean no-op. The empress herself (char:636 Ula Nara) is NOT a harem consort.
+			QING_harem_enroll_historical = { char = char:637  rank = 3 }
+			QING_harem_enroll_historical = { char = char:638  rank = 2 }
+			QING_harem_enroll_historical = { char = char:639  rank = 2 }
+			QING_harem_enroll_historical = { char = char:640  rank = 1 }
+			# FALLBACK: on a bookmark where none of the historical consorts loaded, keep the
+			# High-Qing inner court populated by minting a small opening harem (the old behaviour).
+			if = {
+				limit = { OR = { NOT = { has_variable = qing_harem_consort_count } } var:qing_harem_consort_count = 0 }
+				QING_harem_mint_consort = yes
+				QING_harem_mint_consort = yes
+				QING_harem_mint_consort = yes
+			}
 		}
 	}
 	LOG_exit = { sys = QING  fn = "QING_harem_init"  result = OK }
+}
+
+# ======================================================================
+# [BT-H 2026-07-24] QING_harem_enroll_historical — mark a NAMED setup character as a
+# harem consort at a given rank. $char$ = the char:N scope; $rank$ = 1..4. Guarded so it
+# is a safe no-op if she is absent/dead/married/already-enrolled (bookmark-agnostic).
+# Mirrors QING_harem_take_consort's marking idiom. Scope: COUNTRY (CHI, ROOT = overlord).
+# ======================================================================
+QING_harem_enroll_historical = {
+	if = {
+		limit = {
+			exists = $char$
+			$char$ = {
+				is_alive = yes
+				is_female = yes
+				employer = ROOT
+				is_married = no
+				NOT = { has_variable = qing_is_harem_consort }
+			}
+		}
+		$char$ = {
+			set_home_country = ROOT
+			set_variable = { name = qing_is_harem_consort  value = 1 }
+			set_variable = { name = qing_consort_rank  value = $rank$ }
+		}
+		add_to_variable_list = { name = qing_harem_consorts  target = $char$ }
+		change_variable = { name = qing_harem_consort_count  add = 1 }
+		LOG_line = { sys = QING  msg = "harem: historical consort enrolled (rank $rank$) for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_harem_enroll_historical"  reason = "historical consort $char$ absent/dead/married/already-enrolled (skip)" }
+	}
 }
 
 # ======================================================================

@@ -101,7 +101,7 @@ option values correctly.
 FIXED: BT-E (Central Secretariat), BT-G (harem portrait 46x68).
 PENDING GUI: BT-C (F&S top-align), BT-D (laws two-column balance), BT-B (religion window height, re-check).
 PENDING CONTENT/CODE: BT-A (vassal era-gate + qing_encroach_pw unset), BT-I (debug_log_scopes stray).
-PENDING SETUP: BT-F (Qianlong wife / Ula Nara), BT-H (historical 1763 harem).
+FIXED: BT-F (Qianlong wife / Ula Nara), BT-H (historical 1763 harem). — see FIXES below.
 PENDING UPSTREAM: U4 currency flood — port the upstream_bugs fix to merge-overnight? (dominant log flood.)
 
 ## FIXES APPLIED (2026-07-24, post-analysis)
@@ -130,3 +130,21 @@ PENDING UPSTREAM: U4 currency flood — port the upstream_bugs fix to merge-over
 - **BT-B (religion bottom margin) — deferred to next-boot visual check.** With the F&S filler now absorbing
   that tab's slack at the bottom, the F&S tab's margin is handled. The omens-tab @window_height (852) is a
   known chase; NOT blind-tweaking it — re-verify visually next boot and trim only if it still spills.
+
+- **BT-F (Qianlong has no living wife) — FIXED.** His first empress Xiaoxianchun (char:212, d.1748) + Consort
+  Chun (char:204, d.1760) are both dead by the 1763.2.16 start, so the engine auto-married him to a random
+  generated stray. Seated his REAL 1763 empress — Step-Empress Ula Nara (繼皇后 / 那拉皇后, b.1718, r. as empress
+  1750-66) — as new setup char:636, carrying `marry_character=char:214` on HER block (the proven Orlov/#50
+  spouse idiom: 00_Russian Empire.txt char:632 Grigory Orlov -> Catherine char:144). No death_date (setup-
+  snapshot rule). She is the EMPRESS (皇后), above the harem — NOT marked qing_is_harem_consort.
+- **BT-H (harem not historical) — FIXED.** Minted Qianlong's four real 1763 consorts as setup chars 637-640:
+  Noble Consort Ling 令貴妃 (魏佳氏 Wei, b.1727, mother of Jiaqing — beihua/confucianism, rank 3 貴妃), Consort
+  Shu 舒妃 (葉赫那拉 Nara, b.1728 — manchu/mahayana, rank 2 妃), Consort Yu 愉妃 (珂里葉特 Keliyete, b.1714 —
+  mongolian/vajrayana, rank 2 妃), Consort Rong/香妃 (和卓 Khoja Iparhan, b.1734 — uighur/sunni, entry rank 1
+  貴人). char ids 636-640 are globally contiguous (verified dense 0..635, NO gaps — my earlier "gaps at
+  353/424/458" was a 00_Qing.txt-only artifact; those ids live in other setup files). Since setup blocks
+  cannot carry set_variable, the 4 consorts are marked qing_is_harem_consort at runtime by QING_harem_init
+  (new helper QING_harem_enroll_historical, guarded on exists+alive+female+employer+unmarried → clean no-op on
+  1759/1815 bookmarks), REPLACING the 3 generic minted placeholders. A fallback mints 3 generics only if none
+  of the historical consorts loaded. All culture/religion keys verified to exist (uighur in 00_east_turkic.txt,
+  mongolian in 00_mongolic.txt). Braces: 00_Qing.txt 249/249, se_QING_HAREM.txt 241/241.
