@@ -2680,3 +2680,26 @@ Batch-4 progress: 4a (#44/#27/#45) + 4b (#34) + 4c (#18) + 4d (#43) = 7 laws bui
 Remaining: #22 (needs new backing-drift mechanic — deferred, no clean hook), #35 (directional regency echo),
 #39 (tributary-ritual cadence), #40 (frontier-settlement tri-state — migration-guard care), #15/#17/#30/#31
 (the Task-#32-coupled cluster: DECLINE era-guard + Canton/caravan yield + new recruit pulse).
+
+---
+## PART VI — Batch 4e IMPLEMENTED (2026-07-24): #39 Tributary Ritual
+
+**STATUS: BUILT + reviewed + committed.** Selector-picks-a-literal-branch on the tribute cadence.
+
+- **#39 Tributary Ritual (朝貢之禮)** — `qing_tribute_ritual_law`, foreign domain. on_enact writes idempotent
+  qing_tribute_ritual_bias on CHI (0 customary default / +1 intensified / -1 relaxed). QING_tribute_stamp_
+  cadence (se_QING_TRIBUTE.txt) runs in the SUBJECT scope inside the scheduler's random_subject; it reads the
+  bias off ROOT (=CHI, unchanged inside random_subject — confirmed by the caller's own comment at :105) into
+  a LOCAL scratch var, then each per-tag branch (KOR / VIE+RYU / outer) picks among LITERAL day-bands by that
+  scratch var. Deliberately NOT a var-driven `days = var:X` — that duration form is UNPROVEN in this engine
+  (my own note, se_QING_EXAM.txt:141). Intensified = every court a tier more often; relaxed = a tier less.
+
+REVIEW: idempotent on_enact; ROOT.var read guarded on has_variable + copied to a LOCAL var so the >=1/<=-1
+compares keep a LITERAL RHS (never ROOT.var on a comparison RHS — the illegal form); `value = ROOT.var:X` is
+proven (DECLINE:2216, CANTON:134); scratch var removed after; all durations literal (boot-safe). New var names
+unique, no loc-key collisions. Braces: statutes 415/415, TRIBUTE 176/176, gov_view 2039/2039.
+
+Batch-4 progress: 4a (#44/#27/#45) + 4b (#34) + 4c (#18) + 4d (#43) + 4e (#39) = 8 laws built.
+Remaining: #22 (no clean hook — needs new backing-drift mechanic, deferred), #35 (directional regency echo),
+#40 (frontier-settlement tri-state — the valve is lever-only, not pulse; needs migration-guard care),
+#15/#17/#30/#31 (the Task-#32 cluster — shared DECLINE era-guard + Canton/caravan yield + new recruit pulse).
