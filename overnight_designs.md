@@ -2865,3 +2865,32 @@ follow-up scope (#90). Braces: HAREM 377/377, events 182/182, panel 100/100, win
 105/105, modifiers 4/4, on_action 62/62.
 
 COURT INTRIGUE (Batches 6+7) COMPLETE.
+
+---
+## PART VI — Batch 4i/j/k IMPLEMENTED (2026-07-25): #15, #17, #22 — the last catalogued laws
+
+**STATUS: BUILT + reviewed + committed. BATCH 4 (and the whole law catalogue) NOW COMPLETE.**
+
+- **#15 Drill Posture (操練之制)** — `qing_drill_posture_law`, military. Bias-B target-lift: on_enact writes
+  qing_drill_posture_bias (0 statutory / +15 intensive / -15 lax), added to qing_modernarmy_target_tmp (the
+  modern-army ceiling the share chases) BEFORE the clamp in QING_DECLINE_drift_modernarmy_share. Intensive
+  fields a deeper modern national army (the warlord-suppressing vector); lax keeps it shallow. Distinct from
+  #44 Modernization Doctrine (flat combat mods) — this shapes the structural share.
+- **#17 Southern Study Admission (南書房行走額)** — `qing_southernstudy_admission_law`, court. Selector sets
+  the corps CAP: seeded qing_southernstudy_cap=8 in init, the two recruit gates swapped from literal `< 8`
+  to `< qing_southernstudy_cap_cmpsvalue` (NEW passthrough svalue — avoids var-on-comparison-RHS, the proven
+  modernarmy idiom). Select 4 / customary 8 / broad 12.
+- **#22 Deliberative Governance (議政之制)** — `qing_deliberative_law`, court. Bias-A: on_enact writes
+  qing_delib_posture_bias (0/-1 consultative/+1 autocratic), applied as an extra qing_banner_decay drift at
+  the cohesion-band nudge site in QING_delib_pulse (proven amount=var:X, clamped). NOTE the deliberative
+  organ is only active during a regency, so this shapes how a regency governs the banners. This is the honest
+  hook: the seed-backing site is flood-sensitive (same-tick read-back rule) and there is NO periodic backing
+  accrual to bias, so #22 rides the existing banner-decay nudge instead — no new drift, ratchet-safe.
+
+REVIEW: all idempotent on_enact; guarded reads; #15 LHS-var target-lift; #17 uses the _cmpsvalue passthrough
+(no var-on-RHS); #22 proven bias-A. 00_event_values.txt brace count 576/575 = the PRE-EXISTING single `{`
+in a comment (HEAD was 575/574); my passthrough line is balanced +1/+1. Braces: DECLINE 1239/1239,
+SOUTHERNSTUDY 124/124, DELIB 146/146, statutes 513/513, gov_view 2033/2033.
+
+*** ENTIRE LAW CATALOGUE COMPLETE: 22 net-new/re-based Qing law groups built across Batches 1-4 + the
+upstream stub fills. Court Intrigue (Batches 6+7) complete. Task #33 (Decisions analysis) done. ***
