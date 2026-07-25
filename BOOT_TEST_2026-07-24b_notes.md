@@ -117,3 +117,16 @@ PENDING UPSTREAM: U4 currency flood — port the upstream_bugs fix to merge-over
   unset (23k errors) and fell through to else->LOG_fail->debug_log_scopes ("has no localization" in the Defend
   tooltip). Guarded all reads on has_variable + guarded the else's LOG_fail on has_variable → preview
   short-circuits cleanly; runtime behaviour unchanged. se_QING_VASSAL.txt.
+
+- **BT-D (new laws all in right column) — FIXED.** The 7 Qing laws_widget_area blocks were all in the RIGHT
+  flowcontainer (government_view.gui:2149). Moved the first 4 (governance/fiscal/military/frontier) into the
+  LEFT flowcontainer (after upper_house_laws, before constitutional_laws); court/culture/foreign stay right.
+  Now both columns populate. Braces 2025/2025; all 7 areas present.
+- **BT-C (Faith & Sedition squashed + blank top) — FIXED.** Root cause: as the lone visible child of the
+  expanding top-level body-vbox, the F&S body-vbox (whose expanding was dropped by the earlier BT#3 fix)
+  got vertically distributed. Fix (omens/sites sibling idiom): RESTORE vertical-expanding on the F&S body
+  vbox + DROP the contradictory fixed-170+expanding on the inner scrollarea (now clean fixed 170) + ADD a
+  trailing expanding-filler widget so content TOP-PACKS under the tab row and slack goes to the BOTTOM.
+- **BT-B (religion bottom margin) — deferred to next-boot visual check.** With the F&S filler now absorbing
+  that tab's slack at the bottom, the F&S tab's margin is handled. The omens-tab @window_height (852) is a
+  known chase; NOT blind-tweaking it — re-verify visually next boot and trim only if it still spills.
