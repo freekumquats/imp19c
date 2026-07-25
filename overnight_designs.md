@@ -2834,3 +2834,34 @@ the personnel/harem/censorate panel insurance. Braces: HOUSEHOLD 216/216, script
 DEFERRED (Batch 6 follow-up): B3 chief-eunuch seat (qing_seat_chief_eunuch, non-appointable, display-only —
 must NOT set qing_office_held per the 1:1 validator) + B4 events (household.8 閹黨 / .9 retrenchment / the .7
 slot now used by the trampoline so renumber). NEXT: Batch 7 (harem intrigue A1-A6).
+
+---
+## PART IX — Batch 7 (Harem Intrigue 后妃) IMPLEMENTED (2026-07-25): A1-A6
+
+**STATUS: BUILT + reviewed (3 findings fixed) + committed.**
+
+- **A1 favour meter** (qing_consort_favour 0..100): seeded 30 on mint/take, rank×15 on historical enroll;
+  a PURE ACCUMULATOR (decays toward 0 each pulse, NOT toward rank — favour+rank diverge). +12 favour lever,
+  +15 promote. Roster read-out (寵 N). QING_harem_favour_nudge clamp helper.
+- **A2 demote + disgrace**: QING_harem_demote_consort_target (rank-1, floored at 1, -favour/-pop/-harmony,
+  demote picker window + qing_harem.8/.13 trampolines + button); QING_harem_disgrace_consort (冷宮 — strips
+  the marker, drops from roster, big hit) reached from the scandal events.
+- **A3 passive churn** (QING_harem_resolve_standings): favoured consorts may rise, neglected slip, each
+  quarter — cap-guarded + SKIPS player-acted consorts (qing_consort_recently_acted, days=730) so it never
+  undoes a paid choice.
+- **A4 factions** (QING_harem_assign_factions): highest-favour non-empress leads a rival bloc; a strong
+  bloc drains harmony.
+- **A5 events**: qing_harem.9 有喜 / .10 小產 / .11 太后懿旨 (advisory) / .12 穢亂宮闈, dispatched by a
+  throttled QING_harem_intrigue_roll sharing the court slot.
+- **A6 dowager**: QING_harem_install_dowager at on_ruler_change — non-appointable display-only seat
+  (qing_office_dowager_holder + qing_seat_dowager + qing_dowager_seated modifier, NOT qing_office_held).
+
+REVIEW (code-review agent): concern 1 (compile-inline) CLEAN — demote path trampolines like promote; events
+runtime-dispatch. 3 findings FIXED: (A) take_consort now seeds favour; (B) harem.10/.11 iterators guarded on
+has_variable qing_consort_faction/favour; (C) IMPORTANT — install_dowager now strips qing_is_harem_consort
+from the seated dowager + recomputes, so a former-consort dowager (Ling->Jiaqing's mother) is not re-admitted
+to her own son's harem (was double-counted + impregnable-by-son). No new create_character; favour seed in
+follow-up scope (#90). Braces: HAREM 377/377, events 182/182, panel 100/100, windows 576/576, harem.gui
+105/105, modifiers 4/4, on_action 62/62.
+
+COURT INTRIGUE (Batches 6+7) COMPLETE.

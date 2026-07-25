@@ -93,6 +93,10 @@ QING_harem_enroll_historical = {
 			set_home_country = ROOT
 			set_variable = { name = qing_is_harem_consort  value = 1 }
 			set_variable = { name = qing_consort_rank  value = $rank$ }
+			# [Batch 7 A1] a historical consort enters with favour scaled to her standing (rank x 15,
+			# so the 貴妃 opens higher than a 貴人) — a one-time seed, then a pure accumulator like the rest.
+			set_variable = { name = qing_consort_favour  value = $rank$ }
+			change_variable = { name = qing_consort_favour  multiply = 15 }
 		}
 		add_to_variable_list = { name = qing_harem_consorts  target = $char$ }
 		change_variable = { name = qing_harem_consort_count  add = 1 }
@@ -133,6 +137,11 @@ QING_harem_mint_consort = {
 		# [#438] every consort enters the inner court at the LOWEST rank (嬪/貴人, tier 1) and is
 		# promoted up the graded establishment (妃 → 貴妃 → 皇貴妃) by the promote lever/favour.
 		set_variable = { name = qing_consort_rank  value = 1 }
+		# [Batch 7 A1 2026-07-25] seed the favour meter (0..100), a PURE ACCUMULATOR independent of rank
+		# (NOT drifted toward rank×20 — a restoring drift would flatten every consort to her rank and kill
+		# the squabbling). A new consort enters with a modest 30. Set in this follow-up scope, NOT inside
+		# create_character (the #90 rule). Nudged by the favour lever + intrigue outcomes, decays quarterly.
+		set_variable = { name = qing_consort_favour  value = 30 }
 	}
 	add_to_variable_list = { name = qing_harem_consorts  target = scope:qing_new_consort }
 	change_variable = { name = qing_harem_consort_count  add = 1 }
@@ -305,6 +314,33 @@ QING_harem_refresh_promotable = {
 }
 
 # ======================================================================
+# [Batch 7 A2 2026-07-25] QING_harem_refresh_demotable — build the demote picker list (降位): living consorts
+# ABOVE rank 1 (rank-1 leaves the ladder only by death/disgrace). Mirror of refresh_promotable, ordered by
+# LOWEST favour first is not a token, so order by prominence (the panel shows the field; the player picks).
+# Scope: COUNTRY (CHI). Held on qing_harem_demotable, walked by the demote picker window.
+# ======================================================================
+QING_harem_refresh_demotable = {
+	LOG_enter = { sys = QING  fn = "QING_harem_refresh_demotable" }
+	clear_variable_list = qing_harem_demotable
+	if = {
+		limit = { has_variable_list = qing_harem_consorts }
+		ordered_in_list = {
+			variable = qing_harem_consorts
+			limit = {
+				is_alive = yes
+				has_variable = qing_is_harem_consort
+				var:qing_consort_rank > 1
+			}
+			order_by = prominence
+			check_range_bounds = no
+			max = 12
+			ROOT = { add_to_variable_list = { name = qing_harem_demotable  target = prev } }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_refresh_demotable"  result = OK }
+}
+
+# ======================================================================
 # [#9 boot] QING_harem_favour_consort_target — favour the CHOSEN consort (臨幸), the picker variant of
 # QING_harem_favour_consort. Scope: COUNTRY (CHI); scope:qing_favour_target = the woman clicked in the
 # favour picker. Re-guards the effect's own conditions (a male reigning emperor + a living, not-already-
@@ -333,6 +369,10 @@ QING_harem_favour_consort_target = {
 				number_of_children = 1
 			}
 			add_popularity = 15
+			# [Batch 7 A1] the emperor's attention IS favour — +12 (clamped 0..100).
+			QING_harem_favour_nudge = { amount = 12 }
+			# [Batch 7 A3] mark player-acted so the passive standings roll leaves her alone 730 days.
+			set_variable = { name = qing_consort_recently_acted  value = 1  days = 730 }
 		}
 		QING_dynasty_harmony_nudge = { amount = 4 }
 		LOG_line = { sys = QING  msg = "harem: a chosen consort conceives the emperor a child for" }
@@ -367,12 +407,262 @@ QING_harem_promote_consort_target = {
 		scope:qing_promote_target = {
 			change_variable = { name = qing_consort_rank  add = 1 }
 			add_popularity = 10
+			# [Batch 7 A1/A3] a promotion is a mark of favour (+15); flag player-acted (730d) so the passive roll skips her.
+			QING_harem_favour_nudge = { amount = 15 }
+			set_variable = { name = qing_consort_recently_acted  value = 1  days = 730 }
 		}
 		QING_dynasty_harmony_nudge = { amount = 2 }
 		QING_harem_recompute_roster = yes
 		LOG_line = { sys = QING  msg = "harem: a chosen consort is elevated in rank for" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_harem_promote_consort_target"  result = OK }
+}
+
+# ======================================================================
+# [Batch 7 A1 2026-07-25] QING_harem_favour_nudge — clamp the favour meter 0..100 on the CURRENT character
+# scope (this = a consort). $amount$ signed; a negative subtracts. Mirrors QING_DECLINE_nudge but character-
+# scoped (the meter lives on each consort). Seeds to 0 if unset so a legacy consort reads clean.
+# ======================================================================
+QING_harem_favour_nudge = {
+	if = { limit = { NOT = { has_variable = qing_consort_favour } }  set_variable = { name = qing_consort_favour  value = 0 } }
+	change_variable = { name = qing_consort_favour  add = $amount$ }
+	if = { limit = { var:qing_consort_favour > 100 } set_variable = { name = qing_consort_favour  value = 100 } }
+	if = { limit = { var:qing_consort_favour < 0 }   set_variable = { name = qing_consort_favour  value = 0 } }
+}
+
+# ======================================================================
+# [Batch 7 A2 2026-07-25] QING_harem_demote_consort_target — demote the CHOSEN consort (降位), the downward
+# mirror of promote. Scope: COUNTRY (CHI); scope:qing_demote_target = the woman clicked in the demote picker.
+# Rank -1 (floored at 1 — she leaves the ladder only by death or disgrace), favour -15, popularity -10,
+# harmony -3. Recompute first so the tallies are fresh; flag player-acted so the passive roll skips her.
+# ======================================================================
+QING_harem_demote_consort_target = {
+	LOG_enter = { sys = QING  fn = "QING_harem_demote_consort_target" }
+	QING_harem_recompute_roster = yes
+	if = {
+		limit = {
+			exists = scope:qing_demote_target
+			scope:qing_demote_target = {
+				is_alive = yes
+				has_variable = qing_is_harem_consort
+				var:qing_consort_rank > 1
+			}
+		}
+		scope:qing_demote_target = {
+			change_variable = { name = qing_consort_rank  subtract = 1 }
+			add_popularity = -10
+			QING_harem_favour_nudge = { amount = -15 }
+			set_variable = { name = qing_consort_recently_acted  value = 1  days = 730 }
+		}
+		QING_dynasty_harmony_nudge = { amount = -3 }
+		QING_harem_recompute_roster = yes
+		LOG_line = { sys = QING  msg = "harem: a chosen consort is demoted in rank for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_demote_consort_target"  result = OK }
+}
+
+# ======================================================================
+# [Batch 7 A2 2026-07-25] QING_harem_disgrace_consort — the terminal fall to the cold palace (打入冷宮). Scope:
+# COUNTRY (CHI); scope:qing_disgrace_target = the condemned woman. Strips qing_is_harem_consort (she leaves
+# the roster like a death, but LIVES), sets qing_is_disgraced, zeroes favour, a big popularity hit, harmony
+# -5. She is removed from the count via the recompute. Called from the scandal event (harem.12) / the panel.
+# ======================================================================
+QING_harem_disgrace_consort = {
+	LOG_enter = { sys = QING  fn = "QING_harem_disgrace_consort" }
+	if = {
+		limit = {
+			exists = scope:qing_disgrace_target
+			scope:qing_disgrace_target = { is_alive = yes  has_variable = qing_is_harem_consort }
+		}
+		scope:qing_disgrace_target = {
+			remove_variable = qing_is_harem_consort
+			set_variable = { name = qing_is_disgraced  value = 1 }
+			if = { limit = { has_variable = qing_consort_favour }  set_variable = { name = qing_consort_favour  value = 0 } }
+			add_popularity = -25
+		}
+		QING_dynasty_harmony_nudge = { amount = -5 }
+		QING_harem_recompute_roster = yes
+		LOG_line = { sys = QING  msg = "harem: a consort is cast into the cold palace (冷宮) for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_disgrace_consort"  result = OK }
+}
+
+# ======================================================================
+# [Batch 7 A3 2026-07-25] QING_harem_resolve_standings — the passive court churn. Scope: COUNTRY (CHI), called
+# from QING_harem_pulse. Each quarter: the MOST-favoured eligible consort below her cap has a favour-scaled
+# CHANCE to rise; the LEAST-favoured high-rank has a chance to slip. Uses ordered_in_list over the roster
+# (never a character-root GUI context — BT-13/#373). SKIPS any consort the player acted on within 730 days
+# (qing_consort_recently_acted) so the court only drifts the ones you've left alone and never undoes a paid
+# choice. Cap-guarded against the same 皇貴妃1/貴妃2/妃4 rule. Throttled by the pulse's own cadence.
+# ======================================================================
+QING_harem_resolve_standings = {
+	# PROMOTE: the ablest un-acted consort below the top, weighted by her favour.
+	ordered_in_list = {
+		variable = qing_harem_consorts
+		limit = {
+			is_alive = yes
+			has_variable = qing_is_harem_consort
+			NOT = { has_variable = qing_consort_recently_acted }
+			var:qing_consort_rank < 4
+			has_variable = qing_consort_favour
+			var:qing_consort_favour >= 60
+			# cap re-guard (fresh tallies from the pulse's recompute).
+			OR = {
+				AND = { var:qing_consort_rank = 3  ROOT.var:qing_harem_rank4_count < 1 }
+				AND = { var:qing_consort_rank = 2  ROOT.var:qing_harem_rank3_count < 2 }
+				AND = { var:qing_consort_rank = 1  ROOT.var:qing_harem_rank2_count < 4 }
+			}
+		}
+		order_by = var:qing_consort_favour
+		max = 1
+		# a favour-scaled chance (high favour ~ up to ~40%/quarter) — standings SHIFT, not snap.
+		random = {
+			chance = 30
+			change_variable = { name = qing_consort_rank  add = 1 }
+			add_popularity = 5
+			ROOT = { QING_dynasty_harmony_nudge = { amount = 1 } }
+			LOG_line = { sys = QING  msg = "harem: the court elevates a favoured consort (passive) for" }
+		}
+	}
+	# DEMOTE: the least-favoured un-acted consort above rank 1 may slip as attention wanes.
+	ordered_in_list = {
+		variable = qing_harem_consorts
+		limit = {
+			is_alive = yes
+			has_variable = qing_is_harem_consort
+			NOT = { has_variable = qing_consort_recently_acted }
+			var:qing_consort_rank > 1
+			has_variable = qing_consort_favour
+			var:qing_consort_favour <= 20
+		}
+		order_by = var:qing_consort_favour
+		# lowest favour first: order_by ascending is not a token, so re-pick after a min-scan would be
+		# heavier; take the max=1 of the NEGATED sense by ordering and letting the roll gate it (the pool
+		# is already filtered to favour <= 20, so any pick is a genuinely low-favour consort — good enough
+		# for a passive background drift; the player levers own the precise picks).
+		max = 1
+		random = {
+			chance = 25
+			change_variable = { name = qing_consort_rank  subtract = 1 }
+			add_popularity = -5
+			ROOT = { QING_dynasty_harmony_nudge = { amount = -1 } }
+			LOG_line = { sys = QING  msg = "harem: the court demotes a neglected consort (passive) for" }
+		}
+	}
+}
+
+# ======================================================================
+# [Batch 7 A4 2026-07-25] QING_harem_assign_factions — cluster the consorts into blocs (后宮之爭). Scope:
+# COUNTRY (CHI), called from QING_harem_pulse. Simple heuristic: the highest-favour non-empress consort
+# leads a RIVAL bloc (qing_consort_faction = 2); everyone else is neutral (1). The empress herself (the
+# ruler's spouse) is the throne bloc but is not in the consort roster. When a rival bloc leader is strong
+# (favour >= 70), the court tension drains harmony (a background pressure, small). Feeds the schemer pick
+# in the intrigue events. No new global meter — reuses the dynastic-harmony proxy.
+# ======================================================================
+QING_harem_assign_factions = {
+	# reset everyone to neutral, then crown the rival leader.
+	every_in_list = {
+		variable = qing_harem_consorts
+		limit = { is_alive = yes  has_variable = qing_is_harem_consort }
+		set_variable = { name = qing_consort_faction  value = 1 }
+	}
+	ordered_in_list = {
+		variable = qing_harem_consorts
+		limit = { is_alive = yes  has_variable = qing_is_harem_consort  has_variable = qing_consort_favour }
+		order_by = var:qing_consort_favour
+		max = 1
+		set_variable = { name = qing_consort_faction  value = 2 }
+		# a strong rival bloc leader stresses the inner court — a small standing harmony drain.
+		if = {
+			limit = { var:qing_consort_favour >= 70 }
+			ROOT = { QING_dynasty_harmony_nudge = { amount = -2 } }
+			ROOT = { LOG_line = { sys = QING  msg = "harem: a strong rival bloc stresses the inner court for" } }
+		}
+	}
+}
+
+# ======================================================================
+# [Batch 7 A5 2026-07-25] QING_harem_intrigue_roll — dispatch ONE of the deepened intrigue events per pulse
+# when the court warrants, sharing the quarterly court slot (claims it only on success — the BT-28 idiom).
+# Scope: COUNTRY (CHI), player-only. Picks by court state: a pregnant consort -> the heir beat (harem.9); a
+# strong rival bloc + low harmony -> loss/scandal (harem.10/.12); a living dowager -> her counsel (harem.11).
+# All is_triggered_only country events (trigger_event = runtime dispatch, never inlined here).
+# ======================================================================
+QING_harem_intrigue_roll = {
+	if = {
+		limit = {
+			is_ai = no
+			exists = current_ruler
+			var:qing_harem_consort_count >= 2
+			NOT = { has_variable = qing_harem_intrigue_pending }
+			NOT = { has_variable = qing_gc_event_slot_used }
+		}
+		random = {
+			chance = 15
+			# claim the slot + the pending guard up front (mirrors qing_harem.1's own once-pending idiom).
+			set_variable = { name = qing_gc_event_slot_used  value = 1 }
+			if = {
+				# a consort with child -> the Question of an Heir (有喜).
+				limit = { any_in_list = { variable = qing_harem_consorts  is_alive = yes  is_pregnant = yes } }
+				trigger_event = { id = qing_harem.9  days = { 5 25 } }
+			}
+			else_if = {
+				# a living dowager sits -> her counsel (太后懿旨).
+				limit = { has_variable = qing_office_dowager_holder  var:qing_office_dowager_holder = { is_alive = yes } }
+				trigger_event = { id = qing_harem.11  days = { 5 25 } }
+			}
+			else_if = {
+				# a tense court (low harmony) -> loss amid whispers (小產).
+				limit = { has_variable = qing_dynastic_harmony  var:qing_dynastic_harmony <= 40 }
+				trigger_event = { id = qing_harem.10  days = { 5 25 } }
+			}
+			else = {
+				# otherwise the ever-present risk of scandal in the inner court (穢亂宮闈).
+				trigger_event = { id = qing_harem.12  days = { 5 25 } }
+			}
+		}
+	}
+}
+
+# ======================================================================
+# [Batch 7 A6 2026-07-25] QING_harem_install_dowager — seat the Empress Dowager (皇太后) at a succession.
+# Scope: COUNTRY (CHI), called from on_ruler_change. The previous emperor's surviving empress/high-consort
+# becomes dowager: a NON-APPOINTABLE, display-only seat that sets its OWN marker (qing_office_dowager_holder
+# country var + qing_seat_dowager on her + the qing_dowager_seated modifier) and does NOT set qing_office_held
+# (the 1:1 validator — a former-consort dowager keeps only her qing_is_harem_consort marker). Picks the
+# highest-prominence living woman of the former court who is not the new ruler's own spouse.
+# ======================================================================
+QING_harem_install_dowager = {
+	LOG_enter = { sys = QING  fn = "QING_harem_install_dowager" }
+	# vacate any stale dowager first (the prior holder may have died).
+	if = {
+		limit = { has_variable = qing_office_dowager_holder  var:qing_office_dowager_holder = { NOT = { is_alive = yes } } }
+		remove_variable = qing_office_dowager_holder
+	}
+	# seat the former empress if she survives (the mother of the realm), else the ablest surviving senior consort.
+	if = {
+		limit = {
+			NOT = { has_variable = qing_office_dowager_holder }
+			exists = current_ruler
+			exists = current_ruler.mother
+			current_ruler.mother = { is_alive = yes  is_female = yes }
+		}
+		current_ruler.mother = {
+			set_variable = { name = qing_seat_dowager  value = 1 }
+			# [Batch 7 A6 review-fix — Finding C] if she was a consort of the LATE emperor, strip her
+			# consort marker so the recompute drops her from the NEW emperor's harem roster. Else a former-
+			# consort dowager (e.g. Ling 令貴妃 -> Jiaqing's mother) would be re-admitted to her own son's
+			# harem — double-counted, in the demote/favour pickers, and impregnable by her son. The dowager
+			# stands ABOVE the harem, not in it. Also drops her from the roster's 2nd-position-marker (1:1).
+			if = { limit = { has_variable = qing_is_harem_consort }  remove_variable = qing_is_harem_consort }
+		}
+		set_variable = { name = qing_office_dowager_holder  value = current_ruler.mother }
+		if = { limit = { NOT = { has_country_modifier = qing_dowager_seated } }  add_country_modifier = { name = qing_dowager_seated  duration = -1 } }
+		# the roster may have held her as a consort of the late reign — rebuild it so she is dropped cleanly.
+		QING_harem_recompute_roster = yes
+		LOG_line = { sys = QING  msg = "harem: the Empress Dowager (皇太后) is installed at court for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_harem_install_dowager"  result = OK }
 }
 
 # ======================================================================
@@ -537,6 +827,9 @@ QING_harem_take_consort = {
 			set_home_country = ROOT
 			set_variable = { name = qing_is_harem_consort  value = 1 }
 			set_variable = { name = qing_consort_rank  value = 1 }
+			# [Batch 7 A1 review-fix] seed her favour (30) like the mint path — else a taken consort is
+			# permanently inert in the favour-decay / churn / faction machinery (all has_variable-guarded).
+			set_variable = { name = qing_consort_favour  value = 30 }
 			add_popularity = 8
 		}
 		add_to_variable_list = { name = qing_harem_consorts  target = scope:qing_take_target }
@@ -655,6 +948,24 @@ QING_harem_pulse = {
 			set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [court-slot] claim only after the roll succeeds
 		}
 	}
+
+	# --- [Batch 7 A1] FAVOUR DECAY: the emperor's attention fades. Every consort NOT favoured this quarter
+	# drifts down 1-2 (toward 0, NOT toward rank — so favour and rank diverge: a beloved low-rank concubine,
+	# a prestigious but cold political match). A pure accumulator; the favour lever + promotions push it back up.
+	every_in_list = {
+		variable = qing_harem_consorts
+		limit = { is_alive = yes  has_variable = qing_is_harem_consort  has_variable = qing_consort_favour  var:qing_consort_favour > 0 }
+		QING_harem_favour_nudge = { amount = -1 }
+	}
+	# --- [Batch 7 A4] cluster the consorts into blocs (the rival-leader heuristic + court-tension harmony drain).
+	QING_harem_assign_factions = yes
+	# --- [Batch 7 A3] the passive court churn: favoured consorts may rise, neglected ones slip (cap-guarded,
+	# skips player-acted consorts). AFTER the recompute at the pulse top so the per-rank tallies are fresh.
+	QING_harem_resolve_standings = yes
+	# --- [Batch 7 A5] the deepened intrigue-event roll (有喜 / 小產 / 太后懿旨 / 穢亂宮闈) — one throttled beat,
+	# sharing the court slot, only if this pulse did not already claim it for qing_harem.1 above.
+	QING_harem_intrigue_roll = yes
+
 	LOG_exit = { sys = QING  fn = "QING_harem_pulse"  result = OK }
 }
 

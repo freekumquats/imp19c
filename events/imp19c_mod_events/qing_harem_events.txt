@@ -265,3 +265,273 @@ qing_harem.7 = {
 		QING_harem_refresh_promotable = yes
 	}
 }
+
+# ======================================================================
+# [Batch 7 A2 2026-07-25] qing_harem.8 — DEMOTE-PICKER refresh trampoline (降位). Hidden; the demote
+# panel button fires this to rebuild the demotable list at runtime (never inlined off the button — the
+# #443 compile class). Mirrors the promote trampoline qing_harem.6. ROOT = CHI.
+# ======================================================================
+qing_harem.8 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_harem.8 (demote-picker refresh trampoline) for" }
+		QING_harem_recompute_roster = yes
+		QING_harem_refresh_demotable = yes
+	}
+}
+
+# ======================================================================
+# [Batch 7 A5 2026-07-25] qing_harem.9 — PREGNANCY & THE QUESTION OF AN HEIR (有喜). A consort is with
+# child by the emperor; the court weighs her standing. Elevate her (favour + a promotion path, feeding
+# qing_prince_backing via her rank) / let the empress's bloc move against her (scandal risk) / stay neutral.
+# ROOT = CHI. left = the expectant consort.
+# ======================================================================
+qing_harem.9 = {
+	type = country_event
+	title = "qing_harem.9.t"
+	desc = "qing_harem.9.desc"
+	picture = chinese_throne_room
+	left_portrait = scope:qing_harem_mother
+	is_triggered_only = yes
+
+	trigger = { tag = CHI  exists = current_ruler }
+
+	immediate = {
+		set_variable = { name = qing_harem_intrigue_pending  value = 1 }
+		QING_harem_recompute_roster = yes
+		# the expectant consort: an ablest pregnant woman of the roster.
+		if = {
+			limit = { any_in_list = { variable = qing_harem_consorts  is_alive = yes  is_pregnant = yes } }
+			ordered_in_list = {
+				variable = qing_harem_consorts
+				limit = { is_alive = yes  is_pregnant = yes }
+				order_by = prominence
+				check_range_bounds = no
+				max = 1
+				save_scope_as = qing_harem_mother
+			}
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_harem.9 (有喜 an heir in prospect) for" }
+	}
+
+	# Elevate the mother-to-be — favour + a mark toward promotion.
+	option = {
+		name = "qing_harem.9.a"
+		custom_tooltip = "qing_harem.9.a.tt"
+		if = { limit = { has_variable = qing_harem_intrigue_pending }  remove_variable = qing_harem_intrigue_pending }
+		if = {
+			limit = { exists = scope:qing_harem_mother }
+			scope:qing_harem_mother = {
+				QING_harem_favour_nudge = { amount = 15 }
+				add_popularity = 10
+				set_variable = { name = qing_consort_recently_acted  value = 1  days = 730 }
+			}
+		}
+		QING_dynasty_harmony_nudge = { amount = 2 }
+	}
+	# Let the empress's bloc test her — a scandal risk on the rising consort.
+	option = {
+		name = "qing_harem.9.b"
+		custom_tooltip = "qing_harem.9.b.tt"
+		if = { limit = { has_variable = qing_harem_intrigue_pending }  remove_variable = qing_harem_intrigue_pending }
+		if = {
+			limit = { exists = scope:qing_harem_mother }
+			scope:qing_harem_mother = { QING_harem_favour_nudge = { amount = -10 } }
+		}
+		QING_dynasty_harmony_nudge = { amount = -2 }
+	}
+}
+
+# ======================================================================
+# [Batch 7 A5 2026-07-25] qing_harem.10 — MISCARRIAGE / LOSS (小產). A pregnancy is lost amid whispers of
+# poison. Accuse a rival (target the rival-bloc leader -> disgrace chance) / mourn quietly (harmony) /
+# ignore. NO health-trait manipulation — pure favour/harmony/event state. ROOT = CHI.
+# ======================================================================
+qing_harem.10 = {
+	type = country_event
+	title = "qing_harem.10.t"
+	desc = "qing_harem.10.desc"
+	picture = chinese_throne_room
+	left_portrait = scope:qing_harem_rival
+	is_triggered_only = yes
+
+	trigger = { tag = CHI  exists = current_ruler }
+
+	immediate = {
+		set_variable = { name = qing_harem_intrigue_pending  value = 1 }
+		QING_harem_recompute_roster = yes
+		# the suspected rival: the rival-bloc leader (faction 2), else the ablest schemer by finesse.
+		if = {
+			limit = { any_in_list = { variable = qing_harem_consorts  is_alive = yes  has_variable = qing_consort_faction  var:qing_consort_faction = 2 } }
+			ordered_in_list = {
+				variable = qing_harem_consorts
+				limit = { is_alive = yes  has_variable = qing_consort_faction  var:qing_consort_faction = 2 }
+				order_by = var:qing_consort_favour
+				check_range_bounds = no
+				max = 1
+				save_scope_as = qing_harem_rival
+			}
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_harem.10 (小產 a loss amid whispers) for" }
+	}
+
+	# Accuse the rival — disgrace her to the cold palace (needs a named rival).
+	option = {
+		name = "qing_harem.10.a"
+		custom_tooltip = "qing_harem.10.a.tt"
+		trigger = { exists = scope:qing_harem_rival }
+		if = { limit = { has_variable = qing_harem_intrigue_pending }  remove_variable = qing_harem_intrigue_pending }
+		scope:qing_harem_rival = { save_scope_as = qing_disgrace_target }
+		QING_harem_disgrace_consort = yes
+	}
+	# Mourn quietly — no accusation; the house draws together in grief.
+	option = {
+		name = "qing_harem.10.b"
+		custom_tooltip = "qing_harem.10.b.tt"
+		if = { limit = { has_variable = qing_harem_intrigue_pending }  remove_variable = qing_harem_intrigue_pending }
+		QING_dynasty_harmony_nudge = { amount = 3 }
+	}
+	# Let it lie — nothing done; suspicion festers.
+	option = {
+		name = "qing_harem.10.c"
+		custom_tooltip = "qing_harem.10.c.tt"
+		if = { limit = { has_variable = qing_harem_intrigue_pending }  remove_variable = qing_harem_intrigue_pending }
+		QING_dynasty_harmony_nudge = { amount = -2 }
+	}
+}
+
+# ======================================================================
+# [Batch 7 A5 2026-07-25] qing_harem.11 — THE DOWAGER INTERVENES (太后懿旨). The Empress Dowager SUGGESTS a
+# promotion. ADVISORY, not forced: heed (do it, +harmony) / defer politely (no change) / refuse (no change,
+# harmony hit + scandal risk). Fired only when a dowager sits. ROOT = CHI. left = the dowager.
+# ======================================================================
+qing_harem.11 = {
+	type = country_event
+	title = "qing_harem.11.t"
+	desc = "qing_harem.11.desc"
+	picture = chinese_throne_room
+	left_portrait = scope:qing_harem_dowager
+	right_portrait = scope:qing_harem_favourite
+	is_triggered_only = yes
+
+	trigger = {
+		tag = CHI
+		exists = current_ruler
+		has_variable = qing_office_dowager_holder
+		var:qing_office_dowager_holder = { is_alive = yes }
+	}
+
+	immediate = {
+		set_variable = { name = qing_harem_intrigue_pending  value = 1 }
+		QING_harem_recompute_roster = yes
+		var:qing_office_dowager_holder = { save_scope_as = qing_harem_dowager }
+		# the consort the dowager favours: the highest-favour promotable woman.
+		if = {
+			limit = { any_in_list = { variable = qing_harem_consorts  is_alive = yes  var:qing_consort_rank < 4 } }
+			ordered_in_list = {
+				variable = qing_harem_consorts
+				limit = { is_alive = yes  has_variable = qing_consort_favour  var:qing_consort_rank < 4 }
+				order_by = var:qing_consort_favour
+				check_range_bounds = no
+				max = 1
+				save_scope_as = qing_harem_favourite
+			}
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_harem.11 (太后懿旨 the dowager counsels) for" }
+	}
+
+	# Heed her counsel — promote the favoured consort (via the target effect), the house united.
+	option = {
+		name = "qing_harem.11.a"
+		custom_tooltip = "qing_harem.11.a.tt"
+		if = { limit = { has_variable = qing_harem_intrigue_pending }  remove_variable = qing_harem_intrigue_pending }
+		if = {
+			limit = { exists = scope:qing_harem_favourite }
+			scope:qing_harem_favourite = { save_scope_as = qing_promote_target }
+			QING_harem_promote_consort_target = yes
+		}
+		QING_dynasty_harmony_nudge = { amount = 3 }
+	}
+	# Defer politely — no change; the dowager is unoffended but unheeded.
+	option = {
+		name = "qing_harem.11.b"
+		custom_tooltip = "qing_harem.11.b.tt"
+		if = { limit = { has_variable = qing_harem_intrigue_pending }  remove_variable = qing_harem_intrigue_pending }
+	}
+	# Refuse outright — the throne asserts itself; the dowager is affronted (harmony down).
+	option = {
+		name = "qing_harem.11.c"
+		custom_tooltip = "qing_harem.11.c.tt"
+		if = { limit = { has_variable = qing_harem_intrigue_pending }  remove_variable = qing_harem_intrigue_pending }
+		QING_dynasty_harmony_nudge = { amount = -4 }
+	}
+}
+
+# ======================================================================
+# [Batch 7 A5 2026-07-25] qing_harem.12 — SCANDAL IN THE INNER COURT (穢亂宮闈). A consort is implicated in
+# scandal. Disgrace her (冷宮) / cover it up (corruption + harmony cost). The path to the disgrace lever.
+# ROOT = CHI. left = the implicated consort.
+# ======================================================================
+qing_harem.12 = {
+	type = country_event
+	title = "qing_harem.12.t"
+	desc = "qing_harem.12.desc"
+	picture = chinese_throne_room
+	left_portrait = scope:qing_harem_accused
+	is_triggered_only = yes
+
+	trigger = { tag = CHI  exists = current_ruler  has_variable_list = qing_harem_consorts }
+
+	immediate = {
+		set_variable = { name = qing_harem_intrigue_pending  value = 1 }
+		QING_harem_recompute_roster = yes
+		# the implicated consort: the lowest-favour living woman (the one whispers cling to).
+		if = {
+			limit = { any_in_list = { variable = qing_harem_consorts  is_alive = yes } }
+			ordered_in_list = {
+				variable = qing_harem_consorts
+				limit = { is_alive = yes }
+				order_by = prominence
+				check_range_bounds = no
+				max = 1
+				save_scope_as = qing_harem_accused
+			}
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_harem.12 (穢亂宮闈 scandal in the inner court) for" }
+	}
+
+	# Disgrace her — the cold palace (冷宮).
+	option = {
+		name = "qing_harem.12.a"
+		custom_tooltip = "qing_harem.12.a.tt"
+		trigger = { exists = scope:qing_harem_accused }
+		if = { limit = { has_variable = qing_harem_intrigue_pending }  remove_variable = qing_harem_intrigue_pending }
+		scope:qing_harem_accused = { save_scope_as = qing_disgrace_target }
+		QING_harem_disgrace_consort = yes
+	}
+	# Cover it up — the scandal buried, at a cost to the court's integrity (corruption) and its peace.
+	option = {
+		name = "qing_harem.12.b"
+		custom_tooltip = "qing_harem.12.b.tt"
+		if = { limit = { has_variable = qing_harem_intrigue_pending }  remove_variable = qing_harem_intrigue_pending }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 3 }
+		QING_dynasty_harmony_nudge = { amount = -2 }
+	}
+}
+
+# ======================================================================
+# [Batch 7 A2 2026-07-25] qing_harem.13 — DEMOTE-SELECTED trampoline (降位). Hidden; the demote picker row
+# fires this (re-rooted to CHI reading scope:qing_demote_target) so the demote effect + refresh run at
+# runtime. Mirrors qing_harem.7 (promote-selected). ROOT = CHI.
+# ======================================================================
+qing_harem.13 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		QING_harem_demote_consort_target = yes
+		QING_harem_refresh_demotable = yes
+	}
+}
