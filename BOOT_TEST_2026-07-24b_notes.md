@@ -102,8 +102,11 @@ FIXED (all committed + pushed): BT-A (vassal era-gate + encroacher/debug flood, 
   top-align, 257769541), BT-D (laws two-column balance, 257769541), BT-E (Central Secretariat), BT-F
   (Qianlong wife / Ula Nara, 85ac72dde), BT-G (harem portrait 46x68), BT-H (historical 1763 harem,
   85ac72dde), BT-I (debug_log_scopes stray, 184301bdb), U4 currency flood (96bbea5cc).
-STILL OPEN: BT-B ONLY — religion window bottom margin. DEFERRED (visual-only @window_height chase; do NOT
-  blind-tweak — re-verify against a rendered screenshot next boot, trim only if it still spills).
+FIXED: BT-B — religion window was TOO SHORT (not too tall). Screenshot 224140 (Pantheon tab) showed the
+  deity list clipped mid-card + ~120px dead screen BELOW the window. GREW @window_height 852 -> 950 and the
+  omens scrollarea 500 -> 598 in lockstep so the extra height reveals the clipped card. F&S/Holy-Sites tabs
+  use expanding+trailing-filler so they adapt (larger bottom margin, content stays top-packed). ALL boot-test
+  bugs now fixed.
 
 ## FIXES APPLIED (2026-07-24, post-analysis)
 - **U4 currency flood — FIXED** (cherry-pick 2a395702b → merge-overnight commit 96bbea5cc). CURRENCY_svalues.txt
