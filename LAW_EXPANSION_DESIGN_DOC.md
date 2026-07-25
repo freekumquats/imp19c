@@ -1,5 +1,46 @@
 # Law Expansion — Full Design (all remaining law groups)
 
+> ## ⇩ CANONICAL CURRENT STATE (2026-07-24, after 2 review rounds) — READ THIS FIRST ⇩
+> The sections below this block are the HISTORICAL review layers (kept for rationale). Where they disagree,
+> **this block + the MASTER EFFECTS TABLE at the end are canonical.**
+>
+> **BUILD-BREAKERS to honor in code (Task #32 + Batch 4):**
+> 1. **P7 era-guard.** The shipped `qing_military_upkeep_law` bias is read INSIDE the `qing_high_qing_era`
+>    guard (`se_QING_DECLINE.txt:893-921`) → dead 1763–1772. FIX: hoist ONLY the law-bias read outside the
+>    guard (not the base rot), so policy tilts even a golden-age army without starting decay early.
+> 2. **Caravan income decoupling.** Do NOT swap the `qing_caravan_prosperity` recompute directly. Add a NEW
+>    `qing_caravan_yield_base` scratch (mirror Canton `qing_canton_yield_tmp`) = sum of the 6 real goods
+>    (livestock, textile_fibres, temperate_fruit, vegetables, tea, tobacco — ALL 6 aggregates VERIFIED to
+>    exist) `/ 16` (NOT /8 — 6 goods incl. 78-province livestock ≫ Canton's 3; keep caravan a fiscal drain),
+>    then the income formula multiplies THAT by rate. Prosperity may stay a secondary grip multiplier.
+> 3. **#30 tariff multiply site:** AFTER the `/8` (line ~98, beside the port/Hoppo multipliers), NOT before —
+>    else the rate is 8× too strong. Guarded `has_variable` default = byte-identical.
+>
+> **HOOK STATUS (verified against code):**
+> - #42 National Integration → `qing_civic_law_bias` added at `se_QING_DECLINE.txt:857` (target-lift, ratchet-
+>   safe). Inert until first settlement arc (~5-10yr) — acceptable. `qing_national_awakening` is a MODIFIER.
+> - #27 upstream-trade → pure modifier-swap; VERIFY at build that CHI uses vanilla trade routes at 1763, else
+>   merge with #30.
+> - #44 modernization → modifier-swap (discipline/morale/research confirmed); unit-unlock-from-law is UNPROVEN
+>   → build modifier-only unless an oracle (TI/Invictus) shows a law unlocking a unit.
+> - #15/#17/#18/#33 → ALL net-new-lite (new bias/target var + a read added at the site), NOT free re-bases —
+>   USER-APPROVED to build as such in Batch 4. #15 needs its OWN drill vars (NOT P7's `_upkeep_bias` — collision)
+>   + the era-guard fix. #33 "amban coverage" == the NET-NEW #43 Amban Establishment (the doc conflated #33
+>   Foreign-Office with #43); #33-as-Zongli is post-1861 → keep only the #43 amban form at 1763.
+>
+> **GUI (Batch 1 first task):** "7 domain headers" = 7 `laws_widget_area` blocks distributed across 2-3
+> VERTICAL flowcontainers (vanilla pattern), NOT 7 side-by-side columns (won't fit 970px). SAFE re-file
+> sequence: (1) build the new areas with the 13 shipped laws re-filed into their domain homes, (2) boot-verify
+> all 13 render, (3) DELETE the old single Qing area, (4) add the new laws. An explicit OLD→NEW map for the 13
+> is a Batch-1 deliverable.
+>
+> **CANON RECONCILIATION:** the MASTER EFFECTS TABLE (end of doc) is authoritative for the current law set.
+> The per-law §B sections for #15 (still says BIAS-A on qing_modernarmy_share) and #18 (still says
+> gp_alignment) describe ABANDONED pre-rebase versions — OBSOLETE, see the re-base + this block. #27 is
+> net-new-lite (upstream trade), NOT the BIAS-B/Maritime-Customs version. #37/#38 (harem/eunuch) are BUILT in
+> Batches 6/7 (court subsystems), NOT deferred and NOT standalone laws.
+
+
 > ## ADVERSARIAL REVIEW PASS (2026-07-24) — applied fixes
 > Four adversarial reviewers (classification / boot-crash / GUI-loc-modkeys / gameplay-balance) audited this
 > doc against live code. **Classification core verified CORRECT** (every backing-var class, line citation,
