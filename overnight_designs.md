@@ -2805,3 +2805,32 @@ NOT law-bias — deferred to their own build): #22 Deliberative (needs a new per
 ratchet-safe band gate), #15 Drill Posture (needs own drill vars + recruitment gate), #17 Southern Study
 (needs a brand-new recruitment pulse). These fold into future subsystem batches, per the "build the mechanic
 in the same batch as the law" rule.
+
+---
+## PART VIII — Batch 6 (Eunuch subsystem) CORE IMPLEMENTED (2026-07-25): B1/B2/B5 + purge
+
+**STATUS: core BUILT + reviewed (concern-7 fix applied) + committed.** B3 seat + B4 events deferred to a
+follow-up.
+
+- **B1 — qing_eunuch_power (0..100)**: QING_household_compute_eunuch_power gives the previously-DEAD
+  qing_eunuch_count a consumer. Formula (guarded branches, no boolean-in-arithmetic): count x 8; +30 faction
+  leader; +10 corruption>=50; -15 strong chamberlain (charisma>=8); B5 policy ceiling (restrict caps 40);
+  clamp 0..100. Recomputed fresh each pulse (cannot ratchet). Surfaced as a household-panel read-out.
+- **B2 — consume**: QING_household_eunuch_consume. MID band (>=50): corruption creep (gated <70, doom-loop
+  cap) + secretariat backlog (票擬). VERY-HIGH (>=80): reform-balance -2 (raw change_variable + -100 clamp,
+  signed meter — NOT the DECLINE_nudge macro). Restrict policy HALVES corruption/backlog output.
+- **Purge lever** (counterplay): QING_household_eunuch_purge — strong chamberlain, 1825-day cooldown
+  (re-guarded inside the effect), -30 power + clears faction leader + backlog relief, at stability/legit cost.
+  Panel button + scripted_gui (qing_household_purge_eunuchs).
+- **B5 — qing_eunuch_policy_law** (restrict/standard/empowered), court domain, read by B1/B2. Registered + loc.
+
+REVIEW (code-review agent): concerns 1-6, 8 CLEAN (guarded reads, idempotent on_enact, literal-RHS, signed-
+meter raw clamp, doom-loop gate present, cooldown re-guarded, floors at 0). CONCERN 7 (the one finding): the
+purge button called the iterator-reaching effect INLINE (compile-recursion class). FIXED: added hidden
+trampoline qing_household.7 (is_triggered_only) — the button now fires it, iterators run at runtime, matching
+the personnel/harem/censorate panel insurance. Braces: HOUSEHOLD 216/216, scripted_gui 91/91, household.gui
+156/156, events 100/100, statutes 471/471, gov_view 2027/2027.
+
+DEFERRED (Batch 6 follow-up): B3 chief-eunuch seat (qing_seat_chief_eunuch, non-appointable, display-only —
+must NOT set qing_office_held per the 1:1 validator) + B4 events (household.8 閹黨 / .9 retrenchment / the .7
+slot now used by the trampoline so renumber). NEXT: Batch 7 (harem intrigue A1-A6).

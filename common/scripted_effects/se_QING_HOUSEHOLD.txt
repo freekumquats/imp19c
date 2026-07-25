@@ -129,6 +129,135 @@ QING_household_recompute_eunuchs = {
 }
 
 # ======================================================================
+# [Batch 6 B1 2026-07-25] QING_household_compute_eunuch_power — give the dead qing_eunuch_count a CONSUMER:
+# a single 0..100 signal the influence web reads. Scope: COUNTRY (CHI). Called each pulse AFTER the roster
+# recompute (so the count is fresh). Formula (design B1, no boolean-in-arithmetic — each term a guarded
+# branch): base = count x 8; +30 if a faction leader is entrenched; +10 if corruption >= 50 (a venal court
+# lets them run); -15 if the chamberlain is a strong man (charisma >= 8 checks them). The B5 policy law caps
+# the ceiling (restrict lowers it, empowered raises it). Clamp 0..100.
+# ======================================================================
+QING_household_compute_eunuch_power = {
+	set_variable = { name = qing_eunuch_power  value = var:qing_eunuch_count }
+	change_variable = { name = qing_eunuch_power  multiply = 8 }
+	# an entrenched faction leader is the difference between a corps and a cabal.
+	if = {
+		limit = { any_character = { employer = ROOT  has_variable = qing_eunuch_faction_leader  is_alive = yes } }
+		change_variable = { name = qing_eunuch_power  add = 30 }
+	}
+	# a venal court (high corruption) lets the eunuchs run.
+	if = {
+		limit = { has_variable = qing_corruption_level  var:qing_corruption_level >= 50 }
+		change_variable = { name = qing_eunuch_power  add = 10 }
+	}
+	# a strong chamberlain (內務府大臣) checks the directorate.
+	if = {
+		limit = {
+			has_variable = qing_office_chamberlain_holder
+			var:qing_office_chamberlain_holder = { is_alive = yes  employer = ROOT  charisma >= 8 }
+		}
+		change_variable = { name = qing_eunuch_power  subtract = 15 }
+	}
+	# [B5] policy ceiling: restrict (裁抑) caps the corps low; empowered (寵信) lets it climb higher.
+	if = {
+		limit = { has_variable = qing_eunuch_policy  var:qing_eunuch_policy = 0 }
+		if = { limit = { var:qing_eunuch_power > 40 }  set_variable = { name = qing_eunuch_power  value = 40 } }
+	}
+	else_if = {
+		limit = { has_variable = qing_eunuch_policy  var:qing_eunuch_policy = 2 }
+		# empowered: no extra cap below the 0..100 ceiling — the directorate may run to the crisis band.
+	}
+	# clamp 0..100 (standard band).
+	if = { limit = { var:qing_eunuch_power < 0 }   set_variable = { name = qing_eunuch_power  value = 0 } }
+	if = { limit = { var:qing_eunuch_power > 100 } set_variable = { name = qing_eunuch_power  value = 100 } }
+}
+
+# ======================================================================
+# [Batch 6 B2 2026-07-25] QING_household_eunuch_consume — the eunuch establishment exerts its influence on
+# the court each quarter, gated on qing_eunuch_power bands. Scope: COUNTRY (CHI). All small, all at the
+# existing nudge sites (the P7 bias discipline). REVIEW-FIX doom-loop guards baked in: corruption nudge is
+# gated < 70 (can't spiral past the crisis band); reform-balance hit fires ONLY at the very-high band (>= 80),
+# not a third simultaneous penalty at every level; the restrict policy HALVES the corruption/backlog output.
+# ======================================================================
+QING_household_eunuch_consume = {
+	if = { limit = { NOT = { has_variable = qing_eunuch_power } }  set_variable = { name = qing_eunuch_power  value = 0 } }
+	# MID band (>= 50): the directorate skims — graft rises, memorials slow.
+	if = {
+		limit = { var:qing_eunuch_power >= 50 }
+		# corruption creep, capped below the crisis band so eunuch graft can't spiral it out.
+		if = {
+			limit = { has_variable = qing_corruption_level  var:qing_corruption_level < 70 }
+			QING_household_eunuch_corruption_nudge = yes
+		}
+		# 票擬 backlog — the 敬事房 intercepts/slows the palace paperwork.
+		if = { limit = { has_variable = qing_secretariat_backlog }  QING_household_eunuch_backlog_nudge = yes }
+	}
+	# VERY-HIGH band (>= 80): 太監專權 — the eunuchs are a reactionary bloc tilting the whole reform balance.
+	if = {
+		limit = { var:qing_eunuch_power >= 80  has_variable = qing_reform_faction_balance }
+		# raw change_variable with the +-100 clamp (NOT the DECLINE_nudge macro — this meter is signed).
+		change_variable = { name = qing_reform_faction_balance  subtract = 2 }
+		if = { limit = { var:qing_reform_faction_balance < -100 } set_variable = { name = qing_reform_faction_balance  value = -100 } }
+		LOG_line = { sys = QING  msg = "household: 太監專權 — the eunuch bloc drags the reform balance down for" }
+	}
+}
+
+# eunuch corruption creep — halved under the restrict policy. QING_DECLINE_nudge clamps 0..100.
+QING_household_eunuch_corruption_nudge = {
+	if = {
+		limit = { has_variable = qing_eunuch_policy  var:qing_eunuch_policy = 0 }
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 1 }   # restrict: half output (rounds to +1)
+	}
+	else = {
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 2 }
+	}
+}
+
+# eunuch memorial-interception backlog — halved under the restrict policy. Raw change_variable (backlog is
+# a simple accumulator with its own relief elsewhere); mirrors the +6 fresh-rescript nudge, scaled small.
+QING_household_eunuch_backlog_nudge = {
+	if = {
+		limit = { has_variable = qing_eunuch_policy  var:qing_eunuch_policy = 0 }
+		change_variable = { name = qing_secretariat_backlog  add = 1 }   # restrict: half output
+	}
+	else = {
+		change_variable = { name = qing_secretariat_backlog  add = 2 }
+	}
+}
+
+# ======================================================================
+# [Batch 6 B2 counterplay 2026-07-25] QING_household_eunuch_purge — the PLAYER lever (from the household
+# panel): a strong chamberlain purges the directorate (裁抑內宦). Costs stability + a legitimacy dip (a
+# palace purge is disruptive), knocks eunuch power down hard (-30 via a floor), clears the faction-leader
+# flag, and relieves the backlog. Cooldown-gated (1825 days) so it is a deliberate act, not a spammable tap.
+# Scope: COUNTRY (CHI). Its is_valid (needs a capable chamberlain + off cooldown) lives in the scripted_gui.
+# ======================================================================
+QING_household_eunuch_purge = {
+	LOG_enter = { sys = QING  fn = "QING_household_eunuch_purge" }
+	if = {
+		limit = { NOT = { has_variable = qing_eunuch_purge_cd } }
+		set_variable = { name = qing_eunuch_purge_cd  value = 1  days = 1825 }
+		# clear the cabal's leader if one sits.
+		every_character = {
+			limit = { employer = ROOT  has_variable = qing_eunuch_faction_leader }
+			remove_variable = qing_eunuch_faction_leader
+		}
+		# knock the power down hard (recomputed next pulse, but drop it now for immediate feedback).
+		QING_household_compute_eunuch_power = yes
+		if = { limit = { has_variable = qing_eunuch_power  var:qing_eunuch_power > 30 }  change_variable = { name = qing_eunuch_power  subtract = 30 } }
+		if = { limit = { has_variable = qing_eunuch_power  var:qing_eunuch_power < 0 }   set_variable = { name = qing_eunuch_power  value = 0 } }
+		# the purge relieves the intercepted memorials.
+		if = { limit = { has_variable = qing_secretariat_backlog  var:qing_secretariat_backlog >= 5 }  change_variable = { name = qing_secretariat_backlog  subtract = 5 } }
+		add_stability = -2
+		add_legitimacy = -3
+		LOG_line = { sys = QING  msg = "household: 裁抑內宦 — the chamberlain purges the eunuch directorate for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_household_eunuch_purge"  reason = "purge on cooldown" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_household_eunuch_purge"  result = OK }
+}
+
+# ======================================================================
 # [#424] QING_household_carryover_purse — the 內帑 is an institution of the throne: on a
 # change of sovereign it passes to the successor, not into the void with the dead emperor's
 # personal wealth. Called from on_ruler_change (scope:former_ruler is set there). Reads the
@@ -163,6 +292,9 @@ QING_household_pulse = {
 	QING_household_init = yes
 	# [boot #12] refresh the palace-eunuch roster (prunes the dead/departed, keeps the count honest).
 	QING_household_recompute_eunuchs = yes
+	# [Batch 6 B1/B2 2026-07-25] compute the eunuch power signal + let it consume into the court.
+	QING_household_compute_eunuch_power = yes
+	QING_household_eunuch_consume = yes
 
 	# --- PRIVY PURSE DRIFT: capable loyal high-charisma Grand Secretary fills it
 	# (+2/quarter), vacant or venal office drains it (-3/quarter).
