@@ -2760,3 +2760,24 @@ statutes 429/429, POPULATION 100/100, gov_view 2021/2021.
 Batch-4 progress: 4a(#44/#27/#45) 4b(#34) 4c(#18) 4d(#43) 4e(#39) 4f(#40) = 9 laws built. Task #32 (P7
 dead-law fix + caravan real-goods rework) DONE. Remaining Batch-4: #22 (no clean hook — deferred), #35
 (directional regency echo), #15/#17/#30/#31 (the remaining Task-#32-adjacent cluster).
+
+---
+## PART VI — Batch 4g IMPLEMENTED (2026-07-25): #30/#31 Canton Tariff
+
+**STATUS: BUILT + reviewed + committed.** Bias-B on the Canton real-goods yield (the tariff RATE).
+
+- **#30/#31 Canton Tariff (關稅則例)** — `qing_canton_tariff_law`, fiscal domain. on_enact writes idempotent
+  qing_canton_tariff_rate (0 customary default / 1 low-fixed-treaty / 2 autonomous-high). Read once by the
+  Canton pulse (se_QING_CANTON.txt) as a multiplier on qing_canton_yield_tmp (the real tea/silk/porcelain
+  base) BEFORE the purse split: low = x0.8 (less per unit) + commerce swell; autonomous = x1.3 (fatter
+  yield) but commerce falls + unrest. Distinct from #27 Customs Regime (empire-wide vanilla trade) and #18
+  Hoppo Regulation (supervision/squeeze) — this is the specific Canton rate. Pairs with the Task #32
+  caravan real-goods rework (both now levy on real goods). Registered gov_view fiscal area + full loc.
+
+REVIEW: idempotent on_enact; guarded read (LHS var, literal RHS); qing_canton_tariff_rate is a unique new
+var (no collision with the post-1842 qing_tariff_autonomy treaty var); global_unrest/global_commerce_modifier
+valid. Braces: statutes 443/443, CANTON 121/121, gov_view 2023/2023.
+
+Batch-4 progress: 4a-4g = 10 laws built (#44/#27/#45/#34/#18/#43/#39/#40/#30/#31). Remaining: #22 (no clean
+hook — deferred, needs a new backing-drift mechanic), #35 (directional regency echo), #15 (drill posture —
+needs own vars + already-fixed High-Qing era-guard), #17 (southern study — needs a new recruitment pulse).
