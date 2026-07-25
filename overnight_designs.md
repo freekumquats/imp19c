@@ -2613,3 +2613,27 @@ REMAINING Batch-4 open items (heavier plumbing, next tranches): #34/#35 successi
 #15 drill-posture (needs own vars + High-Qing era-guard, pairs w/ Task #32), #17 southern-study (needs new
 recruit pulse), #18 canton-hoppo drift-bias, #22 deliberative-backing accrual bias, #30/#31 tariff (pairs
 w/ Task #32 caravan rework).
+
+---
+## PART VI — Batch 4b IMPLEMENTED (2026-07-24): #34 Succession Method
+
+**STATUS: BUILT + reviewed + committed.** Next Batch-4 item — a bias-B selector on the
+succession-strife hook (the design's "straightforward selector-with-read; verify the pick site").
+
+- **#34 Succession Method (立儲之法)** — `qing_succession_method_law`, court domain. on_enact writes
+  idempotent qing_succession_method_bias (0 secret-succession default / +1 open designation / -1 fixed
+  primogeniture). Read ONCE, guarded on has_variable, inside QING_dynasty_succession_strife (se_QING_DYNASTY
+  .txt): added to qing_succession_strife_sev BEFORE the `>= 2` escalation compare (LHS — RHS stays a literal,
+  per the RHS-comparison rule). Open designation revives the 九子奪嫡 jockeying (severity+1 → escalates);
+  primogeniture calms it (severity-1). The strife effect is called from qing_succession.1 (severity 2) and
+  the accession branch (severity 1) in qing_regency_events.txt, so the bias is live.
+- Modifiers: secret = +legit; open = +legit / -PI; primogeniture = -legit / -corruption. Registered in
+  government_view.gui court area (after princely_establishment). Full loc with prereq/trade-off callouts.
+
+REVIEW: idempotent on_enact; guarded read; bias on comparison LHS (not RHS); only shifts the escalation
+branch (bounded); QING_DECLINE_nudge target is a 0..100 meter (safe). Braces: statutes 373/373, DYNASTY
+256/256, gov_view 2033/2033.
+
+DEFERRED within #35 (Regency Rules): the regency arc touches a DIRECTIONAL reform-echo (reformer vs
+reactionary regent), not a scalar severity — needs the reform-echo sign semantics worked out, so it is NOT
+folded in here. Remaining heavier Batch-4 items unchanged (#39/#40/#43/#15/#17/#18/#22/#30/#31).
