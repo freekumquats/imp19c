@@ -30,8 +30,12 @@
 #     term (d) inside QING_ministry_recompute_perf_lifanyuan, alongside the #367 consolidation term (c).
 #     Additive-inside (that recompute SETS the meter fresh each pulse), scaled small (/5), so the two
 #     frontier terms are complementary, not double-counted.
-#   • REVENUE: the caravan customs pay a quarterly treasury trickle scaled by prosperity x the customs
-#     rate — the historically-small-but-real fiscal contribution (the 協餉 cost side lives in #367).
+#   • REVENUE: the caravan customs are an ad-valorem levy on the REAL Silk Road goods the empire produces
+#     (GOODS_national_production_ tea/silk/silver west, wool/livestock/gems east — the same real-goods basis
+#     the Canton customs use, #423 family), scaled by route throughput (prosperity) x the customs rate and
+#     capped to the oasis road's carrying capacity. [Task #32 2026-07-25: reworked off an abstract
+#     prosperity x rate-factor onto the real trade base.] The historically-small-but-real fiscal
+#     contribution that now MOVES with the economy the player builds (the 協餉 cost side lives in #367).
 #
 # STATE (CHI country scope):
 #   qing_caravan_prosperity        0..100  the trade-node health/volume (商道繁榮). Eases toward target.
@@ -149,22 +153,46 @@ QING_caravan_pulse = {
 	QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = var:qing_caravan_ease_tmp }
 	remove_variable = qing_caravan_ease_tmp
 
-	# --- PAY THE CUSTOMS: a quarterly treasury trickle = prosperity x a rate-factor, scaled down. The
-	# historically-small-but-real caravan revenue. rate-factor: light 1 / moderate 2 / heavy 3 (heavy
-	# skims more per unit even as it shrinks the base). income = prosperity * factor / 40 (so a thriving
-	# route at moderate rate pays ~ 80*2/40 = 4/quarter — a modest frontier income, not a windfall).
-	# BUT if the aqsaqal concession is granted, Kokand skims the third-party duties: halve the take.
-	set_variable = { name = qing_caravan_income_tmp  value = var:qing_caravan_prosperity }
+	# --- PAY THE CUSTOMS: an ad-valorem levy on the REAL goods the caravans carried, scaled by the route's
+	# throughput (prosperity) and the customs rate. [Task #32 real-goods rework 2026-07-25] The take used to
+	# be a pure abstract prosperity x rate-factor / 40. Now it is levied on the actual Silk Road trade base
+	# the empire produces — the same GOODS_national_production_* reads the Canton customs use (se_QING_CANTON
+	# :94-97) and #423's opium model: tea / silk / silver went WEST down the road, wool / livestock / gems
+	# (the steppe & oasis goods — horses, jade, dried fruit map to these engine keys) came EAST. A larger
+	# real trade economy = a fatter caravan customs, so the frontier income now MOVES with the economy the
+	# player builds, not an abstract meter alone.
+	#   base = (tea + silk + silver + wool + livestock + gems national production) / 20   [the tradeable volume]
+	#   income = base x (prosperity/100)  [route throughput]  x rate-factor  [light .5 / moderate 1 / heavy 1.5]
+	# A going concern lands near the old ~4/quarter at moderate rate, but now tracks the real export base.
+	set_variable = { name = qing_caravan_goods_tmp  value = 0 }
+	change_variable = { name = qing_caravan_goods_tmp  add = GOODS_national_production_tea }
+	change_variable = { name = qing_caravan_goods_tmp  add = GOODS_national_production_silk }
+	change_variable = { name = qing_caravan_goods_tmp  add = GOODS_national_production_silver }
+	change_variable = { name = qing_caravan_goods_tmp  add = GOODS_national_production_wool }
+	change_variable = { name = qing_caravan_goods_tmp  add = GOODS_national_production_livestock }
+	change_variable = { name = qing_caravan_goods_tmp  add = GOODS_national_production_gems }
+	change_variable = { name = qing_caravan_goods_tmp  divide = 20 }
+	# cap the tradeable base (the Yarkand road's throughput ceiling — a caravan route is not a seaport):
+	# an export boom must not balloon the frontier customs beyond what the oasis entrepôts can move. The
+	# cap sits above a healthy going concern so the base still MOVES with the economy up to that ceiling
+	# (mirrors the Canton yield cap, se_QING_CANTON:102, scaled to the smaller caravan volume).
+	if = { limit = { var:qing_caravan_goods_tmp > 18 }  set_variable = { name = qing_caravan_goods_tmp  value = 18 } }
+	# route throughput: the oasis trade only carries what the road can bear (prosperity 0..100 as a fraction).
+	set_variable = { name = qing_caravan_income_tmp  value = var:qing_caravan_goods_tmp }
+	change_variable = { name = qing_caravan_income_tmp  multiply = var:qing_caravan_prosperity }
+	change_variable = { name = qing_caravan_income_tmp  divide = 100 }
+	remove_variable = qing_caravan_goods_tmp
+	# customs rate-factor: heavy skims more per unit (x1.5) even as it shrinks the base (the target penalty
+	# above already cut prosperity for heavy/moderate); light takes half (x0.5); moderate is the x1 baseline.
 	if = {
 		limit = { var:qing_caravan_customs_rate = 2 }
-		change_variable = { name = qing_caravan_income_tmp  multiply = 3 }
+		change_variable = { name = qing_caravan_income_tmp  multiply = 1.5 }
 	}
 	else_if = {
-		limit = { var:qing_caravan_customs_rate = 1 }
-		change_variable = { name = qing_caravan_income_tmp  multiply = 2 }
+		limit = { var:qing_caravan_customs_rate = 0 }
+		change_variable = { name = qing_caravan_income_tmp  multiply = 0.5 }
 	}
-	# light rate (0): factor 1 — leave income_tmp as prosperity.
-	change_variable = { name = qing_caravan_income_tmp  divide = 40 }
+	# moderate rate (1): factor 1 — leave income_tmp as the throughput-scaled base.
 	if = {
 		limit = { has_variable = qing_caravan_aqsaqal_granted }
 		change_variable = { name = qing_caravan_income_tmp  divide = 2 }   # Kokand skims the third-party customs
