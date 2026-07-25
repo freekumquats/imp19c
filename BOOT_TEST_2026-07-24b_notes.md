@@ -98,11 +98,12 @@ option values correctly.
   mainly the F&S tab (BT-C). Re-verify window height after fixing BT-C.
 
 ### PUNCH-LIST STATUS
-FIXED: BT-E (Central Secretariat), BT-G (harem portrait 46x68).
-PENDING GUI: BT-C (F&S top-align), BT-D (laws two-column balance), BT-B (religion window height, re-check).
-PENDING CONTENT/CODE: BT-A (vassal era-gate + qing_encroach_pw unset), BT-I (debug_log_scopes stray).
-FIXED: BT-F (Qianlong wife / Ula Nara), BT-H (historical 1763 harem). — see FIXES below.
-PENDING UPSTREAM: U4 currency flood — port the upstream_bugs fix to merge-overnight? (dominant log flood.)
+FIXED (all committed + pushed): BT-A (vassal era-gate + encroacher/debug flood, 184301bdb), BT-C (F&S
+  top-align, 257769541), BT-D (laws two-column balance, 257769541), BT-E (Central Secretariat), BT-F
+  (Qianlong wife / Ula Nara, 85ac72dde), BT-G (harem portrait 46x68), BT-H (historical 1763 harem,
+  85ac72dde), BT-I (debug_log_scopes stray, 184301bdb), U4 currency flood (96bbea5cc).
+STILL OPEN: BT-B ONLY — religion window bottom margin. DEFERRED (visual-only @window_height chase; do NOT
+  blind-tweak — re-verify against a rendered screenshot next boot, trim only if it still spills).
 
 ## FIXES APPLIED (2026-07-24, post-analysis)
 - **U4 currency flood — FIXED** (cherry-pick 2a395702b → merge-overnight commit 96bbea5cc). CURRENCY_svalues.txt
