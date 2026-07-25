@@ -1654,3 +1654,739 @@ to today. Reformist Drills = -1 bias each (rot slows, +upkeep cost, +land morale
 -upkeep). `amount = var:X` proven at 5 existing nudge call-sites. Registered in the government_view.gui Laws tab
 (mandatory or invisible). Only the ONE representative meter-pair built this pass; the other candidates (customs/canal/
 xj_consolidation recomputed-target terms) remain scoped for a later pass.
+
+---
+
+# PART V — LAW EXPANSION + COURT INTRIGUE (DESIGN, 2026-07-24; branch merge-overnight)
+*STATUS: DESIGN COMPLETE + ADVERSARIALLY REVIEWED (4 reviewers) + REVIEW-FIXES APPLIED. Build PENDING.
+Standalone copies: LAW_EXPANSION_DESIGN_DOC.md, COURT_INTRIGUE_DESIGN_DOC.md. Each carries an ADVERSARIAL
+REVIEW PASS block at its top listing the fixes folded in (toggle-farm removal, ratchet-defeat guards,
+1:1-validator resolution, monetary/military de-overlap, tariff fake-choice fix, harem favour/passive/dowager
+fixes, eunuch doom-loop guards). #37/#38 are NOT standalone laws — they live in the subsystem batches 6/7.*
+
+## PART V.1 — Law Expansion (all remaining law groups)
+
+## Law Expansion — Full Design (all remaining law groups)
+
+> ## ADVERSARIAL REVIEW PASS (2026-07-24) — applied fixes
+> Four adversarial reviewers (classification / boot-crash / GUI-loc-modkeys / gameplay-balance) audited this
+> doc against live code. **Classification core verified CORRECT** (every backing-var class, line citation,
+> no-op default, and the signed-clamp warning confirmed). **Zero boot-crash risks.** The fixes below address
+> exploits, incoherence, and specification gaps they surfaced. Empirically confirmed: EVERY existing law's
+> on_enact uses `set_variable`/modifier (idempotent) — none nudge — so a nudge-on-enact IS a toggle-farm.
+>
+> **SHIP-BLOCKER fixes (applied to the sections below):**
+> - **Toggle-farm exploit (#13, #44, #47):** `on_enact` fires on EVERY enact, so any on_enact that NUDGES a
+>   var is farmable by re-enacting. FIX: all three drop the on_enact nudge. #13/#47 become pure
+>   modifier-swap; #44's "kickstart" nudge is once-guarded (`if NOT has_variable qing_X_adopted { nudge; set
+>   adopted }`) so it fires at most once ever.
+> - **Ratchet-defeating exposure (#19, #20, #44):** exposing drift-from-play decline meters as a standing
+>   policy that CANCELS the pressure defeats the mechanic. FIX: #19/#20 biases are made SMALL and band-gated
+>   (tilt, not cancel — a −1 audit bias against a meter nudged +N from many sources only slows accrual, and
+>   is floored so it can't drive the meter to 0); #44 becomes a pure modifier-law (no ongoing var-write).
+> - **#38 eunuch law shipped before its consumer:** REMOVED from the law batches — #37/#38 live ONLY in the
+>   court-intrigue subsystem batches (6/7), law + backing mechanic in the same batch.
+>
+> **INCOHERENCE fixes (applied):**
+> - **Monetary triple-overlap** (#23 + vanilla currency_law + #48/49): #23 is GATED distinct from the vanilla
+>   `currency_law` debasement (Qing-specific `qing_currency_stress` bias only, no commerce/tax modifier that
+>   would double vanilla's); PART D #48/49 stay ROW-scoped (see below). Documented as orthogonal, not additive.
+> - **Military triple-stack** (P7 + #14 + #15): #14 (勇營 regional) and #15 (新軍 central) are made ORTHOGONAL —
+>   #15's modernarmy bias must NOT subtract from #14's han-provincial target (the two levers were canceling).
+>   Verify the `se_QING_DECLINE.txt` han-provincial target formula and keep them independent.
+> - **#30 tariff fake-choice:** re-specified to WRITE a stance var `qing_tariff_stance` the trade pulse reads
+>   as `min(treaty_autonomy, stance)`, so the law has bite under a treaty (was a pure modifier the treaty
+>   overrode). If that read can't be added cheaply, DEFER #30 rather than ship a fake choice.
+> - **1:1 validator on new seats (chief eunuch #B3, dowager #A6):** the doc's "doesn't set qing_office_held"
+>   claim contradicted the regent precedent (which DOES). RESOLUTION CHOSEN: separate seat-marker
+>   (`qing_seat_chief_eunuch` / `qing_seat_dowager`), NOT counted by `QING_validate_one_position`; the
+>   `qing_office_<key>_holder` country var is display-only (like emperor/empress seats). See court doc.
+>
+> **BATCH-1 SCOPE additions (now explicit):** enumerate ~270 loc keys for the 32 groups; author the 7 GUI
+> column title loc keys (`qing_statutes_gov`…); verify 7-column horizontal fit in the 970px scrollarea (or
+> wrap); author an explicit OLD→NEW re-filing map for the 13 existing entries (avoid duplicate/vanish);
+> replace `omen_power` (#51, means MINING in this TC) with `monthly_legitimacy`/a religion modifier;
+> isolation-test #31's on_enact→scripted_effect (else inline the 3-line lever body).
+>
+> **BALANCE tuning (deferred to testing, noted per element):** eunuch triple-penalty doom-loop (cap the
+> corruption feedback, decouple one output, add a non-event purge lever); harem passive promote/demote must
+> skip player-acted consorts (2-yr `qing_consort_recently_acted` flag) and the dowager event is ADVISORY not
+> forced; harem favour drift must NOT restore to rank×20 (kills squabbling) — make favour a pure accumulator
+> the player/events move. See court doc for these.
+
+
+**Goal:** finish the law-group build-out. Design 2 shipped 13 Qing law groups (P7's
+`qing_military_upkeep_law` was the last). This doc designs **every remaining candidate** from the
+§A–H catalogue in `overnight_designs.md:219–316`, PLUS the four **upstream Victorian-TC stubs**
+(Upper House ×2, Monetary Policy ×2) that ship with empty `modifier = {}` on every option.
+
+Each law is designed against **verified backing-var ground truth** (three fan-out audits, line-cited
+below). The single hard rule that governs correctness:
+
+> **A law may only WRITE a var the pulse READS. It may NOT write a var the pulse itself
+> COMPUTES/nudges** — doing so makes the law fight the recompute (the documented `qing_censorate_vigor`
+> exclusion). The four safe patterns:
+> - **SELECTOR (a):** law `set_variable`s a value/flag the pulse reads as-is. Trivial + safe.
+> - **MODIFIER-SWAP:** option carries a `modifier = {}` block only (no var). Trivial + safe.
+> - **BIAS-A (accumulator):** law sets a standing bias var; the pulse adds it at its existing
+>   `QING_DECLINE_nudge`/`change_variable` site (one guarded line). This is the P7 pattern.
+> - **BIAS-B (recomputed target):** law sets a bias var threaded INTO the pulse's `set_variable`
+>   formula (one guarded `change_variable` term before the clamp). Slightly higher risk (touches a
+>   recompute).
+> - **MODIFIER-LAW (event/treaty state):** no var-write; the option is a pure standing
+>   `modifier = {}`. Used where the backing var is set only by discrete events/treaties.
+
+Every Qing group gets `potential = { tag = CHI }`, a no-op default option (byte-identical to today),
+loc, and a `laws_widget` entry in `government_view.gui` (see §GUI). Every bias var is read **guarded**
+(`has_variable`) at the pulse site so the default is a true no-op.
+
+---
+
+### PART A — GUI capacity (blocking constraint for the whole build)
+
+`government_view.gui` does **not** auto-enumerate law groups — each is hand-listed as a `laws_widget`
+inside a `laws_widget_area` column (lines 2258–2304 hold the current 13 in one column). Vanilla splits
+its ~50 laws across ~9 area columns. **Adding ~30 more Qing laws to one column overflows the panel.**
+
+**Design:** split the Qing statutes into **domain sub-columns**, one `laws_widget_area` each, mirroring
+vanilla's Economic/Military/Social split. Proposed columns (title loc in parens):
+1. `qing_statutes_gov` (治道 — Governance & Council) — ethnic_governance, office_selling, ministry_estab,
+   advisory_estab, council_composition, secretariat_standard, deliberative_governance
+2. `qing_statutes_fiscal` (財政 — Fiscal & Trade) — salt_admin, canton_regime, canton_purse,
+   caravan_customs, granary_policy, canal_quota, customs_regime, monetary_response, frontier_trade_sov, tariff_regime
+3. `qing_statutes_military` (武備 — Military) — military_upkeep, provincial_militarization, army_modernization
+4. `qing_statutes_frontier` (邊疆 — Frontier & Subjects) — xinjiang_admin, tributary_ritual,
+   frontier_settlement, assimilation_doctrine, national_integration, amban_estab
+5. `qing_statutes_court` (宮廷 — Succession & Court) — succession_method, regency_rules,
+   princely_establishment, harem_establishment, eunuch_policy
+6. `qing_statutes_modern` (自強 — Modernization & Culture) — penal_code, ritual_orthodoxy, opium_policy,
+   exam_cadence, exam_curriculum, modernization_doctrine, industrial_encouragement, education_program,
+   cultural_patronage, works_priority, censorate_empowerment, missionary_policy
+7. `qing_statutes_diplo` (外交 — Diplomacy & Great Game) — gp_alignment, foreign_office_doctrine, overseas_expansion
+
+**Task:** author 6 new `laws_widget_area` blocks (one exists), re-file the 13 existing entries by domain,
+add the new entries. Titlebar loc keys `qing_statutes_gov` … `qing_statutes_diplo`. This GUI work is a
+prerequisite for ANY new group being visible — do it first / alongside.
+
+---
+
+### PART B — Qing law groups by classification
+
+Legend for each entry: **[CLASS]** · backing var · **PATTERN** · risk. Options are `default (no-op) /
+stance / stance`. "Pulse site" = the exact line where BIAS is applied.
+
+#### B1. SELECTOR / MODIFIER-SWAP — trivial, safe (build first)
+
+**1. Penal Code Regime 大清律例** — *already shipped* (`qing_penal_code_law`). Modifier-swap.
+**2. Ritual Orthodoxy 禮部** — *already shipped* (`qing_ritual_orthodoxy_law`). Modifier-swap.
+**3. Opium / 4. Caravan / 5. Salt / 6. Canton regime / 7. Canton purse / 8. Ethnic gov / 9. Office-selling
+/ 10. Ministry estab / 11. Advisory estab / 12. Exam cadence** — *already shipped.*
+
+**13. Industrial Encouragement 官辦 / 官督商辦 / 商辦** — [MODIFIER-SWAP + NET-NEW-lite selector]
+- Backing: modifier targets EXIST (`qing_earlyindus_*`, `qing_selfstr_guandu_tension`
+  `se_QING_SELFSTR.txt:421`), but no numeric tri-state selector var.
+- **Design:** pure **modifier-swap** law — 3 options each carrying a `modifier = {}` expressing the
+  school's trade-off (官辦 state-run: +research, +cost, −commerce; 官督商辦 merchant-supervised: balanced,
+  small guandu-tension; 商辦 merchant-run: +commerce, +middle-strata output, −state control). NO var.
+  Do NOT invent a selector var (nothing reads it). **[REVIEW FIX] NO on_enact nudge** — the earlier "optionally
+  nudge qing_selfstr_progress" is a TOGGLE-FARM (on_enact fires every enact → re-enact to farm the nudge).
+  Pure modifier-swap only; the state-run school's modernization edge is expressed as a research modifier, not a
+  var nudge. Risk: low.
+
+#### B2. BIAS-A — accumulators (P7 pattern: one guarded nudge line)
+
+**14. Provincial Militarization 勇營** — [ACCUMULATOR] `qing_han_provincial_power` (nudged ±2,
+`se_QING_DECLINE.txt:426`). Law sets `qing_provmil_bias` ∈ {centralized −1 / sanctioned 0 / delegated +1};
+pulse adds it guarded at the :426 nudge. Modifiers: delegated = +manpower/−central control; centralized =
+inverse. **CAVEAT:** design note says these are "arguably better AI/event-driven" — still viable; a law is
+the player's explicit lever over the 湘軍/淮軍 delegation. Risk: low.
+
+**15. Army Modernization Mandate 新軍** — [ACCUMULATOR] `qing_modernarmy_share` (nudged ±2,
+`se_QING_DECLINE.txt:390`). Law sets `qing_modernarmy_bias` ∈ {traditional −1 / mixed 0 / new-army +1}; pulse
+adds guarded. Modifiers express drill/discipline vs. banner-conservatism prestige cost. Risk: low.
+
+**16. Cultural Patronage 文治** — [ACCUMULATOR] `qing_wenzhi_patronage` (init 40, −1/qtr drift
+`se_QING_WENZHI.txt:75`). Law sets `qing_wenzhi_bias` ∈ {austere +? / standard 0 / lavish −?} added at :75
+so lavish offsets the decay (net 0 or positive) and austere quickens it. **Ratchet-rule caution:** lavish
+must be a *bias at the drift site*, NOT a positive free nudge — the band-gate + the existing −1 base keeps
+it bounded. Modifiers: lavish = +prestige/−treasury; austere = inverse. Risk: low.
+
+**17. Overseas Education 留學** — [ACCUMULATOR + flag] `qing_students_abroad` (nudged, `se_QING_STUDENTS.txt:92`).
+Law sets `qing_students_bias` ∈ {none / limited / large}; adds to the recurring +20 abroad nudge (large
+accelerates, none zeroes the recurring gain via a negative bias floored at 0). Also modifier: large =
++research/−conservative-happiness. **Interaction:** the students mission-active flag is event-owned; the law
+biases the *rate*, not the flag. Risk: low.
+
+**18. Great-Power Alignment** — [ACCUMULATOR ×3] `qing_gp_tension_britain/france/russia`
+(`se_QING_GREATGAME.txt:79-110`). Law sets `qing_gp_alignment_bias` ∈ {isolation / balance / align};
+applied as a standing per-power tension nudge (isolation = +tension all; align = −tension toward the aligned
+power, event-picked). **CAVEAT:** "align-with-one" needs a target — model as balance (symmetric −) vs.
+isolation (symmetric +); a specific alignment stays event-driven. Risk: low-moderate (3 nudge sites).
+
+**19. Anti-Corruption Stance** — [ACCUMULATOR] `qing_corruption_level` (init 12, nudged many).
+**[REVIEW FIX — ratchet-defeat guard]** Build as opt-in, but the bias must TILT not CANCEL: corruption is
+nudged +N from 15+ sources, so a standing −1 (audits) / −2 (draconian) only SLOWS accrual — and the applied
+bias must be FLOORED so the law alone can never drive the meter toward 0 (e.g. apply the negative bias only
+while `qing_corruption_level > 20`, so it thins graft but never legislates a spotless court). Modifier cost
+(−admin-efficiency / +stability / −upper-strata happiness). tolerant 0 / audits −1 / draconian −2. Risk: low.
+
+**20. Heterodox Sect Policy 白蓮教** — [ACCUMULATOR] `qing_sect_pressure` (`se_QING_DECLINE.txt:1005`).
+**[REVIEW FIX — ratchet-defeat guard]** Sect pressure is the OUTPUT of 8+ systems (opium, canal neglect,
+missionary friction, granary failure) and is meant to build toward rebellion. A standing suppress bias that
+cancels it would legislate away the White-Lotus/Taiping. FIX: bias is SMALL and band-gated — suppress −1
+applied only while `qing_sect_pressure > 25` (thins low-level unrest, cannot prevent a genuine crisis), with
+a −minority-happiness cost that itself feeds unrest (so heavy suppression is self-limiting). tolerate 0 /
+monitor 0 +watch modifier / suppress −1. Risk: low.
+
+**21. Reform Posture** — [ACCUMULATOR, SIGNED ±100] `qing_reform_faction_balance`
+(`se_QING_FACTION.txt:424`, raw `change_variable`, clamp ±100). **CRITICAL:** must use `change_variable`,
+NOT `QING_DECLINE_nudge` (the macro clamps at 0 and would corrupt the signed meter — verify ALL existing
+nudge sites use raw change_variable before adding the law bias). **[REVIEW: build with small tilt]** faction
+balance is meant to emerge from events, so the law bias is a SMALL signed nudge (conservative −1 / gradualist
+0 / reformist +1) that tilts the drift without swamping the ±5..±10 event/mission nudges. Modifier expresses
+the court's reform posture. Risk: moderate (signed-clamp footgun — the #1 implementation caution).
+
+**22. Deliberative / Banner Nobility Governance 議政王大臣** — [ACCUMULATOR] `qing_delib_cohesion`
+(init 50, `se_QING_DELIBERATIVE.txt:367`). Law sets `qing_delib_bias` ∈ {empower +/ balance 0 / curb −}
+added at the cohesion nudge; cohesion feeds `qing_banner_decay` bands. Modifiers express Manchu-grandee
+prestige vs. autocratic centralization. Risk: low.
+
+**23. Currency Stress / Monetary Response** — [ACCUMULATOR] `qing_currency_stress`
+(`se_CURRENCY_STRESS.txt` engine drift + discrete nudges). **Pairs with vanilla `currency_law`.** Law sets
+`qing_monetary_bias` ∈ {hard-specie −/ stabilization 0 / debasement +} added as a standing stress nudge.
+Modifiers: hard-specie = +stability/−commerce; debasement = +tax/−stability. Risk: low. *(This is the Qing
+analogue; see PART D for the vanilla monetary stubs.)*
+
+#### B3. BIAS-B — recomputed targets (one guarded term in the formula, before the clamp)
+
+**24. Council Composition** — [RECOMPUTED-TARGET] `qing_council_eff_target` (rebuilt to 0 each pulse,
+`se_QING_COUNCIL.txt:441`; clamp :554). Law sets `qing_council_comp_bias` threaded as `change_variable`
+before :554. **BUT** the catalogue's real intent (Manchu-weighted / balanced / meritocratic) maps better to
+the **`qing_council_dyarchic_balance` MODIFIER + seat composition** than to eff_target. **Design:** a
+MODIFIER-SWAP law (each option a `modifier`) + optional bias into eff_target for the "meritocratic" tilt.
+Do NOT set `qing_council_dyarchic_balance` (it's a banded modifier, not a var). Risk: moderate.
+
+**25. Canal Grain Tribute Quota 漕運** — [RECOMPUTED-TARGET] `qing_canal_jiangnan_quota` (rebuilt to 0.5
+each pulse, `se_QING_CANAL.txt:209`; clamp :228). Law sets `qing_canal_quota_bias` added before the :228
+clamp. Options: relaxed −0.1 / standard 0 / maximal +0.15. Modifier: maximal = +grain/−Jiangnan happiness.
+Risk: moderate.
+
+**26. Xinjiang Administration 屯田/伯克** — [RECOMPUTED-TARGET] `qing_xj_consolidation` is rebuilt from
+`qing_xinjiang_control` + terms (`se_QING_XINJIANG.txt:229`). **Law must feed an INPUT, not the output.**
+Two clean choices: (a) bias `qing_xinjiang_control` (the ACCUMULATOR input, BIAS-A at a nudge) — but that's
+the event-owned grip meter; risky. (b) add `qing_xj_admin_bias` as a term in the consolidation scratch
+formula (BIAS-B before :227 clamp). **Design: BIAS-B** — options military-farm 屯田 (+consolidation) /
+beg-indirect 伯克 (0) / provincialize 行省 (+more, +cost). Risk: moderate.
+
+**27. Customs Service Regime 海關** — [RECOMPUTED-TARGET via input] `qing_customs_eff_target` rebuilt from
+`qing_customs_foreign_control`×2 + bureau_integrity (`se_QING_CUSTOMS.txt:173-176`). The catalogue's
+native/foreign-supervised axis maps to `qing_customs_foreign_control` (ACCUMULATOR, `:144` `$amount$`
+helper). **Design: BIAS-A on `qing_customs_foreign_control`** via a standing nudge — native = −, Hart-style
+foreign-supervised = + (efficiency up, autonomy/prestige down). Modifier expresses the sovereignty cost.
+Risk: moderate. **Overlaps `qing_tariff_autonomy`** (treaty-state, see B4) — keep distinct: this is the
+*administration*, tariff is the *rate*.
+
+**28. Missionary Policy** — [RECOMPUTED-TARGET] `qing_antichr_target` / `qing_social_friction_target`
+rebuilt from formula (`se_QING_MISSIONARY.txt:243-252/194-203`). Law sets `qing_missionary_tol_bias` as a
+term in the target formula (prohibit − toleration → but that raises friction? model carefully: prohibit =
++sentiment via suppression backlash OR −reach; open = +reach/+friction). **Design: BIAS-B** on the target
+formula + gate cathedral promotion (Design-1 coupling). Options prohibit / tolerate / open. Risk:
+moderate-high (two coupled meters + Design-1). *Recommend building AFTER the simpler ones validate.*
+
+**29. Sphere / (folded into #18 Great-Power Alignment)** — `qing_sphere_dominant` is RECOMPUTED from the
+sphere formula and is better left read-only; the alignment law (#18) biases tension, not the sphere result.
+No separate law. 
+
+#### B4. MODIFIER-LAW — event/treaty state (pure `modifier`, no var-write)
+
+**30. Tariff Regime** — [TREATY-STATE] `qing_tariff_autonomy` set only by treaty events
+(`se_QING_TREATIES.txt:79/126`). **[REVIEW FIX — was a fake choice]** A pure modifier-law here is meaningless:
+the treaty system owns the mechanical effect, so a "restored autonomy" modifier the treaty overrides adds
+nothing. FIX: the law WRITES a stance var `qing_tariff_stance` ∈ {comply 0 / partial-resist 1 / full-autonomy
+2}; the trade/customs pulse computes effective autonomy as `min(qing_tariff_autonomy, stance-cap)` so the law
+has real bite — you can legislate "we want autonomy" and it takes effect the moment a treaty revision raises
+`qing_tariff_autonomy`. That is a one-line read added to the customs pulse (NET-NEW-lite, not a standalone
+modifier). **If that read cannot be added cheaply, DEFER #30** rather than ship a fake choice. Risk: moderate.
+
+**31. Frontier Trade Sovereignty 阿奇木** — [STATE-FLAG] `qing_caravan_aqsaqal_granted` toggled by
+`QING_caravan_grant_aqsaqal`/`_revoke_aqsaqal` levers. Design: a law whose on_enact CALLS the existing
+grant/revoke lever (grant-concession → `QING_caravan_grant_aqsaqal = yes`; assert → `_revoke_aqsaqal`).
+This is a SELECTOR-via-lever (the levers are guarded + idempotent). Risk: low. *Novel pattern — on_enact
+calling a scripted_effect; verify on_enact accepts effect calls (it does — see estab laws' set_variable).* 
+
+**32. Overseas Expansion** — [MODIFIER/EVENT-STATE] colonies + treasure fleet are boolean country
+modifiers granted by missions/events (`se_QING_TREASURE_FLEET.txt:144-153`). Design: pure MODIFIER-LAW —
+isolationist / trade-fleet / colonial, each a `modifier = {}` (naval/colonial cost vs. prestige). on_enact
+may nudge `qing_tributary_prestige`. Does NOT grant colonies (those stay mission-earned). Risk: low.
+
+**33. Foreign-Office Doctrine 總理衙門** — [EVENT-STATE] legation/embassy counts are event-established;
+`qing_zongli_diplomat_count` is RECOMPUTED from marked characters. Design: MODIFIER-LAW — tributary-only /
+resident-legations / full-diplomacy, each a `modifier` (diplomatic-reputation/reform-pressure trade).
+on_enact nudges `qing_reform_pressure` (adopting full diplomacy breaks the tribute worldview, matching the
+P3 legation event). `allow` gates "full diplomacy" on `qing_legation_count >= 1`. Risk: low.
+
+#### B5. Court / Succession — mixed, several construction-risky or one-way (design with care)
+
+**34. Succession Method 秘密立儲** — [ONE-WAY-FLAG] `qing_secret_succession_sealed` is a discrete seal set
+=1 then event-REMOVED at accession (`se_QING_PRINCES.txt:342/400`). It is NOT a persistent policy toggle.
+**A reversible law is new capability.** Design: MODIFIER-LAW selector `qing_succession_method_law` ∈ {open
+公開 / secret 秘密立儲 / deliberative 議政} where the option sets a NEW standing var `qing_succession_mode`
+(this is a genuine policy stance, distinct from the per-reign seal flag) that the princes/accession code
+reads to choose the pick algorithm. **This is NET-NEW-lite** (new var + a read at the accession pick,
+`se_QING_PRINCES.txt:336` `order_by`). Risk: moderate (touches succession). *Recommend: design now, build
+in its own careful chunk.*
+
+**35. Regency Rules** — [EVENT-STATE] `qing_office_regent_holder` (char handle) + `qing_regent_pick_kind`
+(flag, log-only) installed/cleared by regency machinery. No persistent policy var. Design: MODIFIER-LAW +
+NET-NEW selector `qing_regency_pref` ∈ {dowager / prince / councillor} that `QING_seat_regent_install`
+(`se_QING_SEATS.txt:270-324`) reads to order its pick. NET-NEW-lite (one read added). Risk: moderate.
+
+**36. Princely Establishment** — [ACCUMULATOR, per-character] `qing_prince_backing` (char var, nudged +
+`order_by` selector). Country-scope law can't set a per-char var directly. Design: MODIFIER-LAW (favour /
+investigate / restrict) each a `modifier` affecting prince loyalty/threat, + optionally a country var
+`qing_prince_policy` read by `QING_prince_backing_nudge` to scale the nudge. Risk: low-moderate.
+
+**37. Harem Establishment 后妃** — [RECOMPUTED + CONSTRUCTION-RISKY] `qing_harem_rankN_count` rebuilt from
+the consort roster (`se_QING_HAREM.txt:122-142`); touches consort create/promote paths. **DEFER** — the
+audit flags the harem create path as #90/#336-sensitive; a size/rank-distribution law would need to gate
+the promotion cap, and the value is a recomputed tally (can't be set). If built: a cap var
+`qing_harem_size_cap` read at the promotion gate (`:246`). **Recommend: DEFER** (construction risk >
+value). Risk: high.
+
+**38. Eunuch Policy 內務府** — [RECOMPUTED + CONSTRUCTION-RISKY] `qing_eunuch_count` sits on the
+`create_character` eunuch-mint path (`se_QING_HOUSEHOLD.txt:82-106`); no live consumer outside its own file.
+**DEFER** — restrict/standard/empowered would gate the mint count (construction-risky) and nothing reads the
+count today, so the policy has no mechanical bite yet. **Recommend: DEFER.** Risk: high.
+
+#### B6. Frontier / Integration
+
+**39. Tributary Ritual Frequency 朝貢** — [PER-SUBJECT TIMER] `qing_tribute_cooldown` is a per-subject
+`days=` timer gate (`se_QING_TRIBUTE.txt:257-266`). A CHI country law can't set a per-subject var. Design:
+MODIFIER-LAW + a country var `qing_tribute_cadence_law` that `QING_tribute_*` reads to CHOOSE the cooldown
+length (1095/1825/2190 already the three branch values — the law selects which branch). NET-NEW-lite (one
+read). Options frequent / standard / rare. Risk: low-moderate.
+
+**40. Frontier Settlement Policy 移民實邊** — [ONE-WAY-FLAG] `qing_frontier_resettlement` set once =1, never
+cleared (`se_QING_POPULATION.txt:242`). **A closed↔encouraged↔forced law needs a clear-path (new
+capability).** Design: replace the one-way flag read at `se_QING_POPULATION.txt:95` with a tri-state var
+`qing_frontier_settle_policy` ∈ {closed 0 / encouraged 1 / forced 2} the law sets; migrate the existing
+flag semantics (flag-set ⇒ value≥1). NET-NEW-lite + a migration guard. Options closed / encouraged / forced
+(forced = +migration/−minority happiness). Risk: moderate (migration-relief-valve interaction).
+
+**41. Cultural Assimilation Doctrine 漢化** — [per-char selector + RECOMPUTED count] `qing_manchu_identity`
+(per-char, banded modifier-swap) + `qing_sinic_count` (recomputed province tally). Country law can't set
+per-char identity. Design: MODIFIER-LAW (preserve-Manchu / balanced / sinicize) each a `modifier` + a
+country var `qing_assimilation_doctrine` read by `QING_char_shift_identity`/sinicization pulse to bias the
+drift direction. NET-NEW-lite. Risk: moderate.
+
+**42. National Integration** — [ACCUMULATOR via target-lift] `qing_civic_identity` — the SAFE knob is the
+Design-4 `qing_civic_identity_settle_bonus` target-lift (`se_QING_DECLINE.txt:856`). Law sets
+`qing_integration_doctrine_bias` folded into `qing_civic_target_tmp` alongside the settle bonus (BIAS-B into
+the target). Options dynastic (0) / multi-ethnic (+) / civic-nation (++). Modifier: civic-nation =
++assimilation/−traditional-legitimacy. **Couples to Design 4.** Risk: low-moderate.
+
+**43. Amban Establishment 理藩院** — [NET-NEW] `QING_AMBAN_MIN` does not exist (not even a constant — only
+a nickname substring). Design: author a new var `qing_amban_estab_target` (mirror `qing_ministry_estab_law`
+exactly — that's the proven precedent) read by the amban staffer. **NET-NEW plumbing** (var + one read).
+Options lean / standard / expanded. Risk: moderate (mirrors proven estab work).
+
+#### B7. Modernization capstones
+
+**44. Modernization Doctrine 自強** — [ACCUMULATOR] `qing_selfstr_progress` (band → 3-modifier swap,
+`se_QING_SELFSTR.txt:672`). Self-strengthening progress is meant to be EARNED (missions/events), not
+legislated. Design: a pure MODIFIER-LAW (conservative / ti-yong 中體西用 / wholesale-western) each a `modifier`
+expressing the reform posture. **[REVIEW FIX — no farmable nudge]** the earlier "one-time on_enact nudge" is
+a toggle-farm (on_enact fires every enact). If a "wholesale-adoption kickstart" is wanted, it MUST be
+once-guarded: `on_enact = { if = { limit = { NOT = { has_variable = qing_selfstr_wholesale_adopted } }
+QING_selfstr_advance = { amount = X }  set_variable = qing_selfstr_wholesale_adopted } }` — fires at most once
+ever. Default: no kickstart, pure modifier. Risk: low-moderate. *The three band-modifiers stay
+progress-driven; the law is the posture overlay.*
+
+**45. Exam Curriculum (practical-subjects / abolition)** — [NET-NEW] beyond cadence, no backing mechanic
+exists. Design: new var `qing_exam_curriculum` ∈ {classical 0 / practical 策論 1 / abolition 2}; classical
+= no-op, practical = bias `qing_exam_pass_rate` recompute + a research modifier, abolition = disables the
+exam cycle (gate `QING_exam_*` on curriculum≠2) + a big stability/legitimacy shock. **NET-NEW plumbing**
+(var + reads in the exam pulse). Options classical / practical / abolition. Risk: moderate-high (abolition
+disables a whole subsystem — needs careful gating). *Recommend: build classical/practical first; abolition
+as a follow-up.*
+
+**46. Censorate Empowerment 都察院** — [RECOMPUTED-TARGET] `qing_censorate_vigor` rebuilt from officeholder
+traits/finance each cycle (`se_QING_CENSORATE.txt:58-64`, clamp 0..50). This was the ORIGINAL exclusion.
+Design: BIAS-B — add `qing_censorate_bias` as a term in the recompute before the :66 clamp (weak −/ active 0
+/ weaponized +). Modifier: weaponized = +corruption-detection/−official happiness (factional purges). Risk:
+moderate (this is the meter the whole "fights-the-pulse" rule was named after — bias-B is the correct, safe
+way now that the pattern is proven).
+
+**47. Public/Palace Works Priority 三山五園** — [EVENT/MODIFIER-STATE] no numeric priority meter; the
+Summer Palace (`qing_sp_*`) + Works (`qing_works_*`) subsystems are event/flag-driven. Design: pure
+MODIFIER-LAW (frugal / balanced / grand) each a `modifier` (construction/prestige vs. treasury/corruption).
+**[REVIEW FIX — no farmable nudge]** does NOT nudge `qing_corruption_level` on_enact (toggle-farm). The
+"grand works breed graft" flavour is expressed as a standing `monthly_corruption` MODIFIER on the "grand"
+option, not a one-off var nudge. Does NOT build the palace (that stays the Summer Palace tree). Risk: low.
+
+---
+
+### PART C — Summary: build order & disposition
+
+**BUILD — trivial (SELECTOR / MODIFIER-SWAP / MODIFIER-LAW), no pulse edits (~9):**
+Industrial Encouragement (13), Tariff Regime (30), Frontier Trade Sov (31), Overseas Expansion (32),
+Foreign-Office Doctrine (33), Princely Establishment (36), Public Works Priority (47), + the two vanilla
+Upper House stubs & monetary stubs (PART D).
+
+**BUILD — BIAS-A, one guarded nudge line each (~7):** Provincial Militarization (14), Army Modernization
+(15), Cultural Patronage (16), Overseas Education (17), Great-Power Alignment (18), Deliberative Governance
+(22), Monetary Response (23). Plus opt-in Anti-Corruption (19).
+
+**BUILD — BIAS-B, one guarded formula term each (~6):** Council Composition (24), Canal Quota (25),
+Xinjiang Admin (26), Customs Regime (27), Missionary Policy (28), National Integration (42), Censorate
+Empowerment (46).
+
+**BUILD — NET-NEW-lite, new var + one read (~6):** Succession Method (34), Regency Rules (35), Tributary
+Ritual (39), Frontier Settlement (40), Assimilation Doctrine (41), Amban Establishment (43), Modernization
+Doctrine (44), Exam Curriculum practical (45, classical/practical only).
+
+**USER DECISION (2026-07-24):** build all deferrals EXCEPT the exam-abolition tier. Sequence **by risk
+ascending, commit + push each batch** so boot-testing is incremental.
+- Harem Establishment (37) — **BUILD** (extra care on the consort create/promote path; law gates the
+  promotion cap `qing_harem_size_cap`, does NOT touch create_character itself).
+- Eunuch Policy (38) — **BUILD** (law sets a mint-cap var read at the mint gate; does NOT add modifiers
+  inside create_character — #90 rule).
+- Heterodox Sect (20) — **BUILD** (Bias-A on `qing_sect_pressure`; tolerate/monitor/suppress).
+- Reform Posture (21) — **BUILD** (Bias-A on `qing_reform_faction_balance` — MUST use raw `change_variable`
+  with the ±100 clamp, NOT `QING_DECLINE_nudge`).
+- Exam Abolition tier (45b) — **STILL DEFERRED** (disables a subsystem; follow-up only). Exam Curriculum
+  (45) ships classical/practical only.
+
+**Net new law groups this pass: ~32 built + 4 vanilla stubs filled = ~36**, taking the Qing total from 13 →
+~45.
+
+#### Batch plan (risk ascending; each boots + commits on its own)
+- **Batch 1 — GUI + trivial + upstream stubs:** PART A (6 new `laws_widget_area` columns + re-file 13
+  existing), the ~9 selector/modifier-swap/modifier-law groups (13/30/31/32/33/36/47), the 4 vanilla stub
+  fills (48/49/50/51) + the `00_administrative_laws.txt` brace fix. GUI is a prerequisite so it leads.
+- **Batch 2 — Bias-A** (one guarded nudge line each): 14/15/16/17/18/19/20/21/22/23/44.
+- **Batch 3 — Bias-B** (one guarded formula term each): 24/25/26/27/28/42/46.
+- **Batch 4 — Net-new-lite** (new var + one read): 34/35/39/40/41/43/45(classical+practical).
+- **Batch 5 — [REVIEW FIX] REMOVED.** #37 (harem) and #38 (eunuch) are NOT standalone laws — a law shipped
+  before its backing mechanic is a no-op. They live ONLY in the court-intrigue subsystem batches (6 eunuch /
+  7 harem), where the law is built in the SAME batch as the mechanic it gates. The old Batch 5 is dissolved.
+Each batch: author data → loc → GUI entry → pulse wire (if any) → brace/quote check → code-review →
+boot-crash review → commit as freekumquats → push merge-overnight.
+
+---
+
+### PART D — Upstream Victorian-TC stubs (Upper House ×2, Monetary ×2)
+
+These ship in the repo with **empty `modifier = {}` on every option** and are absent from vanilla Imperator
+AND both oracle repos (Invictus, TI never added a bicameral legislature or monetary-setting layer). Nothing
+to copy — fill plausibly with **proven modifier keys** (drawn from `00_economic_laws.txt` currency_law etc.).
+
+**FIRST, fix the brace bug:** `00_administrative_laws.txt` is 9-open / 8-close — `delegated_monetary_policy`
+(line 10) never closes, so `legislative_monetary_policy` is nested inside it (the group has only 2 valid
+options). Add the missing `}` after `delegated_monetary_policy`'s `modifier`.
+
+**48. `monetary_policy_law`** (executive / delegated / legislative) — WHO controls minting. Fills:
+- executive: `stability_monthly_change = 0.02`, `monthly_corruption = 0.02` (crown control, mild graft)
+- delegated: `global_commerce_modifier = 0.03`, `global_tax_modifier = 0.02` (competent ministry)
+- legislative (`allow = is_republic`): `global_commerce_modifier = 0.05`, `research_points_modifier = 0.02`,
+  `stability_monthly_change = -0.02` (accountable but slow). This gates `monetary_policy_setting`.
+
+**49. `monetary_policy_setting`** (recall / limited minting / more minting / issue bonds) — the stance,
+gated on `legislative_monetary_policy`:
+- currency_recall: `global_commerce_modifier = -0.05`, `stability_monthly_change = 0.03` (deflationary sound-money)
+- limited_minting: `monthly_corruption = -0.03`, `global_upper_strata_happyness = 0.03`
+- more_minting: `global_tax_modifier = 0.05`, `global_commerce_modifier = 0.05`, `stability_monthly_change = -0.02`
+- issue_bonds: `global_commerce_modifier = 0.1`, `global_capital_trade_routes = 1`, `monthly_corruption = 0.03`
+  (mirrors currency_law's `promissory_notes`).
+
+**50. `upper_house_powers_law`** (veto / review / delay) — gated `has_law = bicameral_legislature`:
+- power_of_veto: `stability_monthly_change = 0.03`, `global_middle_strata_happyness = 0.05`,
+  `monthly_political_influence = -0.05` (strong chamber, slower governance)
+- power_of_review: `global_upper_strata_happyness = 0.03`, `stability_monthly_change = 0.01`
+- power_of_delay: `monthly_political_influence = 0.03`, `global_middle_strata_happyness = -0.02` (weak chamber)
+
+**51. `upper_house_composition_law`** (appointed-spiritual / appointed / elected / state-reps) — gated
+`has_law = bicameral_legislature`:
+- appointed_hereditary_spiritual: `global_upper_strata_happyness = 0.05`, `omen_power = 0.05` (or religion
+  modifier), `global_middle_strata_happyness = -0.02`
+- appointed: `monthly_political_influence = 0.05`, `global_upper_strata_happyness = 0.02`
+- elected: `global_middle_strata_happyness = 0.05`, `global_lower_strata_happyness = 0.03`,
+  `stability_monthly_change = -0.02`
+- state_representatives: `global_pop_assimilation_speed_modifier = 0.05`, `diplomatic_reputation = 0.5`
+  (federal chamber).
+
+**LOC:** replace placeholder descs (`"Power of Veto desc"`, `""`) with real 1-line flavour for all option
+`_desc` keys (laws_l_english.yml:367-637). **VERIFY every modifier key** against the schema before commit
+(all keys above are drawn from existing law/modifier files, but confirm `omen_power`/`monthly_governor_wage`
+etc. resolve — a bad key is a boot error).
+
+**GUI:** the four vanilla stubs are ALREADY registered in `government_view.gui` (lines 2040-2144); no new
+area needed for them — only the `modifier`/loc fills + the brace fix.
+
+---
+
+### PART E — Cross-cutting build rules (apply to every group)
+
+1. **Guarded reads:** every bias var read at a pulse site MUST be `if = { limit = { has_variable = X } … }`
+   so the default (var unset) is byte-identical to today. (P7 proven, `se_QING_DECLINE.txt:919-920`.)
+2. **No-op default:** every group's first option sets the bias to 0 / the current value — enacting nothing
+   changes nothing. Verify against each var's INIT.
+3. **Signed meters:** `qing_reform_faction_balance` is ±100 via raw `change_variable` — NEVER drive with
+   `QING_DECLINE_nudge` (clamps at 0). (If (21) is ever built.)
+4. **Recomputed targets:** never `set_variable` the target directly — thread the bias into the formula
+   BEFORE the clamp (BIAS-B). Applies to 24/25/26/27/28/42/46.
+5. **on_enact calling effects:** (31) calls `QING_caravan_grant_aqsaqal` — confirm on_enact accepts effect
+   calls (estab laws prove set_variable works; a scripted_effect call is the same effect context — verify at
+   build).
+6. **GUI registration is mandatory:** an unregistered law group is invisible. Every new group needs a
+   `laws_widget` line in its domain `laws_widget_area` (PART A).
+7. **BOM:** `00_qing_statutes_laws.txt` — check whether it carries a BOM before Python-editing (setup/ reader
+   rejects BOM; common/ lexer tolerates it — but preserve whatever's there).
+8. **Boot-crash review + se_LOG** per standing rules; commit as freekumquats; push to merge-overnight.
+
+
+## PART V.2 — Court Intrigue Subsystems (Harem 后妃 + Eunuch 內務府)
+
+## Court Intrigue Expansion — Harem (后妃) + Eunuch (內務府) Subsystems
+
+Design for the two court subsystems that #37 and #38 grew into. Both build ON existing concrete code
+(mapped with line citations), reuse proven primitives, and obey the construction-risk rules that the
+harem/eunuch `create_character` paths already carry. **Nothing is built yet — this is for review.**
+
+### ADVERSARIAL REVIEW PASS (2026-07-24) — applied fixes
+Reviewers verified: NO create_character touched (blast radius confirmed untouched), NO #336 inline, named
+branch is runtime-only. Fixes applied below:
+- **1:1 validator (Risk 5/6):** the doc's "seat doesn't set qing_office_held" contradicted the regent
+  precedent (which DOES set it → would trip `QING_validate_one_position`, se_QING_COUNCIL.txt:228-247, which
+  counts both qing_office_held AND qing_is_palace_eunuch/qing_is_harem_consort). **RESOLUTION: separate
+  seat-marker.** Chief-eunuch and dowager seats set `qing_seat_chief_eunuch` / `qing_seat_dowager` (NOT
+  counted by the validator) + a display-only `qing_office_<key>_holder` country var (like the emperor/empress
+  seats), and do NOT set `qing_office_held`. So a promoted eunuch keeps only `qing_is_palace_eunuch` (1
+  marker → passes), a former-consort dowager keeps only `qing_is_harem_consort` (1 marker → passes).
+- **A3/A5 scope:** all passive rolls + new events fire FROM `QING_harem_pulse` at ROOT=CHI using
+  `ordered_in_list { variable = qing_harem_consorts }` and `trigger_event` to `type = country_event`s — NEVER
+  from a character-root GUI context (BT-13/#373). Stated explicitly in A3/A5.
+- **A1 favour drift (doom of the mechanic):** the earlier "drift toward rank×20" is a RESTORING drift that
+  flattens every consort to her rank's value → kills the squabbling favour is meant to create. FIX: favour is
+  a PURE ACCUMULATOR moved by the favour lever + events (+ a small decay toward 0 for un-favoured consorts,
+  NOT toward rank). Favour becomes an axis INDEPENDENT of rank (low-rank favourite / high-rank cold political
+  match) — that is the drama.
+- **A3 fights-the-player:** passive promote/demote must SKIP any consort the player acted on within 730 days
+  (`qing_consort_recently_acted` timer flag set by the player promote/demote levers; the roll gates
+  `NOT has_variable`). The court drifts only consorts the player has left alone.
+- **A5 dowager (harem.11) is ADVISORY, not forced:** she SUGGESTS a promotion/demotion (heed = +dowager
+  favour/+harmony; defer = −dowager favour; refuse = −−favour + scandal risk). The player keeps the wheel.
+- **B1 eunuch power formula (was underspecified):** define exactly —
+  `qing_eunuch_power = min(100, qing_eunuch_count*8 + (faction_leader ? 30 : 0) + corruption_band_bonus)`,
+  then `if chamberlain.charisma >= 8 { subtract 15 }` (a strong chamberlain checks the eunuchs). No
+  boolean-in-arithmetic; the chamberlain term is a discrete guarded subtraction.
+- **B2 doom-loop guard:** eunuch power feeds corruption/backlog/reform, but (a) the corruption nudge is
+  gated `qing_corruption_level < 70` so it can't spiral past the crisis band; (b) the reform-balance penalty
+  fires ONLY at high power (≥80), not the mid band; (c) add a PLAYER purge lever (a chamberlain decision,
+  cost stability/harmony, −30 power, 1825-day cooldown) so counterplay isn't gated behind an event roll.
+- **B2 reform-balance:** MUST use raw `change_variable` with the ±100 clamp (NEVER `QING_DECLINE_nudge`);
+  verify existing qing_reform_faction_balance sites are all raw change_variable first.
+
+### Hard constraints (from the code, non-negotiable)
+1. **`create_character`:** no modifiers, no HEALTH-type traits inside it OR in a boot-reachable follow-up
+   scope (the `castrated` trait was removed for exactly this — `se_QING_HOUSEHOLD.txt:96-103`,
+   `se_QING_HAREM.txt:63-65`). culture/religion must be LITERALS (a country-scope value floods 1.4M log
+   lines). New consorts/eunuchs spawn only at RUNTIME (pulse), never gamestate construction, and follow
+   the proven mint idiom.
+2. **Sorting iterators** (`ordered_character`, `ordered_in_list order_by=…`) must fire via a hidden
+   `trigger_event` trampoline, NEVER inlined in a scripted_gui button (#336 AV crash class —
+   `qing_harem_events.txt:176-217`).
+3. **Picker rows run at CHARACTER root** — re-root to CHI via a hidden country_event before running
+   ROOT-based machinery (BT-13/#373, `qing_harem_events.txt:154-163`).
+4. **1:1 office validator** (`se_QING_COUNCIL.txt:228-247`): a character may hold only one position
+   marker. A "chief eunuch" seat must be its OWN marker, NOT `qing_office_held` (else it trips the
+   validator; `qing_is_palace_eunuch` is already a tracked position). Use the non-appointable-seat shape
+   from `se_QING_SEATS.txt:15-18`.
+5. **Event throttle:** any new court event shares `qing_gc_event_slot_used` (test-then-claim) — at most
+   one court event per ~90-day pulse.
+6. **Perf:** reads are O(1) counters + O(court) `any_character`; never sweep pops/provinces.
+
+---
+
+## SUBSYSTEM A — Harem Intrigue (后妃之爭)
+
+### What exists (map summary)
+4-rank ladder (`qing_consort_rank` 1-4, hard caps 1/2/4/uncapped enforced in 5 synced places); roster +
+count + per-rank tallies; pickers draft·take / favour / promote; native heir via `make_pregnant`;
+empress = `current_ruler.spouse`; quarterly `QING_harem_pulse` with a harmony↔fertility loop + ONE
+12%-throttled intrigue event (schemer-vs-empress, 3 options). **Rank already feeds succession**:
+`se_QING_PRINCES.txt:113-130` gives a prince +25 (嫡子, empress's son) / +12 (貴子, mother rank≥3) to
+`qing_prince_backing`.
+
+### Green field (what's missing)
+No demote/disgrace (rank only rises); no promotion/demotion *chance* (deterministic); no per-consort
+favour/affinity var (only engine popularity/prominence); no dowager; no elevate-to-empress; only one
+intrigue event.
+
+### Design
+
+#### A1. A real favour meter — `qing_consort_favour` (char var, 0..100)
+The spine of squabbling. Seeded 30 on mint (follow-up scope, NOT in create_character). **[REVIEW FIX] Favour
+is a PURE ACCUMULATOR, independent of rank** — do NOT drift it toward rank×20 (a restoring drift flattens
+every consort to her rank and kills the squabbling). Nudged by:
+- **Favour lever (臨幸):** the chosen/random favour effects add +12 favour (on top of the existing +15
+  popularity + make_pregnant). The emperor's attention IS favour.
+- **Quarterly decay in `QING_harem_pulse`:** un-favoured consorts decay toward 0 by −1..−2 (attention
+  fades), NOT toward rank — so favour and rank can diverge (a beloved low-rank concubine; a prestigious but
+  cold political match). Local nudge helper mirroring `QING_DECLINE_nudge` (clamp 0..100).
+- **Intrigue outcomes** (below) move it in larger steps.
+Read as the ORDER KEY for promotion/demotion picks (augmenting prominence) and the intrigue schemer pick.
+
+#### A2. Demotion + disgrace — the missing downward path
+- **`QING_harem_demote_consort_target`** (mirror of promote, re-rooted): `qing_consort_rank -1` (floored
+  at 1), -15 favour, -10 popularity, harmony -3. Cannot demote below rank 1 (she leaves the ladder only by
+  death or disgrace). Player picker `qing_harem_demote_window` + trampoline `qing_harem.8`.
+- **`QING_harem_disgrace_consort`** (冷宮 "cold palace"): the terminal fall. Strips
+  `qing_is_harem_consort` (removes from roster like death, but she lives), sets a `qing_is_disgraced`
+  marker, -all favour, big popularity hit, harmony -5. Gated on rank (can't disgrace the 皇貴妃 without a
+  scandal event). This is the dismiss/expel the map found missing.
+
+#### A3. Promotion/demotion as a CHANCE, not a certainty
+New pulse step: **`QING_harem_resolve_standings`** — fires FROM `QING_harem_pulse` at ROOT=CHI using
+`ordered_in_list { variable = qing_harem_consorts }` (never a character-root GUI context — BT-13/#373). Each
+quarter, for the most-favoured eligible consort below her cap, a `random chance = f(favour, harmony)`
+promotes her; for the least-favoured high-rank, a chance demotes her. So standings SHIFT passively (the AI
+court churns), not only on player click. **[REVIEW FIX] the passive roll SKIPS any consort the player acted
+on within 730 days** (`limit = { NOT = { has_variable = qing_consort_recently_acted } }`; the flag is set with
+`days = 730` by the player promote/demote levers) — so the court only drifts consorts you've left alone, and
+never undoes a choice you just paid for. Throttled + cap-guarded against the same 5-place cap rule.
+
+#### A4. Rivalry & faction — `qing_consort_faction` (char var enum)
+Consorts cluster into factions (e.g. empress's bloc / a rising-consort's bloc / neutral), assigned by a
+pulse heuristic (highest-favour non-empress-aligned consort forms a rival bloc). Feeds:
+- The intrigue event's schemer pick (the rival bloc's leader schemes).
+- A new **harmony drain** when two blocs are both strong (court tension).
+This reuses the existing `qing_dynastic_harmony` meter as the tension proxy — no new global meter.
+
+#### A5. New intrigue events (each shares the court slot, fires from `QING_harem_pulse`)
+1. **qing_harem.9 — Pregnancy & the Question of an Heir (有喜):** on a consort conceiving (hook the
+   make_pregnant), a beat: elevate her rank (favour + backing), or the empress's bloc moves against her
+   (scandal risk). Couples directly to `qing_prince_backing` via her rank.
+2. **qing_harem.10 — Miscarriage / Loss (小產):** low-harmony + rival-bloc-strong roll; a pregnancy is
+   lost amid whispers of poison. Accuse (target a rival → disgrace chance) / mourn (harmony) / ignore.
+   NO health-trait manipulation — pure favour/harmony/event state.
+3. **qing_harem.11 — The Dowager Intervenes (太后懿旨):** if a dowager exists (see A6), she SUGGESTS a
+   promotion or demotion. **[REVIEW FIX] ADVISORY, not forced** — heed her counsel (do it, +dowager
+   favour/+harmony) / politely defer (no change, −dowager favour) / refuse outright (no change, −−dowager
+   favour + scandal risk). Models 孝聖憲皇后-era matriarchal weight without the game seizing the player's wheel.
+4. **qing_harem.12 — Scandal in the Inner Court (穢亂宮闈):** a high-rank consort implicated; disgrace
+   (冷宮) or cover-up (corruption +, harmony -). The path to A2's disgrace lever.
+
+#### A6. Dowager concept — `qing_office_dowager_holder` (display-only seat)
+Model the Empress Dowager (皇太后) as a non-appointable seat: the previous emperor's surviving empress/
+high-consort, installed at succession. She gives a standing prestige modifier and is the trigger-owner of
+qing_harem.11. **[REVIEW FIX — 1:1 validator] the install sets `qing_seat_dowager` (NOT counted by
+`QING_validate_one_position`) + the display-only `qing_office_dowager_holder` country var, and does NOT set
+`qing_office_held`** — so a former-consort dowager keeps only `qing_is_harem_consort` (1 marker, passes). Do
+NOT "mirror the regent seat exactly" (regent DOES set qing_office_held). One install hook at accession.
+
+### Harem risk assessment
+- **A1/A2/A3/A4:** LOW — all var + effect + event work on the RUNTIME path (no create_character changes).
+  The only care: keep the 5-place cap rule in sync when demotion crosses tiers.
+- **A5 events:** LOW — pure event content, share the court slot.
+- **A6 dowager:** LOW-MODERATE — touches the accession hook; mirror the regent-seat install exactly.
+- **NONE of this touches `create_character`** — the boot-AV blast radius is untouched. The one place we
+  read the mint path (A1 seeds favour) is in the EXISTING follow-up scope, not inside create_character.
+
+---
+
+## SUBSYSTEM B — Eunuch Influence (內務府 / 太監專權)
+
+### What exists (map summary — MORE than expected)
+The influence mechanic is already substantially wired via the **flag** `qing_eunuch_faction_leader`:
+corruption-triggered spawn in `QING_household_pulse` (corruption≥50 + weak chamberlain → 20% promote
+ablest eunuch: +ambitious, +loyal veterans, +gold, +corruption); 3 player levers (check / indulge /
+instrument); 3 events (.2 faction ascends, .5 good order, .6 oversteps); GUI + loc. **What's dead: the
+numeric `qing_eunuch_count` — written 4×, read nowhere.** All live logic keys off the flag.
+
+### Design — give the count teeth + deepen the influence web
+
+#### B1. Make `qing_eunuch_count` a live signal — `qing_eunuch_power` (derived 0..100)
+The header already DOCUMENTS a `qing_eunuch_power` "derived, not-stored" strength — build it for real.
+Compute it each pulse in `QING_household_pulse`. **[REVIEW FIX — exact formula, no boolean-in-arithmetic]:**
+`set_variable qing_eunuch_power = qing_eunuch_count`, `multiply = 8`; `if any_character{...faction_leader}
+{ change +30 }`; `+ corruption_band_bonus` (e.g. +10 if corruption ≥50); `if chamberlain.charisma >= 8
+{ change −15 }` (a strong chamberlain checks them); clamp 0..100. Gives the dead count a consumer (its whole
+point) and a single number the new effects read.
+
+#### B2. Eunuch power CONSUMES into the court (the missing bite)
+Each quarter, gated on `qing_eunuch_power` bands, the eunuch establishment exerts influence — reusing the
+mapped hook primitives:
+- **Corruption:** high power → standing `QING_DECLINE_nudge = { var = qing_corruption_level amount = +1/+2 }`
+  (idiomatic; HOUSEHOLD already nudges corruption via check/indulge). **[REVIEW FIX — doom-loop cap]** gated
+  `qing_corruption_level < 70` so eunuch graft can't spiral past the crisis band.
+- **Secretariat backlog (票擬):** high power → `change_variable qing_secretariat_backlog +N` — eunuchs
+  intercepting/slowing memorials, historically exact (敬事房 handled palace paperwork). Mirrors the +6
+  fresh-rescript nudge.
+- **Reform balance:** eunuchs are structurally reactionary → nudge `qing_reform_faction_balance`
+  **negative** −1/−2 (raw change_variable, ±100 clamp — NOT the DECLINE_nudge macro). **[REVIEW FIX]** fires
+  ONLY at very high power (≥80), not the mid band, so it's not a third simultaneous penalty at every level.
+All guarded, all small, all at existing nudge sites — the P7 bias discipline. **[REVIEW FIX — counterplay]**
+add a PLAYER purge lever (a chamberlain decision: cost stability/harmony, −30 eunuch power, 1825-day
+cooldown) so the exit isn't gated behind an event roll + a strong-chamberlain RNG check.
+
+#### B3. Chief Eunuch seat — `qing_office_chief_eunuch_holder` (display-only)
+When a faction leader entrenches (power ≥ high band for N quarters), he takes a named seat. **[REVIEW FIX —
+1:1 validator] the install sets `qing_seat_chief_eunuch` (NOT counted by `QING_validate_one_position`) + the
+display-only `qing_office_chief_eunuch_holder` country var; it does NOT set `qing_office_held`** — so the
+holder keeps only his `qing_is_palace_eunuch` marker (1 marker, passes the validator). Do NOT mirror the
+regent seat (regent DOES set qing_office_held → would trip the validator). The seat is the on-map face of
+太監專權 (a 李蓮英-type; period-note: famous eunuchs are post-1763, so 1763 starts get an anonymous 掌印太監).
+Gives a standing modifier and is the trigger-owner of new events.
+
+#### B4. Deepen the event web (share court slot)
+- **qing_household.7 — The Directorate Overreaches (內務府擅權):** high power beat; purge (costly, resets
+  power, needs a strong chamberlain) / tolerate (corruption+, backlog+) / harness (instrument path,
+  co-opt for throne).
+- **qing_household.8 — A Faction at Court (閹黨):** the eunuch bloc allies with a council faction — ties
+  into `se_QING_FACTION.txt` (`QING_faction_pick_ally`), tilting reform balance.
+- **qing_household.9 — Retrenchment (裁抑內宦):** a reformer emperor / strong chamberlain curbs the corps;
+  grants `qing_household_eunuchs_curbed` (exists), drops power, backlog relief.
+
+#### B5. The law on top — `qing_eunuch_policy_law` (restrict / standard / empowered)
+NOW it has bite. on_enact sets `qing_eunuch_policy` ∈ {restrict / standard / empowered}, read by B1/B2:
+- **restrict (裁抑):** caps `qing_eunuch_power` lower, halves its corruption/backlog output, +chamberlain
+  authority modifier. Historically the early-Qing 敬事房 discipline (Qing deliberately curbed eunuchs
+  after Ming excess).
+- **standard:** no-op (default, byte-identical).
+- **empowered (寵信):** raises the power cap, +privy-purse efficiency but +corruption/+backlog output and
+  −reform. The Ming-style road to 閹黨.
+Modifiers express the palace-management trade. This is the policy overlay on the now-live subsystem.
+
+### Eunuch risk assessment
+- **B1/B2:** LOW — pure counter derivation + nudges at existing sites. Gives the dead count a consumer.
+- **B3 seat:** LOW-MODERATE — non-appointable seat; mirror SEATS + DON'T trip the 1:1 validator.
+- **B4 events:** LOW — event content, share court slot.
+- **B5 law:** LOW — selector var read by B1/B2.
+- **create_character:** the ONLY mint is the existing `QING_household_mint_eunuch` (runtime pulse, boot
+  seed of 4). We add NO new boot-reachable spawn and NO health trait. Blast radius untouched.
+
+---
+
+## Build sequencing (fits the risk-ascending batch plan)
+These two subsystems are bigger than a law — they slot in as their OWN batches AFTER the law batches, or
+interleaved. Proposed:
+- **Batch 6 — Eunuch subsystem** (B1-B5): lower risk (mostly deepening existing wired code + reviving a
+  dead var). Do first of the two.
+- **Batch 7 — Harem subsystem** (A1-A6): more new surface (favour meter, demotion, factions, 4 events,
+  dowager seat). Do second.
+Each: author state → effects → pulse wire → events → loc → GUI (new levers/pickers + trampolines) →
+brace/quote check → code-review → BOOT-CRASH review (mandatory, create_character-adjacent) → commit as
+freekumquats → push.
+
+**USER DECISIONS (2026-07-24):**
+1. **Add BOTH seats** — Dowager (皇太后, A6) + Chief Eunuch (掌印太監/掌印太監, B3), non-appointable SEATS
+   shape, held out of pickers, NOT setting `qing_office_held` (1:1 validator).
+2. **Allow the anachronistic named branch** — a late-game/high-power branch may spawn a NAMED historical
+   eunuch (李蓮英-type) and named consorts via the `QING_roster_finalize { nick = NICKNAME_… }` pattern
+   (`se_QING_ROSTER.txt:45`). 1763 starts still get anonymous 掌印太監 / 選秀 consorts by default; the named
+   figure is a runtime-only (never boot-reachable) spawn, NO inline health trait. Author the NICKNAME_ loc
+   keys.
+3. **Build the FULL design** — A1-A6 + B1-B5, as Batches 7 (harem) and 6 (eunuch). Eunuch first (lower
+   risk, revives dead code + deepens already-wired flag mechanic); harem second (more new surface).
+
