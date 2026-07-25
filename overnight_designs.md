@@ -2546,3 +2546,40 @@ qing_delib_cohesion is a value-BLOCK recompute (set_variable = { value = { sum/c
 mechanism. Deferred to Batch 4 / a careful sub-step rather than forced into a bad fit.
 
 ### PENDING before Batch 3 commit: boot-crash+correctness review (dispatch), commit as freekumquats + push.
+
+## CHECKPOINT after Batch 3 (2026-07-24) — 3 of 5 batches done, all committed+pushed+reviewed
+- Batch 1 (0ce6e9957): 7-column GUI split + 5 trivial laws + 4 upstream stub fills + brace fix
+- Batch 2 (18309001a): 4 bias-A laws (#16/#19/#20/#21)
+- Batch 3 (c4502c8b7): 7 bias-B laws (#24/#25/#26/#28/#42/#46/#14)
+= 16 new Qing law groups + 4 stub fills, each boot-crash+correctness reviewed before commit.
+
+### Batch 4 (net-new-lite) — OPEN ITEMS to resolve deliberately before authoring (not rushed at run-tail):
+1. **#39 Tributary Ritual** — QING_tribute_stamp_cadence (TRIBUTE:253-268) stamps a per-subject `days=` by
+   TAG. A country cadence law must bias the stamped days by a global var — more than "one read" (days= wants
+   a literal or var). Hook: read qing_tribute_cadence_law to pick which branch/scale. Feasible, needs care.
+2. **#40 Frontier Settlement** — migrate the one-way flag (POPULATION:242 set, :95 read) to a tri-state
+   qing_frontier_settle_policy. Must preserve the existing flag semantics (flag-set ⇒ policy≥1) so no
+   regression. Needs a migration guard.
+3. **#43 Amban Establishment** — the ministry_estab precedent (SUBPOSTS:113-120: fill-to-target loop reading
+   qing_law_ministry_estab_target) is the model. The amban post-sweep (AMBAN:253+) posts ONE per call with no
+   target. Need to add a count + fill-to-target loop reading a new qing_amban_estab_target. Real plumbing.
+4. **#44 Modernization Doctrine** — modifier-swap on tech/discipline/morale/research keys (all confirmed valid
+   in Batch 1-3). UNIT-UNLOCK from a law is UNPROVEN — build modifier-only unless an oracle (TI/Invictus)
+   shows a law unlocking a unit. Low risk as modifier-only.
+5. **#27 Customs Regime (upstream trade)** — modifier-swap on global_commerce_modifier/global_capital_trade_
+   routes. MUST verify at build that CHI actually uses vanilla trade routes at 1763 (else no-op for the Qing
+   player). If it's a no-op, reconsider (merge with #30 or drop).
+6. **#34 Succession Method / #35 Regency Rules** — new selector var read at the accession/regent-install pick
+   (PRINCES / SEATS). Straightforward selector-with-read; verify the pick site.
+7. **#45 Exam Curriculum** — classical/practical only (abolition DEFERRED). New qing_exam_curriculum var
+   biasing qing_exam_pass_rate; verify the exam recompute site.
+8. **#15 Drill Posture / #17 Southern Study / #18 Canton Hoppo** — the 3 remaining refuted re-bases, all
+   net-new-lite: #15 needs its OWN drill vars (NOT P7's) + the High-Qing era-guard fix (pairs with Task #32);
+   #17 needs a new recruit-rate input + a recruitment pulse gate (SOUTHERNSTUDY has none today); #18 needs a
+   new hoppo drift-bias var at the hardcoded nudge (CANTON:150/153).
+9. **#22 Deliberative** — bias the qing_delib_backing accrual (not the value-block cohesion recompute).
+10. **#31 tariff (#30)** — Canton real-goods rate multiply (pairs with the Task #32 caravan rework — both
+    touch the Canton/caravan yield formulas; do together to avoid conflicting edits).
+NOTE: several of these (#43 loop, #17 new pulse, #15 era-guard) are heavier than "one read" — genuine
+net-new plumbing. Task #32 (caravan + P7 era-guard) should be done alongside #15/#30 since they share the
+DECLINE era-guard and Canton/caravan yield sites.
