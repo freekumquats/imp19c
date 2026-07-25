@@ -196,3 +196,71 @@ QING_war_review_commanders = {
 
 	LOG_exit = { sys = QING  fn = "QING_war_review_commanders"  result = OK }
 }
+
+# ======================================================================
+# [Phase 4d] QING_war_grant_legion_distinction — the MINISTRY-OF-WAR tie-in for legion
+# distinctions. Called from on_legion_raised (00_specific_from_code.txt) in LEGION scope for a
+# freshly-raised CHI legion. Distinctions cannot be gated in their definition (oracle-verified),
+# so the 兵部's competence is expressed HERE, at the grant: the band of qing_min_perf_war decides
+# WHICH distinction the new legion earns.
+#   - a bare/failing 兵部 (< 40, or the office vacant): the basic 綠營標營 mark, or nothing.
+#   - an adequate 兵部 (40..69): the workhorse marks (綠營/藤牌/索倫/駝城).
+#   - a well-run 兵部 (>= 70): the elite corps (健銳營 / 火器營).
+# A legion that already carries a Qing distinction is left alone (no re-grant / stack). The
+# choice within a band is by the raising province's terrain-ish flavour kept simple: a single
+# random_list so repeated musters vary. Guarded on tag + var existence. Scope: LEGION (owner reads
+# the country). No iterator over characters here (this is the legion itself) — no compile risk;
+# it runs from a real on_action, not a compiled GUI button.
+# ======================================================================
+QING_war_grant_legion_distinction = {
+	# scope: legion. Only for the Qing, and only if this legion has no Qing mark yet.
+	owner = { save_scope_as = qing_legion_owner }
+	if = {
+		limit = {
+			scope:qing_legion_owner = { tag = CHI }
+			NOR = {
+				has_distinction = distinction_qing_green_standard
+				has_distinction = distinction_qing_jianrui
+				has_distinction = distinction_qing_solon
+				has_distinction = distinction_qing_firearms_brigade
+				has_distinction = distinction_qing_rattan_shield
+				has_distinction = distinction_qing_camel_fort
+			}
+		}
+		if = {
+			# ELITE band — a well-run War Ministry (>= 70): the storming/firearms corps.
+			limit = {
+				scope:qing_legion_owner = {
+					has_variable = qing_min_perf_war
+					var:qing_min_perf_war >= 70
+				}
+			}
+			random_list = {
+				50 = { add_distinction = distinction_qing_jianrui }
+				50 = { add_distinction = distinction_qing_firearms_brigade }
+			}
+			LOG_line = { sys = QING  msg = "war-ministry granted an ELITE legion distinction (兵部 well-run) for" }
+		}
+		else_if = {
+			# ADEQUATE band (40..69): the workhorse provincial/frontier marks.
+			limit = {
+				scope:qing_legion_owner = {
+					has_variable = qing_min_perf_war
+					var:qing_min_perf_war >= 40
+				}
+			}
+			random_list = {
+				25 = { add_distinction = distinction_qing_green_standard }
+				25 = { add_distinction = distinction_qing_rattan_shield }
+				25 = { add_distinction = distinction_qing_solon }
+				25 = { add_distinction = distinction_qing_camel_fort }
+			}
+			LOG_line = { sys = QING  msg = "war-ministry granted a standard legion distinction (兵部 adequate) for" }
+		}
+		else = {
+			# BARE band (< 40 or no var): only the basic Green-Standard mark.
+			add_distinction = distinction_qing_green_standard
+			LOG_line = { sys = QING  msg = "war-ministry granted only the basic Green-Standard distinction (兵部 weak/vacant) for" }
+		}
+	}
+}

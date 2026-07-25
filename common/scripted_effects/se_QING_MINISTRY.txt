@@ -897,6 +897,10 @@ QING_ministry_recompute_perf_grand_secretariat = {
 	# O(pool). The list mirrors qing_scholar_pool but is panel-owned so the roster is stable.
 	clear_variable_list = qing_hanlin_scholars
 	set_variable = { name = qing_hanlin_scholar_count  value = 0 }
+	# [Phase 4C] tally the corps' summed literary gift (finesse+charisma) — the RESEARCH-luster
+	# tier reads it (mirrors qing_southernstudy_literary). A deep bench of able laureates drives
+	# the realm's learning. Reset here, accumulated in the roster loop below.
+	set_variable = { name = qing_hanlin_literary  value = 0 }
 	if = {
 		limit = { has_variable_list = qing_scholar_pool }
 		every_in_list = {
@@ -905,9 +909,18 @@ QING_ministry_recompute_perf_grand_secretariat = {
 			ROOT = {
 				add_to_variable_list = { name = qing_hanlin_scholars  target = prev }
 				change_variable = { name = qing_hanlin_scholar_count  add = 1 }
+				# [Phase 4C] the researcher characters' skill IS the research bonus (the user's ask).
+				change_variable = { name = qing_hanlin_literary  add = prev.finesse }
+				change_variable = { name = qing_hanlin_literary  add = prev.charisma }
 			}
 		}
 	}
+	# [Phase 4C] set the RESEARCH luster to the tier the Academy's literary depth warrants
+	# (research_points_modifier + civilization + efficiency). Tier-swap (remove-then-reapply),
+	# so a shrinking Academy steps the bonus down — no restoring-drift ratchet. Runs inside this
+	# already-wired recompute (a plain pulse/on-open path, NOT a compiled GUI button) — clear of
+	# the scripted-gui compile-recursion class.
+	QING_hanlin_apply_research_luster = yes
 	# base: adequate.
 	set_variable = { name = qing_min_perf_grand_secretariat  value = 50 }
 	if = {
@@ -980,6 +993,32 @@ QING_ministry_recompute_perf_grand_secretariat = {
 	if = { limit = { var:qing_min_perf_grand_secretariat < 0 }   set_variable = { name = qing_min_perf_grand_secretariat  value = 0 } }
 	if = { limit = { var:qing_min_perf_grand_secretariat > 100 } set_variable = { name = qing_min_perf_grand_secretariat  value = 100 } }
 	LOG_line = { sys = QING  msg = "grand-secretariat (Hanlin) performance recomputed" }
+}
+
+# ======================================================================
+# [Phase 4C] QING_hanlin_apply_research_luster — set the Hanlin RESEARCH country modifier to
+# the tier the Academy's literary depth warrants. Scope: COUNTRY (CHI). Remove-then-reapply so
+# the tier tracks a growing/shrinking corps (no ratchet). Two tiers keyed on qing_hanlin_literary
+# (summed finesse+charisma of the serving Hanlin scholars): a bare Academy confers nothing, a
+# modest one a minor research luster, a brilliant one a major one. This is the vanilla-research
+# tie-in — research_points_modifier + global_monthly_civilization + max_research_efficiency,
+# driven by the researcher characters on the roster. Called only from the recompute above.
+# ======================================================================
+QING_hanlin_apply_research_luster = {
+	# clear whichever tier is live so we reapply the correct one (no stacking/leak).
+	if = { limit = { has_country_modifier = qing_hanlin_research_minor } remove_country_modifier = qing_hanlin_research_minor }
+	if = { limit = { has_country_modifier = qing_hanlin_research_major } remove_country_modifier = qing_hanlin_research_major }
+	# a brilliant Academy (literary depth >= 45): major research luster.
+	if = {
+		limit = { var:qing_hanlin_literary >= 45 }
+		add_country_modifier = { name = qing_hanlin_research_major }
+	}
+	# a modest Academy (>= 20): minor research luster.
+	else_if = {
+		limit = { var:qing_hanlin_literary >= 20 }
+		add_country_modifier = { name = qing_hanlin_research_minor }
+	}
+	# a bare/empty Academy confers no research luster (both tiers already cleared above).
 }
 
 # ======================================================================
