@@ -786,3 +786,74 @@ area needed for them — only the `modifier`/loc fills + the brace fix.
 **Re-based (1763-live, verifying):** Drill Posture (was Army Modernization — banner/gs drill bias, needs High-Qing fix); Inner-Court Scholarship 南書房 (was Overseas Education); Canton Supervision 粵海關監督 (was Great-Power Alignment — Hoppo squeeze); Frontier Diplomacy 理藩院 (was Foreign-Office — Lifan Yuan Amban coverage); National Integration (→NATIONALISM mechanic: qing_national_awakening/civic-identity/citizenship); Modernization Doctrine 自強 (→TECH + new units + modifiers); Customs Regime (→UPSTREAM base-game trade system, vs Canton/caravan; may merge w/ Tariff).
 **Upstream stubs:** Monetary Policy (executive/delegated/legislative³); Monetary Setting (recall/limited/more/bonds); Upper House Powers (veto/review/delay); Upper House Composition (spiritual/appointed/elected/state-reps).
 ³is_republic gated
+
+---
+
+## MODIFIER-TOUCH TABLE (all laws — Qing-specific vs upstream/vanilla, 2026-07-24)
+Split per law between QING-SPECIFIC (custom `qing_*` vars / custom modifiers) and UPSTREAM/VANILLA (base-game
+engine modifier keys). NOTE: for IMPLEMENTED + upstream-stub rows the keys are drawn from actual code / the
+fill design (reliable). For PENDING rows the vanilla-modifier column is DESIGN INTENT — exact keys are
+schema-verified at build (e.g. global_migration_speed, unit-unlock). A pure Qing-var-selector law (exam
+cadence, succession, tributary ritual, regency, assimilation, amban) touches NO vanilla modifier — its whole
+effect is how a Qing pulse reads the var.
+
+### IMPLEMENTED (13)
+| Law | Qing-specific | Upstream/vanilla |
+|---|---|---|
+| Penal Code 大清律例 | — | global_unrest, monthly_legitimacy, monthly_tyranny, stability_monthly_change, global_monthly_state_loyalty |
+| Ritual Orthodoxy 禮部 | — | monthly_legitimacy, stability_monthly_change, global_commerce_modifier |
+| Opium Policy 鴉片 | qing_opium_posture → qing_currency_stress | — |
+| Caravan Customs 定稅則 | qing_caravan_customs_rate → qing_caravan_prosperity income | add_treasury (effect) |
+| Salt Admin 鹽政 | qing_salt_gabelle_reformed → salt revenue/ministry/venal | add_treasury (effect) |
+| Canton Regime 廣州體制 | qing_canton_regime flag → Canton pulse | add_treasury, add_gold (effects) |
+| Ethnic Governance 滿漢 | qing_ethnic_stance_* modifiers, qing_ethnic_tension | (in modifiers) manpower, discipline, global_tax_modifier, unrest, state-loyalty, stability |
+| Office-Selling 捐納 | qing_office_purchased_ranks modifier, qing_bureau_integrity | (in modifier) monthly_corruption +0.08, global_tax_modifier −0.05, pop_promotion −0.05 |
+| Exam Cadence 科舉 | qing_law_exam_cadence → qing_exam_triennial_cooldown | — |
+| Ministry Estab 員額 | qing_law_ministry_estab_target | — |
+| Advisory Estab 顧問 | qing_advisor_slot_cap | — |
+| Canton Purse 內帑 | qing_canton_purse_share | add_treasury, add_gold (effects) |
+| Military Upkeep 武備 (P7) | qing_banner_upkeep_bias, qing_greenstandard_upkeep_bias → decay | land_morale_modifier, army_maintenance_cost |
+
+### PENDING (surviving set)
+| Law | Qing-specific | Upstream/vanilla |
+|---|---|---|
+| Industrial Encouragement 官辦/官督商辦/商辦 | — | research_points_modifier, global_commerce_modifier, global_tax_modifier, middle-strata output |
+| Princely Establishment | — | prince loyalty/threat (character-scope) |
+| Public Works Priority 三山五園 | — | construction, prestige, monthly_corruption (grand) |
+| Frontier Trade Sovereignty 阿奇木 | qing_caravan_aqsaqal_granted (via lever) | — |
+| Overseas Expansion | qing_tributary_prestige (optional) | naval/colonial cost, prestige |
+| Provincial Militarization 勇營 | ±1 qing_han_provincial_power | (bands) manpower, central-control |
+| Cultural Patronage 文治 | qing_wenzhi_patronage bias | prestige, treasury |
+| Deliberative Governance 議政王大臣 | qing_delib_cohesion → qing_banner_decay | — |
+| Monetary Response | qing_currency_stress bias | (pairs w/ vanilla currency_law; no doubling modifier) |
+| Anti-Corruption 肅貪 | −1/−2 qing_corruption_level (floored) | admin-efficiency, stability_monthly_change, upper-strata happiness |
+| Heterodox Sect 白蓮教 | −1 qing_sect_pressure (gated) | minority happiness |
+| Reform Posture | ±1 signed qing_reform_faction_balance | reform-posture modifier |
+| Council Composition | qing_council_eff_target bias | (+ dyarchic modifier) |
+| Canal Quota 漕運 | qing_canal_jiangnan_quota bias | Jiangnan happiness |
+| Xinjiang Admin 屯田/伯克 | qing_xj_consolidation bias | cost |
+| Missionary Policy | qing_social_friction_target bias; cathedral gate | — |
+| Censorate Empowerment 都察院 | qing_censorate_vigor bias | official happiness |
+| Tariff Regime 關稅 | rate × qing_canton_yield_tmp (real goods) | add_treasury (effect) |
+| Succession Method 秘密立儲 | qing_succession_mode → accession pick | — |
+| Regency Rules | qing_regency_pref → regent install | — |
+| Tributary Ritual 朝貢 | qing_tribute_cadence_law → cooldown branch | — |
+| Frontier Settlement 移民實邊 | qing_frontier_settle_policy (tri-state) | global_migration_speed(?), minority happiness |
+| Assimilation Doctrine 漢化 | qing_assimilation_doctrine → identity/sinic drift | — |
+| Amban Establishment 理藩院 (=#43) | qing_amban_estab_target → amban staffer | — |
+| Exam Curriculum | qing_exam_curriculum → qing_exam_pass_rate | research_points_modifier |
+| National Integration | qing_civic_law_bias → qing_civic_identity target | traditional-legitimacy, assimilation |
+| Customs Regime (upstream trade) | — | global_commerce_modifier, global_capital_trade_routes, global_tax_modifier |
+| Modernization Doctrine 自強 | — | discipline, land_morale_modifier, research_points_modifier, monthly_military_experience (+ maybe unit unlock) |
+| Drill Posture (was Army Mod.) | qing_banner_drill_bias, qing_greenstandard_drill_bias → decay | land_morale_modifier, discipline |
+| Inner-Court Scholarship 南書房 | new recruit-rate var → Southern Study | monthly_legitimacy, prestige |
+| Canton Supervision 粵海關監督 | qing_hoppo_supervision_bias → qing_hoppo_squeeze | — |
+| Frontier Diplomacy 理藩院 | (= Amban Establishment above) | — |
+
+### UPSTREAM STUBS (fill empty modifier={} — all vanilla keys)
+| Law | Upstream/vanilla |
+|---|---|
+| Monetary Policy | stability_monthly_change, monthly_corruption, global_commerce_modifier, global_tax_modifier, research_points_modifier |
+| Monetary Setting | global_commerce_modifier, global_tax_modifier, global_capital_trade_routes, monthly_corruption, global_upper_strata_happyness |
+| Upper House Powers | stability_monthly_change, global_middle_strata_happyness, monthly_political_influence |
+| Upper House Composition | global_upper_strata_happyness, monthly_legitimacy, global_middle_strata_happyness, global_lower_strata_happyness, global_pop_assimilation_speed_modifier, diplomatic_reputation |
