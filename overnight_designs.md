@@ -2657,3 +2657,26 @@ Braces: statutes 387/387, CANTON 115/115, gov_view 2035/2035.
 Batch-4 progress: 4a (#44/#27/#45) + 4b (#34) + 4c (#18) = 6 laws built. Remaining net-new-lite: #22
 (deliberative-backing accrual bias). Remaining heavy-plumbing: #35 (directional regency echo), #39/#40/#43/
 #15/#17/#30/#31.
+
+---
+## PART VI — Batch 4d IMPLEMENTED (2026-07-24): #43 Amban Establishment
+
+**STATUS: BUILT + reviewed + committed.** Net-new-lite: a posts-per-sweep target on the amban auto-sweep.
+
+- **#43 Amban Establishment (駐紮大臣員額)** — `qing_amban_establishment_law`, frontier domain. on_enact writes
+  qing_amban_estab_target (1 gradual default / 2 forward / 3 full). Read once by QING_amban_post_sweep
+  (se_QING_AMBAN.txt) as a `while = { count = var:qing_amban_estab_target }` wrapping the existing
+  random_subject post. Default 1 = byte-identical to the old single-post behaviour. Each pass re-picks a
+  DIFFERENT unattended march (QING_amban_wire sets qing_amban_here synchronously → the candidate limit
+  excludes it next pass), so N passes staff up to N distinct dependencies; a fully-staffed frontier no-ops.
+- Registered gov_view frontier area (after xinjiang_admin). Loc notes the Lifan-Yuan-supervisor prereq.
+
+REVIEW (while-loop is the risk): NO recursion (QING_amban_post→wire never calls the sweep); count bounded
+1..3 (never unbounded); empty random_subject = clean no-op; sweep is a plain QING_GOV_pulse effect, NOT a
+compiled button (compile-recursion class N/A); `count = var:X` proven (se_PRICE.txt:236); default seeded to 1
+if never enacted. Braces: statutes 401/401, AMBAN 235/235, gov_view 2037/2037.
+
+Batch-4 progress: 4a (#44/#27/#45) + 4b (#34) + 4c (#18) + 4d (#43) = 7 laws built.
+Remaining: #22 (needs new backing-drift mechanic — deferred, no clean hook), #35 (directional regency echo),
+#39 (tributary-ritual cadence), #40 (frontier-settlement tri-state — migration-guard care), #15/#17/#30/#31
+(the Task-#32-coupled cluster: DECLINE era-guard + Canton/caravan yield + new recruit pulse).
