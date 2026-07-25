@@ -2703,3 +2703,39 @@ Batch-4 progress: 4a (#44/#27/#45) + 4b (#34) + 4c (#18) + 4d (#43) + 4e (#39) =
 Remaining: #22 (no clean hook — needs new backing-drift mechanic, deferred), #35 (directional regency echo),
 #40 (frontier-settlement tri-state — the valve is lever-only, not pulse; needs migration-guard care),
 #15/#17/#30/#31 (the Task-#32 cluster — shared DECLINE era-guard + Canton/caravan yield + new recruit pulse).
+
+---
+## PART VII — BT-M: New Treasure Fleet tree expansion (DESIGN, 2026-07-25)
+
+Boot test: the 新寶船隊 tree has only 4 linear tasks; user wants it DRAMATICALLY expanded (cf. the
+35-task colonization tree). Keep the proven idiom (player does the real work; mission recognises it;
+gate on real num_of_ships / port levels + treasury cost; reward prestige + concrete effects + a
+country modifier + LOG_line). Structure (branching, ~15 tasks):
+
+SPINE (→ capstone):
+- qing_treasure_revive_yards (振興船政) — ROOT [keep]
+- qing_treasure_build_ports (廣建船塢) — requires yards; port_building>=3 [keep]
+- qing_treasure_amass_fleet (聚舟師) — requires ports; num_of_ships>=20 [keep]
+- qing_treasure_grand_shipyard (龍江船廠, NEW) — requires build_ports; a 2nd top sea port (2x port_building>=3)
+- qing_treasure_capstone (下西洋) — requires amass_fleet; num_of_ships>=30 [keep, final]
+
+VOYAGE FAN (from amass_fleet — "fund + sail", gate = treasury + rising num_of_ships; NOT conquest,
+matching the tribute-diplomacy history; each grants tributary-prestige nudge + wealth + ruler glory +
+a per-leg country modifier). West-to-progressively-farther:
+- qing_treasure_champa (占城) — near landfall; ships>=20
+- qing_treasure_malacca (滿剌加) — the entrepôt; ships>=22
+- qing_treasure_ceylon (錫蘭) — ships>=24
+- qing_treasure_calicut (古里, India) — ships>=26
+- qing_treasure_hormuz (忽魯謨斯, Persian Gulf) — ships>=28
+- qing_treasure_aden (阿丹, Arabia) — ships>=30
+- qing_treasure_malindi (麻林, E Africa — the giraffe) — ships>=34; farthest
+
+LEGACY:
+- qing_treasure_mao_kun_chart (鄭和航海圖, NEW) — requires amass_fleet; treasury; grants a naval/research modifier
+- qing_treasure_bring_tribute (萬國來朝, NEW) — requires a couple of voyages; big tributary-prestige swell
+
+NEW EFFECTS (se_QING_TREASURE_FLEET.txt): QING_treasure_voyage_leg = { region = X } — a shared reward
+helper (tributary-prestige nudge + wealth via CURRENCY_grant_country_wealth + ruler popularity + a named
+leg modifier). Reuses proven idioms only. Flavor names/text pending the Zheng-He research digest.
+REVIEW GATES: no new num_of_ships-on-RHS issues (num_of_ships>=N is a literal RHS, fine); each voyage
+country modifier distinct; treasury costs on_start; all CHI-only, player-only (inherit tree potential).

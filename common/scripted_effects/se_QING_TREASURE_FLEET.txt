@@ -57,6 +57,34 @@ QING_treasure_open_yards = {
 }
 
 # ======================================================================
+# [BT-M 2026-07-25] QING_treasure_grand_shipyard — the great state yard at Nanjing (龍江船廠). Scope:
+# COUNTRY (CHI). The naval-industrial deliverable off the ports: expand the ablest coastal sea port to
+# the top level (a second developed harbour after build_ports) and lay down the industrial base — an
+# industrial estate at the yard so the hulls have a manufactory behind them. Guarded per the open-yards
+# idiom so it no-ops cleanly if no suitable coastal berth exists. Concrete, on-map, proven idioms only.
+# ======================================================================
+QING_treasure_grand_shipyard = {
+	LOG_enter = { sys = QING  fn = "QING_treasure_grand_shipyard" }
+	if = {
+		limit = { any_owned_province = { is_port = yes } }
+		# the ablest held sea port becomes the great yard: top out its harbour + seed an industrial estate.
+		ordered_owned_province = {
+			limit = { is_port = yes }
+			order_by = total_population
+			max = 1
+			if = { limit = { NOT = { num_of_port_building >= 3 } }  add_building_level = port_building }
+			add_building_level = industrial_estate
+			add_civilization_value = 4
+		}
+		LOG_line = { sys = QING  msg = "treasure fleet: the Longjiang shipyard is founded at the home port for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_treasure_grand_shipyard"  reason = "no sea port to found the grand shipyard at for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_treasure_grand_shipyard"  result = OK }
+}
+
+# ======================================================================
 # QING_treasure_launch_fleet — spawn the 寶船隊 itself. Scope: COUNTRY (CHI). A real navy of great
 # treasure-ships (mega_galley — the giant nine-masted 寶船) with a brig escort screen, raised at a
 # held coastal home port (fallback to the ablest coastal province). Mirrors QING_selfstr_raise_fleet
@@ -119,6 +147,31 @@ QING_treasure_complete_voyage = {
 	}
 	LOG_line = { sys = QING  msg = "treasure fleet: the 寶船隊 returns from the Western Ocean in triumph for" }
 	LOG_exit = { sys = QING  fn = "QING_treasure_complete_voyage"  result = OK }
+}
+
+# ======================================================================
+# [BT-M 2026-07-25] QING_treasure_voyage_leg — the shared reward for sailing one leg of the 下西洋
+# to a historical destination (Champa / Malacca / Ceylon / Calicut / Hormuz / Aden / Malindi). Scope:
+# COUNTRY (CHI). A treasure-voyage leg is DIPLOMACY, not conquest — the fleet overawes the port, trades,
+# and draws its court into the 朝貢 order. So the reward is: a swell of tributary prestige (guarded on the
+# counter existing), a haul of trade wealth carried home (CURRENCY_grant_country_wealth — the proven
+# thousands= idiom, se_QING_CUSTOMS:195), ruler glory, and a distinct per-leg country modifier so the
+# player sees which shores the fleet has reached. $leg$ = the modifier-name suffix; $wealth$ = the haul
+# (thousands); $prestige$ = the tributary-prestige nudge. Reuses only proven idioms. No die-roll outcome.
+# ======================================================================
+QING_treasure_voyage_leg = {
+	LOG_enter = { sys = QING  fn = "QING_treasure_voyage_leg ($leg$)" }
+	add_country_modifier = { name = qing_treasure_leg_$leg$  duration = -1 }
+	CURRENCY_grant_country_wealth = { thousands = $wealth$ }
+	add_legitimacy = 4
+	if = { limit = { exists = current_ruler }  current_ruler = { add_popularity = 10 } }
+	# the leg draws the port's court into the tributary order — lift the counter if it is live.
+	if = {
+		limit = { has_variable = qing_tributary_prestige }
+		QING_DECLINE_nudge = { var = qing_tributary_prestige  amount = $prestige$ }
+	}
+	LOG_line = { sys = QING  msg = "treasure fleet: a voyage leg reaches $leg$ for" }
+	LOG_exit = { sys = QING  fn = "QING_treasure_voyage_leg"  result = OK }
 }
 
 # ======================================================================
