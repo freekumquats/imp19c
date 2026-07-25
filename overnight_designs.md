@@ -2637,3 +2637,23 @@ branch (bounded); QING_DECLINE_nudge target is a 0..100 meter (safe). Braces: st
 DEFERRED within #35 (Regency Rules): the regency arc touches a DIRECTIONAL reform-echo (reformer vs
 reactionary regent), not a scalar severity — needs the reform-echo sign semantics worked out, so it is NOT
 folded in here. Remaining heavier Batch-4 items unchanged (#39/#40/#43/#15/#17/#18/#22/#30/#31).
+
+---
+## PART VI — Batch 4c IMPLEMENTED (2026-07-24): #18 Hoppo Regulation
+
+**STATUS: BUILT + reviewed + committed.** Bias-A accumulator on the Canton Hoppo-squeeze drift.
+
+- **#18 Hoppo Regulation (粵海關章程)** — `qing_hoppo_regulation_law`, fiscal domain. on_enact writes
+  idempotent qing_hoppo_regulation_bias (0 customary-farm default / -1 board-audited / +1 tax-farmed). Read
+  once per Canton pulse (se_QING_CANTON.txt) as an extra drift term on qing_hoppo_squeeze, right after the
+  base +3/+1 creep — the bias-A accumulator shape. Guarded on has_variable; amount=var:X is proven (CARAVAN
+  :149, DECLINE:927-928 upkeep bias) and QING_DECLINE_nudge clamps 0..100 (negative subtracts, no underflow).
+  Audited slows the squeeze (-1) + eases corruption; tax-farmed accelerates it (+1) for an immediate tax cut.
+- Registered in gov_view fiscal area (after canton_purse). Full loc with callouts.
+
+REVIEW: idempotent on_enact; guarded read; proven var-amount nudge on a clamped 0..100 meter; no RHS-var.
+Braces: statutes 387/387, CANTON 115/115, gov_view 2035/2035.
+
+Batch-4 progress: 4a (#44/#27/#45) + 4b (#34) + 4c (#18) = 6 laws built. Remaining net-new-lite: #22
+(deliberative-backing accrual bias). Remaining heavy-plumbing: #35 (directional regency echo), #39/#40/#43/
+#15/#17/#30/#31.
