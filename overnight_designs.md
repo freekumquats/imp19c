@@ -2390,3 +2390,79 @@ freekumquats → push.
 3. **Build the FULL design** — A1-A6 + B1-B5, as Batches 7 (harem) and 6 (eunuch). Eunuch first (lower
    risk, revives dead code + deepens already-wired flag mechanic); harem second (more new surface).
 
+
+---
+
+# PART VI — LAW EXPANSION IMPLEMENTATION LOG (BUILDING 2026-07-24, branch merge-overnight)
+*Autonomous build of the reviewed law design (LAW_EXPANSION_DESIGN_DOC.md). Decisions logged here per user.*
+
+## Batch 1 — GUI columns + trivial laws + upstream stubs
+
+### Step 1 — Upstream Victorian-TC stubs FILLED + brace fix (DONE)
+The 4 stubs shipped with empty `modifier={}` on every option (absent from vanilla + both oracle repos).
+All 4 law files are UTF-8 **BOM + CRLF** — edited at byte level (Python) to preserve endings (a naive edit
+flips CRLF→LF = huge junk diff). The loc file `laws_l_english.yml` is BOM + **LF** (different) — edited with
+LF-preserving Edits.
+- **`00_administrative_laws.txt` — brace bug FIXED + #48 filled.** Was 9-open/8-close: `delegated_monetary_policy`
+  never closed, so `legislative_monetary_policy` was mis-nested inside it (group had only 2 valid options).
+  Rewrote the whole `monetary_policy_law` block correctly (now 9/9). Fills: executive = +0.02 stability /
+  +0.02 corruption; delegated = +0.03 commerce / +0.02 tax; legislative (is_republic) = +0.05 commerce /
+  +0.02 research / −0.02 stability.
+- **`00_monetary_policy_setting.txt` — #49 filled** (10/10 braces). currency_recall = −0.05 commerce / +0.03
+  stability; limited_minting = −0.03 corruption / +0.03 upper-happy; more_minting = +0.05 tax / +0.05 commerce
+  / −0.02 stability; issue_bonds = +0.1 commerce / +1 capital-trade-routes / +0.03 corruption.
+- **`00_upper_house_laws.txt` — #50/#51 filled** (18/18 braces). Powers: veto = +0.03 stab / +0.05 mid-happy /
+  −0.05 pol-influence; review = +0.03 upper-happy / +0.01 stab; delay = +0.03 pol-influence / −0.02 mid-happy.
+  Composition: appointed_hereditary_spiritual = +0.05 upper-happy / **+0.05 monthly_legitimacy** (replaced the
+  WRONG `omen_power` = MINING output in this TC) / −0.02 mid-happy; appointed = +0.05 pol-influence / +0.02
+  upper-happy; elected = +0.05 mid / +0.03 low / −0.02 stab; state_representatives = +0.05 assimilation /
+  +0.5 diplo-reputation.
+- **All 13 modifier keys VERIFIED valid** (each appears in 6-53 existing common/ files). No boot-error risk.
+- **LOC: all 14 placeholder option `_desc` filled** with real flavour + the gate-tooltip rule applied — every
+  gated option's desc calls out its prerequisite (#R Requires: a republic / a bicameral legislature /
+  legislative monetary policy #!). These 4 stubs keep their EXISTING vanilla GUI registration (not Qing
+  statutes) — no new area needed for them.
+
+### Step 2 — 5 trivial Qing law groups AUTHORED (DONE)
+Appended to `00_qing_statutes_laws.txt` (BOM+LF, now 179/179 braces). All CHI-only, all with a no-op-ish
+default. Modifier-swap except frontier-trade (selector-via-lever):
+- **qing_industrial_encouragement_law** (#13, 官督商辦 default / 官辦 / 商辦) — pure modifier-swap, NO on_enact
+  nudge (toggle-farm avoided). Keys: global_commerce/tax_modifier, research_points_modifier,
+  global_middle_strata_output.
+- **qing_princely_establishment_law** (#36, favour/investigate/restrict) — legitimacy / corruption /
+  political-influence modifiers.
+- **qing_works_priority_law** (#47, balanced/frugal/grand) — the "grand" graft is a STANDING
+  monthly_corruption modifier, NOT an on_enact nudge. Does NOT build the palace.
+- **qing_overseas_expansion_law** (#32, seclusion/trade-fleet/colonial) — commerce, global_ship_recruit_speed,
+  diplomatic_reputation, tax. Does NOT grant colonies (mission-earned).
+- **qing_frontier_trade_law** (#31, assert/concession) — SELECTOR-VIA-LEVER: on_enact calls the proven guarded
+  QING_caravan_revoke_aqsaqal / _grant_aqsaqal. **#31 on_enact→scripted_effect uncertainty RESOLVED**: the
+  shipped qing_ethnic_governance_law already does `on_enact = { QING_set_ethnic_stance = {...} }`, so this is a
+  proven construct — no isolation test needed.
+- All modifier keys VERIFIED present (global_middle_strata_output 6 files, global_ship_recruit_speed 9 files).
+
+### Step 3 — GUI re-split into 7 domain columns (DONE)
+`gui/government_view.gui` (plain UTF-8/LF): the single `qing_statutes_laws` area (統治大典) REPLACED by 7
+`laws_widget_area` blocks stacked in the existing vertical flowcontainer (areas stack VERTICALLY and the
+scrollarea clips — so 7 areas is fine; the "horizontal fit" worry was moot). Exact sibling indentation
+(area=7 tabs, laws_widget=9, visible=10) mirrored. Braces 2003/2003. Domain homes for the 18 existing laws
+(13 shipped + 5 trivial):
+- 治道 governance: ethnic_governance, office_selling, ministry_estab, advisory_estab
+- 財政 fiscal: salt_admin, canton_regime, canton_purse, caravan_customs
+- 武備 military: military_upkeep
+- 邊疆 frontier: frontier_trade
+- 宮廷 court: princely_establishment
+- 文教 culture: penal_code, ritual_orthodoxy, opium_policy, exam_cadence, works_priority
+- 通商洋務 foreign: overseas_expansion, industrial_encouragement
+Later batches append their groups to the correct domain area. 7 header loc keys added to
+imp19c_interface_l_english.yml (old qing_statutes_laws key left, now unreferenced/harmless).
+
+### Step 4 — LOC for the 5 new groups (DONE)
+laws_l_english.yml (BOM+LF): all 5 groups + their options + _desc added (no collisions, quotes balanced).
+
+### CRLF/BOM discipline
+The 3 upstream law files are BOM+CRLF; edited at byte level and VERIFIED still CRLF+BOM (no LF flip; the
+known junk-diff gotcha avoided). qing_statutes + the 2 loc files are BOM+LF; government_view.gui is plain
+UTF-8/LF. All preserved.
+
+### PENDING before commit: boot-crash review (dispatched), then commit as freekumquats + push.
