@@ -2466,3 +2466,53 @@ known junk-diff gotcha avoided). qing_statutes + the 2 loc files are BOM+LF; gov
 UTF-8/LF. All preserved.
 
 ### PENDING before commit: boot-crash review (dispatched), then commit as freekumquats + push.
+
+## Batch 2 — Bias-A accumulator laws: PRE-AUTHORING CLASSIFICATION (2026-07-24)
+Before authoring, verified each target site against code (the P7 lesson: a nudge site can be dead-gated or a
+target-chaser). Findings — NOT every "accumulator" is a clean bias-A:
+- **#16 Cultural Patronage (qing_wenzhi_patronage, WENZHI:75)** — TRUE accumulator, flat −1/qtr decay, no
+  target-chase → BIAS-A. Build.
+- **#20 Heterodox Sect (qing_sect_pressure, DECLINE:1003-1023)** — TRUE accumulator (clamped compounding-crisis
+  nudges) → BIAS-A. Build (small, band-gated).
+- **#21 Reform Posture (qing_reform_faction_balance, FACTION:412-443)** — TRUE accumulator, signed ±100, raw
+  change_variable, hand-clamp at 441-442 → BIAS-A. Insert the law bias BEFORE the clamp using raw
+  change_variable (NOT QING_DECLINE_nudge — signed-meter rule). Build.
+- **#19 Anti-Corruption (qing_corruption_level)** — accumulator, but nudged from many discrete sources with NO
+  single base-drift line → clean hook = ADD a NEW guarded bias nudge in the DECLINE pulse (the P7 "own line"
+  pattern), not modify an existing amount. Build with a dedicated pulse line.
+- **#14 Provincial Militarization (qing_han_provincial_power, DECLINE:416-431)** — **RECLASSIFIED: NOT bias-A.**
+  It CHASES a target (eases ±2 toward qing_han_prov_target_tmp). Biasing the ±2 only changes convergence SPEED;
+  the meter re-settles at the same target → no durable effect. FIX: bias the TARGET FORMULA (before its clamp
+  at DECLINE:422) = **BIAS-B → MOVED TO BATCH 3.**
+- **#22 Deliberative (qing_delib_cohesion, DELIB:367)** — the :367 write is an EVENT nudge marked "recomputed
+  next pulse anyway" → cohesion is likely RECOMPUTED, not an accumulator. DEFERRED pending its actual
+  drift/recompute site; if recomputed, it's BIAS-B (Batch 3), not bias-A.
+- Not yet re-checked this pass: #15 (already known net-new-lite, Batch 4), #17/#18/#23/#44 (Batch 4 / re-base).
+NET: Batch 2 builds #16, #19, #20, #21 as bias-A. #14 and (likely) #22 move to Batch 3 (bias-B). This keeps
+the "no law that silently does nothing" bar.
+
+### Batch 2 — BUILT (#16, #19, #20, #21) — DONE
+Authored 4 bias-A law groups in 00_qing_statutes_laws.txt (235/235 braces) + guarded pulse reads:
+- **#16 Cultural Patronage** → qing_wenzhi_patronage_bias, applied at WENZHI:75 (guarded, added to the -1/qtr
+  decay). austere -1 / standard 0 / lavish +1.
+- **#19 Anti-Corruption** → qing_anticorrupt_bias, applied as its OWN guarded pulse nudge in se_QING_DECLINE
+  (compounding-crisis block), FLOORED at corruption>20 (thins graft, can't scour to 0). Negative drag baked
+  via a negated temp var (qing_anticorrupt_drag_tmp) since `amount = -var:X` isn't expressible; QING_DECLINE_nudge
+  passes negative amount through to change_variable + clamps 0..100 (verified macro def :33-42). audits 1 /
+  draconian 2 (+modifier costs).
+- **#20 Heterodox Sect** → qing_sect_policy_bias, guarded -1/qtr on qing_sect_pressure BAND-GATED at >25
+  (se_QING_DECLINE). suppress only; monitor = watch modifier, no drag; suppress carries a lower-strata
+  happiness cost that feeds unrest back (self-limiting).
+- **#21 Reform Posture** → qing_reform_posture_bias, SIGNED ±1 tilt inserted BEFORE the ±100 clamp in
+  se_QING_FACTION using RAW change_variable (NOT the nudge macro — signed-meter rule). conservative -1 /
+  reformist +1.
+- All 4 registered in GUI domain columns (anti-corruption + reform → 治道 governance; patronage + sect → 文教
+  culture); 2011/2011 braces. Loc complete with prereq-callout discipline. Each bias var VERIFIED set-by-law +
+  read-by-pulse (no orphans). All modifier keys previously verified valid.
+
+### Batch 2 RECLASSIFICATIONS (moved to Batch 3 / bias-B):
+- **#14 Provincial Militarization** — target-chaser, bias the target formula (DECLINE:~421), not the ±2 nudge.
+- **#22 Deliberative** — qing_delib_cohesion is RECOMPUTED (mean of backing, DELIB:222-230); bias the backing
+  or recompute, not the event nudge.
+
+### PENDING before Batch 2 commit: boot-crash review (dispatch), commit as freekumquats + push.
