@@ -69,8 +69,17 @@ QING_pop_recompute_target = {
 	# set_variable is parsed as a SCOPE link (empty), not a number, so the var lands non-numeric and the
 	# divide below + every later read flood ("Variable not of the 'value' scope type" / "not set"). The
 	# proven numeric idiom is the wrapped form (se_LAND.txt:160 EDU_*_governorship).
-	set_variable = { name = qing_pop_pressure_target  value = { value = total_population } }
-	change_variable = { name = qing_pop_pressure_target  divide = 1200 }
+	# [BT 2026-07-25 logfix R2] GUARD the read on total_population > 0. On a rare early pulse the pop
+	# index is not warm and total_population itself evaluates to `none` — the wrapped set_variable then
+	# logged "Value of wrong type ... Got value of type 'none'" at THIS line (the R1 seed above stopped
+	# the downstream compare flood, but not this read itself). total_population is a valid literal-RHS
+	# trigger (naval_raiding.txt:57, decentralize_realm_button.txt:25). When it's 0/none the seeded 0
+	# stands (a realm with no counted pops has no man-land crisis), so the crowding term is simply skipped.
+	if = {
+		limit = { total_population > 0 }
+		set_variable = { name = qing_pop_pressure_target  value = { value = total_population } }
+		change_variable = { name = qing_pop_pressure_target  divide = 1200 }
+	}
 	# floor at 0 (a tiny realm has no man-land crisis).
 	if = { limit = { var:qing_pop_pressure_target < 0 } set_variable = { name = qing_pop_pressure_target  value = 0 } }
 
