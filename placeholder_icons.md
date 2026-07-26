@@ -19,6 +19,16 @@ All mission task icons resolve to the stock sprites `test1` / `test2` / `test3` 
 `mission_image_test` (generic test art). Concepts inferred from each task's localized name. Bespoke
 mission art is not yet in `gfx/`.
 
+> **STATUS 2026-07-25 — every Qing mission tree was expanded to ≥10 tasks** (user directive
+> "all mission trees should have at least 10 items"). Current task counts (2-tab `icon =` per tree):
+> burma_war 10, central_asia 10, colonization 29, himalaya_seasia 11, india 10, japan 9, japan_preperry 9,
+> nanyang 10, open_japan 10, reform 10, selfstrengthening 15, settle_frontier 10, summer_palace 10,
+> taiping 10, treasure_fleet 14, xinjiang 10. The tables below list the ORIGINAL core tasks with
+> researched reference images; the tasks added in the 2026-07-25 expansion reuse the same
+> `test1/2/3` placeholder convention (no new icon concepts — each new task's art need is covered by
+> the borrow-a-sibling-and-produce-real-art pipeline in §"Producing real .dds icons" below). japan /
+> japan_preperry sit at 9 (their capstone is the 10th, non-`icon` task node).
+
 ### Self-Strengthening — `qing_selfstrengthening_missions.txt`
 | Task | Placeholder | Concept | Reference image |
 |---|---|---|---|
@@ -332,6 +342,18 @@ Both trees borrow shared arabic/indian tradition sprites; each slot flagged `# p
 | napoleon_la_gloire | la gloire, cult of victory (Path D capstone) | arabic_levantine_path_4 | [ref](https://commons.wikimedia.org/wiki/File:Fran%C3%A7ois_G%C3%A9rard_-_Napoleon_in_Coronation_Robes.jpg) — Napoleon in glory / coronation |
 | napoleon_lempereur | "L'Empereur" grand capstone | arabic_philosophy_start_bonus | [ref](https://upload.wikimedia.org/wikipedia/commons/5/50/Jacques-Louis_David_-_The_Emperor_Napoleon_in_His_Study_at_the_Tuileries_-_Google_Art_Project.jpg) — David's Napoleon portrait 1812 |
 
+### The Five Qing Military Traditions — `common/military_traditions/00_qing.txt`
+Five trees, each expanded to 9 nodes (root start-bonus + 8 nodes). Every `image`/`icon` slot borrows a
+stock `arabic_*`/`indian_*` tradition sprite and is flagged `# placeholder`. Concepts by node name:
+
+| Tree (root) | Concept | Node keys (borrowed sprites, all placeholder) | Reference image |
+|---|---|---|---|
+| qing_eight_banners_tradition | Eight Banners 八旗 elite host | qing_banner_start / _cavalry / _garrison / _firearms / _capstone / _vanguard / _jianrui / _bondservants / _niru | [ref](https://en.wikipedia.org/wiki/Eight_Banners) — the Manchu Eight Banners (article) |
+| qing_green_standard_tradition | Green Standard Army 綠營 (Han provincial infantry) | qing_green_* nodes | [ref](https://en.wikipedia.org/wiki/Green_Standard_Army) — the Green Standard Army (article) |
+| qing_mongol_cavalry_tradition | Mongol banner cavalry 蒙古馬隊 | qing_mongol_* nodes | [ref](https://commons.wikimedia.org/wiki/Category:Mongolian_cavalry) — Mongol cavalry |
+| qing_frontier_defence_tradition | frontier defence / garrison 邊防 | qing_frontier_* nodes | [ref](https://commons.wikimedia.org/wiki/Category:Forts_in_Xinjiang) — a Qing frontier fort |
+| qing_tributary_levy_tradition | tributary levy 藩屬徵兵 (subject auxiliaries) | qing_tributary_* nodes | [ref](https://en.wikipedia.org/wiki/Tributary_system_of_China) — the Chinese tributary system (article) |
+
 ---
 
 ## 5. Event pictures — `common/event_pictures/00_event_pictures.txt`
@@ -374,6 +396,36 @@ ministry-specific icon.
 | qing_revenue_ministry.gui | Board of Revenue (戶部) | menu_trade.dds | [ref](https://commons.wikimedia.org/wiki/Category:Sycee) — Chinese sycee silver ingots 銀錠 |
 | qing_secretariat.gui | Grand Secretariat (內閣) | menu_trade.dds | [ref](https://en.wikipedia.org/wiki/Grand_Council_(Qing_dynasty)) — the Grand Council / Grand Secretariat (article) |
 | qing_works_ministry.gui | Board of Works (工部) | menu_trade.dds | [ref](https://en.wikipedia.org/wiki/Ministry_of_Works) — Board of Works (article lead) |
+
+---
+
+## 7. Legion distinctions — `common/legion_distinctions/00_qing_distinctions.txt`
+Six Qing legion distinctions (granted via `add_distinction`, not gated in the definition). Each `icon =`
+borrows a stock vanilla `phalera_*` distinction sprite as a placeholder for bespoke banner-unit art.
+
+| Distinction | Concept | Borrow (phalera_* placeholder) | Reference image |
+|---|---|---|---|
+| distinction_qing_green_standard | Green Standard Army 綠營 | phalera_sword_shield | [ref](https://en.wikipedia.org/wiki/Green_Standard_Army) — the Green Standard Army (article) |
+| distinction_qing_jianrui | Jianrui Battalion 健銳營 (storm troops) | phalera_tower | [ref](https://en.wikipedia.org/wiki/Jianruiying) — the Jianrui Battalion 健銳營 (article) |
+| distinction_qing_solon | Solon/Sibe banner archers 索倫 | phalera_archer | [ref](https://en.wikipedia.org/wiki/Solon_people) — the Solon banner people (article) |
+| distinction_qing_firearms_brigade | Firearms Brigade 火器營 | phalera_swords | [ref](https://en.wikipedia.org/wiki/Firearms_Brigade_(Qing_dynasty)) — the Qing Firearms Brigade 火器營 (article) |
+| distinction_qing_rattan_shield | Rattan-shield troops 藤牌兵 | phalera_helmet | [ref](https://en.wikipedia.org/wiki/Rattan_shield) — the rattan shield 藤牌 (article) |
+| distinction_qing_camel_fort | Camel-borne swivel-gun fort 駝城 | phalera_horse | [ref](https://commons.wikimedia.org/wiki/Category:Bactrian_camels) — a Bactrian war camel (駝城 mount) |
+
+---
+
+## 8. Qing inventions — `common/inventions/00_qing_inventions.txt`
+14 Qing-specific inventions across the civic tree. **No icon block** — inventions render with the
+technology-tree node styling, not a bespoke sprite, so there is no placeholder icon to catalogue here;
+this section is a completeness record. Nodes: qing_tech_imperial_kilns, _imperial_silk, _tea_canton,
+_grand_canal, _siku_compilation, _court_mathematics, _eight_banners, _columbian_crops, _variolation,
+_manchu_science, _han_science, _mongol_science, _tibetan_science, _uyghur_science (the last five are the
+integration-science unlocks armed by the culture decisions in culture_decisions/qing_integration_science.txt).
+
+> **Note — Administrative + Academic tree build-out (2026-07-25):** the +28 oratory and +29 religious
+> nodes added to `00_oratory_inventions.txt` / `00_religious_inventions.txt` likewise carry **no bespoke
+> icons** (invention nodes are text/tech-tree styled), so they need no placeholder-art catalogue entry.
+> They DO have full name+desc loc in `technology_l_english.yml`.
 
 ---
 
