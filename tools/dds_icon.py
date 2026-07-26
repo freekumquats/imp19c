@@ -28,6 +28,13 @@ DDSD_PIXELFORMAT=0x1000
 DDPF_ALPHAPIXELS=0x1; DDPF_RGB=0x40
 DDSCAPS_TEXTURE=0x1000
 
+def write_dds_dxt5(path, rgba):
+    """Compressed DXT5 (FourCC 'DXT5') via Pillow — required by widgets that reject the
+    uncompressed BGRA8 layout (mission tasks, mission headers, building queue, event pics)."""
+    from PIL import Image
+    im = Image.fromarray(rgba.astype(np.uint8), 'RGBA')
+    im.save(path, pixel_format='DXT5')
+
 def write_dds_bgra8(path, rgba):
     """rgba: HxWx4 uint8 numpy array in R,G,B,A order."""
     h, w, _ = rgba.shape
