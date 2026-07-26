@@ -254,11 +254,21 @@ Each points at an existing vanilla building-cost `.dds`.
 [B21] A SEPARATE icon from the modifier-cost icon above: the engine renders the building-TYPE icon
 in the Outliner "Building Constructions" queue + the macro-builder, resolved BY FILENAME from
 `gfx/interface/icons/buildings/<building_key>.dds` (no `.gfx` registry entry — proven by the vanilla
-"Added missing port building icon" commit). Every mod-custom building below currently has NO such file
-→ it renders `gfx/interface/placeholder.dds` in the queue. **`qing_shuyuan_building` is FIXED** (copied
-`EDU_school.dds`, the closest visual match — the reported school placeholder). The other 17 still show
-placeholders in the queue and want proper 50×50-style building icons (each row suggests a vanilla icon
-to borrow as a stopgap; final art via the DDS pipeline below).
+"Added missing port building icon" commit).
+
+> **STATUS 2026-07-25 — ALL 25 Qing buildings now HAVE a stopgap icon.** The 24 that were missing
+> (blank in both the macro builder AND the province window — the reported "foreign buildings missing")
+> were fixed by COPYING the borrow-icon in each row's "Borrow (stopgap)" column to
+> `gfx/interface/icons/buildings/<key>.dds`. These are borrowed stock icons standing in for bespoke art —
+> the DDS pipeline below is still how the REAL 書院/衙門/瓷窯 etc. art gets produced and dropped in.
+> Caveat: most stock icons are 200×200 but `food_exchange_building.dds` (source for granary) is 100×100 —
+> the engine scales it, but the granary icon is lower-res until real art replaces it. Also added this
+> session (not in the table below, same copy-stopgap treatment): qing_embassy_building, qing_foreign_
+> concession_building, qing_foreign_works_building, qing_frontier_colony_building, qing_frontier_fort_
+> building, qing_mission_cathedral_building, qing_mission_public_building, qing_mission_underground_
+> building, qing_treaty_port_building.
+
+Original catalogue (the mapping used for the stopgap copies; all now DONE):
 
 | Building type icon (file `<key>.dds`) | Concept | Borrow (stopgap) | Reference image |
 |---|---|---|---|
