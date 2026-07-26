@@ -493,3 +493,112 @@ there is **no built binary** (no `bin/`, no Mach-O executable). This machine has
 Do **step 1** (build CLI *or* `brew install imagemagick`) + **step 2**, answer **step 3** with (i) or
 (ii). Then I convert **one** icon end-to-end (e.g. the Zongli Yamen panel icon) to prove the pipeline
 before batching all ~130 concepts.
+
+---
+
+# IMPLEMENTATION (2026-07-26) — mechanical DDS generation run
+
+Executing the user directive: *replace ALL placeholders with bespoke icons*, mechanical
+conversion (option (i)), non-commercial so licensing is not a blocker. Decisions logged here as
+work proceeds.
+
+## Environment / tooling decisions
+- **Compressonator ABANDONED + deleted** (762M checkout) and **cmake uninstalled** (brew). Its CLI
+  build hard-requires OpenCV via the `canalysis` plugin even with `-DOPTION_ENABLE_ALL_APPS=OFF`;
+  it is massive overkill for tiny icons. Removed at user request.
+- **Encoder = pure Python** (`tools/dds_icon.py`, venv `~/.dds_venv`: Pillow 12.3.0 + numpy 2.5.1).
+  We write **uncompressed 32-bit BGRA8 (A8R8G8B8)** DDS directly (124-byte header, no mipmaps,
+  non-power-of-two OK). Verified byte-identical to shipped icons (round-trip test on
+  `menu_trade.dds`: pixels identical, header fields match `pfflags=0x41 bits=32 masks=[ff0000,ff00,ff,ff000000]`).
+  Uncompressed BGRA8 is universally engine-loadable — the shipped `tradegoods/*` and
+  `military_traditions/*` icons already use exactly this format, so writing every bespoke icon in it
+  is safe regardless of the donor's own format.
+- **Pillow can also emit DXT1/DXT5** natively (tested) — kept in reserve; not needed since BGRA8 works.
+- **Pipeline:** source raster → center square-crop → `ImageOps.autocontrast(cutoff=2)` +
+  `Color.enhance(1.25)` (tiny photo icons otherwise crush to a dark blob) → resize to the donor's
+  native dimensions → apply alpha → BGRA8 DDS. Enhancement is ON by default (user-approved).
+- **Alpha:** borrow the donor's shaped alpha ONLY when the donor is an uncompressed BGRA8 with a
+  genuine shape (>4 distinct alpha values — panel headers `distinct=209`, tradegoods `distinct=168`).
+  Compressed donors (DX10/DXT3, e.g. mission tasks / buildings / event pictures) are opaque
+  rectangles (distinct≤2), so those icons are written fully opaque — matching the donors.
+
+## Graphics-resolution model (verified against imp19c + upstream sobiso + Invictus + TI + vanilla)
+NONE of the mods ship a `.gfx` sprite registry or a top-level `interface/` dir — **all custom
+graphics resolve BY FILENAME** from a conventional `gfx/interface/icons/<subdir>/<key>.dds` path.
+Proven: imp19c `mission_tasks/russian_missions_1_*.dds` (custom mission set) and
+`buildings/qing_*_building.dds`; Invictus `mission_tasks/task_apollo.dds` (ref'd `icon = task_apollo`)
+and `military_traditions/dacian_path_1.dds` (ref'd `icon = ...`/`image = ...`). So a bespoke icon =
+drop `<key>.dds` at the convention path + (for missions) repoint the `icon =` line from `test1/2/3`
+to the task key.
+
+Per-category donor + target path:
+| Category | donor (size/format) | output path | wiring change |
+|---|---|---|---|
+| Mission task icons | `mission_tasks/test1.dds` (118×68, DX10) | `mission_tasks/<taskkey>.dds` | repoint `icon = testN` → `icon = <taskkey>` |
+| Mission headers | `missions/mission_image_test.dds` (624×120, DX10) | `missions/mission_image_<tree>.dds` | repoint `header =` |
+| Trade goods | `tradegoods/coal.dds` (50×50 BGRA8, shaped α) | `tradegoods/<good>.dds` | none (filename = good key) |
+| Building-type icons | `buildings/EDU_school.dds` (200×200 DX10) | `buildings/<key>.dds` | none (already convention) |
+| Military traditions | `military_traditions/arabic_*_path_*.dds` (198×72 BGRA8) | `military_traditions/<nodekey>.dds` | repoint `icon=`/`image=` |
+| GUI panel headers | `menu_buttons/menu_trade.dds` (50×50 BGRA8, shaped α) | `menu_buttons/qing_<panel>.dds` | repoint `.gui texture=` |
+| Event pictures | `event_window/Event_*.dds` (DXT3) | `event_window/qing_<alias>.dds` | repoint `picture=` |
+
+## BLOCKERS (noted, working around per user instruction)
+- **Legion distinctions (§7):** reference base-game sprite NAMES `phalera_*` with NO filename dir in
+  ANY mod (imp19c/INV/TI all `icon = "phalera_zeus"` etc.) — resolved from the base-game sprite
+  registry, not installable/inspectable locally. No local donor to size against. **Deferred** — would
+  require adding a `.gfx` registry + guessing base sprite dims. Left as-is (they render via base game).
+- **Modifier-cost icons (§3):** NOT blocked after all — they use an explicit `positive = "gfx/...dds"`
+  path I can repoint to NEW mod art, and a local donor exists (`modifiers/commerce_value.dds`, 50×50
+  BGRA8 shaped α). Handled: bespoke art written to `modifiers/<key>.dds` and the `positive =` line
+  repointed. (These are the small building-cost glyphs; low visual priority but done for completeness.)
+
+## Batch 1 — Mission task icons: DONE (203/203)
+All 203 qing_*_missions.txt task `icon = testN` slots now have a bespoke
+`gfx/interface/icons/mission_tasks/<taskkey>.dds` (118×68 BGRA8) and the `icon =` lines are
+repointed to the task key. Queries auto-derived from each task's English loc title (verb-stripped,
+CJK-stripped); 10 stragglers that returned no image were hand-queried (Konbaung/Daoguang/Lanfang/
+Bakumatsu/Hokkaido/Uriankhai/Champa/Malacca/Malindi/Ezo). Commons rate-limited hard (HTTP 429) →
+added 1.1s throttle + exponential backoff in fetch_wm.py; full run took ~40 min.
+QUALITY NOTE: mechanical auto-match quality is mixed — most are on-concept (Zongli Yamen officials,
+Beiyang ironclads, Daoguang portrait), but a minority drew weak Commons matches (e.g. qing_xj_pacify,
+qing_hk_proclaim). Functional + correctly wired; flagged for optional hand-curation later.
+Tools: tools/gen_mission_icons.py + icon_common.py; log tools/mission_icon_log.tsv.
+
+## Batches 2–7 + Visual QA — DONE (367 bespoke icons total)
+All placeholder icon slots replaced with bespoke mechanically-converted art (uncompressed 50×50/
+118×68/198×72/200×200/624×120 BGRA8 as per each category's donor). Counts:
+- Mission task icons: 203 (mission_tasks/<key>.dds, icon= repointed)
+- Mission header banners: 16 (missions/mission_image_qing_<tree>.dds, header= repointed)
+- GUI panel headers: 23 (menu_buttons/qing_<panel>.dds, .gui texture= repointed)
+- Trade goods: 7 (tradegoods/<good>.dds)
+- Building-type icons: 25 (buildings/qing_*.dds — overwrote the stopgap copies)
+- Military traditions: 77 (military_traditions/<nodekey>.dds, icon=/image= repointed; manchu+napoleon+5 qing trees)
+- Modifier-cost glyphs: 13 (modifiers/<key>.dds, positive= repointed)
+- Event pictures: 3 (event_window/qing_<alias>.dds, picture= repointed)
+
+VISUAL QA (in lieu of code review, per user directive — quality AND contextual appropriateness):
+- Rendered per-category review montages (tools/qa_montage.py) + an objective heuristic detector
+  flagging document-scans (high brightness + near-zero saturation) and flat/blur images.
+- Two automated sweeps + manual montage review across all 8 categories. Re-fetched every flagged
+  icon with curated concept-appropriate queries (and, where Commons search returned PDFs/wrong
+  culture, hand-picked verified file titles). The military-tradition category (worst-hit by the wide
+  198×72 aspect) was fully re-done from a curated pool of Qianlong-campaign battle engravings +
+  Napoleonic battle paintings.
+- Final detector state: 0 flagged in buildings/panels/modifiers/tradegoods/headers/traditions/events;
+  1 in missions = qing_treasure_mao_kun_chart, a TRUE POSITIVE concept (the Mao Kun Chart genuinely
+  is a pale historical navigation map — correct art, not a defect).
+- Residual: a small minority of mission auto-matches remain imperfect (inherent ceiling of mechanical
+  photo conversion); all are on-theme + correctly wired. Flagged for optional hand-curation.
+
+BOOT-SAFETY VERIFY: all 367 new DDS validated (magic 'DDS ', 124-byte header, pfflags=0x41, bits=32,
+masks BGRA, byte-length == 128 + w*h*4) — 0 malformed. All icon=/header=/image=/texture=/picture=/
+positive= references resolve to an existing file — 0 dangling.
+
+Tools (all under tools/, venv ~/.dds_venv): dds_icon.py (BGRA8 writer/probe), fetch_wm.py (Commons
+fetch w/ throttle+backoff), icon_common.py, gen_mission_icons.py, gen_table_icons.py,
+gen_tradition_icons.py, gen_header_modifier_icons.py, repoint_refs.py, qa_montage.py, qa_fixes*.py.
+
+## BLOCKER (unchanged): Legion distinctions (§7)
+The 6 qing legion distinctions still reference base-game sprite NAMES (phalera_*) with no filename
+dir in any mod — resolved from the base-game sprite registry, not present locally. Replacing them
+would require a .gfx registry + base sprite dims we can't inspect. Left as-is (renders via base game).
