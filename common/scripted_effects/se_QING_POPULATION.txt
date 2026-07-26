@@ -50,6 +50,13 @@
 # snap the band — it matches the currency-stress design. All O(1) cached reads. Scope: COUNTRY.
 # ======================================================================
 QING_pop_recompute_target = {
+	# [BT 2026-07-25 logfix] Seed the target to 0 BEFORE the total_population read. On a rare early
+	# pulse total_population evaluated to `none` (the country's pop index not yet warm), so the
+	# set_variable below did not land and every downstream `var:qing_pop_pressure_target < 0` compare
+	# then read an UNSET var — the "compare_value returned an unset scope" / "value of type none" flood
+	# (3x at 18:23:42). A cheap unconditional seed guarantees the var is always numeric for the compares
+	# even if the total_population read is momentarily none; the real value overwrites it on the next line.
+	set_variable = { name = qing_pop_pressure_target  value = 0 }
 	# --- CROWDING (the core driver): total_population vs a carrying baseline. High Qing China
 	# is already crowded; the target rises as population grows past the baseline. total_population
 	# reads at country scope as the COUNT of pop objects (proven: slave_revolt_svalue subtracts
