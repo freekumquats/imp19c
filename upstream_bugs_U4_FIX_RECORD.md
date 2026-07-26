@@ -88,3 +88,42 @@ corrected — the committed diff is purely the semantic guards, verified with gi
   against pristine siblings (CURRENCY_base_starting_reserve_gold/silver); scope correct (all country-scope vars).
   The flagged residual same-class sites were then ALSO guarded (this fix) → flood fully, not ~99%, eliminated.
 - Braces 405/405. Behaviour-preserving. This is Sobisonator's upstream code; the fix belongs upstream (PR-able).
+
+---
+
+# AREA TO INVESTIGATE (not yet fixed): U-trade — b78ccc1f6 wealth_owed multiply typo
+
+## STATUS
+OPEN — flagged 2026-07-25 during the 1763-branch upstream review. Present on THIS branch (upstream_bugs
+is built on upstream/master, so b78ccc1f6 is an ancestor). The 1763 branch (merge-overnight) does NOT
+have it — its GT_split_update_wealth_owed_for_tradegoods still uses the correct two-multiply form.
+
+## THE COMMIT
+b78ccc1f6 "Condense multiplication calls for wealth_owed_for_$ ... from 2 to 1"
+Author/committer: Sobisonator <chombasew@gmail.com>, Thu 23 Jul 2026 19:41:42 +0100 (direct commit, not a PR).
+
+## THE BUG
+In GT_split_update_wealth_owed_for_tradegoods (common/scripted_effects/se_GLOBALTRADE_split.txt) the
+author meant to condense two sequential multiplies into one block. Intended (behaviour-preserving) form:
+    multiply = { value = owner.var:country_unit_price_$tradegood$  multiply = owner.var:order_size_modifier_$tradegood$ }   # = price * modifier
+What was committed instead:
+    multiply = { value = owner.var:country_unit_price_$tradegood$  add      = owner.var:order_size_modifier_$tradegood$ }   # = price + modifier
+i.e. an `add` where `multiply` was meant. The engine block computes the inner expression then multiplies
+the target by it, so wealth_owed changed from
+    order_size * price * modifier   (correct)  ->  order_size * (price + modifier)   (wrong).
+
+## WHY IT'S WRONG (both trees)
+order_size_modifier_$tradegood$ is a <=1 FULFILMENT FRACTION (share of demand the market can supply;
+GT_split_get_order_size_modifier_tradegood sets it to a fraction, clamps >1 to 1, else 1). It must MULTIPLY
+the owed wealth (scale unfulfilled orders DOWN). Adding a ~0..1 fraction to a (much larger) unit price both
+fails to scale down shortfalls AND spuriously inflates the price term. Not context-dependent — the
+order_size_modifier function is shared, un-forked code, so the semantics are the same upstream.
+
+## PROVEN ENGINE SEMANTICS (verified in-file)
+- `multiply = { value = 1  subtract = X }` -> multiply by (1 - X)  [se_GLOBALTRADE_split.txt:2472, 5094]
+- correct two-multiply condense: `multiply = { value = A  multiply = B }` -> A*B  [se_ECON_wealth.txt:525-527]
+
+## FIX (when we act)
+Change the committed `add =` back to `multiply =` in that one block. One-line semantic fix. PR-able upstream
+(same class as the U4 guards — Sobisonator's own code). Verify order_size_modifier is still a fraction at
+the time of merge, then re-check trade-wealth figures against a pre-b78ccc1f6 baseline.
