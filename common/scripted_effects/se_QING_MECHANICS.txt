@@ -263,6 +263,53 @@ QING_reassert_central_command = {
 	LOG_exit = { sys = QING  fn = "QING_reassert_central_command"  result = OK }
 }
 
+# ======================================================================
+# [#105] PENSION OFF A REGIONAL ARMY — 裁勇 (disband the Yong Ying by payment).
+# The PEACEFUL counterpart to QING_reassert_central_command (which is a forcible
+# clawback that leaves the magnates bristling, +3 ethnic tension). Historically the
+# court repeatedly tried to stand down (裁撤) the 勇營 after the Taiping/Nian wars —
+# the danger was mutiny by unpaid soldiers, so disbandment had to be bought with
+# generous severance/back-pay. Modelled with the vanilla mercenary BUY-OFF idiom
+# (bribe_mercenary_button.txt: pay a lump sum + a set_variable days-cooldown), which
+# is the one part of the mercenary mechanic that fits the Yong Ying (see
+# YONGYING_MERCENARY_FEASIBILITY.md #105): pay-to-disband, NOT hire-and-buy-off.
+#
+# vs. reassert (forcible): costs MORE (generous severance ~140), cuts provincial power
+# HARDER (-28), and generates NO unrest (an amicable stand-down actually EASES ethnic
+# tension -2) — but it is cooldown-gated (730d, can't be spammed) and costs a little
+# legitimacy (the throne concedes to, rather than crushes, the magnate). Reuses the
+# same concrete magnate-strip as reassert. Scope: country (ROOT = CHI).
+# ======================================================================
+QING_pension_off_regional_army = {
+	LOG_enter = { sys = QING  fn = "QING_pension_off_regional_army" }
+	if = {
+		limit = {
+			var:qing_han_provincial_power >= 20
+			treasury >= 140
+			NOT = { has_variable = qing_pension_off_cooldown }
+		}
+		# generous severance / back-pay — the price of a mutiny-free disbandment.
+		add_treasury = -140
+		# a stood-down army answers to no one: the deepest single cut to provincial power.
+		QING_DECLINE_nudge = { var = qing_han_provincial_power  amount = -28 }
+		# amicable, not forcible: the magnates are paid off, so unrest EASES rather than
+		# rising (the inverse of reassert's +3 ethnic tension).
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -2 }
+		# the throne conceded to a magnate rather than crushing him: a small prestige cost.
+		add_legitimacy = -5
+		# concrete mirror: physically break the greatest regional magnate's power base
+		# (same seat/unseat symmetry as the forcible clawback).
+		QING_reassert_strip_magnate = yes
+		# buy-off cooldown (the vanilla merc-bribe idiom): cannot be repeated for 2 years.
+		set_variable = { name = qing_pension_off_cooldown  days = 730 }
+		LOG_line = { sys = QING  msg = "pensioned off a regional army (裁勇): provincial power -28, amicable stand-down for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_pension_off_regional_army"  reason = "power <20, treasury <140, or still on the 2-year pension cooldown" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_pension_off_regional_army"  result = OK }
+}
+
 # task #90 — CONCRETE LINK for the reassert lever. Break the personal power base of
 # the greatest sitting regional magnate (marked qing_regional_magnate): strip loyal
 # veterans (mirror of the +8 on sanctioning). If that spends his base down, retire
