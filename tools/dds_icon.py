@@ -29,11 +29,42 @@ DDPF_ALPHAPIXELS=0x1; DDPF_RGB=0x40
 DDSCAPS_TEXTURE=0x1000
 
 def write_dds_dxt5(path, rgba):
-    """Compressed DXT5 (FourCC 'DXT5') via Pillow — required by widgets that reject the
-    uncompressed BGRA8 layout (mission tasks, mission headers, building queue, event pics)."""
+    """Compressed DXT5 (FourCC 'DXT5') via Pillow.
+    NOTE: the mission-task / mission-header widgets REJECT this (they show placeholder);
+    they require the DX10 BGRA8-sRGB layout — use write_dds_dx10_bgra8 for those."""
     from PIL import Image
     im = Image.fromarray(rgba.astype(np.uint8), 'RGBA')
     im.save(path, pixel_format='DXT5')
+
+def write_dds_dx10_bgra8(path, rgba):
+    """Uncompressed BGRA8 with a DX10 extended header, dxgiFormat=91
+    (DXGI_FORMAT_B8G8R8A8_UNORM_SRGB), 1 mip. This is the EXACT layout of the
+    stock/vanilla mission icons (e.g. russian_missions_1_10.dds) that render
+    correctly in the mission-task + mission-header widgets. Those widgets reject
+    BOTH plain-FourCC DXT5 AND the legacy 124-byte BGRA8 header (pfflags 0x41) —
+    only this DX10 form works. rgba: HxWx4 uint8, R,G,B,A order."""
+    h, w, _ = rgba.shape
+    pitch = w * 4
+    flags = DDSD_CAPS|DDSD_HEIGHT|DDSD_WIDTH|DDSD_PITCH|DDSD_PIXELFORMAT  # 0x2100f w/ mips flag below
+    flags |= 0x20000                                    # DDSD_MIPMAPCOUNT (matches vanilla 0x2100f)
+    header = bytearray(124)
+    struct.pack_into('<I', header, 0, 124)              # dwSize
+    struct.pack_into('<I', header, 4, flags)            # dwFlags = 0x2100f
+    struct.pack_into('<I', header, 8, h)                # dwHeight
+    struct.pack_into('<I', header, 12, w)               # dwWidth
+    struct.pack_into('<I', header, 16, pitch)           # dwPitchOrLinearSize
+    struct.pack_into('<I', header, 20, 1)               # dwDepth = 1 (vanilla)
+    struct.pack_into('<I', header, 24, 1)               # dwMipMapCount = 1
+    # pixel format at offset 72: FourCC 'DX10', no masks
+    struct.pack_into('<I', header, 72, 32)              # pf.dwSize
+    struct.pack_into('<I', header, 76, 0x4)             # pf.dwFlags = DDPF_FOURCC
+    header[80:84] = b'DX10'                              # pf.dwFourCC (offset 80, NOT 84 = RGBBitCount)
+    struct.pack_into('<I', header, 104, DDSCAPS_TEXTURE)# caps1 = 0x1000
+    # DX10 extended header (20 bytes)
+    dx10 = struct.pack('<5I', 91, 3, 0, 1, 0)           # dxgiFormat=91, resDim=3(TEXTURE2D), misc=0, arraySize=1, misc2=0
+    bgra = rgba[:, :, [2,1,0,3]].astype(np.uint8)       # R,G,B,A -> B,G,R,A
+    with open(path, 'wb') as f:
+        f.write(b'DDS '); f.write(bytes(header)); f.write(dx10); f.write(bgra.tobytes())
 
 def write_dds_bgra8(path, rgba):
     """rgba: HxWx4 uint8 numpy array in R,G,B,A order."""
