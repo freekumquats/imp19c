@@ -67,23 +67,51 @@ def rounded_field(d, box, fill, outline=None, ow=0, radius=None):
     if radius is None: radius = (box[2]-box[0])//7
     d.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=ow)
 
+def _pennant(d, x, y, w, h, fill, border=None, bw=0):
+    """A hung triangular banner (swallow-point down): rectangle top tapering to a point.
+    Matches the embroidered-flag look of the Mongol Banner Cavalry tradition."""
+    pts=[(x,y),(x+w,y),(x+w,y+h*0.60),(x+w*0.5,y+h),(x,y+h*0.60)]
+    if border:
+        d.polygon(pts, fill=border)
+        inner=[(x+bw,y+bw),(x+w-bw,y+bw),(x+w-bw,y+h*0.60-bw*0.5),
+               (x+w*0.5,y+h-bw*1.7),(x+bw,y+h*0.60-bw*0.5)]
+        d.polygon(inner, fill=fill)
+    else:
+        d.polygon(pts, fill=fill)
+
 def draw_green_standard(px):
-    im = new_canvas(px); d = ImageDraw.Draw(im); m = int(px*S*0.10)
-    b = (m, m, px*S-m, px*S-m)
-    rounded_field(d, b, (34,120,52,255), outline=(20,74,32,255), ow=max(2,int(px*S*0.035)))
-    # a paler vertical stripe to read as a hung banner
-    cx = px*S//2
-    d.rectangle((cx-int(px*S*0.05), m, cx+int(px*S*0.05), px*S-m), fill=(70,160,86,120))
+    # 綠營 — a single GREEN embroidered triangular banner on a gold pole (was a plain
+    # blob). Green is the Green Standard's defining colour.
+    im = new_canvas(px); d = ImageDraw.Draw(im)
+    px4=px*S
+    # pole + finial
+    polex=int(px4*0.24)
+    d.rectangle((polex-max(2,int(px4*0.03)), int(px4*0.08), polex, int(px4*0.92)),
+                fill=(196,150,60,255))
+    d.ellipse((polex-int(px4*0.06), int(px4*0.04), polex+int(px4*0.02), int(px4*0.12)),
+              fill=(232,196,90,255))
+    # the green banner, gold-trimmed
+    _pennant(d, polex, int(px4*0.12), int(px4*0.60), int(px4*0.62),
+             fill=(40,140,64,255), border=(232,206,110,255), bw=max(2,int(px4*0.045)))
     return im
 
 def draw_eight_banners(px):
-    # Bordered Yellow (鑲黃旗): yellow field, red border.
-    im = new_canvas(px); d = ImageDraw.Draw(im); m = int(px*S*0.08)
-    b = (m, m, px*S-m, px*S-m)
-    bw = int(px*S*0.13)
-    rounded_field(d, b, (196,36,36,255))                       # red border block
-    inner = (m+bw, m+bw, px*S-m-bw, px*S-m-bw)
-    rounded_field(d, inner, (240,196,44,255), radius=int(px*S*0.05))  # yellow field
+    # 八旗 — SEVERAL embroidered triangular banners together (per user): a compact fan of
+    # the banner colours (yellow, white, red, blue), the Manchu Eight Banners.
+    im = new_canvas(px); d = ImageDraw.Draw(im)
+    px4=px*S
+    cols=[(240,196,44),(238,238,238),(196,36,36),(40,70,150)]  # yellow/white/red/blue
+    n=len(cols)
+    margin=int(px4*0.08)
+    slot=(px4-2*margin)/n
+    fw=int(slot*0.74)
+    fh=int(px4*0.70); top=int(px4*0.12)
+    for i,c in enumerate(cols):
+        x=int(margin+i*slot+(slot-fw)*0.5)
+        # tiny pole per banner
+        d.rectangle((x-max(1,int(px4*0.02)), top, x, top+fh+int(px4*0.08)),
+                    fill=(140,112,56,255))
+        _pennant(d, x, top, fw, fh, fill=c+(255,))
     return im
 
 def draw_bayara(px):
