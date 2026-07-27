@@ -372,6 +372,112 @@ QING_selfstr_raise_evarmy_legion = {
 	LOG_exit = { sys = QING  fn = "QING_selfstr_raise_evarmy_legion"  result = OK }
 }
 
+# ======================================================================
+# [#95] MODERN ARMIES — 北洋新軍 / 南洋新軍. The land counterparts to the Beiyang/
+# Nanyang fleets, mirroring QING_selfstr_found_beiyang/_nanyang: each grants a
+# lasting army-quality modifier AND raises a real modern-army legion (of the
+# qing_ever_victorious Western-drilled unit type — the New Armies were the mature
+# heirs of the Ever-Victorious/Huai lineage). Guarded on the modifier so they fire
+# once. See imp19c-beiyang-nanyang-research memory for the history.
+# ======================================================================
+
+# 北洋新軍 (Beiyang Army) — Yuan Shikai's Newly Created Army, drilled at Xiaozhan
+# (小站) near Tianjin (p:3783) from 1895 on the German model; the empire's premier
+# modern land force. The strongest of the two: a full division-strength raise.
+QING_selfstr_found_beiyang_army = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_found_beiyang_army" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_selfstr_beiyang_army } }
+		add_country_modifier = { name = qing_selfstr_beiyang_army  duration = -1 }
+		# the New Army needed the modern rifle + field-gun arm (both CHI starting techs,
+		# unlocked here as a safety for released tags).
+		unlock_invention = tech_rifles
+		unlock_invention = tech_cannons
+		# task #88: the 北洋新軍 IS the modern national army — the centralizing successor
+		# to banner/green-standard rot. A one-time +35 to the modern-army share (larger
+		# than the Ever-Victorious seed), then it drifts toward the ceiling.
+		if = {
+			limit = { var:qing_modernarmy_share < 40 }
+			QING_DECLINE_nudge = { var = qing_modernarmy_share  amount = 35 }
+			LOG_line = { sys = QING  msg = "Beiyang Army seeds the modern national army; modernarmy_share boosted for" }
+		}
+		QING_selfstr_advance = { amount = 15 }
+		# Raise the real force at Tianjin (its Xiaozhan home); fall back to the capital.
+		if = {
+			limit = { exists = p:3783  p:3783 = { owner = ROOT } }
+			p:3783 = { state.governorship = { QING_selfstr_raise_modern_army = { loc = p:3783  armyname = QING_ARMY_BEIYANG } } }
+			LOG_line = { sys = QING  msg = "Beiyang Army 北洋新軍 raised at Tianjin (p:3783) for" }
+		}
+		else_if = {
+			limit = { exists = capital_scope }
+			capital_scope = { state.governorship = { QING_selfstr_raise_modern_army = { loc = ROOT.capital_scope  armyname = QING_ARMY_BEIYANG } } }
+			LOG_line = { sys = QING  msg = "Beiyang Army 北洋新軍 raised at capital (Tianjin not held) for" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_selfstr_found_beiyang_army"  reason = "no Tianjin and no capital province; ability granted but no legion raised for" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_found_beiyang_army"  result = OK }
+}
+
+# 南洋新軍 / 自強軍 (Nanyang / Self-Strengthening Army) — Zhang Zhidong's German-
+# instructed southern force at Nanjing (p:6659, the 江寧 Jiangning province) from
+# 1895; the twin model of the New Army, orphaned after 1896 so a shade smaller.
+QING_selfstr_found_nanyang_army = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_found_nanyang_army" }
+	if = {
+		limit = { NOT = { has_country_modifier = qing_selfstr_nanyang_army } }
+		add_country_modifier = { name = qing_selfstr_nanyang_army  duration = -1 }
+		unlock_invention = tech_rifles
+		if = {
+			limit = { var:qing_modernarmy_share < 30 }
+			QING_DECLINE_nudge = { var = qing_modernarmy_share  amount = 25 }
+			LOG_line = { sys = QING  msg = "Nanyang Army seeds the modern national army; modernarmy_share boosted for" }
+		}
+		QING_selfstr_advance = { amount = 10 }
+		# Raise at Nanjing (Zhang's base); fall back to the capital.
+		if = {
+			limit = { exists = p:6659  p:6659 = { owner = ROOT } }
+			p:6659 = { state.governorship = { QING_selfstr_raise_modern_army = { loc = p:6659  armyname = QING_ARMY_NANYANG } } }
+			LOG_line = { sys = QING  msg = "Nanyang Army 南洋新軍 raised at Nanjing (p:6659) for" }
+		}
+		else_if = {
+			limit = { exists = capital_scope }
+			capital_scope = { state.governorship = { QING_selfstr_raise_modern_army = { loc = ROOT.capital_scope  armyname = QING_ARMY_NANYANG } } }
+			LOG_line = { sys = QING  msg = "Nanyang Army 南洋新軍 raised at capital (Nanjing not held) for" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_selfstr_found_nanyang_army"  reason = "no Nanjing and no capital province; ability granted but no legion raised for" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_found_nanyang_army"  result = OK }
+}
+
+# Raise one modern-army legion at $loc$ (a province scope). Called in governorship
+# scope. Mirrors QING_selfstr_raise_evarmy_legion, parameterized by $armyname$ — a
+# BARE loc key (QING_ARMY_BEIYANG / _NANYANG), exactly as the proven fleet raiser
+# QING_selfstr_raise_fleet takes `name = $fleetname$` fed an unquoted loc key. A New
+# Army 鎮/division was a rifle brigade with a gun regiment — 4 qing_ever_victorious
+# rifle battalions + 2 artillery. (Beiyang vs Nanyang strength is differentiated by
+# the country modifier + modernarmy_share nudge in the callers, not the roster.)
+QING_selfstr_raise_modern_army = {
+	# $loc$ = province scope; $armyname$ = bare display loc key
+	LOG_enter = { sys = QING  fn = "QING_selfstr_raise_modern_army" }
+	raise_legion = {
+		create_unit = {
+			name = $armyname$
+			location = $loc$
+			sub_unit = qing_ever_victorious
+			add_subunit = qing_ever_victorious
+			add_subunit = qing_ever_victorious
+			add_subunit = qing_ever_victorious
+			add_subunit = artillery
+			add_subunit = artillery
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_raise_modern_army"  result = OK }
+}
+
 # 同文館 (Tongwen Guan, 1862) → colleges → 京師大學堂 — schools + a university.
 QING_selfstr_found_tongwen = {
 	LOG_enter = { sys = QING  fn = "QING_selfstr_found_tongwen" }
