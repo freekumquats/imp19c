@@ -4,7 +4,7 @@ gen_mission_headers.py — build the mission SELECTOR-CARD icons (icons/missions
 
 CORRECTION (review): a mission tree declares TWO separate art fields (see
 common/defines/graphic/00_graphics.txt):
-  icon   = <tree>_mission            -> gfx/interface/icons/icons/missions/<key>.dds
+  icon   = <tree>_mission            -> gfx/interface/icons/missions/<key>.dds
                                         = the SELECTOR CARD in the mission-list (300x120,
                                         MissionItem.GetImage, ~2.5:1 to fit the card)
   header = mission_image_<tree>       -> gfx/interface/missions/<key>.dds
