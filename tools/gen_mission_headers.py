@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 """
-gen_mission_headers.py — create the MISSING mission-tree HEADER banners (#BT).
+gen_mission_headers.py — build the mission SELECTOR-CARD icons (icons/missions/).
 
-Every Qing mission TREE declares `icon = <tree>_mission`, which the engine resolves to
-gfx/interface/icons/missions/<tree>_mission.dds (the 634x122 header banner shown at the
-top of the mission view — MissionView.GetHeaderImage). Only russian_missions_1.dds +
-test1.dds existed there, so every Qing tree showed a placeholder header. (The small
-per-node TASK icons live in mission_tasks/ and were already present — a different set.)
+CORRECTION (review): a mission tree declares TWO separate art fields (see
+common/defines/graphic/00_graphics.txt):
+  icon   = <tree>_mission            -> gfx/interface/icons/icons/missions/<key>.dds
+                                        = the SELECTOR CARD in the mission-list (300x120,
+                                        MissionItem.GetImage, ~2.5:1 to fit the card)
+  header = mission_image_<tree>       -> gfx/interface/missions/<key>.dds
+                                        = the 624x120 HEADER banner at the top of the
+                                        mission view (MissionView.GetHeaderImage)
+This script generates the SELECTOR CARDS (icons/missions/), which were missing for the
+Qing trees (only russian_missions_1 + test1 existed). The HEADER banners already existed
+in gfx/interface/missions/ but were DXT5 (widget rejects it); those are re-encoded to
+DX10 separately, NOT by this script.
 
-Format: 634x122 DX10 BGRA8-sRGB (dxgiFormat=91), matching the widget size and the one
-working sibling. We build each header by compositing the tree's existing 118x68 TASK
-icon (its thematic art) as a crisp emblem on a dark parchment band, letterboxed rather
-than upscaled-blurry — so it reads as an intentional banner, not a stretched thumbnail.
+Format: 300x120 DX10 BGRA8-sRGB (dxgiFormat=91), matching vanilla's selector-card aspect.
+Each card composites the tree's 118x68 TASK-icon art as an emblem on a gold-ruled band.
 """
 import struct, os, glob
 from PIL import Image, ImageDraw
@@ -21,7 +26,7 @@ from dds_icon import write_dds_dx10_bgra8, read_dds_bgra8, read_dds_dims
 
 MT   = 'gfx/interface/icons/mission_tasks'
 OUT  = 'gfx/interface/icons/missions'
-HW, HH = 634, 122
+HW, HH = 300, 120   # selector-card size (vanilla russian_missions_1.dds aspect)
 
 def load_task_rgba(key):
     """Decode a task icon (DX10 BGRA8) to an RGBA PIL image."""
