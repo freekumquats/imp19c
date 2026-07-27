@@ -93,6 +93,19 @@ def center_square_crop(im):
     l=(w-s)//2; t=(h-s)//2
     return im.crop((l,t,l+s,t+s))
 
+def center_aspect_crop(im, tw, th):
+    """Center-crop the source to the TARGET aspect ratio (tw:th) so the subsequent
+    resize does not stretch it. For a wide banner (198x72) this takes a wide strip
+    from the middle of the photo rather than squashing a square."""
+    w,h=im.size
+    target=tw/th; cur=w/h
+    if cur>target:                      # source too wide -> crop width
+        nw=int(round(h*target)); l=(w-nw)//2
+        return im.crop((l,0,l+nw,h))
+    else:                               # source too tall -> crop height
+        nh=int(round(w/target)); t=(h-nh)//2
+        return im.crop((0,t,w,t+nh))
+
 def synth_circular_alpha(size):
     yy,xx=np.mgrid[0:size,0:size]
     cx=cy=(size-1)/2.0
@@ -102,19 +115,20 @@ def synth_circular_alpha(size):
     a=np.clip((rmax-r)/(rmax*0.08),0,1)
     return (a*255).astype(np.uint8)
 
-def convert(src, out, like=None, size=None, enhance=True):
+def convert(src, out, like=None, size=None, enhance=True, dxt5=False):
     im=Image.open(src).convert('RGB')
-    im=center_square_crop(im)
-    if enhance:
-        # tiny photo-derived icons crush to a dark blob otherwise: stretch histogram
-        # (clip 2% tails) and lift saturation a touch so the concept is legible at 50px.
-        im=ImageOps.autocontrast(im, cutoff=2)
-        im=ImageEnhance.Color(im).enhance(1.25)
     # target size: from the donor's header (any format) or explicit --size.
     if like:
         tw,th=read_dds_dims(like)
     else:
         tw=th=size or 50
+    # crop to the TARGET aspect ratio (not always square) so wide banners aren't stretched.
+    im=center_aspect_crop(im, tw, th)
+    if enhance:
+        # tiny photo-derived icons crush to a dark blob otherwise: stretch histogram
+        # (clip 2% tails) and lift saturation a touch so the concept is legible at 50px.
+        im=ImageOps.autocontrast(im, cutoff=2)
+        im=ImageEnhance.Color(im).enhance(1.25)
     im=im.resize((tw,th), Image.LANCZOS)
     rgb=np.asarray(im,dtype=np.uint8)
     # alpha: borrow the donor's SHAPED alpha only if the donor is a decodable
@@ -133,7 +147,10 @@ def convert(src, out, like=None, size=None, enhance=True):
     if alpha is None:
         alpha=np.full((th,tw),255,dtype=np.uint8)
     rgba=np.dstack([rgb, alpha]).astype(np.uint8)
-    write_dds_bgra8(out, rgba)
+    if dxt5:
+        write_dds_dxt5(out, rgba)          # widgets that reject BGRA8 (mission view)
+    else:
+        write_dds_bgra8(out, rgba)
     return (tw,th)
 
 def probe(path):
