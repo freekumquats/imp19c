@@ -68,6 +68,11 @@ PHOTOS = {
  "qing_himalaya_seasia": (
    ("D", "https://i.ebayimg.com/images/g/QZkAAOSw7XpkhR6D/s-l1200.jpg"),
    "qing_himalaya_seasia_mission", "mission_image_qing_himalaya_seasia"),
+ # Nanyang (South Seas) — Johann (Johannes) Walch, "Karte von Australien", from
+ # Walch's "Neuester Schul-Atlas" (Augsburg). Map of Australia & New Zealand.
+ "qing_nanyang": (
+   ("D", "https://nwcartographic.com/cdn/shop/files/12848a.jpg?v=1769040127"),
+   "qing_nanyang_mission", "mission_image_qing_nanyang"),
  # Japan — Tsukioka Yoshitoshi, "Pontoon Bridge Built at Rokugo, Musashi, for the
  # Emperor's Crossing of the Tama River" (1868); Emperor Meiji's Kyoto->Tokyo progress.
  "qing_japan": (
