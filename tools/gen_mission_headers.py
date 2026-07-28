@@ -68,6 +68,12 @@ PHOTOS = {
  "qing_himalaya_seasia": (
    ("D", "https://i.ebayimg.com/images/g/QZkAAOSw7XpkhR6D/s-l1200.jpg"),
    "qing_himalaya_seasia_mission", "mission_image_qing_himalaya_seasia"),
+ # Reform / Constitutional — "Petition Movement of the Hubei Consultative Bureau
+ # Members" (湖北谘议局议员请愿, oil painting), Xinhai Revolution Museum, Wuhan.
+ # NOTE: this tree's card icon is qing_constitutional_mission (not *_reform).
+ "qing_reform": (
+   ("D", "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTwG7gl1RsofbWFhWy1Tc74VLI88u5K-5fWsDK68Buk_l5r9zOnRG42AhA&s=10"),
+   "qing_constitutional_mission", "mission_image_qing_reform"),
  # Open Japan — unknown Japanese artist, "Feudal Lord and Samurai Approach Castle in
  # Edo Built by Ieyasu" (early 17th c. scroll), via National Geographic's "Shogun" feature.
  "qing_open_japan": (
