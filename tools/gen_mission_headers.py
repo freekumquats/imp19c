@@ -68,6 +68,11 @@ PHOTOS = {
  "qing_himalaya_seasia": (
    ("D", "https://i.ebayimg.com/images/g/QZkAAOSw7XpkhR6D/s-l1200.jpg"),
    "qing_himalaya_seasia_mission", "mission_image_qing_himalaya_seasia"),
+ # Japan — Tokugawa-shogunate era artwork supplied by user (OER Project, WHP 1750)
+ "qing_japan": (
+   ("D", "https://www.oerproject.com/-/media/WHP-1750/Images/Unit1/HTML-Articles/"
+         "WHP1750-165-Article--Tokugawa-Shogunate--6.jpg?h=1523&iar=0&w=2000&hash=44D962AFAE191511FF125441CECDE4E9"),
+   "qing_japan_mission", "mission_image_qing_japan"),
  # India — historical print supplied by user
  "qing_india": (
    ("D", "https://i.ebayimg.com/images/g/SycAAOSw83tmEJCC/s-l1600.webp"),
