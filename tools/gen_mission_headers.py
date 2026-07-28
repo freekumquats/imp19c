@@ -86,8 +86,9 @@ PHOTOS = {
    ("D", "https://www.oerproject.com/-/media/WHP-1750/Images/Unit1/HTML-Articles/"
          "WHP1750-153-Article--Qing-Dynasty--4.jpg?h=1754&iar=0&w=2000&hash=DA3C0F4554F3A99BFD03ED49232A0609"),
    "qing_selfstrengthening_mission", "mission_image_qing_selfstrengthening"),
- # Taiping / Heavenly Kingdom — Qing painting of the ambush of the Taiping Army at
- # Wangjiakou (1854), via Wikimedia Commons. Public domain.
+ # Taiping / Heavenly Kingdom — "Qing ambush of the Taiping Army at Wangjiakou" (1854),
+ # from "Ten scenes recording the retreat and defeat of the Taiping Northern
+ # Expeditionary Forces, Feb 1854 - Mar 1855". Via Wikimedia Commons.
  # NOTE: this tree's card icon is qing_heavenly_kingdom_mission (not *_taiping).
  "qing_taiping": (
    ("D", "https://upload.wikimedia.org/wikipedia/commons/5/55/Qing_ambush_Taiping_Army_at_Wangjiakou_1854.jpg"),
@@ -103,6 +104,11 @@ PHOTOS = {
  "qing_open_japan": (
    ("D", "https://i.natgeofe.com/n/f6078f04-2068-4eae-aa82-2ee8a9b74646/Shogun12.jpg"),
    "qing_open_japan_mission", "mission_image_qing_open_japan"),
+ # Treasure Fleet — "600th Anniversary of Zheng He's Voyages to the Western Seas",
+ # China Post postage-stamp souvenir sheet, 2005 (郑和下西洋600周年).
+ "qing_treasure_fleet": (
+   ("D", "https://cdn.thecollector.com/wp-content/uploads/2022/11/zheng-he-fleet-postage-stamp.jpg?width=1200&quality=100&dpr=2"),
+   "qing_treasure_fleet_mission", "mission_image_qing_treasure_fleet"),
  # Nanyang (South Seas) — Johann (Johannes) Walch, "Karte von Australien", from
  # Walch's "Neuester Schul-Atlas" (Augsburg). Map of Australia & New Zealand.
  "qing_nanyang": (
