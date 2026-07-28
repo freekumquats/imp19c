@@ -55,8 +55,102 @@ All triggers verified against PROVEN sources (Invictus/TI/vanilla), not imp19c's
 `country_culture_group` (Invictus 00_mission_effects, TI 00_religious_inventions), `is_in_region`,
 `has_minor_river` (00_default river_port_building), `always = no` (used across 676 TI/Invictus files).
 
-**UNCONFIRMED pending boot test**, but this is a structural registration fix, not a theory: the
-building keys are now in the same list as `INF_railway_upgrade`, which is confirmed-working.
+**✅ USER BOOT-CONFIRMED 2026-07-27** (merge-overnight `a2d5651ba`): "macro builder finally works".
+The building keys are in the same list as `INF_railway_upgrade`, and the 13 buildings now list in-game.
+
+---
+
+## ✅ PROVEN RECIPE — add a building to the macro builder (boot-confirmed 2026-07-27)
+
+This is the exact, verified process. It has TWO indispensable parts: the **allowlist registration**
+(part 1 — the part every prior attempt missed) and the **per-building GUI wiring** (parts 2–5). Skipping
+part 1 = an empty section header; skipping any of 2–5 = a missing row or a GUI-compile failure.
+
+### 1. Register the building in the macro allowlist  ← THE ONE THAT ACTUALLY GATES VISIBILITY
+`gfx/interface/macro_builder/config/00_default.txt` → add the building's KEY to `all_buildings.includes`:
+```
+all_buildings = {
+    ...
+    includes = {
+        ...
+        INF_railway_upgrade      # proof this is the gate: a non-vanilla building that appears
+        my_new_building          # <-- add the raw building key here
+    }
+}
+```
+`MacroBuilderView.GetBuildInProvinceModel` is populated ONLY from this list. Not here ⇒ never in the
+model ⇒ the GUI item name-matches nothing ⇒ zero rows, regardless of how complete parts 2–5 are.
+(This file already carries a UTF-8 BOM and loads fine — leave the BOM as-is.)
+
+### 2. Item type — `gui/shared/gui_templates.gui`
+Add a `macro_build_item_<key>` type that iterates the full model and shows the one matching row:
+```
+type macro_build_item_my_new_building = macro_building_parts_item {
+    item = {
+        macro_building_item_button = {
+            visible = "[EqualTo_string(MacroBuilderProvinceBuildable.GetName, Localize('my_new_building'))]"
+            blockoverride "Tooltip" { tooltipwidget = macro_building_my_new_building_tooltip }
+        }
+    }
+}
+```
+The name-match compares `MacroBuilderProvinceBuildable.GetName` against `Localize('<key>')` — the key is
+the building's def name, NOT a display string. (CJK/concept-word names are fine; they were never the
+blocker.) `macro_building_parts_item` (same file) supplies `datamodel = GetBuildInProvinceModel` +
+`ignoreinvisible = yes`.
+
+### 3. Tooltip template — `gui/shared/custom_tooltip.gui`
+Every `tooltipwidget` referenced in part 2 MUST have a matching `template` here, or the GUI fails to
+resolve the widget:
+```
+template macro_building_my_new_building_tooltip {
+    building_tooltip = {
+        blockoverride "Image"       { texture = "[MacroBuilderProvinceBuildable.GetIconTexture]" }
+        blockoverride "title_text"  { text = "tooltip_macro_building_title_my_new_building" }
+        blockoverride "description" { text = "my_new_building_desc" }
+        blockoverride "bottom_text" { text = "[MacroBuilderProvinceBuildable.GetTooltip]" }
+    }
+}
+```
+
+### 4. Instantiate in the window — `gui/macro_builder_view.gui`
+Add the item type inside the relevant section blockoverride of `building_box`:
+```
+blockoverride "IndustrialItems" {
+    ...
+    macro_build_item_my_new_building = { }
+}
+```
+Section blocks available (defined in the `building_box` template in gui_templates.gui): PortItems,
+EducationItems, IndustrialItems, IndustrialItemsRow2, InfrastructureItems, PublicWorksItems,
+MilitaryItems, UrbanDistrictsItems, ForeignItems. To add a NEW section, add a `block "X" { }` to the
+template AND a `blockoverride "X"` in every caller (macro view + province window).
+
+### 5. Localization — `localization/english/`
+Two keys, both required:
+- title: `imp19c_tooltips_l_english.yml` → `tooltip_macro_building_title_my_new_building:0 "#T Build #L $my_new_building$#!"`
+- description: the building's `my_new_building_desc:0 "..."` (usually already exists with the building).
+
+### Rules that fell out of the investigation (do NOT relearn the hard way)
+- **`allow` / `potential` do NOT gate macro-list membership.** The config `includes` does. `allow` only
+  greys the item per-province; `potential` gates the *province window* list and build-menu membership.
+  So province-scoped gates (`trade_goods`, `is_in_region`, `has_minor_river`) are safe to keep — they
+  shape *where* it can be built, not *whether* it lists in the macro builder.
+- **`add_building_level` bypasses BOTH `potential` and `allow`.** An event-raised building can therefore
+  be locked out of every menu with `potential = { always = no }` + `allow = { always = no }` and still be
+  raised by its event. Omit it from `includes` so it never lists.
+- **flowcontainer does NOT auto-wrap.** To split a section across rows, use explicit stacked rows (see
+  `IndustrialItems` + `IndustrialItemsRow2`), not a `maximumsize`.
+- **gui/ files must have NO BOM; loc + common + this config keep BOM.** Verify with
+  `head -c3 <file> | xxd` (BOM = `efbbbf`).
+- **Verify triggers against PROVEN sources only** (Invictus/TI/vanilla) — never against imp19c's own
+  files (circular). Confirmed valid here: `country_culture_group`, `is_in_region`, `has_minor_river`,
+  `always = no`.
+
+### Provenance
+`INF_railway_upgrade` is a modder-added (non-vanilla) building that appears in the macro builder purely
+because sobisonator added its key to this same `includes` list — no engine C++ access, no hidden
+registry. The entire mechanism is this one readable config file.
 
 ---
 
