@@ -57,7 +57,7 @@ PHOTOS = {
    "qing_burma_war_mission", "mission_image_qing_burma_war"),
  # The Settlement of the New Dominion (新疆善後) — the Western Regions / Xinjiang
  "qing_xinjiang": (
-   ("D", "https://ieres.elliott.gwu.edu/files/2021/01/Land-of-Strangers-cover-1200x1200.jpg"),
+   ("D", "https://upload.wikimedia.org/wikipedia/commons/c/c8/Chengde_summer_palace_writings.jpg"),
    "qing_xinjiang_mission", "mission_image_qing_xinjiang"),
  # Colonization — Ortelius' 1589 map of the Pacific (Maris Pacifici)
  "qing_colonization": (
