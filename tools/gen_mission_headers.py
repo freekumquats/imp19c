@@ -68,6 +68,12 @@ PHOTOS = {
  "qing_himalaya_seasia": (
    ("D", "https://i.ebayimg.com/images/g/QZkAAOSw7XpkhR6D/s-l1200.jpg"),
    "qing_himalaya_seasia_mission", "mission_image_qing_himalaya_seasia"),
+ # Self-Strengthening — Xu Yang, "The Qianlong Emperor's Southern Inspection Tour,
+ # Scroll Six: Entering Suzhou along the Grand Canal" (1770). (via OER Project WHP 1750)
+ "qing_selfstrengthening": (
+   ("D", "https://www.oerproject.com/-/media/WHP-1750/Images/Unit1/HTML-Articles/"
+         "WHP1750-153-Article--Qing-Dynasty--4.jpg?h=1754&iar=0&w=2000&hash=DA3C0F4554F3A99BFD03ED49232A0609"),
+   "qing_selfstrengthening_mission", "mission_image_qing_selfstrengthening"),
  # Reform / Constitutional — "Petition Movement of the Hubei Consultative Bureau
  # Members" (湖北谘议局议员请愿, oil painting), Xinhai Revolution Museum, Wuhan.
  # NOTE: this tree's card icon is qing_constitutional_mission (not *_reform).
