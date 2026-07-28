@@ -64,6 +64,10 @@ PHOTOS = {
    ("D", "https://static-prod.lib.princeton.edu/visual_materials/maps/websites/"
          "pacific/pacific-ocean/map-pacific-ortelius-1589.jpg"),
    "qing_colonization_mission", "mission_image_qing_colonization"),
+ # India — historical print supplied by user
+ "qing_india": (
+   ("D", "https://i.ebayimg.com/images/g/SycAAOSw83tmEJCC/s-l1600.webp"),
+   "qing_india_mission", "mission_image_qing_india"),
  # Central Asia — d'Anville's 1734 map of China, Chinese Tartary and Tibet
  "qing_central_asia": (
    ("D", "https://commons.wikimedia.org/wiki/Special:FilePath/"
