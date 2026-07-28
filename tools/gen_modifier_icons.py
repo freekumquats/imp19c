@@ -136,6 +136,114 @@ def category(k):
     if re.search(r'(bloc|faction)_(influence|conviction)$',k) or 'conviction' in k or 'bloc' in k or 'faction' in k: return 'faction'
     return 'generic'
 
+# ---------------------------------------------------------------------------
+# [#115] CUSTOM-STRATA family — distinct per (stratum x metric).
+# The generic category() above maps EVERY output/happiness/desired_pop_ratio key
+# to the one shared `pop` silhouette, so the imp19c custom strata (upper/middle/
+# lower/proletariat/indentured) all rendered as the SAME icon in tooltips. This
+# pass OVERWRITES the strata family with icons distinct on both axes:
+#   colour + corner emblem  = the STRATUM   (crown / tophat / sheaf / hammer / shackle)
+#   central glyph           = the METRIC    (coin=output, smile=happiness,
+#                                            people=desired_pop_ratio, tower=city ratio)
+# Two files share art only if they are the same stratum AND metric and differ only
+# by scope (local/global/culture) — which is correct, they mean the same thing.
+# ---------------------------------------------------------------------------
+STRATA_COL = {
+    'upper_strata':  (150, 96, 176, 255),   # imperial purple
+    'middle_strata': (56,  96, 156, 255),   # merchant blue
+    'lower_strata':  (120, 92, 52, 255),    # earth brown
+    'proletariat':   (168, 52, 46, 255),    # labour red
+    'indentured':    (96,  100, 108, 255),  # iron grey
+}
+
+def _blade_disc(col):
+    im=canvas(); d=ImageDraw.Draw(im); disc(d,col); return im,d
+
+def strata_emblem(d, stratum):
+    """Small stratum badge, top-left, so strata are told apart even at equal metric."""
+    x0,y0 = int(PX*S*0.10), int(PX*S*0.10); s=int(PX*S*0.30)
+    if stratum=='upper_strata':      # coronet: three points
+        pts=[(x0,y0+s)]
+        for k in range(4):
+            xx=x0+int(s*k/3); pts.append((xx,y0)); pts.append((xx+int(s/6),y0+int(s*0.5)))
+        pts.append((x0+s,y0+s))
+        d.polygon(pts, fill=GOLD, outline=(60,50,20,255))
+    elif stratum=='middle_strata':   # top hat
+        d.rectangle((x0,y0+int(s*0.6),x0+s,y0+int(s*0.8)),fill=(20,20,24,255))       # brim
+        d.rectangle((x0+int(s*0.2),y0,x0+int(s*0.8),y0+int(s*0.62)),fill=(20,20,24,255))  # crown
+    elif stratum=='lower_strata':    # wheat sheaf (three stalks)
+        for k,xx in enumerate([0.2,0.5,0.8]):
+            d.line((x0+int(s*xx),y0+s,x0+int(s*xx),y0),fill=(210,180,70,255),width=max(2,int(PX*S*0.02)))
+    elif stratum=='proletariat':     # hammer
+        d.line((x0,y0+s,x0+s,y0),fill=(150,120,60,255),width=max(2,int(PX*S*0.03)))       # handle
+        d.rectangle((x0+int(s*0.55),y0,x0+s,y0+int(s*0.28)),fill=STEEL,outline=(40,40,40,255))  # head
+    elif stratum=='indentured':      # chain link
+        for cx in (0.3,0.6):
+            d.ellipse((x0+int(s*cx)-int(s*0.16),y0+int(s*0.3),x0+int(s*cx)+int(s*0.16),y0+int(s*0.7)),
+                      outline=(180,184,190,255),width=max(2,int(PX*S*0.02)))
+
+def metric_glyph(d, metric):
+    """Central motif = what the modifier measures."""
+    c=PX*S//2
+    if metric=='output':             # coin with up-tick
+        d.ellipse((c-int(PX*S*0.22),c-int(PX*S*0.22),c+int(PX*S*0.22),c+int(PX*S*0.22)),
+                  fill=GOLD, outline=(120,90,20,255), width=max(2,int(PX*S*0.03)))
+        d.line((c-int(PX*S*0.10),c+int(PX*S*0.08),c,c-int(PX*S*0.10)),fill=(120,90,20,255),width=max(2,int(PX*S*0.035)))
+        d.line((c,c-int(PX*S*0.10),c+int(PX*S*0.10),c+int(PX*S*0.08)),fill=(120,90,20,255),width=max(2,int(PX*S*0.035)))
+    elif metric=='happiness':        # smile
+        d.ellipse((c-int(PX*S*0.24),c-int(PX*S*0.24),c+int(PX*S*0.24),c+int(PX*S*0.24)),
+                  fill=(240,210,90,255), outline=(120,90,20,255), width=max(2,int(PX*S*0.03)))
+        for ex in (-0.09,0.09):
+            d.ellipse((c+int(PX*S*ex)-int(PX*S*0.03),c-int(PX*S*0.08),c+int(PX*S*ex)+int(PX*S*0.03),c-int(PX*S*0.02)),fill=(60,45,20,255))
+        d.arc((c-int(PX*S*0.13),c-int(PX*S*0.10),c+int(PX*S*0.13),c+int(PX*S*0.14)),20,160,fill=(60,45,20,255),width=max(2,int(PX*S*0.03)))
+    elif metric=='desired_pop_ratio':# two figures (a population)
+        for dx in (-0.11,0.11):
+            d.ellipse((c+int(PX*S*dx)-int(PX*S*0.07),c-int(PX*S*0.16),c+int(PX*S*dx)+int(PX*S*0.07),c-int(PX*S*0.02)),fill=STEEL)
+            d.polygon([(c+int(PX*S*dx)-int(PX*S*0.10),c+int(PX*S*0.20)),(c+int(PX*S*dx)+int(PX*S*0.10),c+int(PX*S*0.20)),
+                       (c+int(PX*S*dx)+int(PX*S*0.06),c),(c+int(PX*S*dx)-int(PX*S*0.06),c)],fill=STEEL)
+    elif metric=='city_desired_pop_ratio':  # figure + city tower
+        d.polygon([(c-int(PX*S*0.20),c+int(PX*S*0.20)),(c-int(PX*S*0.02),c+int(PX*S*0.20)),
+                   (c-int(PX*S*0.02),c-int(PX*S*0.14)),(c-int(PX*S*0.20),c-int(PX*S*0.14))],fill=STEEL,outline=(40,40,40,255))
+        for wy in (-0.09,0.02,0.13):  # windows
+            d.rectangle((c-int(PX*S*0.15),c+int(PX*S*wy),c-int(PX*S*0.09),c+int(PX*S*(wy+0.05))),fill=(60,64,70,255))
+        d.ellipse((c+int(PX*S*0.04),c-int(PX*S*0.16),c+int(PX*S*0.18),c-int(PX*S*0.02)),fill=GOLD)      # head
+        d.polygon([(c+int(PX*S*0.02),c+int(PX*S*0.20)),(c+int(PX*S*0.20),c+int(PX*S*0.20)),
+                   (c+int(PX*S*0.16),c),(c+int(PX*S*0.06),c)],fill=GOLD)
+
+def parse_strata(fn):
+    """<key>.dds -> (stratum, metric) or None if not a custom-strata modifier."""
+    k=fn[:-4] if fn.endswith('.dds') else fn
+    for scope in ('local_','global_','culture_'):
+        if k.startswith(scope): k=k[len(scope):]; break
+    else:
+        return None
+    for st in STRATA_COL:
+        if k.startswith(st+'_'):
+            metric=k[len(st)+1:]
+            if metric in ('happyness','happiness'): metric='happiness'
+            if metric in ('output','happiness','desired_pop_ratio','city_desired_pop_ratio'):
+                return st, metric
+    return None
+
+def gen_strata():
+    """Overwrite every custom-strata modifier icon with distinct (stratum x metric) art."""
+    os.makedirs(OUT,exist_ok=True)
+    made={}   # (stratum,metric) -> cached base path
+    n=0
+    for fn in sorted(os.listdir(OUT)):
+        pm=parse_strata(fn)
+        if not pm: continue
+        st,metric=pm
+        if pm not in made:
+            im,d=_blade_disc(STRATA_COL[st])
+            metric_glyph(d, metric)
+            strata_emblem(d, st)
+            made[pm]=save_base(im, f'strata_{st}_{metric}')
+        shutil.copyfile(made[pm], f'{OUT}/{fn}')
+        n+=1
+    print(f"[#115] wrote {n} custom-strata icons across {len(made)} distinct (stratum x metric) images")
+    return n
+
 def main():
     os.makedirs(OUT,exist_ok=True)
     build_bases()
@@ -149,4 +257,9 @@ def main():
     for c,n in used.most_common(): print(f"  {n:4} <- {c}")
 
 if __name__=='__main__':
-    main()
+    import sys
+    if '--strata' in sys.argv:
+        gen_strata()          # [#115] only refresh the strata family
+    else:
+        main()
+        gen_strata()          # base pass copies the shared silhouette; strata pass wins for the strata family
