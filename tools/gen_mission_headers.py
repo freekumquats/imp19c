@@ -86,6 +86,12 @@ PHOTOS = {
    ("D", "https://www.oerproject.com/-/media/WHP-1750/Images/Unit1/HTML-Articles/"
          "WHP1750-153-Article--Qing-Dynasty--4.jpg?h=1754&iar=0&w=2000&hash=DA3C0F4554F3A99BFD03ED49232A0609"),
    "qing_selfstrengthening_mission", "mission_image_qing_selfstrengthening"),
+ # Taiping / Heavenly Kingdom — Qing painting of the ambush of the Taiping Army at
+ # Wangjiakou (1854), via Wikimedia Commons. Public domain.
+ # NOTE: this tree's card icon is qing_heavenly_kingdom_mission (not *_taiping).
+ "qing_taiping": (
+   ("D", "https://upload.wikimedia.org/wikipedia/commons/5/55/Qing_ambush_Taiping_Army_at_Wangjiakou_1854.jpg"),
+   "qing_heavenly_kingdom_mission", "mission_image_qing_taiping"),
  # Reform / Constitutional — "Petition Movement of the Hubei Consultative Bureau
  # Members" (湖北谘议局议员请愿, oil painting), Xinhai Revolution Museum, Wuhan.
  # NOTE: this tree's card icon is qing_constitutional_mission (not *_reform).
