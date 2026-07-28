@@ -68,8 +68,8 @@ PHOTOS = {
  "qing_himalaya_seasia": (
    ("D", "https://i.ebayimg.com/images/g/QZkAAOSw7XpkhR6D/s-l1200.jpg"),
    "qing_himalaya_seasia_mission", "mission_image_qing_himalaya_seasia"),
- # Open Japan — Japanese painted view of Edo Castle main keep (cartouche 江戸御本丸),
- # via National Geographic's "Shogun" feature.
+ # Open Japan — unknown Japanese artist, "Feudal Lord and Samurai Approach Castle in
+ # Edo Built by Ieyasu" (early 17th c. scroll), via National Geographic's "Shogun" feature.
  "qing_open_japan": (
    ("D", "https://i.natgeofe.com/n/f6078f04-2068-4eae-aa82-2ee8a9b74646/Shogun12.jpg"),
    "qing_open_japan_mission", "mission_image_qing_open_japan"),
