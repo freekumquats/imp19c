@@ -224,6 +224,46 @@ EVENTS = {  # event_window/qing_<alias>.dds  (repoint picture=)
  "qing_greek_siege":("S","walled city under siege"),
 }
 
+# [#117] NATIONAL-IDEA icons. Each national idea (common/ideas/00_imperatrix_ideas.txt)
+# resolves art by filename at gfx/interface/icons/ideas/<key>.dds (72x72) + <key>_small.dds
+# (40x40). Only civilising_mission + defender_of_the_faith shipped icons; the other 15
+# rendered blank. Curated concept queries below; the ideas job writes BOTH sizes per key.
+IDEAS = {
+ # military_ideas
+ "idea_world_police":        ("S",["gunboat diplomacy 19th century warship","19th century naval squadron flags"]),
+ "idea_spanish_revanchism":  ("S",["Ferdinand VII Spain portrait","Spanish royalist army 19th century"]),
+ "idea_gott_mit_uns":        ("S",["Prussian soldier Pickelhaube helmet","German infantry soldier 1870 uniform"]),
+ "idea_qing_banner_host":    ("S",["Eight Banners Qing soldier armour","Manchu bannerman Qing cavalry"]),
+ # civic_ideas
+ # Mercantilism — Jean-Baptiste Colbert, Louis XIV's mercantilist minister.
+ "idea_mercantilism":        ("D","https://commons.wikimedia.org/wiki/Special:FilePath/"
+   "Jean-Baptiste_Colbert.jpg?width=800"),
+ "idea_free_trade":          ("S",["19th century free trade port merchant ships","Manchester cotton exchange 19th century"]),
+ "idea_monopsony":           ("S",["company town factory 19th century","single buyer market monopoly warehouse"]),
+ # 摊丁入亩 — the Qing land-poll tax merger; a silver sycee ingot reads the fiscal reform.
+ "idea_qing_tanding":        ("S",["sycee silver ingot Chinese","Chinese silver tael ingot Qing dynasty"]),
+ # oratory_ideas
+ "idea_merchant_colonialism":("S",["East India Company trading post factory","colonial merchant trading house Asia"]),
+ # Settler colonialism — John Gast, "American Progress" (1872), the westward-settlement allegory.
+ "idea_settler_colonialism": ("D","https://commons.wikimedia.org/wiki/Special:FilePath/"
+   "American_Progress_(John_Gast_painting).jpg?width=800"),
+ # Isolationism — the Great Wall of China, the archetypal shut-out-the-world rampart.
+ "idea_isolationism":        ("D","https://commons.wikimedia.org/wiki/Special:FilePath/"
+   "GreatWall_2004_Summer_4.jpg?width=800"),
+ # 萬國來朝 — envoys of many nations at the Qing court (the tributary order); known-good PD scan.
+ "idea_qing_tributary_system":("D","https://upload.wikimedia.org/wikipedia/commons/8/8f/"
+   "%E4%B8%87%E5%9B%BD%E6%9D%A5%E6%9C%9D%E5%9B%BE_Myanmar_%28%E7%BC%85%E7%94%B8"
+   "%E5%9B%BD%29_delegates_in_Peking_in_1761.jpg"),
+ # Counter-colonialism — Boxer Uprising fighters resisting the foreign powers.
+ "idea_counter_colonialism": ("D","https://commons.wikimedia.org/wiki/Special:FilePath/"
+   "Boxer_Rebellion.jpg?width=800"),
+ # religious_ideas
+ # Pan-nationalism — Delacroix, "Liberty Leading the People" (1830), the flag-borne national rising.
+ "idea_pan_nationalism":     ("D","https://commons.wikimedia.org/wiki/Special:FilePath/"
+   "Eug%C3%A8ne_Delacroix_-_Le_28_Juillet._La_Libert%C3%A9_guidant_le_peuple.jpg?width=800"),
+ "idea_qing_reverence_heaven":("S",["Temple of Heaven Beijing altar ceremony","Qing emperor heaven sacrifice ritual"]),
+}
+
 def main(force=False):
     # BLDG donor: EDU_school is a DX10 (compressed) icon, so convert() would keep the
     # icon opaque — fine, but the new building icons were cut against the legacy-BGRA8
@@ -258,5 +298,33 @@ def main(force=False):
                     log.write(f"{key}\t{spec[1]}\tERR\t{e}\n"); print(f"  ERR {key}: {e}"); err += 1
     print(f"done ok={ok} skip={skip} err={err} ->", LOG)
 
+def gen_ideas(force=False):
+    """[#117] National-idea icons: BOTH sizes per key — <key>.dds (72x72) + <key>_small.dds
+    (40x40), opaque squares matching the two shipped idea icons. Source photo fetched once
+    per key and cut to both sizes."""
+    outdir = g("icons", "ideas"); os.makedirs(outdir, exist_ok=True)
+    ok = skip = err = 0
+    with open(os.path.join(ROOT,"tools","idea_icon_log.tsv"),"w",encoding="utf-8") as log:
+        log.write("key\tquery\tsource\tstatus\n")
+        print("== ideas", f"({len(IDEAS)})")
+        for key, spec in IDEAS.items():
+            big   = os.path.join(outdir, key + ".dds")
+            small = os.path.join(outdir, key + "_small.dds")
+            if os.path.exists(big) and os.path.exists(small) and not force:
+                log.write(f"{key}\t-\t-\tSKIP (exists)\n"); skip += 1; continue
+            src = os.path.join(SRC, "idea_src_" + key + ".jpg")
+            try:
+                desc = "cached" if os.path.exists(src) else smart_fetch(spec, src)
+                convert(src, big,   size=72)
+                convert(src, small, size=40)
+                log.write(f"{key}\t{spec[1]}\t{desc}\tOK\n"); print(f"  OK {key} (72+40)"); ok += 1
+            except Exception as e:
+                log.write(f"{key}\t{spec[1]}\tERR\t{e}\n"); print(f"  ERR {key}: {e}"); err += 1
+    print(f"ideas done ok={ok} skip={skip} err={err}")
+
 if __name__ == "__main__":
-    main(force="--force" in sys.argv)
+    force = "--force" in sys.argv
+    if "--ideas" in sys.argv:
+        gen_ideas(force=force)
+    else:
+        main(force=force)
