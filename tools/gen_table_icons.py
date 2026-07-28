@@ -3,16 +3,84 @@
 gen_table_icons.py — bespoke icons for the doc-table categories (panels, trade goods,
 event pictures, modifier-cost glyphs, building-type icons, military traditions).
 
-Each entry: (out_path, donor, query-or-url). Curated queries come from placeholder_icons.md
-§2/§3/§3b/§4/§5/§6 concepts. Writes DDS via dds_icon.convert; GUI/def repointing is done by
-a companion step (repoint_refs.py) so this file only produces art.
+Each entry: key -> (kind, query|url). ('D', url) forces a direct upload.wikimedia.org
+URL; ('S', query) does a Commons search; ('S', [q1, q2, ...]) tries each query in turn
+until one yields a legible photo. Curated queries come from placeholder_icons.md
+§2/§3/§3b/§4/§5/§6 concepts (BUILDINGS also carries the 37 new building keys from the
+buildings-research batch, commit 1ea45ce52). Writes DDS via dds_icon.convert; GUI/def
+repointing is done by a companion step (repoint_refs.py) so this file only produces art.
 
-Idempotent: skips an out_path that already exists (unless --force).
+Search results are quality-filtered (smart_fetch): PDF/map/document thumbnails and
+near-black/near-uniform scans are rejected so the picked source is an actual photograph.
+The brightness/detail score needs PIL+numpy; if they're absent it degrades to the plain
+top hit. (Base python3 usually lacks them — run under a venv with Pillow+numpy.)
+
+Idempotent: skips an out_path that already exists unless run with --force (this protects
+already-committed curated art from being replaced by a different search pick on re-run).
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(__file__))
-from fetch_wm import fetch
+from fetch_wm import fetch, download
 from dds_icon import convert
+
+# Titles whose top Commons hit is typically NOT a usable photo (maps, scans, crests).
+BAD_TITLE = ("map", "plan", "pdf", ".svg", "document", "diagram", "chart", "book",
+             "letter", "manuscript", "stamp", "coat of arms", "seal ", "memorial")
+
+def _candidates(query, width=400, limit=12):
+    """Commons File-namespace search -> [(thumb_url, title)], jpeg/png only, bad
+    titles dropped, in search-rank order."""
+    import json, urllib.parse
+    from fetch_wm import _get, API
+    params = {"action": "query", "generator": "search", "gsrsearch": query,
+              "gsrnamespace": 6, "gsrlimit": limit, "prop": "imageinfo",
+              "iiprop": "url|mime", "iiurlwidth": width, "format": "json"}
+    j = json.loads(_get(API + "?" + urllib.parse.urlencode(params)).decode("utf-8"))
+    pages = (j.get("query") or {}).get("pages") or {}
+    out = []
+    for p in sorted(pages.values(), key=lambda p: p.get("index", 999)):
+        ii = (p.get("imageinfo") or [{}])[0]
+        t = (p.get("title") or "").lower()
+        if ii.get("mime") not in ("image/jpeg", "image/png"):
+            continue
+        if not ii.get("thumburl"):
+            continue
+        if any(b in t for b in BAD_TITLE):
+            continue
+        out.append((ii["thumburl"], p.get("title")))
+    return out
+
+def _photo_ok(path):
+    """True if the raster reads like a legible photo (not a near-black/near-uniform
+    document scan). Needs PIL+numpy; if unavailable, accept unconditionally."""
+    try:
+        import numpy as np
+        from PIL import Image
+    except Exception:
+        return True
+    im = np.asarray(Image.open(path).convert("RGB"), dtype="float32")
+    return (25 < im.mean() < 235) and im.std() > 28
+
+def smart_fetch(spec, src):
+    """('D', url) downloads the curated URL directly (trusted). ('S', query|[queries])
+    searches Commons, skipping PDF/map/document thumbnails and near-black scans, and
+    keeps the first legible photo. Falls back to the plain top hit if none pass."""
+    kind, val = spec
+    if kind == "D":
+        n = download(val, src)
+        return f"direct:{val} ({n}B)"
+    queries = val if isinstance(val, list) else [val]
+    for q in queries:
+        for url, title in _candidates(q):
+            try:
+                download(url, src)
+                if _photo_ok(src):
+                    return f"search:'{q}' -> {title}"
+            except Exception:
+                continue
+    # nothing passed the filter: plain top hit of the first query
+    _, desc = fetch(("search", queries[0]), src, width=400)
+    return desc
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def g(*p): return os.path.join(ROOT, "gfx", "interface", *p)
@@ -100,6 +168,54 @@ BUILDINGS = {
  "military_depot_building":      ("S","military supply depot warehouse"),
  "row_manufactory_building":     ("S","19th century factory manufactory"),
  "row_plantation_building":      ("S","colonial plantation"),
+
+ # --- buildings-research batch (37 new keys, commit 1ea45ce52). Queries are the
+ # --- concrete historical subjects that produced the committed art; list-valued
+ # --- entries carry the fallback queries used when the first hit was a map/scan. ---
+ # Industry (China-specific)
+ "qing_steel_works_building":        ("S","Hanyang Iron Works"),
+ "qing_textile_mill_building":       ("S","cotton mill 19th century interior"),
+ "qing_machine_works_building":      ("S","Jiangnan Arsenal Shanghai"),
+ "qing_navy_yard_building":          ("S","Foochow Arsenal"),
+ "qing_coal_mine_building":          ("S",["colliery coal mine workers historic","Chinese coal mine miners historic photograph","coal mine surface buildings historic photograph"]),
+ "qing_telegraph_building":          ("S","telegraph office 19th century"),
+ "qing_tongwen_guan_building":       ("S","Zongli Yamen Qing dynasty"),
+ "qing_imperial_university_building":("S","Imperial University of Peking"),
+ # Industry (generic worldwide)
+ "IND_coal_mine_building":           ("S",["colliery winding tower headframe","coal mine pit head wheel"]),
+ "IND_blast_furnace_building":       ("S","blast furnace 19th century ironworks"),
+ "IND_electric_plant_building":      ("S","electric power station 1890s dynamo"),
+ "IND_gasworks_building":            ("S","Victorian gasworks gasometer"),
+ # Garrison / military
+ "qing_banner_garrison_building":    ("S","Manchu banner garrison Manchu city"),
+ "qing_horse_pasture_building":      ("S","Mongolian horse herd grassland"),
+ "qing_green_standard_post_building":("S",["Qing dynasty soldier photograph","Chinese soldiers Qing army historic photograph"]),
+ "qing_coastal_battery_building":    ("S",["Bogue forts cannon","Dagu Forts cannon","Chinese fort cannon Opium War historic photograph"]),
+ "qing_military_colony_building":    ("S","Jiayuguan fortress Great Wall"),
+ # Agriculture / hydraulic
+ "qing_river_conservancy_building":  ("S",["Grand Canal China historic photograph","Chinese river embankment stone historic","Yellow River dike flood control China"]),
+ "qing_dujiangyan_building":         ("S","Dujiangyan irrigation system"),
+ "qing_karez_building":              ("S",["qanat irrigation shaft","karez qanat Turpan underground irrigation"]),
+ "qing_fishpond_dyke_building":      ("S","fish pond aquaculture China"),
+ "qing_polder_building":             ("S",["terraced paddy field China","rice paddy terraces Yangtze delta"]),
+ "qing_community_granary_building":  ("S",["traditional Chinese barn building","Chinese granary storehouse historic photograph"]),
+ # Scholarship
+ "qing_hanlin_academy_building":     ("S","Hanlin Academy"),
+ "qing_guozijian_building":          ("S",["Guozijian Beijing archway","Biyong Hall Imperial College Beijing"]),
+ "qing_examination_hall_building":   ("S","Nanjing examination hall Jiangnan Gongyuan"),
+ # Commerce / fiscal
+ "qing_mint_building":               ("S",["ancient Chinese bronze coins","Chinese cash coins pile photograph"]),
+ "qing_draft_bank_building":         ("S","Rishengchang draft bank Pingyao"),
+ "qing_guild_hall_building":         ("S","huiguan guild hall China"),
+ "qing_tribute_depot_building":      ("S",["Chinese warehouse building historic photograph","junk boat Grand Canal China historic"]),
+ "qing_likin_station_building":      ("S",["Chinese Maritime Customs Service building","Shanghai Customs House"]),
+ "qing_imperial_bank_building":      ("S",["HSBC Building Shanghai Bund","bank building Shanghai Bund historic"]),
+ # Religion
+ "qing_temple_of_heaven_building":   ("S","Temple of Heaven Beijing"),
+ "qing_ancestral_temple_building":   ("S","Taimiao Imperial Ancestral Temple Beijing"),
+ "qing_confucian_temple_building":   ("S","Temple of Confucius Beijing"),
+ "qing_gelug_monastery_building":    ("S","Tibetan Buddhist monastery Gelug"),
+ "qing_great_mosque_building":       ("S","Great Mosque of Xian"),
 }
 
 EVENTS = {  # event_window/qing_<alias>.dds  (repoint picture=)
@@ -108,31 +224,39 @@ EVENTS = {  # event_window/qing_<alias>.dds  (repoint picture=)
  "qing_greek_siege":("S","walled city under siege"),
 }
 
-def main():
+def main(force=False):
+    # BLDG donor: EDU_school is a DX10 (compressed) icon, so convert() would keep the
+    # icon opaque — fine, but the new building icons were cut against the legacy-BGRA8
+    # qing_salt_yard_building donor. Prefer it when present for byte-identical output.
+    bldg_donor = g("icons","buildings","qing_salt_yard_building.dds")
+    if not os.path.exists(bldg_donor):
+        bldg_donor = BLDG
     jobs = [
         (PANELS,     g("icons","menu_buttons"),        MENU),
         (TRADEGOODS, g("icons","tradegoods"),          TRADE),
-        (BUILDINGS,  g("icons","buildings"),           BLDG),
+        (BUILDINGS,  g("icons","buildings"),           bldg_donor),
         (EVENTS,     g("event_window"),                EVENT),
     ]
+    ok = skip = err = 0
     with open(LOG,"w",encoding="utf-8") as log:
         log.write("key\tquery\tsource\tstatus\n")
         for table, outdir, donor in jobs:
             print("==", os.path.basename(outdir), f"({len(table)})")
-            for key,(kind,val) in table.items():
+            for key,spec in table.items():
                 out = os.path.join(outdir, key + ".dds")
+                if os.path.exists(out) and not force:
+                    log.write(f"{key}\t-\t-\tSKIP (exists)\n"); skip += 1; continue
                 src = os.path.join(SRC, key + ".jpg")
                 try:
-                    spec = ("direct",val) if kind=="D" else ("search",val)
-                    if not os.path.exists(src):
-                        _,desc = fetch(spec, src, width=400)
+                    if os.path.exists(src):
+                        desc = "cached"
                     else:
-                        desc="cached"
+                        desc = smart_fetch(spec, src)
                     convert(src, out, like=donor)
-                    log.write(f"{key}\t{val}\t{desc}\tOK\n"); print(f"  OK {key}")
+                    log.write(f"{key}\t{spec[1]}\t{desc}\tOK\n"); print(f"  OK {key}"); ok += 1
                 except Exception as e:
-                    log.write(f"{key}\t{val}\tERR\t{e}\n"); print(f"  ERR {key}: {e}")
-    print("done ->", LOG)
+                    log.write(f"{key}\t{spec[1]}\tERR\t{e}\n"); print(f"  ERR {key}: {e}"); err += 1
+    print(f"done ok={ok} skip={skip} err={err} ->", LOG)
 
 if __name__ == "__main__":
-    main()
+    main(force="--force" in sys.argv)
