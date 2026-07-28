@@ -68,11 +68,17 @@ PHOTOS = {
  "qing_himalaya_seasia": (
    ("D", "https://i.ebayimg.com/images/g/QZkAAOSw7XpkhR6D/s-l1200.jpg"),
    "qing_himalaya_seasia_mission", "mission_image_qing_himalaya_seasia"),
- # Japan — Tokugawa-shogunate era artwork supplied by user (OER Project, WHP 1750)
+ # Japan — Tsukioka Yoshitoshi, "Pontoon Bridge Built at Rokugo, Musashi, for the
+ # Emperor's Crossing of the Tama River" (1868); Emperor Meiji's Kyoto->Tokyo progress.
  "qing_japan": (
+   ("D", "https://www.nippon.com/en/ncommon/contents/views/81138/81138.jpg"),
+   "qing_japan_mission", "mission_image_qing_japan"),
+ # Japan (pre-Perry) — Hanegawa Toei, "Chosenjin Ukie" (Korean Procession in
+ # Perspective), c.1748; a Joseon tongsinsa embassy through Edo. (OER Project, WHP 1750)
+ "qing_japan_preperry": (
    ("D", "https://www.oerproject.com/-/media/WHP-1750/Images/Unit1/HTML-Articles/"
          "WHP1750-165-Article--Tokugawa-Shogunate--6.jpg?h=1523&iar=0&w=2000&hash=44D962AFAE191511FF125441CECDE4E9"),
-   "qing_japan_mission", "mission_image_qing_japan"),
+   "qing_japan_preperry_mission", "mission_image_qing_japan_preperry"),
  # India — historical print supplied by user
  "qing_india": (
    ("D", "https://i.ebayimg.com/images/g/SycAAOSw83tmEJCC/s-l1600.webp"),
