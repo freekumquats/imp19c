@@ -64,6 +64,10 @@ PHOTOS = {
    ("D", "https://static-prod.lib.princeton.edu/visual_materials/maps/websites/"
          "pacific/pacific-ocean/map-pacific-ortelius-1589.jpg"),
    "qing_colonization_mission", "mission_image_qing_colonization"),
+ # Himalaya & Southeast Asia — historical print supplied by user
+ "qing_himalaya_seasia": (
+   ("D", "https://i.ebayimg.com/images/g/QZkAAOSw7XpkhR6D/s-l1200.jpg"),
+   "qing_himalaya_seasia_mission", "mission_image_qing_himalaya_seasia"),
  # India — historical print supplied by user
  "qing_india": (
    ("D", "https://i.ebayimg.com/images/g/SycAAOSw83tmEJCC/s-l1600.webp"),
