@@ -68,8 +68,9 @@ PHOTOS = {
  "qing_himalaya_seasia": (
    ("D", "https://i.ebayimg.com/images/g/QZkAAOSw7XpkhR6D/s-l1200.jpg"),
    "qing_himalaya_seasia_mission", "mission_image_qing_himalaya_seasia"),
- # Summer Palace — unknown Chinese artist, "A Large Painting of the Summer Palace",
- # 19th c., gouache on paper, private collection (via Christie's).
+ # Summer Palace — unknown Chinese artist, "A Large Painting of the Summer Palace"
+ # (Kunming Lake, the Seventeen-Arch Bridge, and Longevity Hill), 19th c., gouache
+ # on paper, private collection (via Christie's).
  "qing_summer_palace": (
    ("D", "https://www.christies.com/img/LotImages/2012/CSK/2012_CSK_07339_1058_000"
          "(a_large_painting_of_the_summer_palace_19th_century114845).jpg?mode=max"),
