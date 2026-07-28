@@ -68,6 +68,11 @@ PHOTOS = {
  "qing_himalaya_seasia": (
    ("D", "https://i.ebayimg.com/images/g/QZkAAOSw7XpkhR6D/s-l1200.jpg"),
    "qing_himalaya_seasia_mission", "mission_image_qing_himalaya_seasia"),
+ # Settle Frontier — Qing map of the Ili (Yili) military complex, c.1809 (the Nine
+ # Cities of Ili and their garrisons), via Wikimedia Commons. Public domain.
+ "qing_settle_frontier": (
+   ("D", "https://upload.wikimedia.org/wikipedia/commons/8/8b/Yili-military-complex-ca-1809.jpg"),
+   "qing_settle_frontier_mission", "mission_image_qing_settle_frontier"),
  # Self-Strengthening — Xu Yang, "The Qianlong Emperor's Southern Inspection Tour,
  # Scroll Six: Entering Suzhou along the Grand Canal" (1770). (via OER Project WHP 1750)
  "qing_selfstrengthening": (
