@@ -449,7 +449,7 @@ boot-tested there — the un-gate is a single moment only for the OTHER 20 goods
   gated OFF (not in produce loop until I6). **STATUS: DONE (I3a cottage-5 + I3b intermediates-3 + I3c
   consumers-7 = all 15), each adversarially reviewed clean and committed. See REVIEW LOG.**
 - **I4 — Real tech gating (D3).** `INDUSTRY_unlocked_X` from the invention map (+ add wooden_ships);
-  GUI buttons already agree.
+  GUI buttons already agree. **STATUS: DONE — reviewed clean, committed. See REVIEW LOG.**
 - **I5 — Employment scaling (D4a): `INDUSTRY_employment_ratio` into mechanised output.** Qing granular
   / ROW coarse (D6). LIVE for the 4 pre-wired goods → boot-test their output delta.
 - **I5.5 — Close rare_alloys consumption sink (D10)** BEFORE any un-gate that could produce it.
@@ -560,4 +560,21 @@ precedes any un-gate that could produce it.)
   pre-existing/cosmetic, not introduced): DEMAND_chemicals lacks a trailing `min = 0`; I3b rare_alloys→
   steel add has extra leading tabs (whitespace-insensitive). Goods defined but still gated OFF (produce
   loop → I6). Committed + pushed.
+- **Phase 3 / I4 (real tech gating, D3):** IMPLEMENTED + adversarially reviewed CLEAN (all 5 criteria,
+  no defects). Rewrote `INDUSTRY_unlocked_svalues.txt` so each `INDUSTRY_unlocked_X` MIRRORS its
+  `industrial_goods_buttons.txt` `is_valid` invention AND-gate exactly (single source of truth; the
+  svalue was previously DEAD — no consumer repo-wide — as 7 `civic_tech >= 0` always-true + 16
+  `value = 0 # TODO` always-locked placeholders). 21 goods → bare `invention = tech_X` AND-gates at
+  country scope (button's `owner={}` wrapper dropped since the svalue is already country-scoped); ADDED
+  the missing `INDUSTRY_unlocked_wooden_ships` (23→24 defs). electronics/motors/petrochemicals kept as
+  `value = 0` mirroring their buttons' `always = no` (20th-c., out of the 1763-1900 window — locked, not
+  deleted). Buttons NOT touched (they already gate correctly; the province GUI enables via each button's
+  own `IsValid`). Verified: all 24 defs unique, every good↔invention pairing correct (no swaps — glass/
+  bronze/steel/steel_ships/wooden_ships/processed_foods stress-checked), all 15 inventions exist, braces
+  balanced, UTF-8-BOM+CRLF preserved (`file` confirmed). Inert until I6 reads it as the un-gate authority.
+  **Best-guess decision recorded:** D3 floated a "high civic_tech floor" for the 3 out-of-era goods, but
+  the mod has NO established civic_tech scale to anchor a floor against (no invention gates on civic_tech
+  anywhere), and un-`always=no`-ing their buttons is a balance call better made with boot-test in the
+  loop — so they stay hard-locked (`value = 0`) for now; revisit if a late-game reach is wanted.
+  Committed + pushed.
 - (Phase 3+ increments logged here as they land.)
