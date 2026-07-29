@@ -497,6 +497,8 @@ boot-tested there — the un-gate is a single moment only for the OTHER 20 goods
   the mechanised-only macro.** The switch-on for the new goods. Heavily reviewed + boot-tested.
   **STATUS: DONE — reviewed CLEAN (all 7 criteria), committed. See REVIEW LOG. Boot-test owed (live economic change).**
 - **I7 — Prices for all producible goods (D7).**
+  **STATUS: DONE — reviewed CLEAN (all 7 criteria), committed. See REVIEW LOG. Surfaced a pre-existing
+  never-refreshed-global-mean-price balance item (logged, non-blocking).**
 - **I8 — Manufacturing wealth → workers (D4b): reweight manufacturing income shares.** Closes the
   employment loop.
 - **I9 — Loc + GUI tooltips (D8).**
@@ -694,6 +696,39 @@ precedes any un-gate that could produce it.)
   single-seeded (unaffected). It is a one-time t=0 value error, not a recurring quarterly double-count.
   Also noted: `setup_main_effect` (se_setup.txt) is dead/orphaned (zero callers). Both logged for a
   later increment; neither touches I6's correctness. **LIVE economic change → boot-test owed.** Committed + pushed.
+- **Phase 3 / I7 (prices for all producible goods, D7):** IMPLEMENTED + adversarially reviewed CLEAN
+  (all 7 criteria, no defects). Filled the 15 empty `PRICE_factor_raw_input_costs_X = {}` stubs with real
+  BOM-weighted bodies (construction_materials, furniture, luxury_furniture, pharmaceuticals, wooden_ships,
+  steel, chemicals, rare_alloys, processed_foods, late_munitions, late_artillery, steel_ships, motors,
+  electronics, petrochemicals) and added those 15 to the OR gate at se_GLOBALTRADE_split.txt:5871 that
+  guards `PRICE_factor_raw_input_costs_$tradegood$ = yes` (was a hardcoded 9-good list; the
+  `is_manufactured_tradegood` call there stays commented). All 24 MG goods now price their inputs.
+  **Canonical-generator path:** extended `tools/gen_mg_chains.py` with `price_body()` + a `price` mode
+  emitting bodies from the SAME RECIPES dict that drives the production chains and the
+  `INDUSTRY_demand_importance_<good>_<input>` weights — no hand-copy. rare_alloys had NO prior stub (a
+  post-hoc good), so its body was appended before the raw-goods stub block; the other 14 replaced their
+  stubs in place. Deleted 9 dead commented-out duplicate stub lines (the goods that already had bodies).
+  Bodies are shape-identical to the 9 hand-built ones: `add = { value = global_mean_price_<input>
+  min = 0.001 multiply = INDUSTRY_demand_importance_<good>_<input> }` per input, `multiply =
+  PRICE_input_goods_scale_factor` (=0.1) last. **Ordering/circularity CLEARED (independently traced +
+  review-confirmed):** bodies read `global_mean_price_<input>` — a persistent GLOBAL var computed for
+  ALL tradegoods (incl. manufactured, via the every_tradegood_complex injector list) in a SEPARATE
+  averaging pass (`PRICE_update_all_global_mean_prices`), NOT the in-progress `local_price`. So MG-
+  consuming-MG chains (electronics->rare_alloys, motors/steel_ships/late_*->steel/machine_parts/chemicals,
+  petrochemicals->chemicals) read a stable prior snapshot; intra-loop good ordering is moot and the
+  "raw first" comment is over-cautious for the global-mean approach. Cold-start safe: on the day-0 setup
+  tick, `PRICE_update_TZ_prices` (oa_economy_setup.txt:2360) zero-inits + computes every mean BEFORE the
+  first `GT_split_do_global_trade_split` (:2449) reads it — writer-before-reader, same tick; `min=0.001`
+  prevents div-0/negative. No `INDUSTRY_demand_importance` ref undefined (all built in I3), no double-
+  application (single call per good per loop via the gate), generated bodies free of the original
+  luxury_clothing copy-paste bug (each input multiplies its OWN weight). Static: se_PRICE braces 303->370
+  (+376/-23), se_GLOBALTRADE_split 1613/1613 (+19), both BOM+CRLF preserved.
+  **BACKLOG (pre-existing, NOT introduced by I7, non-blocking, balance not correctness):** `global_mean_price_*`
+  is written ONCE at day 0 and never refreshed — `PRICE_update_TZ_prices` has only the one-time
+  `done_trade_startup`-gated setup call plus two dead event call-sites (trade.1/trade.2, unreferenced).
+  So every quarter's input-cost factoring reads the frozen day-0 mean forever. Affects all 24 MG goods
+  identically (the 9 originals too) — a property of the existing price subsystem, flagged for a later
+  refresh/balance decision. **LIVE economic change → boot-test owed.** Committed + pushed.
 - (Phase 3+ increments logged here as they land.)
 
 ---

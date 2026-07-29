@@ -164,6 +164,34 @@ def goods_split(good, cottage_capable):
     return "\n".join(out)
 
 
+def price_body(good, ings):
+    """[#133 I7] Emit PRICE_factor_raw_input_costs_<good>, IDENTICAL in shape to the 9
+    hand-built bodies. Reads global_mean_price_<input> (a global var from the separate
+    PRICE_update_all_global_mean_prices pass, NOT the in-progress local_price), weighted
+    by the same INDUSTRY_demand_importance_<good>_<input> svalue used by the production
+    malus. Because the reads are of the global-mean snapshot, MG-consuming-MG inputs carry
+    no circular/ordering dependency within the tradegood loop."""
+    out = []
+    out.append(f"PRICE_factor_raw_input_costs_{good} = {{")
+    out.append(f"\t# Scope: Tradezone province")
+    out.append(f"\t# Function: Add the per-unit price of raw tradegoods for the given manufactured $tradegood$")
+    out.append(f"\tchange_variable = {{")
+    out.append(f"\t\tname = local_price_{good}")
+    out.append(f"\t\tadd = {{")
+    for ing, _, _ in ings:
+        out.append(f"\t\t\tadd = {{")
+        out.append(f"\t\t\t\tvalue = global_mean_price_{ing}")
+        out.append(f"\t\t\t\tmin = 0.001")
+        out.append(f"\t\t\t\tmultiply = INDUSTRY_demand_importance_{good}_{ing}")
+        out.append(f"\t\t\t}}")
+    out.append(f"\t\t\tmultiply = PRICE_input_goods_scale_factor")
+    out.append(f"\t\t}}")
+    out.append(f"\t}}")
+    out.append("}")
+    out.append("")
+    return "\n".join(out)
+
+
 def demand_wiring(goods):
     """Emit, per raw input, the `if` blocks to insert into that raw good's DEMAND aggregator."""
     by_raw = {}
@@ -199,5 +227,9 @@ if __name__ == "__main__":
             print(goods_split(g, cottage))
     elif mode == "demand":
         print(demand_wiring(goods))
+    elif mode == "price":
+        for g in goods:
+            _, _, ings = RECIPES[g]
+            print(price_body(g, ings))
     else:
         sys.exit(f"unknown mode {mode}")
