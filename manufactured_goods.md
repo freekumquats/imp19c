@@ -279,6 +279,37 @@ JOBS + wealth-distribution machinery rather than a parallel system.
 recorded here, tunable, and flagged for the adversarial review. Guardrail: never let the ratio ratchet
 a 0..100 meter (see memory `no-restoring-drift-ratchet-rule`) — it's a clamp, not an accumulator.
 
+**### D4a-concrete — [I5 IMPLEMENTATION-LOCKED] the employment-ratio formula, verified terms.**
+All terms below were read on-disk before locking:
+- **Denominator (labour DEMAND)** = `INDUSTRY_governorship_used_industry_slots` (INDUSTRY_svalues.txt) —
+  already sums `var:INDUSTRY_factories_assigned_<good>` across ALL 24 goods, so it is the whole mechanised
+  sector's factory count for this governorship. × a tunable `INDUSTRY_workers_per_factory` (NEW svalue,
+  best-guess = 5) to convert factories → job slots.
+- **Numerator (labour SUPPLY)** = `governorship_proletariat + governorship_lower_strata` (ECON_svalues.txt) —
+  the industrial workforce pops in this governorship.
+- **`INDUSTRY_employment_ratio_compute`** (governorship): if `used_industry_slots > 0` → value =
+  supply ÷ (used_slots × workers_per_factory), `min = 0 max = 1`; else value = 1 (safe default; the
+  `has_variable INDUSTRY_factories_assigned_X` gate on each writer means a 0-factory good never reads it,
+  but the svalue must not divide by zero). It is a CLAMP, never an accumulator (guardrail above).
+- **`INDUSTRY_employment_ratio`** (governorship): reads `var:industry_employment_ratio_cached` if present,
+  else `INDUSTRY_employment_ratio_compute` — the exact #71 cache idiom used by
+  `GOODS_governorship_bonus_to_industrial_production_from_industrialisation`.
+- **Cache effect** `INDUSTRY_cache_employment_ratio` sets `industry_employment_ratio_cached` ONCE per
+  governorship per quarter, called from `GOODS_governorship_produce_all` alongside the two existing caches.
+- **Wiring**: append `multiply = INDUSTRY_employment_ratio` as the LAST line INSIDE each
+  `GOODS_governorship_X_produced_mechanised` `if` block (all 24). By the Jomini multiply rule this scales
+  the whole factory-output accumulator built up in that `if` — and CRUCIALLY stays contained to the `if`,
+  so early_munitions' out-of-`if` `add = GOODS_governorship_munitions_infra_output` (supply-infra, not
+  factory labour) is NOT scaled by employment. Mirrors how cottage output ×`COTTAGEIND_pops_output`.
+- **D6 asymmetry**: the ratio is per-GOVERNORSHIP (identical for every good that quarter) and cached once —
+  there is NO per-good employment fan-out, so ROW pays one cache write, not 24. Qing granularity comes from
+  its many named-works governorships each computing their own ratio, not from a forked formula. So a single
+  uniform svalue satisfies D6 (branch-free) — recorded as the best-guess resolution of "ROW coarse".
+- **Best-guess constants (tunable, flagged for review + boot-test):** `workers_per_factory = 5`; linear
+  clamp 0..1 (no curve). Rationale: keeps a fully-staffed sector at ratio 1 (no output change vs today) and
+  only bites when pops are too few to man the assigned factories — the intended "employment gates output"
+  behaviour without a magic curve.
+
 ### D5 — Raw-goods BOM: extend the cottage recipe system, don't invent a new table
 **Decision.** For every manufactured good that lacks a recipe, add a `COTTAGEIND_produce_X` body (raw
 inputs → output) in the existing idiom, and for the mechanised goods fill the `INDUSTRY_demand_X_<input>`
@@ -452,6 +483,7 @@ boot-tested there — the un-gate is a single moment only for the OTHER 20 goods
   GUI buttons already agree. **STATUS: DONE — reviewed clean, committed. See REVIEW LOG.**
 - **I5 — Employment scaling (D4a): `INDUSTRY_employment_ratio` into mechanised output.** Qing granular
   / ROW coarse (D6). LIVE for the 4 pre-wired goods → boot-test their output delta.
+  **STATUS: DONE — reviewed clean (all 7 criteria), committed. See REVIEW LOG.**
 - **I5.5 — Close rare_alloys consumption sink (D10)** BEFORE any un-gate that could produce it.
 - **I6 — UN-GATE (D1) for the remaining 20 goods: extend `GOODS_governorship_produce_all` to all 24 via
   the mechanised-only macro.** The switch-on for the new goods. Heavily reviewed + boot-tested.
@@ -577,4 +609,28 @@ precedes any un-gate that could produce it.)
   anywhere), and un-`always=no`-ing their buttons is a balance call better made with boot-test in the
   loop — so they stay hard-locked (`value = 0`) for now; revisit if a late-game reach is wanted.
   Committed + pushed.
+- **Phase 3 / I5 (employment scaling, D4a):** IMPLEMENTED + adversarially reviewed CLEAN (all 7 criteria,
+  0 defects). Factory output now scales by an employment fill-ratio = clamp( (governorship_proletariat +
+  governorship_lower_strata) / (INDUSTRY_governorship_used_industry_slots x INDUSTRY_workers_per_factory),
+  0, 1 ), mirroring how the cottage path scales output by pop counts. Added 3 svalues to
+  INDUSTRY_svalues.txt (`INDUSTRY_workers_per_factory = 5` best-guess; `INDUSTRY_employment_ratio_compute`
+  = the clamped ratio, div-0-guarded by `if limit = { used_industry_slots > 0 }`, default `value = 1` when
+  no factories; `INDUSTRY_employment_ratio` = #71 cache wrapper reading `var:industry_employment_ratio_cached`
+  else recomputing inline -> missing cache degrades to correctness never zero). Added
+  `INDUSTRY_cache_employment_ratio` effect to se_GOODS.txt + its call in `GOODS_governorship_produce_all`
+  BEFORE the produce loop (after the 2 sibling caches). Wired `multiply = INDUSTRY_employment_ratio` as the
+  LAST line INSIDE all 24 `GOODS_governorship_X_produced_mechanised` if-blocks -- verified contained: for
+  early_munitions the arsenal/depot `add = ...munitions_infra_output` sits OUTSIDE the if and is correctly
+  NOT employment-scaled. Review confirmed: (1) accumulator-containment correct incl. early_munitions;
+  (2) div-0 impossible (guard + workers_per_factory=5 constant); (3) fresh clamp not ratchet
+  (no-restoring-drift rule); (4) cache set-before-read, per-governorship scope, overwritten each quarter,
+  same one-quarter-stale lifecycle as the 2 existing caches (no new staleness class); (5) `value =`-inside-if
+  reset idiom verified against ~30 codebase precedents (WEALTH/INCOME/MIGRATION/CURRENCY/etc.); (6) all
+  referenced terms exist + governorship-scoped; (7) braces balanced, no duplicate defs, BOM/CRLF preserved
+  (line-1 BOM on GOODS_svalues.txt restored -- HEAD had it). **1 LOW design-consistency note (recorded, no
+  action): ingredient DEMAND (`INDUSTRY_demand_X_<ing>` = factory COUNT x base) is NOT employment-scaled
+  while OUTPUT is -- an under-manned sector draws full inputs but yields reduced output, a latent balance
+  quirk (may drive ingredient shortages a symmetric model wouldn't). Defer symmetric input-scaling to a
+  balance pass / Phase 6; noted here so it is not lost.** Committed + pushed. LIVE for the 4 pre-wired goods
+  -> boot-test their output delta.
 - (Phase 3+ increments logged here as they land.)

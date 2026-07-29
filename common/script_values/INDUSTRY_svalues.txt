@@ -3844,3 +3844,48 @@ INDUSTRY_demand_petrochemicals_chemicals = {
 	multiply = INDUSTRY_base_demand_petrochemicals_chemicals
 }
 
+
+# ===== [#133 I5] Employment scaling (D4a) =====
+# Factory output scales with how fully the mechanised sector's job slots are manned by
+# the governorship's industrial workforce (proletariat + lower_strata pops). Mirrors how
+# the cottage path multiplies output by COTTAGEIND_pops_output. Terms verified on-disk:
+# denominator = INDUSTRY_governorship_used_industry_slots (all 24 goods' assigned factories);
+# numerator = governorship_proletariat + governorship_lower_strata (ECON_svalues.txt).
+INDUSTRY_workers_per_factory = {
+	# [#133 I5] Tunable: industrial-worker pops needed to fully staff ONE assigned factory.
+	# Best-guess = 5; a fully-staffed sector yields ratio 1 (no output change vs pre-I5).
+	value = 5
+}
+
+INDUSTRY_employment_ratio_compute = {
+	# Scope: Governorship. Clamp( workforce / (assigned factories x workers_per_factory), 0..1 ).
+	# NOT an accumulator - a fresh clamp each quarter (no-restoring-drift-ratchet-rule).
+	value = 1
+	if = {
+		limit = {
+			INDUSTRY_governorship_used_industry_slots > 0
+		}
+		value = governorship_proletariat
+		add = governorship_lower_strata
+		divide = {
+			value = INDUSTRY_governorship_used_industry_slots
+			multiply = INDUSTRY_workers_per_factory
+		}
+		min = 0
+		max = 1
+	}
+}
+
+INDUSTRY_employment_ratio = {
+	# Scope: Governorship. Read the per-quarter cache when present (perf #71 idiom), else
+	# compute inline so a missing cache degrades to correctness, never to zeroed output.
+	if = {
+		limit = {
+			has_variable = industry_employment_ratio_cached
+		}
+		value = var:industry_employment_ratio_cached
+	}
+	else = {
+		value = INDUSTRY_employment_ratio_compute
+	}
+}
