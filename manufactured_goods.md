@@ -293,6 +293,64 @@ architecture is a different, unmandated risk.
 tech (per D3), with a `# CANNOT BE PRODUCED BY COTTAGE INDUSTRY` stub kept — matching the existing
 convention, not a gap.
 
+#### D5a — [I3 CONCRETE RECIPE TABLE] rates + BOM for the 15 goods that lack a mechanised chain
+Every good below gets the full proven chain (`INDUSTRY_production_rate_X`, `production_bonus_X`,
+`_base`, `INDUSTRY_production_X`, `_multiplier`, `_efficiency`) plus one ingredient quad
+(`INDUSTRY_malus_X_<ing>` / `_demand_importance_X_<ing>` / `_base_demand_X_<ing>` /
+`INDUSTRY_demand_X_<ing>`) per input, exactly mirroring the 9 built goods. The `_produced` split-writer
+pair (I2 idiom) is added for each. `rate` = per-factory max output (calibrated against the built goods:
+bulk/cheap goods high, big-ticket/high-tech low). `base_demand` = raw units consumed per factory;
+`importance` = 0..1 malus weight (primary input 1.0, secondary lower). Inputs use ONLY confirmed
+tradegood keys (raw list of 58 + manufactured intermediates steel/bronze/chemicals/glass/machine_parts/
+rare_alloys). Each `INDUSTRY_demand_X_<ing>` is wired into the raw good's `DEMAND_svalues.txt`
+aggregator under an `if has_variable INDUSTRY_factories_assigned_X` guard (BOM consumption integration).
+
+**Cottage-capable (5)** — already have a `COTTAGEIND_produce_X` recipe; I3 adds the mechanised chain +
+summed/mechanised split. Mechanised inputs mirror the cottage BOM (so both paths draw the same raws):
+
+| good | rate | mechanised BOM (ing: base_demand, importance) | tech gate |
+|---|---|---|---|
+| construction_materials | 120 | wood:8,1.0 · stone:6,0.6 · iron:2,0.3 | tech_manufactories |
+| furniture | 90 | wood:10,1.0 | tech_manufactories |
+| luxury_furniture | 55 | wood:6,1.0 · silk:2,0.4 · gold:0.5,0.3 · gems:0.5,0.3 · dye:1,0.2 | tech_manufactories |
+| pharmaceuticals | 40 | vegetables:6,1.0 · whales:2,0.4 | tech_manufactories, tech_antiseptic_principle |
+| wooden_ships | 30 | wood:20,1.0 · copper:3,0.4 · industrial_fibres:4,0.5 | tech_manufactories, tech_warships, tech_technical_drawings |
+
+**Mechanised-only (10)** — keep the `# CANNOT BE PRODUCED BY COTTAGE INDUSTRY` stub; add mechanised
+chain + split (summed == mechanised, no cottage term). Intermediates (steel, chemicals, rare_alloys)
+are built as inputs to the others, so they carry raw inputs only:
+
+| good | rate | mechanised BOM (ing: base_demand, importance) | tech gate |
+|---|---|---|---|
+| steel | 90 | iron:10,1.0 · coal:6,0.7 | tech_manufactories, tech_blast_furnace |
+| chemicals | 70 | sulphur:6,1.0 · coal:4,0.5 · salt:3,0.4 | tech_manufactories, tech_electrochemistry |
+| rare_alloys | 35 | steel:4,1.0 · tin:2,0.4 · lead:2,0.3 · copper:2,0.3 | tech_manufactories, tech_electrochemistry |
+| processed_foods | 110 | livestock:6,0.6 · vegetables:6,0.6 · fish:4,0.4 · salt:3,0.5 · glass:2,0.3 | tech_manufactories, tech_bottling_and_canning, tech_antiseptic_principle |
+| late_munitions | 70 | steel:5,0.7 · chemicals:4,1.0 · lead:3,0.4 | tech_manufactories, tech_late_small_arms_manufacturing |
+| late_artillery | 45 | steel:8,1.0 · machine_parts:3,0.6 · chemicals:2,0.4 | tech_manufactories, tech_quick_firing_gun |
+| steel_ships | 25 | steel:20,1.0 · machine_parts:5,0.6 · coal:6,0.4 | tech_manufactories, tech_steam_powered_ships, tech_blast_furnace, tech_technical_drawings |
+| motors | 30 | steel:6,0.7 · machine_parts:5,1.0 · oil:4,0.5 | HIGH civic_tech floor (out-of-era, D3) |
+| electronics | 30 | rare_alloys:4,1.0 · chemicals:3,0.5 · copper:3,0.5 | HIGH civic_tech floor (out-of-era, D3) |
+| petrochemicals | 60 | oil:10,1.0 · chemicals:4,0.6 | HIGH civic_tech floor (out-of-era, D3) |
+
+**BOM ordering constraint (recorded):** steel and chemicals are inputs to several later goods
+(machine_parts already demands steel/rare_alloys; late_munitions/late_artillery/steel_ships demand steel;
+electronics demands rare_alloys+chemicals). Their `INDUSTRY_demand_<good>_steel` etc. wire into steel's
+DEMAND aggregator — so steel/chemicals/rare_alloys must exist as producible goods FIRST. Hence the I3
+implementation batching below (I3a cottage-5, then I3b intermediates steel/chemicals/rare_alloys, then
+I3c the goods that consume them). Every batch is a full chain + split + demand wiring, reviewed on its own.
+
+**Tech-gate note:** the mechanised chain does NOT itself gate on tech — the factory can only be built
+where `INDUSTRY_unlocked_X` (I4) is true, and production is gated by `has_variable
+INDUSTRY_factories_assigned_X`, which only exists where a factory was assigned. So I3 defines the chain;
+I4 supplies the real unlock gate. The tech-gate column above is the I4 target (kept here so the two stay
+in sync), not an I3 edit.
+
+**Decision (recorded, best-guess):** all rates, base_demands, and importances are period-plausible
+judgement calls, tunable in Phase 6/7 and flagged for the I3 adversarial review. They follow the built-
+good calibration (clothing 150 bulk → early_artillery 60 → machine_parts 45 big-ticket) and Imperator/
+Invictus convention (primary input importance 1.0). No new engine keys are invented.
+
 ### D6 — Asymmetric fidelity: Qing granular path, ROW abstracted path
 **Decision.** The asymmetry lives where it already lives — the buildings + cadence, not a forked math
 engine:
