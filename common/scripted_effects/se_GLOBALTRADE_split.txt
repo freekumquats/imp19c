@@ -3832,12 +3832,23 @@ GT_split_calculate_all_trade_shares = {
 	}
 
 	GT_split_calculate_trade_shares = {
-		category = manufacturing
+		# [#133 I8 / D4b] Route manufacturing income to the industrial workforce, not just owners.
+		# These are PER-CAPITA relative weights: each is multiplied by the stratum's population,
+		# summed, then divided by the sum (normalised to shares that total 1). So only the RATIOS
+		# matter and each category normalises independently — changing these does NOT interact with
+		# resource_extraction/shipping. upper_strata (factory owners/bourgeoisie) stays dominant
+		# per-capita; proletariat + lower_strata (the workforce filling factory slots, whose count
+		# also scales output via INDUSTRY_employment_ratio in I5) now receive a real slice — the
+		# closed employment->output->wages loop. The proletariat share credits proletariat_wealth
+		# (a live var, also fed by JOBS_wages_due_proletariat), and lower_strata's share credits
+		# lower_strata_wealth — each stratum's income routes to its own wealth var (see the income
+		# distributor below, ~L3979). Best-guess weights (pre-registered in manufactured_goods.md
+		# D4b; tunable, flagged for balance pass).
 		the_state = 0.001
-		upper_strata = 1
-		middle_strata = 0.2
-		lower_strata = 0
-		proletariat = 0
+		upper_strata = 0.6
+		middle_strata = 0.25
+		lower_strata = 0.03
+		proletariat = 0.12
 		indentured = 0
 		tribesmen = 0
 		slaves = 0
@@ -3960,7 +3971,13 @@ GT_split_distribute_income_category = {
 		seller = proletariat
 	}
 	change_variable = {
-		name = lower_strata_wealth
+		# [#133 I8] FIX: was `lower_strata_wealth` (copy-paste from the lower_strata block above);
+		# the proletariat seller's income must credit proletariat_wealth to match its expense debit
+		# (4107 below), its floor guard (which tests proletariat_wealth), the wages path
+		# (JOBS_wages_due_proletariat -> proletariat_wealth), and every sibling stratum. Inert before
+		# I8 (proletariat share was 0 in all 3 categories); I8's nonzero manufacturing share activates
+		# it. resource_extraction/shipping keep proletariat = 0, so this is a no-op for them.
+		name = proletariat_wealth
 		add = var:this_income_from_$category$_proletariat
 	}
 	# Tribesmen
@@ -4102,7 +4119,12 @@ GT_split_distribute_expenses_category = {
 			var:proletariat_wealth < WEALTH_starting_proletariat_half
 		}
 		set_variable = {
-			name = lower_strata_wealth
+			# [#133 I8] FIX: was `lower_strata_wealth` (copy-paste bug); the guard tests
+			# proletariat_wealth so its corrective floor must write proletariat_wealth, like every
+			# sibling stratum block. Inert before I8 (proletariat expense share was 0 everywhere);
+			# I8's nonzero manufacturing proletariat share is what first drains proletariat_wealth
+			# below its half-floor; without the fix it would clobber lower_strata_wealth.
+			name = proletariat_wealth
 			value = WEALTH_starting_proletariat_half
 		}
 	}

@@ -501,6 +501,8 @@ boot-tested there — the un-gate is a single moment only for the OTHER 20 goods
   never-refreshed-global-mean-price balance item (logged, non-blocking).**
 - **I8 — Manufacturing wealth → workers (D4b): reweight manufacturing income shares.** Closes the
   employment loop.
+  **STATUS: DONE — reviewed (adversarial code-review found 2 REAL latent distributor bugs + 1 doc bug,
+  ALL activated — not introduced — by the reweight; all 3 fixed in-increment). See REVIEW LOG I8.**
 - **I9 — Loc + GUI tooltips (D8).**
 
 (Order rationale: everything that only DEFINES capability lands before I6 flips on the 20 new goods;
@@ -729,6 +731,40 @@ precedes any un-gate that could produce it.)
   So every quarter's input-cost factoring reads the frozen day-0 mean forever. Affects all 24 MG goods
   identically (the 9 originals too) — a property of the existing price subsystem, flagged for a later
   refresh/balance decision. **LIVE economic change → boot-test owed.** Committed + pushed.
+- **Phase 3 / I8 (manufacturing wealth → workers, D4b):** IMPLEMENTED + adversarially reviewed.
+  **Change:** reweighted the `GT_split_calculate_trade_shares category = manufacturing` per-capita share
+  table (se_GLOBALTRADE_split.txt:3834) from `the_state 0.001, upper 1, middle 0.2, lower 0, proletariat 0`
+  to `the_state 0.001, upper 0.6, middle 0.25, lower 0.03, proletariat 0.12` (rest 0). These are per-capita
+  relative weights (each × stratum pop, summed, normalised to shares totalling 1 PER category), so
+  resource_extraction/shipping are untouched; the ratios give factory owners the dominant per-capita cut
+  while routing a real slice to the industrial workforce (proletariat + lower_strata) whose pop count also
+  scales output via `INDUSTRY_employment_ratio` (I5) — this closes the employment→output→wages loop end to end.
+  **Adversarial review (code-review agent) REFUTED my pre-review claim** that "there is no separate
+  proletariat_wealth var; proletariat income folds into lower_strata_wealth harmlessly." It found — and I
+  independently re-verified on disk — that `proletariat_wealth` is a LIVE, load-bearing var (credited by
+  `JOBS_wages_due_proletariat` at se_ECON_wealth.txt:1098, generated production/services :910, growth :114,
+  setup floor :56; read by WEALTH_svalues.txt:270-272/437, province_window.gui, cost_of_living_events.txt,
+  DEMAND_luxury_svalues.txt). Turning the proletariat weight from 0→0.12 ACTIVATED two latent distributor
+  bugs (both pre-existing copy-paste errors that were inert only because every category's proletariat share
+  was 0):
+    - **FINDING 1 (HIGH) — income mis-credit:** `GT_split_distribute_income_category`'s proletariat block
+      (~3971) wrote `name = lower_strata_wealth` (copied from the lower_strata block) instead of
+      `proletariat_wealth`. FIXED → `proletariat_wealth`.
+    - **FINDING 2 (MEDIUM/HIGH) — expense-floor clobber:** `GT_split_distribute_expenses_category`'s
+      proletariat floor guard (~4116) tests `var:proletariat_wealth < WEALTH_starting_proletariat_half` but
+      its corrective `set_variable` wrote `name = lower_strata_wealth`. FIXED → `proletariat_wealth`.
+      (The expense DEBIT just above, 4113, already correctly targets proletariat_wealth; only the floor was wrong.)
+    - **FINDING 3 (LOW) — my false doc comment:** the NOTE I'd added at the weight table asserting "no separate
+      proletariat_wealth var" was wrong. CORRECTED to state each stratum's income routes to its own wealth var.
+  **Decision (Option A, best-guess per autonomy mandate):** make proletariat income + expense + floor all
+  target `proletariat_wealth`, symmetric with every sibling stratum AND with the wages path — rather than
+  Option B (fold proletariat into lower_strata everywhere), which would have contradicted the wages-side
+  crediting and the GUI reads. This is a self-consistent single-var-per-stratum model. Because
+  resource_extraction/shipping keep `proletariat = 0`, all three fixes are provable no-ops there; they take
+  effect only under I8's nonzero manufacturing share. **This is a validation of the mandated adversarial-review
+  pipeline — a plausible-sounding pre-review assumption was refuted before commit and prevented shipping a
+  silent proletariat_wealth drain.** Static: braces 1613/1613, BOM+CRLF preserved, clean +29/-7 diff.
+  **LIVE economic change → boot-test owed.**
 - (Phase 3+ increments logged here as they land.)
 
 ---
