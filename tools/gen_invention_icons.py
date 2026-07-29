@@ -68,7 +68,9 @@ def domain_of_key():
         if not dom:
             continue
         for line in open(f, encoding="utf-8"):
-            mt = re.match(r'^\t([a-z_0-9]+) = \{$', line)
+            # invention nodes sit one tab in; tolerate trailing whitespace after the brace
+            # (e.g. "tech_cartography = {  ") and flexible spacing around '='.
+            mt = re.match(r'^\t([a-z_0-9]+)\s*=\s*\{\s*$', line)
             if mt:
                 m[mt.group(1)] = dom
     return m
