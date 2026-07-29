@@ -510,4 +510,37 @@ precedes any un-gate that could produce it.)
   IMPLEMENTED comments. Brace-balanced, zero dangling refs. Review confirmed all 5 no-op; one LOW
   advisory (rare_alloys/chemicals dropped copies carried an already-shadowed cottage contribution —
   moot, both are mechanised-only per D5 and their cottage recipes are CANNOT-BE-PRODUCED stubs).
+- **Phase 3 / I2 (split-writer for the 9 built goods, D1a + 3 bugfixes):** IMPLEMENTED + adversarially
+  reviewed CLEAN (all 8 criteria). Reversed the earlier flawed "mechanised-only in place" approach —
+  its premise ("nothing external reads the summed svalue") was a grep artifact that missed the
+  `GOODS_governorship_$tradegood$_produced` MACRO form. For each of the 9 built goods added a
+  `_produced_mechanised` (factory chain only; early_munitions keeps its arsenal/depot infra term) and
+  restored `_produced` as the SUMMED total (cottage + mechanised) read by consumers (se_TRADE world
+  price, se_ECON_wealth, se_FUNC, DEMAND_difference, province GUI, GOODS_national_production). Repointed
+  the 4 pre-wired produce-loop blocks + the generic `produce_industry` macro to add the `_mechanised`
+  term (fixes live cottage double-count). Bugfixes: naval_supplies gate (bronze→naval_supplies), glass
+  case-mismatch limit, early_artillery cottage term now added UNSCALED (was wrongly ×industrialisation).
+  Committed `2a1860181`, pushed. **LIVE for those 4 pre-wired goods → boot-test owed.**
+- **Phase 3 / I3a (5 cottage-capable goods — full chains + BOM):** IMPLEMENTED + adversarially reviewed
+  CLEAN (all 8 criteria). Built mechanised chains + I2 split-writer pairs + raw-goods BOM for
+  construction_materials, furniture, luxury_furniture, pharmaceuticals, wooden_ships (whose mechanised
+  branch was previously dead — read never-set lowercase `var:industry_production_X`). Introduced
+  `tools/gen_mg_chains.py` as the CANONICAL data-driven MG-chain generator (RECIPES = doc D5a); extend
+  RECIPES, never hand-copy a chain. Goods defined but still gated OFF (produce loop deferred to I6).
+  Committed `4b64225d4`, pushed.
+- **Phase 3 / I3b (3 mechanised-only intermediates — steel/chemicals/rare_alloys):** IMPLEMENTED +
+  adversarially reviewed CLEAN (all 8 criteria). Generated full chains (gen_mg_chains.py i3b) + split-
+  writer pairs (`_produced` = `value = X_produced_mechanised` wrapper, no cottage term — these have no
+  cottage recipe) + 9 BOM consumption adds: steel→{iron,coal}, chemicals→{sulphur,coal,salt},
+  rare_alloys→{steel,tin,lead,copper}. DEMAND_coal gains TWO adds (steel+chemicals); DEMAND_steel gains
+  rare_alloys as an intermediate-input consumer. Static-verified: braces balanced on all 5 touched files,
+  all 9 `INDUSTRY_demand_*` refs defined, each split-pair defined once, no live dead lowercase var refs.
+  **Whitespace incident (fixed):** a Python whole-file rewrite of DEMAND_svalues.txt normalized CRLF→LF,
+  producing an 8k-line phantom diff; reconverted to CRLF (repo convention) → clean 62-line insert.
+  Review MEDIUM/PLAUSIBLE finding: I3b ships the CONSUMPTION half while PRODUCTION (produce-loop stockpile
+  write) + factory-assignment are deferred to I6 — so the DEMAND adds evaluate to 0 today (factories=0,
+  inert) and the steel-shortage-throttles-rare_alloys coupling can't bite until I6/I5.5. This is the
+  §4 ordering boundary by design; **DEPENDENCY logged: I5.5 (close rare_alloys sink) + I6 (un-gate =
+  produce-loop wiring) MUST land together so supply and demand ship as one — do NOT un-gate any of these
+  3 without their produce-loop output.** Committed + pushed.
 - (Phase 3+ increments logged here as they land.)
