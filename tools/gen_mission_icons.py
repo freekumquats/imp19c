@@ -74,6 +74,13 @@ try:
     from mission_task_queries import CONCEPT_QUERY
 except Exception:
     CONCEPT_QUERY = {}
+# [#126/#127] the breadth-expansion tasks carry their own curated period-art query in the
+# content table; merge them in (content-table query wins for its own keys).
+try:
+    from mission_task_content import CONTENT_QUERY
+    CONCEPT_QUERY = {**CONCEPT_QUERY, **CONTENT_QUERY}
+except Exception:
+    pass
 
 # regex: a task node key line "  <key> = {"
 KEY_RE = re.compile(r'^(\s*)([a-z][a-z0-9_]+)\s*=\s*\{\s*$')
