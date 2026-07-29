@@ -504,6 +504,7 @@ boot-tested there — the un-gate is a single moment only for the OTHER 20 goods
   **STATUS: DONE — reviewed (adversarial code-review found 2 REAL latent distributor bugs + 1 doc bug,
   ALL activated — not introduced — by the reweight; all 3 fixed in-increment). See REVIEW LOG I8.**
 - **I9 — Loc + GUI tooltips (D8).**
+  **STATUS: DONE — reviewed adversarially (PASS, 1 LOW cosmetic finding fixed). See REVIEW LOG I9.**
 
 (Order rationale: everything that only DEFINES capability lands before I6 flips on the 20 new goods;
 the 4 pre-wired goods change behaviour at I2/I5 and are boot-tested there. rare_alloys' sink (I5.5)
@@ -765,6 +766,37 @@ precedes any un-gate that could produce it.)
   pipeline — a plausible-sounding pre-review assumption was refuted before commit and prevented shipping a
   silent proletariat_wealth drain.** Static: braces 1613/1613, BOM+CRLF preserved, clean +29/-7 diff.
   **LIVE economic change → boot-test owed.**
+- **Phase 3 / I9 (loc + GUI factory tooltips, D8):** IMPLEMENTED + adversarially reviewed CLEAN
+  (code-review agent, PASS; 1 LOW cosmetic finding found + fixed). Two loc files:
+  **(1) localization/english/industry_l_english.yml** — the province-window factory tooltip is a
+  macro-assembled string; each producible good needs one `PROVWINDOW_GOV_<GOOD>_PRODUCED_TT` body plus
+  one `ind_<good>_ingredient_<ing>` submacro per ingredient. 7 goods were hand-built (clothing,
+  luxury_clothing, bronze, machine_parts, naval_supplies, alcohol, early_munitions); the other 17 were
+  stubbed as `"...This industry is not yet implemented"` placeholders. Replaced all 17 placeholders with
+  real macro tooltips (furniture, luxury_furniture, glass, pharmaceuticals, processed_foods, motors,
+  electronics, rare_alloys, construction_materials, steel, chemicals, late_munitions, steel_ships,
+  wooden_ships, early_artillery, late_artillery, petrochemicals), byte-identical in shape to the 7
+  hand-built ones. **Canonical-generator path:** new `tools/gen_industry_tooltips.py` (GOODS dict:
+  good -> title + ordered ingredient list). The ingredient lists were derived from the ground-truth
+  `INDUSTRY_base_demand_<good>_<ing>` svalues (so they never drift from the production chains), then the
+  generator was validated to confirm every one of the 3 svalue families it references
+  (`INDUSTRY_base_demand`/`INDUSTRY_malus_*_production`/`INDUSTRY_demand_importance`) plus the frame reads
+  (`GOODS_governorship_<good>_produced`, `INDUSTRY_production_<good>[_efficiency]`,
+  `INDUSTRY_production_rate_<good>`, `INDUSTRY_<good>_factories`) and the `add_<good>_button` scripted GUIs
+  all resolve on disk — ALL 17 goods clean, no dangling refs. Note glass + early_artillery are PRE-EXISTING
+  goods (not in gen_mg_chains.py RECIPES); their ingredient sets (glass=coal/stone/lead;
+  early_artillery=sulphur/wood/stone/lead/textile_fibres/iron/steel/bronze/livestock) were read from their
+  own svalues, not assumed. **(2) localization/english/imp19c_tradegoods_l_english.yml** — filled the 7
+  `NONE DESC` placeholder descriptions (steel_ships, wooden_ships, petrochemicals, early_munitions,
+  late_munitions, early_artillery, late_artillery) with period-appropriate house-style text, and added the
+  missing `rare_alloys` NAME + DESC (it had neither). All 24 MG goods now have NAME + DESC.
+  **Review finding (LOW, fixed):** wooden_ships DESC used a `\'` backslash-escaped apostrophe — the ONLY
+  one in the whole loc dir; Paradox loc renders `\'` as a literal backslash, so changed to a bare `'`
+  (matching the 1430 other possessives). Static: industry_l_english.yml 24 PRODUCED_TT (was 7 real + 17
+  placeholder), 0 placeholders left, 0 dangling `$macro$` refs, 0 duplicate keys, CRLF preserved;
+  imp19c_tradegoods 0 `NONE DESC` left (bar 2 commented fallback lines), LF preserved; both BOMs intact
+  (one double-encode slip caught + repaired before review). **Cosmetic/GUI-only change — no economic
+  behaviour; boot-safe. Boot-test owed (visual verify tooltips render).**
 - (Phase 3+ increments logged here as they land.)
 
 ---
