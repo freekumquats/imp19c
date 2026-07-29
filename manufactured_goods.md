@@ -446,7 +446,8 @@ boot-tested there — the un-gate is a single moment only for the OTHER 20 goods
 - **I3 — Build the other 15 goods (D5): create `INDUSTRY_production_X` rate svalues + cottage recipes,
   and give each the same split-writer pair as I2 (`_produced_mechanised` = factory chain; `_produced`
   = summed cottage + mechanised)** so no good is left half-transformed. Raw-goods BOM. New goods still
-  gated OFF (not in produce loop until I6).
+  gated OFF (not in produce loop until I6). **STATUS: DONE (I3a cottage-5 + I3b intermediates-3 + I3c
+  consumers-7 = all 15), each adversarially reviewed clean and committed. See REVIEW LOG.**
 - **I4 — Real tech gating (D3).** `INDUSTRY_unlocked_X` from the invention map (+ add wooden_ships);
   GUI buttons already agree.
 - **I5 — Employment scaling (D4a): `INDUSTRY_employment_ratio` into mechanised output.** Qing granular
@@ -543,4 +544,20 @@ precedes any un-gate that could produce it.)
   §4 ordering boundary by design; **DEPENDENCY logged: I5.5 (close rare_alloys sink) + I6 (un-gate =
   produce-loop wiring) MUST land together so supply and demand ship as one — do NOT un-gate any of these
   3 without their produce-loop output.** Committed + pushed.
+- **Phase 3 / I3c (7 mechanised-only consumer goods — full chains + BOM):** IMPLEMENTED + adversarially
+  reviewed CLEAN (all 7 criteria, no defects). Built mechanised chains + split-writer pairs + raw-goods
+  BOM for processed_foods, late_munitions, late_artillery, steel_ships, motors, electronics,
+  petrochemicals (each previously a DEAD `_produced` stub reading never-set lowercase
+  `var:industry_production_X`; late_artillery also carried a cottage term whose recipe is a
+  CANNOT-BE-PRODUCED stub — dropped as a no-op). All 7 `_produced` = `value = X_produced_mechanised`
+  wrappers (no cottage). 22 BOM adds wired across 13 aggregators (chemicals+4, steel+4, machine_parts+3,
+  oil+2, singles elsewhere) — several ingredients are themselves MG intermediates (steel, chemicals,
+  rare_alloys, machine_parts, glass); the full MG dependency graph is a verified DAG (no cycles) and
+  demand depends on factory COUNTS not instantaneous production, so no circular script_value eval.
+  Food-ingredient aggregators (livestock/vegetables/fish) have no elasticity multiply → adds anchored
+  before `min = 0` instead. All edits CRLF-preserving. Static: braces balanced on 4 files, all 22 refs
+  defined+wired once, split-pairs once each, no live dead-var reads. Review non-findings (both
+  pre-existing/cosmetic, not introduced): DEMAND_chemicals lacks a trailing `min = 0`; I3b rare_alloys→
+  steel add has extra leading tabs (whitespace-insensitive). Goods defined but still gated OFF (produce
+  loop → I6). Committed + pushed.
 - (Phase 3+ increments logged here as they land.)
