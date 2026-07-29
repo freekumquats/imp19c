@@ -68,11 +68,18 @@ def query_from_title(title, key):
         t = (t + " Qing dynasty China").strip()
     return t or key.replace('_', ' ')
 
+# [#125] Curated per-task search queries live in tools/mission_task_queries.py (one query per
+# task, aimed at period artwork). A task key present there overrides query_from_title entirely.
+try:
+    from mission_task_queries import CONCEPT_QUERY
+except Exception:
+    CONCEPT_QUERY = {}
+
 # regex: a task node key line "  <key> = {"
 KEY_RE = re.compile(r'^(\s*)([a-z][a-z0-9_]+)\s*=\s*\{\s*$')
 ICON_RE = re.compile(r'^(\s*)icon\s*=\s*(\S+)\s*$')
 
-def process_file(path, loc, log):
+def process_file(path, loc, log, force=False):
     with open(path, encoding="utf-8") as f:
         lines = f.readlines()
     # find task keys and the icon= line that immediately (within a few lines) follows
@@ -90,23 +97,35 @@ def process_file(path, loc, log):
         if im and pending_key:
             key = pending_key
             pending_key = None
-            # skip the tree-root node's icon (still give art? -> yes for completeness, but keep testN if it's the root wrapper)
+            # [#125] Skip the tree-root node (icon = qing_<tree>_mission). Its art is the
+            # curated selector CARD written by gen_mission_headers.py (PHOTOS table); fetching
+            # a generic search image here would clobber that period banner. Task nodes only.
+            if key.endswith(ROOT_SUFFIX):
+                continue
             title = loc.get(key)
             out_dds = os.path.join(OUT, key + ".dds")
             cur = im.group(2)
-            need_convert = not os.path.exists(out_dds)
+            need_convert = force or not os.path.exists(out_dds)
             need_repoint = (cur != key)
             if not need_convert and not need_repoint:
                 continue
             if need_convert:
-                query = query_from_title(title, key) if title else key.replace('_', ' ')
+                # [#125] curated query wins over the loc-derived one for flagged tasks.
+                if key in CONCEPT_QUERY:
+                    query = CONCEPT_QUERY[key]
+                else:
+                    query = query_from_title(title, key) if title else key.replace('_', ' ')
                 src = os.path.join(SRC, key + ".jpg")
                 try:
-                    if not os.path.exists(src):
+                    # [#125] --force re-fetches even a cached source so the improved
+                    # period-art ranker actually re-selects the image.
+                    if force or not os.path.exists(src):
                         _, desc = fetch(("search", query), src, width=320)
                     else:
                         desc = "cached"
-                    convert(src, out_dds, like=DONOR)
+                    # [#125] mission-task widgets require the DX10 BGRA8 layout (the donor
+                    # test1.dds + stock icons are DX10); legacy BGRA8 renders as placeholder.
+                    convert(src, out_dds, like=DONOR, dx10=True)
                     log.write(f"{fname}\t{key}\t{title}\t{query}\t{desc}\tOK\n")
                 except Exception as e:
                     log.write(f"{fname}\t{key}\t{title}\t{query}\tERR\t{e}\n")
@@ -122,13 +141,19 @@ def process_file(path, loc, log):
     return changed
 
 def main():
+    force = "--force" in sys.argv
+    # [#125] optional --only=<substr> limits the run to matching mission files (so a single
+    # curated tree can be regenerated without re-fetching all 205 icons / hammering Commons).
+    only = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--only=")), None)
     loc = load_loc()
     files = sorted(glob.glob(os.path.join(MISS, "qing_*_missions.txt")))
+    if only:
+        files = [f for f in files if only in os.path.basename(f)]
     with open(LOG, "w", encoding="utf-8") as log:
         log.write("file\tkey\ttitle\tquery\tsource\tstatus\n")
         for fp in files:
             print("==", os.path.basename(fp))
-            process_file(fp, loc, log)
+            process_file(fp, loc, log, force=force)
     print("done; log ->", LOG)
 
 if __name__ == "__main__":

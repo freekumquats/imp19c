@@ -146,7 +146,7 @@ def synth_circular_alpha(size):
     a=np.clip((rmax-r)/(rmax*0.08),0,1)
     return (a*255).astype(np.uint8)
 
-def convert(src, out, like=None, size=None, enhance=True, dxt5=False):
+def convert(src, out, like=None, size=None, enhance=True, dxt5=False, dx10=False):
     im=Image.open(src).convert('RGB')
     # target size: from the donor's header (any format) or explicit --size.
     if like:
@@ -178,8 +178,14 @@ def convert(src, out, like=None, size=None, enhance=True, dxt5=False):
     if alpha is None:
         alpha=np.full((th,tw),255,dtype=np.uint8)
     rgba=np.dstack([rgb, alpha]).astype(np.uint8)
-    if dxt5:
-        write_dds_dxt5(out, rgba)          # widgets that reject BGRA8 (mission view)
+    # [#125] The mission-task / mission-header widgets REJECT both legacy 124-byte BGRA8
+    # (pfflags 0x41) and plain-FourCC DXT5, silently showing the engine placeholder. They
+    # accept ONLY the DX10 BGRA8-sRGB layout (matches stock russian_missions_1_10.dds). So
+    # mission icons MUST pass dx10=True; other icon families keep the legacy BGRA8 writer.
+    if dx10:
+        write_dds_dx10_bgra8(out, rgba)
+    elif dxt5:
+        write_dds_dxt5(out, rgba)
     else:
         write_dds_bgra8(out, rgba)
     return (tw,th)
@@ -208,12 +214,13 @@ if __name__=='__main__':
     ap.add_argument('--src'); ap.add_argument('--out')
     ap.add_argument('--like'); ap.add_argument('--size', type=int)
     ap.add_argument('--no-enhance', action='store_true')
+    ap.add_argument('--dx10', action='store_true', help='DX10 BGRA8 layout (required for mission icons)')
     ap.add_argument('--probe')
     a=ap.parse_args()
     if a.probe:
         probe(a.probe); sys.exit(0)
     if not (a.src and a.out):
         ap.error("need --src and --out (or --probe)")
-    wh=convert(a.src, a.out, like=a.like, size=a.size, enhance=not a.no_enhance)
+    wh=convert(a.src, a.out, like=a.like, size=a.size, enhance=not a.no_enhance, dx10=a.dx10)
     print(f"wrote {a.out} {wh[0]}x{wh[1]}")
     probe(a.out)
