@@ -508,6 +508,9 @@ boot-tested there — the un-gate is a single moment only for the OTHER 20 goods
 - **I10 — Steel becomes cottage-capable (Phase 5 #1, D5 reversal for steel only).**
   **STATUS: DONE — design review SOUND + post-impl review CLEAN (all 7 criteria); committed. Boot-test owed.
   See REVIEW LOG I10 and §8.**
+- **I11 — BOM spot-audit DEMAND-layer correctness fixes (§7.2 #3; widened to 4 edits).**
+  **STATUS: DONE — design review SOUND (found the gap is systemic, added FIX C, deferred 13 to #146) +
+  post-impl review CLEAN (all 6 checks); committed. Boot-test owed. See REVIEW LOG I11 and §8.**
 
 (Order rationale: everything that only DEFINES capability lands before I6 flips on the 20 new goods;
 the 4 pre-wired goods change behaviour at I2/I5 and are boot-tested there. rare_alloys' sink (I5.5)
@@ -832,6 +835,48 @@ precedes any un-gate that could produce it.)
   condition tracked in memory `imp19c-manufactured-goods-risk`, not introduced here. **LIVE economic change
   → boot-test owed (verify artisan steel is a trickle, does not flood pre-Bessemer, does not trivialise the
   factory unlock).** Committed + pushed.
+- **Phase 5 / I11 (BOM spot-audit — DEMAND-layer correctness fixes; §7.2 #3):** IMPLEMENTED + adversarially
+  reviewed at BOTH stages. **Design review** verified the plan CORRECT but INCOMPLETE — the glass-demand gap
+  is not unique, it is SYSTEMIC. A five-layer BOM audit (cottage / mechanised svalue / INDUSTRY factory
+  demand / DEMAND aggregator / price / tooltip) of chemicals/glass/naval_supplies showed the INDUSTRY, price,
+  and tooltip layers AGREE per good, but the DEMAND-aggregator layer had two defect classes; a completeness
+  sweep across ALL goods found their full extent. **4 edits, all in `DEMAND_svalues.txt`:**
+  - **FIX A (CLASS A — dangling ref, unique repo-wide):** `DEMAND_bronze` added `INDUSTRY_naval_supplies_parts_bronze`,
+    a name defined NOWHERE (undefined-svalue log flood + zero bronze demand for naval yards, the I5.5 bug-class).
+    Renamed to `INDUSTRY_demand_naval_supplies_bronze` (INDUSTRY_svalues.txt:1113), matching the 3 sibling
+    naval_supplies ingredient adds. This is the ONLY CLASS-A instance in the file (all 79 other `add = INDUSTRY_*`
+    tokens resolve).
+  - **FIX B1/B2 (CLASS B — defined-but-unconsumed, target aggregator exists):** `INDUSTRY_demand_glass_coal`
+    (INDUSTRY_svalues.txt:1439) and `_glass_stone` (:1466) were defined + well-formed + real inputs (production
+    malus present) but consumed by ZERO aggregator — only glass_lead was wired. Added the standard
+    `if has_variable = INDUSTRY_factories_assigned_glass { add = INDUSTRY_demand_glass_<coal|stone> }` branches to
+    `DEMAND_coal` (after steel_ships, after the mid-block ×0.3/×3 partial multiplies so it's unscaled like every
+    factory sibling) and `DEMAND_stone` (no mid-block multiply; before the elasticity tail).
+  - **FIX C (CLASS B, folded in by the design review):** `INDUSTRY_demand_early_artillery_textile_fibres`
+    (INDUSTRY_svalues.txt:1905) — same class, target `DEMAND_textile_fibres` exists. Added as a flat factory
+    sibling after the early_munitions branch (NOT swept into the luxury_clothing/clothing cottage branches'
+    ×2/×3 multiplies). **Pre-existing systemic bug noted in-code + out of scope:** the entire early_artillery
+    demand block drives off `INDUSTRY_early_munitions_factories` (copy-paste from the early_munitions chain),
+    not the early_artillery factory count; FIX C's gate (`assigned_early_artillery`) vs scaling driver
+    (early_munitions) is mismatched exactly like its 7 already-wired siblings, so it introduces NO new behaviour
+    vs baseline. Logged for a later dedicated fix.
+  **Scope decision (best-guess, per autonomy mandate):** I11 fixes ONLY proven WIRING defects, not ingredient
+  COMPOSITION. The §7.1/§7.6 historical mismatches (chemicals wants saltpetre; glass wants silica sand/soda/lime;
+  naval_supplies wants timber/tar/pitch/hemp/canvas) reference raw goods ABSENT from the live good set
+  (`common/trade_goods/00_imp19c.txt`, 58 keys — design review independently confirmed saltpetre/silica/soda/
+  lime/tar/pitch/hemp/canvas/flax all absent, not a naming miss); adding them is the I12+ new-goods program.
+  Also DEFERRED to backlog #146: 13 more CLASS-B svalues whose ingredient (livestock/gems/temperate_fruit/grain/
+  sugar/vegetables/fish) has NO `DEMAND_<ing>` aggregator — they feed the separate food-demand
+  (`DEMAND_country_*`/stockpile) architecture and alcohol/grain touches an existing `DEMAND_grain_from_industry_alcohol`
+  path, so wiring is a DESIGN question (double-count risk), not a mechanical fold. **Post-impl review CLEAN** —
+  all 6 checks: (1) all 4 targets defined+well-formed (leaf svalues = factories×constant), each add once, old
+  dangling name gone from live code (survives only in FIX A comment); (2) insertion positions verified unscaled
+  by mid-block multiplies for B1+C, stone/B2 has none; (3) no double-count (`assigned_glass` now exactly 3×,
+  `assigned_early_artillery` 1× in textile_fibres); (4) braces 1279/1279, BOM present, 4278 CRLF / 0 bare-LF,
+  clean +38/-1 localized insert; (5) all adds `if`-gated → 0 when factory absent, no div-0, no circular eval
+  (leaf targets); (6) correct aggregators, no typos, tail intact. 1 LOW (the pre-existing early_artillery
+  mis-key, not introduced, already scoped out). **LIVE economic change → boot-test owed (bites once glass /
+  naval_supplies / early_artillery factories exist).** Committed + pushed.
 - (Phase 3+ increments logged here as they land.)
 
 ---
@@ -1016,8 +1061,53 @@ increments. Ordered by research-stated priority and by blast radius (smallest, b
   **STATUS: DONE — design review PASS (SOUND; 0.35 defensible/conservative, ~4 orders of magnitude below one
   factory; 1 MEDIUM comment-fix trap flagged), implemented as designed, post-impl review CLEAN (all 7 criteria,
   no CRITICAL/HIGH/MEDIUM), committed. Boot-test owed (live economic change). See REVIEW LOG I10.**
-- **I11+ — New goods & BOM audit (deferred within Phase 5).** sugar (factory refineries + cane→beet
-  Napoleonic event hook), silk (split from clothing), paper, dyes, gunpowder/saltpetre; plus the §7.2 #3
-  BOM spot-audit (chemicals/glass/naval_supplies). Each is a feature; scoped after I10 lands and is
-  boot-confirmed, since adding engine-absent goods touches the injector list (D10 regen hazard), DEMAND
-  aggregators, prices, cottage/mechanised chains, GUI buttons + loc — i.e. a full mini-build per good.
+- **I11 — BOM spot-audit fixes (§7.2 #3): two DEMAND-layer correctness defects.** A five-layer BOM audit of
+  chemicals/glass/naval_supplies (cottage / mechanised svalue / INDUSTRY factory demand / DEMAND aggregator /
+  price / tooltip) found the INDUSTRY, price, and tooltip layers all AGREE per good, but the DEMAND-aggregator
+  layer has two genuine wiring defects (both the I5.5 bug-class — an undefined-svalue reference floods the log
+  and evaluates to 0, and a missing aggregator branch silently drops real factory demand). **Both verified on
+  disk:**
+  - **Defect A (naval_supplies bronze — dangling reference):** `DEMAND_bronze` at DEMAND_svalues.txt:1488 adds
+    `INDUSTRY_naval_supplies_parts_bronze`, a name defined NOWHERE (sole repo occurrence). The correct svalue is
+    `INDUSTRY_demand_naval_supplies_bronze` (INDUSTRY_svalues.txt:1113, well-formed, mirrors the other 3
+    naval_supplies ingredient demands). Fix = rename that one token. Effect: naval_supplies factories will now
+    correctly draw bronze demand (and stop logging an undefined-svalue error each quarter once naval_supplies
+    factories exist).
+  - **Defect B (glass coal + stone — missing aggregator branches):** `INDUSTRY_demand_glass_coal`
+    (INDUSTRY_svalues.txt:1439) and `INDUSTRY_demand_glass_stone` (1466) are defined + well-formed but consumed
+    NOWHERE; only `INDUSTRY_demand_glass_lead` is wired (into `DEMAND_lead` at :1220). So glass factories draw
+    lead demand but not coal/stone. Fix = add the two standard `if has_variable = INDUSTRY_factories_assigned_glass
+    { add = INDUSTRY_demand_glass_<coal|stone> }` branches to `DEMAND_coal` (~:390, alongside steel/chemicals/
+    steel_ships) and `DEMAND_stone` (~:706, alongside construction_materials), mirroring the existing glass_lead
+    branch and every sibling factory branch exactly. Both adds land BEFORE the block's `multiply =
+    DEMAND_elasticity_impact` / `min = 0` tail (same anchoring as every neighbour).
+  **Scope decision (best-guess, per autonomy mandate):** I11 fixes ONLY these two proven wiring defects — it does
+  NOT change ingredient COMPOSITION. The remaining §7.1/§7.6 historical mismatches (chemicals wants saltpetre;
+  glass wants silica sand/soda/lime not stone; naval_supplies wants timber/tar/pitch/hemp/canvas) all reference
+  raw goods that DO NOT EXIST in the mod's palette (verified: saltpetre/silica/soda/lime/tar/pitch/hemp/canvas/
+  flax/charcoal all ABSENT). Adding raw goods is high-blast-radius (new tradegood defs + injector list D10 regen
+  hazard + DEMAND/price/GUI) and belongs with the I12+ new-goods program, NOT a "spot-audit fix." The current
+  stone/coal/metals proxies are a defensible abstraction and stay. **Files:** DEMAND_svalues.txt ONLY (3 edits:
+  1 rename + 2 branch inserts). No new svalues, no injector touch, no loc. **Risk:** minimal — all three refer to
+  already-defined, already-verified INDUSTRY svalues; the fix makes demand match the production/price/tooltip
+  layers that already ship these ingredients. **Design review WIDENED the scope:** the glass gap is not
+  unique — it is SYSTEMIC. A completeness sweep found the two defect classes across all goods: CLASS A
+  (dangling refs) has exactly ONE instance repo-wide (the bronze one FIX A targets); CLASS B (defined-but-
+  unconsumed demand svalue whose target `DEMAND_<ing>` aggregator exists) has a 4th mechanical instance —
+  **FIX C: `INDUSTRY_demand_early_artillery_textile_fibres` (INDUSTRY_svalues.txt:1905) → add to
+  `DEMAND_textile_fibres`** (a real input per its production malus, consumed nowhere). Folded into I11. A
+  further 13 CLASS-B svalues were found whose ingredient (livestock/gems/temperate_fruit/grain/sugar/
+  vegetables/fish) has NO `DEMAND_<ing>` aggregator at all — those feed the separate food-demand
+  (`DEMAND_country_*`/stockpile) architecture and at least alcohol/grain touches an existing
+  `DEMAND_grain_from_industry_alcohol` path, so wiring them is a DESIGN question (double-count risk), NOT a
+  mechanical fold → deferred to backlog #146, explicitly logged not dropped. Review also noted the whole
+  early_artillery demand block is mis-keyed to `INDUSTRY_early_munitions_factories` (pre-existing systemic
+  bug, out of I11 scope; FIX C stays consistent with its 7 already-wired siblings). **STATUS: DONE — design
+  review SOUND (widened +FIX C), implemented as 4 edits in DEMAND_svalues.txt, post-impl review CLEAN (all 6
+  checks, no CRITICAL/HIGH/MEDIUM), committed. Boot-test owed (live economic change once these factories
+  exist). See REVIEW LOG I11.**
+- **I12+ — New goods (deferred within Phase 5).** sugar (factory refineries + cane→beet Napoleonic event hook),
+  silk (split from clothing), paper, dyes, gunpowder/saltpetre. Each is a full mini-build (new tradegood defs,
+  injector list D10 regen hazard, DEMAND/prices, cottage+mechanised chains, GUI buttons, loc); scoped after I11
+  lands and is boot-confirmed. Adding saltpetre here would also let a later pass correct the chemicals/gunpowder
+  BOM that I11 deliberately left as a proxy.
