@@ -495,6 +495,7 @@ boot-tested there — the un-gate is a single moment only for the OTHER 20 goods
   **STATUS: DONE — reviewed (1 CRITICAL found + fixed in same increment), committed. See REVIEW LOG.**
 - **I6 — UN-GATE (D1) for the remaining 20 goods: extend `GOODS_governorship_produce_all` to all 24 via
   the mechanised-only macro.** The switch-on for the new goods. Heavily reviewed + boot-tested.
+  **STATUS: DONE — reviewed CLEAN (all 7 criteria), committed. See REVIEW LOG. Boot-test owed (live economic change).**
 - **I7 — Prices for all producible goods (D7).**
 - **I8 — Manufacturing wealth → workers (D4b): reweight manufacturing income shares.** Closes the
   employment loop.
@@ -665,6 +666,34 @@ precedes any un-gate that could produce it.)
   hand-edit to the generated `common/` file is the correct path. Static: injector braces 150/150 (+2),
   WEALTH braces 406/406 (+3), both BOM+CRLF preserved. Committed + pushed. Sink + wealth-parity closed;
   rare_alloys is now safe to un-gate at I6.
+- **Phase 3 / I6 (UN-GATE the remaining 20 manufactured goods, D1):** IMPLEMENTED + adversarially
+  reviewed CLEAN (all 7 criteria, no defects). Added 20 `GOODS_governorship_produce_industry =
+  { tradegood = X }` calls to `GOODS_governorship_produce_all` (se_GOODS.txt), immediately after the 4
+  pre-wired blocks, for: steel, chemicals, rare_alloys (intermediates I3b); construction_materials,
+  furniture, luxury_furniture, pharmaceuticals, wooden_ships (cottage-capable I3a); alcohol, glass,
+  processed_foods, naval_supplies, early_munitions, late_munitions, early_artillery, late_artillery,
+  steel_ships, motors, electronics, petrochemicals (consumers/other I2+I3c). The generic macro
+  (defined but previously UNCALLED) adds the MECHANISED-ONLY term to `X_stockpile`, gated on
+  `has_variable = INDUSTRY_factories_assigned_X` — the split-writer (D1a) so cottage output
+  (written directly by COTTAGEIND_scale_production) is never double-counted. Ships together with I5.5
+  (rare_alloys sink) so supply + demand arrive as one increment (the I3b DEPENDENCY note is satisfied).
+  Prerequisites verified per good before wiring: `_produced_mechanised` svalue defined (24/24 in
+  GOODS_svalues), factory-assign var + GUI assign button (24/24 in industrial_goods_buttons.txt),
+  I4 tech gate (INDUSTRY_unlocked_X), I3 raw-goods BOM (DEMAND aggregators), and a consumption sink
+  (CONSUME_all_stockpiles, 24/24 after I5.5). **Inert-at-0-factories confirmed by review** — the
+  genuine guarantee is that `INDUSTRY_production_X` (and hence `_produced_mechanised`) evaluates to 0
+  when no factory is assigned, NOT merely the `has_variable` gate; so even where the assign-var is
+  seeded to 0 at setup, the add is 0. No div-by-zero. Macro equivalence to the 4 pre-wired
+  `GOODS_governorship_produce` blocks verified (same gate semantics, same mechanised svalue, same
+  scope). Static: braces 395/395 (+20), BOM+CRLF preserved, clean +35 insert diff.
+  **Review-surfaced BACKLOG (pre-existing, NOT introduced by I6, non-blocking):** newly-spawned
+  countries (revolts/colonies/new tags via `FUNC_setup_new_country`) double-seed governorship
+  stockpiles at t=0 — `GOODS_setup_governorship_stockpiles` (se_FUNC.txt:492) and
+  `FUNC_every_governorship_update_tradegood_stockpiles` (se_FUNC.txt:522) fire back-to-back. Game-start
+  countries seed via the mutually-exclusive global-flag path (oa_economy_setup.txt:381) and are
+  single-seeded (unaffected). It is a one-time t=0 value error, not a recurring quarterly double-count.
+  Also noted: `setup_main_effect` (se_setup.txt) is dead/orphaned (zero callers). Both logged for a
+  later increment; neither touches I6's correctness. **LIVE economic change → boot-test owed.** Committed + pushed.
 - (Phase 3+ increments logged here as they land.)
 
 ---
