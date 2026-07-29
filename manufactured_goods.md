@@ -505,6 +505,9 @@ boot-tested there — the un-gate is a single moment only for the OTHER 20 goods
   ALL activated — not introduced — by the reweight; all 3 fixed in-increment). See REVIEW LOG I8.**
 - **I9 — Loc + GUI tooltips (D8).**
   **STATUS: DONE — reviewed adversarially (PASS, 1 LOW cosmetic finding fixed). See REVIEW LOG I9.**
+- **I10 — Steel becomes cottage-capable (Phase 5 #1, D5 reversal for steel only).**
+  **STATUS: DONE — design review SOUND + post-impl review CLEAN (all 7 criteria); committed. Boot-test owed.
+  See REVIEW LOG I10 and §8.**
 
 (Order rationale: everything that only DEFINES capability lands before I6 flips on the 20 new goods;
 the 4 pre-wired goods change behaviour at I2/I5 and are boot-tested there. rare_alloys' sink (I5.5)
@@ -797,6 +800,38 @@ precedes any un-gate that could produce it.)
   imp19c_tradegoods 0 `NONE DESC` left (bar 2 commented fallback lines), LF preserved; both BOMs intact
   (one double-encode slip caught + repaired before review). **Cosmetic/GUI-only change — no economic
   behaviour; boot-safe. Boot-test owed (visual verify tooltips render).**
+- **Phase 5 / I10 (steel becomes cottage-capable — crucible/blister artisan path, D5 reversal for steel
+  ONLY):** IMPLEMENTED + adversarially reviewed at BOTH stages. **Design review (code-review agent) verdict
+  SOUND** — ship the 3-edit plan as designed; efficiency 0.35 is defensible/conservative (cottage steel is
+  ~4 orders of magnitude below one factory's output, so it never rivals the Bessemer volume path); it flagged
+  1 MEDIUM implementation trap (a substring comment-fix on "No cottage recipe for steel" would ALSO hit the
+  `steel_ships` comment at GOODS_svalues.txt:2753), which I avoided by editing via an exact multi-line anchor.
+  **Change (3 edits):** (1) `se_COTTAGEIND.txt` — cached `COTTAGEIND_raw_coal = GOODS_governorship_coal_produced`
+  in `COTTAGEIND_cache_all_values` right after `COTTAGEIND_raw_iron` (coal had no prior COTTAGEIND reader; a
+  read-only capacity proxy like every sibling raw var); (2) same file — replaced the `COTTAGEIND_produce_steel`
+  "CANNOT BE PRODUCED" stub with a real recipe (`set COTTAGEIND_produced_steel = var:COTTAGEIND_raw_iron`,
+  `add var:COTTAGEIND_raw_coal`, `COTTAGEIND_scale_production = { output = steel efficiency = 0.35 }`) —
+  structurally identical to the bronze / construction_materials idiom; (3) `GOODS_svalues.txt` — the
+  `GOODS_governorship_steel_produced` summed writer gained the D1a cottage branch (`value = 0; if has_variable
+  = COTTAGEIND_produced_steel { add = var:COTTAGEIND_produced_steel }; add = _mechanised`), byte-identical in
+  shape to construction_materials, and the stale "No cottage recipe for steel" comment was rewritten.
+  **Post-impl review (code-review agent) CLEAN** — all 7 criteria pass, no CRITICAL/HIGH/MEDIUM: (A) recipe
+  structurally identical to bronze/construction_materials, `output = steel` correct, scale writes
+  `COTTAGEIND_produced_steel` + `steel_stockpile`; (B) no double-count — `steel_stockpile` gets exactly the
+  cottage direct write + the `_mechanised`-only produce-loop add (gated on `INDUSTRY_factories_assigned_steel`);
+  the summed `GOODS_governorship_steel_produced` is read only by price/demand/wealth/GUI + the one-time init
+  seed, never a quarterly stockpile add; (C) summed-writer edit shape-identical to construction_materials, no
+  typo; (D) the `steel_ships` comment at :2753 confirmed UNTOUCHED (trap avoided); (E) `GOODS_governorship_coal_produced`
+  exists (GOODS_svalues.txt:1525), coal cached FIRST in produce_all (cache runs before produce_steel), no
+  duplicate `COTTAGEIND_raw_coal` set; (F) braces balanced (se_COTTAGEIND 137/137, GOODS_svalues 909/909),
+  BOM+CRLF intact, both raw vars cached before use; (G) efficiency 0.35 present, recipe reachable
+  (`COTTAGEIND_produce_steel = yes` in produce_all line 18). **1 LOW (pre-existing, out of scope, NOT a
+  regression):** the `steel` trade_goods engine key is absent from `common/trade_goods/` — true of ALL
+  manufactured goods (bronze/clothing/etc.); the whole MG path is variable-based (`steel_stockpile`,
+  svalue names) and never calls `trade_goods = steel` / `set_trade_goods`, so this is the known half-wired
+  condition tracked in memory `imp19c-manufactured-goods-risk`, not introduced here. **LIVE economic change
+  → boot-test owed (verify artisan steel is a trickle, does not flood pre-Bessemer, does not trivialise the
+  factory unlock).** Committed + pushed.
 - (Phase 3+ increments logged here as they land.)
 
 ---
@@ -946,3 +981,43 @@ Qing) corroborated §7.1-7.5 and added the following:
   furniture factory-mechanisation exact decade (~1856 Thonet Koryčany factory is the anchor found),
   glass hand->machine transition (~1903 Owens, outside window), EIC-Bengal saltpetre volumes, Qing
   yanzheng licensing detail, tea-region processing. Spot-check before any of these become load-bearing.
+
+---
+
+## 8. PHASE 5 IMPLEMENTATION PLAN (research-driven goods changes — #144)
+
+The Phase 5 research (§7) produced a ranked action list. Implementing the whole list (new goods
+sugar/silk/paper/dyes/gunpowder + full BOM audit + date-gates) is a feature-scale program; per the
+build rules each piece gets design → adversarial review → implement → adversarial review, in small
+increments. Ordered by research-stated priority and by blast radius (smallest, best-sourced first):
+
+- **I10 — Steel becomes cottage-capable (crucible/blister artisan path).** §7.2 finding #2 + §7.6 (STRONG
+  multi-agent consensus, "HIGHEST-PRIORITY accuracy correction"). Today steel is I3b mechanised-only
+  (`COTTAGEIND_produce_steel` = explicit "CANNOT BE PRODUCED" stub; summed writer notes "No cottage recipe
+  for steel"). Historically steel is artisan/small-batch (Huntsman crucible 1740, blister) at BOTH 1763 and
+  1815; factory mass-steel only from Bessemer 1856. **Decision (best-guess, per autonomy mandate; reverses
+  D5 mechanised-only for steel ONLY):** give steel a cottage recipe with a DELIBERATELY LOW efficiency (so
+  artisan steel is a trickle at high effective cost, not a free substitute for factories), consuming iron +
+  coal (its real BOM). Factory steel stays invention-gated (tech_manufactories + tech_blast_furnace on
+  `add_steel_button`) and is the volume path once unlocked — matching the "artisan game-start → factory
+  mid-century" arc without needing a new date-gate (the invention gate already IS the mid-century flip).
+  **Files:** (1) `se_COTTAGEIND.txt` — replace the steel stub with a real recipe (iron + coal, low
+  efficiency); requires caching `COTTAGEIND_raw_coal` (coal is NOT currently in `COTTAGEIND_cache_all_values`
+  — the recipe references only cached vars, so coal must be added to the cache the same way as iron/stone;
+  `GOODS_governorship_coal_produced` exists at GOODS_svalues.txt:1525). (2) `GOODS_svalues.txt` — steel
+  summed writer already adds `_mechanised`; add the `if has_variable = COTTAGEIND_produced_steel { add =
+  var:COTTAGEIND_produced_steel }` branch (D1a split-writer, identical to construction_materials) and fix
+  the two stale "No cottage recipe for steel" comments. (3) `industry_l_english.yml` — steel tooltip already
+  shows the cottage line (`industry_TT_p2` reads `COTTAGEIND_produced_steel`), so no loc change needed.
+  **Efficiency calibration:** cottage efficiencies today span 0.5 (bronze) … 10 (two outliers). Steel
+  artisan should sit at/below bronze (0.5) — best-guess **0.35** — reflecting crucible steel's tiny batch
+  size + high cost. Flag for balance/boot-test. **Risk:** if efficiency too high, artisan steel floods the
+  market pre-industrialisation and trivialises the Bessemer unlock; low starting value + boot-test mitigates.
+  **STATUS: DONE — design review PASS (SOUND; 0.35 defensible/conservative, ~4 orders of magnitude below one
+  factory; 1 MEDIUM comment-fix trap flagged), implemented as designed, post-impl review CLEAN (all 7 criteria,
+  no CRITICAL/HIGH/MEDIUM), committed. Boot-test owed (live economic change). See REVIEW LOG I10.**
+- **I11+ — New goods & BOM audit (deferred within Phase 5).** sugar (factory refineries + cane→beet
+  Napoleonic event hook), silk (split from clothing), paper, dyes, gunpowder/saltpetre; plus the §7.2 #3
+  BOM spot-audit (chemicals/glass/naval_supplies). Each is a feature; scoped after I10 lands and is
+  boot-confirmed, since adding engine-absent goods touches the injector list (D10 regen hazard), DEMAND
+  aggregators, prices, cottage/mechanised chains, GUI buttons + loc — i.e. a full mini-build per good.
