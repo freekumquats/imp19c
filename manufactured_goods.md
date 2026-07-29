@@ -213,6 +213,41 @@ a factory that produces nothing. Uses only inventions confirmed to exist.
 the 1763 start — they will be locked behind a high civic_tech floor, not deleted, so a very-late game
 can still reach them. Rationale: the mod's window is 18th–19th c.; these are 20th-c. goods.
 
+**I4 invention-gate map (extracted from `industrial_goods_buttons.txt` `is_valid`; all 15 inventions
+confirmed present in `common/inventions/`):**
+| good | required inventions (owner must have ALL) |
+|---|---|
+| clothing | tech_manufactories, tech_cotton_gin |
+| luxury_clothing | tech_manufactories, tech_cotton_gin |
+| furniture | tech_manufactories |
+| luxury_furniture | tech_manufactories |
+| construction_materials | tech_manufactories |
+| machine_parts | tech_manufactories |
+| alcohol | tech_manufactories, tech_bottling_and_canning |
+| glass | tech_manufactories, tech_bloomery |
+| bronze | tech_manufactories, tech_bloomery |
+| steel | tech_manufactories, tech_blast_furnace |
+| chemicals | tech_manufactories, tech_electrochemistry |
+| rare_alloys | tech_manufactories, tech_electrochemistry |
+| early_munitions | tech_manufactories, tech_replaceable_weapon_parts |
+| late_munitions | tech_manufactories, tech_late_small_arms_manufacturing |
+| naval_supplies | tech_manufactories, tech_non_food_canneries |
+| steel_ships | tech_manufactories, tech_steam_powered_ships, tech_blast_furnace, tech_technical_drawings |
+| wooden_ships | tech_manufactories, tech_warships, tech_technical_drawings |
+| early_artillery | tech_manufactories, tech_cannons |
+| late_artillery | tech_manufactories, tech_quick_firing_gun |
+| pharmaceuticals | tech_manufactories, tech_antiseptic_principle |
+| processed_foods | tech_manufactories, tech_bottling_and_canning, tech_antiseptic_principle |
+| electronics / motors / petrochemicals | (button `always = no # TODO`) → gate on high civic_tech floor per D3 |
+
+**I3 cottage-recipe state (from `se_COTTAGEIND.txt`):** REAL cottage recipes today = clothing,
+luxury_clothing, furniture, luxury_furniture, alcohol, glass, pharmaceuticals, construction_materials,
+bronze, early_munitions, naval_supplies, wooden_ships, early_artillery (13). CANNOT-BE-PRODUCED stubs =
+processed_foods, motors, electronics, rare_alloys, steel, machine_parts, chemicals, late_munitions,
+steel_ships, late_artillery, petrochemicals (11). I3 will add mechanised `INDUSTRY_production_X` rate
+svalues for the goods that lack them, keeping heavy-industrial goods mechanised-only (cottage stub
+retained, matching convention).
+
 ### D4 — Employment: factory output scales with employed industrial workforce; manufacturing wealth
 reaches the workers
 **Decision (two parts).**
@@ -327,12 +362,33 @@ boot-tested there — the un-gate is a single moment only for the OTHER 20 goods
 
 - **I1 — Dead-code removal + comment hygiene (D9, D8-comments) + duplicate-svalue deletion.** No
   behaviour change; shrinks crash surface first. Boot-safe by construction.
-- **I2 — Split-writer svalues (D1a/D2): mechanised-only `GOODS_governorship_X_produced_mechanised` for
-  all 24 + repair summed display svalue + naval_supplies/glass/dup fixes + migrate the 4 hand-coded
-  blocks onto the mechanised-only macro (removes the live double-count).** LIVE change for the 4
-  pre-wired goods → boot-test. Other 20 still gated OFF.
-- **I3 — Missing `INDUSTRY_production_X` rate svalues + cottage recipes (D5).** Raw-goods BOM. New goods
-  still gated OFF.
+- **I2 — Split-writer for the 9 already-built goods (D1a/D2).** [CORRECTION — the earlier "refined I2"
+  note here was WRONG and has been reverted. It claimed "nothing external reads the summed
+  `GOODS_governorship_X_produced` svalue, so make it mechanised-only in place." That premise was a
+  grep artifact: my search `GOODS_governorship_[a-z_]+_produced` silently failed to match the MACRO
+  form `GOODS_governorship_$tradegood$_produced` (the `$` delimiters aren't `[a-z_]`). Re-grepping
+  `GOODS_governorship_\$[a-z_]+\$_produced` CONFIRMED the summed svalue IS read by consumers:
+  se_TRADE.txt (world price / global_supply), se_ECON_wealth.txt (WEALTH_generate_from_production),
+  se_FUNC.txt, DEMAND_svalues.txt (DEMAND_difference_X = produced − demand), the province-window GUI
+  Production tooltip, and GOODS_national_production_X. Making `_produced` mechanised-only would
+  UNDERCOUNT total production for all of them — worst at the pre-industrial 1763 start where nearly
+  all output is cottage. So I2 follows the design doc's original D1a exactly.]
+  I2 = for the 9 built goods (clothing, luxury_clothing, bronze, machine_parts, naval_supplies,
+  alcohol, glass, early_munitions, early_artillery): (a) add a new
+  `GOODS_governorship_X_produced_mechanised` svalue = the factory chain only (gate on
+  `has_variable INDUSTRY_factories_assigned_<good>`, `add INDUSTRY_production_<good>` × industrialisation
+  bonus, plus early_munitions' arsenal/depot infra term); (b) restore `GOODS_governorship_X_produced`
+  as the SUMMED total = cottage term (`add = var:COTTAGEIND_produced_X`) + the `_mechanised` svalue,
+  for consumers; (c) repoint the 4 pre-wired produce-loop blocks (clothing/luxury_clothing/
+  machine_parts/bronze) AND the generic `GOODS_governorship_produce_industry` macro to add the
+  `_mechanised` term, fixing the live cottage double-count. Bug fixes folded in: naval_supplies gate
+  (bronze→naval_supplies), glass limit (lowercase var→uppercase `INDUSTRY_factories_assigned_glass`),
+  early_artillery missing mechanised branch (was cottage-only, and its cottage term was wrongly scaled
+  by the industrialisation bonus — now added unscaled). **LIVE change for the 4 pre-wired goods → boot-test.**
+- **I3 — Build the other 15 goods (D5): create `INDUSTRY_production_X` rate svalues + cottage recipes,
+  and give each the same split-writer pair as I2 (`_produced_mechanised` = factory chain; `_produced`
+  = summed cottage + mechanised)** so no good is left half-transformed. Raw-goods BOM. New goods still
+  gated OFF (not in produce loop until I6).
 - **I4 — Real tech gating (D3).** `INDUSTRY_unlocked_X` from the invention map (+ add wooden_ships);
   GUI buttons already agree.
 - **I5 — Employment scaling (D4a): `INDUSTRY_employment_ratio` into mechanised output.** Qing granular

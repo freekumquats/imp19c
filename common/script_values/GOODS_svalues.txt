@@ -2546,14 +2546,11 @@ GOODS_depot_munitions_output = {
 	value = 1
 }
 
-GOODS_governorship_early_munitions_produced = {
+GOODS_governorship_early_munitions_produced_mechanised = {
+	# [#133 I2] MECHANISED-ONLY term (split-writer D1a): factory + concrete supply-infra
+	# output. This is what the produce loop adds to early_munitions_stockpile; cottage
+	# output reaches the stockpile via COTTAGEIND_scale_production's own direct write.
 	value = 0
-	if = {
-		limit = {
-			has_variable = COTTAGEIND_produced_early_munitions
-		}
-		add = var:COTTAGEIND_produced_early_munitions
-	}
 	if = {
 		limit = {
 			has_variable = INDUSTRY_factories_assigned_early_munitions
@@ -2573,6 +2570,22 @@ GOODS_governorship_early_munitions_produced = {
 	# the wrapper falls back to computing inline if the cache is absent, so a missing
 	# cache degrades to correctness, never to zeroed output (mirrors the #71 idiom).
 	add = GOODS_governorship_munitions_infra_output
+}
+
+GOODS_governorship_early_munitions_produced = {
+	# [#133 I2] SUMMED total (cottage + mechanised) for CONSUMERS: world price (se_TRADE),
+	# production->wealth (se_ECON_wealth), DEMAND_difference (DEMAND_svalues), the province
+	# GUI tooltip, GOODS_national_production. The produce loop adds ONLY the _mechanised
+	# term to the stockpile (D1a split-writer), so cottage — which writes its own stockpile
+	# directly — is never double-counted while the total here stays complete.
+	value = 0
+	if = {
+		limit = {
+			has_variable = COTTAGEIND_produced_early_munitions
+		}
+		add = var:COTTAGEIND_produced_early_munitions
+	}
+	add = GOODS_governorship_early_munitions_produced_mechanised
 }
 
 GOODS_governorship_munitions_infra_output = {
@@ -2623,15 +2636,34 @@ GOODS_governorship_late_munitions_produced = {
 	}
 }
 
+GOODS_governorship_early_artillery_produced_mechanised = {
+	# [#133 I2] MECHANISED-ONLY term (split-writer D1a); this is what the produce loop adds.
+	# BUGFIX: this good previously had ONLY a cottage branch (and erroneously scaled that
+	# cottage output by the industrialisation bonus) and NO mechanised branch, so factory
+	# early_artillery output was never produced despite INDUSTRY_production_early_artillery
+	# existing. Now gated on INDUSTRY_factories_assigned_early_artillery like the other goods.
+	value = 0
+	if = {
+		limit = {
+			has_variable = INDUSTRY_factories_assigned_early_artillery
+		}
+		add = INDUSTRY_production_early_artillery
+		multiply = GOODS_governorship_bonus_to_industrial_production_from_industrialisation
+	}
+}
+
 GOODS_governorship_early_artillery_produced = {
+	# [#133 I2] SUMMED total (cottage + mechanised) for CONSUMERS — see early_munitions note.
+	# BUGFIX: the cottage term is now added UNSCALED (the old code multiplied the cottage
+	# output by the industrialisation bonus, which is a mechanised-only modifier).
 	value = 0
 	if = {
 		limit = {
 			has_variable = COTTAGEIND_produced_early_artillery
 		}
 		add = var:COTTAGEIND_produced_early_artillery
-		multiply = GOODS_governorship_bonus_to_industrial_production_from_industrialisation
 	}
+	add = GOODS_governorship_early_artillery_produced_mechanised
 }
 
 GOODS_governorship_late_artillery_produced = {
@@ -2651,7 +2683,23 @@ GOODS_governorship_late_artillery_produced = {
 	}
 }
 
+GOODS_governorship_naval_supplies_produced_mechanised = {
+	# [#133 I2] MECHANISED-ONLY term (split-writer D1a); this is what the produce loop adds.
+	# BUGFIX: the factory gate read INDUSTRY_factories_assigned_bronze (copy-paste) — a bronze
+	# factory would spawn naval_supplies and a naval_supplies factory produced nothing. Now
+	# gated on the correct INDUSTRY_factories_assigned_naval_supplies.
+	value = 0
+	if = {
+		limit = {
+			has_variable = INDUSTRY_factories_assigned_naval_supplies
+		}
+		add = INDUSTRY_production_naval_supplies
+		multiply = GOODS_governorship_bonus_to_industrial_production_from_industrialisation
+	}
+}
+
 GOODS_governorship_naval_supplies_produced = {
+	# [#133 I2] SUMMED total (cottage + mechanised) for CONSUMERS — see early_munitions note.
 	value = 0
 	if = {
 		limit = {
@@ -2659,13 +2707,7 @@ GOODS_governorship_naval_supplies_produced = {
 		}
 		add = var:COTTAGEIND_produced_naval_supplies
 	}
-	if = {
-		limit = {
-			has_variable = INDUSTRY_factories_assigned_bronze
-		}
-		add = INDUSTRY_production_naval_supplies
-		multiply = GOODS_governorship_bonus_to_industrial_production_from_industrialisation
-	}
+	add = GOODS_governorship_naval_supplies_produced_mechanised
 }
 
 GOODS_governorship_steel_ships_produced = {
@@ -2711,14 +2753,9 @@ GOODS_governorship_steel_produced = {
 	}
 }
 
-GOODS_governorship_bronze_produced = {
+GOODS_governorship_bronze_produced_mechanised = {
+	# [#133 I2] MECHANISED-ONLY term (split-writer D1a); this is what the produce loop adds.
 	value = 0
-	if = {
-		limit = {
-			has_variable = COTTAGEIND_produced_bronze
-		}
-		add = var:COTTAGEIND_produced_bronze
-	}
 	if = {
 		limit = {
 			has_variable = INDUSTRY_factories_assigned_bronze
@@ -2728,14 +2765,25 @@ GOODS_governorship_bronze_produced = {
 	}
 }
 
-GOODS_governorship_clothing_produced = {
+GOODS_governorship_bronze_produced = {
+	# [#133 I2] SUMMED total (cottage + mechanised) for CONSUMERS — see early_munitions note.
 	value = 0
 	if = {
 		limit = {
-			has_variable = COTTAGEIND_produced_clothing
+			has_variable = COTTAGEIND_produced_bronze
 		}
-		add = var:COTTAGEIND_produced_clothing
+		add = var:COTTAGEIND_produced_bronze
 	}
+	add = GOODS_governorship_bronze_produced_mechanised
+}
+
+GOODS_governorship_clothing_produced_mechanised = {
+	# [#133 I2] MECHANISED-ONLY term (split-writer D1a). This is what the produce loop adds to
+	# clothing_stockpile; cottage output reaches the stockpile via COTTAGEIND_scale_production's
+	# own direct write, so cottage is never counted twice. (Previously the summed svalue was
+	# fed to the loop on top of cottage's direct write => a live double-count for goods with a
+	# real cottage recipe.)
+	value = 0
 	if = {
 		limit = {
 			has_variable = INDUSTRY_factories_assigned_clothing
@@ -2746,14 +2794,21 @@ GOODS_governorship_clothing_produced = {
 	}
 }
 
-GOODS_governorship_luxury_clothing_produced = {
+GOODS_governorship_clothing_produced = {
+	# [#133 I2] SUMMED total (cottage + mechanised) for CONSUMERS — see early_munitions note.
 	value = 0
 	if = {
 		limit = {
-			has_variable = COTTAGEIND_produced_luxury_clothing
+			has_variable = COTTAGEIND_produced_clothing
 		}
-		add = var:COTTAGEIND_produced_luxury_clothing
+		add = var:COTTAGEIND_produced_clothing
 	}
+	add = GOODS_governorship_clothing_produced_mechanised
+}
+
+GOODS_governorship_luxury_clothing_produced_mechanised = {
+	# [#133 I2] MECHANISED-ONLY term (split-writer D1a); this is what the produce loop adds.
+	value = 0
 	if = {
 		limit = {
 			has_variable = INDUSTRY_factories_assigned_luxury_clothing
@@ -2762,6 +2817,18 @@ GOODS_governorship_luxury_clothing_produced = {
 		multiply = owner.MODIFIER_textiles_productivity
 		multiply = GOODS_governorship_bonus_to_industrial_production_from_industrialisation
 	}
+}
+
+GOODS_governorship_luxury_clothing_produced = {
+	# [#133 I2] SUMMED total (cottage + mechanised) for CONSUMERS — see early_munitions note.
+	value = 0
+	if = {
+		limit = {
+			has_variable = COTTAGEIND_produced_luxury_clothing
+		}
+		add = var:COTTAGEIND_produced_luxury_clothing
+	}
+	add = GOODS_governorship_luxury_clothing_produced_mechanised
 }
 
 GOODS_governorship_furniture_produced = {
@@ -2798,14 +2865,9 @@ GOODS_governorship_luxury_furniture_produced = {
 	}
 }
 
-GOODS_governorship_alcohol_produced = {
+GOODS_governorship_alcohol_produced_mechanised = {
+	# [#133 I2] MECHANISED-ONLY term (split-writer D1a); this is what the produce loop adds.
 	value = 0
-	if = {
-		limit = {
-			has_variable = COTTAGEIND_produced_alcohol
-		}
-		add = var:COTTAGEIND_produced_alcohol
-	}
 	if = {
 		limit = {
 			has_variable = INDUSTRY_factories_assigned_alcohol
@@ -2815,7 +2877,35 @@ GOODS_governorship_alcohol_produced = {
 	}
 }
 
+GOODS_governorship_alcohol_produced = {
+	# [#133 I2] SUMMED total (cottage + mechanised) for CONSUMERS — see early_munitions note.
+	value = 0
+	if = {
+		limit = {
+			has_variable = COTTAGEIND_produced_alcohol
+		}
+		add = var:COTTAGEIND_produced_alcohol
+	}
+	add = GOODS_governorship_alcohol_produced_mechanised
+}
+
+GOODS_governorship_glass_produced_mechanised = {
+	# [#133 I2] MECHANISED-ONLY term (split-writer D1a); this is what the produce loop adds.
+	# BUGFIX: the factory gate read the never-set lowercase var:industry_production_glass, so
+	# the mechanised branch never fired even though INDUSTRY_production_glass exists. Now gated
+	# on INDUSTRY_factories_assigned_glass, matching the other built goods.
+	value = 0
+	if = {
+		limit = {
+			has_variable = INDUSTRY_factories_assigned_glass
+		}
+		add = INDUSTRY_production_glass
+		multiply = GOODS_governorship_bonus_to_industrial_production_from_industrialisation
+	}
+}
+
 GOODS_governorship_glass_produced = {
+	# [#133 I2] SUMMED total (cottage + mechanised) for CONSUMERS — see early_munitions note.
 	value = 0
 	if = {
 		limit = {
@@ -2823,13 +2913,7 @@ GOODS_governorship_glass_produced = {
 		}
 		add = var:COTTAGEIND_produced_glass
 	}
-	if = {
-		limit = {
-			has_variable = industry_production_glass
-		}
-		add = INDUSTRY_production_glass
-		multiply = GOODS_governorship_bonus_to_industrial_production_from_industrialisation
-	}
+	add = GOODS_governorship_glass_produced_mechanised
 }
 
 GOODS_governorship_pharmaceuticals_produced = {
@@ -2904,7 +2988,11 @@ GOODS_governorship_chemicals_produced = {
 	}
 }
 
-GOODS_governorship_machine_parts_produced = {
+GOODS_governorship_machine_parts_produced_mechanised = {
+	# [#133 I2] MECHANISED-ONLY term (split-writer D1a); this is what the produce loop adds.
+	# machine_parts CANNOT be cottage-produced (empty COTTAGEIND stub), so the summed
+	# _produced below equals this term — but the split is kept uniform so I6's generic macro
+	# can add $tradegood$_produced_mechanised for every good without a special case.
 	value = 0
 	if = {
 		limit = {
@@ -2913,6 +3001,12 @@ GOODS_governorship_machine_parts_produced = {
 		add = INDUSTRY_production_machine_parts
 		multiply = GOODS_governorship_bonus_to_industrial_production_from_industrialisation
 	}
+}
+
+GOODS_governorship_machine_parts_produced = {
+	# [#133 I2] SUMMED total for CONSUMERS. No cottage recipe exists for machine_parts, so this
+	# equals the mechanised term; kept as a wrapper for consumer/consistency (see note above).
+	value = GOODS_governorship_machine_parts_produced_mechanised
 }
 
 GOODS_governorship_petrochemicals_produced = {
