@@ -387,4 +387,13 @@ precedes any un-gate that could produce it.)
     (D3 buildable, +wooden_ships gap); `MANUFACTURE_*` undefined everywhere (D9 safe); naval_supplies bug
     confirmed.
   Design updated to incorporate ALL findings. Design is now internally consistent → cleared for Phase 3.
+- **Phase 3 / I1 (dead-code removal + comment hygiene):** IMPLEMENTED + adversarially reviewed CLEAN
+  (no-behaviour-change verified). Changes: deleted 3 duplicate `GOODS_governorship_X_produced` svalues
+  (rare_alloys/chemicals/electronics — kept the effective later copies, PDX last-wins); deleted
+  `debug_demand.3/.4` (undefined `MANUFACTURE_*`, call-sites already commented); deleted uncalled
+  `GOODS_consume_industrial_demand` + `GOODS_governorship_produce_manufactured`/`_2` (also empty-`if`
+  buggy); deleted 3 duplicate empty `COTTAGEIND_produce_*` stubs; refreshed stale MANUFACTURE_/NOT-YET-
+  IMPLEMENTED comments. Brace-balanced, zero dangling refs. Review confirmed all 5 no-op; one LOW
+  advisory (rare_alloys/chemicals dropped copies carried an already-shadowed cottage contribution —
+  moot, both are mechanised-only per D5 and their cottage recipes are CANNOT-BE-PRODUCED stubs).
 - (Phase 3+ increments logged here as they land.)
