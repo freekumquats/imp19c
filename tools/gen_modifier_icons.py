@@ -154,6 +154,11 @@ STRATA_COL = {
     'lower_strata':  (120, 92, 52, 255),    # earth brown
     'proletariat':   (168, 52, 46, 255),    # labour red
     'indentured':    (96,  100, 108, 255),  # iron grey
+    # [MO#2 2026-07-29] nobles is a vanilla pop-type; its output/happiness icons resolve
+    # from the base game, but the mod-only nobles *_desired_pop_ratio keys are registered
+    # in common/modifier_icons with no shipped .dds -> blank tiles. Add nobles to the family
+    # so gen_strata() can produce the 3 missing desired-ratio icons in the same visual system.
+    'nobles':        (176, 40, 52, 255),    # heraldic crimson
 }
 
 def _blade_disc(col):
@@ -181,6 +186,15 @@ def strata_emblem(d, stratum):
         for cx in (0.3,0.6):
             d.ellipse((x0+int(s*cx)-int(s*0.16),y0+int(s*0.3),x0+int(s*cx)+int(s*0.16),y0+int(s*0.7)),
                       outline=(180,184,190,255),width=max(2,int(PX*S*0.02)))
+    elif stratum=='nobles':          # five-point star (heraldic honour) — distinct from the upper coronet
+        import math
+        cx0,cy0,r=x0+s//2,y0+s//2,s*0.5
+        pts=[]
+        for k in range(10):
+            ang=-math.pi/2+k*math.pi/5
+            rr=r if k%2==0 else r*0.42
+            pts.append((cx0+rr*math.cos(ang),cy0+rr*math.sin(ang)))
+        d.polygon(pts, fill=GOLD, outline=(120,90,20,255))
 
 def metric_glyph(d, metric):
     """Central motif = what the modifier measures."""
@@ -221,18 +235,30 @@ def parse_strata(fn):
         if k.startswith(st+'_'):
             metric=k[len(st)+1:]
             if metric in ('happyness','happiness'): metric='happiness'
-            if metric in ('output','happiness','desired_pop_ratio','city_desired_pop_ratio'):
+            # nobles is vanilla: only its mod-only desired-ratio metrics need generated icons;
+            # leave nobles output/happiness to the base-game art.
+            allowed = ('desired_pop_ratio','city_desired_pop_ratio') if st=='nobles' \
+                      else ('output','happiness','desired_pop_ratio','city_desired_pop_ratio')
+            if metric in allowed:
                 return st, metric
     return None
+
+# [MO#2 2026-07-29] mod-only nobles desired-ratio keys registered in common/modifier_icons
+# but with NO shipped .dds. gen_strata scans existing files; these don't exist yet, so list
+# them explicitly to be generated in the same visual system.
+STRATA_ENSURE = [
+    'local_nobles_desired_pop_ratio',
+    'global_nobles_desired_pop_ratio',
+    'global_nobles_city_desired_pop_ratio',
+]
 
 def gen_strata():
     """Overwrite every custom-strata modifier icon with distinct (stratum x metric) art."""
     os.makedirs(OUT,exist_ok=True)
     made={}   # (stratum,metric) -> cached base path
-    n=0
-    for fn in sorted(os.listdir(OUT)):
+    def emit(fn):
         pm=parse_strata(fn)
-        if not pm: continue
+        if not pm: return 0
         st,metric=pm
         if pm not in made:
             im,d=_blade_disc(STRATA_COL[st])
@@ -240,8 +266,16 @@ def gen_strata():
             strata_emblem(d, st)
             made[pm]=save_base(im, f'strata_{st}_{metric}')
         shutil.copyfile(made[pm], f'{OUT}/{fn}')
-        n+=1
-    print(f"[#115] wrote {n} custom-strata icons across {len(made)} distinct (stratum x metric) images")
+        return 1
+    n=0
+    # existing custom-strata tiles (the #115 family)
+    for fn in sorted(os.listdir(OUT)):
+        n+=emit(fn)
+    # plus any registered-but-missing keys (nobles desired-ratio)
+    for k in STRATA_ENSURE:
+        if not os.path.exists(f'{OUT}/{k}.dds'):
+            n+=emit(f'{k}.dds')
+    print(f"[#115/MO#2] wrote {n} custom-strata icons across {len(made)} distinct (stratum x metric) images")
     return n
 
 def main():
