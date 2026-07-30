@@ -137,11 +137,12 @@ TRADEGOODS = {
  "porcelain":    ("S","Jingdezhen blue and white porcelain vase"),
  "rifles":       ("S","19th century percussion musket rifle"),
  # [#144 I12] Phase-5 new goods. saltpetre = raw; refined_sugar/silk_cloth/paper/dyes/gunpowder = manufactured.
- "saltpetre":    ("S","white saltpetre potassium nitrate mineral crystals"),
- "refined_sugar":("S","refined white sugar loaf and crystals"),
- "silk_cloth":   ("S","bolt of woven silk cloth fabric"),
- "paper":        ("S","stack of handmade paper sheets"),
- "dyes":         ("S","jars of coloured textile dye pigment powder"),
+ # Query lists (first legible photo wins) — the committed art came from the first working query below.
+ "saltpetre":    ("S",["saltpeter crystals","potassium nitrate powder","niter mineral sample"]),
+ "refined_sugar":("S",["white sugar crystals macro","granulated sugar heap","sugar cubes white"]),
+ "silk_cloth":   ("S",["silk textile","silk fabric roll","bolt of silk","woven silk"]),
+ "paper":        ("S",["blank sheet of paper","white paper texture","stack of blank paper"]),
+ "dyes":         ("S",["textile dye pigments","dye powder jars","pigment powders","indigo dye powder"]),
  "gunpowder":    ("S","black gunpowder powder and powder horn"),
 }
 
