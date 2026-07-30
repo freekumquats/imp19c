@@ -1262,3 +1262,51 @@ via `trade_access`, so it will not re-flood — but any future change that touch
 `trade_access`, or re-enables vanilla trade diplomacy must re-check this interaction. The mod's own
 distinctiveness for a good belongs in its `province{}` block + the script market (stockpile/price/
 Trade Agreement), NOT in `country{}`.
+
+---
+
+## 10. #201 — Bespoke apotheosis effects for the 48 ideology thinker-deities (2026-07-30)
+
+### Problem
+The 48 ideology thinker-deities (`common/deities/04_ideology_pantheons.txt`) each cloned one of only
+EIGHT generic category base effects (`military_apotheosis_capital_freemen_effect`, `economy_income_effect`,
+`culture_apotheosis_characters_effect`, `fertility_apotheosis_capital_effect`, and their `_2` counterparts).
+Because the 6 ideologies × 8 slots reuse the same 8 effects, a Liberalism war-deity (Montesquieu) and a
+Communism war-deity (Marx) fired an **identical** apotheosis. Mechanically the 48 collapsed to 8.
+
+### Design chosen — layered flourish (NOT full bespoke rewrite)
+Following the upstream wrapper idiom in `common/scripted_effects/00_apotheosis.txt`
+(`tur_apotheosis_effect` = base + `add_trait`; `midas_apotheosis_effect` = base + `add_treasury`;
+`pylaemenes_apotheosis_effect` = base + `add_popularity`/`add_legitimacy`), each deity KEEPS its working
+category base effect and gains ONE ideology-specific flourish appended to `on_activate`:
+`on_activate = { <base>_effect = yes ideology_apotheosis_<ideology>_effect = yes }`.
+Result: all 48 are now unique — distinct across ideologies (flourish differs) AND within an ideology
+(base differs). New effects live in `common/scripted_effects/se_IDEOLOGY_APOTHEOSIS.txt`.
+
+Six flourishes, each a different lever so no two ideologies overlap:
+| Ideology | Flourish | Primitive (all proven in 00_apotheosis.txt) |
+|----------|----------|----------------------------------------------|
+| Liberalism   | +10 political influence (the open forum)        | `add_political_influence` (glycon) |
+| Conservatism | +5 stability (the settled order)                | `add_stability` (add_stab_apotheosis) |
+| Monarchism   | +10 legitimacy (if monarchy) + ruler popularity | `add_legitimacy`/`add_popularity` (pylaemenes) |
+| Nationalism  | manpower scaled by Martial, else military exp   | `add_manpower`/`add_military_experience` (military_apotheosis_manpower) |
+| Socialism    | state food to every state, scaled by Charisma   | `every_country_state add_state_food` (fertility_apotheosis_food) |
+| Communism    | +15 civic-tech research (scientific vanguard)    | `add_research civic_tech` (culture_apotheosis_civic_tech) |
+
+### Why NOT a full bespoke effect per deity
+48 hand-written effects would (a) require 48 new `_tt_description` loc keys and 48 tooltip audits, (b)
+risk unproven primitives per author whim, (c) not actually improve differentiation over "6 ideology
+signatures × 8 category bases = 48 unique pairs". The layered flourish delivers full uniqueness while
+reusing the already-shipped, already-localized 8 base tooltips. Every primitive is one the vanilla
+apotheosis file already uses at country scope (`on_activate` runs in country scope — confirmed: the
+base `economy_income_effect` uses `add_treasury`).
+
+### Loc
+Each deity `_desc` now ends `... $<base>_tt_description$ $ideology_apotheosis_<ideology>_tt$` — the base
+tooltip line plus the flourish line. Six `ideology_apotheosis_<ideology>_tt` keys added to
+`localization/english/qing_ideology_deities_l_english.yml`.
+
+### Verification
+48 `on_activate` rewrites (8 per ideology, verified by count); brace-balanced (deities 288/288,
+effects 29/29); all 6 effects defined, all 6 tt keys defined; each ideology block carries only its own
+flourish (cross-checked). No unproven engine capability introduced.
