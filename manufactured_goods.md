@@ -1471,3 +1471,177 @@ All `owner.var:X` reads inside the 7 category passes are already cached var read
 recomputes. PRICE_update_TZ_prices / se_PURCHASE / FUNC_every_governorship_update_tradegood_stockpiles are
 setup-only or dead code, not in the quarterly tick. **LIVE economic change (Finding 1 timing + Finding 2
 phantom-wealth removal) → boot-test owed.**
+
+---
+
+## 14. I12+ NEW-GOODS PROGRAM DESIGN (#144 — the deferred goods, now built) (2026-07-30)
+
+**Mandate:** user explicitly rejected the "defer because hard/complex" framing and confirmed
+**all 5** research-recommended goods (§7.3/§7.6), with silk as a **new `silk_cloth` manufactured
+good** (not a clothing-split refactor). No deferral. Full design→review→implement→review pipeline.
+
+### 14.0 Architecture decision (locked)
+Each new good is a **manufactured good that CONSUMES an existing raw**, mirroring the 24 live
+manufactured goods (all "virtual" — NO `common/trade_goods/` entry; variable/svalue-driven). Verified
+on-map raw availability: **sugar 157 provinces, silk 31, dye 27** — all well-placed, so the consuming
+manufactured goods have real inputs. `gunpowder` needs a NEW raw `saltpetre` (absent); placed via a
+boot-time setup block mirroring the existing `defunct_tradegoods_replaced` remap idiom (no hand-editing
+province files). Saltpetre additionally unblocks the I11 chemicals BOM (§8 I11 left it a stone/coal proxy).
+
+The build follows the reverse-engineered 27-location anatomy (see the wiring checklist derived from
+construction_materials + bronze). The canonical generator `tools/gen_mg_chains.py` (D5a) emits the
+INDUSTRY chain, GOODS split-writer, DEMAND wiring, and PRICE body — it MUST be extended (add to RECIPES +
+BATCHES), never hand-copied. **Generator staleness to FIX FIRST (both confirmed on disk):**
+1. `goods_split()` omits `multiply = INDUSTRY_employment_ratio` — live construction_materials has it
+   (GOODS_svalues.txt:2555, the I5 pattern in all 24 goods). Fix the generator to emit it.
+2. `demand_wiring()` is fine but only emits the ingredient-side (`DEMAND_<ing>` gets `INDUSTRY_demand_
+   <good>_<ing>`); the good's OWN `DEMAND_<good>` aggregator + `DEMAND_from_industry_<good>` +
+   `DEMAND_country_<good>`/`DEMAND_difference_<good>` are hand-authored per the finished-good pattern
+   (DEMAND_clothing / DEMAND_glass).
+
+### 14.1 The 5 goods — BOM, tier, tech gate, trade category, demand type
+
+| Good | key | Cottage? | BOM (ingredient: base_demand, importance) | rate | Tech gate (add-button is_valid) | Trade cat | Demand FAMILY (see 14.1a) |
+|---|---|---|---|---|---|---|---|
+| Refined sugar | `refined_sugar` | No (factory refinery — earliest true factory) | sugar 10/1.0, coal 3/0.4 | 100 | tech_manufactories | luxury_2 | LUXURY consumer — register in DEMAND_set_demand_from_luxury_all(+_first_time) |
+| Silk cloth | `silk_cloth` | Yes (cottage loom + factory) | silk 8/1.0, dye 2/0.4 | 70 | tech_manufactories (factory tier) | luxury_2 | LUXURY consumer — register in DEMAND_set_demand_from_luxury_all(+_first_time) |
+| Paper | `paper` | Yes (cottage rag/bamboo + Fourdrinier factory) | wood 6/1.0, textile_fibres 3/0.5 | 90 | tech_manufactories | 5 | GENERIC consumer — `add = DEMAND_consumer_small` (clothing pattern), NO "admin proxy" (doesn't exist) |
+| Dyes (processed) | `dyes` | No (chemical works; distinct from raw `dye`) | dye 6/1.0, chemicals 3/0.6 | 60 | tech_manufactories + **tech_electrochemistry** (matches chemicals/rare_alloys; NOT the non-existent tech_industrial_chemistry) | 3 | INTERMEDIATE — no pop term; consumed by silk_cloth + luxury_clothing/luxury_furniture (LIVE-BALANCE edit, own review) |
+| Gunpowder | `gunpowder` | Yes (powder mill — water-mechanised pre-1763) | saltpetre 8/1.0, sulphur 4/0.5, wood 2/0.3 (charcoal proxy) | 80 | tech_manufactories | 3 | MILITARY intermediate — `DEMAND_gunpowder_from_military` term; ADDITIVE standalone, munitions BOMs UNTOUCHED (H-3) |
+
+**BOM sourcing (§7.1/§7.6):** refined sugar = sugar refineries (cane juice → refined; coal fuel);
+silk cloth = raw silk woven+dyed (Lombe 1721 mill); paper = Fourdrinier 1799–1804 (wood pulp) + rag
+(textile_fibres); dyes = raw dye + chemical mordants/synthetic (aniline post-1856, gated harder);
+gunpowder = classic saltpetre+sulphur+charcoal (75/15/10 → importance-weighted).
+
+### 14.1a — REVIEW RESPONSE (adversarial design review, 2026-07-30): fixes folded in
+The design review found 3 CRITICAL + 3 HIGH issues; all folded into this design before implementation:
+- **C-1 (tech gate) FIXED:** `tech_industrial_chemistry` does NOT exist. `dyes` now gates on
+  `tech_manufactories + tech_electrochemistry` (the exact gate chemicals/rare_alloys use,
+  industrial_goods_buttons.txt:345). Verified the other gate `tech_manufactories` exists.
+- **C-2 (demand sink) FIXED:** there is NO generic consumer-demand hook — each finished good must name its
+  demand FAMILY and, for luxury goods, be REGISTERED in the enumeration effects or it silently gets a
+  static base and its stockpile grows unbounded. Per-good family now in the table above. refined_sugar +
+  silk_cloth = LUXURY family → must be added to `DEMAND_set_demand_from_luxury_all` AND
+  `..._first_time` (se_DEMAND.txt), not just given a `DEMAND_<good>` svalue. paper = GENERIC consumer →
+  `add = DEMAND_consumer_small` (clothing pattern); the design's earlier "admin/education proxy" was
+  hand-waving (no such proxy exists) and is removed. dyes/gunpowder = intermediates (no pop term).
+- **C-3 (saltpetre placement) FIXED:** the `defunct_tradegoods_replaced` idiom is a by-good TOTAL sweep
+  (no regional predicate) — incompatible with "curated 15-25 provinces," and stealing sulphur provinces
+  double-hits sulphur (consumed by chemicals/early_munitions/early_artillery, ~81 provinces). NEW plan:
+  a region-gated by-good sweep that converts a LOW-VALUE good (not sulphur) to saltpetre in historically
+  niter-rich regions. See revised 14.3.
+- **H-1 (employment denominator) FIXED:** each new good must be added to BOTH
+  `INDUSTRY_governorship_used_industry_slots` (INDUSTRY_svalues.txt:64-96) AND the `INDUSTRY_<good>_factories`
+  mirror list (:109-180) — both hardcoded per-good sums. Added to 14.4 checklist. NOTE the review's good
+  news: wages ARE good-agnostic (JOBS_industrial_workers = num_of_IND_industrial_estate, JOBS_svalues.txt:135),
+  so the D4b worker-wealth payoff is NOT dead for new goods — no per-good jobs entry needed (R-new-5 over-stated).
+- **H-2 (dyes live-balance) — USER DECISION: build the full chain.** dyes consumes raw dye + chemicals,
+  AND luxury_clothing/luxury_furniture switch their raw-`dye` input to manufactured `dyes`. This EDITS 2
+  shipped goods (they currently consume raw dye: INDUSTRY_demand_luxury_clothing_dye base 15 at
+  INDUSTRY_svalues.txt:415; INDUSTRY_demand_luxury_furniture_dye base 1 at :2381, both wired into DEMAND_dye
+  :1205/:1218). I12g is therefore a LIVE-BALANCE increment with its own adversarial review + boot-test, NOT
+  a greenfield add. Historical arc: raw dye → processed dyes → dyed textiles.
+- **H-3 (gunpowder coupling) FIXED:** gunpowder is ADDITIVE — its own military demand term, munitions/
+  artillery BOMs left UNTOUCHED for I12f. The historical munitions→gunpowder→saltpetre chain (today powder
+  = sulphur proxy) is a SEPARATE future balance increment, not folded into the new-good build.
+- **M-1 (raw anatomy) FIXED:** 14.3 expanded — saltpetre needs WEALTH_saltpetre_durability (or the wealth
+  loop undefines every tick), ALL THREE injector families (master + PLURAL zz_tradegoods_injector + category
+  — the rare_alloys flood was exactly a missed plural list; regen via zz_injectormaker/), is_raw_tradegood
+  OR-list, GOODS_national_production_saltpetre + _all registration, and DEMAND_country/difference aggregators.
+- **L-1 (rates):** calibration confirmed sensible vs existing RECIPES spread; no change.
+- **L-2 (sequencing):** hard ordering is only I12b (saltpetre) before I12f (gunpowder); confirmed.
+
+**Intermediate-chaining order (must build ingredient before consumer):** `dyes` is consumed by
+`silk_cloth`; `gunpowder` by munitions/artillery (already-live consumers get a new demand branch).
+So build order within the batch: saltpetre(raw) → dyes → {refined_sugar, silk_cloth, paper, gunpowder}.
+Actually silk_cloth consumes raw dye directly (not manufactured dyes) to avoid a hard chain — see 14.2.
+
+### 14.2 Chaining decision (REVISED per user + review)
+Chains among the new set:
+- **silk_cloth consumes RAW `dye`** (map good, always available) + raw silk — keeps silk_cloth boot-safe
+  independent of the dyes build.
+- **dyes** (processed/synthetic) consumes raw `dye` + `chemicals`; its customers are
+  **luxury_clothing + luxury_furniture**, which TODAY consume raw `dye` and will be SWITCHED to consume
+  manufactured `dyes` (user chose the full historical chain — raw dye → processed dyes → dyed textiles).
+  This is a LIVE-BALANCE edit to 2 shipped goods → I12g gets its own adversarial review + boot-test.
+- **gunpowder** is ADDITIVE (own military demand); munitions/artillery BOMs UNTOUCHED (H-3).
+Hard build ordering: I12b (saltpetre) → I12f (gunpowder), and dyes (I12g) after chemicals is confirmed
+live (it is). Otherwise independent. saltpetre is the only new raw.
+
+### 14.3 saltpetre (new RAW good) — REVISED placement (C-3 fix) + full raw anatomy (M-1 fix)
+**Placement (C-3):** do NOT steal sulphur provinces (would double-hit chemicals/early_munitions/
+early_artillery, ~81 sulphur provinces, each with a shortage_sulphur output malus). Instead a
+**region-gated by-good sweep** run once at boot (own global flag, e.g. `saltpetre_seeded`), converting a
+LOW-VALUE good (candidate: `stone` or `sulphur`-adjacent low-value minerals — pick a good with dense
+placement in niter regions so removing a handful doesn't starve its consumers) to `saltpetre` in
+historically niter-rich regions ONLY: `every_province = { limit = { trade_goods = <lowval> is_in_region =
+<bengal/n_china region key> } set_trade_goods = saltpetre }`. Verify the exact region keys + a good whose
+loss of ~15-25 provinces is harmless BEFORE implementing (the map-taxonomy parser, memory
+[[imp19c-map-taxonomy-parser]], resolves province→region). **Best-guess: ~15-25 provinces so saltpetre is
+a real but scarce strategic input.** Flag for boot-test balance + confirm the donor good isn't starved.
+
+**Full raw-good anatomy (M-1 — mirrors sulphur/dye, NOT the terse list):**
+(a) `trade_goods` def in 00_imp19c.txt (category/gold/color, like sulphur);
+(b) ALL THREE injector families — `zz_tradegood_injector.txt` master + the PLURAL `zz_tradegoods_injector.txt`
+    + a raw category injector (cat 6 with minerals) — regen via `zz_injectormaker/` so all stay symmetric
+    (the rare_alloys ~10,850-hit flood was a MISSED PLURAL list, manufactured_goods.md:890);
+(c) `is_raw_tradegood` OR-list (00_trade_scripted_triggers.txt) for symmetry (latent but avoids the
+    cattle/livestock trap #151); NOT in is_manufactured_tradegood;
+(d) `produces_saltpetre` marker in GOODS_update_governorship_local_goods (se_GOODS.txt) + the
+    GOODS_governorship_saltpetre_produced raw svalue + GOODS_national_production_saltpetre + _all registration;
+(e) `saltpetre_stockpile` seed in GOODS_setup_governorship_stockpiles;
+(f) price: global_mean_price_saltpetre plumbing (PRICE_svalues.txt) + local price handling;
+(g) DEMAND_saltpetre aggregator + DEMAND_country_saltpetre + DEMAND_difference_saltpetre (consumed by
+    gunpowder's INDUSTRY_demand_gunpowder_saltpetre; later also chemicals per I11 deferred note);
+(h) **WEALTH_saltpetre_durability** (se_ECON_wealth WEALTH_generate_from_production reads
+    WEALTH_$tradegood$_durability for every iterated good → undefines every wealth tick if missing);
+(i) loc (name+DESC) + icon + the raw-good GUI treatment (raw goods render in the trade view too).
+
+### 14.4 Per-good wiring checklist (all 27 anatomy locations) — applied uniformly
+For each good (refined_sugar/silk_cloth/paper/dyes/gunpowder), the REQUIRED locations:
+1. `is_manufactured_tradegood` OR list (00_trade_scripted_triggers.txt) — add flag line
+2. `zz_tradegood_injector.txt` tradegood_hypercomplex master + `zz_injectormaker/` source template
+3. one category injector (14.1 col) + `zz_injectormaker/business_goods.txt`
+4. `se_COTTAGEIND.txt` — recipe (real for cottage-capable silk_cloth/paper/gunpowder; CANNOT-stub for
+   refined_sugar/dyes) + COTTAGEIND_produce_all dispatcher line + any new COTTAGEIND_raw_<ing> cache
+   (sugar/saltpetre caches needed)
+5. `INDUSTRY_svalues.txt` — full chain via generator + add var to BOTH `INDUSTRY_governorship_used_industry_slots` sum (:64-96) AND the `INDUSTRY_<good>_factories` mirror list (:109-180) — H-1: both are hardcoded per-good sums; omitting either skews the employment ratio silently
+6. `se_INDUSTRY_setup.txt` — INDUSTRY_setup_factories_<good> (=0 seed) + dispatcher line
+7. `GOODS_svalues.txt` — split-writer pair (generator, with employment_ratio fix) + GOODS_national_production_<good> + register in _all sum
+8. `se_GOODS.txt` — GOODS_governorship_produce_industry line + GOODS_setup_governorship_stockpiles seed
+9. `industrial_goods_buttons.txt` — add_<good>_button (invention gate) + remove_<good>_button
+10. `INDUSTRY_unlocked_svalues.txt` — INDUSTRY_unlocked_<good> mirroring button gate
+11. `DEMAND_svalues.txt` — DEMAND_<good> aggregator + DEMAND_country_<good> + DEMAND_difference_<good> + per-ingredient demand branches into each raw's DEMAND_<ing>
+12. `se_PRICE.txt` — PRICE_factor_raw_input_costs_<good> (generator)
+13. `se_GLOBALTRADE_split.txt` — add flag to GT_set_tradegood_price OR list
+14. `PRICE_svalues.txt` — global_mean_price_<good> plumbing
+15. `WEALTH_svalues.txt` — WEALTH_<good>_durability (required or wealth macro undefines)
+16. `gui/province_window.gui` — per-good industrial_goods_widget block (icon+bindings+tooltips+buttons)
+17. `gui/trade_view.gui` — per-good trade block
+18. `gfx/interface/icons/tradegoods/<good>.dds` — icon (via tools/gen_table_icons.py)
+19. loc: `imp19c_tradegoods_l_english.yml` (name+DESC), `industry_l_english.yml` (ingredient+produced TT),
+    `economic_enchancement_l_english.yml` (~14 button/stockpile/tracker keys), `000_ECON_loc.txt` (custom loc)
+
+### 14.5 Increments (each: implement → adversarial review → commit → push → boot-test owed)
+- **I12a — generator fixes** (employment_ratio in goods_split; add 5 goods + saltpetre-consumers to RECIPES/BATCHES). No game change yet; unblocks the rest.
+- **I12b — saltpetre raw good** (def + injector + marker + svalue + price + demand + boot placement). Standalone boot-safe.
+- **I12c — refined_sugar** (factory-only, simplest consumer). Full 27-location wire.
+- **I12d — silk_cloth** (cottage+factory, consumes silk+dye).
+- **I12e — paper** (cottage+factory, consumes wood+textile_fibres).
+- **I12f — gunpowder** (cottage+factory, consumes saltpetre+sulphur+wood; ADDITIVE own military demand; munitions/artillery BOMs UNTOUCHED per H-3).
+- **I12g — dyes** (factory-only chemical `tech_manufactories`+`tech_electrochemistry`; consumes raw dye+chemicals; LIVE-BALANCE increment — luxury_clothing/luxury_furniture switch raw-dye input → manufactured dyes; own adversarial review + boot-test).
+- **I12h — icons + loc sweep + I11 chemicals BOM correction** (now that saltpetre exists, add it to chemicals BOM per §8 I11 deferred note).
+
+### 14.6 Risks
+- **R-new-1 undefined-svalue floods** — the half-wired failure mode. Mitigation: uniform 27-location
+  checklist per good + the verify self-check (rg counts) after each; boot-test with -debug_mode.
+- **R-new-2 injector D10 regen hazard** — must edit BOTH the live injector AND zz_injectormaker source,
+  or a future regen drops the good (the rare_alloys precedent). Explicit checklist item.
+- **R-new-3 GUI not data-driven** — province_window.gui/trade_view.gui blocks are hand-duplicated per
+  good; no compile-time validation of blockoverride names. Highest "looks half-wired" risk. Mitigate by
+  copying a known-good donor block (bronze) verbatim and sed-renaming.
+- **R-new-4 saltpetre map balance** — too many provinces = trivial gunpowder; too few = munitions starve.
+  Best-guess 15-25, flagged for boot-test tuning.
+- **R-new-5 employment/jobs** — new factories need the good-agnostic IND_industrial_estate slot + a jobs
+  entry. Confirm INDUSTRY_assign_factory + employment-ratio path is good-agnostic (checklist verifies).
