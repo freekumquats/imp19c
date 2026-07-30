@@ -1141,3 +1141,49 @@ increments. Ordered by research-stated priority and by blast radius (smallest, b
   injector list D10 regen hazard, DEMAND/prices, cottage+mechanised chains, GUI buttons, loc); scoped after I11
   lands and is boot-confirmed. Adding saltpetre here would also let a later pass correct the chemicals/gunpowder
   BOM that I11 deliberately left as a proxy.
+
+---
+
+## Boot-test 2026-07-29 findings MG-1 .. MG-5 + residual floods
+
+Source: `BOOT_TEST_NOTES_MANUFACTURED_GOODS_2026-07-29.md`. Five reported bugs; all addressed.
+
+- **MG-1 / MG-2 — loc + capitalization.** 8 loaded goods (linen/cotton/wool/inorganic_compounds/whales/
+  peat/palm/chocolate) had NO name/DESC and rendered as raw lowercase keys → added `#T #L` sibling loc.
+  Capitalization tail: 9 building-name loc keys were sentence-case ("Industrial estate") → Title Case per
+  user rule; 2 trade-good DESC tooltip headers lowercase (Processed foods / Naval supplies) → fixed.
+  **STATUS: DONE — committed a45b0b71b (cap tail) + 7478ca515 (loc). Boot-test owed.**
+- **MG-3 — every good felt identical.** All 56 goods carried the same placeholder province block
+  (`local_monthly_food = 0.07`, no country block). Reworked each to a DISTINCT province modifier + a
+  role-matched country modifier (iron→regular_infantry_discipline, silk→export-commerce, grain keeps food,
+  etc.). 4 goods retargeted off inert stub unit-type tokens onto functional country-legal ones.
+  porcelain/rifles drop the flat-food byproduct (worked, not agricultural). category/gold/color/
+  allow_unit_type + BOM + LF all preserved; braces 224/224. **STATUS: DONE — design review + post-impl
+  adversarial review both CLEAN (all tokens legal, no dupes). Committed 94df025d3. Boot-test owed.**
+- **MG-4 — loyal-cohorts grant was a no-op.** `QING_regional_army_bind_commander` only bumped the abstract
+  `num_loyal_veterans` pool (`add_loyal_veterans`) → no visible cohorts. Rewired to trampoline through
+  hidden `qing_office.42` (dodges the scripted_gui compile-inline AV, per `qing_guard.10` precedent), which
+  picks the weightiest sitting Han governor and — on his FIRST sanction only (fire-once guard via
+  `qing_had_yongying_already`) — raises a REAL `qing_yongying` legion (`QING_regional_army_raise_yongying`,
+  clone of the proven grandee-legion idiom) and binds him as commander with loyal sub_units. Create↔destroy
+  symmetry: `QING_reassert_strip_magnate` now destroys the legion (`every_character_unit = destroy_unit`)
+  when the veteran tally fully draws down. LOG wording split so "physical legion raised" logs only on the
+  actual raise. **STATUS: DONE — design review (fabricated-citation + unbounded-legion flags folded in) +
+  post-impl adversarial review both CLEAN (scope chain, fire-once ordering, refs, braces). Committed
+  35ba9099f. Boot-test owed.**
+- **MG-5 — personnel-dispute recall didn't remove governor.** (Fixed prior session.) **STATUS: DONE —
+  committed 7478ca515.**
+
+### Residual correctness fixes (folded in at user request 2026-07-29) — IN PROGRESS
+Two "residual" items from the boot-test notes, promoted to full fixes (design → adversarial review →
+implement → adversarial review → commit). Design in `MG_RESIDUAL_FLOODS_DESIGN.md`.
+- **Bimetallic silver multiply typo** (`se_GLOBALTRADE_split.txt` bimetallic branch): silver reserve is
+  set+divided on `_silver_reserves` but the demand-ratio multiply names `_gold_reserves` → silver never
+  multiplied, gold multiplied twice. Fix = one `_gold_reserves`→`_silver_reserves`. Sibling gold/silver-only
+  branches prove the "multiply the reserve you set" pattern.
+- **cattle/livestock classifier mismatch**: `livestock` is the only loaded good; `cattle` is a defunct
+  vanilla name absent from the goods file, so `flag:$tradegood$ = flag:cattle` never matches. Raw-goods
+  classifier copy-pasted; expenses side (split:3491) + canonical `is_raw_tradegood` (scripted_triggers:74)
+  use dead `flag:cattle` while income side (split:3600) uses correct `flag:livestock` → livestock import
+  expenses mis-booked to manufacturing bucket vs its income booked to resource-extraction. Fix = both
+  `flag:cattle`→`flag:livestock`. **STATUS: design written, adversarial design review dispatched.**
