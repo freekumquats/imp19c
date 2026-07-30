@@ -1652,7 +1652,18 @@ All 8 increments implemented + pushed to `manufactured_goods`:
   industry tooltips (PROVWINDOW_GOV_<good>_PRODUCED_TT + ingredient submacros). **Chemicals BOM saltpetre
   addition (I11 deferred) DECLINED ON MERIT** — would make chemicals a 2nd consumer of scarce saltpetre,
   starving gunpowder; current sulphur+coal+salt BOM is historically sound.
-- **Consolidated adversarial review of all 5 goods: running.** **Boot-test owed** (live: 5 new goods
+- **Consolidated adversarial review of all 5 goods: DONE (35c0b1474).** Found 2 CRITICAL half-wiring
+  floods (rare_alloys class) which I fixed: (C-1) WEALTH_<good>_durability missing for all 5 manufactured
+  → wealth-loop flood + zero production-wealth; (C-2) DEMAND_country_<good> missing for all 5 → quarterly
+  trade-split flood + zero market penetration. Root cause: the generator doesn't emit these and I'd
+  hand-wired only saltpetre's raw anatomy. Also fixed MEDIUM parity gap (DEMAND_difference_<good> +
+  _infrastructure_capped_<good> for all 6; dead-code readers today but latent flood on revival). Review
+  CONFIRMED everything else correctly wired (injectors ×3, classification, all chain svalues, production→
+  stockpile, consumption sinks, employment slots, national production, tech gates, saltpetre boot placement).
+  Two LOW items left as-is: (a) refined_sugar/silk_cloth use a real DEMAND_consumer_medium pop sink instead
+  of the luxury-enumeration registration — deliberate, stockpile drains fine, diverges from §14.1a C-2's
+  luxury model but not a bug; (b) luxury_clothing/furniture factory tooltips still display the raw-dye
+  ingredient line (self-consistent loc key, cosmetic only). **Boot-test owed** (live: 5 new goods
   produce/trade/consume + saltpetre map placement + 2-shipped-good dye rebalance).
 
 ### 14.6 Risks
