@@ -1633,6 +1633,28 @@ For each good (refined_sugar/silk_cloth/paper/dyes/gunpowder), the REQUIRED loca
 - **I12g — dyes** (factory-only chemical `tech_manufactories`+`tech_electrochemistry`; consumes raw dye+chemicals; LIVE-BALANCE increment — luxury_clothing/luxury_furniture switch raw-dye input → manufactured dyes; own adversarial review + boot-test).
 - **I12h — icons + loc sweep + I11 chemicals BOM correction** (now that saltpetre exists, add it to chemicals BOM per §8 I11 deferred note).
 
+### 14.5a IMPLEMENTATION STATUS (2026-07-30)
+All 8 increments implemented + pushed to `manufactured_goods`:
+- **I12a** (3c1fdf84d) — generator fixed (employment_ratio) + 5 goods added to RECIPES/BATCHES.
+- **I12b** (9daa20c18) — saltpetre raw good, full anatomy; boot-placed via region-gated grain→saltpetre
+  sweep (≤18 provinces in Bengal/Zhili/Shandong/Shanxi).
+- **I12c–f** (3ee3222cc) — refined_sugar/silk_cloth/paper/gunpowder fully wired (INDUSTRY chains via
+  generator, GOODS split-writers, produce-loop, cottage recipes for the 3 cottage goods, DEMAND consumer
+  sinks on the DEMAND_clothing pattern, buttons, INDUSTRY_unlocked, price OR-list, injectors×3, is_manufactured,
+  used-slots + factories-mirror + setup seeds, loc, stopgap icons). Self-caught + fixed 2 gaps mid-build:
+  the `INDUSTRY_<good>_factories` mirror svalues and the `global_mean_price_<good>` reader svalues (both
+  referenced-but-undefined by the generated chains / consumers).
+- **I12g** (f118f1e12) — dyes + LIVE luxury rework: luxury_clothing/luxury_furniture switched raw dye →
+  manufactured dyes (INDUSTRY `_dye`→`_dyes` rename, DEMAND branch moved DEMAND_dye→DEMAND_dyes, price
+  bodies read global_mean_price_dyes). dyes tech gate softened to tech_manufactories only (electrochemistry
+  hard-gate would starve the tech_manufactories luxury consumers pre-1856).
+- **I12h** (b3926a403) — province_window.gui + trade_view.gui per-good panels (cloned from bronze donor),
+  industry tooltips (PROVWINDOW_GOV_<good>_PRODUCED_TT + ingredient submacros). **Chemicals BOM saltpetre
+  addition (I11 deferred) DECLINED ON MERIT** — would make chemicals a 2nd consumer of scarce saltpetre,
+  starving gunpowder; current sulphur+coal+salt BOM is historically sound.
+- **Consolidated adversarial review of all 5 goods: running.** **Boot-test owed** (live: 5 new goods
+  produce/trade/consume + saltpetre map placement + 2-shipped-good dye rebalance).
+
 ### 14.6 Risks
 - **R-new-1 undefined-svalue floods** — the half-wired failure mode. Mitigation: uniform 27-location
   checklist per good + the verify self-check (rg counts) after each; boot-test with -debug_mode.
