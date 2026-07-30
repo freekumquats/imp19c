@@ -1190,3 +1190,75 @@ implement → adversarial review → commit). Design in `MG_RESIDUAL_FLOODS_DESI
   unused so latent, fixed anyway), implemented as 3 single-token edits, post-impl review CONFIRMED (diff is
   exactly the 3 fixes + comments, braces/BOM/CRLF intact, zero live flag:cattle). Committed 049d2acfa,
   pushed. Boot-test owed (economic accounting change).**
+
+
+## 9. VANILLA vs MOD TRADE SYSTEMS — architecture + the "Request Trade Route" flood (BT 2026-07-29/30)
+
+**imp19c runs TWO trade systems in parallel over the same trade-good keys.** Understanding the
+split is essential before touching anything trade-related.
+
+### Vanilla engine trade (C++, still LIVE underneath)
+- Each province produces one trade good. A country with a *surplus* of a good receives that good's
+  `country = { }` block (the "trade-surplus bonus", e.g. salt -> `army_maintenance_cost = -0.05`).
+  The `province = { }` block is the local bonus for producing it.
+- Countries import goods they lack via **engine trade routes**. AI desire to import good X is driven
+  largely by how valuable X's `country = { }` bonus is. Route economics live in
+  `common/defines/00_defines.txt -> NTrade` (`ROUTE_BASE_INTERNAL/EXPORTING/IMPORTING_COMMERCE`);
+  these are STOCK values (0.2 / 1 / 0.35) — imp19c never zeroed them, so the vanilla commerce layer
+  and its `country{}` bonuses ARE live and reach the player.
+- The AI's propensity to *ask* for a route is `common/ai_diplochance/00_default.txt -> trade_access`
+  (loc `ASKTRADEACCTITLE` = "Request Trade Route"), scaled by define `TRADE_REQUEST_ACCEPTANCE`.
+
+### Mod script trade (imp19c, the system the mod actually wants players to use)
+- A parallel quarterly market sim in `se_GLOBALTRADE_split.txt`. Its own tradezone (TZ) / stockpile /
+  price economy, all stored in VARIABLES — it does **not** use engine trade routes at all.
+- **What a good "is" to the mod:** per-governorship, per-good production (cottage + mechanised
+  factories) adds to a `<good>_stockpile` var; pop/industry DEMAND (`se_DEMAND`) draws it down; the
+  leftover is offered to the TZ market at a computed PRICE (`PRICE_svalues`, supply vs
+  `global_var:global_mean_price_<good>`), capped by infrastructure/shipping capacity. Goods are
+  handled by category (food_goods + manufactured/raw tiers) and cottage-vs-mechanised chains.
+- **What "surplus" means in mod terms:** a positive `<good>_stockpile` after local demand is met,
+  which the governorship SELLS into the tradezone. It is a continuous priced quantity, NOT vanilla's
+  binary count-based surplus.
+
+### Trade Agreement (mod-invented; NO vanilla equivalent) — the mod's replacement for trade routes
+- `se_DIP_TRADE.txt` + `common/scripted_guis/trade_diplo_buttons.txt`. Pure variable lists
+  (`list_of_trade_partners_<category>`; categories: food_goods + all_categories scaffold).
+- Effect: it DIVIDES a country's exports and import demand among its agreed partners
+  (`TRADE_number_of_trade_partners_<category>` = the divisor) and grants tradezone PENETRATION
+  (`MODIFIER_GLOBAL_STATE_TRADE_ROUTES`), scaled against tariffs (higher tariffs = less penetration
+  from partners' agreements, more from your own shipping). No goods move via engine routes — it is
+  all the script market. This is how two countries formally open their script-market tradezones to
+  each other, i.e. the on-design substitute for vanilla "request/accept trade route".
+- The mod market + Trade Agreement layer reads STOCKPILE VARS and the trade-partner LISTS. It never
+  reads a good's `country{}` bonus.
+
+### The regression: "Request Trade Route" flood at game start
+- imp19c meant to suppress the vanilla trade-route AI, but `trade_access` only had `base offset = 0`
+  and LEFT `opinion scale = 0.25` — so positive opinion still pushed the request over threshold.
+- It stayed quiet ONLY because pre-MG just ONE good (tobacco) carried a `country{}` bonus, so the
+  vanilla import AI had essentially nothing worth importing.
+- **MG-3 (#148)** gave all 56 goods a distinct `country{}` bonus (to make each good feel different).
+  That handed the vanilla import AI 56 desirable import targets -> it woke up and flooded the player
+  with "Request Trade Route" from turn 1. Seen first on the manufactured_goods boot test, then on
+  merge-overnight after the merge. `country{}` bonuses feed ONLY the vanilla layer — the mod's own
+  market/Trade-Agreement system is indifferent to them.
+
+### Fix chosen (2026-07-30, committed 803d7d3fa)
+- **Harden `trade_access` only.** base offset 0 -> **-1000** (swamps any positive term), opinion
+  scale 0.25 -> **0** (removes the term still driving it). `scale = 0` is the file's documented
+  disable idiom (header: "Hardcoded factors can be removed by scaling by 0"; already used elsewhere).
+- The 56 `country{}` surplus bonuses are LEFT INTACT: with the vanilla commerce layer still live they
+  are real player-facing modifiers (several mirror stock vanilla, e.g. grain food / salt maintenance).
+  Only the AI's propensity to ASK for a route is disabled. Trade Agreement diplomacy untouched.
+- REJECTED alternative: stripping the `country{}` bonuses. Rejected because they are live gameplay
+  rewards under the still-active vanilla layer, not vestigial — removing them would delete real
+  surplus modifiers. If imp19c ever fully zeroes the vanilla commerce layer (NTrade ROUTE_BASE_* = 0),
+  revisit: then the `country{}` bonuses WOULD be vestigial and could be stripped.
+
+### STANDING RULE for future trade-good work
+Adding/enlarging a good's `country{}` bonus re-arms the vanilla import AI. That is now hard-suppressed
+via `trade_access`, so it will not re-flood — but any future change that touches NTrade route commerce,
+`trade_access`, or re-enables vanilla trade diplomacy must re-check this interaction. The mod's own
+distinctiveness for a good belongs in its `province{}` block + the script market (stockpile/price/
+Trade Agreement), NOT in `country{}`.
