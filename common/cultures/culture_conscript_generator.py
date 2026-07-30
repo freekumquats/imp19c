@@ -50,9 +50,9 @@ def write_conscripts(culture_files):
     secondary = conscripts\n\
     flank = conscripts\n\
 \n\
-    primary_navy = tetrere\n\
-    secondary_navy = octere\n\
-    flank_navy = liburnian\n\
+    primary_navy = screw_frigate\n\
+    secondary_navy = medium_steamer\n\
+    flank_navy = brig\n\
     male_names")
             f.close()
         with open(file, "w", encoding="utf-8") as f:
