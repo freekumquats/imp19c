@@ -1186,4 +1186,7 @@ implement → adversarial review → commit). Design in `MG_RESIDUAL_FLOODS_DESI
   classifier copy-pasted; expenses side (split:3491) + canonical `is_raw_tradegood` (scripted_triggers:74)
   use dead `flag:cattle` while income side (split:3600) uses correct `flag:livestock` → livestock import
   expenses mis-booked to manufacturing bucket vs its income booked to resource-extraction. Fix = both
-  `flag:cattle`→`flag:livestock`. **STATUS: design written, adversarial design review dispatched.**
+  `flag:cattle`→`flag:livestock`. **STATUS: DONE — design review CONFIRMED (no missed 4th list; is_raw_tradegood
+  unused so latent, fixed anyway), implemented as 3 single-token edits, post-impl review CONFIRMED (diff is
+  exactly the 3 fixes + comments, braces/BOM/CRLF intact, zero live flag:cattle). Committed 049d2acfa,
+  pushed. Boot-test owed (economic accounting change).**
