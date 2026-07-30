@@ -27,7 +27,7 @@ import sys
 # so it matches the production chain exactly. Display names match imp19c_tradegoods loc.
 GOODS = {
     "furniture":              ("Furniture",              [("wood", "Wood")]),
-    "luxury_furniture":       ("Luxury Furniture",       [("wood", "Wood"), ("silk", "Silk"), ("gold", "Gold"), ("gems", "Gemstones"), ("dye", "Dyes")]),
+    "luxury_furniture":       ("Luxury Furniture",       [("wood", "Wood"), ("silk", "Silk"), ("gold", "Gold"), ("gems", "Gemstones"), ("dyes", "Dyes")]), # [#144 I12g] dye -> manufactured dyes
     "glass":                  ("Glass",                  [("coal", "Coal"), ("stone", "Stone"), ("lead", "Lead")]),
     "pharmaceuticals":        ("Pharmaceuticals",        [("vegetables", "Vegetables"), ("whales", "Whales")]),
     "processed_foods":        ("Processed Foods",        [("livestock", "Livestock"), ("vegetables", "Vegetables"), ("fish", "Fish"), ("salt", "Salt"), ("glass", "Glass")]),
@@ -43,6 +43,12 @@ GOODS = {
     "early_artillery":        ("Early Artillery",        [("sulphur", "Sulphur"), ("wood", "Wood"), ("stone", "Stone"), ("lead", "Lead"), ("textile_fibres", "Textile Fibres"), ("iron", "Iron"), ("steel", "Steel"), ("bronze", "Bronze"), ("livestock", "Livestock")]),
     "late_artillery":         ("Late Artillery",         [("steel", "Steel"), ("machine_parts", "Machine Parts"), ("chemicals", "Chemicals")]),
     "petrochemicals":         ("Petrochemicals",         [("oil", "Oil"), ("chemicals", "Chemicals")]),
+    # [#144 I12] Phase-5 new goods.
+    "refined_sugar":          ("Refined Sugar",          [("sugar", "Sugar"), ("coal", "Coal")]),
+    "silk_cloth":             ("Silk Cloth",             [("silk", "Silk"), ("dye", "Dye")]),
+    "paper":                  ("Paper",                  [("wood", "Wood"), ("textile_fibres", "Textile Fibres")]),
+    "dyes":                   ("Dyes",                   [("dye", "Dye"), ("chemicals", "Chemicals")]),
+    "gunpowder":              ("Gunpowder",              [("saltpetre", "Saltpetre"), ("sulphur", "Sulphur"), ("wood", "Wood")]),
 }
 
 
