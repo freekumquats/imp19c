@@ -136,6 +136,13 @@ TRADEGOODS = {
  "chili":        ("S","red chili peppers"),
  "porcelain":    ("S","Jingdezhen blue and white porcelain vase"),
  "rifles":       ("S","19th century percussion musket rifle"),
+ # [#144 I12] Phase-5 new goods. saltpetre = raw; refined_sugar/silk_cloth/paper/dyes/gunpowder = manufactured.
+ "saltpetre":    ("S","white saltpetre potassium nitrate mineral crystals"),
+ "refined_sugar":("S","refined white sugar loaf and crystals"),
+ "silk_cloth":   ("S","bolt of woven silk cloth fabric"),
+ "paper":        ("S","stack of handmade paper sheets"),
+ "dyes":         ("S","jars of coloured textile dye pigment powder"),
+ "gunpowder":    ("S","black gunpowder powder and powder horn"),
 }
 
 # building-TYPE icons (200x200) at gfx/interface/icons/buildings/<key>.dds — currently stopgap-copied
