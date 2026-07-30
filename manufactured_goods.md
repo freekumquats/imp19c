@@ -1310,3 +1310,47 @@ tooltip line plus the flourish line. Six `ideology_apotheosis_<ideology>_tt` key
 48 `on_activate` rewrites (8 per ideology, verified by count); brace-balanced (deities 288/288,
 effects 29/29); all 6 effects defined, all 6 tt keys defined; each ideology block carries only its own
 flourish (cross-checked). No unproven engine capability introduced.
+
+---
+
+## 11. #145 — never-refreshed global_mean_price + new-country double-seed (2026-07-30)
+
+Two independent pre-existing balance/correctness bugs flagged during I6/I7 review, both fixed. Adversarial
+code-review (code-review agent) returned CLEAN on both parts.
+
+### Part A — quarterly refresh of `global_mean_price_<good>`
+**Bug:** `global_mean_price_<good>` (global var, the tradezone-averaged price read by I7's input-cost
+factoring `PRICE_factor_raw_input_costs_X`) was computed ONCE at day-0 setup
+(`PRICE_update_TZ_prices` -> `PRICE_update_all_global_mean_prices`, oa_economy_setup.txt:2360) and never
+refreshed. But `local_price_<good>` (which the mean averages) IS recomputed every quarter by
+`GT_set_tradegood_price` (se_GLOBALTRADE_split.txt) on the trade-center provinces. So every quarter's
+manufactured-good input-cost factoring read a frozen day-0 mean forever — affecting all 24 MG goods and
+the 9 originals identically.
+**Fix:** added `PRICE_update_all_global_mean_prices = yes` to `quarterly_reset_trade_transaction_totals`
+(oa_wealth_changes.txt), the FIRST on_action in the quarterly trade pulse (globally gated to fire once per
+quarter). Called ONLY the averaging pass — NOT the full `PRICE_update_TZ_prices`, which would also re-run
+`PRICE_update_price_TZ`/`PRICE_normalise_price` and double-recompute `local_price` via the defunct SELL
+formula. Because it runs at quarter-start it reads the PRIOR quarter's final local prices (the same stable-
+prior-snapshot ordering I7 documented), then the day-9..61 splits consume the freshly-refreshed mean — no
+read-after-write circularity. Scope-safe at the on_action root (`every_trade_center`/`every_tradegood_complex`
+are global-list iterators; siblings `GT_split_setup_global_shipping_costs_pool` etc. run at the same scope).
+`num_of_TZs = 22` (static svalue) so the divide can't div-0.
+
+### Part B — new-country stockpile double-seed
+**Bug:** `FUNC_setup_new_country` (se_FUNC.txt) seeded newly-spawned-country governorship stockpiles TWICE
+at t=0: `GOODS_setup_governorship_stockpiles` (:492, `set_variable { value = <good>_produced }`) then
+`FUNC_every_governorship_update_tradegood_stockpiles` (:522, `change_variable { add = <good>_produced }`).
+Both firing = 2x one quarter's production seeded at t=0. The game-start path (oa_economy_setup.txt:381)
+calls ONLY `GOODS_setup_governorship_stockpiles`, so game-start countries are single-seeded; revolts/
+colonies/new tags were double-seeded.
+**Fix:** commented out the second call. Review confirmed: (1) it was the sole caller (definition now
+harmless dead code); (2) `GOODS_setup_governorship_stockpiles` hand-enumerates a STRICT SUPERSET of the
+goods the removed `every_tradegood_complex` loop covered, so NO good is left unseeded (the under-seed
+risk does not trigger); (3) the removed call wrote the same `<good>_stockpile` var from the same
+`GOODS_governorship_<good>_produced` source — genuinely redundant. New countries now match game-start.
+
+### Incidental (NOT fixed here — separate backlog)
+Review noted `every_tradegood_complex` omits 7 defined goods (chocolate, inorganic_compounds,
+mediterranean_fruit, peat, tropical_fruit, whales, wool) that `GOODS_setup_governorship_stockpiles` covers.
+A pre-existing gap in the shared iterator affecting the whole price/demand pipeline, unrelated to #145.
+Logged for a future decision on whether those 7 goods are meant to be live in the script market.
