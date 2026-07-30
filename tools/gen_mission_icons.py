@@ -4,7 +4,10 @@ gen_mission_icons.py — batch bespoke mission-task icons for the Qing mission s
 
 For each qing_*_missions.txt: find every task node that carries `icon = testN`, look up
 the task's English loc title, derive a Wikimedia Commons search query from it, fetch the
-top image, convert to a 118x68 BGRA8 DDS (donor = mission_tasks/test1.dds), write it to
+top image, convert to a 320x320 square DX10 BGRA8 DDS (matching Terra Indomita's mission-task
+icon geometry — the mission_view.gui task widget renders every icon at ~128x133, so a SQUARE
+source downscales cleanly whereas a wide 118x68 strip is stretched ~2x vertically and, being
+opaque and full-bleed, overflows the 112px node cell and collides with neighbouring nodes), write it to
 gfx/interface/icons/mission_tasks/<taskkey>.dds, and repoint the `icon =` line to <taskkey>.
 
 Idempotent: skips a task whose .dds already exists AND whose icon line already points to it.
@@ -132,7 +135,12 @@ def process_file(path, loc, log, force=False):
                         desc = "cached"
                     # [#125] mission-task widgets require the DX10 BGRA8 layout (the donor
                     # test1.dds + stock icons are DX10); legacy BGRA8 renders as placeholder.
-                    convert(src, out_dds, like=DONOR, dx10=True)
+                    # [#183] Emit a 320x320 SQUARE icon (TI's mission-task geometry) rather than
+                    # cloning the donor's 118x68 strip: the task widget forces ~128x133, so a
+                    # square source downscales cleanly instead of being stretched ~2x vertically
+                    # and overflowing the node cell into its neighbours. size= (not like=) also
+                    # takes the fully-opaque alpha path, matching TI's opaque square task art.
+                    convert(src, out_dds, size=320, dx10=True)
                     log.write(f"{fname}\t{key}\t{title}\t{query}\t{desc}\tOK\n")
                 except Exception as e:
                     log.write(f"{fname}\t{key}\t{title}\t{query}\tERR\t{e}\n")
