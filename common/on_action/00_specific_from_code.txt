@@ -909,6 +909,25 @@ on_ownership_change = { #province scope
 		# setting state, not the soil — clear it so the new owner does not inherit a
 		# phantom migration draw it never established (se_MIGRATION.txt).
 		MIGRATION_on_ownership_change = yes
+		# [#139-C 2026-07-30] Refresh the GAINING governorship's produces_<good> markers.
+		# GOODS_update_governorship_local_goods (se_GOODS.txt:841, governorship scope) rescans
+		# any_governorship_state{any_state_province{trade_goods=X}} to set/clear each produces_<good>
+		# marker. Its own header (se_GOODS.txt:838-840) says it "should be triggered in all
+		# governorships involved" on ownership change, but it was only ever called at game setup +
+		# new-country spawn — so a raw good gained by an EXISTING country via conquest/peace kept a
+		# stale-ABSENT marker, and GOODS_governorship_produce_all (gated on the marker) produced NONE
+		# of it, while WEALTH_generate_from_production (also gated, #139) generated no wealth for it.
+		# At fire time the province is in its NEW-owner state, so `governorship` = the gaining
+		# governorship — the one carrying the stale-absent marker (the substantive defect). The losing
+		# governorship's stale-TRUE marker is benign: its GOODS_governorship_<good>_produced svalue
+		# scans the (now fewer) provinces and sums to ~0, so the gated produce adds ~0. `?=` no-ops if
+		# the province has no governorship (uninhabitable / ownerless). This is the universal hook —
+		# LAND_transfer_province -> FUNC_set_conquered_by -> set_conquered_by fires it, as do engine
+		# AI peace deals and event cedes — so no per-flow wiring is needed. Same one-time per-province
+		# peace-deal cost class the sibling DEJURE/MIGRATION/CLAIM_HOSTILITY hooks already accept.
+		governorship ?= {
+			GOODS_update_governorship_local_goods = yes
+		}
 	}
 }
 
