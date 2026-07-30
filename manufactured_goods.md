@@ -1382,3 +1382,61 @@ actual livestock demand, understating livestock consumption wherever luxury_clot
 (clothing/early_artillery/processed_foods) exactly. No double-count — verified this is the sole
 luxury_clothing→livestock consumer. Braces 117/117, BOM+CRLF preserved. **LIVE economic change (bites
 once a country runs luxury_clothing factories) → boot-test owed.**
+
+---
+
+## 13. #139 — MG Phase 6 performance assessment + optimizations (2026-07-30)
+
+Assessment (general-purpose analysis agent, read-only) of the quarterly economic hot loops
+(~200 countries × N governorships × ~62 tradegoods × quarterly). Conclusion: the per-tradegood hot
+paths are ALREADY close to fully optimized by prior work (perf #71 caches, #139-E food-mean relocation,
+produce-loop `produces_<good>` gating, CONSUME loop-invariant hoisting). Two genuine remaining
+opportunities found — both about caching GRANULARITY, not missing caches. Both implemented; Finding 1
+reviewed CLEAN, Finding 2 reviewed with a correctness refinement (below).
+
+### Finding 1 (implemented, CLEAN) — infrastructure-capacity cached at wrong granularity
+`GT_split_cache_governorship_infrastructure_capacity` (writes `var:governorship_infrastructure_capacity`
+= `TRADE_governorship_infrastructure_capacity_svalue`, a 7-addend all-state-province walk +
+shipping-power branch) was called inside `GT_split_do_global_trade_split` (se_GLOBALTRADE_split.txt:12) —
+once per governorship PER CATEGORY PASS = **7×/quarter** — although it changes only when a building
+finishes construction. **Fix:** relocated to the once-per-quarter loop in
+`quarterly_reset_trade_transaction_totals` (oa_wealth_changes.txt), beside the sibling once/quarter caches
+(WEALTH_cache_shipping_trade_values, DEMAND_cache_and_update_elasticity_impact). All 4 readers use the
+cached var (se_GLOBALTRADE_split.txt:787/802/2137/2152), so transparent. Added a cold-start seed to the
+game-setup path (oa_economy_setup.txt, in the `GT_reset_trade_transaction_totals` loop) because that path
+runs the 7 splits directly at day 0 — same cold-start reasoning as the #139-E food-mean re-seed. Collapses
+7 multi-province walks/governorship/quarter to 1 (~85% cut, the perf #71 shape). **Accepted temporal
+caveat:** a building completed mid-quarter now takes effect next quarter's trade rather than the next
+category pass — identical once/quarter semantics to the sibling caches; review confirmed this is the ONLY
+behavioural change.
+
+### Finding 2 (implemented, refined) — WEALTH generation loop not gated like its sibling produce loop
+`WEALTH_generate_from_production` (se_ECON_wealth.txt) runs the ungated `every_tradegood_complex` (~62
+goods)/governorship/quarter; for the 45 raw goods `GOODS_governorship_<good>_produced` is a full
+province walk returning 0 where the good isn't local. **Fix:** wrapped the wealth `add` in a 3-marker OR
+gate — `produces_<good>` (45 raw) ∪ `INDUSTRY_factories_assigned_<good>` (24 factory, always present at
+setup) ∪ `COTTAGEIND_produced_<good>` (14 cottage). Verified the union covers all 62 iterated goods with
+ZERO gaps, and factory+cottage are both OR'd so cottage-only goods aren't wrongly zeroed.
+**Adversarial review refinement:** the change is NOT strictly byte-neutral. `produces_<good>` is written
+only at setup + FUNC_setup_new_country, NOT on ownership change (`GOODS_update_governorship_local_goods`
+is documented-unwired for transfers at se_GOODS.txt:838). A raw good gained by an existing country via
+conquest/peace-transfer has a stale-absent `produces_` marker → OLD code generated wealth for it. BUT the
+production-into-stockpile loop gates on the SAME stale marker, so that good produced into NO stockpile
+either way. OLD wealth was therefore PHANTOM (wealth with no matching stockpile output); the gate removes
+it, making wealth consistent with actual production — more correct, not a drain. Comment corrected to state
+this accurately rather than "provably neutral".
+
+### Backlog surfaced (NOT fixed — pre-existing, affects both loops)
+- **#139-C:** `produces_<good>` staleness on ownership change — `GOODS_update_governorship_local_goods`
+  never runs on conquest/peace-transfer (only setup + new-country). Affects BOTH the produce loop and
+  (now) the wealth loop identically; wiring it into an ownership-change on_action would fix the underlying
+  phantom-wealth/no-production mismatch for the whole economy. Logged, not addressed here.
+- Cottage markers `COTTAGEIND_produced_{alcohol,naval_supplies,wooden_ships}` are set inside an `if` and
+  never cleared → a governorship that loses the enabling condition keeps a stale cottage value that both
+  old and new `GOODS_governorship_<good>_produced` read via `has_variable`. Pre-existing, unrelated to #139.
+
+### What is already well-optimized (no action)
+All `owner.var:X` reads inside the 7 category passes are already cached var reads, not live svalue
+recomputes. PRICE_update_TZ_prices / se_PURCHASE / FUNC_every_governorship_update_tradegood_stockpiles are
+setup-only or dead code, not in the quarterly tick. **LIVE economic change (Finding 1 timing + Finding 2
+phantom-wealth removal) → boot-test owed.**

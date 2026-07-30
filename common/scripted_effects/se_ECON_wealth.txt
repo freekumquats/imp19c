@@ -518,13 +518,43 @@ WEALTH_update_services_value = {
 WEALTH_generate_from_production = {
 	# Scope: Governorship
 	# Function: Create new wealth from $tradegood$ production taking into account its durability, i.e., once produced, how long one unit of this tradegood holds its value.
-	change_variable = {
-		name = WEALTH_new_generated_production_governorship
-		add = {
-			value = WEALTH_$tradegood$_durability
-			multiply = {
-				value = GOODS_governorship_$tradegood$_produced
-				multiply = global_var:global_base_import_price_$tradegood$
+	# [#139 Finding 2 2026-07-30] Gate on "does this governorship produce $tradegood$ from ANY source".
+	# This effect runs once per good (~62) per governorship per quarter (WEALTH_generate_from_production_all).
+	# For the 45 RAW goods, GOODS_governorship_$tradegood$_produced is a full every_state_province walk
+	# (GOODS_svalues.txt); skipping it when no production marker is set removes that wasted traversal — the
+	# same optimisation the produce loop already applies via produces_$tradegood$ (se_GOODS.txt).
+	# The three markers together cover ALL 62 goods in every_tradegood_complex with zero gaps (verified):
+	# produces_ (45 raw, GOODS_update_governorship_local_goods), INDUSTRY_factories_assigned_ (24 factory,
+	# set_variable=0 at setup so ALWAYS present for manufactured goods), COTTAGEIND_produced_ (14 cottage).
+	# Both factory AND cottage are OR'd so cottage-only goods (clothing/furniture/steel/... with no factory
+	# var) are NOT wrongly zeroed. This gate matches the SAME markers the production-into-stockpile paths use
+	# (produce loop gates raw on produces_ / factory on INDUSTRY_factories_assigned_; cottage reaches the
+	# stockpile via COTTAGEIND_scale_production's own COTTAGEIND_produced_ write). So wealth is now generated
+	# EXACTLY when production reaches a stockpile — the correct invariant.
+	# NOT strictly byte-neutral (adversarial review caught this): produces_$good$ is written only at
+	# setup + FUNC_setup_new_country, NOT on ownership change (documented-unwired at se_GOODS.txt:838). A raw
+	# good gained by an existing country via conquest/peace-transfer has a stale-absent produces_ marker, so
+	# OLD code here generated wealth for it — but the produce loop, gating on the SAME stale marker, produced
+	# NONE of it into any stockpile. That was PHANTOM wealth (wealth with no matching stockpile output); the
+	# gate removes it, aligning wealth with real production rather than draining legitimate wealth. The
+	# underlying produces_-staleness on ownership change is a pre-existing bug affecting both loops, logged
+	# as backlog (#139-C). See manufactured_goods.md section 13.
+	if = {
+		limit = {
+			OR = {
+				has_variable = produces_$tradegood$
+				has_variable = INDUSTRY_factories_assigned_$tradegood$
+				has_variable = COTTAGEIND_produced_$tradegood$
+			}
+		}
+		change_variable = {
+			name = WEALTH_new_generated_production_governorship
+			add = {
+				value = WEALTH_$tradegood$_durability
+				multiply = {
+					value = GOODS_governorship_$tradegood$_produced
+					multiply = global_var:global_base_import_price_$tradegood$
+				}
 			}
 		}
 	}
