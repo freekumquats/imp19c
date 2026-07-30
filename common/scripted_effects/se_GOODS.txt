@@ -37,6 +37,22 @@ GOODS_cache_munitions_infra = {
 	LOG_exit = { sys = ECON  fn = "GOODS_cache_munitions_infra"  result = OK }
 }
 
+INDUSTRY_cache_employment_ratio = {
+	# [#133 I5] Cache the mechanised-sector employment fill-ratio ONCE per governorship per
+	# quarter (perf #71 idiom). INDUSTRY_employment_ratio is read once inside EVERY
+	# GOODS_governorship_<good>_produced_mechanised writer (24 goods) and the compute walks the
+	# governorship's provinces for pop counts + slots; computing it once here collapses that to a
+	# single evaluation. INDUSTRY_employment_ratio reads var:industry_employment_ratio_cached when
+	# present, else recomputes, so a missing cache degrades to correctness, never to zeroed output.
+	LOG_enter = { sys = ECON  fn = "INDUSTRY_cache_employment_ratio" }
+	set_variable = {
+		name = industry_employment_ratio_cached
+		value = INDUSTRY_employment_ratio_compute
+	}
+	LOG_line = { sys = ECON  msg = "cached industry employment ratio for governorship" }
+	LOG_exit = { sys = ECON  fn = "INDUSTRY_cache_employment_ratio"  result = OK }
+}
+
 GOODS_setup_governorship_stockpiles = {
 	# Manufactured goods
 	set_variable = {
@@ -1040,6 +1056,7 @@ GOODS_governorship_produce_all = {
 	# this quarter (civilization_value drifts over time) and never stale.
 	GOODS_cache_industrialisation_bonus = yes
 	GOODS_cache_munitions_infra = yes # perf #71: cache arsenal/depot munitions output once per quarter
+	INDUSTRY_cache_employment_ratio = yes # [#133 I5] cache employment fill-ratio once per quarter (mechanised output scales by it)
 	GOODS_governorship_produce = {
 		do_if = produces_grain
 		amount = GOODS_governorship_grain_produced
@@ -1260,48 +1277,76 @@ GOODS_governorship_produce_all = {
 		amount = GOODS_governorship_fish_produced
 		into_stockpile = fish_stockpile
 	}
+	# [#133 I2] These 4 loop blocks now add the MECHANISED-ONLY term (split-writer D1a), not the
+	# summed _produced svalue. Cottage output for clothing/luxury_clothing/bronze is written to
+	# its stockpile directly by COTTAGEIND_scale_production; adding the summed svalue here on top
+	# of that was a LIVE double-count. machine_parts has no cottage recipe so its _mechanised
+	# equals its total. (I6 will extend this pattern to the other 20 goods via the generic macro.)
 	GOODS_governorship_produce = {
 		do_if = INDUSTRY_factories_assigned_clothing
-		amount = GOODS_governorship_clothing_produced
+		amount = GOODS_governorship_clothing_produced_mechanised
 		into_stockpile = clothing_stockpile
 	}
 	# Industries
 	GOODS_governorship_produce = {
 		do_if = INDUSTRY_factories_assigned_luxury_clothing
-		amount = GOODS_governorship_luxury_clothing_produced
+		amount = GOODS_governorship_luxury_clothing_produced_mechanised
 		into_stockpile = luxury_clothing_stockpile
 	}
 	GOODS_governorship_produce = {
 		do_if = INDUSTRY_factories_assigned_machine_parts
-		amount = GOODS_governorship_machine_parts_produced
+		amount = GOODS_governorship_machine_parts_produced_mechanised
 		into_stockpile = machine_parts_stockpile
 	}
 	GOODS_governorship_produce = {
 		do_if = INDUSTRY_factories_assigned_bronze
-		amount = GOODS_governorship_bronze_produced
+		amount = GOODS_governorship_bronze_produced_mechanised
 		into_stockpile = bronze_stockpile
 	}
+	# [#133 I6] UN-GATE the remaining 20 manufactured goods (D1). Each call adds the
+	# MECHANISED-ONLY term to the good's stockpile, gated on has_variable =
+	# INDUSTRY_factories_assigned_$tradegood$ (so a governorship with 0 factories of a good
+	# produces nothing — the un-gate is inert until the player/AI assigns a factory via the
+	# industrial_goods_buttons GUI). Ships together with I5.5 (rare_alloys consumption sink)
+	# so supply + demand arrive as one. Prerequisites verified per good: _produced_mechanised
+	# svalue (GOODS_svalues), factory-assign var + GUI button (all 24), I4 tech gate
+	# (INDUSTRY_unlocked_X), I3 raw-goods BOM (DEMAND aggregators), and a consumption sink
+	# (CONSUME_all_stockpiles, 24/24 after I5.5). Cottage-capable goods
+	# (construction_materials/furniture/luxury_furniture/pharmaceuticals/wooden_ships) still
+	# get their cottage output written directly by COTTAGEIND_scale_production; this adds only
+	# the factory term (split-writer D1a — no double-count).
+	# Intermediates (I3b):
+	GOODS_governorship_produce_industry = { tradegood = steel }
+	GOODS_governorship_produce_industry = { tradegood = chemicals }
+	GOODS_governorship_produce_industry = { tradegood = rare_alloys }
+	# Cottage-capable (I3a):
+	GOODS_governorship_produce_industry = { tradegood = construction_materials }
+	GOODS_governorship_produce_industry = { tradegood = furniture }
+	GOODS_governorship_produce_industry = { tradegood = luxury_furniture }
+	GOODS_governorship_produce_industry = { tradegood = pharmaceuticals }
+	GOODS_governorship_produce_industry = { tradegood = wooden_ships }
+	# Consumers / other manufactured (I2 + I3c):
+	GOODS_governorship_produce_industry = { tradegood = alcohol }
+	GOODS_governorship_produce_industry = { tradegood = glass }
+	GOODS_governorship_produce_industry = { tradegood = processed_foods }
+	GOODS_governorship_produce_industry = { tradegood = naval_supplies }
+	GOODS_governorship_produce_industry = { tradegood = early_munitions }
+	GOODS_governorship_produce_industry = { tradegood = late_munitions }
+	GOODS_governorship_produce_industry = { tradegood = early_artillery }
+	GOODS_governorship_produce_industry = { tradegood = late_artillery }
+	GOODS_governorship_produce_industry = { tradegood = steel_ships }
+	GOODS_governorship_produce_industry = { tradegood = motors }
+	GOODS_governorship_produce_industry = { tradegood = electronics }
+	GOODS_governorship_produce_industry = { tradegood = petrochemicals }
 }
 
 ## MANUFACTURED GOODS
 
 ### Functional scripted effects
 
-GOODS_consume_industrial_demand = {
-	change_variable = {
-		name = $from_stockpile$
-		subtract = $demand$
-	}
-	if = {
-		limit = {
-			var:$from_stockpile$ < 0
-		}
-	}
-	set_variable = {
-		name = $from_stockpile$
-		value = 0
-	}
-}
+# [#133 I1] GOODS_consume_industrial_demand DELETED: uncalled. Consumption is done by
+# the live CONSUME_all_stockpiles (se_CONSUME.txt), fired quarterly from oa_wealth_changes.
+# (It was also buggy: its `if` had a limit but an empty body, so the clamp-to-0 always ran.)
 
 ## Production scripted effects
 
@@ -1330,43 +1375,24 @@ GOODS_governorship_produce = {
 	}
 }
 
-GOODS_governorship_produce_manufactured = {
-	if = {
-		limit = {
-			var:$industry_assigned$ > 0 # format = INDUSTRY_factories_assigned_[tradegood_name]
-		}
-	}
-	change_variable = {
-		name = $into_stockpile$
-		add = $amount$
-	}
-}
-
-GOODS_governorship_produce_manufactured_2 = {
-	if = {
-		limit = {
-			var:$industry_assigned$ > 0 # format = INDUSTRY_factories_assigned_[tradegood_name]
-		}
-	}
-	change_variable = {
-		name = $into_stockpile$
-		add = $amount$
-	}
-	set_variable = {
-		name = $record$
-		value = $amount$
-	}
-}
+# [#133 I1] GOODS_governorship_produce_manufactured / _manufactured_2 DELETED: both
+# uncalled and superseded by GOODS_governorship_produce_industry below. Both were also
+# buggy (empty-bodied `if` limit, so the stockpile add ran unconditionally regardless of
+# whether a factory was assigned). See manufactured_goods.md D9.
 
 GOODS_governorship_produce_industry = {
 	# WiP: New, better industry production scripted effect. We don't actually need to replace the old one, but this is much less verbose. Consider switching to it if feeling like a refactor.
+	# [#133 I2] Adds the MECHANISED-ONLY term (split-writer D1a): cottage output reaches the
+	# stockpile via COTTAGEIND_scale_production's own direct write, so the loop must add only the
+	# factory term or cottage would be double-counted. This is the generic template I6 will call
+	# per good to un-gate the remaining 20 goods.
 	if = {
 		limit = {
 			has_variable = INDUSTRY_factories_assigned_$tradegood$
 		}
 		change_variable = {
 			name = $tradegood$_stockpile
-			add = GOODS_governorship_$tradegood$_produced
+			add = GOODS_governorship_$tradegood$_produced_mechanised
 		}
 	}
 }
