@@ -877,6 +877,36 @@ precedes any un-gate that could produce it.)
   (leaf targets); (6) correct aggregators, no typos, tail intact. 1 LOW (the pre-existing early_artillery
   mis-key, not introduced, already scoped out). **LIVE economic change → boot-test owed (bites once glass /
   naval_supplies / early_artillery factories exist).** Committed + pushed.
+- **BOOT-TEST FLOOD FIX (manufactured_goods box, 2026-07-29 logs.zip; error.log 296,979 lines):**
+  IMPLEMENTED + adversarially reviewed. Two MG-caused floods diagnosed from the log and fixed; they
+  drove the bulk of the 80,537 "Script system error!" + 35,380 "unset scope" wrapper lines.
+  - **Flood #1 (`trade_share_manufacturing_*`, 29,488 hits):** the manufacturing
+    `GT_split_calculate_trade_shares` call in `GT_split_calculate_all_trade_shares`
+    (se_GLOBALTRADE_split.txt ~3853) was MISSING `category = manufacturing` (present on the
+    resource_extraction/shipping siblings) → `$category$` expanded empty, wrote `trade_share__*`,
+    distributor read `trade_share_manufacturing_*` unset. Also made I8 (mfg income→workers) a silent
+    no-op. FIX: added `category = manufacturing`. Now the block sets all 8 strata vars the distributor
+    reads. (Verified against the trade_shares definition @5350 + distributor @3935.)
+  - **Flood #2 (`rare_alloys` asymmetry, ~10,850 hits):** I5.5 registered rare_alloys in the SINGULAR
+    master `tradegood` injector only — missing from PLURAL `tradegoods` + CATEGORY `tradegood_3`
+    lists (per-category setters skipped it while master-list readers hit it: `global_base_import_price`
+    2,769, `wealth_owed_for` 1,843, `income_due` 1,843), AND missing 14 hand-defined per-good svalues
+    (2 country aggregators `DEMAND_country_rare_alloys` + `GOODS_national_production_rare_alloys`, and
+    the 12 cat-3-sibling `electronics`-parity stems: `TRADE_governorship_for_export[_internal]`,
+    `TRADE_governorship_export_cap/threshold`, `TRADE_cash_balance`, `TRADE_total_revenue/expenditure`,
+    `DEMAND_shortage_country`, `DEMAND_difference_infrastructure_capped`, `GOODS_country_total_sold`,
+    `PRICE_global_mean`, `AI_root_scope_unit_price_sqrt`). FIX: added rare_alloys to both injector lists
+    (matching `electronics` exactly) + cloned all 14 svalues. Verified: FULL electronics/rare_alloys
+    stem parity (0 gaps), every dep resolves, no `electronics` copy-paste leak in any clone body, all
+    touched files brace-balanced (pre-existing HEAD 2196/2198 quirk in TRADE_svalues.txt is NOT mine —
+    my adds net 21/21), pure additions (0 code-line deletions besides the 1-line category insert).
+  - **Systematic asymmetry sweep:** confirmed master↔category injector lists now perfectly symmetric
+    (every good in exactly one category list ⇄ master); no other good would flood the per-category setters.
+  - **Linear read** of se_GLOBALTRADE_split.txt 1–5984 (user-mandated) COMPLETE — no further MG bugs.
+  - **Out of scope (pre-existing, noted only):** uniform 18× `INDUSTRY_factories_assigned_*` unset for
+    ALL 24 goods (setup-order, flag-only guard); `cattle`/`livestock` flag mismatch (split 3491 vs 3600);
+    bimetallic `_silver_reserves`→`_gold_reserves` multiply typo (5437); merge-overnight baseline floods
+    #13-17. Touches 8 files; see BOOT_TEST_NOTES_MANUFACTURED_GOODS_2026-07-29.md. Commit pending review.
 - (Phase 3+ increments logged here as they land.)
 
 ---
