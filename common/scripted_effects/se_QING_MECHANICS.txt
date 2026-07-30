@@ -170,46 +170,18 @@ QING_sanction_regional_army = {
 # fear, or one day have to break. Marks him with qing_regional_magnate so the
 # reassert lever knows whom to strip. Call from QING_sanction_regional_army only.
 QING_regional_army_bind_commander = {
-	if = {
-		# --- a real Han governor-general already stands: empower HIM ---
-		# task #90 (review CRITICAL): the magnate is HAN (勇營/湘軍/淮軍), so filter on the
-		# Han culture — NOT ROOT.primary_culture, which for CHI is MANCHU (the banner
-		# caste). Using primary_culture would have empowered a Manchu bannerman, the
-		# exact inverse of a Han provincial warlord.
-		limit = {
-			any_character = {
-				employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes
-				is_governor = yes  has_culture = han
-			}
-		}
-		# prefer the weightiest such governor (the man best placed to build a base).
-		ordered_character = {
-			limit = {
-				employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes
-				is_governor = yes  has_culture = han
-			}
-			order_by = power_base
-			check_range_bounds = no
-			max = 1
-			add_loyal_veterans = 8
-			QING_magnate_track_grant = yes
-			LOG_line = { sys = QING  msg = "regional army (勇營) raised under sitting Han governor (+8 loyal veterans) for" }
-		}
-	}
-	else = {
-		# [#90-fix crash] The former else-branch conjured a founder here via
-		# create_character (culture=han, religion=ROOT.religion, ...). That block
-		# CRASHED at gamestate construction (deterministic startup access-violation):
-		# the engine validates create_character bodies at load, and this one — inside a
-		# nested if/else in an effect reached only from a scripted_gui — is rejected in
-		# a way the proven top-level roster spawns (se_QING_ROSTER / se_QING_NAPOLEON)
-		# are not. Isolated by bisection: removing this whole else-branch loads clean.
-		# The feature's core is the if-path above (empower a REAL sitting Han governor);
-		# when no Han governor stands, the sanction's counter bump (+15 provincial power
-		# in QING_sanction_regional_army) still lands — we simply skip the concrete
-		# character grant rather than fabricate one at a crashing call site.
-		LOG_fail = { sys = QING  fn = "QING_regional_army_bind_commander"  reason = "no sitting Han governor to bind a regional army to; counter bump still applied" }
-	}
+	# [MG-4 fix 2026-07-29] TRAMPOLINE OUT of the compiled scripted_gui path. This effect is reached
+	# ONLY from the Sanction-a-Regional-Army scripted_gui button (QING_mechanics_actions.txt), whose
+	# effect{} chain the engine compile-inlines at PARSE time. The concrete fix for the "no loyal
+	# cohorts appear" bug raises a REAL 勇營 legion (add_loyal_veterans on an army-less governor only
+	# bumps the abstract pool — no cohorts materialise); a raise_legion/create_unit body inlined into
+	# the compiled button is the #443 EXCEPTION_ACCESS_VIOLATION class. So dispatch the whole Han-
+	# governor selection + abstract grant + concrete raise through a RUNTIME event (never compile-
+	# inlined) — the proven cure used by qing_guard.10 (QING_guard_panel.txt:143). All the former
+	# inline logic (Han-culture filter, weightiest-governor pick, +8 pool, magnate tracking, and the
+	# no-Han-governor LOG_fail) now lives in qing_office.42; the sanction's own +15 provincial-power
+	# counter bump still lands in QING_sanction_regional_army regardless.
+	trigger_event = { id = qing_office.42 }
 }
 
 # task #90 (review) — grant/refresh the magnate marker in a way that does NOT re-stack
@@ -228,6 +200,44 @@ QING_magnate_track_grant = {
 	else = {
 		# already a magnate: his private army simply grows (no modifier re-stack).
 		change_variable = { name = qing_magnate_granted_veterans  add = 8 }
+	}
+}
+
+# [MG-4 fix 2026-07-29] Raise the sanctioned magnate's REAL 勇營 (Brave Battalion) — the concrete
+# embodiment of the loyal cohorts the Sanction lever's tooltip promises. Called in governorship
+# scope from qing_office.42 (the trampoline); scope:qing_regional_magnate_commander = the sitting
+# Han governor being empowered. Mirrors the PROVEN QING_council_raise_grandee_legion
+# (se_QING_COUNCIL.txt): base sub_unit + 4× add_subunit, commander attached via add_to_legion=PREV +
+# random_legion_unit set_as_commander, then every raised sub_unit set_personal_loyalty to the magnate
+# so the cohorts answer to HIM (the overmighty-subject / civil-war seed) — not the throne. A parallel
+# effect (not a reuse of the grandee one) so the two mechanics keep DISTINCT saved-scope names and
+# army display names. qing_yongying is a real army=yes unit (common/units/army_qing_yongying.txt).
+QING_regional_army_raise_yongying = {
+	raise_legion = {
+		create_unit = {
+			# quoted LITERAL display name — the proven in-mod idiom (QING_selfstr_raise_fleet
+			# name="Beiyang Fleet"; QING_council_raise_grandee_legion name="A Grandee's Private Army").
+			name = "A Regional Army (勇營)"
+			location = ROOT.capital_scope
+			sub_unit = qing_yongying
+			save_scope_as = qing_regional_yongying_legion
+			add_subunit = qing_yongying
+			add_subunit = qing_yongying
+			add_subunit = qing_yongying
+			add_subunit = qing_yongying
+		}
+		if = {
+			limit = { exists = scope:qing_regional_magnate_commander }
+			scope:qing_regional_magnate_commander = { add_to_legion = PREV }
+			random_legion_unit = { set_as_commander = scope:qing_regional_magnate_commander }
+		}
+	}
+	# bind the raised cohorts to the magnate personally (loyal-cohorts civil-war seed).
+	if = {
+		limit = { exists = scope:qing_regional_yongying_legion  exists = scope:qing_regional_magnate_commander }
+		scope:qing_regional_yongying_legion = {
+			every_sub_unit = { set_personal_loyalty = scope:qing_regional_magnate_commander }
+		}
 	}
 }
 
@@ -332,9 +342,21 @@ QING_reassert_strip_magnate = {
 			change_variable = { name = qing_magnate_granted_veterans  subtract = 8 }
 			if = {
 				limit = { var:qing_magnate_granted_veterans <= 0 }
+				# [MG-4 disband-symmetry 2026-07-29] the throne-authorised private army is spent —
+				# so DESTROY the real 勇營 cohorts this magnate commands, not merely the abstract
+				# pool (mirror of the concrete raise on sanction; see qing_office.42 /
+				# QING_regional_army_raise_yongying). Without this the physical legion would stay on
+				# the map answering to him after the throne supposedly broke his power — and repeated
+				# sanction→reassert cycles would pile up unbounded legions. The commander→his-units
+				# link is the durable handle (the free 勇營 legion is bound to HIM, not the capital
+				# governorship, so capital_scope.governorship.legion cannot reach it). Proven idiom:
+				# every_character_unit = { destroy_unit = yes } (Invictus 000_country_switch_effect.txt:413
+				# nukes the ruler's raised levy exactly this way; also ai_war_effects.txt:434).
+				# Character scope here (ordered_character), so this targets THIS magnate's units.
+				every_character_unit = { destroy_unit = yes }
 				remove_character_modifier = qing_regional_magnate
 				remove_variable = qing_magnate_granted_veterans
-				LOG_line = { sys = QING  msg = "reassert: broke the power base of regional magnate — marker cleared for" }
+				LOG_line = { sys = QING  msg = "reassert: broke the power base of regional magnate — private 勇營 disbanded, marker cleared for" }
 			}
 			else = {
 				LOG_line = { sys = QING  msg = "reassert: cut regional magnate 's loyal veterans (-8) for" }

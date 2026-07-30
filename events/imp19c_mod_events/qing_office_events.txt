@@ -989,3 +989,73 @@ qing_office.41 = {
 		}
 	}
 }
+
+# [MG-4 fix 2026-07-29] 勇營 REGIONAL-ARMY RAISE trampoline. Fired by
+# QING_regional_army_bind_commander (se_QING_MECHANICS.txt), which is reached only from the
+# Sanction-a-Regional-Army scripted_gui button (QING_mechanics_actions.txt). A scripted_gui
+# compile-inlines its whole effect chain at PARSE time, so a raise_legion/create_unit body inlined
+# into the compiled button is the #443 EXCEPTION_ACCESS_VIOLATION class. Routing the raise through
+# this RUNTIME event (never compile-inlined) is the proven cure — same pattern as qing_guard.10
+# (QING_guard_panel.txt:143). ROOT = c:CHI (trigger_event target).
+#
+# Empowers the weightiest sitting Han governor: +8 abstract loyal-veteran pool (the passive
+# power-base modifier the man carries) AND — on his FIRST sanction only — a REAL on-map 勇營 legion
+# so the loyal cohorts the lever's tooltip promises actually exist. Repeat sanctions of the SAME man
+# grow only his abstract tally (mirroring QING_magnate_track_grant's no-restack split), so one
+# magnate = one physical legion = no unbounded legion pile. The concrete legion is disbanded when
+# QING_reassert_strip_magnate breaks his power base (create<->destroy symmetry).
+qing_office.42 = {
+	type = country_event
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_office.42 (勇營 regional-army raise trampoline) [ROOT.GetTag]" }
+		if = {
+			limit = {
+				any_character = {
+					employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes
+					is_governor = yes  has_culture = han
+				}
+			}
+			# prefer the weightiest such governor (the man best placed to build a base).
+			ordered_character = {
+				limit = {
+					employer = ROOT  is_ruler = no  is_adult = yes  is_alive = yes
+					is_governor = yes  has_culture = han
+				}
+				order_by = power_base
+				check_range_bounds = no
+				max = 1
+				# [fire-once] capture whether he was ALREADY a magnate BEFORE this grant, so the
+				# physical raise below fires only on his FIRST sanction.
+				if = {
+					limit = { has_character_modifier = qing_regional_magnate }
+					set_variable = { name = qing_had_yongying_already  value = 1 }
+				}
+				# abstract power base (kept — the passive modifier the man carries).
+				add_loyal_veterans = 8
+				QING_magnate_track_grant = yes
+				save_scope_as = qing_regional_magnate_commander
+				LOG_line = { sys = QING  msg = "regional-army sanction applied to sitting Han governor (+8 loyal veterans, tally bumped) for" }
+			}
+			# concrete legion so the loyal cohorts actually exist — ONLY on his FIRST sanction.
+			if = {
+				limit = {
+					exists = ROOT.capital_scope
+					exists = scope:qing_regional_magnate_commander
+					NOT = { scope:qing_regional_magnate_commander = { has_variable = qing_had_yongying_already } }
+				}
+				ROOT.capital_scope = { state.governorship = { QING_regional_army_raise_yongying = yes } }
+				LOG_line = { sys = QING  msg = "勇營 physical legion raised (first sanction) under Han governor scope:qing_regional_magnate_commander" }
+			}
+			# clean up the transient fire-once flag regardless of branch.
+			if = {
+				limit = { exists = scope:qing_regional_magnate_commander }
+				scope:qing_regional_magnate_commander = { remove_variable = qing_had_yongying_already }
+			}
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "qing_office.42"  reason = "no sitting Han governor to bind a regional army to; sanction counter bump still applied" }
+		}
+	}
+}
