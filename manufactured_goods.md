@@ -1435,6 +1435,37 @@ this accurately rather than "provably neutral".
   never cleared → a governorship that loses the enabling condition keeps a stale cottage value that both
   old and new `GOODS_governorship_<good>_produced` read via `has_variable`. Pre-existing, unrelated to #139.
 
+### 13.1 — #139-C RESOLVED (2026-07-30, commits d2e60db7d + 5fe7a5d91) — both adversarially reviewed
+All three surfaced items above are now closed:
+1. **produces_<good> ownership-change refresh (FIXED, d2e60db7d).** Wired
+   `governorship ?= { GOODS_update_governorship_local_goods = yes }` into `on_ownership_change`
+   (00_specific_from_code.txt:891). At fire time the province is in its NEW-owner state (verified: all
+   sibling hooks CLAIM_HOSTILITY/DEJURE/MIGRATION read `owner` as the taker), so this refreshes the
+   GAINING governorship — exactly the one carrying the stale-ABSENT marker (the substantive defect). The
+   losing governorship's stale-TRUE marker is benign (its produced-svalue province-scan sums ~0). Universal
+   hook: LAND_transfer_province → FUNC_set_conquered_by → engine `set_conquered_by` fires it, as do AI peace
+   deals and event cedes — no per-flow wiring needed. Review: SOUND; only a LOW optional perf note (the hook
+   rescans the gaining governorship once per transferred province with no dedup — a one-time
+   O(provinces×45goods) spike at peace, matching the accepted tolerance of the sibling hooks; a
+   `governorship_vars_updated`-style dedup list would be nice-to-have, not required).
+2. **Cottage-marker clear (FIXED, d2e60db7d).** Added `else = { remove_variable = COTTAGEIND_produced_<good> }`
+   to the 3 gated cottage recipes (naval_supplies/wooden_ships coastal gate, alcohol restriction gate) in
+   se_COTTAGEIND.txt. Without it, a governorship that lost the enabling condition kept a stale-TRUE marker +
+   last value, which readers (GOODS_svalues.txt:2756/2802/2993, DEMAND_svalues.txt:506/647/1347) re-added as
+   phantom output every quarter (they gate on has_variable). `remove_variable` makes the branch a clean no-op.
+   Review: SOUND; confirmed these 3 are the ONLY conditionally-gated cottage recipes (all others do an
+   unconditional per-quarter set_variable, self-refreshing, no staleness).
+3. **7-good every_tradegood_complex omission = NOT A BUG / WAI (5fe7a5d91, comment-only).** git-blame found
+   the smoking gun: upstream commit 584ac791c (2024-04-20) DELIBERATELY removed wool/whales/peat/
+   inorganic_compounds/tropical_fruit/mediterranean_fruit/chocolate from the iterator AND added the boot-time
+   `defunct_tradegoods_replaced` remap (oa_economy_setup.txt:130-215) that converts every province carrying
+   them to a live substitute (wool→textile_fibres, whales→fish, chocolate→coffee, peat→sulphur,
+   inorganic_compounds→stone, {tropical,mediterranean}_fruit→temperate_fruit) BEFORE any sim tick. So no
+   province ever carries them past boot; their defs + supporting svalues survive as unreachable dead code.
+   Adding them back to the iterator would be WRONG. Fix = add DEFUNCT comments to their trade_goods defs
+   (mirroring the existing cloth/hemp/camel `# to be removed` style) so future audits don't re-flag them.
+   **Boot-test owed for items 1+2 (live economic changes).**
+
 ### What is already well-optimized (no action)
 All `owner.var:X` reads inside the 7 category passes are already cached var reads, not live svalue
 recomputes. PRICE_update_TZ_prices / se_PURCHASE / FUNC_every_governorship_update_tradegood_stockpiles are
