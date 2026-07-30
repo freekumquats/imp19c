@@ -40,12 +40,23 @@ RECIPES = {
     "motors":                 (30,  False, [("steel", 6, 0.7), ("machine_parts", 5, 1.0), ("oil", 4, 0.5)]),
     "electronics":            (30,  False, [("rare_alloys", 4, 1.0), ("chemicals", 3, 0.5), ("copper", 3, 0.5)]),
     "petrochemicals":         (60,  False, [("oil", 10, 1.0), ("chemicals", 4, 0.6)]),
+    # ---- I12: Phase-5 new goods (#144). refined_sugar/dyes = factory-only (cottage=False);
+    #      silk_cloth/paper/gunpowder = cottage-capable (cottage=True, real COTTAGEIND recipe).
+    #      All BOM ingredients are EXISTING map raws except saltpetre (new raw, added I12b). ----
+    "refined_sugar":          (100, False, [("sugar", 10, 1.0), ("coal", 3, 0.4)]),
+    "silk_cloth":             (70,  True,  [("silk", 8, 1.0), ("dye", 2, 0.4)]),
+    "paper":                  (90,  True,  [("wood", 6, 1.0), ("textile_fibres", 3, 0.5)]),
+    "dyes":                   (60,  False, [("dye", 6, 1.0), ("chemicals", 3, 0.6)]),
+    "gunpowder":              (80,  True,  [("saltpetre", 8, 1.0), ("sulphur", 4, 0.5), ("wood", 2, 0.3)]),
 }
 
 BATCHES = {
     "i3a": ["construction_materials", "furniture", "luxury_furniture", "pharmaceuticals", "wooden_ships"],
     "i3b": ["steel", "chemicals", "rare_alloys"],
     "i3c": ["processed_foods", "late_munitions", "late_artillery", "steel_ships", "motors", "electronics", "petrochemicals"],
+    # [#144] Phase-5 new goods. Emit per good (the impl wires them one increment at a time):
+    #   python3 tools/gen_mg_chains.py i12 industry|goods|price|demand
+    "i12": ["refined_sugar", "silk_cloth", "paper", "dyes", "gunpowder"],
 }
 
 
@@ -140,6 +151,7 @@ def goods_split(good, cottage_capable):
     out.append(f"\t\t}}")
     out.append(f"\t\tadd = INDUSTRY_production_{good}")
     out.append(f"\t\tmultiply = GOODS_governorship_bonus_to_industrial_production_from_industrialisation")
+    out.append(f"\t\tmultiply = INDUSTRY_employment_ratio # [#133 I5] scale factory output by employment fill-ratio")
     out.append(f"\t}}")
     out.append("}")
     out.append("")
