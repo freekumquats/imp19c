@@ -1354,3 +1354,31 @@ Review noted `every_tradegood_complex` omits 7 defined goods (chocolate, inorgan
 mediterranean_fruit, peat, tropical_fruit, whales, wool) that `GOODS_setup_governorship_stockpiles` covers.
 A pre-existing gap in the shared iterator affecting the whole price/demand pipeline, unrelated to #145.
 Logged for a future decision on whether those 7 goods are meant to be live in the script market.
+
+---
+
+## 12. #146 — wire deferred factory food-ingredient demand svalues (2026-07-30)
+
+### Finding: 12 of the 13 were already wired by I3; only ONE genuine gap remained
+The #146 backlog note (written at I7 time) flagged 13 CLASS-B leaf demand svalues
+(`INDUSTRY_demand_<good>_<ingredient>` for the 7 food ingredients livestock/gems/temperate_fruit/grain/
+sugar/vegetables/fish) as needing to be wired into the food/luxury-demand model. A fresh audit
+(grep for `add = <leaf>` across common/) found the incremental I3 wiring had since consumed 12 of them:
+- **food model** (`DEMAND_food_svalues_new.txt` `DEMAND_<ing>` svalues, each gated on
+  `has_variable = INDUSTRY_factories_assigned_<good>`, `add = INDUSTRY_demand_<good>_<ing>`):
+  clothing/early_artillery/processed_foods → livestock; alcohol/pharmaceuticals/processed_foods →
+  vegetables; alcohol → grain; alcohol → temperate_fruit; processed_foods → fish.
+- **luxury model** (`DEMAND_luxury_svalues.txt`): luxury_clothing/luxury_furniture → gems; alcohol → sugar.
+
+### The one genuine gap fixed
+`INDUSTRY_demand_luxury_clothing_livestock` (INDUSTRY_svalues.txt:535; gate
+`INDUSTRY_factories_assigned_luxury_clothing`; base 5 units/factory) was defined AND already read by the
+price input-cost factoring (`se_PRICE.txt:617-637`, `PRICE_factor_raw_input_costs_luxury_clothing`), but
+never added to `DEMAND_livestock`. So luxury_clothing factories PRICED livestock as an input yet never
+ORDERED it — a supply/price asymmetry (the input cost showed up in the good's price but generated no
+actual livestock demand, understating livestock consumption wherever luxury_clothing factories exist).
+**Fix:** added the standard gated `add = INDUSTRY_demand_luxury_clothing_livestock` block to
+`DEMAND_livestock` (DEMAND_food_svalues_new.txt), matching the three existing siblings there
+(clothing/early_artillery/processed_foods) exactly. No double-count — verified this is the sole
+luxury_clothing→livestock consumer. Braces 117/117, BOM+CRLF preserved. **LIVE economic change (bites
+once a country runs luxury_clothing factories) → boot-test owed.**
