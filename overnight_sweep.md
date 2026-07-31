@@ -126,3 +126,17 @@ All four tasks (#228-#231) implemented, self-reviewed, committed. Review checks 
 duplicate (P,building) seeds; grain supply preserved per region; all 68 seeded province IDs exist;
 all good-guarded seeds match current goods (after Wuyishan fix). Anachronisms held out per research.
 Commits: 42bf98df0 (#228), 37298b1cc (#229), 93604cc19 (#230/#231), + Wuyishan follow-on.
+
+### #229 addendum — Beijing court Jesuit church (foreign-buildings anachronism sweep)
+
+Final research slice (foreign-buildings sweep) confirmed the #229 exclusions were correct: treaty
+ports (1842), foreign concessions except Macau (already seeded), resident Western embassies (1860),
+and provincial/underground missions are all post-1763 or suppressed -> correctly left unseeded. ONE
+legitimate 1763 addition: the Beijing court Jesuit churches (Nantang 1605 / Dongtang 1655 / Beitang
+1703), which kept imperial patronage through the Qianlong era despite the 1724 provincial-missionary
+ban. Seeded ONE qing_mission_cathedral_building at Beijing (P8363). se_QING_BUILDINGS.txt braces
+179/179. Everything else in the foreign-buildings category stays mechanic/event-gated.
+
+NOT seeded (confirmed anachronistic per sweep): treaty ports, concessions (Macau excepted), Western
+embassies, Canton Thirteen Factories (real 1760 but wrong building category — a trading district not
+a concession), provincial/underground missions.
