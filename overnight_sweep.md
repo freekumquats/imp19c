@@ -175,7 +175,122 @@ concentrated at ~18 capitals. Restructured:
 Also added China the full generic-civic palette it had been missing entirely (fortress/port/URB/EDU
 on top of its bespoke qing_* works — the player's empire had no walls/ports/schools while Europe did).
 
-### Piaohao follow-up (task #232, deferred)
-Removed the anachronistic 1763 Taiyuan piaohao seed (done in #229); ADD a date-gated founding event
-at the historically-correct year. Year under research (1823 Rishengchang is famous but may be firm-
-not-institution; checking EN+CN academic sources). Not yet implemented.
+### Piaohao follow-up (task #232) — YEAR RESEARCHED, decision recorded
+Removed the anachronistic 1763 Taiyuan piaohao seed (done in #229); ADD a date-gated founding event.
+RESEARCH RESULT (EN+CN academic sources, incl. 黃鑑暉《山西票號史》, Morck & Yang NBER 2010, Beijing
+guild-hall steles via Li Hua): "1823" (Rishengchang, Pingyao, Lei Lutai) is a CONVENTION, not
+archivally proven. Hard evidentiary bracket from steles = 1819–1838 (early Daoguang). Dissent: Fan
+Chunnian 1797, Chen Qitian 1831. The empire-wide NETWORK (multiple firms/branches) is a 1830s–40s
+phenomenon. DECISIONS:
+  - Founding event fires 1823 (safe convention, inside 1819–1838 bracket, after both 1763 & 1815 starts).
+  - Do NOT assert Rishengchang was categorically "first" — call it first documented/most successful.
+  - Optionally a second "industry emerged" beat ~1840. (Implementation pending — see REVIEW GATE below.)
+  DESIGN (researched idiom, to implement after review-gate clears): a country_event in a new
+  events/imp19c_mod_events/qing_piaohao_events.txt (namespace qing_piaohao), fired from the existing
+  monthly qing_mechanics_pulse_on_action, gated `tag=CHI + current_date >= 1823.1.1 + NOT has_variable
+  = qing_piaohao_founded` (one-shot flag). Effect spawns qing_draft_bank_building via ordered_owned_
+  province targeted at Shanxi (Pingyao/Taiyuan region), mirroring QING_revenue_seed_historical_granaries.
+  Works from either 1763 or 1815 start (date-guard, not day-offset). Deliberately NOT yet written —
+  building the spawn the SAME way the reviewed building-seed pattern lands, to avoid rework.
+
+---
+
+## REVIEW GATE (2026-07-31) — standing rule reasserted
+Prior session behaviour violated the review-before-commit rule (changes were committed+pushed before
+review). Correcting: (1) three code-review subagents dispatched over the building seeds + trade-good
+edits (slot exhaustion, scope mis-resolution, double-seeds, defunct-good assignments, BOM/brace); (2)
+two old-goods trade sweeps (Qing done, ROW pending) re-derive placements from 1763 history rather than
+trusting the existing map. NOTHING further commits until review findings are applied + re-verified.
+
+### Uncommitted (working tree) — Qing old-goods corrections (30 edits, APPLIED, awaiting review-fix)
+Applied from the Qing old-goods audit (research agent, sourced). Self pre-check: all 12 files brace-
+balanced, BOM intact, zero duplicate trade_goods lines. Corrections:
+- IRON: Foshan 9301 porcelain→iron; Changzi(Shanxi) 3907 tea→iron; Tiechang(Yunnan) 8780 tobacco→iron
+- SALT: Ziliujing 117 grain→salt; Yuncheng 2055 iron→salt; Huanghua 2902→salt; Dafeng 2522 fish→salt;
+  Dagang 2640 silk→salt
+- TIN/LEAD: Gejiu/Honghe 1965 coffee→tin; Hechi 5058 vegetables→lead
+- TEA: Xinyang 2388→tea; Xianning 3108 livestock→tea; Baoshan 1814 coffee→tea; Zuosuocun 8939 coffee→tea;
+  Dehong 9264 coffee→tea; Cangwu 4228→tea; +wrong-tea fixes Shangqiu 4001 tea→textile_fibres, Dengfeng
+  10128 tea→grain
+- SILK: Nanchong 8810 stone→silk; Changzhou 6053 grain→silk; Heshan 3087 temperate_fruit→silk
+- COTTON→textile_fibres: Heze 1904, Liaocheng 7912, Neihuang 8235 (all grain→)
+- SUGAR/STONE: Neijiang 7961 grain→sugar; Dali 493 coffee→stone
+- FOOD-AWARE reverts: 3 Hunan chili→grain (1788/2472/4637); Wuwei 5616 copper→livestock (Hexi oasis)
+Net: iron 2→~5, salt 3→8, silk 10→13, all 5 Yunnan coffee anachronisms removed. Grain base preserved.
+
+### Pre-existing anachronism found in ROW baseline (for ROW sweep to fix)
+rubber = 14 provinces in ROW priority regions — rubber plantations are late-19th-c., anachronistic for
+1763. The ROW old-goods sweep must reassign these.
+
+### CODE-REVIEW RESULTS + FIXES APPLIED (2026-07-31, uncommitted)
+Three code-review subagents + saltpetre-plumbing check returned. Findings and what I did:
+
+TRADE-GOOD EDITS review: CLEAN. All new goods live/valid, no defunct assignments, braces + BOM intact,
+saltpetre fully plumbed (production/demand/price/stockpile/injector), no dangling globals from the
+removed dynamic block, food preserved. Informational only: pre-existing cotton (defunct) at Bahar
+99/135/693 remaps harmlessly at boot; MG-3 comment drift in 00_imp19c.txt. No fix required.
+
+ROW BUILDINGS review: no critical bugs. Scope resolution VERIFIED CORRECT (macro body runs in iterated-
+country scope; ROOT only matters for log promotes). Slot cap = 9999 (00_hardcoded.txt:742) so no overflow.
+MEDIUM (fortress blanketing) — FIXED per design ruling: fortresses are NOT ubiquitous (vanilla sieges any
+city regardless), so REMOVED fortress from the ROW every-city sweep AND the capital core; kept EDU_school
+swept. LOW fixes applied: arsenal macro now guards NOT chinese_group owner (defense-in-depth); dead
+save_scope_as removed. (Redundant any_owned_province pre-guards left as-is — cosmetic/perf-only, one-time
+cost, editing them adds risk for no correctness gain.)
+
+QING BUILDINGS: same fortress ruling applied proactively — REMOVED the every-CHI-city fortress sweep and
+the 19 hand-placed capital fortresses; replaced with 4 curated historically-notable fortress sites
+(Beijing walls, Jiangning Ming walls, Xi'an city wall, Guangzhou/Humen). School + administration still
+swept across all CHI cities. (Awaiting the dedicated Qing-building code-review before commit.)
+
+TRADE-GOOD ROW old-goods sweep APPLIED (50 explicit corrections, uncommitted): India (Malabar pepper
+Calicut/Cochin/Kollam, Coromandel/Deccan cotton, Bengal silk/cotton, remove anachronistic Indian tea,
+Golconda gems, Champaran indigo), Japan (Arita porcelain), Europe (Lyon silk, Meissen porcelain, Freiberg/
+Sala/Falun/Norberg Bergslagen metals, Urals iron, Solikamsk salt, Bursa silk, remove spurious silver at
+Bristol/Chartres/Chemnitz, remove anachronistic Paris/Normandy beet-sugar), Americas (Zacatecas/Fresnillo/
+San-Luis-Potosi silver, Cuba/Chesapeake tobacco), SE Asia (Maluku spices, Java Preanger coffee, Sumatra
+pepper). ROW anachronism CLUSTER sweeps — now COMPLETE (every instance, not samples):
+- ALL rubber worldwide → hardwood (35 provinces, 10 files; rubber is post-1850, fully anachronistic). Zero remain.
+- SE-Brazil coffee → sugar (15; Brazil coffee boom is 1830s; Minas gold provinces already 'gold', untouched).
+- Anachronistic coal → grain/wood: Central_India 5, East_India 1 (→grain); Peru 3, Sumatra 2 (→wood).
+- ALL Indian tea → textile_fibres/spices/grain (South_India 5→textile_fibres, Punjab 1→grain; earlier
+  Bengal/others done in explicit pass). Zero Indian tea remains.
+All touched files brace-balanced, BOM preserved.
+
+### ALL CODE-REVIEWS RETURNED — findings applied (2026-07-31)
+
+ROW TRADE-GOOD review: no validity/integrity/defunct bugs. Findings FIXED:
+- A (MEDIUM): 4 un-swept Bihar/Bahar tea provinces (59/483/511/572) → grain. FIXED.
+- B (LOW-MED): India coal in Kashmir + Indo-Gangetic_Plain → grain. FIXED.
+- C (LOW, extended per anachronism rule): tropical/colonial coal → grain/wood across Colombia/
+  Venezuela/Ecuador/Gulf_of_Guinea/Visayas/Burma/South_Brazil/Nouvelle-Caledonie/Sahel/Morocco/
+  Taiwan. FIXED. (European coalfields correctly untouched.)
+- Plus final-verify catch: Kashmir tea (2) → textile_fibres (Pashmina). FIXED.
+Result: ZERO rubber and ZERO Indian tea remain anywhere; all tropical-coal anachronisms cleared.
+Low plausibility notes (Borneo hardwood vs gold, Mid-Atlantic tobacco) left as-is (not bugs;
+were already-wrong before).
+
+QING-BUILDING review: #1 suspected bug (slot exhaustion) DISPROVEN — slot cap = 9999
+(00_hardcoded.txt:742). No blocking bug. Findings FIXED:
+- Redundant 14-province EDU_school hand-list (already covered by the CHI every-city sweep) → REMOVED.
+- Heilongjiang region comment (mislabeled Liaoning; actually Far_East) → CORRECTED.
+- $NAME$ multi-word CJK interpolation in 8 LOG_line strings (my own standing rule
+  imp19c-log-string-macro-rule flags this as a load-flood shape) → made LOG strings STATIC
+  (dropped $NAME$, kept $P$). NAME= seed-call args retained (fine — not nested in LOG).
+Scope correctness, single-invocation, idempotency, performance: all confirmed clean by review.
+
+BOOT-TEST FLAGS (cannot verify without engine — owed on user's boot machine):
+- add_building_level `potential`-bypass assumption: ~40% of Qing seeds (region/culture-gated
+  buildings — banner garrisons at settlement-rank frontier provs, military colonies out-of-region,
+  Gelug/mosque/monuments) rely on add_building_level ignoring the building `potential` block. This
+  is well-supported (the mod already ships features that depend on it) but formally UNVERIFIED
+  (SESSION_REPORT.md). Boot-test: grep debug.log for "SKIP" from the seed macros + confirm Temple
+  of Heaven / a settlement banner garrison / a Tibet military colony appear on map.
+- Confirm no "unknown arguments" macro-compile flood from any remaining LOG strings.
+
+FORTRESS design ruling (user): fortresses are NOT ubiquitous — vanilla sieges any city regardless,
+so blanketing is pointless + a war-layer change. Applied to BOTH: ROW fortress removed from sweep +
+capital core (schools stay swept); China fortress sweep + 19 capital placements removed, replaced
+with 4 curated historically-fortified sites (Beijing/Jiangning/Xi'an/Guangzhou-Humen).
+
+REVIEW GATE CLEARED — reviewed work ready to commit.
