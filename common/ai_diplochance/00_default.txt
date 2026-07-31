@@ -180,32 +180,22 @@ ransom = {
 }
 
 trade_access = {
-	# [BT trade-route flood] imp19c supersedes vanilla engine trade routes with its own Trade
-	# Agreement system (se_DIP_TRADE.txt), so the AI must NOT spam the vanilla "Request Trade
-	# Route" action (loc ASKTRADEACCTITLE). The original imp19c change only zeroed the BASE offset
-	# but left opinion scale = 0.25, so a positive opinion still pushed the chance above threshold.
-	# This stayed quiet while almost no good carried a country{} trade-surplus bonus, but once
-	# MG-3 (#148) gave all 56 goods a country{} bonus the vanilla import AI woke up and flooded
-	# the player from turn 1. Hard-suppress: a large negative base offset swamps any positive term,
-	# and opinion scale = 0 removes the term that was still driving it. (Header: "Hardcoded factors
-	# can be removed by scaling by 0.") The mod's Trade Agreement diplomacy is unaffected.
+	# [#219 trade-route flood] imp19c supersedes vanilla engine trade routes with its own Trade
+	# Agreement system (se_DIP_TRADE.txt), so the AI should not spam the vanilla "Request Trade
+	# Route" action (loc ASKTRADEACCTITLE). THREE fixes in THIS block (base+opinion; then the
+	# goods-valuation factors strategic_trade_good/good_for_us/bad_for_us = scale 0; then the
+	# define TRADE_REQUEST_ACCEPTANCE=0) ALL failed on boot-test. Root cause established 2026-07-30:
+	# ai_diplochance governs the ACCEPTANCE-chance roll, which the engine does NOT consult when the
+	# target is a human player (the human just gets the popup) — so nothing here ever gated the AI's
+	# decision to SEND. The real driver is the AI's economic desire to import, and the actual fix is
+	# NTrade.ROUTE_BASE_IMPORTING_COMMERCE = 0 in common/defines/00_defines.txt. The base offset below
+	# is retained only as harmless defence-in-depth for AI-to-AI requests; it is NOT the flood fix.
 	base = {
-		offset = -1000 # Changed imp19c: was 0 — hard-disable vanilla trade-route requests
+		offset = -1000
 	}
 	opinion = {
-		scale = 0 # Changed imp19c: was 0.25 — opinion no longer drives the request
+		scale = 0
 	}
-	# [#219 2026-07-30] The base+opinion change ALONE did NOT stop the flood (boot-tested at 446b3f8).
-	# Root cause: this file's idiom is that any hardcoded factor NOT listed in an action keeps its
-	# native nonzero engine weight (header lines 3-5, "removed by scaling by 0"). The goods-VALUATION
-	# factors — strategic_trade_good / good_for_us / bad_for_us (header order, lines 85/87/88) — read
-	# the requested good's economic value, which MG-3 (#148) inflated by giving all 56 goods a country{}
-	# surplus bonus. Those factors were never zeroed, so they kept driving the AI's propensity to ask,
-	# and (scaled by the stock define TRADE_REQUEST_ACCEPTANCE=200) produced a positive term large enough
-	# to survive the -1000 base offset. Zero all three so the vanilla import AI has no value signal left.
-	strategic_trade_good = { scale = 0 }
-	good_for_us = { scale = 0 }
-	bad_for_us = { scale = 0 }
 }
 
 barbarian_demand_surrender = {
