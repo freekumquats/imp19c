@@ -79,11 +79,10 @@ SE_row_starting_buildings = {
 # matching good that doesn't already have the building. Skips silently (logged) when the
 # country has no eligible province. Mirrors QING_works_build_specialty placement.
 ROW_seed_country_buildings = {
-	# Scope: country (the iterated country from every_country). NOTE: inside a
-	# scripted_effect called from every_country, ROOT is the on_action root, NOT the
-	# iterated country (se_ECON_LOG.txt:57-58), so we stage a self-scope handle for the
-	# log line rather than reading [ROOT.GetTag].
-	save_scope_as = row_seed_country
+	# Scope: this = the iterated country from every_country (verified in code review: a
+	# scripted_effect invoked from every_country executes in the iterated-country scope;
+	# ROOT is the on_action root and only matters for [ROOT.…] promotes in LOG strings —
+	# which is why the LOG lines below are kept static rather than reading a saved tag).
 
 	# --- manufactory: finished / craft goods ---
 	if = {
@@ -166,22 +165,19 @@ ROW_seed_country_buildings = {
 	# rails), INF_hospital (clinical science), INF_sewer — all post-1763 tech eras.
 	# -----------------------------------------------------------------------------------------
 
-	# CAPITAL civic core — every organized realm's seat gets administration + a fortress, and a
-	# port if the capital is a harbour. This is the universal baseline.
+	# CAPITAL civic core — every organized realm's seat gets an administration district, and a
+	# port if the capital is a harbour. (No fortress: cities are sieged regardless in vanilla, so a
+	# capital fort is redundant; fortresses are reserved for historically-notable fortified sites.)
 	capital_scope = {
 		if = {
 			limit = { NOT = { has_building = URB_administration_district } }
 			add_building_level = URB_administration_district
 		}
 		if = {
-			limit = { NOT = { has_building = fortress_building } }
-			add_building_level = fortress_building
-		}
-		if = {
 			limit = { can_have_port = yes  NOT = { has_building = port_building } }
 			add_building_level = port_building
 		}
-		LOG_line = { sys = SETUP  msg = "ROW starting buildings: capital civic core (admin/fortress/port) seeded" }
+		LOG_line = { sys = SETUP  msg = "ROW starting buildings: capital civic core (admin/port) seeded" }
 	}
 
 	# COMMERCE district — the realm's single most-populous province (the primary market/entrepot).
@@ -206,16 +202,15 @@ ROW_seed_country_buildings = {
 		}
 	}
 
-	# FORTRESSES & SCHOOLS — walled towns and schools were widespread, not confined to a realm's
-	# top few provinces. Seed BOTH across EVERY city province the realm owns (has_city_status gates
-	# out wilderness/tribal holdings; the every_country dev-floor of num_of_cities>=3 already keeps
-	# this to organized realms). Data-driven, not a top-N token — matches how ubiquitous these were.
+	# SCHOOLS — basic education was widespread across a realm's administered towns. Seed across
+	# every city province (has_city_status = city/city_metropolis rank; the every_country dev-floor
+	# of num_of_cities>=3 keeps this to organized realms). NOTE: fortresses are deliberately NOT
+	# seeded here — vanilla war mechanics siege any city regardless of a fort building, so blanketing
+	# cities with level-1 forts is mechanically pointless AND a large unintended war-layer change
+	# (per code review + design ruling). Fortresses belong only at historically-notable fortified
+	# sites, which for ROW are the curated arsenal/dockyard sites (below) and are not auto-swept.
 	every_owned_province = {
 		limit = { has_city_status = yes }
-		if = {
-			limit = { NOT = { has_building = fortress_building } }
-			add_building_level = fortress_building
-		}
 		if = {
 			limit = { NOT = { has_building = EDU_school } }
 			add_building_level = EDU_school
@@ -274,6 +269,9 @@ ROW_seed_row_arsenal = {
 			p:$P$ = {
 				has_city_status = yes
 				NOT = { has_building = arsenal_building }
+				# defense-in-depth (code-review LOW): don't seed a ROW arsenal onto a Chinese-culture
+				# owner (China seeds its own bespoke works); guards against a re-owned/remapped bookmark.
+				NOT = { owner = { country_culture_group = chinese_group } }
 			}
 		}
 		p:$P$ = {
