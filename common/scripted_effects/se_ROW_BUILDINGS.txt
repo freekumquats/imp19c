@@ -153,6 +153,121 @@ ROW_seed_country_buildings = {
 			LOG_line = { sys = SETUP  msg = "ROW starting buildings: row_plantation_building seeded" }
 		}
 	}
+
+	# =========================================================================================
+	# [#230/#231 2026-07-31] GENERIC CIVIC / MILITARY / ECONOMIC layer. The granularity rule means
+	# ROW REUSES the shared generic building palette (no bespoke per-country types — those are
+	# China's), but it must still seed ALL the period-appropriate generic types, scaled to each
+	# realm's development — not just a manufactory+plantation. add_building_level bypasses each
+	# building's allow tech-gate (build-menu only); the two port types have a province `potential`
+	# (can_have_port / has_minor_river) that IS respected, so they are guarded accordingly.
+	# EXCLUDED as 1763-anachronistic: INF_railway_upgrade (steam loco), IND_electric_plant,
+	# IND_gasworks/blast_furnace (manufactories = industrial revolution), IND_coal_mine (mining
+	# rails), INF_hospital (clinical science), INF_sewer — all post-1763 tech eras.
+	# -----------------------------------------------------------------------------------------
+
+	# CAPITAL civic core — every organized realm's seat gets administration + a fortress, and a
+	# port if the capital is a harbour. This is the universal baseline.
+	capital_scope = {
+		if = {
+			limit = { NOT = { has_building = URB_administration_district } }
+			add_building_level = URB_administration_district
+		}
+		if = {
+			limit = { NOT = { has_building = fortress_building } }
+			add_building_level = fortress_building
+		}
+		if = {
+			limit = { can_have_port = yes  NOT = { has_building = port_building } }
+			add_building_level = port_building
+		}
+		LOG_line = { sys = SETUP  msg = "ROW starting buildings: capital civic core (admin/fortress/port) seeded" }
+	}
+
+	# COMMERCE district — the realm's single most-populous province (the primary market/entrepot).
+	if = {
+		limit = { any_owned_province = { NOT = { has_building = URB_commerce_district } } }
+		ordered_owned_province = {
+			limit = { NOT = { has_building = URB_commerce_district } }
+			order_by = total_population
+			max = 1
+			add_building_level = URB_commerce_district
+		}
+	}
+
+	# RESIDENTIAL districts — the top TWO population centres get housing (urbanised cores).
+	if = {
+		limit = { any_owned_province = { NOT = { has_building = URB_residential_district } } }
+		ordered_owned_province = {
+			limit = { NOT = { has_building = URB_residential_district } }
+			order_by = total_population
+			max = 2
+			add_building_level = URB_residential_district
+		}
+	}
+
+	# FORTRESSES — the top THREE population centres are walled (beyond the capital), so defence is
+	# not a lone-capital affair. Skips any that already got one (e.g. the capital above).
+	if = {
+		limit = { any_owned_province = { NOT = { has_building = fortress_building } } }
+		ordered_owned_province = {
+			limit = { NOT = { has_building = fortress_building } }
+			order_by = total_population
+			max = 3
+			add_building_level = fortress_building
+		}
+	}
+
+	# SCHOOLS — basic education in the top TWO centres (literate administrative/mercantile cores).
+	if = {
+		limit = { any_owned_province = { NOT = { has_building = EDU_school } } }
+		ordered_owned_province = {
+			limit = { NOT = { has_building = EDU_school } }
+			order_by = total_population
+			max = 2
+			add_building_level = EDU_school
+		}
+	}
+
+	# ADVANCED tier — realms with a developed, civilised capital (civilization_value >= 20: the
+	# European/Ottoman/Japanese/urban-Indian states, not tribal/frontier tags) additionally get a
+	# UNIVERSITY and a CULTURAL district at the capital (the seats of learning & high culture:
+	# Paris, London, Madrid, Istanbul, Edo, etc.). This is the development-scaling that keeps a
+	# steppe khanate from getting a university while Bourbon France does.
+	if = {
+		limit = { capital_scope = { civilization_value >= 20 } }
+		capital_scope = {
+			if = {
+				limit = { NOT = { has_building = EDU_university } }
+				add_building_level = EDU_university
+			}
+			if = {
+				limit = { NOT = { has_building = URB_cultural_district } }
+				add_building_level = URB_cultural_district
+			}
+			LOG_line = { sys = SETUP  msg = "ROW starting buildings: advanced-realm university + cultural district seeded" }
+		}
+	}
+
+	# INDUSTRIAL ESTATE — a realm with a real finished-goods province (the manufactory site) gets a
+	# generic industrial estate there too (proto-industrial workshop concentration). Craft goods only.
+	if = {
+		limit = {
+			any_owned_province = {
+				NOT = { has_building = IND_industrial_estate }
+				OR = { trade_goods = cloth  trade_goods = wool  trade_goods = silk  trade_goods = dye  trade_goods = textile_fibres  trade_goods = industrial_fibres  trade_goods = iron  trade_goods = copper }
+			}
+		}
+		ordered_owned_province = {
+			limit = {
+				NOT = { has_building = IND_industrial_estate }
+				OR = { trade_goods = cloth  trade_goods = wool  trade_goods = silk  trade_goods = dye  trade_goods = textile_fibres  trade_goods = industrial_fibres  trade_goods = iron  trade_goods = copper }
+			}
+			order_by = total_population
+			max = 1
+			add_building_level = IND_industrial_estate
+		}
+	}
 }
 
 # [#230/#231] Seed a naval dockyard / royal arsenal (arsenal_building) at province $P$. Owner-

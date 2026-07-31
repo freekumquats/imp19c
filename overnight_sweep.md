@@ -140,3 +140,18 @@ ban. Seeded ONE qing_mission_cathedral_building at Beijing (P8363). se_QING_BUIL
 NOT seeded (confirmed anachronistic per sweep): treaty ports, concessions (Macau excepted), Western
 embassies, Canton Thirteen Factories (real 1760 but wrong building category — a trading district not
 a concession), provincial/underground missions.
+
+### #230/#231 REDO — full generic-building ROW civic layer (my earlier 3-type version was under-delivery)
+
+CORRECTION: my first #230/#231 pass seeded only arsenal_building (+ the pre-existing manufactory/
+plantation) = 3 types for the ENTIRE non-Qing world. That was lazy and wrong. Granularity rule =
+ROW REUSES the generic building palette (no bespoke types — those are China's), but must seed ALL
+period-appropriate generic types, SCALED to development. Where a historical institution has no
+generic archetype it is abstracted to the closest one or ignored — never a new type.
+Expanded ROW_seed_country_buildings (data-driven, every non-Chinese realm num_of_cities>=3) to seed:
+- capital: URB_administration_district + fortress + port (if can_have_port)
+- URB_commerce_district (top-pop province); URB_residential_district (top 2); fortress (top 3)
+- EDU_school (top 2); advanced realms (capital civilization_value>=20): EDU_university + URB_cultural_district
+- IND_industrial_estate (top craft/metal province)
+Now seeds 12 generic building types worldwide (was 3). 1763-anachronistic generics EXCLUDED:
+INF_railway/hospital/sewer, IND_electric/gasworks/blast_furnace/coal_mine. Braces 110/110.
