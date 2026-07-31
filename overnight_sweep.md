@@ -89,3 +89,23 @@ Anachronisms deliberately EXCLUDED at 1763 (left mechanic/event-gated): coastal 
 at most 1 Humen later), likin stations (1853), imperial bank/telegraph/steel/machine works, treaty
 ports/concessions/embassies, Chengde temples 1766-80, Xuehaitang academy (1824), dense Turpan karez
 (1842). Existing karez seed at Turpan left as-is (pre-existing #190 decision, minor).
+COMMIT: 37298b1cc
+
+### #230/#231 — ROW (non-Qing) buildings: naval dockyards + arsenals (DONE, commit pending)
+
+common/scripted_effects/se_ROW_BUILDINGS.txt. The existing data-driven every_country sweep
+(1 manufactory + 1 plantation per substantial non-Chinese realm) ALREADY covers #230 manufacturing
+at the good-enough-abstraction level the granularity rule prescribes — left as-is. Added the
+missing piece: the genuine large "works" of 1763 (naval dockyards + royal arsenals), which serves
+#231 (non-manufacturing) and the arms-works angle of #230.
+
+Added new macro ROW_seed_row_arsenal (owner-agnostic: exists + city-status + not-present; seeds
+generic arsenal_building, whose allow-gate add_building_level bypasses). 10 HIGH-confidence sites:
+- Britain: Portsmouth (P5294), Chatham/Medway (P9936), Woolwich/London (P3388)
+- France: Brest (P5582), Toulon (P8110)
+- Russia: Kronstadt/St Petersburg (P3174), Tula arms (P7891)
+- Spain: Ferrol (P6142); Venice: Venetian Arsenal (P1135); Ottoman: Istanbul Tersane-i Amire (P7709)
+
+EXCLUDED as anachronistic/unverified: Saint-Étienne (state manufactory 1764); low-confidence
+Rochefort/Lorient/Cadiz/Cartagena/Arkhangelsk/Boston/Spandau (abstraction layer doesn't need them).
+Braces 51/51; owner-agnostic guard is safe (skip+log if no city).
