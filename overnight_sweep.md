@@ -109,3 +109,20 @@ generic arsenal_building, whose allow-gate add_building_level bypasses). 10 HIGH
 EXCLUDED as anachronistic/unverified: Saint-Étienne (state manufactory 1764); low-confidence
 Rochefort/Lorient/Cadiz/Cartagena/Arkhangelsk/Boston/Spandau (abstraction layer doesn't need them).
 Braces 51/51; owner-agnostic guard is safe (skip+log if no city).
+COMMIT: 93604cc19
+
+### Follow-on fix — Wuyishan latent tea-works skip (found in self-review)
+
+Self-review (good-guard vs current-good cross-check) surfaced a PRE-EXISTING latent bug: P3317
+Wuyishan carried trade_goods="peanut", but the shipped qing_tea_workshop_building seed guards on
+G=tea — so the Wuyi/Bohea tea works (the single most iconic Qing export-tea centre) has been
+silently SKIPPING at every game start. Not caused by my edits (peanut confirmed at HEAD~4). Fixed
+P3317 peanut->tea so the seed activates. setup/provinces/00_Fujian.txt, braces 146/146.
+
+---
+
+## SUMMARY
+All four tasks (#228-#231) implemented, self-reviewed, committed. Review checks passed: no
+duplicate (P,building) seeds; grain supply preserved per region; all 68 seeded province IDs exist;
+all good-guarded seeds match current goods (after Wuyishan fix). Anachronisms held out per research.
+Commits: 42bf98df0 (#228), 37298b1cc (#229), 93604cc19 (#230/#231), + Wuyishan follow-on.
