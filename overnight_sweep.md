@@ -293,4 +293,131 @@ so blanketing is pointless + a war-layer change. Applied to BOTH: ROW fortress r
 capital core (schools stay swept); China fortress sweep + 19 capital placements removed, replaced
 with 4 curated historically-fortified sites (Beijing/Jiangning/Xi'an/Guangzhou-Humen).
 
-REVIEW GATE CLEARED — reviewed work ready to commit.
+REVIEW GATE CLEARED — reviewed work committed (7fd1bc157 building fixes, 0e3f269fe trade goods).
+NOT pushed (awaiting user clearance per review-before-commit rule).
+
+### #233 EMPLOYMENT / POP PLUMBING (in progress)
+Premise (user): buildings existed historically → labour existed. So if seeded buildings can't be
+staffed, the ROOT CAUSE is under-seeded pops, and the fix is the POP MODEL, not the buildings.
+MANDATE: if lots of pops must be added, that proves pop seeding is wrong → do a COMPREHENSIVE
+WORLDWIDE POP SWEEP if the gap is systemic (China full-fidelity, ROW abstraction, per granularity
+rule). A read-only analysis agent is sizing the gap first (building→stratum/slots map vs setup
+province pops) to decide sweep scope before any edits. No pop edits until analysis returns + is
+reviewed.
+
+### PUSHED (user approved): remote manufactured_goods now at b8eb610e5.
+
+### #232 PIAOHAO 1823 FOUNDING EVENT — BUILT (user approved), under code-review, uncommitted
+Replaces the removed anachronistic 1763 static draft-bank seed with a historically-timed event.
+Files:
+- events/imp19c_mod_events/qing_piaohao_events.txt (NEW): namespace qing_piaohao; event
+  qing_piaohao.1 (~1823) + macro QING_piaohao_found_at. Seeds qing_draft_bank_building at Taiyuan
+  (Shanxi heartland) + Beijing/Suzhou/Jiangning/Guangzhou branches. Guarded (exists+CHI+not-present),
+  one-shot flag qing_piaohao_founded, current_date>=1823.1.1 re-check, static LOG (no $NAME$).
+- common/on_action/qing_mechanics_on_actions.txt: trigger_event days={21868 21898} (offset 1763.2.16
+  ->1823.1.1) inside CHI on_game_initialized. Fires player AND AI.
+- localization/english/qing_piaohao_l_english.yml (NEW, BOM): 3 loc keys.
+Year decision: 1823 = convention (bracket 1819-1838); do NOT claim Rishengchang was categorically
+first. picture=trade_port (chinese_market didn't exist — would render blank; fixed). Braces OK, IDs
+valid. Code-review dispatched. NOT committed until review returns + findings applied.
+
+### #232 PIAOHAO — review fixes applied (still uncommitted, re-review dispatched)
+Two review findings applied since the entry above:
+- Finding 1 (zero-margin date gate, LOW): schedule window was days={21868 21898} == the exact
+  offset to 1823.1.1, and the gate was current_date>=1823.1.1 — a leap-year day-count discrepancy
+  at the boundary could make the window minimum fall short of the gate and fizzle (~3% of the time).
+  FIXED: window -> {21870 21900} (a few days past the offset), gate -> 1822.12.1 (a month before the
+  window), so the minimum can never fall short. on_action comment updated.
+- Finding 2 (potential-bypass unguarded, LOW): QING_piaohao_found_at relied on add_building_level
+  bypassing the building's `potential`; if the bypass doesn't cover `potential` (UNVERIFIED, boot-test
+  owed), a target lacking city status would log a false "founded". FIXED: added `has_city_status = yes`
+  to the macro's limit block (matches the safer sibling pattern) so the else-branch logs an honest SKIP.
+
+### #233 POP-COMPOSITION CORRECTIONS — conclusion + edits (uncommitted, under code-review)
+CONCLUSION on scope (from the read-only sizing analysis): NO worldwide headcount sweep is warranted.
+The Imperator pop model is NOT Victoria job-slots — seeded buildings apply local_<stratum>_output
+(a multiplier on existing pops) + local_<stratum>_desired_pop_ratio (a soft migration pull); there
+are NO hard job slots and NO "unstaffed building" failure state (global_settlement_building_slot=9999).
+So "buildings existed -> labour existed" is already satisfied by the existing pops; there is no
+systemic under-seeding to fix. What the analysis DID surface were localized COMPOSITION errors
+(culture/religion/class wrong), which the user's later directive explicitly scoped in. Fixed those:
+- setup/provinces/00_Tibet.txt: 22 tibetan/khams/tshangla pop-blocks religion mahayana->vajrayana.
+  BUG: Tibetan Buddhism was seeded as generic mahayana; vajrayana is the correct religion (defined
+  in common/religions/00_vthreereligions.txt, and ALREADY live — used by the Qing emperors in
+  setup/characters/00_Qing.txt + Jiangxi/Fujian provinces). Han (shangjiang) sub-pops in Tibet kept
+  mahayana (correct).
+- EXPANDED (correctness — the Tibet-only flip would have left Kham/Amdo/Bhutan/Nepal inconsistent):
+  swept ALL bodish-Buddhist pops repo-wide to vajrayana via a culture-gated rule (culture in
+  {tibetan,khams,amdo,balti,tshangla} + religion="mahayana" -> vajrayana). 30 pops across
+  Eastern_Himalayas/Nepal/Qinghai/Sichuan_Kham/Sudan[mis-filed Tibet provs]/Yunnan/00_default, plus
+  13 more (amdo Qinghai + 2 balti Buddhists) on a second pass. LEFT ALONE: balti sunni/shiite
+  (Muslim Baltis, correct) and the deliberate tibetan/tshangla HINDU Himalayan-borderland pops.
+- setup/main/00_default.txt: state religion mahayana->vajrayana for ALL 6 bodish-culture countries
+  (TIB + 3 Kham statelets + 1 Amdo + 1 tshangla/Bhutan), to match their now-vajrayana populations
+  (avoids state-vs-pop religion mismatch). Braces balanced.
+- common/scripted_triggers/00_pop_religion_groups.txt: FIXED pre-existing engine TYPO
+  `pop_religion = varjayana` -> `vajrayana` in buddhist_group_pop_trigger / dharmic_group_pop_trigger
+  / sikh_related_group_pop_trigger (3 sites). The misspelled key matched NO religion, so before this
+  sweep every vajrayana pop would have fallen OUTSIDE the buddhist/dharmic pop-groups — latent until
+  we started seeding real vajrayana pops. (The sibling 00_religion_groups.txt was already correct.)
+- setup/provinces/00_Zhili.txt: Hohhot 3322 culture jin->mongolian, religion mahayana->vajrayana
+  (Inner Mongolia Tibetan-Buddhist Mongol seat, not a Jin-Han city).
+- setup/provinces/00_Gansu.txt: Xinjiang oasis Han over-colonization corrected (anachronistic in
+  1763, only 4 yrs post-Dzungar-conquest; Xinjiang Han settlement is a 19th-20th-c. phenomenon):
+  * Urumqi/Dihua 2930: dropped the shangjiang(4)/xiajiang(1) LOWER/UPPER-YANGTZE Han injections
+    (wrong origin — NW colonists were northern Han + Hui, not Yangtze), reduced beihua 6->3, kept
+    hui 6. Modest beihua military-agricultural (屯田) presence retained (Urumqi WAS the colonization
+    centre); uighur+hui Muslim plurality restored.
+  * Yanqi/Karashahr 2343: beihua 4->1 (token admin presence); Hui/Tungan garrison(3) kept.
+  Left ALONE (historically correct): Gansu-proper beihua/hui provinces (Yinchuan, Yumen, Lanzhou
+  corridor, etc.) — Han/Hui presence there is genuine. Only the Tarim/Dzungar oases were touched.
+All edited setup files brace-balanced. Code-review dispatched; commit + push after findings applied.
+
+### CODE-REVIEW ROUND (2 agents)
+Review A (piaohao + Tibet-proper/Gansu/Hohhot pop edits) — RETURNED:
+- Changeset A (piaohao) VERIFIED CLEAN: building key qing_draft_bank_building exists
+  (common/buildings/qing_fiscal_buildings.txt:63); all 5 province IDs are city/city_metropolis so
+  the has_city_status re-guard passes; date-gate fix sound; 3 loc keys present + BOM ok; on_action
+  nesting correct. No findings.
+- MEDIUM (FIXED): common/heritage/00_mod_heritages.txt tibetan_learning heritage gated on
+  `religion = mahayana` — my vajrayana flip orphaned the "Tibetan" heritage from Tibet (it would have
+  matched only the residual Mongol/Korean/Japanese mahayana bloc). FIXED: trigger -> OR{ mahayana
+  vajrayana } so it covers both the Mahayana bloc AND the now-vajrayana Tibetans.
+- LOW (pending review B's scope call): Hohhot is now the lone vajrayana Mongol town amid ~82
+  mahayana mongolian entries. Survey: mongolian 82 / oirat 16 / buryat 15 on mahayana. History:
+  Mongols+Oirats were Gelugpa (Tibetan Vajrayana) by 1763 — same mis-seed as Tibet, so the correct
+  fix is to SWEEP the Mongol Buddhist bloc, not revert Hohhot. Holding for review B's over-reach check.
+- LOW (artifact): common/province_setup.csv still lists tibetan;mahayana — it is a TOOL INPUT (not
+  engine-loaded), harmless in-game, but re-running the old_to_new_setup generators would clobber the
+  fix. Documented; NOT back-ported (generators won't run this session).
+Review B (repo-wide vajrayana sweep + varjayana typo + 6 country religions) — RUNNING.
+
+Review B (repo-wide vajrayana sweep + varjayana typo + 6 country religions) — RETURNED, VERDICT
+"correct, safe, well-targeted": coverage complete, no non-Buddhist bodish pops wrongly flipped,
+braces/BOM clean, no pop dropped from a religion group, typo fix is a genuine latent-bug repair.
+Confirmed the heritage MEDIUM was already fixed. Findings resolved:
+- F1 MEDIUM (scope): Mongol/Oirat/Buryat Buddhists left on mahayana while Hohhot was flipped ->
+  internally inconsistent mongolian culture. RESOLVED by EXTENDING the sweep (not reverting Hohhot):
+  Gelug Mongol/Oirat/Buryat/Dagur/Kalmyk Buddhism IS Tibetan Vajrayana — same mis-seed as Tibet.
+  Flipped 130 more mahayana->vajrayana: ~120 mongol-family province pops (Mongolia/Qinghai/Far_East/
+  Gansu/Siberia/Caucasus/Liaoning/Zhili/Tannu_Tuva/Voiska_Donskova/Sudan/default), 10 mongol chars
+  (00_Qing.txt + Central_Asia), and MGA (Urga/Bogd Khanate) state religion. EXCLUDED manchu (~120
+  pops): sinicized Manchu 1763 popular religion is a defensible shamanist/Chinese-Buddhist mix, not
+  clearly Vajrayana — left on mahayana. Non-Buddhist Mongols (tengri/sunni/orthodox/nestorian/daoism/
+  confucianism) untouched.
+- F2 LOW: the 5th Jebtsundamba Khutuktu (setup/characters/00_Central_Asia.txt, tibetan+mahayana) —
+  head of Mongolian Tibetan Buddhism, unambiguously Vajrayana. FLIPPED (part of the tibetan-char pass).
+- F3 LOW (informational): setup/main/00_default.txt has no BOM — PRE-EXISTING (HEAD also lacks it),
+  edit preserved state per standing rule. No action.
+- F4 INFORMATIONAL: vajrayana grants +0.05 same-religion happiness that mahayana (commented-out line)
+  doesn't — flipped pops gain a minor bonus. Matches theravada/pure_land; desirable, noted.
+- province_setup.csv staleness (from review A): still a tool-input artifact, not engine-loaded; NOT
+  back-ported (generators won't run this session). Documented risk only.
+FINAL consistency check: 0 buddhist-culture (bodish + mongol-family) mahayana remnants across all
+pops + characters + countries. All touched files brace-balanced + BOM state preserved.
+
+### OPEN / OWED
+- Boot-test flags (need engine): add_building_level potential-bypass on ~40% of Qing seeds
+  (+ the piaohao draft-bank spawn uses the same mechanism); LOG-compile cleanliness.
+- (Deferred, not this session) manchu Buddhist pops left on mahayana by deliberate scope call; and
+  province_setup.csv back-port if the old_to_new_setup generators are ever re-run.
