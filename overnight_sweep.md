@@ -155,3 +155,27 @@ Expanded ROW_seed_country_buildings (data-driven, every non-Chinese realm num_of
 - IND_industrial_estate (top craft/metal province)
 Now seeds 12 generic building types worldwide (was 3). 1763-anachronistic generics EXCLUDED:
 INF_railway/hospital/sewer, IND_electric/gasworks/blast_furnace/coal_mine. Braces 110/110.
+
+### #229/#230/#231 REWORK 2 — ubiquitous institutions are DATA-DRIVEN, not capital-lists
+
+CORRECTION (user caught this): I had modeled empire-wide institutions as hand-picked capital lists
+(18 cities) — wrong. Green Standard posts (thousands of outposts), yamen (every prefecture/county
+seat), community granaries (county-level system), city walls & basic schools were UBIQUITOUS, not
+concentrated at ~18 capitals. Restructured:
+- CHINA (se_QING_BUILDINGS.txt): replaced the 18-capital yamen + green-standard lists AND the
+  18-capital fortress/school/administration lists with TWO `c:CHI = { every_owned_province = {
+  limit = has_city_status } ... }` sweeps — seeding qing_yamen + qing_green_standard_post +
+  qing_community_granary, and fortress + EDU_school + URB_administration, across EVERY CHI city
+  province. Genuinely-concentrated buildings (commerce/residential/cultural districts, universities,
+  ports, the named bespoke works & monuments) stay hand-placed at their real centres. Frontier
+  subjects (Tibet/Xinjiang) correctly excluded (c:CHI-owned only). Braces 218/218.
+- ROW (se_ROW_BUILDINGS.txt): replaced the top-3-fortress / top-2-school caps with an
+  every_owned_province(has_city_status) sweep so walls + schools cover ALL a realm's cities, not
+  just its 3 biggest. Braces 104/104.
+Also added China the full generic-civic palette it had been missing entirely (fortress/port/URB/EDU
+on top of its bespoke qing_* works — the player's empire had no walls/ports/schools while Europe did).
+
+### Piaohao follow-up (task #232, deferred)
+Removed the anachronistic 1763 Taiyuan piaohao seed (done in #229); ADD a date-gated founding event
+at the historically-correct year. Year under research (1823 Rishengchang is famous but may be firm-
+not-institution; checking EN+CN academic sources). Not yet implemented.
