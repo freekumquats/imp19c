@@ -709,26 +709,39 @@ LAND_release_from_list = {
 		create_country = {
 			save_scope_as = new_country_scope
 			# Set culture
+            # [as_capital fix] Bare `$primary_culture$ = flag:as_capital` compares two raw flag:
+            # literals; for the sentinel callers this identity check evaluates FALSE at runtime
+            # (same flag-comparison fragility as the country_name/adj bug fixed below — only
+            # flag:dynamic reliably compares true; every other bare sentinel, incl. as_capital,
+            # is "used but never set" per boot log and resolves false), so the else_if ran and fed
+            # literal text "flag:as_capital" into set_primary_culture -> invalid-target error (17 hits).
+            # For the two real-culture-scope callers (SEPARATISM/send_settlers) the same bare
+            # comparison is a hard culture-vs-flag type mismatch. Fix: seed the passed value (flag or
+            # scope, unchanged — do NOT re-wrap flag:, callers already carry their prefix) into a
+            # scratch var, proven idiom from the country_name fix below + se_QING_LEGATIONS.
+            set_variable = { name = LAND_release_culture_is_as_capital  value = $primary_culture$ }
             if = {
             	limit = {
-            		$primary_culture$ = flag:as_capital
+            		var:LAND_release_culture_is_as_capital = flag:as_capital
             	}
             	set_primary_culture = scope:new_capital_scope.dominant_province_culture # TODO: Add conditions
             }
-            else_if = {
-            	limit = {
-            		NOT = {
-            			$primary_culture$ = flag:as_capital
-            		}
-            	}
+            else = {
             	set_primary_culture = $primary_culture$
             }
             # Set religion
+            # [as_capital fix] Same idiom, PLUS an added else: previously a real-religion-scope caller
+            # (send_settlers non-ideology branch) hit the religion-vs-flag mismatch on the if-limit,
+            # the if was skipped, and with no else set_country_religion was NEVER called — silent unset.
+            set_variable = { name = LAND_release_religion_is_as_capital  value = $country_religion$ }
             if = {
             	limit = {
-            		$country_religion$ = flag:as_capital
+            		var:LAND_release_religion_is_as_capital = flag:as_capital
             	}
             	set_country_religion = scope:new_capital_scope.dominant_province_religion # TODO: Add conditions
+            }
+            else = {
+            	set_country_religion = $country_religion$
             }
             # Set name
             set_variable = uses_custom_name
