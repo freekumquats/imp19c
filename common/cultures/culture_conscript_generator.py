@@ -47,7 +47,7 @@ def write_conscripts(culture_files):
     levy_template = levy_conscripts\n\
 \n\
     primary = conscripts\n\
-    secondary = conscripts\n\
+    second = conscripts\n\
     flank = conscripts\n\
 \n\
     primary_navy = screw_frigate\n\
