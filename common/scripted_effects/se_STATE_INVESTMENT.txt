@@ -1,0 +1,68 @@
+﻿# [#223] State-investment cost pipeline + bookkeeping helpers.
+# Backs the invest_in_state_button_* buttons (common/scripted_guis/invest_in_state_buttons.txt),
+# which call add_scaling_gold_cost_trigger (afford check) + add_scaling_gold_cost_effect (charge)
+# + add_state_modification_value_effect. Ported from upstream: calc_governor_investment_fee from
+# Terra Indomita (common/script_values/ib_values.txt); add_scaling_gold_cost_effect/_trigger from
+# Invictus (00_event_effects_inv_1_0.txt / 00_decisions_inv_1_0.txt) — TI leaves those two undefined.
+# The Invictus effect's per-holding-owner gold redistribution is dropped (holding_owner scope is not
+# used anywhere in imp19c and is unproven here); we keep the proven player-treasury deduction, which
+# is the mechanically significant part. increment_state_investment_count + add_state_modification_value_effect
+# are authored: the latter is a vestigial no-op in all upstreams (called, never defined).
+
+# Escalating fee: each prior investment in a state raises the gold surcharge on the next one.
+add_scaling_gold_cost_trigger = {
+	trigger_if = {
+		limit = {
+			calc_governor_investment_fee > 0
+			scope:player = {
+				treasury < root.calc_governor_investment_fee
+				OR = {
+					NOT = { has_variable = free_investments }
+					var:free_investments <= 0
+				}
+			}
+		}
+		scope:player = {
+			treasury >= root.calc_governor_investment_fee
+		}
+	}
+}
+
+# Charge the scaling surcharge (on top of the flat political-influence price paid by the button).
+add_scaling_gold_cost_effect = {
+	save_scope_as = investment_state
+	if = {
+		limit = {
+			has_variable = num_state_investments
+			scope:player = {
+				OR = {
+					NOT = { has_variable = free_investments }
+					var:free_investments <= 0
+				}
+			}
+		}
+		scope:player = {
+			hidden_effect = {
+				add_treasury = {
+					value = scope:investment_state.calc_governor_investment_fee
+					multiply = -1
+				}
+			}
+			custom_tooltip = STATE_INVESTMENT_GOLD_SCALE_TT
+		}
+	}
+}
+
+# Track how many investments a state has received, so calc_governor_investment_fee escalates.
+increment_state_investment_count = {
+	if = {
+		limit = { NOT = { has_variable = num_state_investments } }
+		set_variable = { name = num_state_investments  value = 0 }
+	}
+	change_variable = { name = num_state_investments  add = 1 }
+}
+
+# Vestigial no-op — called by every invest button's hidden_effect but never given a body in any
+# upstream (Invictus/TI). Defined empty so the call resolves cleanly instead of erroring on click.
+add_state_modification_value_effect = {
+}
