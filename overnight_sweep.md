@@ -45,3 +45,47 @@ static placement. No dynamic saltpetre seeding remains.
 
 Files: 00_Bahar, 00_Fujian, 00_Guangdong, 00_Guangxi, 00_Guizhou, 00_Shanxi, oa_economy_setup.txt.
 All brace-balanced; BOM/LF preserved.
+COMMIT: 42bf98df0
+
+### #229 — Qing buildings expanded to 1763 reality (DONE, commit pending)
+
+Extended SE_qing_starting_buildings in common/scripted_effects/se_QING_BUILDINGS.txt using the
+existing self-guarding macros (QING_seed_building / _works_building / _frontier_building — all
+skip+log if not CHI/subject-owned or already present, so liberal seeding is safe). All 31 referenced
+building keys confirmed defined; braces 178/178. Research target from memory + 6 teammate research
+slices, all anachronism-flagged.
+
+ADDED (net-new seeds beyond the original ~37):
+- **Porcelain kilns**: Dehua/Anxi (P3302), Foshan/Shiwan (P9301) — beyond Jingdezhen.
+- **Banner garrisons** (was 5 → 15): +Beijing, Jiangning, Chengdu, Ningxia, Liangzhou, Taiyuan,
+  Kaifeng, Dezhou (interior) + Shengjing, Jilin, Heilongjiang/Qiqihar, Ili/Huiyuan (frontier seats;
+  Ili flagged "est. 1763, under construction").
+- **Green Standard posts** (new building): 18 provincial capitals.
+- **Yamen** (new): 18 provincial capitals (Baoding=Zhili cap, NOT Beijing; frontier excluded).
+- **Exam halls** (was 4 → 16): +12 provincial capitals. NO Anhui hall (Jiangnan/Nanjing served
+  both) or Gansu/Lanzhou hall (1875 anachronism; Xi'an served Shaan-Gan).
+- **Shuyuan** (new): Yuelu (Changsha P2793), White Deer Grotto (Nankang/Lushan P2386).
+- **Confucian temple**: +Qufu (P9041, Jining) as the San Kong anchor.
+- **Gelug monasteries** (new): Lhasa, Shigatse/Tashilhunpo, Xining/Kumbum, Labrang, Beijing/Yonghegong.
+  Chengde 外八廟 — only Puning (1755) pre-1763; rest (1766-80) deliberately NOT seeded.
+- **Great mosques** (new): Xi'an Great Mosque, Kashgar Id Kah.
+- **Customs houses** (new): all four 1685 海關 (Canton/Xiamen/Ningbo/Shanghai); Canton = sole legal
+  Western port post-1757 but others kept for domestic trade (not deleted).
+- **Guild halls** (new): Beijing, Suzhou, Hankou, Canton.
+- **Provincial mints** (new): 8 provincial 寶X局 (Yunnan copper-hub heavy) + existing Beijing central.
+- **Tribute depots** (new): Huai'an (漕運總督 seat), Jining.
+- **Grand Canal control works** (new): Huai'an/Qingjiangpu junction.
+- **River conservancy**: +Jining (東河總督, officeholder attested Nov 1763).
+- **Sea wall**: Haining 海塘 (P3504, Qianlong toured 1762) via dike building.
+- **Great Wall passes** (new, legacy-only): Shanhaiguan, Juyongguan.
+- **Horse pastures**: +Mulan Weichang (P9356 Rehe), +Chahar imperial herds (P9529 Xilin Gol).
+
+FIXED (anachronism REMOVAL, not addition):
+- **Draft bank**: removed the Taiyuan 票號 piaohao seed (Shanxi piaohao = ~1823, 60yr anachronism);
+  reflavoured onto Jiangnan qianzhuang 錢莊 (Shanghai 1736 / Ningbo / Suzhou) — the period-correct
+  native money-shop.
+
+Anachronisms deliberately EXCLUDED at 1763 (left mechanic/event-gated): coastal batteries (19th-c.;
+at most 1 Humen later), likin stations (1853), imperial bank/telegraph/steel/machine works, treaty
+ports/concessions/embassies, Chengde temples 1766-80, Xuehaitang academy (1824), dense Turpan karez
+(1842). Existing karez seed at Turpan left as-is (pre-existing #190 decision, minor).
