@@ -348,3 +348,55 @@ quechua regex insertions well-formed). Fixes applied for the 2 raised issues:
   1762); LSA-owned + Osage-populated = same pattern as Spanish Southwest/Apacheria (nominal claim, indigenous pops). Defensible.
 - B4 (INFO) duplicate identical strata: engine-legal, standard in these files, no action.
 Diff changed only Ecuador after fixes; re-verify then commit.
+
+## AFRICA (ROW region 1) — DECISIONS + FIXES (2026-08-01, source research/1763_TRUTH_ROW.md Africa section)
+Africa 1763 = overwhelmingly independent African states + European COASTAL POINTS (not territorial). Aggregate on-disk
+pop ~13k u across 13 files. Owner audit found post-1763 Mfecane/jihad anachronistic tags (all founded 1804-1820s).
+USER DECISION: reflavour-in-place (keep tag+territory, relabel to period-correct polity + fix pop culture).
+
+REFLAVOURED (loc rename + primary_culture in 00_default.txt):
+- SOK "Sokoto"->"Gobir", primary_culture fulani->hausa (Sokoto Caliphate=1804 jihad; 1763=Hausa city-states).
+  Province 10155 culture fulani->hausa + added fulani pastoralist minority tribesmen (pre-jihad reality).
+- ZUL "Zulu"->"Ndwandwe" (Zulu Kingdom=~1816 Shaka; Ndwandwe/Mthethwa were the pre-Shaka Nguni powers). Kept zulu
+  culture as good-enough Nguni abstraction. Fixed 8 ZUL provinces: shona(Greytown, 1500km wrong!)/sotho/swazi -> zulu.
+- MAT "Matabele"->"Kalanga", primary_culture ndebele->karanga (Ndebele arrived 1830s Mzilikazi; 1763 Zimbabwe=Rozvi/Karanga).
+- LST "Lesotho"->"Basotho", primary_culture xhosa->sotho (WRONG people fixed; Lesotho kingdom=1820s Moshoeshoe but Sotho were there).
+- ESW "Eswatini"->"Ngwane" (Swazi kingdom consolidation 1820s; Ngwane clan = nucleus). Kept swazi culture.
+
+CAPE (CPC): already Dutch VOC client_colony of NED (prior #236, correct). Fixed Cape Town 2750: culture
+  anglo_african->boer, religion anglican->reformed, dropped english/anglican upper stratum (=British Cape 1806
+  anachronism); boer religion lutheran->reformed (Cape Dutch = Calvinist/Dutch Reformed, not Lutheran).
+
+ETHIOPIA: map was POST-1769-fragmented (~15 tags), but 1763 = centralized under Emperor Iyoas I (Zemene Mesafint
+  begins 1769). USER DECISION: subject highland Christian tags to Gondar (GDR). Prior work already had GDR->TGR/SWA/
+  WLO/GJJ tributary; ADDED missing GDR->MDB (Medri Bahri, Tigrayan coastal march). Muslim Somali/Afar periphery
+  (HRR/OGD/MEE/ASA/ISQ/ZEI/MWA) + southern Oromo/Sidama (KFA/SDM/BOE/etc) left independent (correct - outside Christian empire).
+
+VERIFIED CORRECT (no change): European coastal footholds are POINTS (Angola/Mozambique coastal, VOC Cape small,
+  Gold Coast forts); Oyo at zenith + Dahomey tributary; Lunda/Luba peak; Rozvi declining; Madagascar fragmented.
+CRASH SWEEP: South_Africa (BOM,203/203,0 zeros), Gulf_of_Guinea (BOM,250/250) — the 3 amount=0 in GoG lines 75-85
+  are PRE-EXISTING (in HEAD, not my edit to prov 10155); FOLLOW-UP candidate, out of scope. 00_default no BOM, braces
+  balanced. loc file BOM preserved. All culture keys defined. STATUS: pending adversarial review.
+
+## ASIA/PACIFIC (ROW region 2) — PREP NOTES (owner scan done, edits pending Africa commit)
+Owner scan largely period-plausible: TKG Tokugawa dominant Japan; AFG Durrani holds Afghanistan+Punjab+Pashtunistan
+(correct, withdrawing post-Panipat); fragmented Indian successor states (JAI/GWA/MAR Rajputs, AWA Awadh, BIH/PAT Bihar,
+NAG Nagpur-Maratha); Central Asian khanates (BUK/KOK/KHV); PHI Philippines; Pacific mostly unowned (correct).
+KEY ANACHRONISM TO FIX: EIC owns 31 Indo-Gangetic + 23 Bengal + 5 Bahar = post-1857 Raj footprint. In 1763 (pre-Buxar
+1764) EIC held Calcutta+coastal factories w/ de-facto Bengal REVENUE control, but Nawab (BNG) nominal sovereign +
+Gangetic plain = Awadh (AWA). Plan: shift bulk of EIC Gangetic provs -> AWA; Bengal core EIC->BNG (leave EIC a few
+Calcutta/coastal provs); keep EIC as GBR client_colony. Also verify: Sikh=misls not empire (no unified SIK tag holding Punjab —
+AFG holds it, OK); Mughal not territorial; Ayutthaya SIA standing; Manila PHI Spanish. Pacific/NZ/Australia unowned-indigenous.
+
+### AFRICA — ADVERSARIAL CODE-REVIEW: PASS (no crash blockers) + all 3 findings fixed [2026-08-01]
+Review verdict: no crash-class blockers (BOM correct all 4 files incl. loc BOM preserved; braces balanced; culture/
+religion keys resolve; loc YAML valid; GDR->MDB unique dep, no double-overlord/ownerless-capital; no comment corruption).
+Fixes applied:
+- B1 (MED) FIXED: Cape Town had duplicate boer/reformed upper_strata (I'd CONVERTED the English elite instead of
+  DROPPING it -> Boer overcount). Dropped the converted stratum -> single boer upper (matches "remove British-Cape 1806" intent).
+- B2 (MED) FIXED: stale _ADJ loc keys synced to renames: SOK_ADJ Sokoto->Gobir, MAT_ADJ Matabele->Kalanga,
+  ZUL_ADJ Zulu->Ndwandwe, ESW_ADJ Swazi->Ngwane, LST_ADJ Lesotho->Basotho.
+- B3 (LOW) FIXED: MDB primary_culture amharic->tigre (Medri Bahri = Tigrinya highland march, not Amhara).
+BONUS: removed 3 pre-existing amount=0 blocks in Gulf_of_Guinea prov 611 Fernando Poo (+ dropped anachronistic
+  castilian/catholic residue; Bioko was minimally-settled Bubi/fang in 1763, Spanish only from 1778). GoG 0 zeros now.
+Re-verified all files crash-safe. No further blockers -> commit.
