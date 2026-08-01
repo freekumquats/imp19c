@@ -447,3 +447,38 @@ all 637 capital= declarations resolve to an owner; no comment/event-id corruptio
   granularity rule); Burdwan/Midnapore 1760-cession folded to BNG (defensible under nominal-sovereign principle).
 - B3 FOLLOW-UP: EIC own_control_core still comment-lists French Pondicherry cluster (out of scope this pass).
 FINAL: EIC 134->6. STATUS: Asia COMPLETE, committing.
+
+## CHINA (focus region, extra attention) — AUDIT + FIXES (2026-08-01, source research/1763_TRUTH_CHINA.md)
+OWNERSHIP: SOUND (no fix needed). CHI directly owns 450 provs (18 provinces' core). Legitimate subjects: Manchuria
+MKD/MNC/HLJ + ULS (autonomous_governorship); Xinjiang ILI (autonomous_governorship) + XNG Altishahr (ILI client);
+Tibet TIB (protectorate) + LTG/DER/CKL/NGQ (feudatory); Yunnan CHH Shan (feudatory). Only 4 provs correctly UNOWNED:
+Taiwan east coast (Ylan/Hualien/Taidong = indigenous Formosan, Qing held only W plain till 1870s-80s) + Lop Nur
+(empty Xinjiang desert). PARSER LESSON: commented-out #YNG/#SHG/#MZH viceroyalty blocks broke naive brace-parse ->
+falsely showed core provinces "unowned"; MUST comment-strip whole file before tag-scanning (skill rule confirmed).
+POPULATION MAGNITUDE: SOUND. China-proper ~215M (top of truth-doc ~205-215M actual range). Per-province distribution
+matches Cao Shuji shares proportionally (Jiangsu 25M densest, Shandong 19M, Zhejiang 16M...); all provinces uniformly
+~15% below the c.1770s-peak target shares = internally consistent, correctly anchored to a slightly lower total. NO
+rescale (uniform scaling = rejected flat-multiplier fake-work). Sichuan 7.3M = correct (rapidly-infilling frontier ~6-7M).
+Inner Asia: Mongolia 2.4M, Tibet 1.0M, Turkestan 2.5M (Kazakh jüz outside Qing + Tarim Uyghur) — all in range.
+COMPOSITION: richly developed already (Gansu Hui-Sunni+Uyghur+Oirat+Tibetan-Buddhist; Guizhou Miao+nuoism; Yunnan
+Dai/Thai/Kachin+Theravada+Hui; Guangdong Yue+Hakka+Hlai). TWO FINE-FIDELITY FIXES:
+- GUANGXI ZHUANG (real gap): zhuang culture DEFINED but unused; W/central Guangxi (Zhuang heartland, China's largest
+  minority) was all 'yue' (Cantonese Han). Converted 14 W-Guangxi provs (Nanning/Chongzuo/Guigang/Fangchenggang/
+  Liuzhou/Hechi/Laibin/etc) province-default yue->zhuang + added yue Han merchant minority. Eastern Guangxi (Guilin/
+  Wuzhou/Yulin/Beihai/Qinzhou) kept Han. Guangxi now yue:25/zhuang:14/ping:7.
+- NEPAL TRIBUTARY (anachronism): removed CHI->NEP sinosphere_tributary. Nepal NOT a Qing tributary in 1763 (Gorkha
+  unified Kathmandu 1768-69; tributary only after 1792 war). NEP left independent (no GRK tag; good-enough).
+KEPT CORRECT: KOR/VIE/RYU sinosphere_tributary; TIB protectorate; Manchuria/Xinjiang governorships; Dzungar-depopulated
+N.Xinjiang; tributary ring. CRASH SWEEP: Guangxi single BOM/170=170/0 zeros; 00_default no BOM/braces balanced; zhuang defined.
+STATUS: pending adversarial review.
+
+### CHINA — ADVERSARIAL REVIEW + RE-REVIEW: PASS + fidelity fixes [2026-08-01]
+First review: no crash blockers; Nepal fix confirmed correct; raised Guangxi-Zhuang fidelity issues (B1 Han-as-peasant
+inverts Qing structure; B2/B7 flip too far east, western ping-heartland left Han; B6 wrong elite religion).
+REDID Guangxi from HEAD: 16 provinces zhuang-majority (refined set — added true western heartland Baise/Donglan/Longlin/
+Tian'e/Lingyun/Tiandong which were ping-Han; REVERTED too-east/coastal/urban-Han Lingshan/Fangchenggang/Guigang/Liuzhou
+to yue), Han minority now upper_strata/confucianism (gentry-merchant = correct Qing social structure, not peasant).
+RE-REVIEW: PASS, clear to commit (172/172 braces, single BOM, 0 zeros, 16 well-formed appended blocks, 4 reverts match
+HEAD, keys defined, Nepal dep-graph intact). 2 LOW notes: B-LOW-1 (ex-ping provs' Han minority should be ping not yue)
+APPLIED (6 provs yue->ping = Pinghua was the Han substrate there); B-LOW-2 (Longlan 8630) LEFT (reviewer + I both
+uncertain on its geography — flipping uncertainly is worse). FINAL: Guangxi yue:31/zhuang:16/ping:1. STATUS: committing.
