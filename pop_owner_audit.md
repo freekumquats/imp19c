@@ -41,6 +41,19 @@ New_Brunswick + New_England but `catholic` in Nova_Scotia. Mi'kmaq were Catholic
 Pensacola latin_caribbean (FL ceded to GBR 1763, borderline at start-of-year);
 Springfield rifles (pre-existing, out of scope); enslaved `evangelical` mod-wide convention.
 
+### Native RELIGION audit (prompted by "why are the natives catholic?")
+- **Mi'kmaq (14 provs, NB/NS/NE): catholic → `syncretic_christian`.** Mi'kmaq WERE
+  Jesuit-Catholic by 1763 (French allies since 1610s) so not animist — but bare
+  `catholic` implies a European congregation; `syncretic_christian` (the mod's
+  "Christianized-but-indigenous" faith) is the accurate choice. Verified ALL
+  native-on-catholic provinces were Mi'kmaq — no other nation leaked onto catholic.
+- **`gaihwiio` is ANACHRONISTIC** — it's Handsome Lake's Longhouse Code, founded
+  **1799** (36 yrs too late). Iroquois in 1763 = traditional Longhouse; mod convention
+  for unconverted eastern natives = `waashat` (confirmed: Appalachia Cherokee/Shawnee
+  all waashat). FIXED in BNA scope: Mid-Atlantic (25) + Ontario (3) → waashat.
+  ⚠️ REMAINING gaihwiio elsewhere (fix when reaching those regions): **Great_Lakes 18,
+  Great_Forests 9** (both North America region, not yet audited).
+
 ### BNA border/owner audit
 - Multi-core (comment-stripped): 0 true conflicts. The 27 `_fix_bna_cores.py` strips
   were ghosts (already-emptied tags' `# was:` comments) — NOT applied.
