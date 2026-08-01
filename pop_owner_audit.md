@@ -69,16 +69,40 @@ Springfield rifles (pre-existing, out of scope); enslaved `evangelical` mod-wide
   00_default.txt had an errant BOM. Now correct.
 - Bogus "border fix" in bbc8fb286 REVERTED (330590304): was ghosts + regex comment corruption.
 
-### Owner audit — findings so far
-- **CRT (Cartagena) — BUG.** Independent `constitutional_republic`, primary_culture=colombian,
-  owns 944 Sincelejo, 4366 Montería, 9689 Cartagena (cap), 2772 Magangué, 8703 Mojana,
-  8514 Tierralta, 5171 San Marcos. An independent Colombian republic is ~1811 — anachronistic
-  for 1763. These were Spanish New Granada. → FIX: move all 7 to **SFB** (Viceroyalty of New
-  Granada, owns all surrounding provinces); empty CRT (QNG-inert). STATUS: pending review+apply.
-- SA Spanish hierarchy otherwise correct: SPA→PR1(Peru)→{AR1,LFP,CHR,CHL,PRG}, SPA→SFB(New
-  Granada)→{QTO,VNZ→{TNJ,CAU,ANQ}}, Brazil POR→BRZ, Guianas NED→{DUG,BIG}/FRA→FRG,
-  Mapuche independent (LFQ/LFM/INP). Unowned=55 (frontier/independent-indigenous — expected).
-- Remaining SA tags/provinces: full per-province sweep PENDING.
+### Owner audit — COMPLETE (every province of every SA tag + every unowned province)
+- **CRT (Cartagena) — BUG, FIXED (applied to 00_default.txt working tree).** Independent
+  `constitutional_republic` (~1811 anachronism) owned 944/4366/9689(cap)/2772/8703/8514/5171.
+  Moved all 7 to **SFB** (Viceroyalty of New Granada); CRT now inert (owns 0). Capital moved
+  with land → no ownerless-capital crash. Comment-safe edit, no BOM, braces balanced.
+- **Paraguay 913 Concepción — anachronism.** 12u paraguayan/catholic town, UNOWNED. Concepción
+  (Paraguay) founded 1773 — shouldn't be a large catholic town in 1763. → FIX: shrink to small
+  Guaraní frontier (pop). Unowned is then fine.
+- Owner hierarchy otherwise ALL CORRECT (verified per-province): SPA→PR1(Peru)→{AR1,LFP,CHR,CHL,PRG},
+  SPA→SFB(New Granada)→{QTO,VNZ→{TNJ,CAU,ANQ}}, Brazil POR→BRZ, S-Brazil frontier LFP (Rio Grande/
+  Sacramento contested — plausible), Guianas NED→{DUG,BIG}/FRA→FRG, Mapuche+Tehuelche+Guaraní-missions
+  independent (LFQ/LFM/INP/MSN + unowned Patagonia/Pampas). PR1 Amazon-headwaters (Purus/Acre) =
+  defensible pre-1777-San-Ildefonso simplification. Empty provs (6351 Puerto Deseado, 10780 Osorno,
+  6175 Boa Vista, 1694/2763 etc.) = clean-empty, valid, NOT amount=0 residue. Zero amount=0 in all SA.
+
+### Pop audit — findings (magnitudes too high for 1763; to fix)
+- **Northeast_Brazil:** Recife 50u→~7u, Salvador 40u→~11u (Bahia ~45k/Pernambuco ~27k; ~4-8× over);
+  Itabuna 23u, Santo Antonio 13u, Sergipe 10u — trim inflated towns.
+- **South_Brazil:** Desterro 25u, Rio Grande 14u, Porto Alegre 10u — trim (far-south was sparse frontier).
+- **Uruguay:** Montevideo 20u + whole Banda Oriental over (thinly-settled ranching); trim.
+- **Paraguay 913** anachronistic (above).
+- North_Brazil/Center-West = mostly sparse tupi/kayapo/guarani, magnitudes OK.
+- **Chile — was OVER-trimmed (my error), FIXED.** Had gutted to 77u/308k; real 1763 =
+  colonial valley ~400-500k + independent Mapuche Araucanía ~200-300k. Boosted Mapuche
+  Tranaquepe 5→22u, Temuco 7→30u; lifted Santiago/Concepción. Now 127u/508k (defensible-low).
+  Owners all verified correct (CHL valley / LFQ Mapuche / PR1-CHR Atacama-north / AR1 trans-Andes).
+- **Guyana — was ~3× high, FIXED + owner bug.** Trimmed plantation towns (Georgetown/Paramaribo/
+  New Amsterdam/Cayenne/Nieuw Nickerie) + emptied Spanish-Orinoco interior (Santa Elena/El Jobal/
+  Angostura — Ciudad Bolívar founded 1764). Now 38u/152k. **OWNER/COMPOSITION BUG FIXED: Georgetown
+  (9868) was afro_caribbean/anglican/english under Dutch tag BIG — anachronistic (British took
+  Demerara 1796). → creole/reformed/dutch to match its correct Dutch owner (BIG = NED client_colony,
+  culture=dutch; tag NAME misleading but ownership right).**
+- STATUS: **all pop+owner fixes applied. SA fully audited (every province, 4-point checklist).
+  Firing fresh adversarial review on the full 7-file diff → fix → re-review → commit → push.**
 
 ---
 
