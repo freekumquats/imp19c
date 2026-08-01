@@ -315,3 +315,36 @@ religion keys defined; no bare-int/comment corruption). All 4 historical provinc
 2 LOW non-blocking notes (NOT from this diff): Roermond->AUS (Habsburg Upper Guelders, defensible); pre-existing
 `jewish` religion tagged DO-NOT-USE (227 pre-existing lines, out of scope — FOLLOW-UP candidate). No fixes needed
 => no re-review of identical diff. Boot-test owed on separate machine (standing rule).
+
+## NA/SA FOLLOW-UP CORRECTIONS (2026-08-01, from verification agents; source research/1763_TRUTH_ROW.md Americas)
+NA:
+- St.Louis 4459: was French settlement (culture=french +creole slaves) — founded 1764, anachronistic at Feb 1763.
+  FIXED -> Osage (culture=osage/waashat, 2u tribesmen). Matches 1763 reality (Osage country, no St.Louis yet).
+- Quebec: quebecois ~92k overshot New France St.Lawrence census (~70k). Trimmed Montréal/Quebec/Sorel/Boucherville/
+  Joliette -> quebecois ~72k. Native pops (cree/nunavik/huron/abenaki 31u) untouched. Quebec total 54u->49u.
+SA (magnitude/composition drift flagged by SA verify agent):
+- Chile: colonial ~0.27M undercount -> raised Central Valley core (Santiago/Concepción/Talca/Rancagua/etc) to
+  ~0.40M colonial; Mapuche ~0.24M untouched. Total 127u->161u (~0.64M) = matches 400-500k colonial + 200-300k Mapuche.
+- Colombia: 1.20M -> 1.00M (top of 0.8-1.0M range). Scaled down 15 largest settled provinces (Bogota/Tunja/
+  Cartagena/etc). Indigenous keys (zipa/zaque/achagua/panche/wayuu/tairona/sinu) preserved.
+- Venezuela: 0.85M -> 0.76M (slightly above 0.5-0.7M; further trim would gut floors — ACCEPTED as defensible
+  for cacao-coast+llanos+Maracaibo).
+- Peru: indigenous share 47%->73%; Ecuador 44%->79% (research target 70-80%). Converted highland lower_strata
+  (province-default peruvian/ecuadorian mestizo) -> quechua. Mestizo majority is 19thC; 1763 Andes were indigenous-
+  majority. Totals unchanged (culture shift only).
+- candomble/cabula/catimbo (SA verify flag): confirmed DEFINED in common/religions/00_vthreereligions.txt =
+  intentional mod folk-religion abstractions, not crashes. Period-appropriateness = low-priority, LEFT.
+- CRASH SWEEP all 7 files: single BOM, braces balanced, 0 zeros, all cultures defined. STATUS: pending adversarial review.
+
+### NA/SA FOLLOW-UP — ADVERSARIAL REVIEW: PASS (no crash blockers) + fixes applied [2026-08-01]
+Review verdict: no crash-class blockers (all 7 files single-BOM, braces balanced, 0 zeros, cultures/religions defined,
+quechua regex insertions well-formed). Fixes applied for the 2 raised issues:
+- B1 (MEDIUM) FIXED: file-wide quechua conversion wrongly hit COASTAL Ecuador (Guayaquil/Esmeraldas/Machala/
+  Portoviejo/Babahoyo = montubio/mestizo/Afro-coast, not Andean). Reverted those 6 -> ecuadorian. Ecuador indigenous
+  79%->65% (highland quechua-majority + coastal mestizo = geographically correct). Peru B2 (coastal quechua) LEFT:
+  defensible (highland labor migration to coastal haciendas; afro_andean retained).
+- B3 (LOW) DECISION: St.Louis 4459 owned by LSA (Spanish Louisiana), cap=3967 so no ownerless-capital risk.
+  LEFT LSA-owned: research says Spanish authority over Osage country was NOMINAL but the CLAIM existed (from France
+  1762); LSA-owned + Osage-populated = same pattern as Spanish Southwest/Apacheria (nominal claim, indigenous pops). Defensible.
+- B4 (INFO) duplicate identical strata: engine-legal, standard in these files, no action.
+Diff changed only Ecuador after fixes; re-verify then commit.
