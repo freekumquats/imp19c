@@ -116,3 +116,202 @@ Springfield rifles (pre-existing, out of scope); enslaved `evangelical` mod-wide
   Guadeloupe/Martinique → FRA ✓; Cuba → NSP ✓ (Havana returned to Spain 1763); Bahamas → BAH (GBR) ✓.
 - Pop magnitudes to fix: Cuba 572k→~170k; Bahamas(Lucayan) 124k→~4k; StDomingue 412k ✓ mag but
   needs ~85-90% enslaved composition; central Mexico 3.8M ✓ mag but needs ~62% indigenous.
+
+---
+
+## Region 3 — NORTH AMERICA (in progress; NOT committed — full region + review first)
+
+Research: `1763_north_america_research.md` (Calloway/Hämäläinen/Cook/Ray/Ubelaker etc.).
+8 of 9 interior/west regions = entirely Indigenous-owned (unowned on map); only American
+Southwest Rio Grande corridor is Spanish. Missions: Alta CA starts Jul 1769, so 1763 CA=100% Native.
+
+### Done (working tree, unreviewed):
+- **Great_Lakes**: gaihwiio(anachronistic 1799)->waashat (all); Detroit yankee/reformed->quebecois/catholic
+  (French Fort Pontchartrain) + Ojibwe minority. Owners (C3F/MIA/DAK independent natives) correct.
+- **Great_Forests (Ohio/Illinois Country)**: 18 anachronistic yankee/Christian settler provinces
+  (Cincinnati/Columbus/Dayton/etc — post-1763, Pontiac's War + Proclamation Line) -> Native tribesmen
+  (Shawnee Ohio core, Illinois/Miami Indiana). Kaskaskia yankee->quebecois/catholic (French village).
+  gaihwiio->waashat. 47u.
+- **California**: Alta CA catholic->earth_lodge (missions start 1769, not 1763); Alta cities
+  norteno->chumash; stripped anachronistic Spanish settler strata; Baja (Jesuit since 1697) KEPT
+  Spanish/catholic. Pop 36u->83u/332k (research: densest HG region ~250-310k). Owners: native tags +
+  unowned (correct); Baja NSP (correct).
+
+### Remaining NA files to audit (per-province, 4-point checklist):
+Great_Plains, Cascadia, Mountain_West, American_Southwest, British_Columbia, Praire_Provinces,
+Northern_Territories, Vancouver_Island, Alaska, + Mexico(Eastern/Northern/Pacific), Central_America,
+Antilles, Cuba, Haiti, Lucayan. THEN adversarial review -> fix -> re-review -> commit -> push.
+
+### NA continued (working tree, unreviewed):
+- **Great_Plains**: 5 anachronistic settler provinces fixed — St.Louis(4459) yankee->french/catholic
+  (founded 1764, French habitants under Spanish LSA); Girardeau/St.Charles/Fayette/Kennet dixie/yankee
+  ->osage/waashat. Owner LSA (Spanish Louisiana, got it 1762) verified correct, owns own capital 3967.
+  Plains nations (DAK/CMC/OSG/LAK/etc) all correctly independent. 25u.
+- **Cascadia**: clean (all Native, unowned/small native tags, no European contact 1763). No change.
+- **Mountain_West**: 4 Apache/Chiricahua catholic->waashat (San Carlos/Yuma/Phoenix/Tucson — Apacheria
+  independent, unconverted). Tucson kept small norteno mission element (San Xavier pre-1763). Owners correct.
+- **British_Columbia / Northern_Territories / Vancouver_Island**: clean (Dene/Haida/Salish/Inuit, HBC posts + unowned).
+- **Praire_Provinces**: Winnipeg(3055)/Grand Rapids(4798) metis/catholic->cree/waashat (Metis people
+  = 1810s Red River, anachronistic; owner ICF Cree correct). 
+- **Alaska**: Kodiak(2477) orthodox->inuit; Novoarkhangelsk/Sitka(12498) stripped russian/orthodox
+  settler stratum (Russian America starts 1784/1799; ZERO Russian presence 1763). All unowned = correct.
+- **Caribbean OWNER fixes (00_default.txt)**: Trinidad(1591) LWI->NSP (Spanish till 1797); St.Lucia(4849)
+  LWI->FRA (French till 1814). Dominica/StVincent/Grenada/Tobago->LWI correct (ceded 1763). Comment-safe,
+  no BOM, braces ok, spa_america.4 intact.
+- **Cuba**: scaled ~0.3x -> 236k (was 572k; 1763 pre-sugar-boom ~170-200k). Composition (castilian
+  elite/zambo/mulato/slaves) preserved.
+- **Haiti**: Saint-Domingue FRENCH west (HTI/HTK/GAS: PauP/Jeremie/Jacmel/LosCayos/PortdePaix/CapHaitian/
+  Gonaives) rewritten to ENSLAVED-MAJORITY (was 6% -> 67% file-wide, ~85%+ in the French provinces;
+  richest slave colony on earth). Spanish east (Santo Domingo etc, NSP) kept free/mixed. dahoman religion.
+
+REMAINING NA: Eastern_Mexico, Northern_Mexico, Pacific_Mexico, American_Southwest, Central_America,
+Antilles (owner done; pop magnitudes TBD), Lucayan (Bahamas ~4k, currently ~29u — trim).
+
+### NA Mexico/Caribbean (working tree, unreviewed):
+- **American_Southwest**: 28 independent-native provinces (Comanche/Chiricahua/Caddo/Koasati/Lipan)
+  catholic->waashat (unconverted, owned by CMC/CDD/APA/LIP not NSP). NSP Rio Grande/Texas mission-
+  presidio corridor (El Paso/Santa Fe/Albuquerque/San Antonio/Laredo/etc, 11 provs) kept catholic. Owners correct.
+- **Pacific_Mexico** (central Mexico core): re-indigenized to 68% indigenous / 26% mestizo (was 53%
+  mestizo; research ~62% indigenous 1763). 37 mexican-primary provinces flipped to regional Native
+  culture (nahuatl center, zapotec Oaxaca, purepecha Michoacan, tzeltal Chiapas) + small mexican minority.
+  Cities (Mexico/Puebla/Guadalajara/Leon/Irapuato/Queretaro/Pachuca/Tulancingo) kept Hispanic-majority.
+  Pre-existing 2x amount=0 stripped. Owner NSP correct.
+- **Eastern_Mexico**: re-indigenized to 75% indigenous / 17% mestizo (was 38% mestizo). 16 provinces
+  flipped (yucatec Yucatan/Campeche, tzeltal Tabasco, nahuatl Veracruz); Veracruz port + Merida kept
+  Hispanic. Pre-existing amount=0 stripped. Owner NSP correct; Yucatan interior TUL(Maya) independent.
+- **Cuba**: (above) 236k. **Haiti**: (above) Saint-Domingue enslaved-majority.
+- **Northern_Mexico**: audited — silver-mining Bajio (Zacatecas/SanLuisPotosi/Aguascalientes) legitimately
+  populous; far-north already sparse. 207u/828k DEFENSIBLE for the San Luis Potosi+Zacatecas intendancies.
+  28% mestizo/40% norteno acceptable (frontier was more mixed). NO CHANGE needed. Owner NSP correct.
+
+REMAINING NA: Central_America (GUA/pops), Antilles (pop magnitudes), Lucayan (Bahamas trim). Then review.
+
+## EUROPE (region 3) — OWNER audit findings (pre-edit, confirmed vs sourced research)
+
+Sourced basis: research/1763_econ_poland_lithuania.md ("Commonwealth intact; First Partition=1772"),
+audit_worklists/research/europe_1763.md (Black/Doyle/Lynch/Dixon/Finkel/Clark/Ingrao/Wilson/Lukowski).
+CSV owner col DISCARDED (echoes on-disk; proven by Trinidad 1591=LWI but was Spanish/NSP).
+
+Aggregate Euro on-disk pop = 36,041u (~144M) vs ~150M expected — magnitude OK; Europe is an OWNER/distribution problem.
+
+CONFIRMED 1763 OWNER ANACHRONISMS (map frozen at 1815/post-partition borders):
+1. Galicia file (00_galicia.txt): 33 provs = AUS, but Lwów/Kraków/Przemyśl/Tarnopol/Brody = Austrian only from
+   1772 First Partition. 1763 = POLISH. (Prov 10092 Krakau currently = KRA tag.)
+2. Belgium: 00_low_countries.txt lumps Brussel/Antwerpen/Liège/Gent/Namur/Bruges/Mons/Luxembourg under NED
+   (Dutch Republic). 1763 = AUSTRIAN NETHERLANDS (Habsburg). ~20+ provs need NED->AUS (or a Belgium subject tag).
+3. dependency RUS->FIN (royal_union): Finland was SWEDISH in 1763 (Russian only from 1809). Fix overlord + FIN provs.
+4. dependency SWE->NOR (royal_union): Norway was DANISH (Denmark-Norway); Swedish only from 1814. Fix overlord.
+5. dependency PRU->POZ (royal_union): Poznań/Posen = Polish until 1793 2nd Partition. 1763 = POLISH.
+6. Right-bank Ukraine (in 00_kiev.txt, currently all RUS): Bila Tserkva/Fastiv/Cherkasy/Chigirin/Berdychiv =
+   Polish Crown until 1793. Left-bank (Poltava/Chernigov/Kursk/Belgorod)+Kiev city = Russian since 1667 (correct).
+7. Lithuania-proper + Latgalia in 00_baltic_states.txt: ~20 provs = RUS (Kowno/Telšiai/Šiauliai/Panevežys/
+   Kėdainiai/Jurbarkas/Plungė/Kelmė = Samogitia; Rēzekne/Dünaburg/Lucyn/Kreslavl = Latgalia). Commonwealth till partitions.
+
+CORRECT (no change): Habsburg subjects HUN/CRO/TUS/LBV/TRS (royal_union/client); Ottoman vassals CRM(feudatory)/
+WAL/MOL(autonomous); COU=RUS client but should be POLISH FIEF (flag); LIV/EST=RUS client (Baltic German, Russian
+since 1721 — CORRECT). Silesia = PRU (correct, Hubertusburg Feb 1763). Corsica: check 00_corsica_and_sardinia (GEN:4 present).
+
+PRIOR PARTIAL WORK (#218/#229, treat as UNVERIFIED but aligns w/ research): LIT already expanded to full GDL
+(Vilno/Grodno/Minsk/Mogilev/Vitebsk/Volhyn/Brześć); POL got Podlachia. Remaining gaps = Galicia, Poznań, right-bank
+Ukraine, Samogitia/Latgalia, Belgium, Finland, Norway, Courland.
+
+STATUS: edits DEFERRED until two research truth docs assembled (user: consolidate first). Then execute + review.
+
+## EUROPE — EXECUTION DECISION LOG (2026-08-01, autonomous per skill; source = research/1763_TRUTH_ROW.md E.Europe section)
+
+Root cause: Eastern Europe map frozen at 1815 POST-PARTITION borders. Commonwealth was WHOLE in Feb 1763
+(1st Partition 1772). All fixes below reverse partition anachronisms. CRASH-SAFETY: 00_default.txt has NO BOM
+(plain utf-8); comment-safe edits only (no bare-int regex across file); keep every tag's capital owned by SOMEONE.
+
+### A. DEPENDENCY inversions (1815 relations → 1763 reality) — edit dependency lines
+1. RUS->FIN royal_union  => SWE->FIN royal_union.  Finland was integral SWEDEN in 1763 (Russian only 1809).
+2. SWE->NOR royal_union  => DEN->NOR royal_union.  Norway was DENMARK-Norway (Swedish only 1814).
+3. RUS->COU client_state => POL->COU client_state. Courland = Polish CROWN FIEF in 1763 (Russian only 1795).
+4. PRU->POZ royal_union  => DELETE. Poznań/Greater Poland was Polish till 1793 2nd Partition; POZ neutralized (see C).
+
+### B. GALICIA (00_galicia.txt, currently AUS:33) — Austria took Galicia 1772, Bukovina 1775
+- ALL galicia AUS provs => POL (Polish Crown: Ruthenian/Lwów + Lesser Poland voivodeships), EXCEPT:
+  - 6798 Radautz + 8767 Czernovitz => MOL (Bukovina = MOLDAVIAN, Ottoman vassal; Austria annexed 1775 not 1772).
+  - (Kolomea 8769, Nadworna 7948, Kutty 8165, Zaleszczik 8098 = Pokuttya/Ruthenian voiv. = POLISH, NOT Bukovina => POL.)
+- 10092 Krakau: currently owned by KRA tag (see C) => POL.
+
+### C. KRA (Free City of Kraków) — ANACHRONISM: this is the 1815 Congress Free City, constitutional_republic, 1 prov.
+- CRASH CLASS: landless constitutional_republic = construction crash ([[imp19c-landless-republic-crash]]).
+- FIX (proven CRT template): government constitutional_republic => viceroyalty; own_control_core emptied;
+  Krakau 10092 => POL; KRA capital stays 10092 (now owned by POL, exactly like CRT cap 9689 owned by SFB).
+- KRA has 3 guarantee lines (RUS/AUS/PRU) — harmless on an inert tag, leave.
+
+### D. POZ (Poznań) — neutralize; Greater Poland is Polish in 1763
+- POZ is a viceroyalty (safe landless class). Move all 12 POZ provs => POL. POZ capital 563 => now owned by POL (CRT pattern).
+- Delete PRU->POZ dependency (B4).
+
+### E. RIGHT-BANK UKRAINE (00_kiev.txt, currently RUS) — west of Dnieper = Polish Crown till 1793
+  Left-bank + Kiev city + Sloboda + Russia-proper Black Earth = Russian since 1667 => KEEP RUS.
+- => POL (right-bank Kyiv voiv. + Bracław + Podolia + Pokuttya-adjacent): 4002 Bila Tserkva, 3937 Fastiw,
+  2671 Berdichiv, 3989 Cherkassy, 3409 Chigirin, 5905 Bohuslav, 5414 Uman, 6533 Vinnitsya, 6521 Illintsy,
+  5958 Orativ, 5971 Zhmerinka, 6600 Kamyanets-Podilsky, 5300 Proskuriv, 7175 Husiatyn, 6038 Yarmolintsy,
+  6022 Murovani Kurilivsty, 7326 Kodima, 5361 Torodishe(Horodyshche), 5410 Mala Viska, 4604 Ruzhin,
+  4542 Khmilnik, 2829 Ovruch, 6099 Pripyat.
+- => MOL: 6586 Chernivtsi (Bukovina).
+- FLAG (uncertain, left RUS pending review): 2187 Vishgorod (Vyshhorod, right-bank but abuts Kiev city 1667 cession).
+- KEEP RUS (left-bank/Sloboda/Black-Earth): Poltava, Chernigov, Konotop, Nezhin, Romny, Priluki, Lubny, Kremenchuk,
+  Zolotonosha, Pereyaslav, Starodub, Novgorod-Seversky, Kharkiv, Sumy, Okhtirka, Kursk, Belgorod, Stary Oskol, etc.
+
+### F. BALTIC (00_baltic_states.txt, RUS provs) — Samogitia/Latgalia/Lithuania-proper = Commonwealth till partitions
+- => LIT (Grand Duchy): 122 Pasvalys, 129 Kursenai, 751 Plunge, 1767 Visaginas, 2363 Rokiskis, 2379 Kelme,
+  6140 Silale, 6472 Kowno(Kaunas), 7519 Kedainiai, 7723 Telsiai, 8222 Sakiai, 8237 Jurbarkas, 9694 Siauliai,
+  10032 Panevezys  (Samogitia + Lithuania-proper);  3252 Rezekne, 5194 Dünaburg, 6029 Lucyn, 6609 Kreutzburg,
+  6638 Vorklyany, 8359 Marienhausen, 10050 Kreslavl  (Latgalia/Inflanty).
+- => PRU: 8352 Silute (Šilutė/Heydekrug = Memelland = PRUSSIAN Lithuania, never Commonwealth/Russia).
+- FLAG (uncertain, left RUS pending review): 2880 Lyanskorona (possibly Livonia-proper Vidzeme, which correctly stays RUS).
+- KEEP RUS (correct since 1721 Nystad): LIV (Livonia/Riga) + EST (Estonia/Reval) client_states — Baltic German, Russian.
+
+### G. FINLAND (00_finland.txt, currently FIN) — Vyborg/"Old Finland" Karelia was Russian since 1721/1743
+- => RUS (ceded to Russia by Nystad 1721 + Åbo 1743): 8832 Viipuri(Vyborg), 3761 Käkisalmi(Kexholm),
+  7564 Sortavala, 6525 Muolaa, 9555 Virolahti, 9567 Kotka, 3766 Valkeala, 6580 Impilahti, 8212 Suojärvi.
+  (rest of FIN stays FIN under SWE per A1.)
+  FLAG: exact Vyborg-Karelia province set approximate — review to confirm none are core-Finland.
+
+### NOT CHANGED (verified correct): Silesia=PRU (Hubertusburg Feb 1763); Corsica GEN (Genoese); Habsburg subjects
+  HUN/CRO/TUS/LBV/TRS; Ottoman CRM(feudatory)/WAL/MOL(autonomous); Belgium=AUS (no Belgium tag — good-enough
+  abstraction, Austrian Netherlands folded into AUS which already owns low_countries Belgian provs... VERIFY: are
+  Brussel/Antwerpen/etc under NED? YES — NED:35. DECISION: Belgium provs NED->AUS. See H.)
+
+### H. BELGIUM (00_low_countries.txt) — Austrian Netherlands (Habsburg), currently under NED (Dutch Republic)
+- => AUS (Austrian Netherlands + Luxembourg): Brussel 235, s'Hertogenbosch(NO—Dutch Brabant, stays NED), Dinant 1090,
+  Mons 3177, Kortryk 3187, Yper 3392, Charleroi 3992, Verviers 4447, Wavre 5133, Leuven 5148, Liège 6426,
+  Antwerpen 6584, Bruges 7221, Gent 8056, Namur 8497, + LUX provs (Arlon 2361, Bastogne 2377, Luxembourg 4270).
+  DECISION detail: the Dutch Republic kept the 7 northern provinces + Generality Lands (States Brabant incl.
+  's-Hertogenbosch/Maastricht, Zeeland-Flanders). Austrian Netherlands = Brabant(Brussels/Antwerp/Leuven), Flanders
+  (Gent/Bruges/Kortrijk/Ypres), Hainaut(Mons/Charleroi), Namur, Liège(prince-bishopric, tech. separate but abstract to AUS),
+  Luxembourg. FLAG for review: exact NED-vs-AUS province split of the Low Countries is the error-prone call here.
+
+### EUROPE — CRASH-SAFETY RESOLUTIONS (applied)
+- KRA (Free City Kraków): constitutional_republic -> viceroyalty, core emptied, cap 10092 owned by POL. SAFE (CRT pattern).
+- POZ (Poznań): already viceroyalty; core emptied, cap 563 owned by POL. SAFE. PRU->POZ dependency deleted.
+- LUX (Luxembourg): already viceroyalty; core emptied (Luxembourg prov 4270 -> AUS), cap 4270 owned by AUS. SAFE.
+  Stale NED->LUX royal_union DELETED (Luxembourg=Austrian Netherlands 1763; LUX left inert like QNG/ALC/CRT).
+- VERIFIED post-edit: 0 double/zero-owned among 100 touched provs; all 13 relevant tags' capitals owned; braces 10967=10967; 00_default.txt has NO BOM (correct). All 3 landless tags are viceroyalty (NOT elected-head republic crash class).
+- Dependency inversions applied: SWE->FIN, DEN->NOR, POL->COU (were RUS->FIN, SWE->NOR, RUS->COU).
+
+### EUROPE — POP-SIDE + FINAL VERIFICATION (applied)
+- Galicia pops: 10 anachronistic `culture="austrian"` strata (post-1772 Habsburg admin/colonists) fixed —
+  Bukovina provs (Radautz/Czernowitz) -> romanian; Polish-Galicia provs (Lezaysk/Rzeszów/Neu Sandec/Bochnia/
+  Wadowice/Bielitz/Kraków) -> polish. (Bielitz German enclave folded to polish = good-enough abstraction.)
+- Latgalia (LIT now) small `russian` Old-Believer pops: KEPT — historically correct (Old Believers fled to Polish
+  Inflanty late-17thC); old_belief religion present confirms. Right-bank Ukraine pops clean (ukrainian/polish/ashkenazi).
+- Religions across touched files all DEFINED + period-appropriate (catholic/orthodox/jewish/sunni/lutheran/reformed/
+  old_belief/evangelical). No anachronisms. Aggregate Euro pop ~144M (vs ~150M expected) — magnitude fine, no rescale needed.
+- CRASH SWEEP: 00_Galicia single BOM (efbbbf, no double), braces 247=247, 0 zeros. 00_default NO BOM, braces balanced.
+  Only 00_default.txt (owner) + 00_Galicia.txt (pops) changed — baltic/kiev/finland pop files already period-correct, owner-only fix.
+- STATUS: Europe audit COMPLETE, pending adversarial code-review (mandatory gate before commit).
+
+### EUROPE — ADVERSARIAL CODE-REVIEW: PASS (no blockers) [2026-08-01]
+code-review subagent verdict: PASS, clear to commit. All crash-class checks CLEAR (landless-republic SAFE:
+KRA/POZ/LUX all viceroyalty; ownerless-capital SAFE: caps owned by POL/POL/AUS — proven CRT/ALC pattern, NOT a
+dangling-capital crash; 0 double/zero-owned; BOM correct both files; braces balanced; 0 amount=0; all culture/
+religion keys defined; no bare-int/comment corruption). All 4 historical province sets independently CONFIRMED
+(right-bank Dnieper, Bukovina->MOL, Vyborg/Old-Finland, Belgium NED/AUS split incl. Generality Lands kept Dutch).
+2 LOW non-blocking notes (NOT from this diff): Roermond->AUS (Habsburg Upper Guelders, defensible); pre-existing
+`jewish` religion tagged DO-NOT-USE (227 pre-existing lines, out of scope — FOLLOW-UP candidate). No fixes needed
+=> no re-review of identical diff. Boot-test owed on separate machine (standing rule).
