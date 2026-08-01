@@ -400,3 +400,50 @@ Fixes applied:
 BONUS: removed 3 pre-existing amount=0 blocks in Gulf_of_Guinea prov 611 Fernando Poo (+ dropped anachronistic
   castilian/catholic residue; Bioko was minimally-settled Bubi/fang in 1763, Spanish only from 1778). GoG 0 zeros now.
 Re-verified all files crash-safe. No further blockers -> commit.
+
+## ASIA/PACIFIC — DECISIONS + FIXES (2026-08-01, source research/1763_TRUTH_ROW.md Asia section)
+MAIN FIX — EIC de-Raj-ification (00_default.txt): EIC owned 134 provs = post-1857 Raj footprint. Pre-Buxar (1764)
+EIC held Calcutta+coastal factories with de-facto Bengal REVENUE control, but Nawab nominal sovereign + Gangetic=Awadh.
+- 31 Indo-Gangetic (Agra/Mathura/Meerut/Kanpur/Allahabad/Bareilly/Lucknow-doab) EIC->AWA (Awadh + Mughal/Maratha
+  frontier; EIC took these 1801-1856 as Ceded&Conquered Provinces).
+- 21 Bengal-proper (Dacca/Jessore/Barisal/Mymensingh/etc) EIC->BNG (Nawab of Bengal sovereign); EIC KEEPS Calcutta
+  6219 (capital) + Chittagong 1491 (genuine footholds).
+- 5 Bahar EIC->BIH (Bihar, Nawab sphere pre-Buxar).
+- EIC now owns 77 (Madras/Bombay presidencies + Bengal coastal factories = realistic 1763). Still GBR client_colony. Verified: 0 double/zero-owned, capital safe, braces balanced, no BOM.
+VERIFIED CORRECT (no change): AFG Durrani holds Punjab/Pashtunistan (withdrawing post-Panipat, correct); fragmented
+  Indian successors (Rajputs/AWA/Hyderabad/Marathas NAG); Central Asian khanates BUK/KOK/KHV; TKG Tokugawa Japan;
+  PHI Spanish Philippines (British occupation 1762-64 reverts to Spain 1764 = Spanish steady-state correct); SIA
+  Ayutthaya standing; Pacific/NZ/Australia mostly unowned-indigenous. FALSE ALARM: "SIK" = Siak Sri Indapura
+  (Sumatran sultanate, culture=sumatran), NOT Sikhs — Sikh Empire correctly ABSENT (Punjab=AFG/misls).
+POP: religions all defined + period-appropriate (sunni/hindu/shinto/catholic-Luzon/mahayana/sikhism/theravada/
+  anito/vajrayana/etc). anglican in Bengal = British Calcutta footholds (OK). No anachronistic religions found.
+Only 00_default.txt changed (owner-only fix; pop composition already period-correct across Asia). STATUS: pending review.
+
+### ASIA — REVIEW-DRIVEN EXTENSION (B1+B2 fixes applied) [2026-08-01]
+First adversarial review PASSED (no crash blockers; 57-prov bijection verified) but flagged 2 medium historical gaps:
+- B1 FIXED: ~half the Gangetic EIC->AWA provs weren't Awadh. Reassigned 19 AWA->MUG: Rohilkhand (Rampur/Bareilly/
+  Moradabad/Badaun/Pilibhit/Shahjahanpur/Najibabad/Saharanpur/Muzaffarnagar = Rohilla Afghan), Agra-Braj (Agra/
+  Mathura/Hathras/Firozabad = Jat Bharatpur), Delhi-Doab (Sonipat/Rohtak/Faridabad/Hapur/Meerut = Najib regent),
+  Farrukhabad (Bangash). No Rohilla/Jat tag exists -> MUG nominal sphere = good-enough ROW abstraction. Genuine Awadh core kept AWA.
+- B2 FIXED: EIC over-held the whole South/East/West/Central India + Sumatra (same pre-Buxar logic). Reassigned 70:
+  Orissa->NAG (Nagpur Maratha since 1751); Northern Circars+coastal Andhra+Carnatic/Coromandel+Telangana->HYD (Nizam/
+  Arcot; Circars ceded to EIC only 1766); Mysore-plateau+Malabar/Kanara->MYS (Hyder Ali); Nagercoil->TRV; Gujarat->MRT
+  (Gaekwad); Daman->POR (Portuguese); Sumatra W-coast->DEI (Dutch/Minangkabau). Unowned: Aizawl(Mizo tribal), Maldives, Chagos.
+  EIC KEEPS 6 genuine 1763 footholds: Calcutta 6219(cap)+Chittagong 1491+Madras 162+Bombay 8299+Surat 683+Bengkulu 6553.
+- RESULT: EIC 134 -> 7 provinces (historically-accurate 1763 footprint = presidency towns + coastal factories). All 12
+  touched tags' capitals owned by self (no ownerless-capital); 0 double/zero-owned; braces 10967=10967; no BOM.
+- B3 (LOW, pre-existing NOT fixed here): EIC own_control_core still comment-lists French India (Pondicherry) + already
+  moved Yanaon 3464->HYD, Daman 6414->POR. French Pondicherry cluster = FOLLOW-UP. B4 cosmetic whitespace in EIC core: harmless.
+STATUS: pending RE-REVIEW (large extension beyond first-reviewed diff).
+
+### ASIA — RE-REVIEW: PASS + B1 fixed [2026-08-01]
+Re-review of extended diff: no crash blockers (127-prov bijection independently verified twice; 0 double/zero-owned;
+all 637 capital= declarations resolve to an owner; no comment/event-id corruption; BOM correct; braces balanced).
+- B1 (MED) FIXED: EIC still held a 7th province 146 Andaman (HEAD leftover; EIC had no Andaman presence 1763,
+  first settlement 1789/1858). Dropped -> unowned (indigenous Andamanese). EIC now = exactly 6 footholds as intended.
+- B2-B5 (LOW) non-blocking defensible ROW abstractions, accepted: Malabar->MYS ~3yr early (Hyder Ali took it 1766;
+  Kanara 1763 OK); Carnatic/Coromandel->HYD (no Arcot tag, HYD=nominal Nizam suzerain); MUG=NOMINAL SPHERE for
+  Rohilkhand/Jat-Agra/Farrukhabad (de-facto independent, but no Rohilla/Jat/Bangash tag -> good-enough per China-
+  granularity rule); Burdwan/Midnapore 1760-cession folded to BNG (defensible under nominal-sovereign principle).
+- B3 FOLLOW-UP: EIC own_control_core still comment-lists French Pondicherry cluster (out of scope this pass).
+FINAL: EIC 134->6. STATUS: Asia COMPLETE, committing.
