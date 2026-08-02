@@ -274,3 +274,28 @@ region (Turkestan) is DISJOINT from Anxi's (Fergana/Bukhara/Khwarezm) — no lan
 LEAF tasks gated on qing_ca_capstone (no circular dep, no soft-lock). Removed backwards qing_col_anbei;
 loc moved+retargeted (+ qing_ca_anbei_march_tt, qing_ca_needs_steppe_land_tt). Braces: CA 232/232,
 coloniz 209/209. No dup loc keys.
+
+### P3b-3 + P3b-4 — Annan → Burma tree, Andong → Japan tree (DONE, pre-review)
+- **Annan** (qing_burma_annan_march, Burma tree): retargeted from CHI-core 'Vietnam' to conquered mainland
+  SE-Asia (regions Burma/Siam/South_Siam/Laos/Vietnam/Cambodia), subordinating BUR/SIA/VIE. Land march.
+- **Andong** (qing_openjapan_andong_march, Japan tree): retargeted from CHI-core Liaoning/Korea to
+  FRAGMENTED JAPAN (regions Honshu/Kyushu/Shikoku/Ezo), subordinating the daimyo/shogunate/Ainu
+  (TKG/SHZ/CSU/DTE/NMB/MED/AIN). MARITIME march (crosses water → navy). Uses `every_country` with an
+  explicit `OR{is_subject_of=ROOT is_subject=no}` filter (the daimyo may be INDEPENDENT — the Japan tree
+  doesn't auto-subjugate them — so every_subject would miss the free ones).
+- Both reuse the validated pattern (capstone-gated leaf + release-then-rebind). Removed the backwards
+  qing_col_annan/qing_col_andong; loc moved+retargeted to burma/japan loc (+ needs_seasia/needs_japan +
+  march_tt keys). Braces: coloniz 177/177, burma 210/210, japan 196/196. No dup loc; no dangling requires.
+- **ALL 7 MARCHES now use QING_found_march.** QING_establish_protectorate remains ONLY for its 2 legit
+  callers: qing_col_lanfang (Borneo kongsi republic) + qing_col_mexican_empire. Oceania tree final set =
+  bureau/taiwan/pacific_isles/new_holland/new_guinea + anhai(march) + lanfang + capstone (DESIGN §A1).
+- **Review (code-review agent) — P3b-3+4 + follow-through fix:** PASS on Andong's every_country (correct
+  — captures independent daimyo that every_subject would miss). Found MEDIUM: ANNAN's every_subject can't
+  capture BUR/SIA/VIE (the Burma capstone does NOT guarantee they're CHI subjects — qing_burma_tribute is
+  optional/off-path, SIA/VIE never subjugated in-tree), so Annan would found with an empty locals list.
+  FIXED: Annan → every_country + double-OR filter (mirror of the approved Andong pattern). FOLLOW-THROUGH:
+  the same reasoning exposed a LATENT bug in the already-committed Anxi/Anbei (P3b-1/-2) — the CA capstone
+  guarantees the KHANATES (ferghana←khanates chain) so Anxi's every_subject WAS ok, but NOT the hordes
+  (qing_ca_kazakh is off the capstone path), so Anbei had the same empty-list bug. Converted BOTH Anxi and
+  Anbei to every_country too, so all 4 land marches now use the uniform robust iterator. Also cleaned the
+  LOW orphaned loc comment-headers. Braces: CA 234/234, burma 211/211, japan 196/196.
