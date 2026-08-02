@@ -664,3 +664,42 @@ set_trade_goods = silk (raw textile_fibres -> finished silk); Calcutta 6219 seat
 customs house + draft bank; Bengkulu 6553 pepper post -> qing_tea_workshop + tea. Gated
 on holding real trade ground. Proven idioms (add_building_level+has_building guard;
 set_trade_goods). All keys/goods/regions verified valid; braces balanced; loc BOM kept.
+
+--------------------------------------------------------------------------------
+#24 QING BUILDINGS ON CHI SUBJECT NATIONS (2026-08-01, reviewed)
+--------------------------------------------------------------------------------
+Seed Qing-specific buildings on the capitals of CHI's 1763 subjects. KEY ENGINE FACT
+(verified against repo, NOT the research agent which was WRONG): add_building_level does
+NOT bypass a building's `potential` — a gate-failing building is hidden/dropped at boot
+(proven: Macau was bumped to city rank specifically to pass has_city_status). So the
+approach is to make the buildings' gates PASS, not to force-seed.
+
+USER-DRIVEN INSIGHT: has_city_status was on many Qing buildings that are frontier/rural/
+remote by nature (forts, garrisons, pastures, monasteries, mosques, granaries, likin
+barriers) — historically wrong (forts sit on the frontier; the great lamaseries Labrang/
+Kumbum/Chengde 外八廟 are remote; granaries served county-wide). So REMOVED has_city_status
+from: qing_banner_garrison, qing_confucian_temple, qing_gelug_monastery, qing_great_mosque,
+qing_granary, qing_likin_station. (frontier_fort/colony/military_colony/horse_pasture/karez/
+customs_house were ALREADY correctly ungated by their authors.) This removed the need for
+any city-rank bumps (an earlier settlement->city approach was built then REVERTED).
+
+GATE RELAXATION: gelug + confucian owner-gate widened to admit a Qing subject
+(owner={overlord={country_culture_group=jurchen/chinese}}) so CHI's non-manchu Buddhist/
+sinosphere subjects qualify; gelug region gate gained Sichuan_Kham (the Kham feudatories).
+
+REGRESSION CAUGHT + FIXED post-review: removing has_city_status left qing_granary with an
+EMPTY potential{} = globally buildable by every nation. Fixed: gated to jurchen/chinese
+owner-or-overlord (Chinese-realm-only, not city-restricted).
+
+SEEDING: new hidden one-shot imp19c_setup.12 (dispatched day 2 from oa_economy_setup beside
+.11), places 17 buildings on 12 subject capitals, each guarded exists+owner-is-subject-of-
+ROOT+NOT-has-building:
+  banner_garrison: ILI/ULS/MNC/MKD/HLJ (manchu governorships)
+  military_colony: ILI(Gansu)/ULS(Mongolia)/MKD(Liaoning); horse_pasture: ULS/MKD
+  gelug_monastery: TIB(Lhasa)/CKL(Kangding)/DER(Derge)
+  confucian_temple: KOR/VIE/RYU/CHH (sinosphere tributaries + Sipsong Panna Shan court)
+All 17 verified to PASS their post-edit gates. Adversarial review: CLEAN (1 informational
+note re confucian build-menu breadth across all CHI subjects — thematically defensible,
+left; the seeding event places only the 12 enumerated). NOT bumped/seeded: TNN/MLM/TNI/LSU/
+LAF/FOS (non-city nominal vassals, not worth promoting). Braces balanced, BOMs preserved.
+New memory: [[imp19c-add-building-level-respects-potential]].
