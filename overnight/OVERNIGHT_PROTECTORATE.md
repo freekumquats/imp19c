@@ -240,3 +240,27 @@ relocation to their conquering trees (CA/Burma/Japan) per DESIGN §4.1/§4.2.
   no-ops); the `maritime = yes` → `$maritime$ = yes` → `yes = yes` trigger is a PROVEN shipping idiom
   (qing_works_events cheap=yes, se_MOBILIZATION floor=yes); overseas-only regions (no CHI core carved);
   both working lists cleaned at the effect tail (no carryover). Braces balanced.
+
+### P3b-1 — Anxi relocated to the Central Asia tree + retargeted (DONE, pre-review)
+- NEW task `qing_ca_anxi_march` in `qing_central_asia_missions.txt` (requires qing_ca_ferghana — holding
+  conquered oasis ground). RETARGETED per DESIGN §4.1: carves from Fergana/Bukhara/Khwarezm (the OASIS
+  khanates) — NOT "Turkestan" (the Kazakh steppe, the old task's mis-target) and NOT already-Qing Tarim.
+  Subordinates the conquered KOK/BUK/KHV (which the CA tree makes CHI tributaries) as the MARCH's own
+  princely states via QING_found_march. Land march (maritime=no). icon reuses qing_ca_ferghana.
+- **Effect fix (subordination guard):** QING_found_march's local-guard changed from `NOT is_subject=yes`
+  to `OR { is_subject=no  is_subject_of=ROOT }` — the LAND marches' theatre polities are ALREADY CHI
+  subjects when founded (conquered into the sinosphere by the CA/Burma/Japan trees), so the march must be
+  able to REPARENT CHI's own subjects down to itself (CHI→march→khanate nesting, viable per memory), while
+  still never yanking a FOREIGN overlord's subject. This is the branch that actually populates land-march
+  princely states (P3a's overseas marches pass an empty locallist; this is the first real use).
+- Removed the OLD backwards `qing_col_anxi` (carved Turkestan as a fake tributary) from colonization;
+  moved its loc to CA loc + added retargeted text + 2 new tooltip keys (qing_ca_anxi_march_tt,
+  qing_ca_needs_oasis_land_tt). Braces: CA 215/215, coloniz 224/224. No dup loc keys; no dangling requires.
+- **Review (code-review, 2 passes):** Pass 1 PASS on mechanics + found MEDIUM (founding Anxi soft-locks the
+  CA capstone — carving CHI's Fergana land + reparenting the khanates breaks the capstone's allow, and both
+  branched independently off qing_ca_ferghana) + PLAUSIBLE (FUNC_make_subject may not cleanly reparent an
+  already-bound subject; se_FUNC releases first). FIXED: (1) qing_ca_anxi_march now requires the CAPSTONE
+  (founded after the region is pacified — no soft-lock, acyclic, narratively right); (2) release-then-rebind
+  in QING_found_march (release_subject from CHI before make_subject to the march, proven se_FUNC idiom).
+  Pass 2 (re-review): BOTH fixes CONFIRMED correct, no new defects. This validates the reusable pattern
+  (capstone-gate + release-then-rebind) for the remaining land marches Annan/Andong/Anbei.

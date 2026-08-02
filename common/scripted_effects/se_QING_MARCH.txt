@@ -115,10 +115,13 @@ QING_found_march = {
 
 			# 4. Subordinate the theatre's OTHER local polities as the MARCH's own subjects
 			#    (its princely states — they answer to the march, not to Beijing). Guarded per
-			#    tag: skip any that no longer exists, is the march itself, is CHI, or is ALREADY
-			#    a subject of ANYONE (NOT is_subject — so we never yank a polity out from under an
-			#    existing overlord, incl. one of CHI's OWN tributaries; only free polities are taken).
-			#    Overlord = the march scope (FUNC_make_subject accepts any overlord).
+			#    tag: skip any that no longer exists, is the march itself, or is CHI. A polity is
+			#    taken ONLY if it is EITHER free (is_subject=no) OR already a subject of CHI
+			#    (is_subject_of=ROOT) — the latter a deliberate REPARENT hand-down (CHI's conquered
+			#    tributaries devolved to the march, the EIC model; the LAND marches' khanates/daimyo
+			#    are ALREADY CHI subjects when the founding task runs, so this branch is what actually
+			#    populates them). A polity under a FOREIGN overlord is skipped (never yank a third
+			#    party's subject). FUNC_make_subject re-parents in place; overlord = the march scope.
 			if = {
 				limit = { any_in_list = { list = $locallist$  count >= 1 } }
 				every_in_list = {
@@ -127,16 +130,29 @@ QING_found_march = {
 						exists = this
 						NOT = { this = scope:new_country_scope }
 						NOT = { this = ROOT }
-						NOT = { is_subject = yes }
+						# take only free polities OR CHI's own subjects (a deliberate reparent
+						# hand-down); never yank a polity from a FOREIGN overlord.
+						OR = {
+							is_subject = no
+							is_subject_of = ROOT
+						}
 					}
 					save_temporary_scope_as = local_princely_state
-					FUNC_make_subject = {
-						overlord = scope:new_country_scope
-						target = scope:local_princely_state
-						type = protectorate
+						# RELEASE-then-rebind: if the polity is already a CHI subject, release it from CHI
+						# FIRST, then bind it to the march. make_subject on an ALREADY-bound subject is not
+						# safely reparenting in this engine — the proven idiom (se_FUNC.txt:349-351 +
+						# se_FUNC.txt:1411-1415) releases before re-subjugating. A free polity skips the release.
+						if = {
+							limit = { scope:local_princely_state = { is_subject_of = ROOT } }
+							ROOT = { release_subject = scope:local_princely_state }
+						}
+						FUNC_make_subject = {
+							overlord = scope:new_country_scope
+							target = scope:local_princely_state
+							type = protectorate
+						}
 					}
 				}
-			}
 
 			# 5. Seed the march's initial army sized to whatever subsidy tier the founding
 			#    task set (default small if none set). The subsidy pulse (§3.3) maintains it
