@@ -140,6 +140,120 @@ QING_march_expand_pulse = {
 			}
 		}
 	}
+
+	# ==================================================================
+	# [#39] MARITIME EXPANSION (option 1, user ruling 2026-08-02) — a naval-expansion
+	# path for MARITIME marches (qing_march_maritime flag: Anhai/Anxin/Anfei/Andong/Annan).
+	# Roads 1+2 above pivot entirely on `any_neighbor_province` = LAND adjacency; an island
+	# march scattered across open ocean (Anhai: Ryukyus/Marianas/Philippines/Hawaii) has no
+	# owned-then-land-adjacent target, so those roads no-op and the march sits strategically
+	# inert. These roads instead scan by REGION MEMBERSHIP (design "within the same region(s)
+	# the march operates in", NOT adjacency): a region where the march already holds ≥1
+	# province is its theatre; within it, target a conquerable other-owned province (Road 3,
+	# the engine drives the amphibious war itself) or colonise an unowned one (Road 4). The
+	# owner filter mirrors the land roads exactly (never the metropole, a fellow subject, or
+	# a fellow march's princely state). Proven region idioms: random_region + any_region_
+	# province / random_region_province (common/scripted_guis/decentralize_realm_button.txt,
+	# se_AI.txt). Maritime-only (gated on the flag), so the land marches are untouched.
+	# ==================================================================
+
+	# --- Road 3: an overseas war of conquest within the march's theatre region(s). Gated on
+	# the maritime flag + peace, and on the LAND conquest road (Road 1) NOT having already
+	# declared this pulse (it saves scope:qing_march_wargoal_prov only when it fires) — so a
+	# maritime march that DID find a land target does not also open a second sea war the same year.
+	if = {
+		limit = {
+			has_variable = qing_march_maritime
+			war = no
+			exists = overlord
+			NOT = { exists = scope:qing_march_wargoal_prov }
+			# a theatre region (holds march land) that also holds a conquerable polity's province
+			any_region = {
+				any_region_province = { owner = ROOT }
+				any_region_province = {
+					exists = owner
+					NOT = { owner = ROOT }
+					NOT = { owner = ROOT.overlord }
+					owner = {
+						NOT = { is_subject_of = ROOT }
+						NOT = { is_subject_of = ROOT.overlord }
+						NOT = { this = ROOT.overlord }
+						NOT = { overlord = { is_subject_of = ROOT.overlord } }
+					}
+				}
+			}
+		}
+		random = {
+			chance = qing_march_conquest_chance_svalue
+			random_region = {
+				limit = {
+					any_region_province = { owner = ROOT }
+					any_region_province = {
+						exists = owner
+						NOT = { owner = ROOT }
+						NOT = { owner = ROOT.overlord }
+						owner = {
+							NOT = { is_subject_of = ROOT }
+							NOT = { is_subject_of = ROOT.overlord }
+							NOT = { this = ROOT.overlord }
+							NOT = { overlord = { is_subject_of = ROOT.overlord } }
+						}
+					}
+				}
+				random_region_province = {
+					limit = {
+						exists = owner
+						NOT = { owner = ROOT }
+						NOT = { owner = ROOT.overlord }
+						owner = {
+							NOT = { is_subject_of = ROOT }
+							NOT = { is_subject_of = ROOT.overlord }
+							NOT = { this = ROOT.overlord }
+							NOT = { overlord = { is_subject_of = ROOT.overlord } }
+						}
+					}
+					save_scope_as = qing_march_sea_wargoal_prov
+					owner = { save_scope_as = qing_march_sea_target }
+				}
+			}
+			if = {
+				limit = { exists = scope:qing_march_sea_wargoal_prov  exists = scope:qing_march_sea_target }
+				FUNC_declare_war_with_wargoal_province = {
+					war_goal = conquer_wargoal
+					province = scope:qing_march_sea_wargoal_prov
+					target = scope:qing_march_sea_target
+				}
+				LOG_line = { sys = QING  msg = "MARCH (maritime) declares an overseas war of conquest within its theatre region for" }
+			}
+		}
+	}
+
+	# --- Road 4: colonise an unowned province within a theatre region (peaceful, higher chance) ---
+	if = {
+		limit = {
+			has_variable = qing_march_maritime
+			any_region = {
+				any_region_province = { owner = ROOT }
+				any_region_province = { has_owner = no }
+			}
+		}
+		random = {
+			chance = 35
+			random_region = {
+				limit = {
+					any_region_province = { owner = ROOT }
+					any_region_province = { has_owner = no }
+				}
+				random_region_province = {
+					limit = { has_owner = no }
+					# same march-scoped colonise fallback as Road 2 (set_owned_by ROOT + starter pop).
+					set_owned_by = ROOT
+					create_state_pop = tribesmen
+					LOG_line = { sys = QING  msg = "MARCH (maritime) colonises an unowned province within its theatre region for" }
+				}
+			}
+		}
+	}
 }
 
 # ======================================================================

@@ -399,3 +399,42 @@ protectorate retained ONLY for its legit callers (Lanfang + Mexican Empire).
   river/lake ports create_unit rejects). So the pre-fix `is_port`-alone was already correct; my is_coastal
   addition was redundant + its comment backwards (a maintenance trap). REVERTED to `is_port = yes` alone
   with a corrected comment matching the two proven sibling naval effects. march braces 164/164.
+
+### P5-naval (#39) — MARITIME MARCH EXPANSION (option 1, DONE 2026-08-02)
+The gap the P6/P9 reviews left open: the P5 expand pulse's Roads 1+2 pivot entirely on
+`any_neighbor_province` (LAND adjacency), so an island march (Anhai — Ryukyus/Marianas/
+Philippines/Hawaii, scattered across open ocean) finds no owned-then-land-adjacent target
+and sits strategically inert (founds + subsidizes + raises a fleet, but never expands).
+User ruled: build **option 1** — a naval-expansion path scanning by REGION MEMBERSHIP, not
+adjacency.
+
+- **Impl** (se_QING_MARCH_PULSE.txt, QING_march_expand_pulse): added Road 3 (overseas war of
+  conquest) + Road 4 (colonise unowned), BOTH gated on `has_variable = qing_march_maritime`
+  (set only for maritime marches at founding, se_QING_MARCH.txt), so LAND marches are wholly
+  untouched. A "theatre region" = any region where the march holds >=1 province
+  (`any_region = { any_region_province = { owner = ROOT } ... }`); within it, Road 3 picks a
+  conquerable other-owned province → FUNC_declare_war_with_wargoal_province (engine drives the
+  amphibious war), Road 4 colonises an unowned one (set_owned_by ROOT + starter pop, the Road-2
+  fallback). Owner filter mirrors the land roads EXACTLY (never metropole/fellow-subject/
+  fellow-march sub-subject). Road 3 is guarded `NOT = { exists = scope:qing_march_wargoal_prov }`
+  so a maritime march that already found a LAND war (Road 1) doesn't also open a second sea war
+  the same year. Conquest chance reuses qing_march_conquest_chance_svalue (subsidy-scaled);
+  colonise chance = 35 (matches Road 2).
+- **Proven idioms:** `any_region` / `random_region` + `any_region_province` /
+  `random_region_province` — verified in common/scripted_guis/decentralize_realm_button.txt and
+  se_AI.txt (region-membership province iteration). No new verbs.
+- Braces: pulse 141/141. Self-review pending (subagent limit hit; manual audit done).
+
+### TEMP create_country / change_country_tag viability probe (2026-08-02)
+User also asked for a temporary game-start test of the two RAW primitives the march-mint
+alternative would need (the design flagged `create_country -> change_country_tag` UNPROVEN;
+the marches use LAND_release_from_list instead). NEW **TEMPORARY** files (remove before master):
+- `common/scripted_effects/se_QING_TEST_PRIMS.txt` (QING_TEST_country_primitives): once-ever
+  (global flag), CHI-only. Step-logs (TESTPRIM 1-8) through: create_country + set_as_ruler →
+  give it UNOWNED p:59 (Salt Lake City, verified in no own_control_core, no setup/provinces
+  owner) → validate landed → change_country_tag = JPN (dormant registered tag, no 00_default
+  block — the se_JAPAN_BOSHIN precedent) → confirm c:JPN owns p:59. A boot that logs through
+  step 8 = both primitives viable; a stop/crash at a step = that primitive is the culprit.
+- `common/on_action/qing_test_prims_on_actions.txt`: on_game_initialized on_actions LIST-form
+  registration (#254 merge form) → CHI-only wrapper → QING_TEST_country_primitives.
+- Steals no land (unowned province only); no collision (JPN dormant). Braces 34/34, 6/6.
