@@ -221,3 +221,22 @@ NEW `common/scripted_effects/se_QING_MARCH.txt`:
   Pass 2 (re-review): BOTH fixes CONFIRMED correct — convergence verified, count=0 while-loop safe (mints
   just the base cohort), target=0 disbands to nothing without a negative count reaching create_unit,
   manpower never double-docked, is_subject attested. No new defects. Braces 135/135.
+
+### P3a — rewire the three OVERSEAS marches to QING_found_march (DONE, pre-review)
+Anhai (colonization/Oceania), Anxin (New-World), Anfei (Africa) swapped from the old
+QING_establish_protectorate to the new QING_found_march (se_QING_MARCH.txt). These three needed ONLY the
+effect swap — their region lists already gather the player's COLONIZED overseas holdings (Pacific isles /
+Alaska-BC-California / African coast), which are legitimately non-core frontier land (the old backwards
+bug was the LAND marches carving CHI HEARTLAND — Mongolia/Liaoning/Vietnam). All three: maritime = yes
+(they get navies, DESIGN §3.3); locallist = qing_march_locals_list (empty for now — they found from the
+colonized land + grow via the P5 expansion pulse; per-theatre island/coastal polity tags are follow-up).
+QING_establish_protectorate is UNTOUCHED for its legitimate callers (Lanfang republic + Mexican Empire).
+Braces balanced (coloniz 240, nw 134, africa 105). REMAINING for P3b: the four LAND marches
+(anbei/andong/anxi/annan) still call the old effect on CHI-CORE regions — they need region-retargeting +
+relocation to their conquering trees (CA/Burma/Japan) per DESIGN §4.1/§4.2.
+- **Review (code-review agent):** PASS, no defects. Confirmed: arg-contract match (all 6 macro args,
+  government= correctly dropped since the effect hardcodes megacorporation); empty locallist is SAFE (an
+  unpopulated list name = empty list; the any_in_list guard skips subordination, every_in_list cleanup
+  no-ops); the `maritime = yes` → `$maritime$ = yes` → `yes = yes` trigger is a PROVEN shipping idiom
+  (qing_works_events cheap=yes, se_MOBILIZATION floor=yes); overseas-only regions (no CHI core carved);
+  both working lists cleaned at the effect tail (no carryover). Braces balanced.
