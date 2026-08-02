@@ -773,3 +773,177 @@ DELIBERATELY NOT seeded (research-driven negatives):
 
 Verify: braces 212/212 balanced; events file has NO BOM (unchanged); all four placements satisfy each
 building's on-disk potential (region + owner/overlord culture-group), so nothing drops inert.
+
+## #24 sweep — DROPPED core-empire building seeds (add_building_level respects potential)
+
+User: "the buildings added to china itself predate the loosening of the has_city restriction, so do
+another sweep on china to add buildings where historically there were buildings."
+
+KEY: add_building_level RESPECTS a building's `potential` (region/city/culture gate) — it does NOT
+bypass it (memory imp19c-add-building-level-respects-potential; confirmed by the #24 reviewer). So
+se_QING_BUILDINGS.txt seeds whose target province FAILS the building's gate have been SILENTLY DROPPING
+at boot. Audited every seed vs its building's on-disk potential. 11 drops found, two classes:
+
+CLASS A — REGION-gate drops (FIXED by widening the building potential to the regions where the
+institution historically stood; each still requires owner/overlord culture-group jurchen/chinese_group,
+so no non-Qing over-grant):
+- qing_great_mosque   +Shaanxi   -> Xi'an Great Mosque 西安清真大寺 (7129) now lands
+- qing_gelug_monastery +Qinghai  -> Kumbum 塔爾寺 (Xining 7200) now lands
+- qing_gelug_monastery +Zhili    -> Beijing Yonghegong 雍和宮 1744 (8363) now lands
+- qing_horse_pasture   +Zhili    -> Hohhot 呼和浩特 (3322) + Mulan/Rehe 木蘭圍場 (9356) now land
+- qing_military_colony +Tibet    -> Lhasa 拉薩 tuntian (3819) now lands
+- qing_military_colony +Far_East -> Qiqihar 齊齊哈爾 tuntian (43) now lands
+  (the military_colony file-comment already ASSUMED these landed via a bypass that does not exist;
+   the widening makes the comment true.)
+
+CLASS B — CITY-rank drops (building has_city_status vs a settlement-rank province). PENDING a design
+call (bump the province to city rank vs relax the building gate) — deferred to research + review:
+- qing_examination_hall @ Kaifeng 4931 (Henan capital, settlement) + Guilin 2162 (Guangxi capital, settlement)
+- qing_draft_bank       @ Shanghai 5429 (Jiangsu, settlement; qianzhuang emerged here 1736)
+- qing_tribute_depot    @ Jining 9041 (Shandong canal entrepôt, settlement)
+- (also flag: Xiamen 7845 is settlement — affects the customs/port seeds there? port uses can_have_port, OK)
+
+PART 2 (in progress): now that #24 dropped has_city_status from the frontier/religious buildings, ADD
+NEW seeds at real REMOTE (non-city) 1763 sites that could not be placed before — pending research agent
+(gelug: Wutaishan/Chengde-Puning/Hohhot Silituzhao; mosques: Linxia/Hami; frontier forts: Aigun/Hunchun/
+Barkol/Tacheng; horse pastures: Chahar/Taipusi; karez/granaries at frontier towns).
+
+### Class B resolution (city-rank drops)
+- Kaifeng 4931 (Henan cap) + Guilin 2162 (Guangxi cap): FIXED by bumping province_rank settlement->city.
+  Rationale: 16 of China's 18 provincial capitals are already city-rank; these two were the lone
+  settlement outliers = a data gap. Bumping fixes the 貢院 exam-hall drop AND aligns them with peers
+  (proven Macau precedent: bump rank to satisfy has_city gate).
+- Shanghai 5429 (draft_bank/qianzhuang) + Jining 9041 (tribute_depot): PENDING. NOT provincial capitals;
+  in 1763 both were sub-prefectural (Shanghai a Songjiang county; Jining a canal town). Bumping rank
+  would be anachronistically generous (Shanghai's rise is 19th-c.). Leaning toward the BUILDING-side fix
+  (a qianzhuang money-shop / canal grain-depot did not need metropolis rank — same #24 logic), but
+  deferring to research + review rather than unilaterally relaxing gates.
+  (Confirmed via potential re-scan: only draft_bank + tribute_depot are city-gated on these two; the
+   Shanghai 江海關 customs has NO potential block and lands fine — earlier awk false-alarm corrected.)
+
+### Class B FINAL + Part 2 (new remote seeds) — DONE
+Class B (city-rank drops) all FIXED by province_rank settlement->city, justified by each being a
+real city-scale 1763 place (evidence = mod's own civ-value/pop + provincial-capital status):
+- Kaifeng 4931 (Henan cap, civ 12) + Guilin 2162 (Guangxi cap, civ 6): lone settlement outliers among 18 caps.
+- Shanghai 5429 (civ 18 — higher than several city-rank capitals; qianzhuang origin 1736).
+- Jining 9041 (civ 12, ~221 lower-strata pop, 漕運 canal hub + Qufu 孔廟 holy site).
+Now their exam-hall / draft-bank / tribute-depot seeds land.
+
+Part 2 — NEW remote (non-city) seeds enabled by #24's has_city drop + the region-gate widenings.
+Curated, sourced, 1763-extant, not-already-seeded, potential-satisfied (research agent: Naquin & Yü;
+Farquhar; Berger; Elliott; Perdue; Millward):
+- gelug_monastery +Shanxi region -> Wutaishan 五臺山 (2407): imperial Gelug pilgrimage mtn (Pusa Ding).
+- gelug_monastery (Zhili) -> Hohhot 呼和浩特 (3322): Da Zhao 大召 1580 / Xilitu Zhao 席力圖召 1585 (co-located with existing horse pasture — 2 diff buildings, OK).
+- gelug_monastery (Mongolia) -> Dolonnor 多倫諾爾 (155): Huizong 匯宗寺 1691 lama-temple complex.
+- banner_garrison -> Hunchun 琿春 (1952, MNC): 副都統 far-eastern frontier garrison (1714).
+DELIBERATELY not mass-seeded: the dozens of Xinjiang/Manchuria granary+tuntian+fort sites the research
+lists — most frontier garrison seats already carry buildings via the OOB/existing seeds, and blanketing
+every documented outpost would be the formulaic over-seeding the user rejected. Added only the few
+NAMED, singular, iconic sites that were genuinely missing.
+
+### De-duplication (architecture)
+Discovered the prior commit's imp19c_setup.12 seeded Shigatse 4799 + Jilin 8051, but the CORE seed
+se_QING_BUILDINGS.txt ALREADY places both via its subject-tolerant QING_seed_frontier_building macro
+(guard: owner=CHI OR is_subject_of=c:CHI). Removed the two redundant duplicates from setup.12. Kept
+Erdene Zuu 6767 (ULS) + Khovd 6617 (nested KBD — the frontier macro's non-recursive is_subject_of=c:CHI
+would MISS it, so it legitimately belongs in the event with the nested-overlord guard).
+
+FINAL re-audit of se_QING_BUILDINGS: 0 remaining potential-fail drops (was 11).
+
+## #24 sweep — CODEBASE-WIDE add_building_level potential-respect audit (CHINA)
+
+User: "do a comprehensive scan for more buildings affected by this ... first in china, then for ROW."
+187 add_building_level callsites total. Built an analyzer: per-building potential (region/city/culture,
+brace-accurate) x province->region (areas/regions) x province rank x owner. Checked STATIC p:N seeds
+AND dynamic ordered_owned_province/random_neighbor picks (does the limit/scope guarantee the gate?).
+
+CHINA drops found & FIXED beyond se_QING_BUILDINGS.txt:
+- se_QING_WORKS.txt — the 3 dynamic Works-commission verbs picked "most populous owned province lacking
+  the building" with NO region/river guard, so the building silently dropped while the treasury was still
+  charged + corruption applied (pay-for-nothing):
+    * QING_works_build_dike     -> added has_minor_river guard (matches qing_dike_building potential)
+    * QING_works_build_canal_depot -> added Zhili/Shandong/Jiangsu/Zhejiang region guard
+    * QING_works_build_wall_section -> added Zhili/Shanxi/Shaanxi/Gansu/Liaoning guard (comment even
+      admitted the old "any province" was a loose proxy -> it picked a southern city, always dropped)
+- se_QING_TREATIES.txt QING_treaty_stamp_port — coastal pick lacked has_city_status; qing_treaty_port_building
+  needs city -> stamped the qing_treaty_port MODIFIER but the BUILDING silently dropped (desync). Added
+  has_city_status to the pick. This ALSO fixes the post-treaty mission founder (keys off the treaty-port modifier).
+- se_QING_FOREIGNBUILD.txt — hardened BOTH treaty-port planter macros (domestic QING_fbuild_plant_treaty_port
+  + victim QING_treaty_impose_concession) with has_city_status in their own limit (defense-in-depth: a dropped
+  port building while still stamping humiliation/grievance is a desync).
+- se_QING_MISSIONARY_STATIONS.txt — mission buildings (public/underground) need city; the spread founder
+  (random_neighbor_province) + the pre-treaty FALLBACK founder guarded only is_sea=no + total_population>0,
+  so a settlement pick dropped the building while STILL bumping qing_missionary_reach (phantom missions).
+  Added has_city_status to both. (The historic-mission-city founder was already safe — its 9 cities are all
+  city-rank; Shanghai 5429 among them, which I bumped to city earlier in this sweep.)
+
+CHINA false positives verified (no fix): all imp19c_setup.12 fixed-province seeds (literal p:N in-region);
+Macau 2481 foreign_concession (city rank per prior bump); INDIA draft_bank @ Calcutta 6219 (city); customs_house
+(NO potential block — seeds anywhere); central_asia/colonization/xinjiang/himalaya frontier seeds (either
+region-guarded in the limit, or on fixed in-region provinces, or the building has no potential).
+
+NEXT: ROW pass (se_ROW_BUILDINGS.txt, row_production_buildings.txt, and generic-building callsites).
+
+## #24 sweep — SECOND-ROUND fixes (from adversarial review of the WORKS/mission/monument batch)
+
+Review of the codebase-wide China audit surfaced further drops of the SAME class (add_building_level
+respects potential). All fixed:
+
+1. HIGH — always=no seed-only buildings (7). qing_great_wall / qing_grand_canal / qing_hanlin_academy /
+   qing_guozijian / qing_temple_of_heaven / qing_ancestral_temple / qing_dujiangyan all had
+   potential={always=no} on the (now-DISPROVEN) assumption add_building_level bypasses potential. Proof it
+   respects it: the qing_mission_cathedral_building BT#6 note ("a permanently-false gate HIDES the type").
+   So ALL 7 silently dropped at their seed sites, AND the Great Wall / Grand Canal WORKS-verbs became
+   REPEATABLE EXPLOITS (charge 240/220 treasury + 10 manpower, grant legitimacy/stability, but the once-only
+   NOT-has_building guard never latched because the building never appeared). FIXES:
+   - Wall/Canal: real region+culture potential (Wall = Zhili/Shanxi/Shaanxi/Gansu/Liaoning belt; Canal =
+     Zhili/Shandong/Jiangsu/Zhejiang corridor; both owner Chinese/Manchu). Seed sites (Shanhaiguan 6974,
+     Juyongguan 8380 = Zhili; Huai'an 8311 = Jiangsu) now satisfied.
+   - Wall/Canal WORKS-verbs: added the region guard to BOTH the outer availability limit (so no treasury is
+     levied when no valid province exists) AND the ordered_owned_province pick (so it can't land off-belt).
+   - The 5 unique institutions (Hanlin/Guozijian/Temple-of-Heaven/Ancestral/Dujiangyan): real region+culture
+     gate per USER CHOICE (region+culture proven idiom, over province_id which is unattested in a building
+     potential). Beijing 4 = Zhili; Dujiangyan = Sichuan_Kham. allow = sufficient_job_slots (NOT always=no,
+     which would re-hide the type per the cathedral note).
+
+2. HIGH — qing_military_colony_building dropped at Lhasa 3819 (owned by TIB/bodish): its owner-culture gate
+   had NO overlord branch, so a CHI-SUBJECT's province failed it even after the Tibet region widening. The
+   whole point (#190) was food_capacity for the Lhasa garrison — still starving. FIX: added the
+   owner={overlord={jurchen/chinese}} branch (mirror gelug). Now lands.
+
+3. MEDIUM — qing_great_mosque_building dropped at Kashgar 2700 (owned by XNG/east_turkic): same missing
+   overlord branch. FIX: added it. The Id Kah mosque seed now lands.
+
+4. MISSIONARY root-fix: gated the SINK QING_mission_found_station on has_city_status (mission buildings need
+   city) — covers EVERY caller (spread, both seed branches, pre-treaty spread, treaty-port branch) so a
+   settlement pick is a clean logged no-op instead of a phantom station (reach bumped, no building). This
+   also covers the pre-treaty-spread + historic-city callers the first pass missed.
+
+5. EARLYINDUS + SELFSTR port picks: is_coastal -> can_have_port (match port_building's actual potential;
+   a coastal-but-non-harbour top province would drop the port while the yard modifier/effects still fired).
+
+Comment fix: se_QING_BUILDINGS.txt Dolonnor 155 note (it's region Mongolia, already in-gate, not part of the widening).
+
+ROW pass: se_ROW_BUILDINGS.txt + row_production_buildings all CLEAN — manufactory/plantation picks already
+match the trade_goods gate; ports guarded can_have_port; schools/districts has_city; university capital-civ.
+Generic buildings (URB_*/EDU_*/IND_*/fortress) have no geo gate. Zero ROW drops.
+
+## #24 sweep — batch-2 review CORRECTIONS (allow-gate + mission parity)
+
+The batch-2 review confirmed all 8 seeds land + mechanical fixes sound, but caught that I'd changed the
+`allow` gate the wrong way on the 7 always=no buildings. Engine model (uniform in-repo + cathedral BT#6):
+add_building_level RESPECTS potential but BYPASSES allow. So the fix is: real POTENTIAL (seed lands) +
+KEEP allow={always=no} (menu stays closed). I had deleted the monuments' allow (→ always-true → region-wide
+menu-build snowball) and given the 5 uniques sufficient_job_slots (still menu-buildable region-wide). FIXED:
+restored allow={always=no} on all 7 (great_wall/grand_canal/hanlin/guozijian/temple_of_heaven/ancestral/dujiangyan).
+Seeds still land (add_building_level bypasses allow); no snowball; WORKS-verb once-only guard still latches.
+
+Also (review LOW items, fixed for parity/robustness):
+- se_QING_MISSIONARY_STATIONS: added has_city_status to the pre-treaty historic-city founder (else it could
+  stall re-picking a sub-city historic seat forever) and the pre-treaty spread twin (parity w/ treaty-era twin).
+  The sink QING_mission_found_station already backstops phantom stations; these close the wasted-pick/stall.
+- qing_great_mosque comment corrected: Kashgar 2700 is XNG→ILI→CHI (passes via single-level overlord because
+  ILI is manchu; overlord is NOT recursive); region is Gansu (Tarim area), not Turkestan.
+
+Also folded in (earlier #27 intent): Taiwan colonization task (qing_colonization_missions.txt) now plants a
+qing_customs_house on owned Taibei (6799/6781) beside the port/commerce — Qing institution on colonized soil.

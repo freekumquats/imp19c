@@ -81,6 +81,14 @@ QING_mission_found_station = {
 	# tolerated/underground kind. add_building_level is the proven engine verb (vanilla
 	# common/unit_abilities/border_forts.txt:125). Guarded NOT-has-building so a re-entry never stacks.
 	# ROOT = the Qing owner (this = the province).
+	# [#24 sweep 2026-08-01] ROOT-GUARD on city rank: the mission BUILDINGS (public/underground) require
+	# has_city_status (qing_foreign_buildings.txt); add_building_level RESPECTS potential, so on a settlement
+	# the building silently drops. Without this guard the founder would still seed the faith var + bump
+	# qing_missionary_reach — a PHANTOM station (reach over-count, no on-map building). Gating the whole
+	# sink here covers EVERY caller (spread, both seed branches, pre-treaty spread, the treaty-port branch)
+	# in one place, instead of each call site. A non-city target is a clean, logged no-op.
+	if = {
+	limit = { has_city_status = yes }
 	if = {
 		limit = { ROOT = { has_variable = qing_treaty_system_imposed } }
 		if = {
@@ -105,6 +113,10 @@ QING_mission_found_station = {
 	set_variable = { name = qing_station_founded_this_pass  value = 1 }
 	ROOT = { change_variable = { name = qing_missionary_reach  add = 1 } }
 	LOG_line = { sys = QING  msg = "mission: station founded in province for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_mission_found_station"  reason = "target province is not a city; mission building would drop — no station founded, reach not bumped for" }
+	}
 }
 
 # ======================================================================
@@ -275,6 +287,7 @@ QING_mission_spread_one = {
 			limit = {
 				any_neighbor_province = {
 					is_sea = no
+					has_city_status = yes   # [#24 sweep] mission buildings (public/underground) require city rank; a settlement pick silently drops the station (add_building_level respects potential) while still counting toward reach
 					owner = scope:mission_owner
 					NOT = { QING_prov_has_mission = yes }
 					total_population > 0  # [logfix] read on the PROVINCE directly (already province scope); the prior state={..} threw "Wrong scope: state, expected province"
@@ -283,6 +296,7 @@ QING_mission_spread_one = {
 			random_neighbor_province = {
 				limit = {
 					is_sea = no
+					has_city_status = yes   # [#24 sweep] see above — keep the founder on city-rank provinces so the building actually lands
 					owner = scope:mission_owner
 					NOT = { QING_prov_has_mission = yes }
 					total_population > 0  # [logfix] read on the PROVINCE directly (already province scope); the prior state={..} threw "Wrong scope: state, expected province"
@@ -410,6 +424,7 @@ QING_mission_seed_pretreaty = {
 			limit = {
 				any_owned_province = {
 					is_sea = no
+					has_city_status = yes   # [#24 sweep] parity with the fallback below: mission buildings need city rank; if a historic-mission-city province were ever sub-city the founder would no-op AND this branch would keep re-picking it every pulse (never falling through to the fallback). Gating here lets a non-city historic seat fall through cleanly.
 					NOT = { QING_prov_has_mission = yes }
 					QING_prov_is_historic_mission_city = yes
 				}
@@ -417,6 +432,7 @@ QING_mission_seed_pretreaty = {
 			ordered_owned_province = {
 				limit = {
 					is_sea = no
+					has_city_status = yes
 					NOT = { QING_prov_has_mission = yes }
 					QING_prov_is_historic_mission_city = yes
 				}
@@ -426,11 +442,12 @@ QING_mission_seed_pretreaty = {
 			}
 			LOG_line = { sys = QING  msg = "mission: pre-treaty station seeded at historical mission city for" }
 		}
-		# Fallback once the historical seats are all taken: the most-populous interior province.
+		# Fallback once the historical seats are all taken: the most-populous interior CITY.
 		else = {
 			ordered_owned_province = {
 				limit = {
 					is_sea = no
+					has_city_status = yes   # [#24 sweep] mission buildings require city rank; without this the fallback could pick a settlement and the station-building would silently drop (add_building_level respects potential) while still bumping the reach counter
 					NOT = { QING_prov_has_mission = yes }
 					total_population > 0  # [logfix] read on the PROVINCE directly (already province scope); the prior state={..} threw "Wrong scope: state, expected province"
 				}
@@ -499,6 +516,7 @@ QING_mission_spread_one_pretreaty = {
 				limit = {
 					any_neighbor_province = {
 						is_sea = no
+						has_city_status = yes   # [#24 sweep] parity with QING_mission_spread_one: mission buildings need city rank; a settlement neighbour wastes the 5% roll on a no-op founding
 						owner = scope:mission_owner
 						NOT = { QING_prov_has_mission = yes }
 						total_population > 0  # [logfix] read on the PROVINCE directly (already province scope); the prior state={..} threw "Wrong scope: state, expected province"
@@ -507,6 +525,7 @@ QING_mission_spread_one_pretreaty = {
 				random_neighbor_province = {
 					limit = {
 						is_sea = no
+						has_city_status = yes   # [#24 sweep] parity with QING_mission_spread_one: mission buildings need city rank; a settlement neighbour wastes the 5% roll on a no-op founding
 						owner = scope:mission_owner
 						NOT = { QING_prov_has_mission = yes }
 						total_population > 0  # [logfix] read on the PROVINCE directly (already province scope); the prior state={..} threw "Wrong scope: state, expected province"
