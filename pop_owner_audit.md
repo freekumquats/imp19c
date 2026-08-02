@@ -741,3 +741,35 @@ inert-drop; no dangling arsenal_building ref; no double-plant in settle_frontier
 mirrors the reviewed India #26 seizure pattern; (2) reform/japan buildings place but sit idle until
 their allow-gate tech lands (allow not enforced by add_building_level) — acceptable (institution
 founded, activates on modernization). 12 files, braces balanced, BOMs preserved.
+
+## #24 extension — subject-TERRITORY institution seeds (imp19c_setup.12, non-capital)
+
+User: "24 should not just be on subject capitals, but on all subject territory (where appropriate)"
+then corrected the approach: "why are you doing this iterator and cap nonsense — if there was a
+real temple or fort or whatever else in a particular location in 1763, then seed it; if not, don't."
+So: NO iterators, NO per-region caps, NO formulaic spread. Seed only real, named, 1763-extant
+institutions on a subject's soil, one specific province each, matched to sourced historical fact.
+
+Research (agent, MONOGRAPH-grade — Perdue, Millward, Elliott, Crossley, Goldstein, Berger, Deuchler,
+Smits) folded into research/1763_TRUTH_CHINA.md ("Named institutions on SUBJECT soil (1763)").
+
+Added FOUR non-capital blocks to imp19c_setup.12 (all guarded: exists + subjecthood + NOT has_building):
+- 4799 Shigatse (TIB, direct subject)  -> qing_gelug_monastery  = Tashilhunpo, Panchen Lama's seat (1447). Region Tibet OK.
+- 6767 Erdene Zuu/Karakorum (ULS, direct) -> qing_gelug_monastery = Khalkha's premier fixed monastery (1585). Region Mongolia OK.
+- 8051 Jilin city (MNC, direct)        -> qing_banner_garrison   = Jilin General's yamen (moved there 1757). owner manchu OK.
+- 6617 Khovd (KBD, NESTED CHI->ULS->KBD) -> qing_banner_garrison  = 科布多參贊大臣 garrison (1731).
+    NESTED-subject guard: owner={ overlord={ is_subject_of=ROOT } } (is_subject_of is NOT recursive —
+    verified via 000_GOVERNMENT_custom_loc.txt which checks is_subject_of=CHI and overlord={is_subject_of=CHI}
+    as SEPARATE conditions). KBD's overlord ULS is manchu, so the banner potential (owner jurchen) is satisfied.
+
+DELIBERATELY NOT seeded (research-driven negatives):
+- Urga/Ikh Khuree (MGA, 5117): fixed monastic city is POST-1763 (seasonal camp only in 1763). Excluding it
+    also sidesteps the nested-MGA (CHI->ULS->MGA) guard issue — correct on both history AND engine grounds.
+- Xinjiang Gelug monasteries: institutionally BLANK in 1763 (Dzungar destruction 1755-59; re-seeding is 1760s-70s+).
+- Korean seowon / Vietnamese Van Mieu / Ryukyu Shiseibyo: real, but Korea/Ryukyu are ROW-abstraction (no
+    map provinces for the seowon cities); the existing capital-court Confucian-temple seed already stands for them.
+    (Van Mieu is at Hanoi/TRH-north, not VIE-south's Hue — noted in the truth file; VIE capital seed left as-is.)
+- Labrang/Kumbum: in directly-ruled Gansu/Qinghai, NOT subject soil.
+
+Verify: braces 212/212 balanced; events file has NO BOM (unchanged); all four placements satisfy each
+building's on-disk potential (region + owner/overlord culture-group), so nothing drops inert.
