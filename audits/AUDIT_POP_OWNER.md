@@ -184,7 +184,18 @@ Antilles (owner done; pop magnitudes TBD), Lucayan (Bahamas ~4k, currently ~29u 
   populous; far-north already sparse. 207u/828k DEFENSIBLE for the San Luis Potosi+Zacatecas intendancies.
   28% mestizo/40% norteno acceptable (frontier was more mixed). NO CHANGE needed. Owner NSP correct.
 
-REMAINING NA: Central_America (GUA/pops), Antilles (pop magnitudes), Lucayan (Bahamas trim). Then review.
+NA POP-MAGNITUDE FOLLOW-UP (done 2026-08-02): Central_America (GUA/pops) + Lucayan (Bahamas trim)
+were completed in the "NA region reviewed" commit fa7e57cd0. **Antilles pop magnitudes were NOT** — that
+commit landed only the OWNER fixes (Trinidad->NSP, StLucia->FRA in 00_default.txt), leaving the doc's
+"Antilles (owner done; pop magnitudes TBD)" open. NOW DONE: full per-province Antilles pass (research:
+Higman/Watts/O'Reilly 1765/Eltis). 00_Antilles.txt 250u->160u (~640k). Gross fixes: Puerto Rico
+(San Juan 33u->11u + Ponce 20u->5u; 1765 O'Reilly census ~45k total, PR was a pre-sugar-boom FREE-
+population outlier, not a slave colony); Trinidad 10u->2u (nearly empty pre-1783 Cedula; de-anachronized
+- removed the English settler stratum, it was Spanish till 1797; trade cacao->coffee (chocolate is a DEFUNCT good; culture->latin_caribbean)); Barbados
+28u->18u; Martinique/Guadeloupe kept ~mag (French sugar); Curacao 10u->4u (Dutch entrepot, not
+plantation); the just-ceded-1763 Windwards (Grenada/StVincent/Dominica/Tobago) trimmed (barely settled,
+Carib-held). ANACHRONISM FIX: St Barthelemy swedish->french (Swedish only from 1784). Jamaica
+(Kingston+MontegoBay 40u~160k) already matched research - unchanged. No amount=0; single BOM; braces ok.
 
 ## EUROPE (region 3) — OWNER audit findings (pre-edit, confirmed vs sourced research)
 
