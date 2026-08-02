@@ -1,0 +1,381 @@
+########################################################################
+# se_QING_MARCH.txt — the frontier PROTECTORATES-GENERAL (都護府) as "Qing EICs".
+# #27 rework (2026-08-02). Design: design/DESIGN_PROTECTORATES_GENERAL.md;
+# build log/decisions: overnight/OVERNIGHT_PROTECTORATE.md.
+#
+# The seven marches (安北/安東/安西/安南/安海/安新/安非) are self-governing FRONTIER
+# SUBJECTS of the Son of Heaven, modelled on the mod's own East India Company:
+#   CHI --(frontier_protectorate)--> MARCH (govt megacorporation) --> local princely states
+# A march is carved from CONQUERED LOCAL-POLITY land (NEVER from CHI's own core),
+# holds the theatre's other local polities as ITS subjects, is funded by Beijing in
+# REVERSE tribute (協餉 xiéxiǎng subsidy: money + a manpower levy on army raises), and
+# expands by its own wars + colonisation. See the design doc for the full rationale
+# and the failure history of the OLD (backwards) QING_establish_protectorate mechanic
+# — which is KEPT, unchanged, for the Lanfang kongsi + the Mexican client-Empire
+# releases (those are genuine sinosphere_tributary client states, NOT marches).
+#
+# WHY LAND_release_from_list, not create_country->change_country_tag: the design doc
+# (§5/§8.0) flags the predefined-tag mint + change_country_tag-as-a-unit as UNPROVEN
+# (no repo precedent), needing an isolation boot-spike. This build takes the doc's
+# documented FALLBACK as the primary path: a DYNAMIC-tag release via the proven
+# LAND_release_from_list (the same verb the old effect + Lanfang + Mexico use), with a
+# scripted country name. Cost of the fallback: the march is a generated tag (no fixed
+# 3-letter code / predefined COA) — acceptable and boot-safe. See OVERNIGHT R2.
+#
+# UNIT SIZING: COHORT_SIZE = 500 men (common/defines/00_defines.txt:355), so the
+# subsidy tiers low/med/high = 5,000/10,000/15,000 men = 10/20/30 cohorts.
+#
+# Proven idioms only:
+#  - LAND_release_from_list (se_LAND.txt:654) — spins a new country off a province list,
+#    saves scope:new_country_scope, handles econ init (fires ECON_events.7).
+#  - FUNC_make_subject (se_FUNC.txt) — overlord can be ANY tag (so a march is overlord
+#    of its locals); type = frontier_protectorate binds the march to CHI.
+#  - bare create_unit in a COUNTRY scope + `location = capital_scope` (se_QING_BURMA
+#    QING_burma_rally_konbaung raises c:BUR's OWN host; TI galatian_invasion) — raises
+#    the MARCH's own army in the MARCH scope.
+#  - add_manpower = -N on CHI (se_QING_WORKS.txt:449) — the manpower-on-raise dock.
+#  - ncohorts (00_republic_triggers.txt) — read a country's current cohort count for the
+#    army-maintenance reconcile.
+#  - is_subject_type = X, every_subject { limit } (se_SUBJECT_QING QING_subject_collect_
+#    tribute) — the quarterly per-subject sweep this mirrors, flow reversed.
+#
+# PREFIX: QING_march_ / QING_found_march. sys = QING (LOG_* module, se_LOG.txt).
+########################################################################
+
+# ======================================================================
+# QING_found_march — establish one march from a pre-built province list of
+# CONQUERED LOCAL-POLITY territory. Scope: country (ROOT = the Qing, c:CHI).
+# Args:
+#   list      : province list of the just-conquered LOCAL land the march is carved from
+#               (built by the caller; guarded so CHI core is never included — see §6.1).
+#   name_key  : loc key for the march's name
+#   adj_key   : loc key for the march's adjective
+#   maritime  : yes|no — a maritime march also gets a navy from its subsidy (P9); the
+#               flag is stamped on the march for the subsidy pulse to read.
+#   locallist : (optional) a country list of the theatre's OTHER local polities to
+#               subordinate as the march's OWN subjects (its princely states). May be
+#               empty — the caller builds it; guarded per tag.
+#   log_tag   : short identifier for the log line (e.g. ANFEI).
+# ======================================================================
+QING_found_march = {
+	LOG_enter = { sys = QING  fn = "QING_found_march ($log_tag$)" }
+
+	if = {
+		limit = { any_in_list = { list = $list$  count >= 1 } }
+
+		LOG_line = { sys = QING  msg = "MARCH $log_tag$ founding from conquered local land held by" }
+
+		# 1. Spin the conquered LOCAL land off as a new country — the march. Released
+		#    INDEPENDENT (as_subject_type = flag:independent) so we bind the exact
+		#    frontier_protectorate type below rather than the release's default colony.
+		#    Dynamic tag + name/adj loc keys (the proven fallback, see header). Capital =
+		#    the most-populous province of the conquered land; culture/religion inherited
+		#    from that seat (the march is a LOCAL conqueror-state under a Qing charter).
+		LAND_release_from_list = {
+			releaser = ROOT
+			list = $list$
+			capital_location = flag:by_population
+			primary_culture = as_capital
+			country_religion = as_capital
+			as_subject_type = flag:independent
+			government_type = flag:dynamic
+			give_overlord_hos = no
+			country_flag = flag:dynamic
+			country_name = $name_key$
+			country_adj = $adj_key$
+			country_color = flag:dynamic
+		}
+
+		if = {
+			limit = { exists = scope:new_country_scope }
+
+			# 2. Government = megacorporation (the EIC's government; the ruler slot IS
+			#    the Governor-General, has_co_ruler = no). Then bind the march to CHI as
+			#    frontier_protectorate (LAND_release fired ECON_events.7 already, so the
+			#    economy is initialised — do not re-init).
+			scope:new_country_scope = { change_government = megacorporation }
+			FUNC_make_subject = {
+				overlord = ROOT
+				target = scope:new_country_scope
+				type = frontier_protectorate
+			}
+			# stamp the maritime flag for the subsidy pulse (navies, P9) + a founding marker.
+			scope:new_country_scope = {
+				set_variable = { name = qing_march  value = 1 }
+				if = { limit = { $maritime$ = yes }  set_variable = { name = qing_march_maritime  value = 1 } }
+			}
+
+			# 3. GOVERNOR-GENERAL appointed by the Lifan Yuan (理藩院). Only if a Lifan Yuan
+			#    holder is seated (the appointment is an act of that office); else the march
+			#    keeps the engine-generated ruler and the yearly pulse re-imposes a GG later
+			#    (QING_march_reappoint_gg). Create the Manchu administrator in CHI scope, THEN
+			#    install as the march's ruler in a SEPARATE step (never grant a role inside the
+			#    create_character block — the #90 boot-crash gotcha; no HEALTH trait on the char).
+			QING_march_appoint_gg = { march = scope:new_country_scope }
+
+			# 4. Subordinate the theatre's OTHER local polities as the MARCH's own subjects
+			#    (its princely states — they answer to the march, not to Beijing). Guarded per
+			#    tag: skip any that no longer exists, is the march itself, is CHI, or is ALREADY
+			#    a subject of ANYONE (NOT is_subject — so we never yank a polity out from under an
+			#    existing overlord, incl. one of CHI's OWN tributaries; only free polities are taken).
+			#    Overlord = the march scope (FUNC_make_subject accepts any overlord).
+			if = {
+				limit = { any_in_list = { list = $locallist$  count >= 1 } }
+				every_in_list = {
+					list = $locallist$
+					limit = {
+						exists = this
+						NOT = { this = scope:new_country_scope }
+						NOT = { this = ROOT }
+						NOT = { is_subject = yes }
+					}
+					save_temporary_scope_as = local_princely_state
+					FUNC_make_subject = {
+						overlord = scope:new_country_scope
+						target = scope:local_princely_state
+						type = protectorate
+					}
+				}
+			}
+
+			# 5. Seed the march's initial army sized to whatever subsidy tier the founding
+			#    task set (default small if none set). The subsidy pulse (§3.3) maintains it
+			#    thereafter. Raise in the MARCH scope so the troops are the MARCH's own.
+			QING_march_size_army = { march = scope:new_country_scope }
+
+			LOG_line = { sys = QING  msg = "MARCH $log_tag$ established as a frontier_protectorate of" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_found_march"  reason = "release produced no new_country_scope" }
+		}
+
+		LOG_exit = { sys = QING  fn = "QING_found_march"  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_found_march"  reason = "$log_tag$ has no conquered local provinces in list to found the march" }
+	}
+
+	# Clean the working lists so a later march task starts from empty.
+	every_in_list = { list = $list$  remove_from_list = $list$ }
+	every_in_list = { list = $locallist$  remove_from_list = $locallist$ }
+}
+
+# ======================================================================
+# QING_march_appoint_gg — install a Lifan-Yuan-appointed Manchu Governor-General as
+# the march's ruler. Scope: country (ROOT = c:CHI). Arg: march = <the march scope>.
+# Gated on a seated Lifan Yuan holder (the appointment is an act of that office — the
+# same gate the amban sweep uses). If no holder is seated, no-op (the march keeps its
+# generated local ruler; the yearly re-appointment pulse re-checks).
+#
+# IDIOM (proven — MEX_install_empire, se_MEXICO.txt:398): enter the MARCH scope, create
+# the character THERE, and set_as_ruler THERE — the create-in-target-then-set_as_ruler
+# pattern. This deliberately AVOIDS the unproven cross-country create-in-CHI-then-move-
+# and-set_ruler primitive the design doc (§3.1/M5) flagged for a boot-spike I can't run:
+# creating the GG directly in the march scope is functionally identical (he is a Manchu
+# Lifan-Yuan appointee — marked by culture manchu + fanyi_jinshi + the qing_march_gg var
+# — regardless of which scope's create_character minted him) and uses only proven verbs.
+# #90 gotcha honoured: the role (set_as_ruler) is a SEPARATE statement AFTER the
+# create_character block closes, never inside it; no HEALTH trait on the created char.
+# ======================================================================
+QING_march_appoint_gg = {
+	if = {
+		limit = {
+			exists = $march$
+			has_variable = qing_office_lifanyuan_holder
+			var:qing_office_lifanyuan_holder = { is_alive = yes  employer = ROOT }
+		}
+		$march$ = {
+			# create the Manchu conquest-elite Governor-General in the MARCH's own scope.
+			create_character = {
+				age = { 40 55 }
+				culture = manchu
+				religion = vajrayana
+				female = no
+				add_martial = { 4 6 }
+				add_finesse = { 4 6 }
+				add_charisma = { 3 5 }
+				add_zeal = { 2 4 }
+				add_trait = fanyi_jinshi   # a translation-examination laureate, as the ambans are
+				save_scope_as = qing_new_gg
+			}
+			# SEPARATE step (post-creation, outside the create block — #90 gotcha): mark him a
+			# Lifan-Yuan appointee and seat him as the march's ruler.
+			scope:qing_new_gg = { set_variable = { name = qing_march_gg  value = 1 } }
+			set_as_ruler = scope:qing_new_gg
+		}
+		LOG_line = { sys = QING  msg = "MARCH governor-general appointed by the Lifan Yuan for" }
+	}
+	else = {
+		LOG_line = { sys = QING  msg = "MARCH no Lifan Yuan holder seated; march keeps its local ruler for now for" }
+	}
+}
+
+# ======================================================================
+# QING_march_size_army — reconcile ONE march's standing host to its subsidy-tier
+# target. Scope: country (ROOT = c:CHI). Arg: march = <the march scope>.
+# Target men by tier: none=0, small=5000, medium=10000, high=15000 (COHORT_SIZE 500 →
+# 0/10/20/30 cohorts), PLUS any temporary relief bonus (qing_march_relief_cohorts, P8).
+# H3 MODEL: CHI pays manpower ONLY for the cohorts actually RAISED toward the target
+# (target - current), never a flat quarterly upkeep. A march at target costs 0 manpower.
+# Lifecycle symmetry: if over target (tier lowered), disband down toward it.
+# ======================================================================
+QING_march_size_army = {
+	if = {
+		limit = { exists = $march$ }
+		$march$ = {
+			# derive target COHORTS from the tier var (men/500). Relief bonus (P8) adds cohorts.
+			if =      { limit = { var:qing_subsidy_tier = flag:small }   set_variable = { name = qing_march_target_cohorts  value = 10 } }
+			else_if = { limit = { var:qing_subsidy_tier = flag:medium }  set_variable = { name = qing_march_target_cohorts  value = 20 } }
+			else_if = { limit = { var:qing_subsidy_tier = flag:high }    set_variable = { name = qing_march_target_cohorts  value = 30 } }
+			else =    { set_variable = { name = qing_march_target_cohorts  value = 0 } }
+			if = {
+				limit = { has_variable = qing_march_relief_cohorts }
+				change_variable = { name = qing_march_target_cohorts  add = var:qing_march_relief_cohorts }
+			}
+		}
+		# In the MARCH scope: compute the cohort shortfall (target - current) and, if positive,
+		# raise exactly that many cohorts as one host at the capital (the march's OWN troops).
+		# The comparison uses a NAMED svalue on the RHS (RHS-operator rule); the raise `count`
+		# uses a var directly (proven `count = var:X`, se_QING_AMBAN:270).
+		# In the MARCH scope: shortfall = target - current cohorts.
+		# CREATE_UNIT SEMANTICS (imp19c_effects_legion_setup.txt:60): a create_unit with a base
+		# `sub_unit` PLUS `while = { count = N add_subunit }` raises N+1 cohorts (total = count + 1,
+		# the base + N added). So to raise `shortfall` cohorts total, the loop count is shortfall-1
+		# (and shortfall must be >= 1). Failing to subtract 1 overshoots by one every time, so the
+		# host never converges and thrashes (destroy+rebuild) every peacetime quarter — the HIGH bug.
+		$march$ = {
+			save_scope_as = march_being_sized
+			set_variable = { name = qing_march_shortfall  value = var:qing_march_target_cohorts }
+			change_variable = { name = qing_march_shortfall  subtract = qing_march_ncohorts_svalue }
+			# the loop count = shortfall - 1 (base sub_unit is the +1), stored in its own var.
+			set_variable = { name = qing_march_raise_count  value = var:qing_march_shortfall }
+			change_variable = { name = qing_march_raise_count  subtract = 1 }
+			if = {
+				# raise only when at least one full cohort short (shortfall >= 1 → count >= 0).
+				limit = {
+					exists = capital_scope
+					var:qing_march_shortfall >= 1
+				}
+				create_unit = {
+					navy = no
+					name = "Protectorate Host"
+					location = capital_scope
+					sub_unit = regular_infantry
+					# count = shortfall-1 additional on top of the 1 base = shortfall total.
+					while = { count = var:qing_march_raise_count  add_subunit = regular_infantry }
+				}
+				# CHI pays the 協餉 manpower levy for exactly the cohorts RAISED (H3): shortfall total
+				# cohorts * COHORT_SIZE(500) men. add_manpower deduct on CHI is proven (se_QING_WORKS:449);
+				# inline { value multiply } negation is the proven effect form (tribute model). ROOT = c:CHI
+				# throughout (all three callers enter in CHI scope). Bills the TRUE raised count (shortfall),
+				# not the loop count, so the levy matches the men actually added.
+				ROOT = { add_manpower = { value = scope:march_being_sized.var:qing_march_shortfall  multiply = -500 } }
+				LOG_line = { sys = QING  msg = "MARCH host raised toward subsidy target; CHI paid the manpower levy for" }
+			}
+			# lifecycle symmetry: if OVER target by at least a full cohort (shortfall <= -1 — tier
+			# lowered / relief expired), stand the hosts down so a de-funded march shrinks. The <= -1
+			# guard (not < 0) means a mere rounding never trips this — only a genuine over-strength host,
+			# so a march at target sits STABLE (no quarterly thrash). destroy_unit=yes on every_army is
+			# the PROVEN disband verb (SE_qing_navy_disband: every_navy = { destroy_unit = yes });
+			# ordered_army/disband_unit are NOT attested here. Disband all + re-raise to the lower target
+			# keeps only proven verbs. Guard is_at_war=no: never strip a march mid-campaign. The re-raise
+			# is a SHRINK (target < current), so it docks NO new manpower (H3 — down-steps are free).
+			else_if = {
+				limit = {
+					var:qing_march_shortfall <= -1
+					is_at_war = no
+					any_army = { count >= 1 }
+				}
+				every_army = { destroy_unit = yes }
+				if = {
+					limit = {
+						exists = capital_scope
+						var:qing_march_target_cohorts >= 1
+					}
+					# count = target-1 additional + 1 base = target total (reuse the raise-count var).
+					set_variable = { name = qing_march_raise_count  value = var:qing_march_target_cohorts }
+					change_variable = { name = qing_march_raise_count  subtract = 1 }
+					create_unit = {
+						navy = no
+						name = "Protectorate Host"
+						location = capital_scope
+						sub_unit = regular_infantry
+						while = { count = var:qing_march_raise_count  add_subunit = regular_infantry }
+					}
+				}
+				LOG_line = { sys = QING  msg = "MARCH over subsidy target; host stood down and re-raised to the lower target for" }
+			}
+			remove_variable = qing_march_shortfall
+			remove_variable = qing_march_raise_count
+		}
+	}
+}
+
+# ======================================================================
+# QING_march_pay_subsidy — the 協餉 REVERSE-TRIBUTE quarterly pulse. Scope: country
+# (ROOT = c:CHI), called from the Qing quarterly pulse (qing_mechanics_pulse_on_action).
+# For every march (frontier_protectorate) carrying a subsidy tier: transfer GOLD from
+# CHI to the march scaled by tier (clamped to CHI's own treasury — a broke Beijing can
+# not fund beyond what it holds, modelling 19th-c. frontier abandonment), and reconcile
+# the march's army to the tier target (QING_march_size_army, which handles the manpower
+# levy on raise, H3). Mirror of QING_subject_collect_tribute, flow REVERSED.
+# ======================================================================
+QING_march_pay_subsidy = {
+	LOG_enter = { sys = QING  fn = "QING_march_pay_subsidy" }
+	every_subject = {
+		limit = {
+			is_subject_type = frontier_protectorate
+			has_variable = qing_subsidy_tier
+		}
+		save_temporary_scope_as = subsidy_march
+		# quarterly gold stipend by tier (a flat per-march stipend; small/med/high rising),
+		# stored on the MARCH (this scope) so the cross-scope transfer below can read it.
+		if =      { limit = { var:qing_subsidy_tier = flag:small }   set_variable = { name = qing_subsidy_amt  value = 15 } }
+		else_if = { limit = { var:qing_subsidy_tier = flag:medium }  set_variable = { name = qing_subsidy_amt  value = 30 } }
+		else_if = { limit = { var:qing_subsidy_tier = flag:high }    set_variable = { name = qing_subsidy_amt  value = 45 } }
+		else =    { set_variable = { name = qing_subsidy_amt  value = 0 } }
+		# clamp the stipend to what CHI actually holds. A broke Beijing pays only what it has
+		# (the tribute-model clamp: when the owed stipend exceeds CHI's treasury, cut it to the
+		# treasury). Evaluated in the MARCH scope, where qing_subsidy_amt lives; the comparison RHS
+		# reads CHI's treasury via the NAMED svalue chi_treasury_svalue (RHS-operator rule).
+		if = {
+			limit = { var:qing_subsidy_amt > chi_treasury_svalue }
+			# pay CHI's whole remaining treasury (0 if CHI is in deficit — set_variable to
+			# ROOT.treasury; the > 0 transfer guard below drops a non-positive result).
+			set_variable = { name = qing_subsidy_amt  value = ROOT.treasury }
+		}
+		# transfer: CHI -= amt ; march += amt (the reverse of the tribute haul), only if > 0.
+		# Proven inline forms (QING_subject_collect_tribute): { value multiply -1 } to spend,
+		# and add_treasury = scope:X.var:Y to credit across scopes.
+		if = {
+			limit = { var:qing_subsidy_amt > 0 }
+			ROOT = { add_treasury = { value = scope:subsidy_march.var:qing_subsidy_amt  multiply = -1 } }
+			add_treasury = var:qing_subsidy_amt
+		}
+		remove_variable = qing_subsidy_amt
+		# reconcile this march's army to its tier target (manpower levy on raise, H3).
+		ROOT = { QING_march_size_army = { march = scope:subsidy_march } }
+	}
+	LOG_exit = { sys = QING  fn = "QING_march_pay_subsidy"  result = OK }
+}
+
+# ======================================================================
+# QING_march_set_subsidy — the low/med/high toggle effect (mirrors QING_subject_set_
+# tribute). Scope: country (ROOT = c:CHI). Arg: tier = small|medium|high. Swaps an
+# exclusive tier modifier + the qing_subsidy_tier var on scope:target (the march), which
+# the subsidy pulse + army-sizer read. Bound to the Subject-tab S/M/L buttons (P6 GUI).
+# ======================================================================
+QING_march_set_subsidy = {
+	LOG_enter = { sys = QING  fn = "QING_march_set_subsidy -> $tier$" }
+	scope:target = {
+		# strip any existing tier first (exclusive selection).
+		if = { limit = { has_country_modifier = qing_subsidy_small }   remove_country_modifier = qing_subsidy_small }
+		if = { limit = { has_country_modifier = qing_subsidy_medium }  remove_country_modifier = qing_subsidy_medium }
+		if = { limit = { has_country_modifier = qing_subsidy_high }    remove_country_modifier = qing_subsidy_high }
+		add_country_modifier = { name = qing_subsidy_$tier$  duration = -1 }
+		set_variable = { name = qing_subsidy_tier  value = flag:$tier$ }
+	}
+	# resize the march's army to the new tier immediately (so the toggle has instant effect).
+	QING_march_size_army = { march = scope:target }
+	LOG_exit = { sys = QING  fn = "QING_march_set_subsidy"  result = OK }
+}

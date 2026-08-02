@@ -185,3 +185,39 @@ alaska→amur, canada→alaska, california→alaska, anxin→california all stay
   into the tree that conquers that ground, using the proven idiom already shipped at CA tree lines
   172/304/342. Reviewer's Urumqi-2930 note = acceptable per the region-wide good-enough abstraction rule
   (forts/colonies still seeded region-wide; qing_xj_fortify gates on a Tarim-area fortress). CA braces balanced.
+
+### P1+P4 — march subsystem core (se_QING_MARCH.txt) (DONE, pre-review)
+NEW `common/scripted_effects/se_QING_MARCH.txt`:
+- **QING_found_march** (P1): LAND_release_from_list (proven fallback per R2 — dynamic tag, NOT the
+  unproven mint) spins the conquered-local land into the march; change_government=megacorporation;
+  FUNC_make_subject type=frontier_protectorate under CHI; QING_march_appoint_gg; subordinate the
+  theatre's OTHER locals as the march's OWN subjects (overlord=march, type=protectorate); seed the army.
+- **QING_march_appoint_gg**: creates the Manchu GG IN THE MARCH SCOPE + set_as_ruler there (the proven
+  MEX_install_empire idiom, se_MEXICO.txt:398) — this deliberately AVOIDS the unproven cross-country
+  create-in-CHI-then-set_ruler primitive (design M5). Gated on a seated Lifan Yuan holder; graceful no-op
+  otherwise (#90 gotcha honoured: set_as_ruler is a separate statement outside create_character).
+- **QING_march_size_army** (P4/H3): reconciles the march's host to its tier target (small/med/high =
+  10/20/30 cohorts @ COHORT_SIZE 500 = 5k/10k/15k men, + relief bonus). Raises shortfall in the MARCH
+  scope (its own troops); CHI pays manpower ONLY for the raised cohorts (add_manpower {value multiply -500}
+  on ROOT=CHI) — a march at target costs 0 manpower/quarter (H3 corrected). Over-target (tier lowered):
+  destroy_unit all + re-raise to lower target (proven verb; ordered_army/disband_unit NOT attested here),
+  guarded is_at_war=no so a march is never stripped mid-campaign.
+- **QING_march_pay_subsidy** (P4): quarterly on ROOT=CHI (wired into qing_mechanics_pulse_on_action after
+  QING_subject_collect_tribute). every_subject{ frontier_protectorate + subsidy tier }: gold stipend
+  15/30/45 CHI->march, CLAMPED to CHI treasury (tribute-model clamp); then QING_march_size_army. Mirror
+  of QING_subject_collect_tribute, flow reversed — proven inline-transfer forms, not invented svalues.
+- **QING_march_set_subsidy** (P6-effect): S/M/L exclusive modifier swap + tier var + immediate army resize.
+- Supporting: 2 svalues (qing_march_ncohorts_svalue, chi_treasury_svalue — RHS-operator rule), 3 modifiers
+  (qing_subsidy_small/medium/high in subject_rework_mods.txt). Braces 130/130.
+- Verified proven: LAND_release_from_list, FUNC_make_subject any-overlord, create_unit-in-country-scope
+  (Konbaung rally), set_as_ruler-in-target (MEX), change_government (Mexico/old protectorate), add_manpower
+  deduct, ncohorts, destroy_unit, female=no, count=var:X. NOT-yet-called by missions (P3 wires it).
+- **Review (code-review agent, 2 passes):** Pass 1 found HIGH create_unit off-by-one (base sub_unit +
+  `while count=N` raises N+1, so the army overshot by 1, never converged, and thrashed destroy+rebuild
+  every peacetime quarter) + MEDIUM subject-guard (would yank a polity from its existing overlord).
+  FIXED: raise_count = shortfall-1 (total = raise_count+1 = shortfall); positive branch gated shortfall>=1;
+  down-step gated shortfall<=-1 (rounding never trips it → a march at target sits STABLE); manpower bills
+  the true raised count; local-subordination guard → `NOT is_subject=yes` (only free polities taken).
+  Pass 2 (re-review): BOTH fixes CONFIRMED correct — convergence verified, count=0 while-loop safe (mints
+  just the base cohort), target=0 disbands to nothing without a negative count reaching create_unit,
+  manpower never double-docked, is_subject attested. No new defects. Braces 135/135.
