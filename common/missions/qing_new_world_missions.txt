@@ -1,0 +1,327 @@
+########################################################################
+# qing_new_world_missions.txt — THE NEW WORLD ENTERPRISE (新大陸事業):
+# the trans-Pacific American arc of the Qing overseas enterprise. #27 (lifted
+# out of qing_colonization_missions.txt, 2026-08-02 — see
+# design/DESIGN_COLONIZATION_SPLIT.md §A2).
+#
+# Where the Oceania tree (qing_colonization_missions.txt) plants the island road
+# and the southern continent, this tree crosses the Great Ocean itself: secure the
+# Amur (the northern springboard), contest Russian America (Alaska), the fur coast
+# of Canada, and plant a colony on the golden shore of California — and gather the
+# Pacific-coast conquests into the transpacific march of the Pacified New World
+# (安新 Anxin). The Daoguang Doctrine — the Pacific-basin entente with the young
+# American republic — lives here too, being the North-American diplomacy task.
+#
+# History: the Qing and Romanov empires met on the Amur in the 17th c. (Nerchinsk
+# 1689, Kyakhta 1727, Aigun 1858). Russian America was governed by the tiny, half-
+# starved Russian-American Company from Novoarkhangelsk (Sitka), leaning on the
+# Canton tea trade and Californian grain (Fort Ross, 1812-41) to survive. A Qing
+# that had mastered steam and finance could, in an alternate history, have contested
+# all of it. That is the premise. At a 1763 High-Qing start the same reach opens on
+# the era flag; only the trans-Pacific flourish (Alaska/Canada/California) stays the
+# alt-history conceit.
+#
+# Gating: CHI-only, player-only (ai_chance factor 0), same self-strengthening /
+# High-Qing-era gate as the parent Oceania tree. Art reuses the parent colonization
+# card + banner (Ortelius' 1589 Pacific map — this IS the Pacific enterprise's
+# American half). Icons/effects/vars resolve against the shared codebase.
+#
+# Sources: Gibson, Otter Skins, Boston Ships and China Goods (1992); Perdue, China
+#   Marches West (2005); Schottenhammer (ed.), The East Asian Maritime World.
+########################################################################
+
+qing_new_world_mission = {
+	# Art reuse: the Great Pacific Enterprise card + banner (this tree is that
+	# enterprise's trans-Pacific American half). Both DDS present in gfx/interface/.
+	icon = qing_colonization_mission
+	header = mission_image_qing_colonization
+
+	repeatable = no
+
+	chance = { }
+	ai_chance = { factor = 0 }   # player-only
+
+	potential = {
+		tag = CHI
+		is_ai = no
+		# same two-road gate as the parent Oceania tree: [develop] a self-strengthening
+		# industrial dynasty (progress >= 40), OR [bookmark-1763] the High-Qing zenith.
+		OR = {
+			AND = {
+				has_variable = qing_selfstr_progress
+				var:qing_selfstr_progress >= 40
+			}
+			has_variable = qing_high_qing_era
+		}
+	}
+
+	abort = {
+		NOT = { tag = CHI }
+	}
+
+	on_start = {
+		LOG_line = { sys = QING  msg = "MISSION New World enterprise started for" }
+	}
+
+	on_completion = {
+		LOG_line = { sys = QING  msg = "MISSION New World enterprise COMPLETED for" }
+	}
+
+	# ==================================================================
+	# THE AMUR — secure the northern frontier the Romanovs contest (黑龍江).
+	# ==================================================================
+	qing_col_amur = {
+		icon = qing_col_amur
+		allow = {
+			treasury >= 120
+		}
+		on_start = {
+			add_treasury = -120
+			LOG_line = { sys = QING  msg = "MISSION task START Amur (spending treasury) for" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_amur_tt
+			# fortify the Amur — a claim on the disputed Okhotsk coast
+			if = { limit = { owns = 6170 }  p:6170 = { add_building_level = fortress_building } }
+			# [#52 2026-07-23] the concrete frontier-building deliverable (Design 1): a 屯田 colony
+			# to settle the Amur strongpoint + a frontier fort to hold it (on-map objects, alongside
+			# the vanilla fortress). Guarded not-already-present so re-entry never stacks.
+			if = {
+				limit = { owns = 6170 }
+				p:6170 = {
+					if = { limit = { NOT = { has_building = qing_frontier_colony_building } }  add_building_level = qing_frontier_colony_building }
+					if = { limit = { NOT = { has_building = qing_frontier_fort_building } }    add_building_level = qing_frontier_fort_building }
+				}
+			}
+			if = {
+				limit = { exists = p:11553  NOT = { owns = 11553 } }
+				p:11553 = { add_claim = ROOT }
+				# and press the claim as a first-class diplomatic play vs the Tsar (#53):
+				# the contested Okhotsk coast becomes a live Great-Game crisis, not just
+				# a claim. Same province the claim covers, so goal + claim are one aim.
+				QING_gp_frontier_play = { tag = RUS  province = 11553  goal = flag:get_territory }
+			}
+			# and draw settlers to the garrison (闖關東): the frontier peoples itself
+			# via the migration pulse. See se_QING_COLON.txt.
+			QING_COLON_frontier_pull = { province = 6170 }
+			add_country_modifier = { name = qing_col_amur_frontier  duration = -1 }
+			QING_DECLINE_nudge = { var = qing_banner_decay  amount = -5 }
+			# fortifying the contested river alarms the Tsar (Nerchinsk/Aigun frontier)
+			QING_gp_provoke_russia = { severity = 8 }
+			# [scripted-revolutions] if pressed while Russia is pinned in the west by the
+			# Napoleonic Wars (asia_napoleonic.5, ~1812-1815), the undefended frontier yields
+			# more: a second claim on the Outer-Manchurian coast the Tsar cannot contest now.
+			if = {
+				limit = { has_global_variable = asia_russia_distracted }
+				custom_tooltip = qing_col_amur_napoleonic_tt
+				if = { limit = { exists = p:11553  NOT = { owns = 11553 } }  p:11553 = { add_claim = ROOT } }
+				add_stability = 1
+			}
+			LOG_line = { sys = QING  msg = "MISSION task Amur for" }
+		}
+	}
+
+	# ==================================================================
+	# ALASKA — cross the ocean to Russian America (Novoarkhangelsk/Sitka).
+	# The Russian-American Company is weak and half-starved; contest it.
+	# ==================================================================
+	qing_col_alaska = {
+		icon = qing_col_alaska
+		requires = { qing_col_amur }
+		allow = {
+			treasury >= 200
+			custom_tooltip = {
+				text = qing_col_needs_strong_fleet_tt
+				has_country_modifier = qing_selfstr_beiyang_fleet
+			}
+		}
+		on_start = {
+			add_treasury = -200
+			LOG_line = { sys = QING  msg = "MISSION task START Alaska (spending treasury) for" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_alaska_tt
+			# lay claim to the great fur coast; if Russian America exists, press it
+			if = {
+				limit = { exists = p:9429  NOT = { owns = 9429 } }
+				p:9429 = { add_claim = ROOT }
+				# seizing Novoarkhangelsk (Sitka) itself, pressed as a diplomatic play (#53):
+				# the direct contest for Russian America becomes a formal Great-Game crisis
+				QING_gp_frontier_play = { tag = RUS  province = 9429  goal = flag:get_territory }
+			}
+			if = { limit = { exists = p:12498  NOT = { owns = 12498 } }  p:12498 = { add_claim = ROOT } }
+			if = { limit = { exists = p:2477  NOT = { owns = 2477 } }  p:2477 = { add_claim = ROOT } }
+			add_country_modifier = { name = qing_col_fur_coast  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 80 }
+			# seizing Russian America directly supplants the Tsar's colonial effort
+			QING_gp_provoke_russia = { severity = 16 }
+			LOG_line = { sys = QING  msg = "MISSION task Alaska for" }
+		}
+	}
+
+	# ==================================================================
+	# CANADA — the Pacific-Northwest fur coast (the Columbia / Nootka trade).
+	# ==================================================================
+	qing_col_canada = {
+		icon = qing_col_canada
+		requires = { qing_col_alaska }
+		allow = {
+			treasury >= 160
+		}
+		on_start = {
+			add_treasury = -160
+			LOG_line = { sys = QING  msg = "MISSION task START Canada coast (spending treasury) for" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_canada_tt
+			add_country_modifier = { name = qing_col_pacific_trade  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 60 }
+			# the Northwest coast is contested by BOTH the Hudson's Bay Company (Britain,
+			# the Oregon dispute) AND the Russian-American Company — friction with each,
+			# UNLESS the Daoguang Doctrine has aligned the Qing with the American republic.
+			if = {
+				limit = { NOT = { has_country_modifier = qing_daoguang_doctrine } }
+				QING_gp_provoke_britain = { severity = 10 }
+			}
+			QING_gp_provoke_russia = { severity = 6 }
+			LOG_line = { sys = QING  msg = "MISSION task Canada coast for" }
+		}
+	}
+
+	# ==================================================================
+	# CALIFORNIA — plant a Chinese colony on the golden shore (金山).
+	# History: Fort Ross fed Russian Alaska; Chinese labour later built the
+	# American West. Here the Qing settles San Francisco Bay itself.
+	# ==================================================================
+	qing_col_california = {
+		icon = qing_col_california
+		requires = { qing_col_alaska }
+		allow = {
+			treasury >= 180
+		}
+		on_start = {
+			add_treasury = -180
+			LOG_line = { sys = QING  msg = "MISSION task START California (spending treasury) for" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_california_tt
+			if = { limit = { exists = p:1493  NOT = { owns = 1493 } }  p:1493 = { add_claim = ROOT } }
+			add_country_modifier = { name = qing_col_golden_shore  duration = -1 }
+			CURRENCY_grant_country_wealth = { thousands = 100 }
+			# a colony on the Pacific coast of the New World crosses the young American
+			# republic's own westward path — friction with the United States, UNLESS the
+			# Daoguang Doctrine has made the two expanding powers partners rather than rivals.
+			if = {
+				limit = {
+					exists = c:USA
+					NOT = { has_country_modifier = qing_daoguang_doctrine }
+				}
+				c:USA = { add_opinion = { modifier = qing_gp_rivalry_opinion  target = ROOT } }
+				LOG_line = { sys = QING  msg = "MISSION task California antagonised USA for" }
+			}
+			LOG_line = { sys = QING  msg = "MISSION task California for" }
+		}
+	}
+
+	# ==================================================================
+	# THE DAOGUANG DOCTRINE — align with the rising American republic (道光主義).
+	# A Pacific-basin answer to the Monroe Doctrine (1823): the two rising
+	# non-European powers — the Great Qing and the young United States — declare
+	# the Pacific and the Americas closed to further European aggrandisement, and
+	# stand together against Britain, France and Russia. History that grounds it:
+	# the Treaty of Wanghia (望廈條約, 1844) gave the US most-favoured-nation terms
+	# and was negotiated more amicably than the British treaties; American traders
+	# at Canton (the "Old China Trade") and the sandalwood/fur men of the Pacific
+	# had long been rivals of, not partners with, the British. Here the player can
+	# make that rivalry a formal entente. Taking the Doctrine turns the American
+	# republic from a rival on the Pacific coast into a partner, and cools the
+	# European friction the enterprise stirs up — the diplomatic alternative to
+	# playing every power at once.
+	# ==================================================================
+	qing_col_daoguang_doctrine = {
+		icon = qing_col_daoguang_doctrine
+		allow = {
+			custom_tooltip = {
+				text = qing_col_needs_usa_tt
+				exists = c:USA
+			}
+		}
+		on_completion = {
+			custom_tooltip = qing_col_daoguang_doctrine_tt
+			add_country_modifier = { name = qing_daoguang_doctrine  duration = -1 }
+			# the entente with the American republic — goodwill, and a shared front
+			if = {
+				limit = { exists = c:USA }
+				c:USA = { add_opinion = { modifier = qing_gp_accommodation_opinion  target = ROOT } }
+				ROOT = { add_opinion = { modifier = qing_gp_accommodation_opinion  target = c:USA } }
+			}
+			# standing with a fellow rising power steadies the reform cause at home
+			add_stability = 1
+			if = {
+				limit = { has_variable = qing_selfstr_progress }
+				QING_selfstr_advance = { amount = 5 }
+			}
+			LOG_line = { sys = QING  msg = "MISSION task Daoguang Doctrine (US entente) for" }
+		}
+	}
+
+	# --- 安新 ĀNXĪN, Pacified New World — the invented N.-American march -
+	# The New-World protectorate: the Qing's Pacific-coast conquests in the
+	# Americas — the fur coast, the golden shore — erected into a single
+	# transpacific march.
+	qing_col_anxin = {
+		icon = qing_col_anxin
+		requires = { qing_col_california }
+		allow = {
+			political_influence >= 30
+			custom_tooltip = {
+				text = qing_col_needs_newworld_land_tt
+				any_owned_province = {
+					count >= 3
+					OR = {
+						is_in_region = Alaska
+						is_in_region = British_Columbia
+						is_in_region = Vancouver_Island
+						is_in_region = Cascadia
+						is_in_region = California
+					}
+				}
+			}
+		}
+		on_start = {
+			add_political_influence = -30
+			LOG_line = { sys = QING  msg = "MISSION task START Anxin protectorate for" }
+		}
+		on_completion = {
+			custom_tooltip = qing_col_anxin_tt
+			every_owned_province = {
+				limit = {
+					is_capital = no
+					OR = {
+						is_in_region = Alaska
+						is_in_region = British_Columbia
+						is_in_region = Vancouver_Island
+						is_in_region = Cascadia
+						is_in_region = California
+					}
+				}
+				add_to_list = qing_protectorate_list
+			}
+			QING_establish_protectorate = {
+				list = qing_protectorate_list
+				name_key = qing_protectorate_anxin_name
+				adj_key = qing_protectorate_anxin_adj
+				government = viceroyalty
+				log_tag = ANXIN
+			}
+			add_country_modifier = { name = qing_col_protectorate_newworld  duration = -1 }
+			# #78 (2026-07-05): planting the flag in the New World accelerates the
+			# historical trend — the crops spread back THROUGH CHINA. A few marginal
+			# heartland provinces take up the sweet potato and gain the capacity lift,
+			# turning the demographic bulge into real settlers. See se_QING_COLON.txt.
+			QING_COLON_spread_newworld_crops = { count = 3 }
+			current_ruler = { add_popularity = 25 }
+			LOG_line = { sys = QING  msg = "MISSION task Anxin protectorate for" }
+		}
+	}
+}

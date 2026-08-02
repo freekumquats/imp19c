@@ -122,3 +122,40 @@ adversarial `code-review` passes (+ re-review of fixes). No chunk is committed u
   sibling convention (all 19 other mission-group loc files carry the identical suffix set). Re-verified
   directly (5 keys present, BOM intact) — pure loc addition on a proven pattern, no re-review agent needed.
 
+
+### C3 — New-World lift (plan)
+Moving amur/alaska/canada/california/daoguang + anxin (the New-World MARCH, travels with its arc like
+anfei did in C1) to NEW `qing_new_world_missions.txt`. This ORPHANS three `requires` in the Oceania tree:
+- **capstone** requires canada+california (leaving) → re-root to kept Oceania tasks (pacific_isles +
+  new_guinea). Its `allow` (holdings/modifier checks incl. California 1493/golden_shore) is UNCHANGED, so
+  it still demands real far-flung conquest.
+- **anbei** + **andong** require amur (leaving) → re-root onto `qing_col_bureau` (kept root) as a
+  BOOT-SAFETY BRIDGE. These two marches relocate to their proper homes (CA tree / Japan tree) in P3; the
+  bridge just keeps them reachable in the interim so C3 is independently boot-safe.
+Re-roots inside the New-World tree: amur drops `requires=bureau` → tree root; daoguang drops
+`requires=bureau` → second root (independent US-entente diplomacy, gated on tree potential + exists c:USA).
+alaska→amur, canada→alaska, california→alaska, anxin→california all stay intra-tree.
+
+### C3 — New-World lift (DONE, pre-review)
+- NEW `common/missions/qing_new_world_missions.txt` (group `qing_new_world_mission`) + NEW
+  `localization/english/qing_new_world_l_english.yml` (BOM). Moved: amur/alaska/canada/california/
+  daoguang + the anxin MARCH (travels with its arc, like anfei in C1). amur+daoguang re-rooted (both
+  dropped `requires=bureau` → two independent roots); alaska→amur, canada→alaska, california→alaska,
+  anxin→california stay intra-tree. All New-World internal `requires` resolve; no cross-tree requires.
+- **Orphan re-roots in the KEPT Oceania tree (boot-safety):** capstone dropped canada+california (gone)
+  from its `requires`, now requires pacific_isles+new_guinea (its `allow` still demands a real New-World
+  holding, so it stays an all-oceans capstone); anbei+andong re-rooted amur→bureau as interim bridges
+  (they relocate to CA/Japan trees in P3). All three annotated in-code with [#27 split] comments.
+- Moved 28 loc keys (task title/DESC/tt + needs_usa/newworld tooltips + anxin name/adj + fur_coast/
+  pacific_trade/golden_shore/daoguang modifier display names). Shared `qing_col_needs_strong_fleet_tt`
+  KEPT in colonization loc (still used by 2 kept Oceania tasks). No dup keys across all 4 loc files.
+- Braces: colonization 296/296, new-world 134/134.
+- **DEFERRED (cosmetic):** Oceania group English title still "The Great Pacific Enterprise" — its final
+  contents aren't settled until C4 (delete xinjiang/central_asia) + P3 (relocate land marches), so the
+  rename to the Oceania/South-Seas enterprise is deferred to end-of-split to avoid churn. Chinese
+  (大洋洲事業 = Oceania Enterprise) already correct.
+- **Review (code-review agent):** PASS, no defects. Verified all requires resolve in-file (no dangling
+  cross-tree requires — the chunk's #1 risk), byte-identical relocation vs 073e2cb62, loc completeness,
+  no dup keys across all 4 loc files, BOM/CJK. One harmless non-defect noted: `qing_col_amur_frontier:0`
+  modifier display was left in the colonization loc though its granting task (amur) moved. FIXED for
+  locality — moved it to the New-World loc (pure organization, no behavior change; re-verified no dup).
