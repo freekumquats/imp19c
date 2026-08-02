@@ -622,3 +622,45 @@ AMHERST DOUBLE-SCHEDULE FIXED (dedup, user "investigate further"):
   Amherst on the 1763 start; B is a true fallback for a hypothetical post-1793 start.
   Matches the proven stand-down idiom at se_QING_DECLINE.txt:1265. current_date >= literal
   date is valid (3 mission-file uses, 0 errors). PRE-EXISTING issue, not from the triage.
+
+--------------------------------------------------------------------------------
+#25 MISSION/EVENT SWEEP for #234 setup changes (2026-08-01)
+--------------------------------------------------------------------------------
+Systematic sweep of ALL 16 Qing mission trees + all events for references made
+stale by #234 setup changes. Method: extracted structural changes (tag/owner/dep)
+from each #234 commit, grepped all missions+events for changed tags/provinces/cultures.
+
+FINDINGS BY REGION:
+- CHINA (Nepal now independent, commit 7a9ac8aec): Himalaya tree qing_hs_nepal
+  MECHANICALLY CORRECT (guards exists c:NEP + NOT is_subject_of; makes NEP tributary
+  later = models the 1792 war, exactly the user's intent). Fixed stale "returns to the
+  tributary fold" wording (implied prior tributary status) in mission comment + the
+  qing_tribute_events / color_picker tributary-list comments (NEP no longer a START
+  tributary, joins via mission). Tribute event iterates every_subject dynamically — no
+  mechanical break.
+- ASIA (EIC 134 provs -> 6 pre-Buxar footholds, commit fa587c4f3): India tree
+  (qing_india_missions) MECHANICALLY SOUND — EIC still holds Calcutta 6219 (the seat +
+  central mission target); every task gates on is_subject_of=ROOT / province control,
+  never on MUG/BNG starting as EIC subjects; QING_india_free_mughal only checks
+  NOT-subject-of-ROOT. BUT 7 flavor refs called MUG a "Company puppet to free from
+  tutelage" — stale (MUG independent pre-Buxar). Per user "flavor + strengthen premise":
+  reframed the whole tree to pre-Buxar "strangle the upstart Company in its Bengal
+  cradle; the independent Indian thrones (MUG/AWA/HYD) to bring under the wing, not
+  Company puppets to liberate" — header, ARC E, inline comments, effect header/LOG, and
+  3 player-facing loc strings (mission DESC, mughal_DESC, mughal_tt).
+- AFRICA (reflavours/renames MAT->Kalanga, LST->Basotho, ESW->Ngwane, culture swaps +
+  GDR->MDB dep, commit 307a4ad06): ZERO Qing mission/event references any reflavoured
+  tag or swapped culture; colonization arc (#67) targets provinces by ID (unaffected by
+  pop reflavours). No changes needed.
+- EUROPE (FIN->SWE, COU->POL, NOR->DEN, POZ/LUX dep changes, commit 0e8ee2062): no Qing
+  mission/event references FIN/COU/NOR/POZ/LUX. No changes needed.
+- NA/SA (pop-composition only, no owner/dep changes): nothing to reconcile.
+
+#26 (India TRADE arc, same changeset): reworked qing_india_trade from "open overland
+trade" (flavor no-op) into "Seize the Company's Commerce (奪夷商)" with CONCRETE on-map
+effects (new QING_india_seize_trade effect): on Qing-controlled EIC-footprint provinces
+(Bengal/Bihar/South-India) raise qing_customs_house + qing_silk_filature buildings and
+set_trade_goods = silk (raw textile_fibres -> finished silk); Calcutta 6219 seat gets a
+customs house + draft bank; Bengkulu 6553 pepper post -> qing_tea_workshop + tea. Gated
+on holding real trade ground. Proven idioms (add_building_level+has_building guard;
+set_trade_goods). All keys/goods/regions verified valid; braces balanced; loc BOM kept.

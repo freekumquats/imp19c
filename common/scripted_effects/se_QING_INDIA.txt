@@ -17,9 +17,9 @@
 #   • EMBRACE THE NAWAB — take BNG (the Nawab of Bengal, sovereign and at war
 #     with the Company in 1763) under the Qing wing as a sinosphere tributary,
 #     the natural anti-Company ally. FUNC_make_subject, guarded.
-#   • FREE THE MUGHAL — take MUG (the Mughal emperor, a Company client_state in
-#     1763) under the Qing wing as a tributary — freeing the Timurid throne from
-#     the Company and setting the Son of Heaven over it. FUNC_make_subject, guarded.
+#   • COURT THE MUGHAL — take MUG (the Mughal emperor, INDEPENDENT and the nominal
+#     paramount of Hindustan in 1763) under the Qing wing as a tributary — the Timurid
+#     throne turned east before the Company can claim it. FUNC_make_subject, guarded.
 #   • THE BENGAL CLAIM — a claim on the Company seat (Calcutta, 6219) so the
 #     drive has a war-goal and control can convert to cession.
 #
@@ -76,17 +76,17 @@ QING_india_embrace_nawab = {
 
 # ======================================================================
 # QING_india_free_mughal — take the Mughal emperor (MUG) under the Qing wing as a
-# sinosphere tributary. Scope: COUNTRY (CHI). In 1763 the Timurid throne was a Company
-# client_state; embracing it frees it from the Company and sets the Son of Heaven over it.
-# FUNC_make_subject; guarded so an absent or already-bound Mughal is a no-op (and since the
-# guard is only NOT-subject-of-ROOT, a Company vassal still qualifies — that is the point).
+# sinosphere tributary. Scope: COUNTRY (CHI). In 1763 (pre-Buxar) the Timurid throne is
+# INDEPENDENT — the nominal paramount of Hindustan; the Qing court it before the Company
+# can. FUNC_make_subject; guarded (NOT-subject-of-ROOT) so an absent or already-bound
+# Mughal is a no-op. (Kept the historical function name for stability of references.)
 # ======================================================================
 QING_india_free_mughal = {
 	LOG_enter = { sys = QING  fn = "QING_india_free_mughal" }
 	if = {
 		limit = { exists = c:MUG  NOT = { c:MUG = { is_subject_of = ROOT } } }
 		FUNC_make_subject = { overlord = ROOT  target = c:MUG  type = sinosphere_tributary }
-		LOG_line = { sys = QING  msg = "India: the Mughal emperor (蒙兀兒) freed from the Company and taken under the wing for" }
+		LOG_line = { sys = QING  msg = "India: the Mughal emperor (蒙兀兒) courted and taken under the wing for" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_india_free_mughal"  result = OK }
 }
@@ -116,4 +116,53 @@ QING_india_close_campaign = {
 	}
 	LOG_line = { sys = QING  msg = "India: the Company broken, the pressure on the Bengal factories lifted for" }
 	LOG_exit = { sys = QING  fn = "QING_india_close_campaign"  result = OK }
+}
+
+# ======================================================================
+# QING_india_seize_trade — CONCRETE trade takeover (奪夷商). The counterpoint to the
+# Company's commerce: on every India-trade province the Qing now CONTROL (Bengal / Bihar /
+# South-India — the EIC footprint + its cash-crop hinterland), tear out the Company's
+# export-extraction and stand up Qing commercial institutions IN THEIR PLACE. Concrete,
+# on-map (per the concrete-over-abstract rule): real buildings raised + the trade good
+# turned from the Company's raw-export cash crop to Qing-directed manufacture.
+# Scope: COUNTRY (CHI). Called by qing_india_trade. Guarded per-province + idempotent.
+#   - a customs house (海關) on the seat we hold — the Company's revenue turned to the throne;
+#   - the raw textile-fibre export provinces (Calcutta 6219 / Madras 162 and their like)
+#     re-tooled: a silk filature raised and the good turned to finished silk — value the
+#     Company shipped home as raw fibre now spun on Indian soil under the Qing;
+#   - Bengkulu's spice post (6553) turned to a Qing tea plantation if we hold it.
+# ======================================================================
+QING_india_seize_trade = {
+	LOG_enter = { sys = QING  fn = "QING_india_seize_trade" }
+	# the Company seat at Calcutta, if held: a customs house + a draft bank (the revenue engine).
+	if = {
+		limit = { exists = p:6219  p:6219 = { controller = ROOT } }
+		p:6219 = {
+			if = { limit = { NOT = { has_building = qing_customs_house_building } }  add_building_level = qing_customs_house_building }
+			if = { limit = { NOT = { has_building = qing_draft_bank_building } }     add_building_level = qing_draft_bank_building }
+		}
+	}
+	# every raw textile-fibre province we control across the Company's Bengal/South-India
+	# footprint: raise a silk filature and turn the good to finished silk (Indian fibre spun
+	# on the spot for the Qing, not shipped home raw by the Company).
+	every_province = {
+		limit = {
+			controller = ROOT
+			trade_goods = textile_fibres
+			OR = { is_in_region = Bengal_region  is_in_region = Bahar  is_in_region = South_India }
+		}
+		if = { limit = { NOT = { has_building = qing_silk_filature_building } }  add_building_level = qing_silk_filature_building }
+		if = { limit = { NOT = { has_building = qing_customs_house_building } }  add_building_level = qing_customs_house_building }
+		set_trade_goods = silk
+	}
+	# Bengkulu (6553), the Company spice post, if held: a Qing tea plantation in its place.
+	if = {
+		limit = { exists = p:6553  p:6553 = { controller = ROOT } }
+		p:6553 = {
+			if = { limit = { NOT = { has_building = qing_tea_workshop_building } }  add_building_level = qing_tea_workshop_building }
+			set_trade_goods = tea
+		}
+	}
+	LOG_line = { sys = QING  msg = "India: the Company's commerce seized — customs houses, filatures and Qing goods stood up on the seized ground for" }
+	LOG_exit = { sys = QING  fn = "QING_india_seize_trade"  result = OK }
 }
