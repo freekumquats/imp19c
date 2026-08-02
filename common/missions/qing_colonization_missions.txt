@@ -173,102 +173,6 @@ qing_colonization_mission = {
 	}
 
 	# ==================================================================
-	# CENTRAL ASIA — the New Dominion and the road west (新疆 → 中亞).
-	# History: the Qing conquered the Zunghar basin in the 1750s and named it
-	# Xinjiang ("New Dominion"). Through the 19th c. Russia pushed into the Kazakh
-	# steppe and the Khanates (Kokand 浩罕, Bukhara, Khiva); the Ili Crisis
-	# (伊犁危機) and Yaqub Beg's revolt nearly cost the Qing the whole region,
-	# recovered by Zuo Zongtang (左宗棠) in 1877 and made a province in 1884. Here
-	# the Qing pushes the OTHER way — consolidating Xinjiang and contesting the
-	# steppe and the oasis khanates against the advancing Tsar (the true Great
-	# Game). This branch runs off the Amur/northern frontier resolve.
-	# ==================================================================
-	qing_col_xinjiang = {
-		icon = qing_col_xinjiang
-		requires = { qing_col_bureau }
-		allow = {
-			treasury >= 110
-			custom_tooltip = {
-				text = qing_col_needs_xinjiang_tt
-				OR = { owns = 2930  owns = 2977  owns = 9597 }
-			}
-		}
-		on_start = {
-			add_treasury = -110
-			LOG_line = { sys = QING  msg = "MISSION task START Xinjiang (spending treasury) for" }
-		}
-		on_completion = {
-			custom_tooltip = qing_col_xinjiang_tt
-			# Zuo Zongtang's consolidation: fortify and settle the New Dominion
-			if = {
-				limit = { owns = 2930 }
-				p:2930 = {
-					set_city_status = city
-					add_building_level = fortress_building
-					# [#234] the Qing frontier institutions Zuo actually planted at Urumqi: a
-					# 卡倫 picket-fort and a 屯田 military colony, not just the generic fortress.
-					if = { limit = { NOT = { has_building = qing_frontier_fort_building } }    add_building_level = qing_frontier_fort_building }
-					if = { limit = { NOT = { has_building = qing_military_colony_building } }  add_building_level = qing_military_colony_building }
-				}
-			}
-			# military-agricultural colonies (屯田): the state makes the oases
-			# attractive; the empire's surplus migrates there of its own accord via
-			# the migration pulse, and a Han plurality then seeds a claim organically.
-			# Replaces the old create_state_pop fiat. See se_QING_COLON.txt.
-			QING_COLON_frontier_pull = { province = 2930 }
-			QING_COLON_frontier_pull = { province = 2977 }
-			add_country_modifier = { name = qing_col_xinjiang_province  duration = -1 }
-			QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 4 }
-			# a firmer grip on the New Dominion presses on Russia's Ili sphere
-			QING_gp_provoke_russia = { severity = 6 }
-			LOG_line = { sys = QING  msg = "MISSION task Xinjiang for" }
-		}
-	}
-
-	# --- the Kazakh steppe + the oasis khanates (contest Russia's advance) ---
-	qing_col_central_asia = {
-		icon = qing_col_central_asia
-		requires = { qing_col_xinjiang }
-		allow = {
-			treasury >= 170
-			custom_tooltip = {
-				text = qing_col_needs_strong_army_tt
-				OR = {
-					has_country_modifier = qing_selfstr_ever_victorious
-					has_country_modifier = qing_col_xinjiang_province
-				}
-			}
-		}
-		on_start = {
-			add_treasury = -170
-			LOG_line = { sys = QING  msg = "MISSION task START Central Asia (spending treasury) for" }
-		}
-		on_completion = {
-			custom_tooltip = qing_col_central_asia_tt
-			# claim the great Silk Road cities and the steppe before the Tsar takes them
-			if = { limit = { exists = p:8238  NOT = { owns = 8238 } }  p:8238 = { add_claim = ROOT } }  # Alma-Ata
-			if = { limit = { exists = p:7038  NOT = { owns = 7038 } }  p:7038 = { add_claim = ROOT } }  # Bishkek
-			if = {
-				limit = { exists = p:9370  NOT = { owns = 9370 } }
-				p:9370 = { add_claim = ROOT }  # Tashkent
-				# racing the Tsar to the great Silk Road city, pressed as a diplomatic play (#53)
-				QING_gp_frontier_play = { tag = RUS  province = 9370  goal = flag:get_territory }
-			}
-			if = { limit = { exists = p:110   NOT = { owns = 110 } }   p:110 = { add_claim = ROOT } }   # Kokand
-			# offer the oasis khanates tributary status under the Son of Heaven
-			if = {
-				limit = { exists = c:BUK  NOT = { c:BUK = { is_subject_of = ROOT } } }
-				FUNC_make_subject = { overlord = ROOT  target = c:BUK  type = sinosphere_tributary }
-			}
-			add_country_modifier = { name = qing_col_silk_road  duration = -1 }
-			CURRENCY_grant_country_wealth = { thousands = 70 }
-			# racing Russia to the khanates is the sharpest provocation of the Great Game
-			QING_gp_provoke_russia = { severity = 14 }
-			LOG_line = { sys = QING  msg = "MISSION task Central Asia for" }
-		}
-	}
-
-	# ==================================================================
 	# THE PACIFIC ISLANDS — the sea road between the two shores (太平洋群島).
 	# Ryukyu (琉球, a Qing tributary until Japan annexed it in 1879), the
 	# Marianas/Guam, the Philippines (呂宋), and on to Hawaii (檀香山, "Sandalwood
@@ -505,7 +409,12 @@ qing_colonization_mission = {
 	# --- 安西 ĀNXĪ, Pacified West — the Tarim oases / Turkestan (都護府) --
 	qing_col_anxi = {
 		icon = qing_col_anxi
-		requires = { qing_col_xinjiang }
+		# [#27 split 2026-08-02] BOOT-SAFETY BRIDGE: was `requires = { qing_col_xinjiang }`, but that task
+		# was DELETED as a duplicate of the dedicated qing_xinjiang_missions.txt (a cross-tree/deleted-task
+		# requires never unlocks). Re-rooted onto the kept root qing_col_bureau. This march RELOCATES to
+		# qing_central_asia_missions.txt in chunk P3 (off the khanate-conquest chain); the bridge only keeps
+		# it reachable in the interim.
+		requires = { qing_col_bureau }
 		allow = {
 			political_influence >= 30
 			custom_tooltip = {

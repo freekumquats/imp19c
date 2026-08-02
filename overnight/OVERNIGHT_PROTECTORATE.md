@@ -159,3 +159,29 @@ alaska→amur, canada→alaska, california→alaska, anxin→california all stay
   no dup keys across all 4 loc files, BOM/CJK. One harmless non-defect noted: `qing_col_amur_frontier:0`
   modifier display was left in the colonization loc though its granting task (amur) moved. FIXED for
   locality — moved it to the New-World loc (pure organization, no behavior change; re-verified no dup).
+
+### C4 — delete duplicate xinjiang/central_asia (DONE, pre-review)
+- SALVAGE-CHECK FIRST (DESIGN §D): confirmed the dedicated trees fully cover the deleted content —
+  `qing_central_asia_missions.txt` embraces KOK/BUK/KHV as sinosphere_tributary (via
+  `se_QING_CENTRAL_ASIA.txt QING_ca_embrace_khanates`), claims every Turkestan province (qing_ca_begs),
+  seeds military colonies + frontier forts region-wide, revives the Silk Road; `qing_xinjiang_missions.txt`
+  has a dedicated Urumqi task + region-wide forts/colonies/karez. The two colonization tasks' specific
+  point-claims (Alma-Ata 8238 / Bishkek 7038 / Tashkent 9370 / Kokand 110) fold into the Anxi/Anbei march
+  founding in P3 per DESIGN §4.1; nothing unique is lost.
+- Deleted `qing_col_xinjiang` + `qing_col_central_asia` tasks (96 lines) + their dead task-facing loc keys
+  (titles/DESC/tt + needs_xinjiang_tt/needs_strong_army_tt). Left the modifier DEFINITIONS + their display
+  names (qing_col_xinjiang_province/silk_road) intact per DESIGN §4 (lowest-risk; modifiers load globally).
+- Re-rooted orphaned `qing_col_anxi` (required deleted xinjiang) → bureau bridge (relocates to CA tree in P3).
+- Cleaned stray empty loc comment-headers left by C3/C4 migrations.
+- FINAL SPLIT VALIDATION: all 11 live `requires` in the Oceania tree resolve in-file; africa/mexico/
+  new_world all resolve; braces balanced (coloniz 240/240, africa 105/105, mexico 135/135, nw 134/134);
+  no dup loc keys across all 5 loc files.
+- **Review (code-review agent):** PASS on boot-safety + loc integrity. One MEDIUM content-loss finding:
+  the deleted qing_col_central_asia granted claims on Tashkent (9370) + Kokand (110), both region
+  **Fergana** — but qing_ca_begs only sweeps **Turkestan**, so those 2 Fergana claims had no home
+  (Alma-Ata 8238 + Bishkek 7038 ARE Turkestan → already re-homed by qing_ca_begs). FIXED per DESIGN §4.1
+  (oasis claims belong to the Anxi/khanate theatre): added a guarded `every_province is_in_region=Fergana
+  add_claim` sweep to `qing_ca_khanates` (the task that overawes KOK/BUK/KHV) — re-homing the lost claims
+  into the tree that conquers that ground, using the proven idiom already shipped at CA tree lines
+  172/304/342. Reviewer's Urumqi-2930 note = acceptable per the region-wide good-enough abstraction rule
+  (forts/colonies still seeded region-wide; qing_xj_fortify gates on a Tarim-area fortress). CA braces balanced.
