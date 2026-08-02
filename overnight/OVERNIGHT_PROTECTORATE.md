@@ -22,7 +22,20 @@ scope excludes them. **Therefore: leave `QING_establish_protectorate` intact (La
 it verbatim), and write a NEW effect `QING_found_march` for the seven 都護府.** This avoids breaking the
 two correct releases and keeps the two mechanics cleanly separate.
 
-### R2 — Marches are founded via the PROVEN `LAND_release_from_list`, NOT the unproven mint path.
+### R2 — Marches are founded via `LAND_release_from_list` (BOOT-SAFE fallback), NOT the tag-mint path.
+**Accuracy correction (user, 2026-08-02):** do NOT call this path "proven." `change_country_tag` is proven
+only to EXIST as a verb (se_JAPAN_BOSHIN renames a LIVE tag); `LAND_release_from_list` is proven only
+BOOT-SAFE (Lanfang/Mexico ship with it, so the files parse + load). NEITHER is proven at RUNTIME —
+`qing_col_lanfang` / `qing_col_mexican_empire` are deep late-game mission endpoints (gated on self-str
+progress / High-Qing era + owning specific overseas regions) that have almost certainly NEVER FIRED in a
+boot test, so nobody has actually watched `LAND_release_from_list` spin off a working sinosphere_tributary.
+The real value R2 buys is NOT runtime correctness — it is **avoiding NEW boot-crash surface** (no new
+dormant tags, only verbs that already load). The whole QING_found_march subsystem is therefore BOOT-SAFE
+by construction (braces/keys/verbs verified + adversarially reviewed for logic) but RUNTIME-UNVERIFIED —
+it needs an actual boot test that founds a march. The mint path was rejected because it ADDS boot surface
+(new tags + an unattested create_country→change_country_tag-to-a-predefined-code composition), on top of
+being equally runtime-unverified.
+
 `DESIGN_PROTECTORATES_GENERAL §5/§8.0` flags `create_country → change_country_tag`-to-a-predefined-code
 as UNPROVEN (no repo precedent as a unit) and offers "a dynamic tag with a scripted custom name" as the
 explicit fallback. Since I cannot run the isolation spike, I take the fallback as the primary path:
