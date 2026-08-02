@@ -334,6 +334,50 @@ QING_march_size_army = {
 			}
 			remove_variable = qing_march_shortfall
 			remove_variable = qing_march_raise_count
+
+			# --- MARITIME marches also get a NAVY scaled to the subsidy tier (DESIGN §3.3/H2, P9) ---
+			# Only a maritime march (qing_march_maritime flag, set at founding) that HOLDS a port. Navy
+			# target = half the army tier in ships (small/med/high = 5/10/15 ships). Issued BARE in the
+			# MARCH's own scope at a march-held port — the PROVEN navy-raise form (SE_qing_navy_guangdong /
+			# TI rel_flavor_kemetic.7: create_unit navy=yes location=<owned is_port> in the country's own
+			# scope). This is NOT the H2-flagged re-scoped raise (which re-resolves location wrong) — the
+			# march IS `this` here, so location resolves to the march's port. Simple top-up: raise the navy
+			# ONLY if the march currently has none (avoids per-quarter stacking); a lost fleet is re-raised.
+			if = {
+				limit = {
+					has_variable = qing_march_maritime
+					var:qing_march_target_cohorts >= 1
+					# "march has NO fleet" — `any_navy = { count = 0 }` is ALWAYS TRUE (count = N means
+					# >= N in this engine), which would stack a new fleet every quarter. The attested
+					# absence idiom is NOT { any_navy count >= 1 } (SE_qing_navy_disband uses this form).
+					NOT = { any_navy = { count >= 1 } }
+					# a SEA port: is_port = yes is the PROVEN sea-port predicate (SE_qing_navy_guangdong /
+					# se_QING_TREASURE_FLEET use is_port ALONE and explicitly warn NOT is_coastal — is_coastal
+					# is the LOOSER predicate that also matches river/lake ports, which create_unit navy=yes
+					# rejects). A maritime march founded from overseas/coastal conquest holds real sea ports.
+					any_owned_province = { is_port = yes }
+				}
+				# ship count by tier (target cohorts 10/20/30 -> 5/10/15 ships; -1 for the base sub_unit).
+				if =      { limit = { var:qing_march_target_cohorts >= 30 }  set_variable = { name = qing_march_ships  value = 15 } }
+				else_if = { limit = { var:qing_march_target_cohorts >= 20 }  set_variable = { name = qing_march_ships  value = 10 } }
+				else =    { set_variable = { name = qing_march_ships  value = 5 } }
+				change_variable = { name = qing_march_ships  subtract = 1 }   # base sub_unit is the +1
+				ordered_owned_province = {
+					limit = { is_port = yes }
+					order_by = total_population
+					max = 1
+					save_scope_as = qing_march_berth
+				}
+				create_unit = {
+					navy = yes
+					name = "Protectorate Fleet"
+					location = scope:qing_march_berth
+					sub_unit = brig
+					while = { count = var:qing_march_ships  add_subunit = brig }
+				}
+				remove_variable = qing_march_ships
+				LOG_line = { sys = QING  msg = "MARITIME MARCH raises a fleet scaled to its subsidy tier for" }
+			}
 		}
 	}
 }

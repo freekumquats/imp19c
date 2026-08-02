@@ -349,3 +349,40 @@ NEW `common/scripted_effects/se_QING_MARCH_PULSE.txt` + `common/on_action/qing_m
   relief host decays + stands down after ~2y (verified ordering: decay-clear runs before the target adds
   the relief var; converges to 0 in one pass, then drops out of the limit). Braces march 143/143.
   All P5/P7/P8 findings resolved.
+
+### P6 + P9 — subsidy S/M/H toggle GUI + maritime navies (DONE, pre-review)
+- **P9 navies** (in QING_march_size_army, se_QING_MARCH.txt): a maritime march (qing_march_maritime flag)
+  that HOLDS a port and has NO navy raises a fleet scaled to its subsidy tier (small/med/high = 5/10/15
+  ships, brigs) at its most-populous port. BARE create_unit navy=yes in the MARCH's own scope (the proven
+  SE_qing_navy_guangdong / TI kemetic form — NOT the H2-flagged re-scoped raise, since the march IS `this`).
+  Simple top-up (only when navy count = 0) — a lost fleet is re-raised, no per-quarter stacking.
+- **P6 subsidy toggle GUI**: 6 scripted_guis in SUB_QING_subject_interactions.txt (small/medium/high
+  buttons + is_X indicators), mirroring the tribute set but gated on frontier_protectorate + calling
+  QING_march_set_subsidy. A parallel S/M/H button flowcontainer in gui/diplomatic_view.gui (after the
+  tribute one, same slot — shows only for a march via the scripted-gui is_shown). 6 new tooltip loc keys
+  (QING_SUBSIDY_*_TT + qing_subsidy_already_*_tt) in 00_subject_rework_l_english.yml.
+- Braces: march 161/161, scripted_guis 265/265, gui 1397/1397. All scripted-gui names + loc keys resolve.
+
+## STATUS: the full #27 protectorate/colonization rework is FUNCTIONALLY COMPLETE.
+Split (C1-C4) + march subsystem (P1/P4) + all 7 marches founded (P3a/P3b) + autonomous behaviours
+(P5 expand / P7 integrate / P8 relief) + subsidy GUI (P6) + maritime navies (P9). Every chunk reviewed
+by an adversarial code-review agent, fixes applied + re-reviewed, committed + pushed. QING_establish_
+protectorate retained ONLY for its legit callers (Lanfang + Mexican Empire).
+
+### P6/P9 review outcome
+- **Review (code-review agent):** found 2 real defects + 1 LOW, ALL FIXED:
+  - **CRITICAL** `any_navy = { count = 0 }` is ALWAYS TRUE (count=N means >=N) → maritime marches stacked
+    a new fleet EVERY quarter, unbounded. FIXED: `NOT = { any_navy = { count >= 1 } }` (the proven
+    SE_qing_navy_disband absence idiom) — now a one-time top-up, re-raised only if the fleet is lost.
+  - **MEDIUM** tribute/subsidy slot overlap: a march showed BOTH button groups and could be drained by
+    tribute AND funded by subsidy at once. FIXED: excluded frontier_protectorate from all 3 tribute-button
+    is_shown blocks + from QING_subject_collect_tribute's every_subject limit (defense in depth).
+  - **LOW** river-port berth: navy raise could fail on a river port + (with the CRITICAL) retry forever.
+    FIXED: berth pick + guard now require `is_port = yes  is_coastal = yes` (a real sea berth).
+  Braces: march 164/164, sgui 268/268, subj 313/313. Re-review dispatched.
+- **Re-review:** fixes (1) fleet-stacking + (2) tribute/subsidy overlap CONFIRMED correct. Fix (3) was
+  based on an INVERTED premise — the mod's own docs (imp19c_effects_legion_setup / se_QING_TREASURE_FLEET)
+  establish `is_port = yes` as the PROVEN sea-port predicate and warn that `is_coastal` is LOOSER (matches
+  river/lake ports create_unit rejects). So the pre-fix `is_port`-alone was already correct; my is_coastal
+  addition was redundant + its comment backwards (a maintenance trap). REVERTED to `is_port = yes` alone
+  with a corrected comment matching the two proven sibling naval effects. march braces 164/164.
