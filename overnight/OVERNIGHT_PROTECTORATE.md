@@ -438,3 +438,21 @@ the marches use LAND_release_from_list instead). NEW **TEMPORARY** files (remove
 - `common/on_action/qing_test_prims_on_actions.txt`: on_game_initialized on_actions LIST-form
   registration (#254 merge form) → CHI-only wrapper → QING_TEST_country_primitives.
 - Steals no land (unowned province only); no collision (JPN dormant). Braces 34/34, 6/6.
+
+### create_country / change_country_tag probe — RESOLVED + REMOVED (2026-08-02)
+The temporary boot probe (se_QING_TEST_PRIMS.txt + on_action) answered the design's
+§5/§8.0 open question over two boots, then was removed:
+- **create_country** is a PROVINCE-scope effect (country-scope call errors "Wrong scope
+  for effect: country, expected province"). From a province scope it WORKS + the saved
+  scope persists. VIABLE.
+- **change_country_tag = <predefined tag>** does NOT carry the source's provinces: renaming
+  dynamic A00 (owning p:59) -> JPN left c:JPN not owning p:59. ROOT CAUSE: EVERY registered
+  tag is instantiated at setup (game.log: 685 "Created country (Reason: Setup)" >= 683
+  registered), even dormant JPN — so there is no free tag to rename into; the rename hits a
+  pre-existing landless instance and provinces don't transfer.
+- CONCLUSION: LAND_release_from_list (dynamic tags) is the correct march-founding path; the
+  predefined-tag + change_country_tag mint is a dead end. Probe deleted (no residue).
+Also confirmed clean this boot: the $log_tag$ LOG-string fix cleared the QING_found_march
+compile noise; the two treasure-fleet art keys (qing_africa vs qing_treasure_fleet) both
+resolve; the #46 Protectorates-General laws load without error. The "lacks a final task"
+warning fires for ALL 21 trees incl. vanilla russian_missions — benign, not a defect.
