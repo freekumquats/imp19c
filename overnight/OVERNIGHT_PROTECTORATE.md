@@ -264,3 +264,13 @@ relocation to their conquering trees (CA/Burma/Japan) per DESIGN §4.1/§4.2.
   in QING_found_march (release_subject from CHI before make_subject to the march, proven se_FUNC idiom).
   Pass 2 (re-review): BOTH fixes CONFIRMED correct, no new defects. This validates the reusable pattern
   (capstone-gate + release-then-rebind) for the remaining land marches Annan/Andong/Anbei.
+
+### P3b-2 — Anbei relocated to the CA tree + retargeted (DONE, pre-review)
+NEW task `qing_ca_anbei_march` (CA tree) — REUSES the exact validated Anxi pattern (capstone-gated +
+release-then-rebind), differing only in theatre: RETARGETED from CHI-core Mongolia to the KAZAKH STEPPE
+(region `Turkestan` — the steppe, per DESIGN §4.1's map trap), subordinating the 3 Kazakh hordes
+GKH/ORT/KSH (made CHI tributaries by qing_ca_kazakh) as the march's princely states. Land march. Carve
+region (Turkestan) is DISJOINT from Anxi's (Fergana/Bukhara/Khwarezm) — no land-overlap. Both marches are
+LEAF tasks gated on qing_ca_capstone (no circular dep, no soft-lock). Removed backwards qing_col_anbei;
+loc moved+retargeted (+ qing_ca_anbei_march_tt, qing_ca_needs_steppe_land_tt). Braces: CA 232/232,
+coloniz 209/209. No dup loc keys.
