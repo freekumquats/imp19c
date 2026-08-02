@@ -104,10 +104,10 @@ PHOTOS = {
  "qing_open_japan": (
    ("D", "https://i.natgeofe.com/n/f6078f04-2068-4eae-aa82-2ee8a9b74646/Shogun12.jpg"),
    "qing_open_japan_mission", "mission_image_qing_open_japan"),
- # Treasure Fleet — "600th Anniversary of Zheng He's Voyages to the Western Seas",
- # China Post postage-stamp souvenir sheet, 2005 (郑和下西洋600周年).
+ # Treasure Fleet (the Scramble-for-Africa tree) — Hong Nian Zhang (张宏年),
+ # "China's Great Armada", oil, 2005 — Zheng He's treasure fleet under sail.
  "qing_treasure_fleet": (
-   ("D", "https://cdn.thecollector.com/wp-content/uploads/2022/11/zheng-he-fleet-postage-stamp.jpg?width=1200&quality=100&dpr=2"),
+   ("D", "https://i.natgeofe.com/n/86f084a7-6e7c-45a9-901f-226a6a641c1f/painting-master-commander-with-fleet.jpg"),
    "qing_treasure_fleet_mission", "mission_image_qing_treasure_fleet"),
  # Nanyang (South Seas) — Johann (Johannes) Walch, "Karte von Australien", from
  # Walch's "Neuester Schul-Atlas" (Augsburg). Map of Australia & New Zealand.
