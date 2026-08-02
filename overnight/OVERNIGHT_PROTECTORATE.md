@@ -299,3 +299,53 @@ coloniz 209/209. No dup loc keys.
   (qing_ca_kazakh is off the capstone path), so Anbei had the same empty-list bug. Converted BOTH Anxi and
   Anbei to every_country too, so all 4 land marches now use the uniform robust iterator. Also cleaned the
   LOW orphaned loc comment-headers. Braces: CA 234/234, burma 211/211, japan 196/196.
+
+### P5 + P7 + P8 — march autonomous behaviours (DONE, pre-review)
+NEW `common/scripted_effects/se_QING_MARCH_PULSE.txt` + `common/on_action/qing_march_on_actions.txt` +
+`events/imp19c_mod_events/qing_march_relief_events.txt` + loc:
+- **P5 QING_march_expand_pulse** (yearly, self-gated on frontier_protectorate via qing_march_on_actions →
+  yearly_country_pulse): Road 1 = a LOW-chance war of conquest gated on peace (war=no), picks a bordering
+  province of a non-subject/non-overlord/non-fellow-subject polity → FUNC_declare_war_with_wargoal_province
+  (conquer_wargoal). Chance scaled by subsidy tier via NAMED svalue qing_march_conquest_chance_svalue
+  (NOT an effect-scope `modifier{}` inside random — that's unattested). Road 2 = colonise an unowned
+  bordering province (set_owned_by ROOT + starter pop; march-scoped, avoids the colonise verb's scope:player).
+- **P7 QING_march_integrate_pulse** (yearly): slow-chance advance of a march-owned progress var on one
+  bound subject; at threshold (5) SUBJ_QING_absorb_subject (grantee=ROOT, march-driven per H1 — no player
+  event). Absorb runs OUTSIDE the random_subject block in the march scope.
+- **P8 QING_march_relief_check** (quarterly, wired into the CHI pulse) → qing_march_relief.1 event: a march
+  war=yes + has_war_exhaustion>=10 fires the throne dilemma (shared court-slot throttle + ~4y per-march
+  cooldown). Options: (a) relief army = TEMPORARY bump to qing_march_relief_cohorts (H4 — no per-unit
+  maintenance-exempt primitive; the §3.3 sizer raises+maintains the bigger host, decaying via a timed
+  qing_march_relief_decay flag + a decay-clear in the sizer); (b) CHI joins the war (add_to_war attacker=yes
+  in ROOT=CHI scope, targeting the march's random_current_war — the se_SEPARATISM:285 joining-scope gotcha);
+  (c) decline (loyalty ding).
+- **Latent bug fix in committed P4:** the down-step guard used `is_at_war = no` — NOT attested (only my own
+  use); the proven trigger is `war = no`. Fixed (would have errored).
+- All verbs verified attested: FUNC_declare_war_with_wargoal_province, random_neighbor_province,
+  create_state_pop, conquer_wargoal, chance=<svalue>, random_current_war, add_to_war attacker=yes,
+  SUBJ_QING_absorb_subject, war=no/has_war_exhaustion, loyalty_qing_estranged, chinese_throne_room.
+  Braces: pulse 81/81, march 142/142, event 26/26. BOM: on_action efbbbf (sibling convention), events none
+  (sibling convention), loc efbbbf.
+- **Review (code-review agent):** PASS on scope-correctness (ROOT in province iterators, triggered-event
+  scope persistence, integrate-absorb contract, decay lifecycle for funded marches, all verbs attested).
+  Found 4 defects, ALL FIXED:
+  - **HIGH** add_to_war side: relief option (b) hardcoded attacker=yes, but the relief fires for DEFENSIVE
+    wars too → CHI could join AGAINST its own march. FIXED: pick the war the march LEADS
+    (is_war_leader limit) + derive CHI's side from the march's (any_war_attacker test → attacker yes/no).
+  - **MEDIUM** war-declare guard missed fellow-march SUB-subjects (is_subject_of non-recursive) → march B
+    could attack march A's princely state (fratricide). FIXED: added
+    `NOT = { overlord = { is_subject_of = ROOT.overlord } }` to all 3 owner-limit blocks.
+  - **MEDIUM** relief option (a) was a silent no-op for an UNFUNDED march: QING_march_size_army only runs
+    from QING_march_pay_subsidy (which requires a subsidy tier), so the relief bump sat inert while CHI
+    paid. FIXED: option (a) now calls QING_march_size_army directly (raises regardless of tier).
+  - **LOW** stale saved-scope in the integrate pulse spammed a yearly LOG_fail. FIXED: absorb nested
+    inside random_subject (fresh scope every year).
+  Braces: pulse 86/86, event 34/34, march 142/142. Re-review dispatched.
+- **Re-review:** fixes (1)(2)(4) CONFIRMED correct. Fix (3) correctly solved the raise-no-op but
+  introduced a NEW MEDIUM: an unfunded relief-march's host never decays (the decay-clear + stand-down
+  live only in the tier-gated QING_march_pay_subsidy). FIXED: widened that pulse's every_subject limit to
+  `OR { has_variable=qing_subsidy_tier  has_variable=qing_march_relief_cohorts }` — a tier-less relief
+  march is now routed through the sizer (gold transfer stays 0 via the else branch + >0 guard), so its
+  relief host decays + stands down after ~2y (verified ordering: decay-clear runs before the target adds
+  the relief var; converges to 0 in one pass, then drops out of the limit). Braces march 143/143.
+  All P5/P7/P8 findings resolved.

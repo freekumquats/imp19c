@@ -1,0 +1,125 @@
+########################################################################
+# qing_march_relief_events.txt — [#27] the FRONTIER-MARCH WAR-RELIEF dilemma (DESIGN §3.6).
+# When a march (frontier_protectorate) is bogged down in a long war (war = yes + heavy war
+# exhaustion), the detection pulse QING_march_relief_check (se_QING_MARCH_PULSE.txt, on the
+# Qing quarterly pulse) fires this event to the human Qing (ROOT = c:CHI), with scope:qing_relief_march
+# = the stricken march. The throne chooses: send a relief army, join the war outright, or decline.
+#
+# Proven idioms: add_manpower/add_treasury deduct on ROOT=CHI (se_QING_WORKS); set_variable on the
+# march for the relief-army-as-target-bump (H4 — there is NO per-unit maintenance-exempt primitive, so
+# the relief is a TEMPORARY raise of the march's maintained tier target that the §3.3 sizer re-raises +
+# then maintains, decaying over time); add_to_war run in the JOINING country's scope (se_SEPARATISM:285
+# gotcha — so "CHI joins" runs in ROOT=CHI, targeting the march's war on the march's side);
+# random_current_war to fetch the march's war scope. Shared court-event throttle qing_gc_event_slot_used.
+#
+# Sources: the 協餉 xiéxiǎng emergency-supplement precedent (frontier generalships drawing extra silver
+# + men from the interior when a campaign bogged down). PREFIX qing_march_relief / sys = QING.
+########################################################################
+
+namespace = qing_march_relief
+
+# ======================================================================
+# qing_march_relief.1 — the throne's intervention dilemma for a bogged-down march.
+# ======================================================================
+qing_march_relief.1 = {
+	type = country_event
+	title = "qing_march_relief.1.t"
+	desc = "qing_march_relief.1.desc"
+	picture = chinese_throne_room
+
+	# fire only while the march still exists, is still our frontier_protectorate, and is still at war
+	# (the 3-15 day delay between queue and fire could have ended the war or lost the march).
+	trigger = {
+		tag = CHI
+		exists = scope:qing_relief_march
+		scope:qing_relief_march = {
+			is_subject_of = ROOT
+			is_subject_type = frontier_protectorate
+			war = yes
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_march_relief.1 (a frontier march is bogged down) for [ROOT.GetTag]" }
+	}
+
+	# --- Option 1: send extra silver + men — SPAWN A RELIEF ARMY (~20,000 = 40 cohorts) ---
+	# H4: no per-unit maintenance-exempt primitive exists, so the relief is a TEMPORARY bump to the
+	# march's maintained tier target (qing_march_relief_cohorts), which the §3.3 sizer adds to the
+	# target + raises + maintains. CHI pays the emergency 協餉 supplement (manpower + gold) now; the
+	# sizer's own raise will also levy the manpower for the raised cohorts, so we grant the march the
+	# gold here and dock CHI the emergency gold; the relief cohorts' manpower is billed by the sizer.
+	option = {
+		name = "qing_march_relief.1.a"
+		custom_tooltip = "qing_march_relief.1.a.tt"
+		# bump the march's maintained target by 40 cohorts (~20,000 men); the quarterly sizer raises them.
+		scope:qing_relief_march = {
+			if = {
+				limit = { NOT = { has_variable = qing_march_relief_cohorts } }
+				set_variable = { name = qing_march_relief_cohorts  value = 0 }
+			}
+			change_variable = { name = qing_march_relief_cohorts  add = 40 }
+			# decay: clear the bonus after ~2 years so the swollen host reverts to the tier baseline.
+			set_variable = { name = qing_march_relief_decay  days = 730  value = 1 }
+			# an emergency war chest for the campaign.
+			add_treasury = 50
+		}
+		# the throne funds the supplement: gold from Beijing (manpower for the relief cohorts is levied
+		# by QING_march_size_army when it raises them — do not double-dock here).
+		add_treasury = -50
+		# RAISE THE RELIEF ARMY NOW, directly. QING_march_size_army is otherwise only called from
+		# QING_march_pay_subsidy, whose every_subject requires has_variable = qing_subsidy_tier — so an
+		# UNFUNDED march (no tier set) would never have the relief cohorts raised at all (the bump would
+		# sit inert, the player having paid for nothing). Calling the sizer here (ROOT = CHI) raises the
+		# relief cohorts + levies their manpower immediately, funded or not. (For a funded march it just
+		# brings the quarterly raise forward a few days — idempotent: the sizer only raises the shortfall.)
+		QING_march_size_army = { march = scope:qing_relief_march }
+		LOG_line = { sys = QING  msg = "EVENT qing_march_relief.1: throne sends a relief army (target bump + immediate raise) + war chest for [ROOT.GetTag]" }
+	}
+
+	# --- Option 2: the Qing JOINS the war ---
+	# add_to_war runs in the JOINING country's scope (se_SEPARATISM:285). We are ROOT = CHI (the joiner),
+	# so run it here directly, targeting the march's current war on the march's side (attacker = yes if
+	# the march is the war leader/attacker). Fetch the war scope from the march.
+	option = {
+		name = "qing_march_relief.1.b"
+		custom_tooltip = "qing_march_relief.1.b.tt"
+		# fetch the war the MARCH LEADS (a march can be in several wars; join the one it leads).
+		scope:qing_relief_march = {
+			random_current_war = {
+				limit = { is_war_leader = scope:qing_relief_march }
+				save_scope_as = qing_relief_war
+			}
+		}
+		if = {
+			limit = { exists = scope:qing_relief_war }
+			# CHI (ROOT = this option scope) joins the march's war (add_to_war adds `this` = CHI —
+			# se_SEPARATISM:285). DERIVE THE SIDE from the march's position: if the march is an ATTACKER
+			# in that war, CHI joins as attacker; if the march is the DEFENDER (a frontier subject is very
+			# attackable — the relief fires for defensive wars too), CHI joins as defender. Hardcoding
+			# attacker=yes would put CHI AGAINST its own march in a defensive war (the bug this avoids).
+			if = {
+				limit = { scope:qing_relief_war = { any_war_attacker = { this = scope:qing_relief_march } } }
+				add_to_war = { target = scope:qing_relief_war  attacker = yes  leader = no }
+			}
+			else = {
+				add_to_war = { target = scope:qing_relief_war  attacker = no  leader = no }
+			}
+			LOG_line = { sys = QING  msg = "EVENT qing_march_relief.1: the Son of Heaven joins the march's war on its side for [ROOT.GetTag]" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "qing_march_relief.1.b"  reason = "march leads no current war to join (ended before the throne acted)" }
+		}
+	}
+
+	# --- Option 3: decline — leave the march to its fate ---
+	option = {
+		name = "qing_march_relief.1.c"
+		custom_tooltip = "qing_march_relief.1.c.tt"
+		# a small loyalty ding with the abandoned march (it fights on alone).
+		scope:qing_relief_march = {
+			add_loyalty = loyalty_qing_estranged
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_march_relief.1: throne declines; the march fights on alone for [ROOT.GetTag]" }
+	}
+}

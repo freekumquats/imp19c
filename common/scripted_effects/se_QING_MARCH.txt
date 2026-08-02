@@ -244,6 +244,17 @@ QING_march_size_army = {
 			else_if = { limit = { var:qing_subsidy_tier = flag:medium }  set_variable = { name = qing_march_target_cohorts  value = 20 } }
 			else_if = { limit = { var:qing_subsidy_tier = flag:high }    set_variable = { name = qing_march_target_cohorts  value = 30 } }
 			else =    { set_variable = { name = qing_march_target_cohorts  value = 0 } }
+			# temporary relief bonus (P8 war-relief event) — ADDS to the target while live, then DECAYS.
+			# The relief event stamps a timed qing_march_relief_decay flag (auto-expires ~2y); once that
+			# flag is gone but the bonus var remains, clear the bonus so the host reverts to the tier
+			# baseline (the down-step then stands the extra cohorts down).
+			if = {
+				limit = {
+					has_variable = qing_march_relief_cohorts
+					NOT = { has_variable = qing_march_relief_decay }
+				}
+				remove_variable = qing_march_relief_cohorts
+			}
 			if = {
 				limit = { has_variable = qing_march_relief_cohorts }
 				change_variable = { name = qing_march_target_cohorts  add = var:qing_march_relief_cohorts }
@@ -294,12 +305,12 @@ QING_march_size_army = {
 			# so a march at target sits STABLE (no quarterly thrash). destroy_unit=yes on every_army is
 			# the PROVEN disband verb (SE_qing_navy_disband: every_navy = { destroy_unit = yes });
 			# ordered_army/disband_unit are NOT attested here. Disband all + re-raise to the lower target
-			# keeps only proven verbs. Guard is_at_war=no: never strip a march mid-campaign. The re-raise
+			# keeps only proven verbs. Guard war=no: never strip a march mid-campaign. The re-raise
 			# is a SHRINK (target < current), so it docks NO new manpower (H3 — down-steps are free).
 			else_if = {
 				limit = {
 					var:qing_march_shortfall <= -1
-					is_at_war = no
+					war = no
 					any_army = { count >= 1 }
 				}
 				every_army = { destroy_unit = yes }
@@ -341,7 +352,15 @@ QING_march_pay_subsidy = {
 	every_subject = {
 		limit = {
 			is_subject_type = frontier_protectorate
-			has_variable = qing_subsidy_tier
+			# a funded march (has a tier) OR a march carrying a live/expired RELIEF bonus. The latter
+			# is essential: an UNFUNDED march that received a war-relief army (qing_march_relief_cohorts)
+			# must still be routed through QING_march_size_army so its relief host DECAYS + stands down
+			# after the bonus expires (the decay-clear + over-target stand-down live only in the sizer).
+			# Without this a tier-less relief march would keep its swollen host forever.
+			OR = {
+				has_variable = qing_subsidy_tier
+				has_variable = qing_march_relief_cohorts
+			}
 		}
 		save_temporary_scope_as = subsidy_march
 		# quarterly gold stipend by tier (a flat per-march stipend; small/med/high rising),

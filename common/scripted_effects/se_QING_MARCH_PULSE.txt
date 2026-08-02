@@ -1,0 +1,224 @@
+########################################################################
+# se_QING_MARCH_PULSE.txt — the frontier marches' AUTONOMOUS behaviour pulses.
+# #27 (P5 active expansion + P7 self-integration). Design: design/
+# DESIGN_PROTECTORATES_GENERAL.md §3.4/§3.5; build log: overnight/OVERNIGHT_PROTECTORATE.md.
+#
+# The marches (frontier_protectorate) are AI-run subjects. `allowed_to_declare_war_
+# against_others` only grants the CAPABILITY; the vanilla AI will not reliably drive a
+# small frontier subject to conquer. So the marches expand + consolidate under scripted
+# YEARLY pulses, each self-gating on `is_subject_type = frontier_protectorate` (NOT is_ai),
+# exactly like the AI-autonomous Japan/marriage pulses on yearly_country_pulse. Every march
+# — including an AI overlord's, though in practice CHI's — runs its own pulse.
+#
+# CADENCE (DESIGN §3.4/§3.5, user ruling): a new WAR OF CONQUEST is a LOW YEARLY CHANCE
+# gated on the march being at peace (a real war takes years to fight + digest — quarterly
+# would devour a continent). Colonisation of unowned land + one integration step are also
+# yearly-chance. The subsidy/army pulse (se_QING_MARCH.txt QING_march_pay_subsidy) stays
+# QUARTERLY; only these autonomous-behaviour rolls are yearly.
+#
+# Proven idioms only:
+#  - FUNC_declare_war_with_wargoal_province (se_FUNC.txt:320; used by se_AI) — the scripted
+#    war-declare-with-wargoal; excludes protected subjects, brings in colonies. war_goal =
+#    conquer_wargoal.
+#  - random_owned_province + any_neighbor_province (se_QING_ILI/AMERICAS/DIPLO) — target pick.
+#  - random = { chance = N } (pervasive) — the yearly-chance gate.
+#  - set_owned_by + create_state_pop (se_QING_AMERICAS QING_colonise_this_province) — colonise
+#    an unowned neighbour under the MARCH (a march-scoped simplification of the colonise verb,
+#    avoiding its hardcoded scope:player refs — DESIGN §2.1 [M1]).
+#  - SUBJ_QING_absorb_subject (se_SUBJECT_QING.txt:526; grantee = ROOT, NOT CHI-gated) — the
+#    direct-absorb that a MARCH overlord can drive (DESIGN §3.5 [H1] — bypasses the player-event
+#    integration dispatcher entirely; the march accrues its own progress var + threshold).
+#  - war = no / has_war_exhaustion (proven; `is_at_war` is NOT attested) — stuck-war reads.
+#
+# PREFIX: QING_march_ / sys = QING.
+########################################################################
+
+# ======================================================================
+# QING_march_expand_pulse — ONE march's yearly expansion roll. Scope: country (the march).
+# Registered self-gating on yearly_country_pulse. Two roads (DESIGN §3.4):
+#   1. WAR OF CONQUEST — LOW yearly chance, gated on the march being at PEACE: pick a bordering
+#      province owned by a non-subject, non-overlord polity and declare a conquest war on it.
+#   2. COLONISE UNOWNED — higher yearly chance (peaceful, no digest-time): plant a colony on a
+#      bordering unowned province under the march.
+# Guards: never target the march's own overlord or a fellow subject of that overlord; skip if
+# no valid target (no-op, logged). Scaled loosely by subsidy tier (a funded march is bolder).
+# ======================================================================
+QING_march_expand_pulse = {
+	# --- Road 1: a war of conquest, LOW yearly chance, only while at peace ---
+	if = {
+		limit = { war = no }
+		random = {
+			# base ~15%, scaled by subsidy tier via a NAMED svalue (a high-subsidy march presses
+			# harder; an unfunded one sits quieter). `chance = <svalue>` is proven (se_QING_EXAM/COLON);
+			# an effect-scope `modifier = { add }` inside random is NOT attested here, so the scaling
+			# lives in the svalue instead of a modifier block.
+			chance = qing_march_conquest_chance_svalue
+			# find a bordering province owned by a conquerable polity and declare on its owner.
+			if = {
+				limit = {
+					exists = overlord
+					any_owned_province = {
+						any_neighbor_province = {
+							exists = owner
+							NOT = { owner = ROOT }              # not the march's own land
+							NOT = { owner = ROOT.overlord }      # not the metropole (CHI)
+							owner = {
+								NOT = { is_subject_of = ROOT }             # not the march's own subject
+								NOT = { is_subject_of = ROOT.overlord }     # not a DIRECT subject of CHI
+								NOT = { this = ROOT.overlord }
+								# is_subject_of is NOT recursive, so also exclude a SUB-subject of CHI —
+								# a fellow march's princely state (its overlord is itself a CHI subject).
+								NOT = { overlord = { is_subject_of = ROOT.overlord } }
+							}
+						}
+					}
+				}
+				random_owned_province = {
+					limit = {
+						any_neighbor_province = {
+							exists = owner
+							NOT = { owner = ROOT }
+							NOT = { owner = ROOT.overlord }
+							owner = {
+								NOT = { is_subject_of = ROOT }
+								NOT = { is_subject_of = ROOT.overlord }
+								NOT = { this = ROOT.overlord }
+								NOT = { overlord = { is_subject_of = ROOT.overlord } }   # not a fellow march's sub-subject
+							}
+						}
+					}
+					random_neighbor_province = {
+						limit = {
+							exists = owner
+							NOT = { owner = ROOT }
+							NOT = { owner = ROOT.overlord }
+							owner = {
+								NOT = { is_subject_of = ROOT }
+								NOT = { is_subject_of = ROOT.overlord }
+								NOT = { this = ROOT.overlord }
+								NOT = { overlord = { is_subject_of = ROOT.overlord } }   # not a fellow march's sub-subject
+							}
+						}
+						save_scope_as = qing_march_wargoal_prov
+						owner = { save_scope_as = qing_march_war_target }
+					}
+				}
+				if = {
+					limit = { exists = scope:qing_march_wargoal_prov  exists = scope:qing_march_war_target }
+					FUNC_declare_war_with_wargoal_province = {
+						war_goal = conquer_wargoal
+						province = scope:qing_march_wargoal_prov
+						target = scope:qing_march_war_target
+					}
+					LOG_line = { sys = QING  msg = "MARCH declares a war of conquest on a bordering polity for" }
+				}
+			}
+		}
+	}
+
+	# --- Road 2: colonise an unowned bordering province (peaceful; a higher yearly chance) ---
+	if = {
+		limit = {
+			any_owned_province = {
+				any_neighbor_province = { has_owner = no }
+			}
+		}
+		random = {
+			chance = 35
+			random_owned_province = {
+				limit = { any_neighbor_province = { has_owner = no } }
+				random_neighbor_province = {
+					limit = { has_owner = no }
+					# plant the colony under the MARCH (ROOT). Simplified march-scoped colonise: claim the
+					# empty province + seed a starter pop so it is not empty. (The full migration-pull
+					# colonise verb hardcodes scope:player; a march variant uses set_owned_by ROOT + a
+					# starter pop — the proven fallback branch of QING_colonise_this_province.)
+					set_owned_by = ROOT
+					create_state_pop = tribesmen
+					LOG_line = { sys = QING  msg = "MARCH colonises an unowned bordering province for" }
+				}
+			}
+		}
+	}
+}
+
+# ======================================================================
+# QING_march_integrate_pulse — ONE march's yearly integration roll (DESIGN §3.5 [H1]).
+# Scope: country (the march). A march gradually DIGESTS its princely states into direct rule
+# (改土歸流). MARCH-SPECIFIC, NOT the player-event dispatcher SUBJ_QING_advance_integration:
+# accrue a march-owned progress var on one bound subject; at threshold call SUBJ_QING_absorb_
+# subject DIRECTLY (that verb is grantee=ROOT, NOT CHI-gated, so a march overlord can drive it).
+# CADENCE: a slow yearly chance advances one step; 5 steps ≈ several years to a decade of loose
+# rein before full absorption. Own var + own threshold — no player event, no transient-type misuse.
+# ======================================================================
+QING_march_integrate_pulse = {
+	if = {
+		limit = { any_subject = { count >= 1 } }
+		random = {
+			chance = 25   # a slow, organic pace: ~1 step/4yr per subject on average
+			# save the march (this pulse's country scope) so the absorb can re-enter the overlord.
+			save_scope_as = qing_integ_march
+			# advance ONE eligible bound subject by one step; absorb at threshold (5).
+			random_subject = {
+				limit = { exists = this }
+				# accrue the march-owned progress var on the subject (0..5).
+				if = {
+					limit = { NOT = { has_variable = qing_march_integ_progress } }
+					set_variable = { name = qing_march_integ_progress  value = 0 }
+				}
+				change_variable = { name = qing_march_integ_progress  add = 1 }
+				# at threshold, the march absorbs the subject's provinces directly. Done INSIDE
+				# random_subject (scope = this subject) so the target is ALWAYS fresh — no stale saved
+				# scope re-entering the absorb on a later, below-threshold year (which would spam a
+				# spurious LOG_fail). SUBJ_QING_absorb_subject runs in the OVERLORD (the march) scope
+				# with scope:target = the subject; grantee=ROOT, NOT CHI-gated (DESIGN §3.5 [H1]).
+				if = {
+					limit = { var:qing_march_integ_progress >= 5 }
+					save_scope_as = qing_integ_target
+					scope:qing_integ_march = {
+						scope:qing_integ_target = { save_scope_as = target }
+						SUBJ_QING_absorb_subject = yes
+						LOG_line = { sys = QING  msg = "MARCH fully absorbs a princely state into direct rule (改土歸流) for" }
+					}
+				}
+			}
+		}
+	}
+}
+
+# ======================================================================
+# QING_march_relief_check — a bogged-down march triggers a Qing RELIEF event (DESIGN §3.6).
+# Scope: country (ROOT = c:CHI), called from the Qing quarterly pulse (qing_mechanics_pulse_on_action).
+# When a march is STUCK in a long war (war = yes + heavy war exhaustion), fire a country_event to CHI
+# offering the throne a one-off intervention: spawn a relief army, join the war, or decline.
+# THROTTLE: gate on the shared court-event slot qing_gc_event_slot_used (a Lifan-Yuan / frontier event
+# must not dogpile with other palace events) + a per-march cooldown so one march doesn't re-fire.
+# ======================================================================
+QING_march_relief_check = {
+	if = {
+		limit = {
+			NOT = { has_variable = qing_gc_event_slot_used }
+			any_subject = {
+				is_subject_type = frontier_protectorate
+				war = yes
+				has_war_exhaustion >= 10
+				NOT = { has_variable = qing_march_relief_cooldown }
+			}
+		}
+		# pick one stricken march and fire the relief dilemma to CHI, scoping the march as the target.
+		random_subject = {
+			limit = {
+				is_subject_type = frontier_protectorate
+				war = yes
+				has_war_exhaustion >= 10
+				NOT = { has_variable = qing_march_relief_cooldown }
+			}
+			save_scope_as = qing_relief_march
+			set_variable = { name = qing_march_relief_cooldown  days = 1460 }   # ~4y per-march re-fire guard
+		}
+		# claim the shared court slot (BT-10/BT-28 pattern) + fire the event to CHI.
+		set_variable = { name = qing_gc_event_slot_used  value = 1 }
+		trigger_event = { id = qing_march_relief.1  days = { 3 15 } }
+		LOG_line = { sys = QING  msg = "MARCH relief: a bogged-down frontier march prompts the throne to intervene for" }
+	}
+}
