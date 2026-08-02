@@ -703,3 +703,41 @@ note re confucian build-menu breadth across all CHI subjects — thematically de
 left; the seeding event places only the 12 enumerated). NOT bumped/seeded: TNN/MLM/TNI/LSU/
 LAF/FOS (non-city nominal vassals, not worth promoting). Braces balanced, BOMs preserved.
 New memory: [[imp19c-add-building-level-respects-potential]].
+
+--------------------------------------------------------------------------------
+#27 WIRE QING BUILDINGS + TRADE GOODS INTO MISSION TREES (2026-08-01, reviewed)
+--------------------------------------------------------------------------------
+Went through ALL 16 Qing mission trees INDIVIDUALLY by hand (an earlier scripted/
+templated attempt was rejected by the user as inappropriate and fully reverted). Each
+tree read in full; buildings/goods added ONLY where they fit the task's actual theme.
+
+WIRED (building/good as task reward, guarded NOT-has-building / subsistence-good-only):
+- xinjiang: karez task->qing_karez_building; fortify->qing_frontier_fort; jade->set cotton (all Turkestan)
+- central_asia: tuntian->qing_military_colony; border(karun line)->qing_frontier_fort (Fergana else Turkestan)
+- settle_frontier: garrison task->qing_banner_garrison (the ONE gap; tree already plants colony+fort via QING_settle_plant_works)
+- taiping: land_system->qing_granary (聖庫 shared granary — the Taiping's OWN institution, Yangzi heartland)
+- reform: schools->imperial_university, railways->telegraph, currency->mint, new_army->machine_works (all capital_scope)
+- burma_war: yunnan base->qing_frontier_fort (Yunnan); teak trade->set hardwood (Burma)
+- nanyang: severed->qing_customs_house on captured Batavia(6270)/Manila(2004) [controller=ROOT, mirrors India #26]
+- himalaya_seasia: tibet amban->qing_gelug_monastery on Lhasa when Qing owns it directly (complements #24 subject-seed)
+- japan: ready-coast->qing_navy_yard at Weihaiwei 3033 (Beiyang base; steam-era apt here)
+- open_japan: ezo->qing_frontier_colony (settling Hokkaido)
+- colonization: Urumqi task->add qing_frontier_fort+military_colony alongside vanilla fortress
+- selfstrengthening (se_QING_SELFSTR.txt): SWAPPED generic->purpose-built Qing buildings in 4 found-effects:
+    jiangnan arsenal_building->qing_machine_works (機器局; + updated paired has_building ref for the rifles swap);
+    telegraph URB_commerce_district->qing_telegraph (電報局); tongwen EDU_university->qing_tongwen_guan (同文館);
+    fuzhou ADDED qing_navy_yard (船政局) beside the port.
+- india: DONE separately in #26 (QING_india_seize_trade).
+
+LEFT UNTOUCHED (no appropriate building — "where appropriate" cuts both ways):
+- treasure_fleet: pre-modern Zheng-He fleet; the only Qing shipyard building (navy_yard) is steam-era
+  (福州船政局 1866) = anachronistic. Its generic port/industrial-estate is correct for a wooden fleet.
+- japan_preperry: pure diplomacy/intelligence; the Qing owns no Japanese ground to build on.
+- summer_palace: a unique imperial garden (圓明園/頤和園) with its own dedicated buildings + verbs.
+
+Adversarial code-review: CLEAN (all placements pass their post-#24 building potentials; no
+inert-drop; no dangling arsenal_building ref; no double-plant in settle_frontier; idempotent).
+2 low-severity notes, both non-defects / design-consistent: (1) nanyang customs on controller=ROOT
+mirrors the reviewed India #26 seizure pattern; (2) reform/japan buildings place but sit idle until
+their allow-gate tech lands (allow not enforced by add_building_level) — acceptable (institution
+founded, activates on modernization). 12 files, braces balanced, BOMs preserved.
