@@ -564,20 +564,26 @@ QING_canton_close_trade = {
 # ======================================================================
 QING_char_init_identity = {
 	# Manchu characters start staunch; Han-cultured courtiers start sinicized.
+	# [logfix 2026-08-01] POST-CONDITION GUARANTEE: this effect MUST leave
+	# qing_manchu_identity set on every path — QING_char_shift_identity reads it
+	# immediately after calling us (var:qing_manchu_identity > 100 / < 0), and any
+	# unset-read throws "Failed to fetch variable ... not being set" (was firing
+	# thousands of times/tick via qing_char.10). The earlier fix nested the
+	# set_variable inside an `if culture=.../else` whose culture-link comparison can
+	# itself fail to evaluate (no current_ruler, or an unresolved culture link on a
+	# freshly-scoped char) — when it threw, NEITHER branch set the var. Fix: set an
+	# unconditional default FIRST (so the var always exists), then upgrade Manchu-
+	# kin to staunch. No read can now hit an unset variable.
 	if = {
 		limit = { NOT = { has_variable = qing_manchu_identity } }
+		# default: sinicized/Han baseline — always sets the variable.
+		set_variable = { name = qing_manchu_identity  value = 20 }
+		# upgrade: characters sharing the reigning emperor's (Manchu) culture start staunch.
+		# `culture = <char>.culture` is the proven navigable link (se_QING_AFFINITY.txt:64,
+		# 00_ambitions.txt:1606); guarded by exists= so it never evaluates without a ruler.
 		if = {
-			# [logfix] `culture = root.primary_culture` is INVALID on a character scope
-			# (primary_culture is a COUNTRY trigger, not a navigable culture link) — it
-			# threw "Badly read script value / Illegal use of operator =" ~115k times and
-			# PostValidated false, so EVERY char fell to the sinicized branch. Use the proven
-			# `culture = <char>.culture` link against the dynasty's ruler (se_QING_AFFINITY.txt:64,
-			# 00_ambitions.txt:1606). The reigning emperor IS the Manchu reference.
 			limit = { exists = root.current_ruler  culture = root.current_ruler.culture }
 			set_variable = { name = qing_manchu_identity  value = 80 }
-		}
-		else = {
-			set_variable = { name = qing_manchu_identity  value = 20 }
 		}
 	}
 }

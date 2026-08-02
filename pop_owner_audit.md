@@ -482,3 +482,143 @@ RE-REVIEW: PASS, clear to commit (172/172 braces, single BOM, 0 zeros, 16 well-f
 HEAD, keys defined, Nepal dep-graph intact). 2 LOW notes: B-LOW-1 (ex-ping provs' Han minority should be ping not yue)
 APPLIED (6 provs yue->ping = Pinghua was the Han substrate there); B-LOW-2 (Longlan 8630) LEFT (reviewer + I both
 uncertain on its geography — flipping uncertainly is worse). FINAL: Guangxi yue:31/zhuang:16/ping:1. STATUS: committing.
+
+================================================================================
+BOOT-LOG ERROR TRIAGE (2026-08-01) — task #22, post-successful-boot
+================================================================================
+Boot test PASSED (2 months daily ticks, no crash). User: "investigate and triage
+them all, fix the ones which need to be fixed." Log = /tmp/imp_logs (STALE vs disk:
+00_egypt_missions.txt already deleted; line numbers offset ~1). Triage METHOD =
+DIFFERENTIAL (live-vs-dead key in the SAME load unit), NOT oracle-absence inference.
+
+USER COURSE-CORRECTION (mid-task): "treat sobisonator upstream bugs with EXTREME
+CAUTION; chance you're wrong and sobisonator is right is VERY HIGH." → new standing
+memory [[imp19c-sobisonator-upstream-caution]]. LEFT UNTOUCHED accordingly:
+  - TRADE_lists.txt base=region + every_*_TZ_region (MOVEMENT/PRICE/TRADE svalues):
+    parse-line "Unexpected token" is a LOAD-ORDER artifact (scripted_lists parsed
+    after script_values), NOT a real bug. Runs fine (game boots + ticks).
+  - cultural_infatuation_modifiers.txt test_modifier custom_tooltip (Sobisonator stub).
+  - .asset scale/rotation (MIUNO gfx) — valid syntax (TI identical), load-order noise.
+
+FIXES APPLIED (all differential-proven real):
+1. first_valid = yes (8 lines: 000_GOVERNMENT_custom_loc x7, 00_qing_harem_loc x1) —
+   REMOVED. Not a valid customizable_localization key (0 in vanilla + both oracles;
+   TI orders text{} top-down with NO first_valid). First-match is engine default.
+2. is_triggered_only = yes (439 lines, 84 event files) — REMOVED. CK3/EU4-ism, 0 uses
+   in either oracle; Imperator events fire only via trigger_event/on_action regardless.
+3. DEAD-UNIT MODIFIERS (114 lines, 13 files) — REMAPPED to unit-agnostic keys. Vanilla
+   land types (light/heavy_infantry, light/heavy_cavalry, archers, camels, chariots,
+   horse_archers) + galley navy types were EMPTIED in #188 "Merge culture levies";
+   their derived <unit>_offensive/etc keys no longer exist. PROOF: live types
+   (artillery_/conscripts_) 0 errors, emptied types 28 errors, SAME files/load.
+   Map: _offensive->discipline, _defensive->global_defensive, _discipline->discipline,
+   _morale->land_morale_modifier, _movement_speed->army_movement_speed,
+   _cost->cohort_cost, _maintenance_cost->army_maintenance_cost, _<terrain>_combat_bonus
+   ->unit-agnostic <terrain>_combat_bonus. Colliding keys in a block SUMMED (merge).
+   USER DECISION: "Remap everywhere (current state)" — restore intended bonuses in all
+   files incl Sobisonator/krushka (00_indian, 00_arabic, 00_from_events_country,
+   00_hardcoded). regulary_infantry_offensive typo->regular_infantry_offensive (live).
+   ai_plan_goals dead trireme_* AI-weight block removed (generic naval_* covers intent).
+4. religions 00_vthreereligions.txt (20 bare diplomatic_relations/happiness_for_same_
+   religion_modifier keys) — WRAPPED in modifier={}. SOBISONATOR upstream → per user,
+   MOVE TO upstream_bugs BRANCH (task #23), NOT this branch.
+5. qing_war_modifiers.txt — morale_of_armies_modifier->land_morale_modifier,
+   ship_recruit_speed->global_ship_recruit_speed, loyalty->character_loyalty,
+   popularity->monthly_character_popularity, power_base->prominence (all my file).
+6. qing_rites tributary opinions (3) — MOVED from common/modifiers/ (opinion=N, illegal)
+   to common/opinions/imp19c_opinions.txt (value+yearly_decay); renamed + call sites.
+7. qing_ili_modifiers movement_speed->army_movement_speed.
+8. all_power_cost (qing_governance, qing_household) — dead key (Invictus icon-only);
+   folded into monthly_political_influence_modifier / ruler_popularity_gain.
+9. local_commerce_value_modifier (qing_mechanics, qing_treaties)->state_commerce_modifier
+   (the engine-read province commerce key; the earlier "fix" landed on a vanilla-only key).
+10. local_population_growth_modifier (00_province_feature x3)->local_population_growth.
+11. monthly_character_loyalty (qing_amban, 00_from_events_character)->character_loyalty
+    (monthly form is invention/icon-only, not an applied modifier key).
+12. custom_tooltip inside modifier (imp19c_province_modifiers colonial_outpost) — REMOVED
+    (illegal in modifier{}; tooltip comes from the modifier's own loc key).
+13. hidden_effect inside modifier{} (00_civic_inventions tech_mechanical_tools/
+    tech_manufactories) — UNWRAPPED (effect block illegal in modifier{}; the 7 inner
+    output keys are all valid modifier keys, moved directly into modifier{}).
+
+VERIFIED VALID (NO fix): diplomatic_relations as country-modifier (qing_legations, 25x
+Inv), happiness_for_same_religion_modifier as country-modifier (00_from_events_country),
+country_civilization_value as modifier key (70x Inv; only its TRIGGER form needed
+civilization_value, fixed earlier). movement_speed/opinion/loyalty/custom_tooltip/
+hidden_effect all valid in their proper (non-modifier) contexts.
+
+STATUS: all edits brace-balanced + BOM-correct. PENDING: move #4 to upstream_bugs;
+mandatory adversarial code-review of full diff BEFORE commit.
+
+--------------------------------------------------------------------------------
+REVISION (2026-08-01, post-review + user course-corrections)
+--------------------------------------------------------------------------------
+USER CORRECTIONS applied:
+- classes 1 (first_valid) & 2 (is_triggered_only) reframed: these are NOT feature
+  repairs — the keys are inert CK3/EU4 cargo-cult (unknown to Imperator engine), so
+  removal only clears log noise; behavior was already correct via engine defaults
+  (first-match text{}; no MTTH anywhere in mod → nothing auto-fires). Legitimate
+  triage outcome, but not "fixes" in the functional sense.
+- class 3 (dead-unit modifiers): user chose LIVE-UNIT remap (hybrid) over unit-agnostic.
+  REDID from HEAD: Qing-themed blocks → the historically-correct LIVE Qing unit; non-Qing
+  blocks → unit-agnostic (no generic live cavalry/archer unit exists). Mapping by
+  enclosing-def theme:
+    banner/Mongol trees, banner modifiers, jianrui/solon/camel distinctions → qing_eight_banners
+    green-standard tree + green/rattan/firearms distinctions → qing_green_standard
+    Self-Strengthening (ever-victorious/beiyang/nanyang/jiangnan), advisor army, Napoleon-
+      at-Qing-court tree (00_napoleon IS Qing alt-history) → regular_infantry
+    Arabic/Indian/Japanese/default/Rome-Carthage (00_from_events_country) → unit-agnostic
+    terrain *_combat_bonus everywhere → unit-agnostic (no per-unit terrain key authored)
+  Collisions re-summed per new key. Proven valid: oracle legion_distinctions unit{} blocks
+  use <unittype>_<stat> (Invictus spearmen_*, TI archers_/engineer_cohort_*); all target
+  units are army=yes so keys derive.
+- religions wrap (00_vthreereligions): STAYS fixed on this branch; ALSO ported to
+  upstream_bugs (task #23). NOT reverted here.
+
+CODE-REVIEW (adversarial subagent) findings + resolution:
+  HIGH  global_defensive in a legion-distinction unit{} block (invalid in unit scope) —
+        RESOLVED by live-unit remap (now qing_green_standard_defensive, valid in unit{}).
+  MED-1 rm_defence_focus_cmod dup global_defensive → merged to 0.15.
+  MED-2 00_indian.txt dup global_defensive → merged to 0.15.
+  MED-3 qing_advisor_army_active dup discipline → RESOLVED by live remap (discipline +
+        regular_infantry_offensive, distinct keys).
+  MED-4 relocated-opinion loc keys still opinion_qing_tributary_* → renamed to
+        qing_tributary_* in qing_rites_l_english.yml (BOM preserved).
+  LOW   cost/discipline magnitude shifts — intended per user "remap everywhere" + live choice.
+  Review noted the diff also carries UNRELATED prior work (se_LAND flag:as_capital rework,
+  WAR_scripted_guis LAND_transfer rewrite, new scripted_triggers, ECON svalue) — those
+  predate this task and were reviewed/kept as-is; flagged for their own pass if needed.
+
+FINAL VERIFY: 131 changed files, 0 brace problems, 0 BOM changes, 0 dead-unit keys, 0 dup
+keys. Re-review dispatched before commit.
+
+--------------------------------------------------------------------------------
+NAPOLEON-CHAIN DATE AUDIT + AMHERST DEDUP (2026-08-01, user-requested)
+--------------------------------------------------------------------------------
+Q (user): does the Napoleon (#65 Emperor-Emeritus) chain, built for the old 1815 start,
+still fire at the correct date in the 1763 start?
+
+FINDING: YES — the chain reaches its 1816 window correctly.
+  Path: oa_economy_setup.txt (gate current_date < 1793.9.14, so ALWAYS fires on the
+  1763-only start) schedules Amherst embassy qing_embassy.2 at day 19552 (=1816.8.29,
+  historically exact). Player receiving Amherst fires qing_napoleon.5 (Waterloo overture,
+  gate current_date < 1821.5.5 — Napoleon alive) → .6 St Helena → .1 arrival → chain.
+  Already migrated for 1763 ([bookmark-1763 #304-fix] on the Amherst re-entry guard).
+
+STALE COMMENT FIXED: qing_mechanics_on_actions.txt:~277 said "START_DATE is 1815.7.1 /
+  ~410-430 days" — described the DEFUNCT 1815 start. Code (days 19537-19557) was already
+  correct for 1763; comment updated.
+
+AMHERST DOUBLE-SCHEDULE FIXED (dedup, user "investigate further"):
+  START_DATE is now ONLY 1763.2.16 (defines; 1815 start superseded, moved back 19127d;
+  no bookmark file). Two schedulers both fired Amherst on a 1763 player-CHI game:
+    A = oa_economy_setup.txt  (gate current_date < 1793.9.14 → always fires) day 19552
+    B = qing_mechanics_on_actions.txt (gate is_ai=no only) days 19537-19557
+  B was the DEFUNCT 1815 start's pin (A doesn't fire on 1815 since 1815 > 1793.9.14).
+  On 1763 both fire; saved only by qing_embassy.2's amherst_done idempotency guard — a
+  latent double-Amherst/double-Napoleon-overture trap. FIX (user choice): gate B with
+  current_date >= 1793.9.14 (mirrors A's gate; race-free date gate, NOT the racy
+  qing_embassy_dated_schedule flag since both are on_game_initialized). Now A alone pins
+  Amherst on the 1763 start; B is a true fallback for a hypothetical post-1793 start.
+  Matches the proven stand-down idiom at se_QING_DECLINE.txt:1265. current_date >= literal
+  date is valid (3 mission-file uses, 0 errors). PRE-EXISTING issue, not from the triage.

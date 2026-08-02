@@ -709,17 +709,21 @@ LAND_release_from_list = {
 		create_country = {
 			save_scope_as = new_country_scope
 			# Set culture
-            # [as_capital fix] Bare `$primary_culture$ = flag:as_capital` compares two raw flag:
-            # literals; for the sentinel callers this identity check evaluates FALSE at runtime
-            # (same flag-comparison fragility as the country_name/adj bug fixed below — only
-            # flag:dynamic reliably compares true; every other bare sentinel, incl. as_capital,
-            # is "used but never set" per boot log and resolves false), so the else_if ran and fed
-            # literal text "flag:as_capital" into set_primary_culture -> invalid-target error (17 hits).
-            # For the two real-culture-scope callers (SEPARATISM/send_settlers) the same bare
-            # comparison is a hard culture-vs-flag type mismatch. Fix: seed the passed value (flag or
-            # scope, unchanged — do NOT re-wrap flag:, callers already carry their prefix) into a
-            # scratch var, proven idiom from the country_name fix below + se_QING_LEGATIONS.
-            set_variable = { name = LAND_release_culture_is_as_capital  value = $primary_culture$ }
+            # [as_capital fix v2 2026-08-01] The prior version seeded `value = $primary_culture$`
+            # RAW, then compared `var: = flag:as_capital`. That fails BOTH caller shapes:
+            #  - sentinel callers passed `flag:as_capital` -> a var holding a flag compared to
+            #    flag:as_capital resolved FALSE (flag-in-var identity is unreliable), so the else fed
+            #    the literal text "flag:as_capital" into set_primary_culture -> invalid-target error.
+            #  - scope callers passed a culture/religion SCOPE -> storing a scope in the var then
+            #    comparing it to a flag threw "Invalid left side during comparison 'var'".
+            # Fix: wrap the passed value with flag:$macro$ (the PROVEN idiom, se_LAND:838 country_name
+            # + se_QING_LEGATIONS:78). flag:$arg$ coerces ANY macro text to a flag, so the comparison
+            # is always flag-vs-flag (never a scope-vs-flag type error): the bare sentinel `as_capital`
+            # becomes flag:as_capital and matches; a scope arg becomes a flag literally named
+            # "scope:..." that simply never matches -> the else fires and uses the RAW $arg$ scope
+            # correctly. REQUIRES sentinel callers pass a BARE `as_capital` (not flag:as_capital),
+            # else flag:flag:as_capital is double-wrapped and never matches. Callers updated to suit.
+            set_variable = { name = LAND_release_culture_is_as_capital  value = flag:$primary_culture$ }
             if = {
             	limit = {
             		var:LAND_release_culture_is_as_capital = flag:as_capital
@@ -729,11 +733,8 @@ LAND_release_from_list = {
             else = {
             	set_primary_culture = $primary_culture$
             }
-            # Set religion
-            # [as_capital fix] Same idiom, PLUS an added else: previously a real-religion-scope caller
-            # (send_settlers non-ideology branch) hit the religion-vs-flag mismatch on the if-limit,
-            # the if was skipped, and with no else set_country_religion was NEVER called — silent unset.
-            set_variable = { name = LAND_release_religion_is_as_capital  value = $country_religion$ }
+            # Set religion — same flag:$macro$ idiom.
+            set_variable = { name = LAND_release_religion_is_as_capital  value = flag:$country_religion$ }
             if = {
             	limit = {
             		var:LAND_release_religion_is_as_capital = flag:as_capital
