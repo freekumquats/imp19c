@@ -101,3 +101,24 @@ adversarial `code-review` passes (+ re-review of fixes). No chunk is committed u
   (all province ids/modifiers/severities/LOG strings identical to git HEAD), loc completeness, BOM
   conventions (txt no-BOM, yml BOM), CJK integrity (鄭 not 鄧). Only flag = the era-escape deviation
   above (confirmed correct + necessary; comment sharpened, no functional change → no re-review needed).
+
+### C2 — Mexico lift (DONE, pre-review)
+- NEW `common/missions/qing_mexico_missions.txt` (group `qing_mexico_mission`) + NEW
+  `localization/english/qing_mexico_l_english.yml` (BOM). Tasks: galleon (re-rooted: dropped
+  `requires = qing_col_bureau`), veracruz, maximilian, mexican_empire — VERBATIM (mexican_empire keeps
+  its LEGITIMATE `QING_establish_protectorate` client-Empire release + its se_QING_MEXICO.txt arc hooks).
+- Moved with the arc: the consumer-event loc keys `qing_mexico_adventure.1.*` (namespace confirmed
+  `qing_mexico_adventure`, keys `.1.t/.desc/.a/.a.tt/.b/.b.tt` — verified against the event file, NOT the
+  misleading `ln` display artifact). Also `qing_col_needs_pacific_reach/acapulco/mexico_land_tt` + the
+  silver_road/gulf_gate/mexican_crown/mexican_empire_mod modifier names + `qing_protectorate_mexico_name/adj`.
+- Art REUSE: `icon = qing_colonization_mission` / `header = mission_image_qing_colonization` (this arc is
+  the Pacific enterprise's American terminus; both DDS exist).
+- Removed the Mexico section (280 lines) from the colonization tree + its loc block. Colonization braces
+  417/417; mexico braces 135/135; capstone `requires` references only kept Oceania tasks; no dup loc keys.
+- **Review (code-review agent):** PASS with one MEDIUM finding — the new tree's mission-group loc keys
+  (`qing_mexico_mission:0` + the 4 `_DESCRIPTION/_CRITERIA/_REWARD/_BUTTON` suffixes) were absent (the
+  verbatim loc extraction never included them, since the arc rendered under the parent
+  `qing_colonization_mission` title pre-split). FIXED: added the 5 group keys matching the verified
+  sibling convention (all 19 other mission-group loc files carry the identical suffix set). Re-verified
+  directly (5 keys present, BOM intact) — pure loc addition on a proven pattern, no re-review agent needed.
+
