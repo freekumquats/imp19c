@@ -75,10 +75,14 @@ ECON_LOG_country_snapshot = {
 		limit = { has_variable = WEALTH_total_private_moveable_wealth }
 		root = { set_variable = { name = ECON_LOG_tmp_wealth  value = scope:econ_log_country.var:WEALTH_total_private_moveable_wealth } }
 	}
-	LOG_line = {
-		sys = ECON
-		msg = " treasury= natl_wealth="
-	}
+	# [#value-log-fix] Emit debug_log DIRECTLY, not via LOG_line. LOG_line wraps the text
+	# in a SECOND macro layer (debug_log = "IMP19C $sys$: $msg$"); the promptable
+	# [ROOT.MakeScope.GetVariable(...).GetValue] data-function does not survive that
+	# indirection — which is why every prior snapshot logged blank (" treasury= natl_wealth="
+	# with no numbers). Direct debug_log with the render inline is the only form proven to
+	# interpolate here (cf. WAR_scripted_effects.txt:24). ROOT.MakeScope is the sole promptable
+	# scope handle in effect context (see this file's SYNTAX NOTE).
+	debug_log = "IMP19C ECON: [ROOT.GetTag] SNAP treasury=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_treasury').GetValue|0] natl_wealth=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_wealth').GetValue|0]"
 	root = {
 		remove_variable = ECON_LOG_tmp_treasury
 		remove_variable = ECON_LOG_tmp_wealth
@@ -118,10 +122,9 @@ ECON_LOG_jobs_snapshot = {
 		set_variable = { name = ECON_LOG_tmp_used        value = scope:econ_log_country.var:ECON_LOG_tmp_used }
 		set_variable = { name = ECON_LOG_tmp_unemployed  value = scope:econ_log_country.var:ECON_LOG_tmp_unemployed }
 	}
-	LOG_line = {
-		sys = ECON
-		msg = " used= unemployed="
-	}
+	# [#value-log-fix] direct debug_log (see country_snapshot note) — LOG_line's $msg$ layer
+	# does not render the data-function, so the old line logged blank.
+	debug_log = "IMP19C ECON: [ROOT.GetTag] SNAP used=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_used').GetValue|0] unemployed=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_unemployed').GetValue|0]"
 	# clean both the this-scope accumulators and the ROOT read-temps (harmless
 	# double-remove if ROOT == this in a non-iterated call).
 	remove_variable = ECON_LOG_tmp_used
@@ -159,10 +162,8 @@ ECON_LOG_currency_snapshot = {
 			limit = { var:official_currency = { has_variable = purchasing_power } }
 			root = { set_variable = { name = ECON_LOG_tmp_pp  value = scope:econ_log_country.var:official_currency.var:purchasing_power } }
 		}
-		LOG_line = {
-			sys = ECON
-			msg = " backing= purchasing_power="
-		}
+		# [#value-log-fix] direct debug_log (see country_snapshot note).
+		debug_log = "IMP19C ECON: [ROOT.GetTag] SNAP backing=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_backing').GetValue|0] purchasing_power=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_pp').GetValue|0]"
 		root = {
 			remove_variable = ECON_LOG_tmp_backing
 			remove_variable = ECON_LOG_tmp_pp
@@ -226,10 +227,8 @@ ECON_LOG_production_snapshot = {
 			change_variable = { name = ECON_LOG_tmp_bonus_sum   add = scope:econ_log_snapshot_gov.var:industrialisation_bonus_cached }
 		}
 	}
-	LOG_line = {
-		sys = ECON
-		msg = " governorships_producing= summed_industrialisation_bonus="
-	}
+	# [#value-log-fix] direct debug_log (see country_snapshot note) — was blank via LOG_line's $msg$ layer.
+	debug_log = "IMP19C ECON: [ROOT.GetTag] PRODSNAP governorships_producing=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_gov_count').GetValue|0] summed_industrialisation_bonus=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_bonus_sum').GetValue|0]"
 	root = {
 		remove_variable = ECON_LOG_tmp_gov_count
 		remove_variable = ECON_LOG_tmp_bonus_sum
@@ -337,46 +336,296 @@ ECON_LOG_cottage_empty_probe = {
 }
 
 # ======================================================================
-# STOCKPILE-WRITE EMPTY-VAR PROBE (#MG-flood-diag) — the SECOND, distinct flood:
-# GOODS_governorship_produce (se_GOODS.txt) does `change_variable name =
-# $into_stockpile$` guarded ONLY by `has_variable = $do_if$` (the produces_X
-# marker), NOT by whether the stockpile var itself was seeded. This is the raw/
-# manufactured stockpile write erroring at GOODS_governorship_produce line 6.
-# This probe walks the governorships and logs which <good>_stockpile vars are
-# absent while their produces_ marker is present — the exact guard-gap mismatch.
-# Representative goods chosen from the observed error offsets (raw + manufactured).
-# Read-only; does not touch se_GOODS.txt. Scope: country.
+# COMPREHENSIVE STOCKPILE FORENSIC (#MG-flood-diag v3) — supersedes the old
+# has_variable-only stockpile_gap_probe. That probe (and the cottage_empty_probe
+# above) could only ever see UNSET vs present; it was BLIND to the actual failure,
+# which log analysis (Aug-3) proved is a var that is SET-but-EMPTY (has_variable
+# TRUE, value empty). This forensic instead CLASSIFIES every relevant node into
+# one of four buckets using CONTROL FLOW ONLY (never value-printing, which does
+# not render in debug_log here — see the SYNTAX NOTE / the blank snapshot lines):
+#
+#   UNSET       = NOT has_variable            (never seeded)
+#   REAL        = has_variable AND value >= a very-negative sentinel is TRUE
+#   EMPTY       = has_variable AND that comparison ERRORS->FALSE (set-but-empty)
+#   (a scriptvalue that Div/0s or reads an empty operand yields EMPTY when staged.)
+#
+# Method: for a var X, `has_variable` splits UNSET from present; then a guarded
+# comparison `var:X > -999999999` is TRUE for any real number and engine-errors
+# (=> FALSE, caught by else) for an empty. This is the ONLY way to see set-but-
+# empty (memory: has_variable is true for set-to-empty). Precedent for comparing
+# a staged scriptvalue behind a has_variable guard: se_GLOBALTRADE_split.txt:784.
+#
+# Emits ONE greppable line per (governorship, good, node) via DIRECT debug_log
+# (bare literals — no $macro$ value interpolation, which is the thing that does
+# not work) plus debug_log_scopes for governorship+owner identity. Runs for ALL
+# tradegoods (every_tradegood_complex) so raw AND manufactured are covered in one
+# pass, settling whether the 3 observed populations share a cause. Grep the trace:
+#   grep "IMP19C FORENSIC" debug.log
+# Silent no-op outside -debug_mode (all output via debug_log). Read-only: sets
+# only ECON_LOG_fx_* temps and removes them. Remove the ECON_LOG_flood_probe call
+# site (oa_wealth_changes.txt) + this block to revert.
 # ======================================================================
-ECON_LOG_stockpile_gap_probe = {
-	# Scope: country
-	every_governorships = {
-		save_scope_as = econ_log_probe_gov
-		# wool / chocolate / peat were among the named erroring stockpiles; clothing/
-		# construction_materials among the manufactured. Log any produces_-marked good
-		# whose _stockpile var is missing (guard passes, mutate target empty).
+
+# --- per-(governorship, good) node classifier. Scope: governorship. -----------
+# Classifies FOUR nodes for $tradegood$: the stockpile TARGET, its seed-source
+# svalue GOODS_governorship_$tradegood$_produced, the produces_ marker, and the
+# cottage COTTAGEIND_produced_ var. Each line is prefixed so a single grep +
+# sort|uniq -c yields the full (good x bucket) matrix.
+ECON_LOG_fx_classify_good = {
+	# Scope: governorship
+	# NODE 1 — the stockpile TARGET var (what every erroring change_variable mutates).
+	if = {
+		limit = { NOT = { has_variable = $tradegood$_stockpile } }
+		debug_log = "IMP19C FORENSIC stockpile $tradegood$ = UNSET"
+		debug_log_scopes = yes
+	}
+	else_if = {
+		limit = { var:$tradegood$_stockpile > -999999999 }
+		debug_log = "IMP19C FORENSIC stockpile $tradegood$ = REAL"
+	}
+	else = {
+		debug_log = "IMP19C FORENSIC stockpile $tradegood$ = EMPTY"
+		debug_log_scopes = yes
+	}
+	# NODE 2 — the SEED-SOURCE scriptvalue the setup set_variable and the quarterly
+	# FUNC re-seed both read. Stage it into a temp so an empty/Div0 svalue becomes a
+	# detectable set-but-empty var (a raw svalue that hits an empty owner.MODIFIER_*,
+	# or a manufactured one that Div/0s in the industrialisation/employment chain,
+	# lands here). Staging a possibly-empty svalue: set_variable does NOT error, it
+	# stores empty (setup proves this — 0 errors at seed time).
+	set_variable = { name = ECON_LOG_fx_src  value = GOODS_governorship_$tradegood$_produced }
+	if = {
+		limit = { NOT = { has_variable = ECON_LOG_fx_src } }
+		debug_log = "IMP19C FORENSIC src_produced $tradegood$ = UNSET"
+	}
+	else_if = {
+		limit = { var:ECON_LOG_fx_src > -999999999 }
+		debug_log = "IMP19C FORENSIC src_produced $tradegood$ = REAL"
+	}
+	else = {
+		debug_log = "IMP19C FORENSIC src_produced $tradegood$ = EMPTY (seed-source svalue empty -> seeds stockpile empty)"
+		debug_log_scopes = yes
+	}
+	remove_variable = ECON_LOG_fx_src
+	# NODE 3 — the produces_ marker (the guard GOODS_governorship_produce trusts).
+	if = {
+		limit = { has_variable = produces_$tradegood$ }
+		debug_log = "IMP19C FORENSIC marker produces_$tradegood$ = PRESENT"
+	}
+	# NODE 4 — the cottage produced var (manufactured goods only will have it).
+	if = {
+		limit = { has_variable = COTTAGEIND_produced_$tradegood$ }
 		if = {
-			limit = { has_variable = produces_wool  NOT = { has_variable = wool_stockpile } }
-			LOG_fail = { sys = ECON  fn = "stockpile_gap_probe"  reason = "produces_wool set but wool_stockpile NOT set — GOODS_governorship_produce mutate-empty (scope dump)" }
+			limit = { var:COTTAGEIND_produced_$tradegood$ > -999999999 }
+			debug_log = "IMP19C FORENSIC cottage_produced $tradegood$ = REAL"
 		}
-		if = {
-			limit = { has_variable = produces_chocolate  NOT = { has_variable = chocolate_stockpile } }
-			LOG_fail = { sys = ECON  fn = "stockpile_gap_probe"  reason = "produces_chocolate set but chocolate_stockpile NOT set (scope dump)" }
-		}
-		if = {
-			limit = { has_variable = produces_peat  NOT = { has_variable = peat_stockpile } }
-			LOG_fail = { sys = ECON  fn = "stockpile_gap_probe"  reason = "produces_peat set but peat_stockpile NOT set (scope dump)" }
+		else = {
+			debug_log = "IMP19C FORENSIC cottage_produced $tradegood$ = EMPTY"
+			debug_log_scopes = yes
 		}
 	}
 }
 
+# --- per-governorship SHARED-SCOPE classifier. Scope: governorship. -----------
+# The operands EVERY good's seed-source svalue shares. If one of these is empty,
+# it explains a whole-governorship flood (all goods at once). Covers owner
+# resolution, the three owner.MODIFIER_* productivity svalues the RAW _produced
+# svalues multiply by, and the manufactured-only chain (industrialisation bonus
+# + its cache + employment ratio + its cache) — plus the pop/province inputs that
+# feed the Div/0-guarded denominators.
+ECON_LOG_fx_classify_scope = {
+	# Scope: governorship
+	if = {
+		limit = { NOT = { exists = owner } }
+		debug_log = "IMP19C FORENSIC scope owner = NONE"
+		debug_log_scopes = yes
+	}
+	else = {
+		debug_log = "IMP19C FORENSIC scope owner = PRESENT"
+		# the three country-scope modifier svalues the raw _produced svalues multiply by
+		owner = {
+			set_variable = { name = ECON_LOG_fx_agri  value = MODIFIER_agriculture_productivity }
+			set_variable = { name = ECON_LOG_fx_mine  value = MODIFIER_mining_productivity }
+			set_variable = { name = ECON_LOG_fx_text  value = MODIFIER_textiles_productivity }
+		}
+		if = {
+			limit = { owner = { var:ECON_LOG_fx_agri > -999999999 } }
+			debug_log = "IMP19C FORENSIC scope MODIFIER_agriculture_productivity = REAL"
+		}
+		else = {
+			debug_log = "IMP19C FORENSIC scope MODIFIER_agriculture_productivity = EMPTY (raw _produced multiply operand empty)"
+			debug_log_scopes = yes
+		}
+		if = {
+			limit = { owner = { var:ECON_LOG_fx_mine > -999999999 } }
+			debug_log = "IMP19C FORENSIC scope MODIFIER_mining_productivity = REAL"
+		}
+		else = {
+			debug_log = "IMP19C FORENSIC scope MODIFIER_mining_productivity = EMPTY"
+			debug_log_scopes = yes
+		}
+		if = {
+			limit = { owner = { var:ECON_LOG_fx_text > -999999999 } }
+			debug_log = "IMP19C FORENSIC scope MODIFIER_textiles_productivity = REAL"
+		}
+		else = {
+			debug_log = "IMP19C FORENSIC scope MODIFIER_textiles_productivity = EMPTY"
+			debug_log_scopes = yes
+		}
+		owner = {
+			remove_variable = ECON_LOG_fx_agri
+			remove_variable = ECON_LOG_fx_mine
+			remove_variable = ECON_LOG_fx_text
+		}
+	}
+	# manufactured-only chain: industrialisation bonus (Div/0-guarded) + its cache
+	set_variable = { name = ECON_LOG_fx_ind  value = GOODS_governorship_bonus_to_industrial_production_from_industrialisation }
+	if = {
+		limit = { var:ECON_LOG_fx_ind > -999999999 }
+		debug_log = "IMP19C FORENSIC scope industrialisation_bonus = REAL"
+	}
+	else = {
+		debug_log = "IMP19C FORENSIC scope industrialisation_bonus = EMPTY (Div/0 or empty operand in the mechanised chain)"
+		debug_log_scopes = yes
+	}
+	remove_variable = ECON_LOG_fx_ind
+	if = {
+		limit = { has_variable = industrialisation_bonus_cached }
+		if = {
+			limit = { var:industrialisation_bonus_cached > -999999999 }
+			debug_log = "IMP19C FORENSIC scope industrialisation_bonus_cached = REAL"
+		}
+		else = {
+			debug_log = "IMP19C FORENSIC scope industrialisation_bonus_cached = EMPTY (cache holds an empty)"
+			debug_log_scopes = yes
+		}
+	}
+	else = {
+		debug_log = "IMP19C FORENSIC scope industrialisation_bonus_cached = UNSET"
+	}
+	# employment ratio (Div/0-guarded) + its cache
+	set_variable = { name = ECON_LOG_fx_emp  value = INDUSTRY_employment_ratio }
+	if = {
+		limit = { var:ECON_LOG_fx_emp > -999999999 }
+		debug_log = "IMP19C FORENSIC scope employment_ratio = REAL"
+	}
+	else = {
+		debug_log = "IMP19C FORENSIC scope employment_ratio = EMPTY"
+		debug_log_scopes = yes
+	}
+	remove_variable = ECON_LOG_fx_emp
+	if = {
+		limit = { has_variable = industry_employment_ratio_cached }
+		if = {
+			limit = { var:industry_employment_ratio_cached > -999999999 }
+			debug_log = "IMP19C FORENSIC scope employment_ratio_cached = REAL"
+		}
+		else = {
+			debug_log = "IMP19C FORENSIC scope employment_ratio_cached = EMPTY"
+			debug_log_scopes = yes
+		}
+	}
+	# pop/province Div/0 denominators the industrialisation/employment computes divide by
+	if = {
+		limit = { governorship_total_provinces > 0 }
+		debug_log = "IMP19C FORENSIC scope total_provinces = POSITIVE"
+	}
+	else = {
+		debug_log = "IMP19C FORENSIC scope total_provinces = ZERO (Div/0 source -> empty industrialisation svalue)"
+		debug_log_scopes = yes
+	}
+	if = {
+		limit = { has_variable = COTTAGEIND_pops_output }
+		if = {
+			limit = { var:COTTAGEIND_pops_output > -999999999 }
+			debug_log = "IMP19C FORENSIC scope pops_output = REAL"
+		}
+		else = {
+			debug_log = "IMP19C FORENSIC scope pops_output = EMPTY"
+			debug_log_scopes = yes
+		}
+	}
+	else = {
+		debug_log = "IMP19C FORENSIC scope pops_output = UNSET"
+	}
+	# --- VALUE DUMP (additive, separate line) -----------------------------------
+	# The buckets above are the DIAGNOSIS (only control-flow can tell empty from a
+	# real 0 — [ ...GetValue|N] renders an empty as its fallback, indistinguishable
+	# from a genuine 0). But for the REAL nodes the magnitude is useful (is
+	# total_provinces a healthy 3 or a Div/0-causing count? is a modifier ~1.0 or a
+	# near-zero that collapses a downstream svalue?). So dump the numeric scope
+	# operands on a SEPARATE debug_log line: if value-rendering voids this line (the
+	# macro-string footgun, or ROOT.MakeScope not rendering in effect context — it is
+	# the only precedent form but UNPROVEN here), only this line dies, never a bucket.
+	# Fallback sentinel is -1 (NOT 0) so a staging miss reads distinctly from a real 0.
+	# Stage each numeric as a gov var (proven var-through-scope form), copy to ROOT
+	# (the only promptable render scope), emit one line, clean up both scopes.
+	set_variable = { name = ECON_LOG_fx_v_ind    value = GOODS_governorship_bonus_to_industrial_production_from_industrialisation }
+	set_variable = { name = ECON_LOG_fx_v_emp    value = INDUSTRY_employment_ratio }
+	set_variable = { name = ECON_LOG_fx_v_prov   value = governorship_total_provinces }
+	set_variable = { name = ECON_LOG_fx_v_agri   value = -1 }
+	set_variable = { name = ECON_LOG_fx_v_pops   value = -1 }
+	if = {
+		limit = { exists = owner }
+		set_variable = { name = ECON_LOG_fx_v_agri  value = owner.MODIFIER_agriculture_productivity }
+	}
+	if = {
+		limit = { has_variable = COTTAGEIND_pops_output }
+		set_variable = { name = ECON_LOG_fx_v_pops  value = var:COTTAGEIND_pops_output }
+	}
+	save_scope_as = econ_log_fx_gov
+	root = {
+		set_variable = { name = ECON_LOG_fx_v_ind   value = scope:econ_log_fx_gov.var:ECON_LOG_fx_v_ind }
+		set_variable = { name = ECON_LOG_fx_v_emp   value = scope:econ_log_fx_gov.var:ECON_LOG_fx_v_emp }
+		set_variable = { name = ECON_LOG_fx_v_prov  value = scope:econ_log_fx_gov.var:ECON_LOG_fx_v_prov }
+		set_variable = { name = ECON_LOG_fx_v_agri  value = scope:econ_log_fx_gov.var:ECON_LOG_fx_v_agri }
+		set_variable = { name = ECON_LOG_fx_v_pops  value = scope:econ_log_fx_gov.var:ECON_LOG_fx_v_pops }
+	}
+	debug_log = "IMP19C FORENSIC values ind_bonus=[ROOT.MakeScope.GetVariable('ECON_LOG_fx_v_ind').GetValue|-1] emp_ratio=[ROOT.MakeScope.GetVariable('ECON_LOG_fx_v_emp').GetValue|-1] total_provinces=[ROOT.MakeScope.GetVariable('ECON_LOG_fx_v_prov').GetValue|-1] agri_mod=[ROOT.MakeScope.GetVariable('ECON_LOG_fx_v_agri').GetValue|-1] pops_output=[ROOT.MakeScope.GetVariable('ECON_LOG_fx_v_pops').GetValue|-1]"
+	debug_log_scopes = yes
+	remove_variable = ECON_LOG_fx_v_ind
+	remove_variable = ECON_LOG_fx_v_emp
+	remove_variable = ECON_LOG_fx_v_prov
+	remove_variable = ECON_LOG_fx_v_agri
+	remove_variable = ECON_LOG_fx_v_pops
+	root = {
+		remove_variable = ECON_LOG_fx_v_ind
+		remove_variable = ECON_LOG_fx_v_emp
+		remove_variable = ECON_LOG_fx_v_prov
+		remove_variable = ECON_LOG_fx_v_agri
+		remove_variable = ECON_LOG_fx_v_pops
+	}
+}
+
 # ======================================================================
-# COMPOSITE — one call the pulse makes per country to run both flood probes.
+# COMPOSITE — one call the pulse makes per country to run the flood forensic.
 # Country scope. Gated by -debug_mode via the underlying debug_log like the rest
 # of the module. Wire this into the quarterly pulse next to
 # ECON_LOG_production_snapshot to capture the floods with full scope identity.
 # ======================================================================
 ECON_LOG_flood_probe = {
 	# Scope: country
+	# keep the legacy cottage operand probe (owner/raw/pops has_variable checks — cheap, and its
+	# only OUTPUT is via LOG_fail/debug_log so it is genuinely -debug_mode-gated).
 	ECON_LOG_cottage_empty_probe = yes
-	ECON_LOG_stockpile_gap_probe = yes
+	# v3 comprehensive forensic: per-scope shared operands, then per-good nodes for ALL tradegoods,
+	# in EVERY governorship. CRITICAL GATE: unlike debug_log (which the engine no-ops outside
+	# -debug_mode), the classifiers below run REAL set_variable/every_tradegood_complex loops that
+	# are NOT engine-gated — so they must be fenced behind an explicit opt-in global or they would
+	# cost a full country×gov×68-good walk every quarter in NORMAL player games. The global
+	# ECON_FORENSIC_enabled is set by NOTHING in shipped content; a dev sets it once (e.g. via the
+	# debug console `set_global_variable ECON_FORENSIC_enabled` or a temporary game-start hook)
+	# before a -debug_mode diagnostic boot, then the trace populates. Zero cost when the flag is unset.
+	if = {
+		limit = { has_global_variable = ECON_FORENSIC_enabled }
+		# PHASE marker pairs with the SETUP_SEED capture (oa_economy_setup.txt) so one boot separates
+		# the empty's ORIGIN (setup seed) from its CONSEQUENCE (quarterly mutate).
+		debug_log = "IMP19C FORENSIC PHASE = QUARTERLY"
+		every_governorships = {
+			ECON_LOG_fx_classify_scope = yes
+			every_tradegood_complex = {
+				APPLY = ECON_LOG_fx_classify_good
+			}
+		}
+	}
 }
