@@ -99,8 +99,12 @@ QING_march_expand_pulse = {
 								NOT = { overlord = { is_subject_of = ROOT.overlord } }   # not a fellow march's sub-subject
 							}
 						}
-						save_scope_as = qing_march_wargoal_prov
-						owner = { save_scope_as = qing_march_war_target }
+						# TEMP scopes ([#39-review-fix]): save_scope_as PERSISTS across on_action pulses, so a
+						# once-fired land war left this scope existing forever and permanently killed Road 3's
+						# `NOT exists` guard (the maritime sea-war road). Temporary scopes live only for THIS
+						# pulse execution — the intra-pulse "don't open a 2nd war" guard still holds and self-clears.
+						save_temporary_scope_as = qing_march_wargoal_prov
+						owner = { save_temporary_scope_as = qing_march_war_target }
 					}
 				}
 				if = {
@@ -110,6 +114,8 @@ QING_march_expand_pulse = {
 						province = scope:qing_march_wargoal_prov
 						target = scope:qing_march_war_target
 					}
+					# NOTE: scope:qing_march_wargoal_prov is a TEMPORARY scope; it survives to Road 3's
+					# `NOT exists` guard within THIS pulse (so no double-war) and self-clears after.
 					LOG_line = { sys = QING  msg = "MARCH declares a war of conquest on a bordering polity for" }
 				}
 			}
@@ -212,8 +218,8 @@ QING_march_expand_pulse = {
 							NOT = { overlord = { is_subject_of = ROOT.overlord } }
 						}
 					}
-					save_scope_as = qing_march_sea_wargoal_prov
-					owner = { save_scope_as = qing_march_sea_target }
+					save_temporary_scope_as = qing_march_sea_wargoal_prov
+					owner = { save_temporary_scope_as = qing_march_sea_target }
 				}
 			}
 			if = {
@@ -274,7 +280,11 @@ QING_march_integrate_pulse = {
 			save_scope_as = qing_integ_march
 			# advance ONE eligible bound subject by one step; absorb at threshold (5).
 			random_subject = {
-				limit = { exists = this }
+				# [#39-review-fix] require the subject to still hold land. SUBJ_QING_absorb_subject
+				# transfers provinces but does not destroy the now-landless subject; without this
+				# filter random_subject could re-pick it (qing_march_integ_progress still >=5), re-enter
+				# the absorb on a province-less target, and burn the roll on a spurious LOG_fail.
+				limit = { any_owned_province = { count >= 1 } }
 				# accrue the march-owned progress var on the subject (0..5).
 				if = {
 					limit = { NOT = { has_variable = qing_march_integ_progress } }
