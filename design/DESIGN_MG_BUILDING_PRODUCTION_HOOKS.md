@@ -1,5 +1,40 @@
 # Manufactured-Goods — Named-Building Production Hooks (Design)
 
+> **BLOCKER — cottage empty-var flood (undiagnosed). This feature is blocked by it** because the
+> production hooks feed the same `COTTAGEIND` / `GOODS_governorship_<good>_produced` chain that is
+> currently throwing `change_variable [ Variable not of the 'value' scope type. Type: empty ]`.
+> Building on a broken chain is pointless until the flood is understood.
+>
+> **WHERE THE FLOOD LOGS COME FROM (boot logs.zip Aug-3 01:14, v2 probe `cottage_scale pre-multiply`,
+> gated `owner = { is_subject_of = c:CHI }`):** it fires ONLY in CHI-SUBJECT governorships, at the
+> cottage produce pass (`GOODS_setup_governorship_stockpiles → COTTAGEIND_produce_all →
+> produce_<good> → COTTAGEIND_scale_production`). The 15 flooding governorships, by hit count:
+>
+> | Governorship | id | dumps |
+> |---|---|---|
+> | North Burma | 14 | 180 |
+> | Northeast Asia | 12 | 128 |
+> | Sichuan | 35 | 120 |
+> | Mongolia | 69 | 120 |
+> | Borneo | 186 | 120 |
+> | Vietnam | 161 | 68 |
+> | Ryukyu | 117 | 68 |
+> | Liaoning | 13 | 68 |
+> | Korea | 15 | 68 |
+> | Yunnan | 37 | 60 |
+> | Ü-Tsang | 136 | 60 |
+> | Turkestan | 113 | 60 |
+> | Tannu Tuva | 70 | 60 |
+> | Gansu | 123 | 60 |
+> | Eastern Himalayas | 152 | 60 |
+>
+> Common thread: ALL are CHI-subject-owned governorships (Qing tributaries/protectorates/
+> autonomous-governorships — Burma/Vietnam/Ryukyu/Korea/Tibet/Mongolia/Xinjiang/etc.). It is
+> mod-side (NOT Sobisonator's cottage engine, which faithfully reports the empty it is handed).
+> The `imp19c_setup.12` force-seed / potential-gate theory was CHECKED AND REJECTED (every seed's
+> potential passes; Borneo floods with NO seed). Actual trigger still UNKNOWN — the shared trait is
+> CHI-subject ownership, not seeded buildings. See [[imp19c-cottage-empty-var-flood]].
+
 **Branch:** to isolate off `merge-overnight` (follows the #133 MG isolation discipline).
 **Relates to:** #133 (manufactured-goods system), [logistics P2] arsenal/depot munitions hook,
 [[imp19c-manufactured-goods-build-rules]], [[imp19c-add-building-level-respects-potential]].
