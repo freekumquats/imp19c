@@ -177,6 +177,55 @@ QING_found_march = {
 }
 
 # ======================================================================
+# [#49] QING_convert_to_march — turn an EXISTING country (already on the map) into a
+# frontier_protectorate march, with the SAME march-hood as QING_found_march but WITHOUT a
+# release (the country already exists; we don't spin a new tag from a province list). Built
+# for Lanfang (LAF) — a live Hakka kongsi republic that is CHI's nominal/sinosphere vassal at
+# start; the Nanyang tree elevates it from a firm tributary to a full march. Scope: ROOT =
+# c:CHI. Args: target = <the existing country scope>; maritime = yes|no.
+# Steps mirror QING_found_march 2-3/5: release-then-rebind as frontier_protectorate,
+# megacorporation government, march flags, Lifan-Yuan Governor-General, seed the subsidy army.
+# ======================================================================
+QING_convert_to_march = {
+	LOG_enter = { sys = QING  fn = "QING_convert_to_march" }
+	if = {
+		limit = { exists = $target$ }
+		# 1. RELEASE-then-REBIND: FUNC_make_subject on an already-bound subject does not safely
+		#    reparent in this engine (the same idiom the local-princely-state loop uses). LAF is a
+		#    CHI subject after the embrace, so release it from CHI first, then bind as the march type.
+		if = {
+			limit = { $target$ = { is_subject_of = ROOT } }
+			ROOT = { release_subject = $target$ }
+		}
+		# 2. Government = megacorporation (the EIC's government; the ruler slot IS the Governor-
+		#    General). Then bind to CHI as frontier_protectorate. (An existing country already has its
+		#    economy initialised — nothing to re-init, unlike a fresh LAND_release.)
+		$target$ = { change_government = megacorporation }
+		FUNC_make_subject = {
+			overlord = ROOT
+			target = $target$
+			type = frontier_protectorate
+		}
+		# 3. Stamp the march flags (subsidy pulse + expansion pulse key off these).
+		$target$ = {
+			set_variable = { name = qing_march  value = 1 }
+			if = { limit = { $maritime$ = yes }  set_variable = { name = qing_march_maritime  value = 1 } }
+		}
+		# 4. Governor-General appointed by the Lifan Yuan (no-op if no holder seated; the yearly
+		#    pulse re-imposes one later). Same call QING_found_march uses.
+		QING_march_appoint_gg = { march = $target$ }
+		# 5. Seed the march's initial army to its subsidy tier (default small if none set); the
+		#    subsidy pulse maintains it thereafter.
+		QING_march_size_army = { march = $target$ }
+		LOG_line = { sys = QING  msg = "MARCH established by CONVERTING an existing country to a frontier_protectorate for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_convert_to_march"  reason = "target country does not exist; conversion skipped" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_convert_to_march"  result = OK }
+}
+
+# ======================================================================
 # QING_march_appoint_gg — install a Lifan-Yuan-appointed Manchu Governor-General as
 # the march's ruler. Scope: country (ROOT = c:CHI). Arg: march = <the march scope>.
 # Gated on a seated Lifan Yuan holder (the appointment is an act of that office — the
