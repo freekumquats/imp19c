@@ -38,6 +38,20 @@ COTTAGEIND_produce_all = {
 
 COTTAGEIND_cache_all_values = {
 	# Scope: Governorship
+	# [#MG-flood-diag — READ-ONLY, REMOVABLE] This effect seeds COTTAGEIND_raw_<input> =
+	# GOODS_governorship_<raw>_produced, and those raw svalues do `multiply = owner.MODIFIER_*`.
+	# If owner is unresolved here, every raw var below is set to EMPTY, feeding the downstream
+	# flood. Log the governorship (scope dump) at the seeding site when owner is missing — this
+	# is the earliest point the empty enters. debug_log/scope-dump only; no logic change; silent
+	# outside -debug_mode. Remove this if block to revert.
+	if = {
+		limit = { NOT = { exists = owner } }
+		LOG_fail = {
+			sys = ECON
+			fn = "COTTAGEIND_cache_all_values"
+			reason = "ownerless governorship at raw-cache seeding -> owner.MODIFIER_* empty -> COTTAGEIND_raw_* seeded EMPTY -> cottage flood downstream; scope dump identifies it"
+		}
+	}
 	set_variable = {
 		name = governorship_average_industrialisation
 		value = governorship_average_industrialisation
@@ -169,6 +183,30 @@ COTTAGEIND_cache_all_values = {
 COTTAGEIND_scale_production = {
 	# Scope: Governorship
 	# Function: Scale the production from cottage industries to the appropriate level based on pops, industrialisation etc.
+	# [#MG-flood-diag — READ-ONLY, REMOVABLE] This is the exact effect whose change_variable
+	# below throws "Variable not of the 'value' scope type. Type: empty" (~30 goods, a fixed
+	# ~8 scopes/boot). Log the governorship scope AT THE FAILURE SITE when the suspected
+	# empty-source precondition holds: (a) owner link unresolved — GOODS_governorship_<raw>_
+	# produced does `multiply = owner.MODIFIER_*`, so an unresolved owner makes that svalue
+	# empty, which propagates through COTTAGEIND_raw_* -> COTTAGEIND_produced_$output$ ->
+	# the multiply here; or (b) either multiply operand var was never set on this scope.
+	# (has_variable does NOT catch a var SET to an empty value, so the owner check is the
+	# primary detector.) debug_log + scope dump ONLY — no logic/variable change; silent
+	# no-op outside -debug_mode. Remove this if block to revert.
+	if = {
+		limit = {
+			OR = {
+				NOT = { exists = owner }
+				NOT = { has_variable = COTTAGEIND_pops_output }
+				NOT = { has_variable = COTTAGEIND_produced_$output$ }
+			}
+		}
+		LOG_fail = {
+			sys = ECON
+			fn = "COTTAGEIND_scale_production"
+			reason = "empty-var precondition at scale entry (ownerless governorship and/or pops_output/produced-var unset) -> the change_variable multiply below errors empty; scope dump identifies this governorship + its owner link"
+		}
+	}
 	change_variable = {
 		name = COTTAGEIND_produced_$output$
 		multiply = var:COTTAGEIND_pops_output

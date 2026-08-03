@@ -231,3 +231,148 @@ ECON_LOG_production_snapshot = {
 		remove_variable = ECON_LOG_tmp_bonus_sum
 	}
 }
+
+# ======================================================================
+# COTTAGE EMPTY-VAR PROBE (#MG-flood-diag) — read-only diagnostic for the long-
+# standing cottage-production empty-var flood (change_variable "Type: empty" in
+# COTTAGEIND_scale_production, ~30 goods, a FIXED ~8 scopes/boot, runtime-gated,
+# predates all #133/#139/#144 MG work). Does NOT modify Sobisonator's cottage
+# effects — it re-walks the SAME governorships the quarterly pass hits and, for
+# each, records every operand in the propagation chain that produces the empty:
+#
+#   GOODS_governorship_<raw>_produced  (value=0, then multiply=owner.MODIFIER_*)
+#        └─ if owner unresolved / MODIFIER_* empty -> raw svalue returns EMPTY
+#   -> COTTAGEIND_raw_<input>   (cache_all_values: set = the raw svalue)      EMPTY
+#   -> COTTAGEIND_produced_<good> (produce_X: set = var:COTTAGEIND_raw_input) EMPTY
+#   -> COTTAGEIND_scale_production line-8 change_variable multiply -> "Type: empty"
+#
+# Scope: COUNTRY (called inside every_country in the quarterly pulse, same site
+# as ECON_LOG_production_snapshot). For each of the country's governorships it
+# logs a scope dump (identity + owner) ONLY when a probe operand is empty/absent,
+# so the trace pinpoints exactly which scopes flood and why. Silent no-op outside
+# -debug_mode (all output via LOG_*/debug_log). Uses clothing's inputs
+# (textile_fibres + silk) as the representative recipe — it is one of the flooding
+# goods and its raws are the most common, so a scope empty here is empty for all.
+# ======================================================================
+ECON_LOG_cottage_empty_probe = {
+	# Scope: country
+	save_scope_as = econ_log_probe_country
+	every_governorships = {
+		save_scope_as = econ_log_probe_gov
+		# --- 1. OWNER RESOLUTION: the suspected root. GOODS_governorship_<raw>_produced
+		#        does `multiply = owner.MODIFIER_agriculture_productivity` — if owner does
+		#        not resolve, the whole svalue returns empty and propagates. Log any
+		#        governorship whose owner link is unset (the prime hypothesis for the 8).
+		if = {
+			limit = { NOT = { exists = owner } }
+			LOG_fail = {
+				sys = ECON
+				fn = "cottage_empty_probe"
+				reason = "GOVERNORSHIP HAS NO OWNER — owner.MODIFIER_* returns empty -> raw svalue empty -> cottage flood (scope dump: identity of this ownerless governorship)"
+			}
+		}
+		else = {
+			# owner resolves — capture the modifier values that the raw svalue multiplies
+			# by. If either is empty/absent, that is the empty source instead.
+			owner = {
+				save_scope_as = econ_log_probe_owner
+				if = {
+					limit = { NOT = { exists = var:tribute_income_modifier } }
+					# MODIFIER_agriculture_productivity reads modifier:tribute_income_modifier;
+					# a modifier (not a variable) — logged here only as context, not a var.
+					LOG_line = { sys = ECON  msg = "cottage_empty_probe: owner present, agriculture-modifier context (see scope dump for tag)" }
+				}
+			}
+		}
+		# --- 2. RAW-INPUT CACHE STATE: were the raw vars actually seeded this pass?
+		#        cache_all_values sets COTTAGEIND_raw_<input> = GOODS_governorship_<raw>_produced.
+		#        If the svalue returned empty, the set produced an EMPTY var (has_variable can
+		#        still be true). Stage the value onto the country ROOT and log it.
+		if = {
+			limit = { NOT = { has_variable = COTTAGEIND_raw_textile_fibres } }
+			LOG_fail = {
+				sys = ECON
+				fn = "cottage_empty_probe"
+				reason = "COTTAGEIND_raw_textile_fibres NOT SET in this governorship — cache_all_values never seeded it (scope dump)"
+			}
+		}
+		if = {
+			limit = { NOT = { has_variable = COTTAGEIND_raw_silk } }
+			LOG_fail = {
+				sys = ECON
+				fn = "cottage_empty_probe"
+				reason = "COTTAGEIND_raw_silk NOT SET in this governorship (scope dump)"
+			}
+		}
+		# --- 3. POPS-OUTPUT CACHE STATE: the OTHER multiply operand in scale_production
+		#        line-6 (multiply = var:COTTAGEIND_pops_output). Log if absent.
+		if = {
+			limit = { NOT = { has_variable = COTTAGEIND_pops_output } }
+			LOG_fail = {
+				sys = ECON
+				fn = "cottage_empty_probe"
+				reason = "COTTAGEIND_pops_output NOT SET in this governorship — scale_production line-6 multiply operand missing (scope dump)"
+			}
+		}
+		# --- 4. PRODUCED-VAR STATE after a real produce pass would have run: log the
+		#        clothing produced var's presence. Absent => the set_variable from an
+		#        empty raw yielded nothing. (State capture; the scope dump names the gov.)
+		if = {
+			limit = { NOT = { has_variable = COTTAGEIND_produced_clothing } }
+			LOG_line = { sys = ECON  msg = "cottage_empty_probe: COTTAGEIND_produced_clothing absent post-pass (see scope dump)" }
+		}
+		# --- 5. STRATA/POP STATE: an ownerless or pop-less governorship is the likely
+		#        shared trait of the 8. Record whether the pop-count vars the pops_output
+		#        svalue depends on are present, so we can correlate the 8 scopes.
+		if = {
+			limit = { NOT = { has_variable = governorship_middle_strata } }
+			LOG_line = { sys = ECON  msg = "cottage_empty_probe: governorship_middle_strata absent (pop-state anomaly; see scope dump)" }
+		}
+	}
+	root = { remove_variable = econ_log_probe_country }
+}
+
+# ======================================================================
+# STOCKPILE-WRITE EMPTY-VAR PROBE (#MG-flood-diag) — the SECOND, distinct flood:
+# GOODS_governorship_produce (se_GOODS.txt) does `change_variable name =
+# $into_stockpile$` guarded ONLY by `has_variable = $do_if$` (the produces_X
+# marker), NOT by whether the stockpile var itself was seeded. This is the raw/
+# manufactured stockpile write erroring at GOODS_governorship_produce line 6.
+# This probe walks the governorships and logs which <good>_stockpile vars are
+# absent while their produces_ marker is present — the exact guard-gap mismatch.
+# Representative goods chosen from the observed error offsets (raw + manufactured).
+# Read-only; does not touch se_GOODS.txt. Scope: country.
+# ======================================================================
+ECON_LOG_stockpile_gap_probe = {
+	# Scope: country
+	every_governorships = {
+		save_scope_as = econ_log_probe_gov
+		# wool / chocolate / peat were among the named erroring stockpiles; clothing/
+		# construction_materials among the manufactured. Log any produces_-marked good
+		# whose _stockpile var is missing (guard passes, mutate target empty).
+		if = {
+			limit = { has_variable = produces_wool  NOT = { has_variable = wool_stockpile } }
+			LOG_fail = { sys = ECON  fn = "stockpile_gap_probe"  reason = "produces_wool set but wool_stockpile NOT set — GOODS_governorship_produce mutate-empty (scope dump)" }
+		}
+		if = {
+			limit = { has_variable = produces_chocolate  NOT = { has_variable = chocolate_stockpile } }
+			LOG_fail = { sys = ECON  fn = "stockpile_gap_probe"  reason = "produces_chocolate set but chocolate_stockpile NOT set (scope dump)" }
+		}
+		if = {
+			limit = { has_variable = produces_peat  NOT = { has_variable = peat_stockpile } }
+			LOG_fail = { sys = ECON  fn = "stockpile_gap_probe"  reason = "produces_peat set but peat_stockpile NOT set (scope dump)" }
+		}
+	}
+}
+
+# ======================================================================
+# COMPOSITE — one call the pulse makes per country to run both flood probes.
+# Country scope. Gated by -debug_mode via the underlying debug_log like the rest
+# of the module. Wire this into the quarterly pulse next to
+# ECON_LOG_production_snapshot to capture the floods with full scope identity.
+# ======================================================================
+ECON_LOG_flood_probe = {
+	# Scope: country
+	ECON_LOG_cottage_empty_probe = yes
+	ECON_LOG_stockpile_gap_probe = yes
+}
