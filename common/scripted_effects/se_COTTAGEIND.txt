@@ -183,29 +183,22 @@ COTTAGEIND_cache_all_values = {
 COTTAGEIND_scale_production = {
 	# Scope: Governorship
 	# Function: Scale the production from cottage industries to the appropriate level based on pops, industrialisation etc.
-	# [#MG-flood-diag — READ-ONLY, REMOVABLE] This is the exact effect whose change_variable
-	# below throws "Variable not of the 'value' scope type. Type: empty" (~30 goods, a fixed
-	# ~8 scopes/boot). Log the governorship scope AT THE FAILURE SITE when the suspected
-	# empty-source precondition holds: (a) owner link unresolved — GOODS_governorship_<raw>_
-	# produced does `multiply = owner.MODIFIER_*`, so an unresolved owner makes that svalue
-	# empty, which propagates through COTTAGEIND_raw_* -> COTTAGEIND_produced_$output$ ->
-	# the multiply here; or (b) either multiply operand var was never set on this scope.
-	# (has_variable does NOT catch a var SET to an empty value, so the owner check is the
-	# primary detector.) debug_log + scope dump ONLY — no logic/variable change; silent
-	# no-op outside -debug_mode. Remove this if block to revert.
+	# [#MG-flood-diag v2 — READ-ONLY, REMOVABLE, LOG-ONLY] This effect's change_variable below
+	# throws "Variable not of the 'value' scope type. Type: empty" (~30 goods, ~8 scopes/boot).
+	# v1 probe was flawed twice: it used has_variable (TRUE even for a var SET to an empty
+	# value — so it can't see the actual failure), and the sibling probe ran POST-pass. Static
+	# tracing shows every operand (COTTAGEIND_produced_$output$, COTTAGEIND_pops_output, and
+	# their raw/svalue sources) bottoms out in a numeric literal, so an *empty* here is not
+	# explained by static reading — it needs runtime ground truth. debug_log_scopes dumps EVERY
+	# variable's RAW value on this scope (empties included) + the scope identity, at the failure
+	# site, BEFORE the erroring change_variable. Gated to CHI-subject governorships (where the
+	# starving-garrison provinces Urumqi/Lhasa/Ili live) to bound volume — a safe trigger, no
+	# numeric comparison on the suspect var. If the flood persists with NO dump captured, the
+	# erroring scopes are NOT CHI subjects (widen the gate). PURE LOG: no variable/logic change;
+	# silent outside -debug_mode. Remove this if block to revert.
 	if = {
-		limit = {
-			OR = {
-				NOT = { exists = owner }
-				NOT = { has_variable = COTTAGEIND_pops_output }
-				NOT = { has_variable = COTTAGEIND_produced_$output$ }
-			}
-		}
-		LOG_fail = {
-			sys = ECON
-			fn = "COTTAGEIND_scale_production"
-			reason = "empty-var precondition at scale entry (ownerless governorship and/or pops_output/produced-var unset) -> the change_variable multiply below errors empty; scope dump identifies this governorship + its owner link"
-		}
+		limit = { exists = owner  owner = { is_subject_of = c:CHI } }
+		LOG_state = { sys = ECON  note = "cottage_scale pre-multiply: dump produced_$output$ + pops_output values for this CHI-subject governorship" }
 	}
 	change_variable = {
 		name = COTTAGEIND_produced_$output$
