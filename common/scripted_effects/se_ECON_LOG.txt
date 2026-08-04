@@ -65,28 +65,13 @@ ECON_LOG_country_snapshot = {
 	# stale/zero temp. Stage a self-scope handle and stage/read the temps on ROOT
 	# consistently (the ROOT.MakeScope form is the only promptable one here — see the
 	# file's SYNTAX NOTE; the paired ECON_LOG_production_snapshot already does this).
-	save_scope_as = econ_log_country
-	# stage treasury (readable as a plain value — se_INCOME.txt:469) and wealth
-	root = {
-		set_variable = { name = ECON_LOG_tmp_treasury  value = scope:econ_log_country.treasury }
-		set_variable = { name = ECON_LOG_tmp_wealth    value = 0 }
-	}
-	if = {
-		limit = { has_variable = WEALTH_total_private_moveable_wealth }
-		root = { set_variable = { name = ECON_LOG_tmp_wealth  value = scope:econ_log_country.var:WEALTH_total_private_moveable_wealth } }
-	}
-	# [#value-log-fix] Emit debug_log DIRECTLY, not via LOG_line. LOG_line wraps the text
-	# in a SECOND macro layer (debug_log = "IMP19C $sys$: $msg$"); the promptable
-	# [ROOT.MakeScope.GetVariable(...).GetValue] data-function does not survive that
-	# indirection — which is why every prior snapshot logged blank (" treasury= natl_wealth="
-	# with no numbers). Direct debug_log with the render inline is the only form proven to
-	# interpolate here (cf. WAR_scripted_effects.txt:24). ROOT.MakeScope is the sole promptable
-	# scope handle in effect context (see this file's SYNTAX NOTE).
-	debug_log = "IMP19C ECON: [ROOT.GetTag] SNAP treasury=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_treasury').GetValue|0] natl_wealth=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_wealth').GetValue|0]"
-	root = {
-		remove_variable = ECON_LOG_tmp_treasury
-		remove_variable = ECON_LOG_tmp_wealth
-	}
+	# [#log-noise-fix 2026-08-03] BODY REMOVED. This snapshot existed only to render treasury/
+	# wealth via [ROOT.MakeScope.GetVariable(...).GetValue], which the engine CANNOT resolve in
+	# scripted-effect debug_log — it emitted "Could not find promote for 'MakeScope'" every call
+	# (~2456 lines/boot × 2 vars) and never logged a value. Value-rendering in debug_log is not
+	# viable here (only a direct inline data-function like WAR_scripted_effects.txt:24 works, and it
+	# doesn't survive this context). No usable output was lost. Effect kept as a no-op so the
+	# ECON_LOG_quarter call site needn't change; re-add a working snapshot only with a proven render.
 }
 
 # ======================================================================
@@ -103,36 +88,8 @@ ECON_LOG_jobs_snapshot = {
 	# on `this`, then COPY the totals into ROOT temps via the proven cross-scope
 	# var-read form so the LOG_line's [ROOT.MakeScope...] read matches what was staged,
 	# and label the line with the iterated country instead of ROOT.
-	save_scope_as = econ_log_country
-	set_variable = {
-		name = ECON_LOG_tmp_used
-		value = 0
-		every_owned_province = {
-			add = JOBS_num_used_slots
-		}
-	}
-	set_variable = {
-		name = ECON_LOG_tmp_unemployed
-		value = 0
-		every_owned_province = {
-			add = JOBS_unemployed_pops_province
-		}
-	}
-	root = {
-		set_variable = { name = ECON_LOG_tmp_used        value = scope:econ_log_country.var:ECON_LOG_tmp_used }
-		set_variable = { name = ECON_LOG_tmp_unemployed  value = scope:econ_log_country.var:ECON_LOG_tmp_unemployed }
-	}
-	# [#value-log-fix] direct debug_log (see country_snapshot note) — LOG_line's $msg$ layer
-	# does not render the data-function, so the old line logged blank.
-	debug_log = "IMP19C ECON: [ROOT.GetTag] SNAP used=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_used').GetValue|0] unemployed=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_unemployed').GetValue|0]"
-	# clean both the this-scope accumulators and the ROOT read-temps (harmless
-	# double-remove if ROOT == this in a non-iterated call).
-	remove_variable = ECON_LOG_tmp_used
-	remove_variable = ECON_LOG_tmp_unemployed
-	root = {
-		remove_variable = ECON_LOG_tmp_used
-		remove_variable = ECON_LOG_tmp_unemployed
-	}
+	# [#log-noise-fix 2026-08-03] BODY REMOVED — same unresolvable ROOT.MakeScope render as
+	# ECON_LOG_country_snapshot (see its note). Emitted only "Could not find promote" noise, no value.
 }
 
 # ======================================================================
@@ -147,29 +104,13 @@ ECON_LOG_currency_snapshot = {
 	# [#98-fix task #98] same every_country scope fix as the sibling snapshots: stage
 	# the temps on ROOT (where the LOG_line reads them) and label the line with the
 	# iterated country, not ROOT.
-	save_scope_as = econ_log_country
+	# [#log-noise-fix 2026-08-03] The has_variable=official_currency branch RENDER was removed —
+	# it staged backing/purchasing_power only to feed the unresolvable ROOT.MakeScope render (see
+	# ECON_LOG_country_snapshot note; "Could not find promote" noise, no value). The else branch
+	# (a plain-text LOG_line, which renders fine) is KEPT so the trace still records metal/barter
+	# economies. The if-branch is now empty of output.
 	if = {
-		limit = { has_variable = official_currency }
-		root = {
-			set_variable = { name = ECON_LOG_tmp_backing  value = 0 }
-			set_variable = { name = ECON_LOG_tmp_pp        value = 0 }
-		}
-		if = {
-			limit = { var:official_currency = { has_variable = backing_value } }
-			root = { set_variable = { name = ECON_LOG_tmp_backing  value = scope:econ_log_country.var:official_currency.var:backing_value } }
-		}
-		if = {
-			limit = { var:official_currency = { has_variable = purchasing_power } }
-			root = { set_variable = { name = ECON_LOG_tmp_pp  value = scope:econ_log_country.var:official_currency.var:purchasing_power } }
-		}
-		# [#value-log-fix] direct debug_log (see country_snapshot note).
-		debug_log = "IMP19C ECON: [ROOT.GetTag] SNAP backing=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_backing').GetValue|0] purchasing_power=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_pp').GetValue|0]"
-		root = {
-			remove_variable = ECON_LOG_tmp_backing
-			remove_variable = ECON_LOG_tmp_pp
-		}
-	}
-	else = {
+		limit = { NOT = { has_variable = official_currency } }
 		LOG_line = { sys = ECON  msg = " no official currency (metal/barter economy)" }
 	}
 }
@@ -215,24 +156,9 @@ ECON_LOG_production_snapshot = {
 	# (prev.var -> scope:x.var) and never noticed init-scope != modify-scope. Fix: stage ALL temp-var ops
 	# (init, increment, cleanup) on ROOT consistently — exactly what the working ECON_LOG_country_snapshot
 	# above does. The per-governorship value is still read via the proven scope:x.var: idiom (se_SELL.txt:1569).
-	root = {
-		set_variable = { name = ECON_LOG_tmp_gov_count  value = 0 }
-		set_variable = { name = ECON_LOG_tmp_bonus_sum  value = 0 }
-	}
-	every_governorships = {
-		limit = { has_variable = industrialisation_bonus_cached }
-		save_scope_as = econ_log_snapshot_gov
-		root = {
-			change_variable = { name = ECON_LOG_tmp_gov_count  add = 1 }
-			change_variable = { name = ECON_LOG_tmp_bonus_sum   add = scope:econ_log_snapshot_gov.var:industrialisation_bonus_cached }
-		}
-	}
-	# [#value-log-fix] direct debug_log (see country_snapshot note) — was blank via LOG_line's $msg$ layer.
-	debug_log = "IMP19C ECON: [ROOT.GetTag] PRODSNAP governorships_producing=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_gov_count').GetValue|0] summed_industrialisation_bonus=[ROOT.MakeScope.GetVariable('ECON_LOG_tmp_bonus_sum').GetValue|0]"
-	root = {
-		remove_variable = ECON_LOG_tmp_gov_count
-		remove_variable = ECON_LOG_tmp_bonus_sum
-	}
+	# [#log-noise-fix 2026-08-03] BODY REMOVED — the per-governorship counters were aggregated only
+	# to feed the unresolvable ROOT.MakeScope render (see ECON_LOG_country_snapshot note; "Could not
+	# find promote" noise ×2 vars/boot, no value logged). No usable output lost.
 }
 
 # ======================================================================
@@ -549,52 +475,14 @@ ECON_LOG_fx_classify_scope = {
 		debug_log = "IMP19C FORENSIC scope pops_output = UNSET"
 	}
 	# --- VALUE DUMP (additive, separate line) -----------------------------------
-	# The buckets above are the DIAGNOSIS (only control-flow can tell empty from a
-	# real 0 — [ ...GetValue|N] renders an empty as its fallback, indistinguishable
-	# from a genuine 0). But for the REAL nodes the magnitude is useful (is
-	# total_provinces a healthy 3 or a Div/0-causing count? is a modifier ~1.0 or a
-	# near-zero that collapses a downstream svalue?). So dump the numeric scope
-	# operands on a SEPARATE debug_log line: if value-rendering voids this line (the
-	# macro-string footgun, or ROOT.MakeScope not rendering in effect context — it is
-	# the only precedent form but UNPROVEN here), only this line dies, never a bucket.
-	# Fallback sentinel is -1 (NOT 0) so a staging miss reads distinctly from a real 0.
-	# Stage each numeric as a gov var (proven var-through-scope form), copy to ROOT
-	# (the only promptable render scope), emit one line, clean up both scopes.
-	set_variable = { name = ECON_LOG_fx_v_ind    value = GOODS_governorship_bonus_to_industrial_production_from_industrialisation }
-	set_variable = { name = ECON_LOG_fx_v_emp    value = INDUSTRY_employment_ratio }
-	set_variable = { name = ECON_LOG_fx_v_prov   value = governorship_total_provinces }
-	set_variable = { name = ECON_LOG_fx_v_agri   value = -1 }
-	set_variable = { name = ECON_LOG_fx_v_pops   value = -1 }
-	if = {
-		limit = { exists = owner }
-		set_variable = { name = ECON_LOG_fx_v_agri  value = owner.MODIFIER_agriculture_productivity }
-	}
-	if = {
-		limit = { has_variable = COTTAGEIND_pops_output }
-		set_variable = { name = ECON_LOG_fx_v_pops  value = var:COTTAGEIND_pops_output }
-	}
-	save_scope_as = econ_log_fx_gov
-	root = {
-		set_variable = { name = ECON_LOG_fx_v_ind   value = scope:econ_log_fx_gov.var:ECON_LOG_fx_v_ind }
-		set_variable = { name = ECON_LOG_fx_v_emp   value = scope:econ_log_fx_gov.var:ECON_LOG_fx_v_emp }
-		set_variable = { name = ECON_LOG_fx_v_prov  value = scope:econ_log_fx_gov.var:ECON_LOG_fx_v_prov }
-		set_variable = { name = ECON_LOG_fx_v_agri  value = scope:econ_log_fx_gov.var:ECON_LOG_fx_v_agri }
-		set_variable = { name = ECON_LOG_fx_v_pops  value = scope:econ_log_fx_gov.var:ECON_LOG_fx_v_pops }
-	}
-	debug_log = "IMP19C FORENSIC values ind_bonus=[ROOT.MakeScope.GetVariable('ECON_LOG_fx_v_ind').GetValue|-1] emp_ratio=[ROOT.MakeScope.GetVariable('ECON_LOG_fx_v_emp').GetValue|-1] total_provinces=[ROOT.MakeScope.GetVariable('ECON_LOG_fx_v_prov').GetValue|-1] agri_mod=[ROOT.MakeScope.GetVariable('ECON_LOG_fx_v_agri').GetValue|-1] pops_output=[ROOT.MakeScope.GetVariable('ECON_LOG_fx_v_pops').GetValue|-1]"
-	debug_log_scopes = yes
-	remove_variable = ECON_LOG_fx_v_ind
-	remove_variable = ECON_LOG_fx_v_emp
-	remove_variable = ECON_LOG_fx_v_prov
-	remove_variable = ECON_LOG_fx_v_agri
-	remove_variable = ECON_LOG_fx_v_pops
-	root = {
-		remove_variable = ECON_LOG_fx_v_ind
-		remove_variable = ECON_LOG_fx_v_emp
-		remove_variable = ECON_LOG_fx_v_prov
-		remove_variable = ECON_LOG_fx_v_agri
-		remove_variable = ECON_LOG_fx_v_pops
-	}
+	# [#log-noise-fix 2026-08-03] The numeric value-DUMP that used to sit here was REMOVED. The
+	# UNSET/REAL/EMPTY buckets above ARE the diagnosis (control-flow is the only thing that tells an
+	# empty from a real 0). The dump merely tried to add magnitudes for the REAL nodes via
+	# [ROOT.MakeScope.GetVariable(...).GetValue], which the engine cannot resolve in scripted-effect
+	# debug_log — it emitted "Could not find promote for 'MakeScope'" ×5 vars per erroring scope
+	# (~23k lines/boot, the single biggest noise class) and never rendered a value. Scope identity is
+	# still captured by the per-node debug_log_scopes in the buckets above. If magnitudes are ever
+	# needed, re-add them only with a render form proven to work in effect context.
 }
 
 # ======================================================================
