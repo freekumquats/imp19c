@@ -1,16 +1,27 @@
 # Manufactured-Goods — Named-Building Production Hooks (Design)
 
-> **BLOCKER — cottage empty-var flood (undiagnosed). This feature is blocked by it** because the
-> production hooks feed the same `COTTAGEIND` / `GOODS_governorship_<good>_produced` chain that is
-> currently throwing `change_variable [ Variable not of the 'value' scope type. Type: empty ]`.
-> Building on a broken chain is pointless until the flood is understood.
+> **BLOCKER CLEARED 2026-08-03 (commit 3b8300d28).** The cottage empty-var flood is diagnosed and
+> fixed. It was NOT a broken production chain and it was NOT in CHI-subject govs — both were wrong
+> theories from a probe whose gate was literally `owner = { is_subject_of = c:CHI }` (so it only ever
+> *visited* CHI subjects; the "15 flooding governorships by dump count" table below was probe VISITS,
+> not errors). Whole-boot forensic (Aug-3 19:40, `ECON_LOG_fx_classify_good`): 310,420 stockpile reads
+> REAL, 3,332 UNSET, ZERO set-to-empty. Every cottage error was an UNSET `<good>_stockpile` write
+> target in exactly 9 UNCOLONIZED frontier map-regions (Congo Basin, Sahel, Kalahari, Western Sahara,
+> Horn of Africa, Argentina, South Siam, Eastern Himalayas, Zimbabwe) whose owner isn't reached by
+> setup's `every_country`, so `GOODS_setup_governorship_stockpiles` never seeded them. Fix = guard the
+> stockpile write on `has_variable`. **Consequence for this feature: the `COTTAGEIND` /
+> `GOODS_governorship_<good>_produced` chain is healthy for every real governorship — including all
+> CHI subjects, which are seeded and classify REAL. The named-building hooks (overwhelmingly Qing /
+> CHI-subject buildings) feed into govs that were never part of the flood.** See
+> [[imp19c-cottage-empty-var-flood]] for the full diagnosis. Proceed.
 >
-> **WHERE THE FLOOD LOGS COME FROM (boot logs.zip Aug-3 01:14, v2 probe `cottage_scale pre-multiply`,
-> gated `owner = { is_subject_of = c:CHI }`):** it fires ONLY in CHI-SUBJECT governorships, at the
-> cottage produce pass (`GOODS_setup_governorship_stockpiles → COTTAGEIND_produce_all →
-> produce_<good> → COTTAGEIND_scale_production`). The 15 flooding governorships, by hit count:
+> <details><summary>Stale pre-fix blocker text (kept for provenance — the table is probe visits, not errors)</summary>
 >
-> | Governorship | id | dumps |
+> ~~**WHERE THE FLOOD LOGS COME FROM (boot logs.zip Aug-3 01:14, v2 probe `cottage_scale pre-multiply`,
+> gated `owner = { is_subject_of = c:CHI }`):** it fires ONLY in CHI-SUBJECT governorships~~ [FALSE — the
+> gate only let it see CHI subjects; the real erroring set is the 9 uncolonized regions above]:
+>
+> | Governorship | id | dumps (= probe VISITS, not errors) |
 > |---|---|---|
 > | North Burma | 14 | 180 |
 > | Northeast Asia | 12 | 128 |
@@ -28,12 +39,7 @@
 > | Gansu | 123 | 60 |
 > | Eastern Himalayas | 152 | 60 |
 >
-> Common thread: ALL are CHI-subject-owned governorships (Qing tributaries/protectorates/
-> autonomous-governorships — Burma/Vietnam/Ryukyu/Korea/Tibet/Mongolia/Xinjiang/etc.). It is
-> mod-side (NOT Sobisonator's cottage engine, which faithfully reports the empty it is handed).
-> The `imp19c_setup.12` force-seed / potential-gate theory was CHECKED AND REJECTED (every seed's
-> potential passes; Borneo floods with NO seed). Actual trigger still UNKNOWN — the shared trait is
-> CHI-subject ownership, not seeded buildings. See [[imp19c-cottage-empty-var-flood]].
+> </details>
 
 **Branch:** to isolate off `merge-overnight` (follows the #133 MG isolation discipline).
 **Relates to:** #133 (manufactured-goods system), [logistics P2] arsenal/depot munitions hook,
