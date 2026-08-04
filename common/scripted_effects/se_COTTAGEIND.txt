@@ -183,23 +183,19 @@ COTTAGEIND_cache_all_values = {
 COTTAGEIND_scale_production = {
 	# Scope: Governorship
 	# Function: Scale the production from cottage industries to the appropriate level based on pops, industrialisation etc.
-	# [#MG-flood-diag v2 — READ-ONLY, REMOVABLE, LOG-ONLY] This effect's change_variable below
-	# throws "Variable not of the 'value' scope type. Type: empty" (~30 goods, ~8 scopes/boot).
-	# v1 probe was flawed twice: it used has_variable (TRUE even for a var SET to an empty
-	# value — so it can't see the actual failure), and the sibling probe ran POST-pass. Static
-	# tracing shows every operand (COTTAGEIND_produced_$output$, COTTAGEIND_pops_output, and
-	# their raw/svalue sources) bottoms out in a numeric literal, so an *empty* here is not
-	# explained by static reading — it needs runtime ground truth. debug_log_scopes dumps EVERY
-	# variable's RAW value on this scope (empties included) + the scope identity, at the failure
-	# site, BEFORE the erroring change_variable. Gated to CHI-subject governorships (where the
-	# starving-garrison provinces Urumqi/Lhasa/Ili live) to bound volume — a safe trigger, no
-	# numeric comparison on the suspect var. If the flood persists with NO dump captured, the
-	# erroring scopes are NOT CHI subjects (widen the gate). PURE LOG: no variable/logic change;
-	# silent outside -debug_mode. Remove this if block to revert.
-	if = {
-		limit = { exists = owner  owner = { is_subject_of = c:CHI } }
-		LOG_state = { sys = ECON  note = "cottage_scale pre-multiply: dump produced_$output$ + pops_output values for this CHI-subject governorship" }
-	}
+	# [#flood-fix] The $output$_stockpile write below threw "Type: empty" (~741/boot). Runtime forensic
+	# (19:40 boot, ECON_LOG_fx_classify_good) proved the empty operand is the stockpile TARGET, not the
+	# add operand: for every erroring scope src_produced/cottage_produced classify REAL, and the two
+	# multiplies above (which target COTTAGEIND_produced_$output$) never error — so produced_$output$ is
+	# a real number here. The failing scopes are exactly the 9 uncolonized frontier governorships owned
+	# by "Rebels [0]" (Western Sahara/Congo Basin/Zimbabwe/S.Siam/Sahel/Kalahari/E.Himalayas/Horn/
+	# Argentina) — the same class skipped by setup's every_country, so GOODS_setup_governorship_stockpiles
+	# never seeded their $output$_stockpile (classifier reached UNSET via NOT has_variable, i.e. genuinely
+	# unset, NOT set-to-empty). Guarding on has_variable is behaviour-preserving: every real gov is seeded
+	# (all 17 cottage outputs are in the unconditional manufactured-goods seed block), so the guard always
+	# passes there; only the never-seeded frontier govs are skipped, and a gov with no stockpile has
+	# nothing to accumulate into (an empty change_variable is a no-op anyway). Same pattern as the
+	# CONSUME/GT_split frontier guards (logfix #19).
 	change_variable = {
 		name = COTTAGEIND_produced_$output$
 		multiply = var:COTTAGEIND_pops_output
@@ -212,9 +208,12 @@ COTTAGEIND_scale_production = {
 			multiply = TECH_cottage_industry_overall_bonus
 		}
 	}
-	change_variable = {
-		name = $output$_stockpile
-		add = var:COTTAGEIND_produced_$output$
+	if = {
+		limit = { has_variable = $output$_stockpile }
+		change_variable = {
+			name = $output$_stockpile
+			add = var:COTTAGEIND_produced_$output$
+		}
 	}
 }
 
