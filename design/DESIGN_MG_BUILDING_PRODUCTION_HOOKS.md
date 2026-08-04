@@ -296,6 +296,82 @@ must not consume the finished good it makes.
 
 ---
 
+## 5.1 OPEN-QUESTION RULINGS (resolved in-design 2026-08-04, before impl)
+
+- **OQ1 — invention gating. RULED: gate each production term on the SAME invention the building's own
+  `allow` block requires** (verified in `qing_industry_buildings.txt`): textile mill = `tech_manufactories`
+  (:84), machine works = `tech_weapon_manufacturing` (:119), navy yard = `tech_steam_powered_ships` (:153).
+  Rationale: you cannot field the term before you can build the works, and each good's military demand
+  appears around the same tech horizon. Gate reads `owner = { invention = <tech> }` inside the compute,
+  exactly as the munitions walk gates on `tech_firearms` (:2756).
+- **OQ2 — steel/blast furnace. RULED: LEAVE (out of this pass).** `qing_steel_works`/`IND_blast_furnace`
+  carry `base_resources = 2` on iron provinces — that is the RAW iron layer, a DIFFERENT good from any
+  manufactured `construction_materials`/`steel`. Hooking them is a separate raw→manufactured conversion
+  question (§3.2/D3); this pass hooks ONLY the three purely-manufacturing modifier-only works that have
+  no `base_resources` today. `steel`, `construction_materials`, `machine_parts` all EXIST in
+  `is_manufactured_tradegood`, so a future pass is unblocked — just not now.
+- **OQ3 — ships. RULED: hook `naval_supplies` ONLY; DEFER `wooden_ships`/`steel_ships`.** naval_supplies
+  is a distinct manufactured good (naval stores/fitting-out), additive-correct with the yard's
+  `local_ship_recruit_speed` (which speeds RAISING ships, a different axis). wooden_ships/steel_ships
+  overlap the recruit-speed modifier and risk double-crediting hull construction — deferred to a ships
+  sub-phase, as the doc's OQ3 leaning suggested.
+- **OQ4 — output rates. RULED** (relative to arsenal=2 / depot=1):
+  - `qing_machine_works` → **early_munitions = 3** (East Asia's largest arms + machine-tool complex,
+    materially above a bare arsenal).
+  - `qing_textile_mill` → **clothing = 2** (the accessible first rung of factory light industry).
+  - `qing_navy_yard` → **naval_supplies = 2** (a major but single coastal yard).
+  Each is comparable to one arsenal, so the R1/R6 per-province stacking (works + estate + cottage) stays
+  bounded — a lone works nudges shortage down without swamping demand. Re-check in the §6.5 perf/calibration
+  pass against a typical governorship's demand; these are starting values, tunable in their own svalues.
+- **OQ5 — ROW. RULED: deliberately LEAVE `row_manufactory_building` abstract** (base_resources raw),
+  per asymmetric-fidelity ([[imp19c-china-granularity-rule]]). Confirmed, no ROW hook.
+- **OQ6 — add_building_level potential trap. N/A** — no new hook force-adds a building; the terms only
+  read `num_of_<building>`. Any future spawn event must still respect the city/potential gate.
+
+## 5.2 IMPLEMENTATION NOTES (2026-08-04, branch mg-building-production-hooks)
+
+Implemented all three confirmed hooks on the isolated branch:
+- **early_munitions ← qing_machine_works (rate 3)**: folded into the EXISTING
+  `GOODS_governorship_munitions_infra_output_compute` (GOODS_svalues.txt), under its own
+  `tech_weapon_manufacturing` gate (OQ1), so it rides the existing `munitions_infra_cached` cache for
+  free — no new cache var, no new walk (G4).
+  - **RIPPLE (intended, documented):** `GOODS_governorship_rifles_produced` (GOODS_svalues.txt:1773,
+    #281) reuses the munitions-infra term for rifle supply, gated on `tech_rifles`. So the machine
+    works now ALSO yields rifles at rate 3. This is historically correct — the Jiangnan Arsenal
+    (江南製造局) was the empire's principal RIFLE manufactory (Remington rolling-blocks, then Mauser
+    copies) — and it is supply-only + demand-capped (G3), so it cannot inflate the topbar. Kept
+    deliberately rather than splitting the term (which would need its own cache var and lose the
+    theme). Recorded so the coupling is visible.
+- **clothing ← qing_textile_mill (rate 2)**: NEW cached wrapper `GOODS_governorship_clothing_infra_output`
+  (+ `_compute`, `tech_manufactories` gate) added into `clothing_produced_mechanised`.
+- **naval_supplies ← qing_navy_yard (rate 2)**: NEW cached wrapper `..._naval_supplies_infra_output`
+  (+ `_compute`, `tech_steam_powered_ships` gate) added into `naval_supplies_produced_mechanised`.
+- **Cache writer (step A)**: extended `GOODS_cache_munitions_infra` (se_GOODS.txt) to also write
+  `clothing_infra_cached` + `naval_supplies_infra_cached` in the SAME per-governorship pass (called from
+  GOODS_governorship_produce_all + se_FUNC every_governorships). One walk per quarter, all three terms
+  (G4). Wrappers fall back to inline compute on a cache miss (correctness, never zeroed — perf #71 idiom).
+- **Per-building rates** live in own tunable svalues (GOODS_machine_works_munitions_output=3,
+  GOODS_textile_mill_clothing_output=2, GOODS_navy_yard_naval_supplies_output=2), mirroring
+  GOODS_arsenal_munitions_output=2. All disjoint from factory (`INDUSTRY_factories_assigned`) + cottage
+  (`COTTAGEIND_produced`) vars (R1). Braces balanced on all touched files.
+
+### 5.2.1 Where the infra term takes effect (verified — mirrors the arsenal exactly)
+The infra term is added into `GOODS_governorship_<good>_produced_mechanised`, which flows into the
+summed `GOODS_governorship_<good>_produced`. Two downstream consumers:
+1. **`DEMAND_difference_<good>` (DEMAND_svalues.txt:2565/2842/2858) = `_produced` − demand** — the
+   shortage/fulfilment driver that feeds the topbar income term. The named-building term reduces the
+   good's shortage HERE **regardless of whether a factory exists** — this is the mechanism that makes
+   the hook actually do something, and it is exactly how the arsenal munitions term already works.
+2. **The quarterly physical stockpile write** (se_GOODS.txt produce loop / `GOODS_governorship_produce_industry`)
+   is gated `has_variable = INDUSTRY_factories_assigned_<good>`. That var is seeded to 0 for EVERY
+   governorship at setup (se_INDUSTRY_setup.txt:6-39), so the gate — a HAS-variable check, not a
+   value>0 check — is ALWAYS true. Therefore a works-only province (0 factories) DOES write its themed
+   good to the physical stockpile too, via `_produced_mechanised` (into which the infra term is added
+   exactly once — no double-count). Both consumers (#1 shortage AND #2 stockpile) see the works output.
+   Verified by the adversarial review (2026-08-04): identical to the pre-existing arsenal behaviour.
+   [Corrected from an earlier draft note that wrongly assumed the gate suppressed the stockpile write
+   for a bare works — it does not, because the assignment var always exists.]
+
 ## 6. STAGING (per MG build rule: design → review → impl → review, small steps)
 1. **This doc → adversarial design review** (round 1). ✅ DONE 2026-08-02. Verdict: **premise TRUE
    (gap real, not closed by #133), audit complete, proceed.** Findings folded in: F1 (steel_works is
@@ -309,7 +385,17 @@ must not consume the finished good it makes.
 2. Impl step A: the cache-writer extension (one province walk writes all `<X>_infra_cached`). Review.
 3. Impl step B: ONE good end-to-end (clothing via `qing_textile_mill`) as the reference vertical —
    svalues + cache + demand-symmetry check + se_LOG wiring. Review.
-4. Impl step C: remaining confirmed hooks, one good per commit. Review each.
+4. Impl step C: remaining confirmed hooks, one good per commit. Review each. ✅ DONE 2026-08-04
+   (all three hooks impl'd together on branch mg-building-production-hooks).
+   **ADVERSARIAL REVIEW (round 2, post-impl) — 2026-08-04: CLEAN, no bugs.** Verified all six risk axes:
+   no double-count (three-channel disjointness holds; `_produced` vs `_mechanised` split honoured for
+   both new goods); rifles ripple benign (machine works → munitions AND rifles = two different goods/
+   stockpiles, tech_rifles gate intact, single-read of the compute); cache correct (writer runs at
+   governorship scope in all 3 call sites, computes use the same state×province walk, miss → inline
+   compute never zero); num_of_qing_*_building read at province scope (granary/arsenal precedent);
+   invention gates match each building's allow block; no undefined/unwired svalues; braces 1005/1005 +
+   423/423. Correction folded in: the assignment-var gate is a has_variable check on a var seeded to 0
+   for all govs, so a works-only province DOES write to the stockpile (§5.2.1 updated).
 5. Perf pass: confirm the cache holds; measure quarterly tick (compare `timetest_quarterly_tick`).
 6. Boot-test on the separate machine (PUSH first, [[imp19c-testing-on-other-machine]]).
 

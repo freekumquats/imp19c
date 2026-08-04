@@ -28,12 +28,25 @@ GOODS_cache_munitions_infra = {
 	# re-walked every province each time. Computing it once here collapses that to a single
 	# state×province traversal; the wrapper svalue reads var:munitions_infra_cached when
 	# present, else recomputes, so a missing cache degrades to correctness, never zeroed output.
+	# [MG-hook 2026-08-04] extended to also cache the NEW named-building infra terms (clothing via
+	# the textile mill, naval_supplies via the navy yard) in the SAME per-governorship pass, so all
+	# named-building production hooks share one cache-write cadence rather than each re-walking the
+	# provinces on every svalue read (G4, the required perf discipline in the design). The munitions
+	# term already folds in the machine-works count via its compute, so no separate write for it.
 	LOG_enter = { sys = ECON  fn = "GOODS_cache_munitions_infra" }
 	set_variable = {
 		name = munitions_infra_cached
 		value = GOODS_governorship_munitions_infra_output_compute
 	}
-	LOG_line = { sys = ECON  msg = "cached munitions-infra output for governorship" }
+	set_variable = {
+		name = clothing_infra_cached
+		value = GOODS_governorship_clothing_infra_output_compute
+	}
+	set_variable = {
+		name = naval_supplies_infra_cached
+		value = GOODS_governorship_naval_supplies_infra_output_compute
+	}
+	LOG_line = { sys = ECON  msg = "cached named-building infra output (munitions/clothing/naval_supplies) for governorship" }
 	LOG_exit = { sys = ECON  fn = "GOODS_cache_munitions_infra"  result = OK }
 }
 
@@ -1096,7 +1109,7 @@ GOODS_governorship_produce_all = {
 	# before the ~28 industrial-good reads below, so the cache is always current for
 	# this quarter (civilization_value drifts over time) and never stale.
 	GOODS_cache_industrialisation_bonus = yes
-	GOODS_cache_munitions_infra = yes # perf #71: cache arsenal/depot munitions output once per quarter
+	GOODS_cache_munitions_infra = yes # perf #71: cache named-building infra output (munitions+machine-works, clothing, naval_supplies) once per quarter [MG-hook 2026-08-04]
 	INDUSTRY_cache_employment_ratio = yes # [#133 I5] cache employment fill-ratio once per quarter (mechanised output scales by it)
 	GOODS_governorship_produce = {
 		do_if = produces_grain

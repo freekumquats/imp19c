@@ -2689,6 +2689,21 @@ GOODS_arsenal_munitions_output = {
 GOODS_depot_munitions_output = {
 	value = 1
 }
+# [MG-hook 2026-08-04, OQ4] the Jiangnan Arsenal / machine bureau (qing_machine_works_building) is the
+# flagship arms + machine-tool complex — a materially larger munitions producer than a bare arsenal.
+GOODS_machine_works_munitions_output = {
+	value = 3
+}
+# [MG-hook 2026-08-04, OQ4] the mechanised textile mill (qing_textile_mill_building) — the accessible
+# first rung of factory light industry, turning cotton/silk into cloth at scale.
+GOODS_textile_mill_clothing_output = {
+	value = 2
+}
+# [MG-hook 2026-08-04, OQ4] the Foochow Navy Yard (qing_navy_yard_building) — a major coastal shipyard;
+# its naval-stores output (distinct from ship recruit-speed, OQ3) feeds naval_supplies.
+GOODS_navy_yard_naval_supplies_output = {
+	value = 2
+}
 
 GOODS_governorship_early_munitions_produced_mechanised = {
 	# [#133 I2] MECHANISED-ONLY term (split-writer D1a): factory + concrete supply-infra
@@ -2764,6 +2779,25 @@ GOODS_governorship_munitions_infra_output_compute = {
 				add = {
 					value = num_of_military_depot_building
 					multiply = GOODS_depot_munitions_output
+				}
+			}
+		}
+	}
+	# [MG-hook 2026-08-04] the Qing machine works (江南製造局) adds early_munitions directly — the
+	# named-building production hook §D6 always intended (see DESIGN_MG_BUILDING_PRODUCTION_HOOKS.md).
+	# Its OWN invention gate (tech_weapon_manufacturing, per its allow block, OQ1), separate from the
+	# arsenal's tech_firearms gate, so the term appears exactly when the works can exist. Folded into
+	# THIS existing cached compute (not a new walk) so it rides the munitions_infra_cached cache for
+	# free (G4). Pure producer — supply only, no demand entry (G3).
+	if = {
+		limit = {
+			owner = { invention = tech_weapon_manufacturing }
+		}
+		every_governorship_state = {
+			every_state_province = {
+				add = {
+					value = num_of_qing_machine_works_building
+					multiply = GOODS_machine_works_munitions_output
 				}
 			}
 		}
@@ -2854,6 +2888,40 @@ GOODS_governorship_naval_supplies_produced_mechanised = {
 		add = INDUSTRY_production_naval_supplies
 		multiply = GOODS_governorship_bonus_to_industrial_production_from_industrialisation
 		multiply = INDUSTRY_employment_ratio # [#133 I5] scale factory output by employment fill-ratio
+	}
+	# [MG-hook 2026-08-04] the Qing navy yard (福州船政局) adds naval_supplies directly (naval stores,
+	# distinct from ship recruit-speed — OQ3). Cached wrapper (naval_supplies_infra_cached), pure
+	# producer (G3), disjoint from the factory/cottage vars (R1).
+	add = GOODS_governorship_naval_supplies_infra_output
+}
+
+GOODS_governorship_naval_supplies_infra_output = {
+	# Scope: Governorship. [MG-hook] Cached wrapper over the navy-yard naval-supplies walk.
+	if = {
+		limit = { has_variable = naval_supplies_infra_cached }
+		value = var:naval_supplies_infra_cached
+	}
+	else = {
+		value = GOODS_governorship_naval_supplies_infra_output_compute
+	}
+}
+
+GOODS_governorship_naval_supplies_infra_output_compute = {
+	# Scope: Governorship. The navy-yard naval-supplies walk. Gated on tech_steam_powered_ships (the
+	# yard's own allow-block invention, OQ1).
+	value = 0
+	if = {
+		limit = {
+			owner = { invention = tech_steam_powered_ships }
+		}
+		every_governorship_state = {
+			every_state_province = {
+				add = {
+					value = num_of_qing_navy_yard_building
+					multiply = GOODS_navy_yard_naval_supplies_output
+				}
+			}
+		}
 	}
 }
 
@@ -2988,6 +3056,42 @@ GOODS_governorship_clothing_produced_mechanised = {
 		multiply = owner.MODIFIER_textiles_productivity
 		multiply = GOODS_governorship_bonus_to_industrial_production_from_industrialisation
 		multiply = INDUSTRY_employment_ratio # [#133 I5] scale factory output by employment fill-ratio
+	}
+	# [MG-hook 2026-08-04] the Qing textile mill (機器織布局) adds clothing directly — the named-building
+	# production hook. Cached wrapper (clothing_infra_cached) so it rides the same one-pass cache as
+	# munitions (G4). Pure producer — supply only (G3); the factory-assignment path above and the
+	# cottage path in _produced key off different vars, so no double-count (R1).
+	add = GOODS_governorship_clothing_infra_output
+}
+
+GOODS_governorship_clothing_infra_output = {
+	# Scope: Governorship. [MG-hook] Cached wrapper over the textile-mill clothing walk; read the
+	# cache if present, else compute inline (never zero on a cache miss) — the perf #71 idiom.
+	if = {
+		limit = { has_variable = clothing_infra_cached }
+		value = var:clothing_infra_cached
+	}
+	else = {
+		value = GOODS_governorship_clothing_infra_output_compute
+	}
+}
+
+GOODS_governorship_clothing_infra_output_compute = {
+	# Scope: Governorship. The textile-mill clothing walk. Gated on tech_manufactories (the mill's
+	# own allow-block invention, OQ1), so the term appears exactly when the mill can be built.
+	value = 0
+	if = {
+		limit = {
+			owner = { invention = tech_manufactories }
+		}
+		every_governorship_state = {
+			every_state_province = {
+				add = {
+					value = num_of_qing_textile_mill_building
+					multiply = GOODS_textile_mill_clothing_output
+				}
+			}
+		}
 	}
 }
 
