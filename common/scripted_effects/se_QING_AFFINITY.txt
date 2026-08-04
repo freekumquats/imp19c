@@ -190,7 +190,10 @@ QING_char_bind = {
 	}
 	if = {
 		limit = { var:qing_char_affinity >= 70 }
-		add_loyalty = loyalty_qing_congenial
+		# [loyalty-calibration 2026-08-04] APPLY ONCE via the shared helper (idempotent + sheds the
+		# opposite band). QING_char_bind is called from many re-bind pulses; a bare add_loyalty
+		# re-stamped every call.
+		QING_apply_congenial_once = yes
 		# a genuinely congenial servant becomes a friend of the throne
 		if = {
 			limit = {
@@ -204,7 +207,10 @@ QING_char_bind = {
 	}
 	else_if = {
 		limit = { var:qing_char_affinity <= 30 }
-		add_loyalty = loyalty_qing_estranged
+		# [loyalty-calibration 2026-08-04] APPLY ONCE via the shared helper. The old bare add_loyalty
+		# here, re-stamped every pulse, is what pinned low-affinity chars (Guanting via this path;
+		# Songchun/Fulu also via QING_war_review_commanders, now likewise guarded) toward the floor.
+		QING_apply_estranged_once = yes
 		# a deeply incompatible servant turns rival
 		if = {
 			limit = {
@@ -218,6 +224,56 @@ QING_char_bind = {
 	}
 	LOG_line = { sys = QING  msg = "char bind applied: affinity= for" }
 	LOG_exit = { sys = QING  fn = "QING_char_bind"  result = OK }
+}
+
+# ======================================================================
+# APPLY-ONCE loyalty helpers (this = a character). [loyalty-calibration 2026-08-04]
+# loyalty_qing_estranged / _congenial are applied from SEVERAL quarterly pulses
+# (QING_char_bind here + QING_war_review_commanders in se_QING_WAR). A bare
+# add_loyalty re-stamps every pulse, piling toward the floor/ceiling. These helpers
+# make the application idempotent (add only if not already carried) and shed the
+# OPPOSITE band on a cross, so a character carries at most one of the pair and it
+# lands exactly once. has_loyalty / remove_loyalty are proven (on_office_gained.txt,
+# 00_ambitions.txt). Call these instead of a bare add_loyalty at any recurring site.
+# ======================================================================
+QING_apply_estranged_once = {
+	# Scope: character
+	if = {
+		limit = { has_loyalty = loyalty_qing_congenial }
+		remove_loyalty = loyalty_qing_congenial
+	}
+	if = {
+		limit = { NOT = { has_loyalty = loyalty_qing_estranged } }
+		add_loyalty = loyalty_qing_estranged
+	}
+}
+QING_apply_congenial_once = {
+	# Scope: character
+	if = {
+		limit = { has_loyalty = loyalty_qing_estranged }
+		remove_loyalty = loyalty_qing_estranged
+	}
+	if = {
+		limit = { NOT = { has_loyalty = loyalty_qing_congenial } }
+		add_loyalty = loyalty_qing_congenial
+	}
+}
+# [loyalty-calibration 2026-08-04] Army-collapse pressure (MO-ENH #3) is a DISTINCT modifier that
+# coexists WITH the congenial/estranged pair (it must not be shed by the well-managed branch — see
+# loyalty def note). Apply-once; the paired remove restores it when the central armies recover.
+QING_apply_army_collapse_once = {
+	# Scope: character
+	if = {
+		limit = { NOT = { has_loyalty = loyalty_qing_army_collapse } }
+		add_loyalty = loyalty_qing_army_collapse
+	}
+}
+QING_remove_army_collapse = {
+	# Scope: character
+	if = {
+		limit = { has_loyalty = loyalty_qing_army_collapse }
+		remove_loyalty = loyalty_qing_army_collapse
+	}
 }
 
 # ======================================================================

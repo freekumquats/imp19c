@@ -677,6 +677,215 @@ SUBJ_QING_reparent_sub_subjects = {
 	}
 }
 
+# ======================================================================
+# [#task-7/#task-8 2026-08-04] SUBJ_QING_resolve_integ_actors — resolve the two on-the-ground
+# actors (the resident Amban + the imperial garrison) whose presence, loyalty, and relative
+# strength gate the subject-integration event choices. Called from each integration event's
+# immediate at COUNTRY scope (ROOT = CHI); expects scope:target = the subject governorship.
+# Reuses the EXISTING per-subject bookkeeping — qing_amban_here (se_QING_AMBAN.txt, a var on the
+# subject holding the resident amban's CHARACTER scope) and the CHI garrison standing on the
+# subject's soil (the same every_army + unit_location.owner walk QING_fgar_scan uses in
+# se_QING_FRONTIER.txt) — so NO new persistent state is introduced. Writes only SCRATCH country
+# vars on ROOT, cleared by SUBJ_QING_clear_integ_actors at the event tail. All comparisons use a
+# LITERAL RHS (the RHS-comparison rule); the amban char scope is reached via the proven
+# var-holding-a-char-scope idiom (qing_amban_here, se_QING_AMBAN.txt:223).
+#
+# Outputs (all on ROOT):
+#   integ_amban_present   1 if a live resident amban sits in scope:target (else var absent)
+#   scope:integ_amban     saved character scope of that amban (only when present)
+#   integ_amban_band      0 wavering (loyalty<40) / 1 steady (40-70) / 2 staunch (>70)
+#   integ_garrison_size   summed unit_size of CHI armies standing on scope:target's soil (0 = none)
+#   integ_subject_size    summed unit_size of the subject's OWN armies (its capacity to resist)
+#   integ_garrison_edge   0 subject outweighs / no garrison, 1 rough parity, 2 garrison dominant
+# ======================================================================
+SUBJ_QING_resolve_integ_actors = {
+	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_resolve_integ_actors" }
+	# start clean each resolve (idempotent — an event may re-run the immediate on refire)
+	SUBJ_QING_clear_integ_actors = yes
+	# init the band var UNCONDITIONALLY so every option trigger/effect can read it without a
+	# missing-var fetch: 0 also cleanly means "no amban present" (present flag distinguishes an
+	# ABSENT amban from a WAVERING one, but band 0 covers both for the force-branch flavour).
+	set_variable = { name = integ_amban_band  value = 0 }
+
+	# --- AMBAN: present + loyalty band --------------------------------------------------
+	if = {
+		limit = {
+			exists = scope:target
+			scope:target = {
+				has_variable = qing_amban_here
+				var:qing_amban_here = { is_alive = yes  employer = ROOT }
+			}
+		}
+		scope:target.var:qing_amban_here = { save_scope_as = integ_amban }
+		set_variable = { name = integ_amban_present  value = 1 }
+		if = {
+			limit = { scope:integ_amban = { loyalty > 70 } }
+			set_variable = { name = integ_amban_band  value = 2 }
+		}
+		else_if = {
+			limit = { scope:integ_amban = { loyalty >= 40 } }
+			set_variable = { name = integ_amban_band  value = 1 }
+		}
+		# else leaves band = 0 (wavering resident)
+		LOG_line = { sys = SUBJ  msg = "integ actors: resident amban present, loyalty band above, for subject" }
+	}
+
+	# --- GARRISON strength: sum CHI army unit_size standing on the subject's soil -------
+	set_variable = { name = integ_garrison_size  value = 0 }
+	every_army = {
+		limit = {
+			is_moving = no
+			exists = unit_location
+			unit_location = { exists = owner  owner = scope:target }
+		}
+		# accumulate into the outer country var via the proven <iterated> = { ROOT = { add = prev.X } }
+		# idiom (se_QING_COUNCIL.txt:591); prev inside ROOT resolves back to the iterated army here.
+		ROOT = { change_variable = { name = integ_garrison_size  add = prev.unit_size } }
+	}
+
+	# --- SUBJECT strength: sum the subject's OWN army unit_size --------------------------
+	set_variable = { name = integ_subject_size  value = 0 }
+	scope:target = {
+		every_army = {
+			limit = { exists = unit_location }
+			ROOT = { change_variable = { name = integ_subject_size  add = prev.unit_size } }
+		}
+	}
+
+	# --- GARRISON EDGE band: garrison vs subject. Compare via a scratch delta so the RHS
+	#     stays a literal (the RHS-comparison rule bars a var-ref on a comparison RHS). -----
+	set_variable = { name = integ_garrison_edge  value = 0 }
+	if = {
+		limit = { var:integ_garrison_size >= 1 }
+		# delta = garrison - subject; >0 garrison bigger, well below 0 subject bigger.
+		set_variable = { name = integ_edge_delta  value = var:integ_garrison_size }
+		change_variable = { name = integ_edge_delta  subtract = var:integ_subject_size }
+		if = {
+			limit = { var:integ_edge_delta >= 4 }
+			set_variable = { name = integ_garrison_edge  value = 2 }   # garrison clearly dominant
+		}
+		else_if = {
+			limit = { var:integ_edge_delta >= -3 }
+			set_variable = { name = integ_garrison_edge  value = 1 }   # rough parity
+		}
+		# else stays 0 (subject clearly outweighs the garrison)
+		remove_variable = integ_edge_delta
+	}
+	LOG_line = { sys = SUBJ  msg = "integ actors: garrison size / subject size / edge band computed for subject" }
+	LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_resolve_integ_actors"  result = OK }
+}
+
+# Clear the scratch actor vars. Scope: COUNTRY (ROOT = CHI). Called at each event's option tail
+# (and at the top of resolve, for idempotency). scope:integ_amban is a saved scope, not a var —
+# it simply falls out of use; only the flag/band/size vars need removing.
+SUBJ_QING_clear_integ_actors = {
+	if = { limit = { has_variable = integ_amban_present } remove_variable = integ_amban_present }
+	if = { limit = { has_variable = integ_amban_band }    remove_variable = integ_amban_band }
+	if = { limit = { has_variable = integ_garrison_size } remove_variable = integ_garrison_size }
+	if = { limit = { has_variable = integ_subject_size }  remove_variable = integ_subject_size }
+	if = { limit = { has_variable = integ_garrison_edge } remove_variable = integ_garrison_edge }
+	if = { limit = { has_variable = integ_edge_delta }    remove_variable = integ_edge_delta }
+}
+
+# ======================================================================
+# [#task-7 2026-08-04] SUBJ_QING_crush_revolt_war — the "crush the rising" option made a REAL war.
+# A subject in open armed revolt has in effect thrown off the yoke, so crushing it is a
+# RE-SUBJUGATION war, not an abstract counter tick. Proven idiom (se_QING_JAPAN_PREPERRY.txt:199-214
+# release_subject + civil war; imp19c_setup_events.txt:54 FUNC_declare_war_with_wargoal_province):
+# free the subject, reparent its sub-subjects first (so they don't dangle under a vanishing overlord
+# — SUBJ_QING_reparent_sub_subjects), then declare a conquer war to take it back by force. Scope:
+# COUNTRY (ROOT = CHI); expects scope:target. Guarded so a non-subject / landless target no-ops.
+# ======================================================================
+SUBJ_QING_crush_revolt_war = {
+	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_crush_revolt_war" }
+	if = {
+		limit = {
+			exists = scope:target
+			scope:target = { is_subject_of = ROOT }
+			scope:target = { any_owned_province = { count >= 1 } }
+		}
+		# preserve the sub-subject chain before the intermediary is freed (proven helper)
+		SUBJ_QING_reparent_sub_subjects = yes
+		# anchor the wargoal on one of the rebel's own provinces
+		scope:target = {
+			ordered_owned_province = { order_by = total_population  max = 1  save_scope_as = integ_wargoal_prov }
+		}
+		# [review-fix low#1] clear the integration meter on the rebel BEFORE freeing it, so if CHI
+		# re-subjugates it later it re-enters the chain fresh rather than carrying a stale progress=5
+		# meter that could fire the .30 capstone immediately. Mirrors SUBJ_QING_absorb_subject's clear.
+		scope:target = { SUBJ_QING_clear_integration_state = yes }
+		# free the rebel, then declare a real re-subjugation war on it
+		release_subject = scope:target
+		FUNC_declare_war_with_wargoal_province = {
+			war_goal = conquer_wargoal
+			province = scope:integ_wargoal_prov
+			target = scope:target
+		}
+		LOG_line = { sys = SUBJ  msg = "crush-revolt: freed the rebel dependency and declared a re-subjugation war on subject" }
+		LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_crush_revolt_war"  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_crush_revolt_war"  reason = "target not a live landed subject — war skipped" }
+	}
+}
+
+# ======================================================================
+# [#task-7 2026-08-04] SUBJ_QING_marry_into_chieftain — the "marry into his family" option made a
+# REAL marriage. Weds an unmarried adult of the imperial house to an unmarried adult child of the
+# chieftain (scope:target.current_ruler), binding the two houses. Proven idiom (se_MARRIAGE.txt:305-372,
+# Invictus me_bithynia): pick the partner child (opposite sex) via ordered_child, save it, then
+# marry_character on our chosen child. Fully guarded: if either side has no eligible child the co-opt
+# still lands (gold/prestige, in the calling option) — only the wedding itself is skipped. Scope:
+# COUNTRY (ROOT = CHI); expects scope:target with a live ruler.
+# ======================================================================
+SUBJ_QING_marry_into_chieftain = {
+	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_marry_into_chieftain" }
+	if = {
+		limit = {
+			exists = scope:target
+			scope:target = { exists = current_ruler  current_ruler = { is_alive = yes } }
+			exists = current_ruler
+		}
+		# 1. the chieftain's child — an unmarried adult daughter (opposite sex to our groom). order_by
+		#    age + max=1 picks one eligible child deterministically (same idiom as se_MARRIAGE.txt:316).
+		scope:target.current_ruler = {
+			ordered_child = {
+				limit = { is_alive = yes  is_adult = yes  is_married = no  prisoner = no  is_female = yes }
+				order_by = age
+				max = 1
+				save_scope_as = integ_bride
+			}
+		}
+		# 2. our house's groom — an unmarried adult male of the imperial family; wed to the bride.
+		if = {
+			limit = { exists = scope:integ_bride }
+			current_ruler = {
+				ordered_child = {
+					limit = { is_alive = yes  is_adult = yes  is_married = no  prisoner = no  is_male = yes }
+					order_by = age
+					max = 1
+					marry_character = scope:integ_bride
+					save_scope_as = integ_groom
+				}
+			}
+			if = {
+				limit = { exists = scope:integ_groom }
+				LOG_line = { sys = SUBJ  msg = "co-opt: wed an imperial prince to the chieftain's daughter, subject" }
+			}
+			else = {
+				LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_marry_into_chieftain"  reason = "no eligible imperial groom — wedding skipped (co-opt gold/prestige still applied)" }
+			}
+		}
+		else = {
+			LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_marry_into_chieftain"  reason = "chieftain has no eligible daughter — wedding skipped (co-opt gold/prestige still applied)" }
+		}
+		LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_marry_into_chieftain"  result = OK }
+	}
+	else = {
+		LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_marry_into_chieftain"  reason = "no live chieftain ruler / no imperial ruler — wedding skipped" }
+	}
+}
+
 
 # ---- [#314 B17] TRIBUTE SIZE selector -----------------------------------
 # Repurposes the three formerly-dead "Overseer" policy toggles into a per-subject

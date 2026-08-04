@@ -254,6 +254,68 @@ QING_validate_one_position = {
 	}
 }
 
+# ======================================================================
+# [#task-2 2026-08-04] QING_scorned_office_credit — CREDIT Qing court service to the vanilla
+# Scorned Family mechanic. The engine penalizes the loyalty of every member of an under-employed
+# ("scorned") family, counting only ENGINE job/office slots. The mod's own court positions — the
+# Grand Council great offices (qing_office_held) and the sub-positions (Inspecting Censor, Amban,
+# Imperial Guardsman, Southern/Upper Study scholar, Zongli diplomat, palace eunuch, harem consort) —
+# are custom variables the engine's counter never sees, so a grandee genuinely serving the throne
+# still reads as idle and is wrongly scorned. This sweep grants him an offsetting loyalty credit
+# (qing_office_family_credit for a great office, qing_subpos_family_credit for a sub-position) ONLY
+# while BOTH conditions hold — his family is scorned AND he holds a position — and strips it the
+# moment either lapses (family recovers, or he loses the post), so the credit tracks the phantom
+# penalty exactly. A great office outranks a sub-position, so at most ONE tier is carried (the
+# great-office branch strips any stale sub-position credit first). is_scorned is a family-scope
+# trigger; is_minor_character guards the minor-char (no real family) case. Scope: COUNTRY (CHI),
+# called from QING_GOV_pulse alongside QING_validate_one_position. O(court); read-only on family state.
+# ======================================================================
+QING_scorned_office_credit = {
+	every_character = {
+		limit = { employer = ROOT  is_alive = yes }
+		if = {
+			# GREAT OFFICE + scorned family -> the strong credit (and shed any sub-position credit).
+			limit = {
+				has_variable = qing_office_held
+				is_minor_character = no
+				family = { is_scorned = yes }
+			}
+			if = { limit = { has_character_modifier = qing_subpos_family_credit } remove_character_modifier = qing_subpos_family_credit }
+			if = {
+				limit = { NOT = { has_character_modifier = qing_office_family_credit } }
+				add_character_modifier = { name = qing_office_family_credit  duration = -1 }
+			}
+		}
+		else_if = {
+			# SUB-POSITION + scorned family -> the milder credit (and shed any stale great-office credit).
+			limit = {
+				is_minor_character = no
+				family = { is_scorned = yes }
+				OR = {
+					has_variable = qing_zongli_diplomat
+					has_variable = qing_is_censor_inspector
+					has_variable = qing_is_imperial_guardsman
+					has_variable = qing_is_southernstudy
+					has_variable = qing_is_upperstudy
+					has_variable = qing_amban_marker
+					has_variable = qing_is_palace_eunuch
+					has_variable = qing_is_harem_consort
+				}
+			}
+			if = { limit = { has_character_modifier = qing_office_family_credit } remove_character_modifier = qing_office_family_credit }
+			if = {
+				limit = { NOT = { has_character_modifier = qing_subpos_family_credit } }
+				add_character_modifier = { name = qing_subpos_family_credit  duration = -1 }
+			}
+		}
+		else = {
+			# family recovered, or he left the post / lost his family standing -> strip both credits.
+			if = { limit = { has_character_modifier = qing_office_family_credit } remove_character_modifier = qing_office_family_credit }
+			if = { limit = { has_character_modifier = qing_subpos_family_credit } remove_character_modifier = qing_subpos_family_credit }
+		}
+	}
+}
+
 QING_council_recompute = {
 	# [#103] se_LOG enter/exit wiring (council-is-offices rewrite)
 	LOG_enter = { sys = QING  fn = "QING_council_recompute" }

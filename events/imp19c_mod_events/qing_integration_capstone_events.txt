@@ -57,6 +57,9 @@ qing_integ.30 = {
 
 	immediate = {
 		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.30 (capstone) overlord=[ROOT.GetTag] subject=[scope:target.GetTag] progress=[scope:target.MakeScope.GetVariable('SUBJ_integration_progress').GetValue|0]/5" }
+		# [#task-8] resolve the resident amban + garrison so the coercive path can key off a
+		# garrison being on the spot (a coercive absorb with no banner troops present is dearer).
+		SUBJ_QING_resolve_integ_actors = yes
 	}
 
 	# --- Grand ceremony: hold a full investiture festival ----------------
@@ -70,6 +73,7 @@ qing_integ.30 = {
 		add_legitimacy = 40
 		add_legitimacy = 10
 		add_stability = 5
+		SUBJ_QING_clear_integ_actors = yes
 		# Bureau capacity is taxed by the administrative overhead of the
 		# newly incorporated provinces, but the ceremonial legitimacy offsets it.
 		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = -5 }
@@ -100,6 +104,7 @@ qing_integ.30 = {
 		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = -10 }
 		# [#subj-integ-rework 2026-07-22] authorize the engine handoff (see option .a).
 		SUBJ_QING_authorize_integration = yes
+		SUBJ_QING_clear_integ_actors = yes
 		add_country_modifier = {
 			name = qing_integ_new_circuit_bureaucratic
 			duration = 1460
@@ -114,10 +119,22 @@ qing_integ.30 = {
 		custom_tooltip = "qing_integ.30.c.tt"
 		add_tyranny = 8
 		add_aggressive_expansion = 8
-		add_stability = -5
+		# [#task-8] a garrison already on the spot (edge >= 1) means the "garrison first" model is
+		# cheaper on stability and provokes a milder aftershock; with no banner troops present the
+		# coercion is a raw imposition and bites harder.
+		if = {
+			limit = { has_variable = integ_garrison_edge  var:integ_garrison_edge >= 1 }
+			add_stability = -3
+			LOG_line = { sys = SUBJ  msg = "capstone coercive: garrison on the spot eases the imposition, subject=[scope:target.GetTag]" }
+		}
+		else = {
+			add_stability = -5
+			LOG_line = { sys = SUBJ  msg = "capstone coercive: no garrison present — a raw imposition, subject=[scope:target.GetTag]" }
+		}
 		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = -8 }
 		# [#subj-integ-rework 2026-07-22] authorize the engine handoff (see option .a).
 		SUBJ_QING_authorize_integration = yes
+		SUBJ_QING_clear_integ_actors = yes
 		add_country_modifier = {
 			name = qing_integ_new_circuit_coercive
 			duration = 1825
@@ -277,6 +294,9 @@ qing_integ.41 = {
 				}
 			}
 		}
+		# [#task-8] resolve the two on-the-ground actors (resident amban + imperial garrison)
+		# whose presence, loyalty, and relative strength gate the options below.
+		SUBJ_QING_resolve_integ_actors = yes
 	}
 
 	# --- Conciliate: roll back the decree and restore autonomy -----------
@@ -304,27 +324,82 @@ qing_integ.41 = {
 				add_prominence = 10
 			}
 		}
+		SUBJ_QING_clear_integ_actors = yes
+	}
+
+	# --- [#task-8] The resident AMBAN negotiates a settlement -------------
+	# Shown only when a STAUNCH resident amban (loyalty > 70) sits in the dependency: he knows
+	# the chieftain and can talk him down. A cheap de-escalation — a modest rollback, peace kept,
+	# and the amban's standing rises for the service. Absent / wavering amban => option hidden
+	# (and the "amban flees" flavour fires under the crush/fortress branches instead).
+	option = {
+		name = "qing_integ.41.d"
+		custom_tooltip = "qing_integ.41.d.tt"
+		trigger = {
+			has_variable = integ_amban_present
+			var:integ_amban_band = 2
+			exists = scope:integ_amban
+		}
+		SUBJ_QING_reduce_integration = { steps = 1 }
+		add_stability = 2
+		# the amban spends his personal standing to broker the peace
+		scope:integ_amban = {
+			add_prominence = 10
+			add_popularity = 5
+		}
+		if = {
+			limit = { exists = scope:target.current_ruler }
+			scope:target.current_ruler = { add_loyalty = loyalty_qing_delta_p10 }
+		}
+		LOG_line = { sys = SUBJ  msg = "resistance NEGOTIATED by resident amban subject=[scope:target.GetTag]" }
+		SUBJ_QING_clear_integ_actors = yes
 	}
 
 	# --- Crush: send in the Green Standard Army to suppress the rising ---
-	# The Qianlong model in the second Jinchuan War (1771-76): a massive
-	# expedition (60,000 troops, 70M taels) that crushed the Gyalrong
-	# chieftains but left the treasury drained. Military + tyranny cost.
+	# [#task-7] Now a REAL war. A dependency in open armed revolt has thrown off the yoke — so the
+	# crush is a re-subjugation WAR (release_subject + declare a conquer war), not an abstract tick.
+	# [#task-8] Gated on the means to prosecute it: a garrison at rough parity or better (edge >= 1)
+	# OR a treasury deep enough to field a fresh expedition. When the garrison is DOMINANT (edge 2)
+	# it marches out and the war opens with the rebel already pressed (cheaper); when it can only
+	# hold its fortress (edge <= 1) the campaign is the full Jinchuan bloodletting. A wavering /
+	# absent amban abandons his post as the fighting starts.
 	option = {
 		name = "qing_integ.41.b"
 		custom_tooltip = "qing_integ.41.b.tt"
-		trigger = { treasury >= 150 }
-		add_treasury = -150
+		trigger = {
+			OR = {
+				treasury >= 150
+				AND = { has_variable = integ_garrison_edge  var:integ_garrison_edge >= 1 }
+			}
+		}
+		# cost scales with whether the garrison can carry the fight: a dominant garrison (edge 2)
+		# marches out and the expedition is cheaper; otherwise it is the full costly campaign.
+		if = {
+			limit = { has_variable = integ_garrison_edge  var:integ_garrison_edge = 2 }
+			add_treasury = -80
+			add_war_exhaustion = 1
+			LOG_line = { sys = SUBJ  msg = "crush: dominant garrison marches out to break the rising, subject=[scope:target.GetTag]" }
+		}
+		else = {
+			add_treasury = -150
+			add_war_exhaustion = 3
+			LOG_line = { sys = SUBJ  msg = "crush: garrison holds its fortress; a full field expedition is mounted, subject=[scope:target.GetTag]" }
+		}
 		add_tyranny = 10
 		add_aggressive_expansion = 10
-		add_war_exhaustion = 3
 		add_stability = -5
-		# The subject resents the brutal hand
-		add_country_modifier = {
-			name = qing_integ_frontier_resentment
-			duration = 1825
+		# a wavering / absent amban abandons his post when the shooting starts (flavour + a small ding)
+		if = {
+			limit = {
+				OR = {
+					NOT = { has_variable = integ_amban_present }
+					var:integ_amban_band = 0
+				}
+			}
+			add_legitimacy = -3
+			LOG_line = { sys = SUBJ  msg = "crush: no steady amban on the spot — the resident flees his post, subject=[scope:target.GetTag]" }
 		}
-		# Local unrest
+		# Local unrest in the rebel heartland (captured before the subject is freed).
 		if = {
 			limit = { exists = scope:resistance_province }
 			scope:resistance_province = {
@@ -334,8 +409,10 @@ qing_integ.41 = {
 				}
 			}
 		}
-		# But the process continues (no setback)
-		LOG_line = { sys = SUBJ  msg = "resistance CRUSHED subject=[scope:target.GetTag]" }
+		# [#task-7] the actual war: free the rebel and declare a re-subjugation conquer war.
+		SUBJ_QING_crush_revolt_war = yes
+		LOG_line = { sys = SUBJ  msg = "resistance CRUSHED (real war declared) subject=[scope:target.GetTag]" }
+		SUBJ_QING_clear_integ_actors = yes
 	}
 
 	# --- Co-opt: bribe the chieftain, marry into his family, grant titles -
@@ -368,6 +445,10 @@ qing_integ.41 = {
 				duration = 1825
 			}
 		}
+		# [#task-7] "marry into his family" made LITERAL: wed an imperial prince to the chieftain's
+		# daughter. Fully guarded — if either house lacks an eligible child the co-opt still lands
+		# on the gold/prestige above; only the wedding is skipped.
+		SUBJ_QING_marry_into_chieftain = yes
 		# The subject itself gains a relationship buff
 		add_country_modifier = {
 			name = qing_integ_imperial_favor
@@ -375,5 +456,6 @@ qing_integ.41 = {
 		}
 		# Integration proceeds smoothly (no setback)
 		LOG_line = { sys = SUBJ  msg = "resistance CO-OPTED subject=[scope:target.GetTag] chieftain=[scope:target.current_ruler.GetName]" }
+		SUBJ_QING_clear_integ_actors = yes
 	}
 }
