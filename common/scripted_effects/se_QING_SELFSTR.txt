@@ -110,6 +110,43 @@ QING_selfstr_build = {
 	LOG_exit = { sys = QING  fn = "QING_selfstr_build"  result = OK }
 }
 
+# [#41 2026-08-05] Good-targeted variant of QING_selfstr_build. The heavy-industry buildings
+# want their resource on the doorstep — a steel works multiplies an IRON province's output
+# (base_resources=2), a colliery a COAL province's — so placing them on the most-POPULOUS
+# province (what QING_selfstr_build does) would raise them where they yield nothing. This
+# prefers an owned province carrying the target trade good $GOOD$ (idempotent: skips one that
+# already has the building), and only if none exists falls back to the most-populous province
+# so the reward is never silently lost. add_building_level bypasses the building `allow` invention
+# gate (build-menu only) and these three buildings have NO `potential` block, so placement always
+# lands. $B$ = building key, $GOOD$ = trade good to prefer.
+QING_selfstr_build_on_good = {
+	LOG_enter = { sys = QING  fn = "QING_selfstr_build_on_good" }
+	if = {
+		# preferred: an owned province of the right good that lacks the building
+		limit = { any_owned_province = { trade_goods = $GOOD$  NOT = { has_building = $B$ } } }
+		ordered_owned_province = {
+			limit = { trade_goods = $GOOD$  NOT = { has_building = $B$ } }
+			order_by = total_population
+			max = 1
+			add_building_level = $B$
+		}
+		LOG_line = { sys = QING  msg = "selfstr built industry on target-good province for" }
+	}
+	else_if = {
+		# fallback: no matching-good province — place on the most-populous owned province
+		# so the mission reward is delivered rather than lost.
+		limit = { any_owned_province = { count >= 1  NOT = { has_building = $B$ } } }
+		ordered_owned_province = {
+			limit = { NOT = { has_building = $B$ } }
+			order_by = total_population
+			max = 1
+			add_building_level = $B$
+		}
+		LOG_line = { sys = QING  msg = "selfstr built industry (no target-good province; placed on most-populous) for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_selfstr_build_on_good"  result = OK }
+}
+
 # ======================================================================
 # NAMED-INSTITUTION FOUNDING EFFECTS — one per Self-Strengthening mission task.
 # Each grants the institution's lasting country modifier, advances the movement,

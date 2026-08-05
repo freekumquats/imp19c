@@ -50,4 +50,75 @@ Braces balanced (212/212).
 
 **Files:** `common/scripted_effects/se_QING_BUILDINGS.txt` only.
 
-**Status:** implemented; pending adversarial code-review before commit.
+**Review:** code-review found ONE real defect (MEDIUM/HIGH): the new 3rd guard branch did an
+`overlord = {}` scope-switch WITHOUT the `exists = overlord` guard — CHI itself hits this macro
+(Liangzhou/Chahar/Xining) and has no overlord, which would re-trigger the 41,005-line overlord
+flood that commit 7b88e9962 fixed mod-wide. FIXED: guarded with `exists = overlord` (matching
+qing_great_mosque_building:257 and the 7-site convention). Re-verified 0 problems, braces 213/213.
+
+**Status:** DONE — committed `6061c7f28`.
+
+---
+
+## #41 — Add ungranted modern-industry buildings as Self-Strengthening mission rewards — DONE
+
+**Why:** three modern `qing_*` industrial buildings had NO `add_building_level` grant anywhere
+(not seeded, not mission-granted) — reachable only via the invention-gated player build menu,
+which may never open. User: add them as mission rewards; add new missions if necessary.
+
+**Investigation (corrected the candidate list first, per the flag I raised):**
+- Caught a false-grep: my initial "ungranted" scan matched only literal `add_building_level`,
+  MISSING the `QING_selfstr_build = { building = X }` indirection. Re-ran catching all grant
+  idioms. Results:
+  - `qing_tongwen_guan_building` — **already granted** via `QING_selfstr_found_tongwen`
+    (se_QING_SELFSTR.txt). EXCLUDED.
+  - `qing_cotton_workshop_building` — a SEEDED specialty building (se_QING_BUILDINGS.txt:48).
+    EXCLUDED (not modern-industry; user's original list conflated it).
+  - `qing_n_poppy_farm_building` — buildable-from-start (poppy long cultivated), not gated.
+    EXCLUDED.
+- TRUE ungranted modern-industry set = **3**: `qing_steel_works_building` (漢陽鐵廠),
+  `qing_coal_mine_building` (開平礦務局), `qing_textile_mill_building` (機器織布局).
+
+**No new missions needed** — the Self-Strengthening tree ALREADY has three tasks named exactly
+for these buildings (`qing_ss_hanyang`, `qing_ss_kaiping`, `qing_ss_cotton_mill`), but they only
+granted `add_popularity` (+`add_stability` on cotton). They were stubs. Wired each to build its
+eponymous building.
+
+**Placement care:** steel/coal carry `base_resources = 2` (a MULTIPLIER on the province's
+iron/coal output), so placing them on the most-populous province (what the existing
+`QING_selfstr_build` helper does) would raise them where they yield nothing. None of the 3
+buildings has a `potential` block, so `add_building_level` lands anywhere. Added a new helper
+`QING_selfstr_build_on_good = { B = <building> GOOD = <good> }` (se_QING_SELFSTR.txt) that PREFERS
+an owned province of the target good lacking the building (idempotent), and ONLY if none exists
+falls back to the most-populous province — so the reward is never silently lost. Verified 1763
+CHI owns iron provinces (5) and coal provinces (6). Each task also now calls
+`QING_selfstr_advance = { amount = 8 }` (matching the other founding tasks, which all advance the
+0..100 selfstr meter — the three stubs previously did not).
+
+Wiring: hanyang→steel_works/iron, kaiping→coal_mine/coal, cotton_mill→textile_mill/textile_fibres.
+
+**Files:** `common/scripted_effects/se_QING_SELFSTR.txt` (new helper),
+`common/missions/qing_selfstrengthening_missions.txt` (3 task on_completions).
+
+**Review:** code-review raised 3 findings.
+- Finding #1 (MEDIUM, PLAUSIBLE): claimed the helper bets `add_building_level` bypasses the
+  `allow` gate, contradicting memory `imp19c-add-building-level-respects-potential`, so the
+  buildings would silently drop on rural resource provinces. **REFUTED after verification:** that
+  memory VERIFIES `potential` is enforced, not `allow`; the review conflated the two — the exact
+  error the memory itself flags a prior agent made. The 3 buildings have NO `potential` block. The
+  decisive precedent: `qing_machine_works_building` has the IDENTICAL gate class (no potential;
+  allow with has_city_status + civilization_value>=35 + sufficient_job_slots + industry-capacity +
+  invention) and has shipped since #234 placed via add_building_level on capital_scope (reform
+  mission) and most-populous (QING_selfstr_build) with ZERO gate replication. If `allow` were
+  enforced on force-add, that flagship reward would silently fail — it doesn't. So the mechanism
+  the comment describes is correct. No change.
+- Finding #2 (LOW, design, ACCEPTED): good-targeting buys nothing for the textile mill (no
+  base_resources, no trade-good gate) and could steer it to a smaller fibres settlement. FIXED:
+  textile mill now uses plain `QING_selfstr_build` (most-populous, where the proletariat lives);
+  good-targeting retained only for steel (iron) and coal (coal) where base_resources=2 bites.
+- Finding #3 (LOW, convention, ACCEPTED): new LOG strings embedded `$B$`/`$GOOD$` macro params
+  (log-string-macro rule). FIXED: both LOG_line strings made static.
+
+Brace balance OK both files after fixes.
+
+**Status:** DONE — committed (see git log).
