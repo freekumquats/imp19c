@@ -387,3 +387,26 @@ Every task was code-reviewed BEFORE commit (AAA rule 1); review findings were ve
 repo before acting (two review "criticals" were REFUTED after verification — the overlord-guard one
 was real and fixed, the allow-vs-potential one was a conflation). All commits authored by freekumquats.
 Every commit brace-checked; loc BOM preserved.
+
+---
+
+# SESSION 2 (2026-08-05, after boot-test) — user reported multiple failures; reworking
+
+User boot-tested and found #33/#34/#35/#36/#40/#30 did NOT work. Reopened them. New task
+batch #42–#53. Working in order; every decision logged here; review before each commit.
+Building rework (#42) to be done BY HAND per building — no generator scripts (user directive).
+
+## #52 — PRICE_PROBE result (feeds #37) — DIAGNOSIS COMPLETE
+Newest log (logs.zip Aug 5 14:58) post-dates the probe. Probe output:
+`IMP19C PRICE_PROBE gold=ERROR:[...] silver=ERROR:[...]` — the read did not resolve.
+ROOT CAUSE FOUND (grep, not guess): `global_base_import_price_gold` / `_silver` is READ in ~12
+sites — CURRENCY_svalues.txt (reserve valuation, lines 21/27/32/37/624/640/1079-1093) and
+se_INCOME.txt (reserve SELLING, lines 580/599/644/647/659/673) — but is **NEVER set_global_variable'd
+anywhere in common/**. So the reserve-sale price global is permanently unset (reads 0/error).
+This is the #37 bug: reserve-sale income math multiplies/divides by an unset global → inert.
+Also corroborated by error.log: 47+47 "Failed to fetch variable for silver_needed_for_deficit /
+gold_reserve_value_greater_than_silver due to not being set" (DEBT_events.txt:13 →
+INCOME_mitigate_deficit:111 → INCOME_sell_largest_reserve:26/50 → INCOME_sell_reserves:8).
+FIX (deferred to #37 proper): determine where the global SHOULD be set (likely from the per-zone
+country_unit_price_* or the type-6 trade split that computes gold/silver prices) and set it there.
+Careful fix — reserve system, burn history.
