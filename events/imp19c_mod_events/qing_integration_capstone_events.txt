@@ -110,26 +110,19 @@ qing_integ.30 = {
 		}
 	}
 
-	# --- Coercive absorption: send in the Green Standard Army -------------
-	# The Zhao Erfeng model: garrison first, administrate second. Cheap and
-	# fast, but provokes unrest and tyranny. The frontier remembers force.
+	# --- Coercive absorption: BRING IN the Green Standard Army -------------
+	# The Zhao Erfeng model: garrison first, administrate second. Cheap and fast, but provokes unrest
+	# and tyranny. The frontier remembers force. [#task-27 R1 2026-08-04] This is now the throne
+	# BRINGING IN troops from outside to enforce the incorporation (a raw imposition, -5 stability) —
+	# the case where a LOCAL garrison is already on the spot has been promoted to its own dedicated,
+	# cheaper option (.30.e). Always available (the hard fallback when no local garrison can do it).
 	option = {
 		name = "qing_integ.30.c"
 		custom_tooltip = "qing_integ.30.c.tt"
 		add_tyranny = 8
 		add_aggressive_expansion = 8
-		# [#task-8] a garrison already on the spot (edge >= 1) means the "garrison first" model is
-		# cheaper on stability and provokes a milder aftershock; with no banner troops present the
-		# coercion is a raw imposition and bites harder.
-		if = {
-			limit = { has_variable = integ_garrison_edge  var:integ_garrison_edge >= 1 }
-			add_stability = -3
-			LOG_line = { sys = SUBJ  msg = "capstone coercive: garrison on the spot eases the imposition, subject=[scope:target.GetTag]" }
-		}
-		else = {
-			add_stability = -5
-			LOG_line = { sys = SUBJ  msg = "capstone coercive: no garrison present — a raw imposition, subject=[scope:target.GetTag]" }
-		}
+		add_stability = -5
+		LOG_line = { sys = SUBJ  msg = "capstone coercive: outside troops brought in — a raw imposition, subject=[scope:target.GetTag]" }
 		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = -8 }
 		# [#subj-integ-rework 2026-07-22] authorize the engine handoff (see option .a).
 		SUBJ_QING_authorize_integration = yes
@@ -140,6 +133,44 @@ qing_integ.30 = {
 		}
 		# A coercive push can seed a delayed resistance event (the chieftain's
 		# kinsmen remember, and may rise later). Set a flag for the pulse.
+		set_variable = { name = qing_integ_coercive_absorption_flag  days = 730  value = 1 }
+	}
+
+	# --- [#task-27 R1 2026-08-04] LOCAL GARRISON enforces the incorporation ----------------------
+	# Shown only when an imperial garrison strong enough to matter (edge >= 1) already stands on the
+	# dependency's soil. The banner troops are ALREADY there, so enforcing the 改土歸流 on the ground is
+	# cheaper and milder than marching in an outside column (.30.c): a DOMINANT garrison (edge 2) makes
+	# the handover almost orderly (-2 stability); rough parity (edge 1) is a little rougher (-3). Still
+	# coercive (tyranny + AE), but LESS than the from-outside imposition, and the aftershock is milder.
+	# This is the "local garrison does it, cheaper" counterpart to .30.c, per the distinction the design
+	# draws. Same engine handoff as the other paths.
+	option = {
+		name = "qing_integ.30.e"
+		custom_tooltip = "qing_integ.30.e.tt"
+		trigger = {
+			has_variable = integ_garrison_edge
+			var:integ_garrison_edge >= 1
+		}
+		add_tyranny = 5
+		add_aggressive_expansion = 5
+		if = {
+			limit = { var:integ_garrison_edge = 2 }
+			add_stability = -2
+			LOG_line = { sys = SUBJ  msg = "capstone: a dominant local garrison enforces the incorporation smoothly, subject=[scope:target.GetTag]" }
+		}
+		else = {
+			add_stability = -3
+			LOG_line = { sys = SUBJ  msg = "capstone: the local garrison enforces the incorporation, subject=[scope:target.GetTag]" }
+		}
+		SUBJ_QING_war_garrison_outcome = { delta = 2 }   # a garrison holding the handover credits the Board of War
+		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = -6 }
+		SUBJ_QING_authorize_integration = yes
+		SUBJ_QING_clear_integ_actors = yes
+		add_country_modifier = {
+			name = qing_integ_new_circuit_coercive
+			duration = 1825
+		}
+		# a garrison-enforced coercion still leaves a memory — seed the delayed-resistance flag.
 		set_variable = { name = qing_integ_coercive_absorption_flag  days = 730  value = 1 }
 	}
 }
@@ -215,9 +246,12 @@ qing_integ.40 = {
 		scope:target = {
 			set_variable = { name = SUBJ_integration_progress  value = 5 }
 		}
-		# Roll for resistance: proud dependencies, culturally alien ones, or
-		# those with high total_population are likelier to resist — but a garrison
-		# on the spot and a loyal resident amban make forcing the pace SAFER.
+		# Roll for resistance: proud dependencies, culturally alien ones, or those with high
+		# total_population are likelier to resist. [#task-27 R1 2026-08-04] the GARRISON's mitigating
+		# effect has been PROMOTED OUT of this base roll into the dedicated .40.e "local garrison stands
+		# behind the decree" option (so .40.a is now the decree forced WITHOUT local banner backing) —
+		# per the "local garrison does X (cheaper/safer) vs the throne acts alone" distinction. The
+		# staunch-amban path likewise has its own dedicated option (.40.c).
 		random_list = {
 			40 = {
 				# Resistance event fires
@@ -228,25 +262,6 @@ qing_integ.40 = {
 				modifier = {
 					factor = 1.5
 					scope:target = { any_owned_province = { total_population >= 30 } }
-				}
-				# [#task-20] a dominant imperial garrison overawes the dependency — a decree backed by
-				# banner troops on the ground is far likelier to be swallowed without a rising (e.g. the
-				# TWO garrisons in Yili). Rough parity still helps a little.
-				modifier = {
-					factor = 0.4
-					has_variable = integ_garrison_edge
-					var:integ_garrison_edge = 2
-				}
-				modifier = {
-					factor = 0.7
-					has_variable = integ_garrison_edge
-					var:integ_garrison_edge = 1
-				}
-				# [#task-20] a staunch resident amban prepares the ground and softens the blow.
-				modifier = {
-					factor = 0.6
-					has_variable = integ_amban_present
-					var:integ_amban_band = 2
 				}
 				LOG_line = { sys = SUBJ  msg = "decree RESISTANCE subject=[scope:target.GetTag]" }
 				trigger_event = { id = qing_integ.41  days = { 10 30 } }
@@ -261,11 +276,73 @@ qing_integ.40 = {
 		SUBJ_QING_clear_integ_actors = yes
 	}
 
-	# --- [#task-20] Let the resident amban prepare the ground first -------
-	# Shown only when a STAUNCH resident amban (band 2) sits in the dependency: rather than force
-	# the decree cold, he spends months smoothing the local elite — the pace is forced AND resistance
-	# is far less likely (skips the .41 roll). Cheaper on legitimacy than the raw decree; the amban's
-	# standing rises for the service. Absent / lesser amban => option hidden.
+	# --- [#task-27 R1 2026-08-04] Have the LOCAL GARRISON stand behind the decree ----------------
+	# Shown only when an imperial garrison strong enough to matter (edge >= 1) already sits on the
+	# dependency's soil. The banner troops are ALREADY there — a decree backed by a visible garrison on
+	# the ground is far likelier to be swallowed without a rising (the "local garrison does it, cheaper
+	# and safer" path, distinct from forcing the decree cold in .40.a). A DOMINANT garrison (edge 2)
+	# all but guarantees quiet acceptance; rough parity (edge 1) still greatly reduces the risk. Same
+	# gold/legitimacy price as the raw decree — the saving is in RISK, not treasury. The subject is not
+	# rolled back; this is the throne forcing the pace with the garrison as the visible guarantor.
+	option = {
+		name = "qing_integ.40.e"
+		custom_tooltip = "qing_integ.40.e.tt"
+		trigger = {
+			treasury >= 100
+			legitimacy >= 20
+			has_variable = integ_garrison_edge
+			var:integ_garrison_edge >= 1
+		}
+		add_treasury = -100
+		add_legitimacy = -20
+		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = -15 }
+		scope:target = {
+			set_variable = { name = SUBJ_integration_progress  value = 5 }
+		}
+		# resistance roll, heavily damped by the garrison on the spot (dominant near-eliminates it).
+		random_list = {
+			40 = {
+				modifier = {
+					factor = 2
+					scope:target = { NOT = { primary_culture = root.culture } }
+				}
+				modifier = {
+					factor = 1.5
+					scope:target = { any_owned_province = { total_population >= 30 } }
+				}
+				# a dominant garrison overawes the dependency; rough parity still helps a lot.
+				modifier = {
+					factor = 0.25
+					var:integ_garrison_edge = 2
+				}
+				modifier = {
+					factor = 0.55
+					var:integ_garrison_edge = 1
+				}
+				LOG_line = { sys = SUBJ  msg = "decree (garrison-backed) RESISTANCE despite the troops, subject=[scope:target.GetTag]" }
+				trigger_event = { id = qing_integ.41  days = { 10 30 } }
+			}
+			60 = {
+				LOG_line = { sys = SUBJ  msg = "decree ACCEPTED under the garrison's eye, subject=[scope:target.GetTag]" }
+			}
+		}
+		SUBJ_QING_clear_integ_actors = yes
+	}
+
+	# --- [#task-20; #task-27 req-9 skill-check 2026-08-04] Let the resident amban prepare the ground ---
+	# Shown only when a STAUNCH resident amban (band 2) sits in the dependency: rather than force the
+	# decree cold, he OFFERS to spend months smoothing the local elite. His loyalty gated his WILLINGNESS
+	# (the option shows); whether he SUCCEEDS is a SKILL CHECK on his diplomatic skills (charisma +
+	# finesse, qing_amban_negotiate_chance_svalue):
+	#   • SUCCESS → a decree brokered by a trusted resident lands WITHOUT a rising (no .41 roll); his
+	#               standing rises and the Lifan Yuan is credited.
+	#   • FAILURE → his groundwork falls flat; the decree still lands (progress jumps to 5) but now
+	#               triggers the ORDINARY resistance roll — and the Lifan Yuan is marked down. Per the
+	#               "execute only in .41" decision, a FAILED SMOOTHING here does NOT kill the amban
+	#               (smoothing a decree is not the mortal gamble of facing an armed rebel — cf. .41.d);
+	#               he is merely discredited (a prominence hit).
+	# Cheaper on legitimacy than the raw decree (the attempt is worth making); the amban's fate is the
+	# gamble. Absent / lesser amban => option hidden.
 	option = {
 		name = "qing_integ.40.c"
 		custom_tooltip = "qing_integ.40.c.tt"
@@ -281,9 +358,47 @@ qing_integ.40 = {
 		scope:target = {
 			set_variable = { name = SUBJ_integration_progress  value = 5 }
 		}
-		scope:integ_amban = { add_prominence = 10  add_popularity = 5 }
-		# a decree brokered by a trusted resident lands without a rising.
-		LOG_line = { sys = SUBJ  msg = "decree SMOOTHED by resident amban (no resistance roll) subject=[scope:target.GetTag]" }
+		# skill roll → one-shot marker on the amban (random has no else; se_QING_EXAM.txt idiom).
+		scope:integ_amban = {
+			random = {
+				chance = qing_amban_negotiate_chance_svalue
+				set_variable = { name = integ_amban_negotiated_ok  value = 1 }
+			}
+		}
+		if = {
+			limit = { scope:integ_amban = { has_variable = integ_amban_negotiated_ok } }
+			# SUCCESS — the decree is swallowed quietly.
+			scope:integ_amban = {
+				add_prominence = 10
+				add_popularity = 5
+				remove_variable = integ_amban_negotiated_ok
+			}
+			SUBJ_QING_lifan_amban_outcome = { delta = 5 }
+			LOG_line = { sys = SUBJ  msg = "decree SMOOTHED by resident amban (skill check passed, no resistance roll) subject=[scope:target.GetTag]" }
+		}
+		else = {
+			# FAILURE — the amban is discredited (not killed — cf. .41.d), and the decree draws the
+			# ordinary resistance roll.
+			scope:integ_amban = { add_prominence = -10 }
+			SUBJ_QING_lifan_amban_outcome = { delta = -4 }
+			LOG_line = { sys = SUBJ  msg = "decree smoothing FAILED — the amban is discredited; ordinary resistance roll follows, subject=[scope:target.GetTag]" }
+			random_list = {
+				40 = {
+					modifier = {
+						factor = 2
+						scope:target = { NOT = { primary_culture = root.culture } }
+					}
+					modifier = {
+						factor = 1.5
+						scope:target = { any_owned_province = { total_population >= 30 } }
+					}
+					trigger_event = { id = qing_integ.41  days = { 10 30 } }
+				}
+				60 = {
+					LOG_line = { sys = SUBJ  msg = "decree ACCEPTED despite the amban's failed groundwork, subject=[scope:target.GetTag]" }
+				}
+			}
+		}
 		SUBJ_QING_clear_integ_actors = yes
 	}
 
@@ -397,11 +512,21 @@ qing_integ.41 = {
 		SUBJ_QING_clear_integ_actors = yes
 	}
 
-	# --- [#task-8] The resident AMBAN negotiates a settlement -------------
-	# Shown only when a STAUNCH resident amban (loyalty > 70) sits in the dependency: he knows
-	# the chieftain and can talk him down. A cheap de-escalation — a modest rollback, peace kept,
-	# and the amban's standing rises for the service. Absent / wavering amban => option hidden
-	# (and the "amban flees" flavour fires under the crush/fortress branches instead).
+	# --- [#task-8; #task-27 req-9 skill-check+execution 2026-08-04] The resident AMBAN negotiates ----
+	# Shown only when a STAUNCH resident amban (loyalty > 70) sits in the dependency: he knows the
+	# chieftain and OFFERS to talk him down. His loyalty gated whether he is WILLING (the option shows);
+	# whether he SUCCEEDS is a separate SKILL CHECK on his diplomatic skills (charisma + finesse, via
+	# qing_amban_negotiate_chance_svalue). This is a genuine GAMBLE, not a free de-escalation:
+	#   • SUCCESS  → he talks the chieftain down: a modest rollback, peace kept, his standing rises, and
+	#                the Lifan Yuan is credited (perf-fold +).
+	#   • FAILURE  → the chieftain has him SEIZED AND EXECUTED (death). The Lifan Yuan is hit hard
+	#                (perf-fold −−). The crisis is UNRESOLVED, so the event LOOPS BACK to itself
+	#                (trigger_event qing_integ.41): the re-fired immediate re-runs the resolver, but the
+	#                amban is now dead — the death-cleanup hook (on_character_death clears qing_amban_here
+	#                off the subject, se_QING_AMBAN.txt) means integ_amban_present is unset, so THIS option
+	#                cannot re-appear (no infinite loop — the player faces the same dilemma minus the amban).
+	# random = { chance = <svalue> } is the proven skill-roll idiom (se_QING_EXAM.txt); death = { killer
+	# death_reason } is the proven kill (mod 00_ambitions.txt:1094, Invictus internal_politics).
 	option = {
 		name = "qing_integ.41.d"
 		custom_tooltip = "qing_integ.41.d.tt"
@@ -410,19 +535,46 @@ qing_integ.41 = {
 			var:integ_amban_band = 2
 			exists = scope:integ_amban
 		}
-		SUBJ_QING_reduce_integration = { steps = 1 }
-		add_stability = 2
-		# the amban spends his personal standing to broker the peace
+		# roll the skill check into a one-shot marker on the amban (a `random` block has no else, so we
+		# stamp the pass then branch pass/fail with a proper if/else — the se_QING_EXAM.txt idiom).
 		scope:integ_amban = {
-			add_prominence = 10
-			add_popularity = 5
+			random = {
+				chance = qing_amban_negotiate_chance_svalue
+				set_variable = { name = integ_amban_negotiated_ok  value = 1 }
+			}
 		}
 		if = {
-			limit = { exists = scope:target.current_ruler }
-			scope:target.current_ruler = { add_loyalty = loyalty_qing_delta_p10 }
+			limit = { scope:integ_amban = { has_variable = integ_amban_negotiated_ok } }
+			# SUCCESS — the settlement holds.
+			SUBJ_QING_reduce_integration = { steps = 1 }
+			add_stability = 2
+			scope:integ_amban = {
+				add_prominence = 10
+				add_popularity = 5
+				remove_variable = integ_amban_negotiated_ok
+			}
+			if = {
+				limit = { exists = scope:target.current_ruler }
+				scope:target.current_ruler = { add_loyalty = loyalty_qing_delta_p10 }
+			}
+			SUBJ_QING_lifan_amban_outcome = { delta = 5 }   # a brokered peace credits the Court of Colonial Affairs
+			LOG_line = { sys = SUBJ  msg = "resistance NEGOTIATED by resident amban (skill check passed) subject=[scope:target.GetTag]" }
+			SUBJ_QING_clear_integ_actors = yes
 		}
-		LOG_line = { sys = SUBJ  msg = "resistance NEGOTIATED by resident amban subject=[scope:target.GetTag]" }
-		SUBJ_QING_clear_integ_actors = yes
+		else = {
+			# FAILURE — the chieftain seizes and executes the envoy. The amban dies; the crisis stands.
+			add_stability = -2
+			add_legitimacy = -3
+			scope:integ_amban = {
+				death = { death_reason = death_murder }
+			}
+			SUBJ_QING_lifan_amban_outcome = { delta = -8 }  # a murdered envoy is a heavy Lifan Yuan failure
+			LOG_line = { sys = SUBJ  msg = "resistance NEGOTIATION FAILED — the chieftain executes the amban; looping back minus the amban, subject=[scope:target.GetTag]" }
+			SUBJ_QING_clear_integ_actors = yes
+			# LOOP BACK: re-fire the same crisis. The dead amban is cleaned off qing_amban_here by the
+			# death hook, so the re-fired resolver finds no amban and this option cannot re-appear.
+			trigger_event = { id = qing_integ.41  days = { 1 3 } }
+		}
 	}
 
 	# --- [#task-20 garrison actor] The local GARRISON marches out and breaks the rising ----
@@ -447,20 +599,44 @@ qing_integ.41 = {
 		add_aggressive_expansion = 3
 		# [cost 2026-08-04] no GOLD — like the expedition, the garrison crush is paid in STABILITY and
 		# LEGITIMACY, but LIGHTER than .41.b: the troops are already on the spot, no war is declared,
-		# and the subject is held. A dominant garrison breaks it cleanly (small toll); rough parity
-		# wins but bloodier (larger toll).
+		# and the subject is held.
+		# [#task-27 req-10 2026-08-04] The edge gated AVAILABILITY (that a garrison strong enough to take
+		# the field is present); the clean-vs-chaotic OUTCOME is now a SKILL CHECK on the garrison
+		# COMMANDER's martial + zeal (qing_garrison_clean_crush_chance_svalue) — replacing the old flat
+		# edge2-clean-vs-edge1-bloody split. A capable commander (high martial+zeal) breaks it CLEANLY
+		# (small toll, War Ministry credited); a poor one wins CHAOTICALLY (larger toll, more unrest and
+		# war exhaustion, War Ministry marked down). If the garrison has no live commander scope saved
+		# (leaderless), fall back to the edge as the outcome proxy. random={chance=<svalue>} = the proven
+		# skill-roll idiom (se_QING_EXAM.txt).
 		if = {
+			limit = { exists = scope:integ_garrison_cmd }
+			scope:integ_garrison_cmd = {
+				random = {
+					chance = qing_garrison_clean_crush_chance_svalue
+					ROOT = { set_variable = { name = integ_garrison_crush_clean  value = 1 } }
+				}
+			}
+		}
+		else_if = {
+			# leaderless garrison: a dominant edge still tends to a clean result, parity does not.
 			limit = { var:integ_garrison_edge = 2 }
+			set_variable = { name = integ_garrison_crush_clean  value = 1 }
+		}
+		if = {
+			limit = { has_variable = integ_garrison_crush_clean }
 			add_stability = -1
 			add_legitimacy = -3
 			add_war_exhaustion = 1
-			LOG_line = { sys = SUBJ  msg = "resistance BROKEN in the field by a dominant local garrison, subject=[scope:target.GetTag]" }
+			SUBJ_QING_war_garrison_outcome = { delta = 3 }   # a clean field suppression credits the Board of War
+			LOG_line = { sys = SUBJ  msg = "resistance BROKEN cleanly in the field by the local garrison (able commander), subject=[scope:target.GetTag]" }
+			remove_variable = integ_garrison_crush_clean
 		}
 		else = {
 			add_stability = -3
 			add_legitimacy = -6
 			add_war_exhaustion = 2
-			LOG_line = { sys = SUBJ  msg = "resistance broken in the field by the local garrison (hard-fought), subject=[scope:target.GetTag]" }
+			SUBJ_QING_war_garrison_outcome = { delta = -3 }  # a chaotic suppression is a Board of War failing
+			LOG_line = { sys = SUBJ  msg = "resistance broken in the field by the local garrison but CHAOTICALLY (poor commander), subject=[scope:target.GetTag]" }
 		}
 		# the rising is put down where it stands; local unrest lingers but the subject is held.
 		if = {
@@ -498,16 +674,19 @@ qing_integ.41 = {
 		add_stability = -5
 		add_legitimacy = -15
 		LOG_line = { sys = SUBJ  msg = "crush: a full field expedition is mounted (re-subjugation war), subject=[scope:target.GetTag]" }
-		# a wavering / absent amban abandons his post when the shooting starts (flavour + a small ding)
+		# [#task-27 R6 2026-08-04] a PRESENT-but-WAVERING resident amban (present, band 0) abandons his
+		# post when the shooting starts — flavour + a small ding, and his desertion marks down the Lifan
+		# Yuan. A GENUINELY ABSENT amban (no resident at all) prints nothing here: the old OR-guard fired
+		# the "the resident flees his post" line even when there had never been a resident, which read
+		# wrong. Split the two: only a real resident who wavers flees.
 		if = {
 			limit = {
-				OR = {
-					NOT = { has_variable = integ_amban_present }
-					var:integ_amban_band = 0
-				}
+				has_variable = integ_amban_present
+				var:integ_amban_band = 0
 			}
 			add_legitimacy = -3
-			LOG_line = { sys = SUBJ  msg = "crush: no steady amban on the spot — the resident flees his post, subject=[scope:target.GetTag]" }
+			SUBJ_QING_lifan_amban_outcome = { delta = -4 }  # a resident who deserts his post fails the Court of Colonial Affairs
+			LOG_line = { sys = SUBJ  msg = "crush: the wavering resident amban flees his post as the fighting starts, subject=[scope:target.GetTag]" }
 		}
 		# Local unrest in the rebel heartland (captured before the subject is freed).
 		if = {

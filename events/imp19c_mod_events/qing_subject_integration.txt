@@ -36,7 +36,18 @@ namespace = qing_integ
 qing_integ.10 = {
 	type = country_event
 	title = "qing_integ.10.t"
-	desc = "qing_integ.10.desc"
+	# [#task-27 2026-08-04] base text + the shared actor-status addendum naming the local amban /
+	# garrison when present (resolved in the immediate). .10 now carries both a garrison option (.10.e)
+	# and an amban option (.10.d), so it names them on the ground like its sibling events do.
+	desc = {
+		desc = "qing_integ.10.desc"
+		first_valid = {
+			triggered_desc = { trigger = { has_variable = integ_amban_present  has_variable = integ_garrison_size  var:integ_garrison_size >= 1 }  desc = "qing_integ.actors_both" }
+			triggered_desc = { trigger = { has_variable = integ_amban_present }  desc = "qing_integ.actors_amban" }
+			triggered_desc = { trigger = { has_variable = integ_garrison_size  var:integ_garrison_size >= 1 }  desc = "qing_integ.actors_garrison" }
+			triggered_desc = { trigger = { always = yes }  desc = "qing_integ.actors_none" }
+		}
+	}
 	picture = revolt
 
 	left_portrait = root.current_ruler
@@ -70,22 +81,16 @@ qing_integ.10 = {
 		SUBJ_QING_resolve_integ_actors = yes
 	}
 
-	# --- Push through with a show of force: crush it, but at a cost -------
-	# [#task-8] a strong garrison (edge >= 1) puts the rising down more cheaply — the banner
-	# troops are already on the spot; a weak / absent garrison makes the show of force dearer.
+	# --- Push through with a show of force: BRING IN troops to crush it ---
+	# [#task-27 R1 2026-08-04] This is the throne BRINGING IN a column to crush the rising (a heavy
+	# hand, -5 stability). The case where a LOCAL garrison is already on the spot has been promoted to
+	# its own cheaper option (.10.e). Always available (the fallback when no local garrison can act).
 	option = {
 		name = "qing_integ.10.a"
 		custom_tooltip = "qing_integ.10.a.tt"
 		add_war_exhaustion = 2
-		if = {
-			limit = { has_variable = integ_garrison_edge  var:integ_garrison_edge >= 1 }
-			add_stability = -3
-			LOG_line = { sys = SUBJ  msg = "unrest: garrison on hand puts down the rising cheaply, subject=[scope:target.GetTag]" }
-		}
-		else = {
-			add_stability = -5
-			LOG_line = { sys = SUBJ  msg = "unrest: no garrison on the spot — the show of force costs more, subject=[scope:target.GetTag]" }
-		}
+		add_stability = -5
+		LOG_line = { sys = SUBJ  msg = "unrest: outside troops brought in to crush the rising, subject=[scope:target.GetTag]" }
 		# The subject network resents the heavy hand (Three Feudatories echo).
 		add_country_modifier = {
 			name = qing_integ_frontier_resentment
@@ -104,10 +109,46 @@ qing_integ.10 = {
 		SUBJ_QING_clear_integ_actors = yes
 	}
 
-	# --- [#task-8] The resident amban restores order by persuasion -------
-	# Shown only when a steady-or-better resident amban (band >= 1) sits in the dependency: he
-	# calms the unrest without the mailed fist. Cheaper on stability than the show of force, and
-	# keeps the process moving. Absent / wavering amban => hidden (fall back to force or suspend).
+	# --- [#task-27 R1 2026-08-04] The LOCAL GARRISON restores order ------
+	# Shown only when an imperial garrison strong enough to matter (edge >= 1) already stands in the
+	# dependency: the banner troops on the spot put the rising down at once, cheaper and with far less
+	# lingering resentment than marching in an outside column (.10.a). A dominant garrison (edge 2) does
+	# it almost bloodlessly (-1 stability); rough parity (edge 1) is rougher (-3). The "local garrison
+	# does it, cheaper" counterpart to .10.a. The process keeps moving.
+	option = {
+		name = "qing_integ.10.e"
+		custom_tooltip = "qing_integ.10.e.tt"
+		trigger = {
+			has_variable = integ_garrison_edge
+			var:integ_garrison_edge >= 1
+		}
+		if = {
+			limit = { var:integ_garrison_edge = 2 }
+			add_stability = -1
+			LOG_line = { sys = SUBJ  msg = "unrest: a dominant local garrison restores order almost bloodlessly, subject=[scope:target.GetTag]" }
+		}
+		else = {
+			add_stability = -3
+			LOG_line = { sys = SUBJ  msg = "unrest: the local garrison restores order, subject=[scope:target.GetTag]" }
+		}
+		SUBJ_QING_war_garrison_outcome = { delta = 2 }   # a garrison keeping the peace credits the Board of War
+		if = {
+			limit = { exists = scope:unrest_province }
+			scope:unrest_province = { add_province_modifier = { name = local_unrest_harsh  duration = 365 } }
+		}
+		SUBJ_QING_clear_integ_actors = yes
+	}
+
+	# --- [#task-8; #task-27 req-9 light skill-check 2026-08-04] The resident amban restores order ---
+	# Shown only when a steady-or-better resident amban (band >= 1) sits in the dependency: he OFFERS to
+	# calm the unrest without the mailed fist. Whether he SUCCEEDS is a SKILL CHECK on his diplomatic
+	# skills (charisma + finesse, qing_amban_negotiate_chance_svalue):
+	#   • SUCCESS → he talks the crowds down: a little stability, the province eased, his standing and
+	#               the Lifan Yuan credited.
+	#   • FAILURE → his intervention falls flat; a small stability ding, and he is DISCREDITED (a
+	#               prominence hit) and the Lifan Yuan marked down — but per "execute only in .41", a
+	#               failed CALMING does NOT kill him (routine unrest is not the mortal gamble of .41).
+	# Keeps the process moving either way. Absent / wavering amban => hidden.
 	option = {
 		name = "qing_integ.10.d"
 		custom_tooltip = "qing_integ.10.d.tt"
@@ -116,13 +157,29 @@ qing_integ.10 = {
 			var:integ_amban_band >= 1
 			exists = scope:integ_amban
 		}
-		add_stability = 1
-		scope:integ_amban = { add_prominence = 5 }
-		if = {
-			limit = { exists = scope:unrest_province }
-			scope:unrest_province = { add_province_modifier = { name = positive_food_modifier  duration = 365 } }
+		scope:integ_amban = {
+			random = {
+				chance = qing_amban_negotiate_chance_svalue
+				set_variable = { name = integ_amban_negotiated_ok  value = 1 }
+			}
 		}
-		LOG_line = { sys = SUBJ  msg = "unrest: resident amban restores order by persuasion, subject=[scope:target.GetTag]" }
+		if = {
+			limit = { scope:integ_amban = { has_variable = integ_amban_negotiated_ok } }
+			add_stability = 1
+			scope:integ_amban = { add_prominence = 5  remove_variable = integ_amban_negotiated_ok }
+			if = {
+				limit = { exists = scope:unrest_province }
+				scope:unrest_province = { add_province_modifier = { name = positive_food_modifier  duration = 365 } }
+			}
+			SUBJ_QING_lifan_amban_outcome = { delta = 4 }
+			LOG_line = { sys = SUBJ  msg = "unrest: resident amban restores order by persuasion (skill check passed), subject=[scope:target.GetTag]" }
+		}
+		else = {
+			add_stability = -1
+			scope:integ_amban = { add_prominence = -5 }
+			SUBJ_QING_lifan_amban_outcome = { delta = -3 }
+			LOG_line = { sys = SUBJ  msg = "unrest: the amban's appeal fails and he is discredited, subject=[scope:target.GetTag]" }
+		}
 		SUBJ_QING_clear_integ_actors = yes
 	}
 
@@ -349,20 +406,16 @@ qing_integ.12 = {
 		SUBJ_QING_resolve_integ_actors = yes
 	}
 
-	# --- Send in the Green Standard Army to restore order ----------------
-	# [#task-8] a garrison on the spot (edge >= 1) restores order with less bloodshed (less AE).
+	# --- BRING IN the Green Standard Army to restore order ---------------
+	# [#task-27 R1 2026-08-04] The throne BRINGS IN an outside column to pacify the strife (a bloodier
+	# imposition, +5 AE). The case where a LOCAL garrison is already on the spot is promoted to its own
+	# cheaper option (.12.e). Always available (the fallback when no local garrison can act).
 	option = {
 		name = "qing_integ.12.a"
 		custom_tooltip = "qing_integ.12.a.tt"
 		add_stability = -3
-		if = {
-			limit = { has_variable = integ_garrison_edge  var:integ_garrison_edge >= 1 }
-			add_aggressive_expansion = 3
-			LOG_line = { sys = SUBJ  msg = "strife: garrison on hand restores order with less bloodshed, subject=[scope:target.GetTag]" }
-		}
-		else = {
-			add_aggressive_expansion = 5
-		}
+		add_aggressive_expansion = 5
+		LOG_line = { sys = SUBJ  msg = "strife: outside troops brought in to restore order, subject=[scope:target.GetTag]" }
 		# Applied to the overlord: subject_loyalty tightens the bond, and integrate_speed
 		# now feeds the ENGINE's subject-integration timer (post-#subj-integ-rework: once the
 		# 改土歸流 capstone hands a governorship to the engine's native integration, integrate_speed
@@ -379,6 +432,41 @@ qing_integ.12 = {
 					duration = 730
 				}
 			}
+		}
+		SUBJ_QING_clear_integ_actors = yes
+	}
+
+	# --- [#task-27 R1 2026-08-04] The LOCAL GARRISON separates the communities ----
+	# Shown only when an imperial garrison strong enough to matter (edge >= 1) already stands in the
+	# dependency: the banner troops on the spot interpose between settlers and natives at once, with far
+	# less bloodshed (less AE) than marching in an outside column (.12.a). A dominant garrison (edge 2)
+	# does it with a minimum of force (+2 AE); rough parity (edge 1) is rougher (+3). The "local garrison
+	# does it, cheaper" counterpart to .12.a.
+	option = {
+		name = "qing_integ.12.e"
+		custom_tooltip = "qing_integ.12.e.tt"
+		trigger = {
+			has_variable = integ_garrison_edge
+			var:integ_garrison_edge >= 1
+		}
+		add_stability = -1
+		if = {
+			limit = { var:integ_garrison_edge = 2 }
+			add_aggressive_expansion = 2
+			LOG_line = { sys = SUBJ  msg = "strife: a dominant local garrison separates the communities with minimal force, subject=[scope:target.GetTag]" }
+		}
+		else = {
+			add_aggressive_expansion = 3
+			LOG_line = { sys = SUBJ  msg = "strife: the local garrison separates the communities, subject=[scope:target.GetTag]" }
+		}
+		SUBJ_QING_war_garrison_outcome = { delta = 2 }
+		add_country_modifier = {
+			name = qing_integ_ethnic_strife
+			duration = 730
+		}
+		if = {
+			limit = { exists = scope:riot_province }
+			scope:riot_province = { add_province_modifier = { name = local_unrest_harsh  duration = 365 } }
 		}
 		SUBJ_QING_clear_integ_actors = yes
 	}
@@ -419,10 +507,16 @@ qing_integ.12 = {
 		SUBJ_QING_clear_integ_actors = yes
 	}
 
-	# --- [#task-8] The resident amban mediates between settlers and natives ----
-	# Shown only when a steady-or-better resident amban (band >= 1) sits in the dependency: he
-	# knows both communities and brokers a local settlement — the least bloody path, keeping the
-	# process on track. Absent / wavering amban => hidden.
+	# --- [#task-8; #task-27 req-9 light skill-check 2026-08-04] The resident amban mediates ----------
+	# Shown only when a steady-or-better resident amban (band >= 1) sits in the dependency: he OFFERS to
+	# broker a local settlement between settlers and natives. Whether he SUCCEEDS is a SKILL CHECK on his
+	# diplomatic skills (charisma + finesse, qing_amban_negotiate_chance_svalue):
+	#   • SUCCESS → the least bloody path: a little stability, the province eased, his standing and the
+	#               Lifan Yuan credited.
+	#   • FAILURE → the mediation collapses; a small stability ding, he is DISCREDITED (prominence hit)
+	#               and the Lifan Yuan marked down — but per "execute only in .41", a failed MEDIATION
+	#               here does NOT kill him.
+	# Keeps the process on track either way. Absent / wavering amban => hidden.
 	option = {
 		name = "qing_integ.12.d"
 		custom_tooltip = "qing_integ.12.d.tt"
@@ -431,13 +525,29 @@ qing_integ.12 = {
 			var:integ_amban_band >= 1
 			exists = scope:integ_amban
 		}
-		add_stability = 1
-		scope:integ_amban = { add_prominence = 5 }
-		if = {
-			limit = { exists = scope:riot_province }
-			scope:riot_province = { add_province_modifier = { name = positive_food_modifier  duration = 365 } }
+		scope:integ_amban = {
+			random = {
+				chance = qing_amban_negotiate_chance_svalue
+				set_variable = { name = integ_amban_negotiated_ok  value = 1 }
+			}
 		}
-		LOG_line = { sys = SUBJ  msg = "strife: resident amban mediates a local settlement, subject=[scope:target.GetTag]" }
+		if = {
+			limit = { scope:integ_amban = { has_variable = integ_amban_negotiated_ok } }
+			add_stability = 1
+			scope:integ_amban = { add_prominence = 5  remove_variable = integ_amban_negotiated_ok }
+			if = {
+				limit = { exists = scope:riot_province }
+				scope:riot_province = { add_province_modifier = { name = positive_food_modifier  duration = 365 } }
+			}
+			SUBJ_QING_lifan_amban_outcome = { delta = 4 }
+			LOG_line = { sys = SUBJ  msg = "strife: resident amban brokers a local settlement (skill check passed), subject=[scope:target.GetTag]" }
+		}
+		else = {
+			add_stability = -1
+			scope:integ_amban = { add_prominence = -5 }
+			SUBJ_QING_lifan_amban_outcome = { delta = -3 }
+			LOG_line = { sys = SUBJ  msg = "strife: the amban's mediation collapses and he is discredited, subject=[scope:target.GetTag]" }
+		}
 		SUBJ_QING_clear_integ_actors = yes
 	}
 }
@@ -557,6 +667,35 @@ qing_integ.20 = {
 		}
 		SUBJ_QING_clear_integ_actors = yes  # [#task-20 hygiene] clear the resolver scratch vars
 	}
+
+	# --- [#task-27 R1 2026-08-04] The LOCAL GARRISON works the tuntian (屯田) ----------------------
+	# Shown only when an imperial garrison stands in the dependency (edge >= 1). This is the garrison as
+	# a CONSTRUCTIVE actor, NOT a coercive one — the Qing banner colonies literally FARMED (the 屯田
+	# military-agricultural colonies that anchored the frontier). With the garrison working and guarding
+	# the harvest, more of the surplus reaches the store: a larger granary deposit than the civil options,
+	# and the troops' labour warms the subject to the arrangement. Only offered when a granary exists to
+	# receive the grain (mirrors .20.a). The garrison's productive service also credits the Board of War.
+	option = {
+		name = "qing_integ.20.e"
+		custom_tooltip = "qing_integ.20.e.tt"
+		trigger = {
+			has_variable = integ_garrison_edge
+			var:integ_garrison_edge >= 1
+			has_variable = qing_granary_count
+			var:qing_granary_count >= 1
+		}
+		if = { limit = { NOT = { has_variable = qing_granary_food } }  set_variable = { name = qing_granary_food  value = 0 } }
+		change_variable = { name = qing_granary_food  add = 250 }   # the garrison's own labour swells the surplus
+		add_country_modifier = {
+			name = qing_integ_bountiful_frontier
+			duration = 730
+		}
+		SUBJ_QING_war_garrison_outcome = { delta = 2 }   # productive tuntian service credits the Board of War
+		# a prosperous, garrison-worked year advances the process a further step for free.
+		SUBJ_QING_advance_integration = { steps = 1 }
+		LOG_line = { sys = SUBJ  msg = "harvest: the local garrison works and guards the tuntian, swelling the granary, subject=[scope:target.GetTag]" }
+		SUBJ_QING_clear_integ_actors = yes
+	}
 }
 
 ########################################################################
@@ -629,5 +768,30 @@ qing_integ.21 = {
 			duration = 730
 		}
 		SUBJ_QING_clear_integ_actors = yes  # [#task-20 hygiene] clear the resolver scratch vars
+	}
+
+	# --- [#task-27 R1 2026-08-04] The LOCAL GARRISON forms the guard of honour --------------------
+	# Shown only when an imperial garrison stands in the dependency (edge >= 1). This is the garrison as
+	# a CONSTRUCTIVE, CEREMONIAL actor, NOT a coercive one — banner troops in dress array lending martial
+	# splendour to the investiture (冊封) rather than a show of force. A parade of the throne's soldiers
+	# at the rite magnifies imperial prestige: a legitimacy gain the purely civil rites do not give, and
+	# the goodwill still binds the subject's elite. The garrison's ceremonial service credits the Board
+	# of War. No gold (the troops are already there).
+	option = {
+		name = "qing_integ.21.e"
+		custom_tooltip = "qing_integ.21.e.tt"
+		trigger = {
+			has_variable = integ_garrison_edge
+			var:integ_garrison_edge >= 1
+		}
+		add_legitimacy = 5
+		current_ruler = { add_popularity = 10 }
+		add_country_modifier = {
+			name = qing_integ_imperial_favor
+			duration = 1095
+		}
+		SUBJ_QING_war_garrison_outcome = { delta = 2 }   # a splendid guard of honour credits the Board of War
+		LOG_line = { sys = SUBJ  msg = "festival: the local garrison forms the guard of honour, magnifying the rite, subject=[scope:target.GetTag]" }
+		SUBJ_QING_clear_integ_actors = yes
 	}
 }

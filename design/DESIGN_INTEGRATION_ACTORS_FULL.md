@@ -162,6 +162,70 @@ Reqs 9 (amban skill-check + execution on fail) and 10 (garrison commander martia
 chaotic) were added AFTER this review and are NOT yet review-covered — re-review the revised design
 (incl. saving scope:integ_garrison_cmd) before building.
 
-## STATUS: design NOT ready — must-fix list above outstanding. NOT IMPLEMENTED — task #27 tracks the
-## revise-then-build. The design needs a second pass addressing items 1-6 + reqs 9/10, then re-review,
-## before any code is written.
+## RESOLVED DECISIONS (2026-08-04, user-confirmed) — ready to build
+The two forks that needed the user's call, plus the framing steer, are settled; the remaining
+review must-fixes are resolved with the calls below.
+
+- **R1 (garrison scope — was MF#1). User: "explicit garrison option (if the garrison exists) on
+  ALL events, but it does not literally have to be marching out and killing people," and "a clear
+  distinction between 'local garrison does X' (cheaper/more beneficial) and 'imperial troops are
+  brought in to do X' (dearer)."** So the model per event is: the coercive/active action exists in
+  TWO forms — the DEDICATED local-garrison option (gated `integ_garrison_edge >= 1`, cheaper /
+  milder / more beneficial because the banner troops are already there) and the base "bring in
+  imperial troops" option (always available, dearer). This IS review-MF#1's fix: PROMOTE the
+  garrison branch OUT of each base force option into its own dedicated option, and STRIP the
+  garrison discount from the base (the base becomes the pure "imperial troops brought in" path). For
+  the POSITIVE events the local-garrison option is CONSTRUCTIVE, not martial: .20 = the garrison
+  works/guards the tuntian (屯田 — the banner colonies literally farmed), .21 = the garrison provides
+  the ceremonial guard of honour at the investiture. Per-event map:
+  | Event | base "imperial troops brought in" | dedicated "local garrison does it" (edge>=1, cheaper) |
+  |---|---|---|
+  | .10 unrest   | .10.a bring in troops to crush (−5 stab)      | .10.e local garrison restores order (−3 stab, less resentment) |
+  | .12 strife   | .12.a bring in Green Standard (+5 AE)          | .12.e local garrison separates communities (+3 AE, less blood) |
+  | .30 capstone | .30.c bring in Green Standard to enforce (−5) | .30.e local garrison enforces incorporation (−3, milder) |
+  | .40 decree   | .40.a force decree, resistance roll           | .40.e local garrison stands behind the decree → resistance far less likely |
+  | .20 harvest  | (n/a)                                          | .20.e local garrison works/guards the tuntian (constructive: extra granary food) |
+  | .21 festival | (n/a)                                          | .21.e local garrison provides the guard of honour (constructive: prestige/legitimacy) |
+  | .41 revolt   | .41.b bring in a from-scratch expedition (independence war) | .41.e local garrison marches out, breaks it in the field (no war) |
+
+- **R2 (execution scope — was req 9). User picked "Execute only in .41."** So: the amban
+  negotiation in .41 (.41.d) is a charisma/finesse SKILL-CHECK and on FAILURE the amban is EXECUTED
+  (death) + the event LOOPS BACK to itself minus the amban option (req 9/9b) — the loop-back is
+  self-limiting because the death-cleanup hook (on_character_death clears qing_amban_here off the
+  subject, se_QING_AMBAN.txt) means the re-fired resolver finds no amban, so the option cannot
+  re-appear. In .10/.12/.40 the amban options are LIGHTER skill-checks: on failure the amban is
+  DISCREDITED (loyalty + prominence hit, option spent) but NOT killed — execution for failing to
+  calm routine unrest / smooth a decree is disproportionate; only facing down an armed rebel chieftain
+  (.41) is mortal. .40's amban-smooth failure simply falls through to the ordinary decree resistance roll.
+
+- **R3 (req 10 — garrison commander skill-check).** The resolver also saves scope:integ_garrison_cmd
+  (commander of the largest garrison army on the subject's soil, via ordered_army order_by unit_size
+  max 1). In .41.e (and only there — the other garrison options are single-outcome), the clean-vs-
+  chaotic OUTCOME rolls on the commander's MARTIAL + ZEAL (garrison_clean_crush_chance_svalue): a
+  capable commander breaks it cleanly (small toll), a poor one wins chaotically (larger toll). edge
+  still gates AVAILABILITY; commander skill drives the OUTCOME (replaces the flat edge2-vs-edge1 split).
+
+- **R4 (edge recalibration — was MF#2).** Keep manpower÷500 as the subject proxy (user: "just use
+  manpower, 1 cohort = 500 manpower"), but recalibrate the bands to be SCALE-ROBUST via two scratch
+  deltas compared to a literal 0 (RHS-literal rule): dominant (edge 2) iff garrison_cohorts ≥
+  subject_size (delta = g − s ≥ 0); parity (edge 1) iff garrison_cohorts×2 ≥ subject_size
+  (delta2 = 2g − s ≥ 0); else 0. So a garrison at least HALF the subject's manpower-pool-in-cohorts
+  reads as parity and one matching it reads dominant — robust across the real 1763 manpower range,
+  not tuned to Yili's 500-man special case.
+
+- **R5 (req 7 — perf fold, was MF#3).** ONE self-expiring signed var per ministry, folded once in the
+  office-FILLED branch of each recompute (inert when the seat is vacant — acceptable, stated):
+  qing_lifan_recent_amban_outcome (amban success + / failure or death −−) and
+  qing_war_recent_garrison_outcome (clean crush + / chaotic or failed −). Stamped via a small helper
+  with set_variable { days = 730 } (self-expiring, the coercive-absorption-flag idiom), folded as a
+  bounded fixed ±; NOT a change_variable poke on the meter (which the wholesale recompute would
+  overwrite). No double-count vs the Lifan meter's existing coverage (b) + affinity (e) terms — this
+  is a distinct "recent event outcome" term.
+
+- **R6 (flee flavour split — was MF#4) + invariants (MF#6).** .41.b flee line: present+band0 = "the
+  resident flees his post"; genuinely absent = no amban line. Every option touching scope:integ_amban
+  guards `exists = scope:integ_amban`; every event keeps one always-available ungated fallback; no new
+  option declares war or frees the subject (only .41.b, via SUBJ_QING_crush_revolt_war).
+
+## STATUS: design RESOLVED and greenlit by the user — BUILDING now (task #27). Adversarial review of
+## the finished batch BEFORE commit; stage only the named files.

@@ -695,8 +695,9 @@ SUBJ_QING_reparent_sub_subjects = {
 #   scope:integ_amban     saved character scope of that amban (only when present)
 #   integ_amban_band      0 wavering (loyalty<40) / 1 steady (40-70) / 2 staunch (>70)
 #   integ_garrison_size   summed unit_size of CHI armies standing on scope:target's soil (0 = none)
-#   integ_subject_size    summed unit_size of the subject's OWN armies (its capacity to resist)
-#   integ_garrison_edge   0 subject outweighs / no garrison, 1 rough parity, 2 garrison dominant
+#   scope:integ_garrison_cmd  commander of the LARGEST garrison army (only when a garrison w/ a live cmd)
+#   integ_subject_size    the subject's manpower ÷ 500 (cohort-equivalents of its potential rising)
+#   integ_garrison_edge   0 subject outweighs / no garrison, 1 rough parity (2g>=s), 2 dominant (g>=s)
 # ======================================================================
 SUBJ_QING_resolve_integ_actors = {
 	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_resolve_integ_actors" }
@@ -748,6 +749,28 @@ SUBJ_QING_resolve_integ_actors = {
 		ROOT = { change_variable = { name = integ_garrison_size  add = prev.unit_size } }
 	}
 
+	# --- [#task-27 R3/req-10] GARRISON COMMANDER: save the commander of the LARGEST garrison army on
+	# the subject's soil, so the .41.e march-out roll (and its War-Ministry perf coupling) can read his
+	# MARTIAL + ZEAL for the clean-vs-chaotic outcome. ordered_army order_by unit_size max 1 picks the
+	# principal garrison; guarded on has_commander + a live commander so a leaderless garrison saves
+	# nothing (the .41.e outcome then falls back to the edge-only split — see the option). The commander
+	# scope on an army is the proven read (se_QING_MINISTRY.txt:105). Skipped cleanly when no garrison.
+	if = {
+		limit = { var:integ_garrison_size >= 1 }
+		ordered_army = {
+			limit = {
+				is_moving = no
+				exists = unit_location
+				unit_location = { exists = owner  owner = scope:target }
+				has_commander = yes
+				commander = { is_alive = yes }
+			}
+			order_by = unit_size
+			max = 1
+			commander = { save_scope_as = integ_garrison_cmd }
+		}
+	}
+
 	# --- SUBJECT strength: the subject's POTENTIAL RISING, measured by its MANPOWER pool -----
 	# [#task-20 refine 2026-08-04] was the subject's STANDING-army unit_size, which read ~0 for a
 	# frontier governorate that fields no peacetime army — so a subject that levies a rising the moment
@@ -763,27 +786,68 @@ SUBJ_QING_resolve_integ_actors = {
 	set_variable = { name = integ_subject_size  value = scope:target.manpower }
 	change_variable = { name = integ_subject_size  divide = 500 }
 
-	# --- GARRISON EDGE band: garrison vs subject. Compare via a scratch delta so the RHS
-	#     stays a literal (the RHS-comparison rule bars a var-ref on a comparison RHS). -----
+	# --- GARRISON EDGE band: garrison cohorts vs the subject's manpower-in-cohorts. Compare via a
+	#     scratch delta so the RHS stays a literal (the RHS-comparison rule bars a var-ref on a
+	#     comparison RHS). [#task-27 R4 2026-08-04] RECALIBRATED off the old fixed ±4/-3 thresholds,
+	#     which were tuned to Yili's 500-manpower special case (size 1) and misfired at scale: any
+	#     subject with a few thousand manpower gave a subject_size in the teens, so a real banner
+	#     garrison could never reach subject+4 and the garrison options hid everywhere but Yili. The
+	#     bands are now RATIO-based and scale-robust:
+	#       dominant (edge 2) iff garrison_cohorts >= subject_size          (delta  = g − s   >= 0)
+	#       parity   (edge 1) iff garrison_cohorts*2 >= subject_size        (delta2 = 2g − s  >= 0)
+	#       else 0 (the subject's potential rising clearly outweighs the garrison)
+	#     i.e. a garrison at least HALF the subject's manpower-pool-in-cohorts counts as parity, and
+	#     one matching it counts as dominant — robust across the real 1763 manpower distribution.
 	set_variable = { name = integ_garrison_edge  value = 0 }
 	if = {
 		limit = { var:integ_garrison_size >= 1 }
-		# delta = garrison - subject; >0 garrison bigger, well below 0 subject bigger.
+		# delta = garrison - subject; >= 0 means the garrison matches or outweighs the potential rising.
 		set_variable = { name = integ_edge_delta  value = var:integ_garrison_size }
 		change_variable = { name = integ_edge_delta  subtract = var:integ_subject_size }
+		# delta2 = 2*garrison - subject; >= 0 means the garrison is at least half the potential rising.
+		set_variable = { name = integ_edge_delta2  value = var:integ_garrison_size }
+		change_variable = { name = integ_edge_delta2  multiply = 2 }
+		change_variable = { name = integ_edge_delta2  subtract = var:integ_subject_size }
 		if = {
-			limit = { var:integ_edge_delta >= 4 }
-			set_variable = { name = integ_garrison_edge  value = 2 }   # garrison clearly dominant
+			limit = { var:integ_edge_delta >= 0 }
+			set_variable = { name = integ_garrison_edge  value = 2 }   # garrison matches/outweighs => dominant
 		}
 		else_if = {
-			limit = { var:integ_edge_delta >= -3 }
-			set_variable = { name = integ_garrison_edge  value = 1 }   # rough parity
+			limit = { var:integ_edge_delta2 >= 0 }
+			set_variable = { name = integ_garrison_edge  value = 1 }   # garrison >= half => rough parity
 		}
 		# else stays 0 (subject clearly outweighs the garrison)
 		remove_variable = integ_edge_delta
+		remove_variable = integ_edge_delta2
 	}
 	LOG_line = { sys = SUBJ  msg = "integ actors: garrison size / subject size / edge band computed for subject" }
 	LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_resolve_integ_actors"  result = OK }
+}
+
+# ======================================================================
+# [#task-27 req-7/R5 2026-08-04] MINISTRY PERFORMANCE COUPLING — the amban's and the garrison's
+# performance in these integration events folds into the Lifan Yuan (理藩院, the amban's board) and
+# the Ministry of War (兵部, the garrison's board) Grand Council standing respectively.
+#
+# The two perf meters (qing_min_perf_lifanyuan / qing_min_perf_war, se_QING_MINISTRY.txt) are
+# RECOMPUTED WHOLESALE each quarterly pulse from concrete state — a bare change_variable poke on the
+# meter would be OVERWRITTEN at the next recompute (the no-restoring-drift ratchet rule + the meters'
+# own design). So the coupling is a PERSISTENT, SELF-EXPIRING signed input var that each recompute
+# READS and folds (in its office-FILLED branch — inert while the seat is vacant, which is acceptable:
+# a vacant board has no head to credit/blame). The var self-expires in 730 days (the coercive-
+# absorption-flag idiom, .30.c) so a good/bad showing fades rather than ratcheting forever. These
+# helpers SET (not change) the var to a fixed signed magnitude — the most recent outcome is what the
+# board is currently judged on; they do not accumulate. Scope: COUNTRY (ROOT = CHI).
+# ======================================================================
+# Amban outcome → Lifan Yuan. $delta$ = signed magnitude (+ success, − failure, −− death).
+SUBJ_QING_lifan_amban_outcome = {
+	set_variable = { name = qing_lifan_recent_amban_outcome  value = $delta$  days = 730 }
+	LOG_line = { sys = SUBJ  msg = "perf-fold: recent amban outcome recorded for the Lifan Yuan (delta=$delta$)" }
+}
+# Garrison outcome → Ministry of War. $delta$ = signed magnitude (+ clean crush, − chaotic/failed).
+SUBJ_QING_war_garrison_outcome = {
+	set_variable = { name = qing_war_recent_garrison_outcome  value = $delta$  days = 730 }
+	LOG_line = { sys = SUBJ  msg = "perf-fold: recent garrison outcome recorded for the Ministry of War (delta=$delta$)" }
 }
 
 # Clear the scratch actor vars. Scope: COUNTRY (ROOT = CHI). Called at each event's option tail
@@ -796,6 +860,9 @@ SUBJ_QING_clear_integ_actors = {
 	if = { limit = { has_variable = integ_subject_size }  remove_variable = integ_subject_size }
 	if = { limit = { has_variable = integ_garrison_edge } remove_variable = integ_garrison_edge }
 	if = { limit = { has_variable = integ_edge_delta }    remove_variable = integ_edge_delta }
+	if = { limit = { has_variable = integ_edge_delta2 }   remove_variable = integ_edge_delta2 }
+	if = { limit = { has_variable = integ_garrison_crush_clean } remove_variable = integ_garrison_crush_clean }
+	# scope:integ_garrison_cmd is a saved scope, not a var — it simply falls out of use, like integ_amban.
 }
 
 # ======================================================================
