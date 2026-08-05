@@ -410,3 +410,18 @@ INCOME_mitigate_deficit:111 → INCOME_sell_largest_reserve:26/50 → INCOME_sel
 FIX (deferred to #37 proper): determine where the global SHOULD be set (likely from the per-zone
 country_unit_price_* or the type-6 trade split that computes gold/silver prices) and set it there.
 Careful fix — reserve system, burn history.
+
+## #48 / #30 — Currency £→¥ — REAL FIX (icon, not text)
+Root cause of #30's failure: the on-screen currency symbol is NOT the literal £/¥ text #30
+swapped (that swap DID apply — 0 £ / 694 ¥ in mod text now). The symbol the player sees on
+money VALUES is the `@gold!` texticon = the IMAGE gfx/interface/icons/font_icons/
+font_icon_treasury.dds (font_icons.gui:113, used ~115×), plus the topbar's big
+gfx/interface/icons/shared_icons/treasury.dds. Both were a £ glyph — verified by rendering
+the DDS to PNG (25×25 and 50×50 BGRA8). #30 fixed a layer that isn't displayed.
+FIX (user chose "replace the .dds icon"): redrew BOTH icons as a ¥ glyph (Arial Bold ¥,
+sampled the £'s exact per-row gold gradient so shading matches), written back at the SAME
+dimensions/format/byte-size reusing the ORIGINAL 128-byte DDS header (25×25→2628 bytes;
+50×50→10128 bytes) so the engine loads them identically. Verified both re-render as ¥.
+The #30 text swap (£→¥ in strings) is harmless and left in place (¥ prefixes in cost loc
+strings are still correct). Other £-name hits (tech_treasury_bills, qing_con_currency,
+tradegoods) are unrelated button/good art, not the currency glyph — left alone.
