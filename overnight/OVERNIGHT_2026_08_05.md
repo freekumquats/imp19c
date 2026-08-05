@@ -345,3 +345,45 @@ resolved:
   stay governorship-scoped (documented upstream-model limitation).
 
 **Status:** DONE — committed (see git log).
+
+---
+
+## #37 — Gold/silver reserve price-when-untraded — BLOCKED ON RUNTIME PROOF (not changed)
+
+**Status: intentionally NOT changed this run.** The reserve/price-setting system is complex and — per
+memory `imp19c-vanilla-trade-request-flood-open` and the prior session's record — every previous
+attempt to change it was ultimately dismissed as too risky. The standing decision (user-set) is: do
+NOT change the reserve/price system without RUNTIME PROOF that the price is actually broken +
+a user greenlight.
+
+**Why no proof yet:** the read-only PRICE_PROBE (commit `7b4e31f22`, Aug 5 00:26) logs
+global_base_import_price_gold/silver each quarter. The newest available log is Aug 4 22:00 — it
+PREDATES the probe commit by ~2.5h, so it contains 0 PRICE_PROBE lines (confirmed: unzip -p ... |
+grep -c PRICE_PROBE = 0, even though the log has 628k IMP19C lines, i.e. it DID boot -debug_mode).
+There is simply no post-probe log to read.
+
+**Verified this run:** the probe is still in place and well-formed (oa_wealth_changes.txt:494-511),
+fires once per quarter right after the type-6 trade split, uses the proven ROOT-country-var staging
+idiom (GetGlobalVariable is unresolvable in a debug_log; se_ECON_LOG.txt SYNTAX NOTE), and emits no
+macro/# in the string. It will produce the diagnostic on the next -debug_mode boot.
+
+**Next step (needs a boot, then user):** boot -debug_mode into 1763, play a few quarters, then read
+debug.log for the PRICE_PROBE series. If gold/silver log as 0 → the reserve-sale income math is inert
+(a real bug to fix); if nonzero but wildly swinging → the thin-stockpile volatility concern. EITHER
+finding, plus a greenlight, unblocks the fix. Until then, changing the system blind would repeat the
+exact over-eager mistake the standing constraint exists to prevent.
+
+---
+
+## RUN SUMMARY (2026-08-05)
+
+Completed + committed + adversarially reviewed (in order): **#40** (3 stale 1763 seed mappings),
+**#41** (3 modern buildings → selfstr tasks), **#39** (Protectors-General roster + 5-event arc),
+**#33** (56-building modification_display / Results sweep), **#34** (military-supplies topbar
+breakdown), **#35 + #36 + #32** (Military Supplies ledger + Admin Capacity reports, incl. the
+yamen→capacity legibility). **#37** left blocked on a runtime boot (probe in place; do not change blind).
+
+Every task was code-reviewed BEFORE commit (AAA rule 1); review findings were verified against the
+repo before acting (two review "criticals" were REFUTED after verification — the overlord-guard one
+was real and fixed, the allow-vs-potential one was a conflation). All commits authored by freekumquats.
+Every commit brace-checked; loc BOM preserved.
