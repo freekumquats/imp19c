@@ -609,7 +609,7 @@ base_sub_window = {
 # ======================================================================
 base_sub_window = {
 	name = "qing_reports_window"
-	size = { 360 320 }
+	size = { 360 420 }
 	position = { 420 200 }
 	movable = yes
 
@@ -698,6 +698,36 @@ base_sub_window = {
 					onclick = "[ExecuteConsoleCommand('gui.ClearWidgets qing_reports_window')]"
 				}
 				tooltip = "qing_report_open_sinicization_button"
+			}
+
+			# [#35] Military Supplies ledger
+			text_button_square_highlighted = {
+				size = { 300 30 }
+				datacontext = "[GetScriptedGui('qing_report_open_milsupply')]"
+				visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+				blockoverride "Center_text" { text = "QING_ACTION_REPORT_MILSUPPLY_BTN"  max_width = 280 }
+				blockoverride "On_click" {
+					enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+					onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+					onclick = "[ExecuteConsoleCommand('gui.createwidget gui/qing_province_reports.gui qing_milsupply_report_window')]"
+					onclick = "[ExecuteConsoleCommand('gui.ClearWidgets qing_reports_window')]"
+				}
+				tooltip = "qing_report_open_milsupply_button"
+			}
+
+			# [#36] Administrative Capacity report
+			text_button_square_highlighted = {
+				size = { 300 30 }
+				datacontext = "[GetScriptedGui('qing_report_open_admin')]"
+				visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+				blockoverride "Center_text" { text = "QING_ACTION_REPORT_ADMIN_BTN"  max_width = 280 }
+				blockoverride "On_click" {
+					enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
+					onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+					onclick = "[ExecuteConsoleCommand('gui.createwidget gui/qing_province_reports.gui qing_admin_report_window')]"
+					onclick = "[ExecuteConsoleCommand('gui.ClearWidgets qing_reports_window')]"
+				}
+				tooltip = "qing_report_open_admin_button"
 			}
 		}
 	}
@@ -1191,6 +1221,301 @@ base_sub_window = {
 					using = Default_FontColor
 					text = "qing_friction_report_count"
 					autoresize = yes
+				}
+			}
+		}
+	}
+}
+
+# ======================================================================
+# [#35] Military Supplies Ledger window — scrollable list of provinces producing
+# a military-supply good (munitions/rifles/naval_supplies), with the country
+# income vs consumption totals in the footer. Read-only. Clones the crop-report shape.
+# ======================================================================
+base_sub_window = {
+	name = "qing_milsupply_report_window"
+	size = { 430 650 }
+	position = { 387 145 }
+	movable = yes
+
+	blockoverride "Title_text" { text = "qing_milsupply_report_title" }
+
+	blockoverride "White_buttons"
+	{
+		button_close = {
+			tooltip = "CLOSE"
+			onclick = "[ExecuteConsoleCommand('gui.ClearWidgets qing_milsupply_report_window')]"
+		}
+	}
+
+	margin_widget = {
+		size = { 100% 100% }
+
+		vbox = {
+			parentanchor = hcenter
+			margin_top = 45
+			margin_bottom = 15
+
+			scrollarea = {
+				size = { 412 0 }
+				layoutpolicy_vertical = expanding
+				scrollbarpolicy_horizontal = always_off
+				scrollbar_vertical = { using = VerticalScrollBar }
+				using = VerticalScrollAreaCutOff
+
+				# empty-state line — no province produces a military-supply good yet
+				textbox = {
+					visible = "[GetScriptedGui('qing_report_milsupply_empty').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+					size = { 380 80 }
+					parentanchor = hcenter
+					multiline = yes
+					using = BaseFontS
+					using = Default_FontColor
+					text = "qing_milsupply_report_empty"
+					align = center
+				}
+
+				scrollwidget = {
+					dynamicgridbox = {
+						datamodel = "[Player.MakeScope.GetList('qing_milsupply_report_provinces')]"
+						item = {
+							margin_widget = {
+								size = { 400 32 }
+
+								goto_button = {
+									size = { 26 26 }
+									parentanchor = vcenter
+									tooltip = "go_to"
+									blockoverride "On_click" {
+										onclick = "[OnClickOnProvince(Scope.GetProvince)]"
+										onmousehierarchyenter = "[SetHighlightProvince(Scope.GetProvince.GetId)]"
+										onmousehierarchyleave = "[ClearHighlightColors]"
+									}
+								}
+
+								margin_widget = {
+									size = { 100% 100% }
+									margin_left = 30
+
+									hbox = {
+										size = { 100% 100% }
+										spacing = 8
+
+										textbox = {
+											size = { 210 100% }
+											using = BaseFontS
+											using = Default_FontColor
+											text = "[Scope.GetProvince.GetName]"
+											align = left|vcenter
+											tooltip = "[Scope.GetProvince.GetTradeGoods.GetTooltip]"
+										}
+										icon = {
+											size = { 24 24 }
+											parentanchor = vcenter
+											texture = "[GetTradeGoodsIcon(Scope.GetProvince.GetTradeGoods)]"
+											tooltip = "[Scope.GetProvince.GetTradeGoods.GetTooltip]"
+										}
+										textbox = {
+											size = { 110 100% }
+											using = BaseFontS
+											using = Default_FontColor
+											text = "[Scope.GetProvince.Custom('province_actual_goods_produced')]"
+											align = right|vcenter
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			widget = { size = { 0 10 } }
+
+			# footer — country income vs consumption (same svalues as the #34 topbar tooltip)
+			margin_widget = {
+				size = { 0 60 }
+				layoutpolicy_horizontal = expanding
+
+				textbox = {
+					parentanchor = hcenter
+					position = { 0 8 }
+					using = BaseFontM
+					using = Default_FontColor
+					text = "qing_milsupply_report_totals"
+					autoresize = yes
+					multiline = yes
+				}
+			}
+		}
+	}
+}
+
+# ======================================================================
+# [#36 / #32] Administrative Capacity window — scrollable list of governorship-states
+# with admin PROVIDED / REQUIRED / available and yamen + district counts; a per-state
+# deficit marker; the country supplied / required / available totals in the footer.
+# The yamen count column makes the yamen -> admin-capacity link (#32) legible. Read-only.
+# ======================================================================
+base_sub_window = {
+	name = "qing_admin_report_window"
+	size = { 540 650 }
+	position = { 387 145 }
+	movable = yes
+
+	blockoverride "Title_text" { text = "qing_admin_report_title" }
+
+	blockoverride "White_buttons"
+	{
+		button_close = {
+			tooltip = "CLOSE"
+			onclick = "[ExecuteConsoleCommand('gui.ClearWidgets qing_admin_report_window')]"
+		}
+	}
+
+	margin_widget = {
+		size = { 100% 100% }
+
+		vbox = {
+			parentanchor = hcenter
+			margin_top = 45
+			margin_bottom = 15
+
+			# column header row
+			margin_widget = {
+				size = { 522 24 }
+				hbox = {
+					size = { 100% 100% }
+					margin_left = 36
+					spacing = 6
+					textbox = { size = { 150 100% }  using = BaseFontS  using = Default_FontColor  text = "qing_admin_report_col_state"  align = left|vcenter }
+					textbox = { size = { 66 100% }   using = BaseFontS  using = Default_FontColor  text = "qing_admin_report_col_prov"   align = right|vcenter  tooltip = "qing_admin_report_col_prov_tt" }
+					textbox = { size = { 66 100% }   using = BaseFontS  using = Default_FontColor  text = "qing_admin_report_col_req"    align = right|vcenter  tooltip = "qing_admin_report_col_req_tt" }
+					textbox = { size = { 66 100% }   using = BaseFontS  using = Default_FontColor  text = "qing_admin_report_col_avail"  align = right|vcenter  tooltip = "qing_admin_report_col_avail_tt" }
+					textbox = { size = { 44 100% }   using = BaseFontS  using = Default_FontColor  text = "qing_admin_report_col_yamen"  align = right|vcenter  tooltip = "qing_admin_report_col_yamen_tt" }
+					textbox = { size = { 44 100% }   using = BaseFontS  using = Default_FontColor  text = "qing_admin_report_col_dist"   align = right|vcenter  tooltip = "qing_admin_report_col_dist_tt" }
+				}
+			}
+
+			scrollarea = {
+				size = { 522 0 }
+				layoutpolicy_vertical = expanding
+				scrollbarpolicy_horizontal = always_off
+				scrollbar_vertical = { using = VerticalScrollBar }
+				using = VerticalScrollAreaCutOff
+
+				textbox = {
+					visible = "[GetScriptedGui('qing_report_admin_empty').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
+					size = { 490 80 }
+					parentanchor = hcenter
+					multiline = yes
+					using = BaseFontS
+					using = Default_FontColor
+					text = "qing_admin_report_empty"
+					align = center
+				}
+
+				scrollwidget = {
+					dynamicgridbox = {
+						datamodel = "[Player.MakeScope.GetList('qing_admin_report_states')]"
+						item = {
+							margin_widget = {
+								size = { 518 30 }
+
+								goto_button = {
+									size = { 26 26 }
+									parentanchor = vcenter
+									tooltip = "go_to"
+									blockoverride "On_click" {
+										onclick = "[OnClickOnProvince(Scope.GetState.GetCapital)]"
+										onmousehierarchyenter = "[SetHighlightArea(Scope.GetState.GetArea)]"
+										onmousehierarchyleave = "[ClearHighlightColors]"
+									}
+								}
+
+								margin_widget = {
+									size = { 100% 100% }
+									margin_left = 30
+
+									hbox = {
+										size = { 100% 100% }
+										spacing = 6
+
+										textbox = {
+											size = { 150 100% }
+											using = BaseFontS
+											using = Default_FontColor
+											text = "[Scope.GetState.GetName]"
+											align = left|vcenter
+										}
+										# provided capacity (from this state's yamens + districts + capital share)
+										textbox = {
+											size = { 66 100% }
+											using = BaseFontS
+											using = Default_FontColor
+											text = "[Scope.GetState.MakeScope.GetVariable('qing_admin_rep_provided').GetValue|0]"
+											align = right|vcenter
+										}
+										textbox = {
+											size = { 66 100% }
+											using = BaseFontS
+											using = Default_FontColor
+											text = "[Scope.GetState.MakeScope.GetVariable('qing_admin_rep_required').GetValue|0]"
+											align = right|vcenter
+										}
+										# available = provided - required. RED when this state is in deficit
+										# (qing_report_admin_state_deficit gate: available < 0), else green surplus.
+										textbox = {
+											visible = "[GetScriptedGui('qing_report_admin_state_deficit').IsShown( GuiScope.SetRoot( Scope.GetState.MakeScope ).End )]"
+											size = { 66 100% }
+											using = BaseFontS
+											text = "#R [Scope.GetState.MakeScope.GetVariable('qing_admin_rep_available').GetValue|0]#!"
+											align = right|vcenter
+										}
+										textbox = {
+											visible = "[Not( GetScriptedGui('qing_report_admin_state_deficit').IsShown( GuiScope.SetRoot( Scope.GetState.MakeScope ).End ) )]"
+											size = { 66 100% }
+											using = BaseFontS
+											text = "#G [Scope.GetState.MakeScope.GetVariable('qing_admin_rep_available').GetValue|0]#!"
+											align = right|vcenter
+										}
+										textbox = {
+											size = { 44 100% }
+											using = BaseFontS
+											using = Default_FontColor
+											text = "[Scope.GetState.MakeScope.GetVariable('qing_admin_rep_yamens').GetValue|0]"
+											align = right|vcenter
+										}
+										textbox = {
+											size = { 44 100% }
+											using = BaseFontS
+											using = Default_FontColor
+											text = "[Scope.GetState.MakeScope.GetVariable('qing_admin_rep_districts').GetValue|0]"
+											align = right|vcenter
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			widget = { size = { 0 10 } }
+
+			# footer — country supplied / required / available totals
+			margin_widget = {
+				size = { 0 70 }
+				layoutpolicy_horizontal = expanding
+
+				textbox = {
+					parentanchor = hcenter
+					position = { 0 8 }
+					using = BaseFontM
+					using = Default_FontColor
+					text = "qing_admin_report_totals"
+					autoresize = yes
+					multiline = yes
 				}
 			}
 		}

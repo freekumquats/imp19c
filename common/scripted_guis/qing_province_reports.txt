@@ -500,3 +500,125 @@ qing_prov_has_mission_gui = {
 	ai_is_valid = { always = no }
 	is_shown = { QING_prov_has_mission = yes }
 }
+
+# ======================================================================
+# [#35] COUNTRY-SCOPE: open the MILITARY SUPPLIES LEDGER report.
+# Lists every owned province that PRODUCES a military-supply good (early/late
+# munitions, rifles, naval_supplies), with its good and per-province output, so
+# the player can see WHERE the empire's supplies come from — the concrete face
+# of the topbar figure (#34 surfaces the country totals; this surfaces the sites).
+# The window footer shows the country income vs consumption totals (the same
+# svalues the #34 topbar tooltip uses). Read-only; degrades to empty gracefully.
+# ======================================================================
+qing_report_open_milsupply = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		LOG_line = { sys = QING  msg = "military-supply ledger opened by" }
+		clear_variable_list = qing_milsupply_report_provinces
+		# [#35 review-fix #4] every_owned_province, NOT every_governorships -> state -> province:
+		# the governorship descent EXCLUDES the capital domain (boot #10 root cause, migration report
+		# fix at :151-158), so a Self-Strengthening arsenal / navy yard seeded in the capital domain
+		# would produce munitions yet never appear in the ledger. every_owned_province lists ALL the
+		# empire's producing provinces (proven iterator, same as the migration report's PASS 2). The
+		# footer totals remain governorship-scoped (the upstream military-supply model is; a documented
+		# limitation, not introduced here) — the LIST is now complete regardless.
+		every_owned_province = {
+			save_scope_as = this_prov
+			# only provinces producing a military-supply good
+			if = {
+				limit = {
+					scope:this_prov = {
+						OR = {
+							trade_goods = early_munitions
+							trade_goods = late_munitions
+							trade_goods = rifles
+							trade_goods = naval_supplies
+						}
+					}
+				}
+				root = {
+					add_to_variable_list = {
+						name = qing_milsupply_report_provinces
+						target = scope:this_prov
+					}
+				}
+			}
+		}
+	}
+}
+
+# EMPTY-STATE gate (proven has_variable_list negation idiom) — no province
+# produces a military-supply good yet (true at a 1763 start before the
+# Self-Strengthening arsenals/yards stand up).
+qing_report_milsupply_empty = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { NOT = { has_variable_list = qing_milsupply_report_provinces } }
+}
+
+# ======================================================================
+# [#36 / #32] COUNTRY-SCOPE: open the ADMINISTRATIVE CAPACITY report.
+# Lists every governorship-state with its admin capacity PROVIDED vs REQUIRED
+# (the ADMIN_svalues model) and its yamen + administration-district counts — so
+# the yamen -> admin-capacity link (#32) is legible and per-state deficit/surplus
+# is visible. Each state carries snapshot vars read by the window; the footer
+# shows the country supplied / required / available totals. Read-only.
+# ======================================================================
+qing_report_open_admin = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		LOG_line = { sys = QING  msg = "admin-capacity report opened by" }
+		clear_variable_list = qing_admin_report_states
+		every_governorships = {
+			every_governorship_state = {
+				save_scope_as = this_state
+				# snapshot the state's admin provided / required + building counts onto the
+				# state, so the window can read them via Scope.GetState.MakeScope.GetVariable.
+				set_variable = { name = qing_admin_rep_provided  value = ADMIN_provided_state }
+				set_variable = { name = qing_admin_rep_required  value = ADMIN_required_state }
+				# available = provided - required (negative = deficit).
+				set_variable = { name = qing_admin_rep_available  value = ADMIN_provided_state }
+				change_variable = { name = qing_admin_rep_available  subtract = ADMIN_required_state }
+				# yamen + admin-district counts across the state's provinces. Inside
+				# every_state_province THIS = the province and prev = this state (scope:this_state);
+				# read the per-province building count on the province and accumulate onto the state var.
+				set_variable = { name = qing_admin_rep_yamens  value = 0 }
+				set_variable = { name = qing_admin_rep_districts  value = 0 }
+				every_state_province = {
+					save_scope_as = admin_rep_prov
+					scope:this_state = {
+						change_variable = { name = qing_admin_rep_yamens  add = scope:admin_rep_prov.num_of_qing_yamen_building }
+						change_variable = { name = qing_admin_rep_districts  add = scope:admin_rep_prov.num_of_URB_administration_district }
+					}
+				}
+				root = {
+					add_to_variable_list = {
+						name = qing_admin_report_states
+						target = scope:this_state
+					}
+				}
+			}
+		}
+	}
+}
+
+# EMPTY-STATE gate — no governorship-states (should not happen for CHI, safety net).
+qing_report_admin_empty = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { NOT = { has_variable_list = qing_admin_report_states } }
+}
+
+# PER-STATE deficit gate (drives a red/green marker in the admin window): this state's
+# admin available < 0 (required exceeds provided).
+qing_report_admin_state_deficit = {
+	scope = state
+	ai_is_valid = { always = no }
+	is_shown = { has_variable = qing_admin_rep_available  var:qing_admin_rep_available < 0 }
+}

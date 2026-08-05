@@ -289,3 +289,59 @@ mismatch made adjacent by this change. FIXED: added MILITARY_supplies_country_co
 (same addends, positive) and used it in the "consumes X" clause so total + breakdown agree in sign.
 
 **Status:** DONE — committed (see git log).
+
+---
+
+## #35 + #36 (+#32) — two new Reports-hub reports: Military Supplies ledger + Admin Capacity — IMPLEMENTED
+
+Both are new tabs in the existing Reports hub (qing_reports_window, opened from the Central
+Secretariat). #36 (Admin Capacity) directly satisfies #32 (surface the yamen→admin-capacity link):
+its yamen-count column + per-yamen capacity tooltip makes the link legible, so #32 is folded in.
+
+**#35 — Military Supplies Ledger:** scripted-gui `qing_report_open_milsupply` walks owned provinces
+and lists those producing a military-supply good (early/late munitions, rifles, naval_supplies) into
+qing_milsupply_report_provinces; the window shows province + good icon + actual output
+(Custom('province_actual_goods_produced'), proven province_window.gui:1314), with a footer of the
+realm's quarterly income / consumption / stockpile (same svalues as #34). Empty-state gate for a fresh
+1763 start (no arsenals yet).
+
+**#36 — Administrative Capacity:** scripted-gui `qing_report_open_admin` walks governorship-states,
+snapshots each state's ADMIN_provided_state / ADMIN_required_state / available + yamen & district
+counts onto the state (read back via Scope.GetState.MakeScope.GetVariable, proven), lists them in a
+5-column table (state / provided / required / yamens / districts) with a per-state deficit gate
+(qing_report_admin_state_deficit) and a footer of the country ADMIN_supplied/required/available totals.
+The yamen column's tooltip states the 8-per-yamen / 10-per-district capacity — surfacing #32.
+
+**Scope-correctness catch:** in the admin walk, accumulating per-province building counts onto the
+state var required the right scope dance — inside every_state_province THIS=province, prev=state; saved
+the province as scope:admin_rep_prov and added scope:admin_rep_prov.num_of_X onto scope:this_state's var
+(scope:X.num_of_BUILDING proven se_MARRIAGE_PLAY.txt:179). Also simplified the "provided" cell from a
+loc-indirection to an inline read (removed the now-unused loc key).
+
+**Wiring:** two new buttons in the hub window (grown 320→420h), each Execute()s its opener + opens its
+window; loc for buttons (qing_governance_l_english.yml) + windows (qing_province_reports_l_english.yml,
+BOM preserved).
+
+**Files:** common/scripted_guis/qing_province_reports.txt, gui/qing_province_reports.gui,
+localization/english/qing_province_reports_l_english.yml, localization/english/qing_governance_l_english.yml.
+
+**Status:** implemented; pending adversarial code-review before commit.
+
+**Review (#35/#36):** code-review CLEAN on all 8 concern areas (scope-correctness of the yamen/district
+accumulation confirmed, ADMIN svalues genuinely state-scope, list/datamodel scopes match, hub-button
+order + window sizing correct, all datafunctions proven, braces balanced, BOM kept). 4 findings, all
+resolved:
+- #1 (MEDIUM): dangling tooltip key qing_report_open_admin_button. FIXED — added the loc.
+- #2 (LOW-MED): dead deficit gate + unused `available` var. FIXED by WIRING them — added an "Avail."
+  column (provided − required) colored #R red#! on deficit / #G green#! on surplus via the
+  qing_report_admin_state_deficit gate; widened the window + row for the column + its header/tooltip loc.
+- #3 (LOW): state snapshot vars persist without expiry — accepted (read-only snapshot, overwritten each
+  open; same trade-off as the other reports).
+- #4 (PLAUSIBLE, the important one): both walked every_governorships, which EXCLUDES the capital domain
+  (boot #10 class). For the ADMIN report that's model-consistent (ADMIN totals are governorship-scoped)
+  — left as-is. For the MILSUPPLY ledger it was a real gap: an arsenal/navy-yard seeded in the capital
+  domain would produce yet never list. FIXED — switched the milsupply walk to every_owned_province (the
+  same fix boot #10 applied to the migration report), so the producer list is complete; footer totals
+  stay governorship-scoped (documented upstream-model limitation).
+
+**Status:** DONE — committed (see git log).
