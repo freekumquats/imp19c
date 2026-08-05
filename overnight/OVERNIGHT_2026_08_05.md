@@ -425,3 +425,17 @@ dimensions/format/byte-size reusing the ORIGINAL 128-byte DDS header (25×25→2
 The #30 text swap (£→¥ in strings) is harmless and left in place (¥ prefixes in cost loc
 strings are still correct). Other £-name hits (tech_treasury_bills, qing_con_currency,
 tradegoods) are unrelated button/good art, not the currency glyph — left alone.
+
+## #47 — Conservative-Bloc "C" chip in the Character window — FIXED (all characters, per user)
+User directive refined mid-task: NOBODY should show the "C" chip in the Character window — not
+just ambans. So instead of an amban-specific guard, the chip is flatly hidden across the whole
+Character window:
+- characters_view.gui:999 (roster card party chip) -> visible = no.
+- characters_view.gui family-member portraits (cpt_button, gui_base PartyIcons block) ->
+  blockoverride "PartyIcons" {} (the proven Lifan-Yuan suppression idiom).
+- characterwindow.gui:110 (the character DETAIL window portrait chip) -> visible = no, so an
+  amban (or anyone) opened from the roster no longer shows the bloc chip on his detail card either
+  (the code-review of the earlier amban-only version flagged this detail-window site as missed).
+REVERTED my earlier over-reach: the gui_base.gui shared-template change (4 party-chip lines) was
+NOT what was asked (it affects many other windows) — reverted; only the two Character-window files
+are touched. Braces balanced both.
