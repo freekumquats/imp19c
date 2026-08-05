@@ -87,7 +87,7 @@ def i_coin():
     try:
         from PIL import ImageFont
         font=ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Unicode.ttf",int(PX*S*0.5))
-        d.text((c,c),"£",font=font,fill=(120,90,20,255),anchor='mm')
+        d.text((c,c),"¥",font=font,fill=(120,90,20,255),anchor='mm')
     except Exception:
         d.ellipse((int(PX*S*0.3),int(PX*S*0.3),int(PX*S*0.7),int(PX*S*0.7)),outline=(120,90,20,255),width=int(PX*S*0.05))
     return im
