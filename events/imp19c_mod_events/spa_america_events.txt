@@ -291,3 +291,154 @@ spa_america.5 = {
 		ai_chance = { factor = 10 }
 	}
 }
+
+# ======================================================================
+# .6  1810.09.16  THE SPANISH-AMERICAN WARS OF INDEPENDENCE (西屬美洲獨立戰爭)
+# [#task-29 2026-08-04] The wave of wars by which Spain's American viceroyalties broke away,
+# 1810-1825. This REPLACES the vanilla setup_trigger_spanish_american_independence_wars for the
+# 1763 bookmark (see below) — that trigger was authored for the 1815 START, where the patriot
+# tags stood as SOVEREIGN republics fighting sovereign royalist tags (MEX-vs-NSP, VNZ-vs-CPV,
+# AR1-vs-CHR) with conquer_wargoal. The 1763 territorial rework (#31/#40/#232/#296) rebuilt
+# Spanish America as a real SUBJECT HIERARCHY (SPA -> {NSP, PR1, SFB}; SFB -> {QTO, VNZ};
+# PR1 -> {AR1, CHL, LFP, PRG}) and emptied 7 of the trigger's declarers to landless-inert, so
+# the old trigger fires stale 1815 pairs that no longer match the map. Here each viceroyalty
+# instead declares its INDEPENDENCE WAR on its ACTUAL 1763 overlord — the engine-native model,
+# valid because independence_wargoal is gated is_subject = yes (common/wargoals/00_default.txt)
+# and these ARE real subjects now.
+#
+# PROVEN IDIOM (UPSTREAM Invictus, epigoni.txt:1008): from the SUBJECT scope, the bare engine
+# verb `declare_war_with_wargoal = { war_goal = independence_wargoal  province = capital_scope
+# target = c:<overlord> }` — no release_subject, no FUNC wrapper (the freekumquats
+# FUNC_declare_war_with_wargoal_province floods when its every_subject add_to_war loop's
+# current_war_scope fails to save; the bare verb skips that loop, as in imp19c_setup.2/USA).
+#
+# MEX is DELIBERATELY absent: it is landless-inert until spa_america.4 (this same 1810 beat)
+# re-lands + colonises it, after which the mex_instability arc walks it to independence on its
+# own timeline. Adding a MEX independence war here would race that re-landing.
+#
+# CHR (Charcas / Upper Peru) is ALSO deliberately absent though it is a landed PR1 subject: Upper
+# Peru was the royalist stronghold that outlasted the whole war, freed only from OUTSIDE in 1825
+# (Sucre's Ayacucho campaign) — it mounted no successful war of its own, so it correctly stays
+# PR1's subject through the wave. VNZ's own sub-protectorates (TNJ/CAU/ANQ) likewise do not
+# separately revolt (they follow VNZ). Each declaration below is bilateral subject-vs-DIRECT-
+# overlord.
+#
+# [#task-29 review-fix 2026-08-04] Each guard ALSO tests NOT = { war_with = <overlord> }: if the
+# engine has already drawn the declarer into a war with that overlord (e.g. called in to defend a
+# grand-overlord when a sibling declared first), a fresh declare_war_with_wargoal on a country you
+# are already at war with would be rejected by the engine and silently no-op — the guard turns that
+# into a clean, explicit skip (and suppresses the misleading "declares independence" LOG line for it).
+#
+# Each declaration is independently guarded (declarer exists + is still the subject of the
+# intended overlord + both landed), so a war the AI/player already resolved, or a subject
+# already freed, is a clean no-op. ROOT carrier = c:SPA (self-scoping via absolute c:TAG refs).
+# Hidden, one-shot (own done-flag). Fires at the 1810 Bayonne-collapse window, like .4.
+# ======================================================================
+spa_america.6 = {
+	type = country_event
+	hidden = yes
+
+	trigger = {
+		tag = SPA
+		NOT = { has_variable = spa_america_beat_independence_wars }
+	}
+
+	immediate = {
+		set_variable = spa_america_beat_independence_wars
+		LOG_line = { sys = SPA  msg = "EVENT spa_america.6: the Spanish-American wars of independence break out (1810) for [ROOT.GetTag]" }
+
+		# --- Top-level viceroyalties revolt against SPAIN itself -----------------------------
+		# New Granada (Santa Fe de Bogotá = SFB) — the Gran Colombia war.
+		if = {
+			limit = {
+				exists = c:SFB
+				c:SFB = { is_subject_of = c:SPA  any_owned_province = { count >= 1 }  NOT = { war_with = c:SPA } }
+			}
+			c:SFB = {
+				declare_war_with_wargoal = { war_goal = independence_wargoal  province = capital_scope  target = c:SPA }
+			}
+			LOG_line = { sys = SPA  msg = "spa_america.6: New Granada (SFB) declares independence on Spain" }
+		}
+		# Peru (PR1) — the Andean war.
+		if = {
+			limit = {
+				exists = c:PR1
+				c:PR1 = { is_subject_of = c:SPA  any_owned_province = { count >= 1 }  NOT = { war_with = c:SPA } }
+			}
+			c:PR1 = {
+				declare_war_with_wargoal = { war_goal = independence_wargoal  province = capital_scope  target = c:SPA }
+			}
+			LOG_line = { sys = SPA  msg = "spa_america.6: Peru (PR1) declares independence on Spain" }
+		}
+
+		# --- Sub-viceroyalties revolt against their IMMEDIATE overlord ----------------------
+		# (Historically the wars were nested and simultaneous; independence_wargoal handles a
+		# subject-vs-immediate-overlord war at any depth — the same verb USA-vs-GBR uses.)
+		# Venezuela (VNZ) vs New Granada (SFB).
+		if = {
+			limit = {
+				exists = c:VNZ
+				c:VNZ = { is_subject_of = c:SFB  any_owned_province = { count >= 1 }  NOT = { war_with = c:SFB } }
+			}
+			c:VNZ = {
+				declare_war_with_wargoal = { war_goal = independence_wargoal  province = capital_scope  target = c:SFB }
+			}
+			LOG_line = { sys = SPA  msg = "spa_america.6: Venezuela (VNZ) declares independence on New Granada (SFB)" }
+		}
+		# Quito (QTO) vs New Granada (SFB).
+		if = {
+			limit = {
+				exists = c:QTO
+				c:QTO = { is_subject_of = c:SFB  any_owned_province = { count >= 1 }  NOT = { war_with = c:SFB } }
+			}
+			c:QTO = {
+				declare_war_with_wargoal = { war_goal = independence_wargoal  province = capital_scope  target = c:SFB }
+			}
+			LOG_line = { sys = SPA  msg = "spa_america.6: Quito (QTO) declares independence on New Granada (SFB)" }
+		}
+		# Río de la Plata (AR1) vs Peru (PR1).
+		if = {
+			limit = {
+				exists = c:AR1
+				c:AR1 = { is_subject_of = c:PR1  any_owned_province = { count >= 1 }  NOT = { war_with = c:PR1 } }
+			}
+			c:AR1 = {
+				declare_war_with_wargoal = { war_goal = independence_wargoal  province = capital_scope  target = c:PR1 }
+			}
+			LOG_line = { sys = SPA  msg = "spa_america.6: Río de la Plata (AR1) declares independence on Peru (PR1)" }
+		}
+		# Chile (CHL) vs Peru (PR1).
+		if = {
+			limit = {
+				exists = c:CHL
+				c:CHL = { is_subject_of = c:PR1  any_owned_province = { count >= 1 }  NOT = { war_with = c:PR1 } }
+			}
+			c:CHL = {
+				declare_war_with_wargoal = { war_goal = independence_wargoal  province = capital_scope  target = c:PR1 }
+			}
+			LOG_line = { sys = SPA  msg = "spa_america.6: Chile (CHL) declares independence on Peru (PR1)" }
+		}
+		# Litoral / Banda Oriental (LFP) vs Peru (PR1).
+		if = {
+			limit = {
+				exists = c:LFP
+				c:LFP = { is_subject_of = c:PR1  any_owned_province = { count >= 1 }  NOT = { war_with = c:PR1 } }
+			}
+			c:LFP = {
+				declare_war_with_wargoal = { war_goal = independence_wargoal  province = capital_scope  target = c:PR1 }
+			}
+			LOG_line = { sys = SPA  msg = "spa_america.6: Banda Oriental (LFP) declares independence on Peru (PR1)" }
+		}
+		# Paraguay (PRG) vs Peru (PR1).
+		if = {
+			limit = {
+				exists = c:PRG
+				c:PRG = { is_subject_of = c:PR1  any_owned_province = { count >= 1 }  NOT = { war_with = c:PR1 } }
+			}
+			c:PRG = {
+				declare_war_with_wargoal = { war_goal = independence_wargoal  province = capital_scope  target = c:PR1 }
+			}
+			LOG_line = { sys = SPA  msg = "spa_america.6: Paraguay (PRG) declares independence on Peru (PR1)" }
+		}
+	}
+}
