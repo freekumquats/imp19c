@@ -1,0 +1,329 @@
+########################################################################
+# qing_march_events.txt — the PROTECTORS-GENERAL (都護府 march Governors-General)
+# lifecycle events (#39).
+#
+# The 都護府 frontier marches (se_QING_MARCH.txt): subject countries carrying
+# qing_march=1, each ruled by a Lifan-Yuan-appointed Governor-General (the march's
+# current_ruler, installed by QING_march_appoint_gg). Modelled on the AMBAN arc
+# (qing_amban_events.txt) — the GGs are Lifan appointees exactly as the ambans are,
+# so they get the same central-roster visibility (Lifan Yuan panel) and the same kind
+# of lifecycle/interaction events. Events (5, right-sized to the amban arc's 4):
+#   qing_march.1 — PETITION for support (協餉): the GG asks the throne for more silver
+#                  and/or troops. Grant (recurring/one-off cost) or deny (neglect teeth).
+#   qing_march.2 — UNREST in the protectorate: a rising among the march's own princely-
+#                  state subjects; the GG puts it down (skill check) or imperial aid.
+#   qing_march.3 — an ABLE Governor-General (reward): commend or note.
+#   qing_march.4 — an OVERMIGHTY / gone-native GG: recall & reappoint, or leave him.
+#   qing_march.5 — TURNOVER: the GG dies / must be replaced.
+#
+# CHI player-only; fired from QING_march_evaluate (se_QING_MARCH.txt), which saves
+# scope:qing_march_evt_march (the march) + scope:qing_march_evt_gg (its GG) on the
+# fire path and throttles to at most one court event per quarter (qing_gc_event_slot_used).
+# Every event's `trigger` RE-VALIDATES the saved scopes (they were saved 5-15 days
+# earlier — the march could have been lost, the GG could have died), so a stale scope
+# simply no-fires. Namespace qing_march.
+#
+# Every outcome folds a signed magnitude into qing_lifan_recent_march_outcome (a self-
+# expiring 730d var) via QING_march_recent_gg_outcome, which the Lifan Yuan performance
+# recompute reads at HALF weight (term h) — good/bad GG management moves the Court of
+# Colonial Affairs' Grand Council standing, exactly as amban outcomes do, without a ratchet.
+#
+# NO BOM (events convention).
+########################################################################
+
+namespace = qing_march
+
+# ======================================================================
+# qing_march.1 — PETITION FOR SUPPORT (協餉). The Governor-General asks the throne for
+# more silver (a higher subsidy tier) and/or troops. GRANT SILVER lifts the subsidy tier
+# (recurring treasury cost via the tier modifier). GRANT TROOPS also lifts the tier and
+# rebuilds the host (one-off manpower via QING_march_size_army). DENY is soft-but-real:
+# a stacking neglect opinion so repeated denials compound. A high-skill GG's grant costs
+# LESS (the throne trusts his judgment) — a cost MODIFIER, not a success roll.
+# ======================================================================
+qing_march.1 = {
+	type = country_event
+	title = "qing_march.1.t"
+	desc = "qing_march.1.desc"
+	picture = chinese_throne_room
+	left_portrait = scope:qing_march_evt_gg
+	trigger = {
+		tag = CHI
+		exists = scope:qing_march_evt_march
+		exists = scope:qing_march_evt_gg
+		scope:qing_march_evt_march = { is_subject_of = ROOT  has_variable = qing_march }
+		scope:qing_march_evt_gg = { is_alive = yes }
+		# still something to grant (not already at the top tier)
+		scope:qing_march_evt_march = { NOT = { var:qing_subsidy_tier = flag:high } }
+	}
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_march.1 (petition for support) [ROOT.GetTag]" }
+	}
+
+	# GRANT SILVER — raise the subsidy one tier (recurring cost, borne through the tier
+	# modifier). A capable GG (finesse >= 6) is trusted with the funds, so the up-front
+	# grant costs less; a poorer one costs more (the light skill gate — a cost modifier).
+	option = {
+		name = "qing_march.1.a"
+		custom_tooltip = "qing_march.1.a.tt"
+		# raise the tier: small -> medium -> high. scope:target is what QING_march_set_subsidy reads.
+		scope:qing_march_evt_march = { save_scope_as = target }
+		if =      { limit = { scope:qing_march_evt_march = { var:qing_subsidy_tier = flag:medium } }  QING_march_set_subsidy = { tier = high } }
+		else =    { QING_march_set_subsidy = { tier = medium } }
+		# [#39 review-fix #3] modest up-front cost (silver is the LIGHTER grant — it raises the
+		# standing subsidy but does NOT mobilise a host now; the troops option does that and costs
+		# more overall). Scaled by the GG's finesse (trusted stewardship = cheaper).
+		if = {
+			limit = { scope:qing_march_evt_gg = { finesse >= 6 } }
+			add_treasury = -20
+		}
+		else = {
+			add_treasury = -35
+		}
+		QING_march_recent_gg_outcome = { delta = 4 }
+	}
+
+	# GRANT TROOPS — raise the tier AND rebuild the host to the new establishment now
+	# (QING_march_size_army bills the one-off manpower levy for the cohorts raised).
+	option = {
+		name = "qing_march.1.b"
+		custom_tooltip = "qing_march.1.b.tt"
+		scope:qing_march_evt_march = { save_scope_as = target }
+		if =      { limit = { scope:qing_march_evt_march = { var:qing_subsidy_tier = flag:medium } }  QING_march_set_subsidy = { tier = high } }
+		else =    { QING_march_set_subsidy = { tier = medium } }
+		# [#39 review-fix #3] QING_march_set_subsidy already resizes the host (the one-off manpower
+		# levy is billed inside QING_march_size_army). This option ALSO carries a heavier treasury
+		# cost than the silver grant — it delivers both the tier AND an immediate mobilisation, so it
+		# must not strictly dominate the cheaper silver-only option.
+		add_treasury = -55
+		QING_march_recent_gg_outcome = { delta = 4 }
+	}
+
+	# DENY — no immediate breakaway, but the march feels neglected. The opinion stacks and
+	# decays, so repeated denials compound (the design's denial teeth).
+	option = {
+		name = "qing_march.1.c"
+		custom_tooltip = "qing_march.1.c.tt"
+		scope:qing_march_evt_march = {
+			add_opinion = { modifier = qing_march_neglected_opinion  target = ROOT }
+		}
+		QING_march_recent_gg_outcome = { delta = -3 }
+	}
+}
+
+# ======================================================================
+# qing_march.2 — UNREST IN THE PROTECTORATE. A rising among the march's own princely-state
+# subjects (or its provinces). LET THE GG HANDLE IT = a skill check on his martial + zeal
+# (the qing_garrison_clean_crush_chance_svalue idiom, #27): clean = cheap, chaotic = toll.
+# SEND IMPERIAL AID = reliable but a treasury cost and the GG stands down (undermined).
+# ======================================================================
+qing_march.2 = {
+	type = country_event
+	title = "qing_march.2.t"
+	desc = "qing_march.2.desc"
+	picture = senate_debate
+	left_portrait = scope:qing_march_evt_gg
+	trigger = {
+		tag = CHI
+		exists = scope:qing_march_evt_march
+		exists = scope:qing_march_evt_gg
+		scope:qing_march_evt_march = { is_subject_of = ROOT  has_variable = qing_march }
+		scope:qing_march_evt_gg = { is_alive = yes }
+		# [#39 review-fix #1] re-assert the firing CONDITION (not just scope existence): the event
+		# fires 5-15 days after QING_march_evaluate scored it, so the rising could already have
+		# subsided. Parity with the amban arc (which re-checks its condition in-trigger). No-fire if
+		# the unrest is gone, so the player is never shown a rebellion that no longer exists.
+		scope:qing_march_evt_march = {
+			OR = {
+				any_owned_province = { count >= 1  province_unrest >= 3 }
+				any_subject = { any_owned_province = { count >= 1  province_unrest >= 3 } }
+			}
+		}
+	}
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_march.2 (unrest in the protectorate) [ROOT.GetTag]" }
+	}
+
+	# LET THE GG HANDLE IT — skill check on the GG's martial + zeal.
+	option = {
+		name = "qing_march.2.a"
+		custom_tooltip = "qing_march.2.a.tt"
+		# roll the GG's clean-suppression chance in his own scope (the proven skill-roll idiom).
+		scope:qing_march_evt_gg = {
+			random = {
+				chance = qing_garrison_clean_crush_chance_svalue
+				ROOT = { set_variable = { name = qing_march_unrest_clean  value = 1 } }
+			}
+		}
+		if = {
+			limit = { has_variable = qing_march_unrest_clean }
+			# CLEAN: a small toll; the GG's standing rises; the Court is credited.
+			add_stability = -1
+			scope:qing_march_evt_gg = { QING_char_promote_standing = { pop = 3  prom = 2 } }
+			QING_march_recent_gg_outcome = { delta = 4 }
+			remove_variable = qing_march_unrest_clean
+		}
+		else = {
+			# CHAOTIC: a larger toll; the march's loyalty suffers.
+			add_stability = -3
+			scope:qing_march_evt_march = {
+				add_opinion = { modifier = qing_amban_ineffective_opinion  target = ROOT }
+			}
+			QING_march_recent_gg_outcome = { delta = -4 }
+		}
+	}
+
+	# SEND IMPERIAL AID — reliable, a treasury cost, and the GG is undermined (imperial
+	# troops did what he could not).
+	option = {
+		name = "qing_march.2.b"
+		custom_tooltip = "qing_march.2.b.tt"
+		add_treasury = -60
+		add_stability = -1
+		# the GG loses face; his affinity to the throne dips (he was passed over).
+		scope:qing_march_evt_gg = {
+			QING_char_affinity = yes
+			change_variable = { name = qing_char_affinity  subtract = 5 }
+		}
+		QING_march_recent_gg_outcome = { delta = -2 }
+	}
+}
+
+# ======================================================================
+# qing_march.3 — AN ABLE GOVERNOR-GENERAL (reward). A capable GG pacifies/expands the march.
+# COMMEND (gold + standing, small treasury) or NOTE IT (small standing). Clone of qing_amban.3.
+# ======================================================================
+qing_march.3 = {
+	type = country_event
+	title = "qing_march.3.t"
+	desc = "qing_march.3.desc"
+	picture = senate
+	left_portrait = scope:qing_march_evt_gg
+	trigger = {
+		tag = CHI
+		exists = scope:qing_march_evt_march
+		exists = scope:qing_march_evt_gg
+		scope:qing_march_evt_march = { is_subject_of = ROOT  has_variable = qing_march }
+		scope:qing_march_evt_gg = { is_alive = yes }
+		# [#39 review-fix #1] re-assert the firing condition: still an able GG (affinity >= 70) and a
+		# prospering march (no unrest), lest we commend a GG whose march has since fallen into revolt.
+		scope:qing_march_evt_gg = { has_variable = qing_char_affinity  var:qing_char_affinity >= 70 }
+		scope:qing_march_evt_march = { NOT = { any_owned_province = { count >= 1  province_unrest >= 3 } } }
+	}
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_march.3 (able governor-general) [ROOT.GetTag]" }
+	}
+
+	# COMMEND — reward him: loyalty, standing, a small gold grant.
+	option = {
+		name = "qing_march.3.a"
+		custom_tooltip = "qing_march.3.a.tt"
+		scope:qing_march_evt_gg = {
+			add_loyalty = loyalty_qing_congenial
+			QING_char_promote_standing = { pop = 4  prom = 3 }
+			add_gold = 15
+		}
+		add_treasury = -15
+		QING_march_recent_gg_outcome = { delta = 4 }
+	}
+
+	# NOTE IT — small standing, no cost.
+	option = {
+		name = "qing_march.3.b"
+		custom_tooltip = "qing_march.3.b.tt"
+		scope:qing_march_evt_gg = { QING_char_promote_standing = { pop = 2  prom = 1 } }
+		QING_march_recent_gg_outcome = { delta = 2 }
+	}
+}
+
+# ======================================================================
+# qing_march.4 — AN OVERMIGHTY / GONE-NATIVE GOVERNOR-GENERAL. A long-tenured, estranged GG
+# builds a personal power base on the frontier. RECALL & REAPPOINT (a fresh Lifan appointee,
+# turnover cost) or LEAVE HIM (the march drifts, neglect opinion). Clone of qing_amban.2.
+# ======================================================================
+qing_march.4 = {
+	type = country_event
+	title = "qing_march.4.t"
+	desc = "qing_march.4.desc"
+	picture = chinese_throne_room
+	left_portrait = scope:qing_march_evt_gg
+	trigger = {
+		tag = CHI
+		exists = scope:qing_march_evt_march
+		exists = scope:qing_march_evt_gg
+		scope:qing_march_evt_march = { is_subject_of = ROOT  has_variable = qing_march }
+		scope:qing_march_evt_gg = { is_alive = yes }
+		# [#39 review-fix #1] re-assert the firing condition: still a long-tenured (tenure timer
+		# expired), estranged (affinity < 40) GG, lest we accuse a GG whose loyalty has since recovered.
+		scope:qing_march_evt_gg = {
+			NOT = { has_variable = qing_march_gg_tenure_pending }
+			has_variable = qing_char_affinity
+			var:qing_char_affinity < 40
+		}
+	}
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_march.4 (overmighty governor-general) [ROOT.GetTag]" }
+	}
+
+	# RECALL & REAPPOINT — install a fresh Lifan-Yuan GG on the march (turnover cost).
+	option = {
+		name = "qing_march.4.a"
+		custom_tooltip = "qing_march.4.a.tt"
+		# QING_march_appoint_gg creates a new appointee and set_as_ruler's him over the old one.
+		QING_march_appoint_gg = { march = scope:qing_march_evt_march }
+		add_treasury = -25
+		QING_march_recent_gg_outcome = { delta = 3 }
+	}
+
+	# LEAVE HIM — accept the drift: the march grows more autonomous (neglect opinion).
+	option = {
+		name = "qing_march.4.b"
+		custom_tooltip = "qing_march.4.b.tt"
+		scope:qing_march_evt_march = {
+			add_opinion = { modifier = qing_march_neglected_opinion  target = ROOT }
+		}
+		QING_march_recent_gg_outcome = { delta = -4 }
+	}
+}
+
+# ======================================================================
+# qing_march.5 — TURNOVER. The Governor-General dies or must be replaced (age/health).
+# REPLACE (a new Lifan appointee, appointment cost) or LEAVE VACANT (the march drifts until
+# a new GG is seated). Clone of qing_amban.4.
+# ======================================================================
+qing_march.5 = {
+	type = country_event
+	title = "qing_march.5.t"
+	desc = "qing_march.5.desc"
+	picture = chinese_throne_room
+	left_portrait = scope:qing_march_evt_gg
+	trigger = {
+		tag = CHI
+		exists = scope:qing_march_evt_march
+		scope:qing_march_evt_march = { is_subject_of = ROOT  has_variable = qing_march }
+		# NOTE: the GG scope may already be dead here (that is the point of the event) — do
+		# not gate on scope:qing_march_evt_gg being alive; the portrait tolerates a dead scope.
+	}
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_march.5 (governor-general turnover) [ROOT.GetTag]" }
+	}
+
+	# REPLACE — seat a fresh Lifan-Yuan GG (appointment cost).
+	option = {
+		name = "qing_march.5.a"
+		custom_tooltip = "qing_march.5.a.tt"
+		QING_march_appoint_gg = { march = scope:qing_march_evt_march }
+		add_treasury = -25
+		QING_march_recent_gg_outcome = { delta = 3 }
+	}
+
+	# LEAVE VACANT — the march drifts (neglect opinion) until a GG is seated.
+	option = {
+		name = "qing_march.5.b"
+		custom_tooltip = "qing_march.5.b.tt"
+		scope:qing_march_evt_march = {
+			add_opinion = { modifier = qing_march_neglected_opinion  target = ROOT }
+		}
+		QING_march_recent_gg_outcome = { delta = -3 }
+	}
+}

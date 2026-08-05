@@ -122,3 +122,78 @@ Wiring: hanyang→steel_works/iron, kaiping→coal_mine/coal, cotton_mill→text
 Brace balance OK both files after fixes.
 
 **Status:** DONE — committed (see git log).
+
+---
+
+## #39 — Protectors-General: Lifan Yuan roster section + event arc — IMPLEMENTED
+
+Design doc `design/DESIGN_PROTECTORS_GENERAL_EVENTS.md` (READY, reviewed) implemented in the
+build order it prescribed. The 都護府 marches = subject countries with qing_march=1; the GG is
+the march's current_ruler (a Lifan appointee, set_as_ruler by QING_march_appoint_gg). Modelled
+on the amban arc.
+
+**PART A — roster (Lifan Yuan panel):**
+- `se_QING_MINISTRY.txt` QING_ministry_recompute_perf_lifanyuan: rebuild
+  `qing_lifanyuan_march_subjects` each Lifan pulse (every_subject over qing_march — non-recursive,
+  same as the amban roster). Also added perf **term (h)**: fold `qing_lifan_recent_march_outcome`
+  at HALF weight (divide by 2) — separate var from the amban term (g), no cross-contamination,
+  no over-swing (review #4).
+- `gui/qing_lifanyuan.gui`: new Protectors-General section between the amban roster and the
+  tributary section. GG portrait via `Country.GetRuler` (proven datacontext — the GG IS the ruler,
+  so no per-GG var, unlike the amban); PartyIcons chip suppressed (#86); empty-note.
+- loc: `QING_LIFANYUAN_PG_TITLE` / `_EMPTY`.
+
+**PART B — evaluate pulse + fold helper (se_QING_MARCH.txt):**
+- `QING_march_evaluate`: called from QING_GOV_pulse right after QING_amban_evaluate. CHI player-only.
+  Iterates marches, re-scores each GG's affinity (QING_char_affinity), rolls ~10% per quarter for
+  AT MOST ONE mutually-exclusive event by priority (turnover .5 > overmighty .4 > unrest .2 >
+  petition .1 > commend .3), sharing the court-event slot (qing_gc_event_slot_used).
+  - SCOPE-LIFETIME care: the per-iteration scopes (qing_march_here/gg_here) would be overwritten
+    by later iterations before a DEFERRED event (days 5-15) fires. Each fire branch re-saves
+    DEDICATED event scopes (qing_march_evt_march/qing_march_evt_gg) at the moment of firing; only
+    one branch fires per pulse (slot claim), and every event re-validates the scopes in its trigger.
+  - Petition gate simplified to the subsidy-tier signal only (a var-vs-var cohort compare would
+    break the RHS-operator rule; the invented svalue didn't exist).
+- `QING_march_appoint_gg`: added a self-expiring tenure timer (qing_march_gg_tenure_pending, 2920d)
+  mirroring the amban's, so the overmighty (.4) event can gate on "served long enough".
+- `QING_march_recent_gg_outcome = { delta }`: clone of SUBJ_QING_lifan_amban_outcome; stamps the
+  self-expiring 730d var (no ratchet).
+
+**PART C — events (`events/imp19c_mod_events/qing_march_events.txt`, namespace qing_march) + loc:**
+5 events (.1 petition, .2 unrest, .3 able, .4 overmighty, .5 turnover), each with a defensive
+`trigger` re-validating the saved scopes (march still a subject + GG alive), CHI-only. Petition
+grant has a light skill-gate (finesse>=6 → cheaper grant, a cost modifier not a roll); unrest .2.a
+is a martial+zeal skill check (qing_garrison_clean_crush_chance_svalue from #27); .4/.5 reappoint via
+QING_march_appoint_gg. Denials stamp a NEW stacking/decaying `qing_march_neglected_opinion`
+(imp19c_opinions.txt) — the design's denial teeth (mod expresses subject disaffection via opinions,
+not a raw liberty_desire poke, which is unused mod-wide). Every outcome folds via
+QING_march_recent_gg_outcome. New loc file (UTF-8 BOM per loc convention).
+
+**Self-check:** all touched files brace-balanced; pictures/verbs (add_gold/add_loyalty/
+loyalty_qing_congenial/QING_char_promote_standing) all proven in the amban arc; Country.GetRuler
+datacontext proven (the review's earlier "unproven" NO-GO was refuted in the design doc).
+
+**Files:** se_QING_MINISTRY.txt, se_QING_MARCH.txt, se_QING_GOVERNANCE.txt, gui/qing_lifanyuan.gui,
+localization/english/qing_lifanyuan_l_english.yml, common/opinions/imp19c_opinions.txt,
+events/imp19c_mod_events/qing_march_events.txt (new), localization/english/qing_march_l_english.yml (new).
+
+**Review:** code-review returned CLEAN — no crash/flood/correctness-critical defect. It confirmed
+the scope-lifetime handling is sound (only one branch fires per pulse via the slot claim; scopes
+survive the deferred event; cross-pulse clobber impossible), the slot serialisation is correct
+(amban evaluate claims the same var first, so amban > march priority), the perf scratch var is
+re-inited per term (no clobber), and all verbs/pictures/loc are legal. Four LOW findings, all fixed:
+- #1 (LOW-MED): event triggers re-validated only scope existence, not the firing condition — a
+  situation could drift in the 5-15d defer window (unrest subsided, affinity recovered). FIXED:
+  .2/.3/.4 triggers now re-assert their scoring condition (parity with the amban arc).
+- #2 (LOW): a displaced GG kept a stale qing_march_gg=1 (no tenure timer) after reappoint — could
+  re-qualify for .4/.5 if succession re-elevated him. FIXED: QING_march_appoint_gg now clears the
+  outgoing ruler's qing_march_gg + tenure var before set_as_ruler.
+- #3 (LOW, balance): .1.b (troops) strictly dominated .1.a (silver) — same tier bump, cheaper, plus
+  a host rebuild. FIXED: silver grant made cheaper (−20/−35) and troops pricier (−55), so silver is
+  the lighter recurring commitment and troops the heavier all-in.
+- #4 (LOW, doc): comment said the slot "resets monthly"; it clears each ~90d Qing pulse. FIXED wording.
+The earlier design-round "Country.GetRuler unproven" NO-GO was re-confirmed refuted.
+
+Brace balance OK all files after fixes.
+
+**Status:** DONE — committed (see git log). Design doc committed alongside.

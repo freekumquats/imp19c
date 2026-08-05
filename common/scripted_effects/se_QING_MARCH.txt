@@ -260,6 +260,17 @@ QING_march_appoint_gg = {
 			var:qing_office_lifanyuan_holder = { is_alive = yes  employer = ROOT }
 		}
 		$march$ = {
+			# [#39 review-fix #2] clear the OUTGOING ruler's GG markers before seating the new one, so a
+			# displaced Governor-General is not left with a stale qing_march_gg=1 (and no tenure timer) —
+			# which would make him eligible for the overmighty/turnover events again if succession ever
+			# re-elevated him. Guarded on the current ruler actually being a GG.
+			if = {
+				limit = { exists = current_ruler  current_ruler = { has_variable = qing_march_gg } }
+				current_ruler = {
+					remove_variable = qing_march_gg
+					if = { limit = { has_variable = qing_march_gg_tenure_pending }  remove_variable = qing_march_gg_tenure_pending }
+				}
+			}
 			# create the Manchu conquest-elite Governor-General in the MARCH's own scope.
 			create_character = {
 				age = { 40 55 }
@@ -277,6 +288,11 @@ QING_march_appoint_gg = {
 			# Lifan-Yuan appointee and seat him as the march's ruler.
 			scope:qing_new_gg = { set_variable = { name = qing_march_gg  value = 1 } }
 			set_as_ruler = scope:qing_new_gg
+			# [#39] tenure timer, mirroring the amban's qing_amban_tenure_pending: a self-expiring
+			# flag (days=2920 ≈ 8y). While it EXISTS the GG is freshly-appointed; once it has expired
+			# (no var) he has served long enough for the "overmighty / gone native" event (qing_march.4)
+			# to consider him. `age`/`health` remain readable directly for the turnover event (.5).
+			scope:qing_new_gg = { set_variable = { name = qing_march_gg_tenure_pending  value = 1  days = 2920 } }
 		}
 		LOG_line = { sys = QING  msg = "MARCH governor-general appointed by the Lifan Yuan for" }
 	}
@@ -543,4 +559,137 @@ QING_march_apply_support_standard = {
 		}
 	}
 	LOG_exit = { sys = QING  fn = "QING_march_apply_support_standard"  result = OK }
+}
+
+# ======================================================================
+# [#39] QING_march_evaluate — the Protectors-General lifecycle pulse. Scope: ROOT = c:CHI
+# (called from QING_GOV_pulse, right after QING_amban_evaluate). Modelled on QING_amban_evaluate:
+# iterate the marches (subject countries carrying qing_march=1 — the SAME non-recursive
+# every_subject over CHI's DIRECT subjects the amban roster uses; it does NOT descend into the
+# marches' princely-state sub-subjects), (re)score each march's Governor-General (its current_ruler,
+# a Lifan appointee) for affinity, and roll AT MOST ONE mutually-exclusive lifecycle event per march
+# per quarter by priority — turnover (.5) > overmighty (.4) > unrest (.2) > petition (.1) > commend
+# (.3). All modal events share the court-event slot (qing_gc_event_slot_used, cleared each Qing pulse,
+# the GC-event-throttle rule) so several marches in one pulse cannot dogpile the court. CHI player-only
+# (guarded tag=CHI + not-AI via the pulse's own gate). Per-quarter fire chance is LOW (~10%, below the
+# amban ~15%) so amban + march events rarely fire together, and the meter-fold (term h) is half-weight.
+# ======================================================================
+QING_march_evaluate = {
+	LOG_enter = { sys = QING  fn = "QING_march_evaluate" }
+	# CHI player-only — the whole Protectors-General arc is a player mechanic (like the amban arc).
+	if = {
+		limit = { tag = CHI  is_ai = no }
+		every_subject = {
+			limit = {
+				has_variable = qing_march
+				# the GG must exist and actually rule this march (set_as_ruler'd Lifan appointee).
+				exists = current_ruler
+				current_ruler = { has_variable = qing_march_gg }
+			}
+			save_scope_as = qing_march_here
+			current_ruler = { save_scope_as = qing_march_gg_here }
+			# (re)score the GG's affinity to the throne each pulse (as the amban evaluate does for
+			# residents), so a GG whose loyalty/culture/stats drift is judged on current standing.
+			scope:qing_march_gg_here = { QING_char_affinity = yes }
+			# roll one event, mutually exclusive by priority; each guarded on its own condition AND
+			# on the shared court-event slot being free (claim it on the FIRST fire this pulse).
+			# SCOPE-LIFETIME NOTE: qing_march_here / qing_march_gg_here are re-saved every loop
+			# iteration, so by the time a DEFERRED event (days 5-15) runs they would hold the LAST
+			# march iterated, not the triggering one. So each fire branch re-saves DEDICATED event
+			# scopes (qing_march_evt_march / qing_march_evt_gg) at the moment of firing; only ONE
+			# branch fires per pulse (the slot claim), so a single pair of names is safe, and the
+			# events themselves re-validate/re-pick defensively (per the amban-arc idiom).
+			ROOT = {
+				random = {
+					# ~10% per quarter that this march surfaces a lifecycle beat at all (below the amban
+					# rate; keeps the two arcs from firing together and the meter from over-swinging).
+					chance = 10
+					if = {
+						# (.5) TURNOVER — the GG is old or failing; he must be replaced.
+						limit = {
+							NOT = { has_variable = qing_gc_event_slot_used }
+							scope:qing_march_gg_here = { OR = { age >= 65  health < 0.4 } }
+						}
+						scope:qing_march_here = { save_scope_as = qing_march_evt_march }
+						scope:qing_march_gg_here = { save_scope_as = qing_march_evt_gg }
+						trigger_event = { id = qing_march.5  days = { 5 15 } }
+						set_variable = { name = qing_gc_event_slot_used  value = 1 }
+					}
+					else_if = {
+						# (.4) OVERMIGHTY — a long-tenured (tenure timer expired), estranged (affinity < 40) GG.
+						limit = {
+							NOT = { has_variable = qing_gc_event_slot_used }
+							scope:qing_march_gg_here = {
+								NOT = { has_variable = qing_march_gg_tenure_pending }
+								has_variable = qing_char_affinity
+								var:qing_char_affinity < 40
+							}
+						}
+						scope:qing_march_here = { save_scope_as = qing_march_evt_march }
+						scope:qing_march_gg_here = { save_scope_as = qing_march_evt_gg }
+						trigger_event = { id = qing_march.4  days = { 5 15 } }
+						set_variable = { name = qing_gc_event_slot_used  value = 1 }
+					}
+					else_if = {
+						# (.2) UNREST — a rising among the march's own princely-state sub-subjects or its provinces.
+						limit = {
+							NOT = { has_variable = qing_gc_event_slot_used }
+							scope:qing_march_here = {
+								OR = {
+									any_owned_province = { count >= 1  province_unrest >= 3 }
+									any_subject = { any_owned_province = { count >= 1  province_unrest >= 3 } }
+								}
+							}
+						}
+						scope:qing_march_here = { save_scope_as = qing_march_evt_march }
+						scope:qing_march_gg_here = { save_scope_as = qing_march_evt_gg }
+						trigger_event = { id = qing_march.2  days = { 5 15 } }
+						set_variable = { name = qing_gc_event_slot_used  value = 1 }
+					}
+					else_if = {
+						# (.1) PETITION — the GG asks for more silver and/or troops. Gate: the march is
+						# not yet at the top subsidy tier (so there is a tier to grant). A march with no
+						# subsidy_tier var yet (founded before any support law) also qualifies — it reads
+						# as "not high". Kept to the tier signal only; comparing live vs establishment
+						# cohorts would need a march-scope scratch shortfall (RHS-operator rule bars a
+						# var-vs-var compare) and the tier gate already captures "wants more support".
+						limit = {
+							NOT = { has_variable = qing_gc_event_slot_used }
+							scope:qing_march_here = { NOT = { var:qing_subsidy_tier = flag:high } }
+						}
+						scope:qing_march_here = { save_scope_as = qing_march_evt_march }
+						scope:qing_march_gg_here = { save_scope_as = qing_march_evt_gg }
+						trigger_event = { id = qing_march.1  days = { 5 15 } }
+						set_variable = { name = qing_gc_event_slot_used  value = 1 }
+					}
+					else_if = {
+						# (.3) COMMEND — an able GG (affinity >= 70) and a prospering march (no unrest). Reward.
+						limit = {
+							NOT = { has_variable = qing_gc_event_slot_used }
+							scope:qing_march_gg_here = { has_variable = qing_char_affinity  var:qing_char_affinity >= 70 }
+							scope:qing_march_here = { NOT = { any_owned_province = { count >= 1  province_unrest >= 3 } } }
+						}
+						scope:qing_march_here = { save_scope_as = qing_march_evt_march }
+						scope:qing_march_gg_here = { save_scope_as = qing_march_evt_gg }
+						trigger_event = { id = qing_march.3  days = { 5 15 } }
+						set_variable = { name = qing_gc_event_slot_used  value = 1 }
+					}
+				}
+			}
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_march_evaluate"  result = OK }
+}
+
+# ======================================================================
+# [#39] QING_march_recent_gg_outcome — record a signed magnitude ($delta$) from a
+# Protector-General event outcome as a SELF-EXPIRING var (days=730) on CHI, folded (at
+# half weight) into qing_min_perf_lifanyuan by QING_ministry_recompute_perf_lifanyuan (term h).
+# Kept SEPARATE from the amban outcome var (qing_lifan_recent_amban_outcome) so the two do not
+# cross-contaminate. Self-expiring = no ratchet (the no-restoring-drift rule). Scope: c:CHI.
+# Clone of SUBJ_QING_lifan_amban_outcome (se_SUBJECT_QING.txt).
+# ======================================================================
+QING_march_recent_gg_outcome = {
+	set_variable = { name = qing_lifan_recent_march_outcome  value = $delta$  days = 730 }
+	LOG_line = { sys = QING  msg = "perf-fold: recent Protector-General outcome recorded for the Lifan Yuan (delta=$delta$)" }
 }
