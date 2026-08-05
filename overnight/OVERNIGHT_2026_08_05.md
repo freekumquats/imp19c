@@ -197,3 +197,62 @@ The earlier design-round "Country.GetRuler unproven" NO-GO was re-confirmed refu
 Brace balance OK all files after fixes.
 
 **Status:** DONE — committed (see git log). Design doc committed alongside.
+
+---
+
+## #33 — Buildings pass: fortress-format tooltip (complete Results) across every mod building — IMPLEMENTED
+
+**Requirement (user):** every building follows the Fortress template — flavor desc, a description
+of the modifiers it grants (visible whether buildable or not), count, cost/time, cost modifiers, and
+a **Results:** section with all changed numbers + icons. "Results should list all appropriate
+modifiers, Other Results only modifiers that cannot go in Results, FOR EVERY BUILDING." Plus the
+Ever-Normal Granary complaint: "why two sections (Results + Other Results), just combine them."
+
+**Mechanism (verified, not assumed):** the province building panel's "Results:" section renders the
+building's `modification_display` list as icons. The FORTRESS — the user's cited gold standard —
+lists EVERY modifier it grants (fort_level + value_manpower + local_defensive). Vanilla and the mod's
+own IND_* buildings CURATE to 2-4 keys, so their other modifiers fall to "Other Results:" (or don't
+show). #33's fix = expand every mod building's `modification_display` to enumerate ALL its engine-key
+modifiers, matching the fortress. This also resolves the Ever-Normal Granary two-section complaint:
+with all 6 modifiers now in Results, nothing is left for Other Results.
+
+**What I did:**
+- Wrote `tools/gen_building_modification_display.py`: for each mod-added building (qing_*, IND_heavy_*,
+  row_*), rewrite `modification_display` to list every top-level modifier key (all standard engine
+  keys — local_*, base_resources, army_movement_speed, fort_level — verified renderable via the
+  fortress + IND_coal_mine base_resources precedent), in source order, excluding cost/time. Idempotent;
+  brace-guarded; preserves BOM; SKIPS upstream/vanilla 00_* files (proven-code rule).
+- Applied to **56 buildings** across 15 files. Re-run is a no-op (0 changes). All files brace-balanced.
+- The DESCRIPTION side was already fully wired in a prior session — `tools/gen_building_tooltips.py`
+  reports 0 uncovered build_items (every mod building points its build_item at a custom tooltipwidget
+  that shows its `_desc` unconditionally, even when unbuildable).
+
+**Deliberately NOT changed (scope discipline):**
+- The 7 monument buildings with `allow = { always = no }` (Great Wall / Dujiangyan / Temple of Heaven /
+  Hanlin / Guozijian / Ancestral Temple / Grand Canal): the #24 sweep INTENTIONALLY set that + a real
+  satisfiable `potential` so add_building_level plants them (seed + Works verb) while they stay out of
+  the routine build menu — documented in-file and matching memory
+  `imp19c-add-building-level-respects-potential`. They are NOT hidden (visible + full tooltip where
+  built); making them menu-buildable would be a design regression. Left as-is.
+- The ~22 buildings with no `potential` block (industry/production): they are menu-gated by `allow`
+  (culture-group + invention + resource), so they are correctly gated, NOT hidden. Adding a `potential`
+  culture gate to restrict menu visibility to China would be a behavior change beyond #33's legibility
+  scope AND risks the "too-tight potential hides it from China too" trap the memory warns about. Left as-is.
+
+**Runtime caveat (stated honestly):** the "Results:" split is engine-rendered (MODIFICATION_DIFFERENCE_
+HEADER, not scriptable GUI), so the exact on-screen result of the expanded modification_display — and
+whether the `always=no` monuments render their Results when already built — cannot be proven statically.
+The change is additive to an existing curated list and matches the fortress template that is known to
+work, so the risk is low, but it wants a boot-check to confirm the panels render as intended.
+
+**Files:** 15 common/buildings/*.txt (modification_display only) + tools/gen_building_modification_display.py (new).
+
+**Review:** code-review returned CLEAN — no defects. Verified every added key was ALREADY a
+top-level modifier in that building's body (the tool reads existing keys, never synthesises), no
+dropped keys, no leaked nested/structural tokens (allow/potential inner keys stripped; a
+`local_monthly_food` inside a comment correctly did NOT leak), all 15 files brace-balanced, no
+duplicates, correct scope (no 00_* upstream touched, idempotent no-ops on already-complete blocks).
+Minor tool-regex note (leading-dot decimals like `.05` would be missed) — confirmed non-applicable
+(grepped: no such values in any touched file). No changes needed.
+
+**Status:** DONE — committed (see git log).
