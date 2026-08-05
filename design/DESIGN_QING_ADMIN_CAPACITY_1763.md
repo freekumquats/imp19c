@@ -62,7 +62,28 @@ Prefer (1): concrete on-map objects (the yamen network), demand-capped so it can
   updating. Assess the true post-seed balance from a boot log AFTER #24 lands.
 - Loc for the drain/gain modifiers was just added ([task #6]) so the impact is now legible in-game.
 
-## Next step
-Confirm the exact CHI middle_strata-vs-population ratio from a boot (or province_setup.csv) to size the
-top-up, then implement option 1 behind a greenlight. NOT implemented yet — this is the assessment the
-task asked for.
+## RESOLUTION (2026-08-04, implemented) — count the yamen as admin capacity
+The user pointed out the cleaner fix: rather than seed extra generic `URB_administration_district`
+onto China, make the **衙門 (qing_yamen_building) actually provide admin capacity** — which it thematically
+already IS ("the CONCRETE face of the abstracted bureaucracy-CAPACITY meter", per its own building
+comment), but fed nothing into `ADMIN_provided_state` (which counted only `URB_administration_district`).
+
+Implemented in `ADMIN_svalues.txt`: `ADMIN_provided_state` now adds
+`num_of_qing_yamen_building × ADMIN_provided_per_qing_yamen (=8)` per province (a yamen administers a
+county — a shade below a dedicated administration district's 10). Why this is the right fix over
+option 1:
+- **Thematically correct:** the mod's own concrete admin building finally relieves the admin drain it
+  represents. Before, the Qing built yamens (via `QING_GOV_yamen_band_track` on the capacity band) that
+  did nothing for the engine's admin supply — two disconnected tracks.
+- **Self-scaling:** the governance capacity-band pulse already raises/removes yamens as the abstracted
+  capacity meter moves, so admin supply now tracks Qing governance quality automatically — no static
+  seed to maintain, no ROW change (asymmetric fidelity preserved; the yamen is Qing-only).
+- **Safe:** `ADMIN_provided_state_max_bonus` caps supply at demand, so yamens only reduce shortfall,
+  never create surplus.
+
+The ADMIN capacity system is confirmed MOD-INVENTED (vanilla Imperator has no admin-capacity /
+URB_administration_district; git history = WiP mod work), so this edit is mod-owned, not upstream.
+
+Option 1 (seed more admin districts) is therefore NOT needed and NOT done. Re-check the post-fix balance
+from a boot after this + the #24 biannual refresh land; if yamens alone don't close the gap in the
+populous heartland, revisit the per-yamen value (8) or add a modest 1763 yamen seed then.
