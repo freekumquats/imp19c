@@ -516,47 +516,15 @@ qing_report_open_milsupply = {
 	is_shown = { tag = CHI }
 	is_valid = { always = yes }
 	effect = {
+		# [#45 2026-08-05] The ledger is now a fixed per-good TABLE (produced vs consumed for
+		# the six military-supply goods), reading the MILITARY_supplies_prod_* / _country_*
+		# svalues live in the window — NOT a province variable-list. So the opener has no data
+		# to build; it exists only so the hub button has a scripted_gui to Execute (and to log).
+		# (The old province-list model could only ever show provinces whose trade_good was a
+		# military good — Beijing's rifles at 1763 — and never clothing/pharma/construction/
+		# artillery, which are demand-fulfilled from stockpiles, not province trade_goods.)
 		LOG_line = { sys = QING  msg = "military-supply ledger opened by" }
-		clear_variable_list = qing_milsupply_report_provinces
-		# [#35 review-fix #4] every_owned_province, NOT every_governorships -> state -> province:
-		# the governorship descent EXCLUDES the capital domain (boot #10 root cause, migration report
-		# fix at :151-158), so a Self-Strengthening arsenal / navy yard seeded in the capital domain
-		# would produce munitions yet never appear in the ledger. every_owned_province lists ALL the
-		# empire's producing provinces (proven iterator, same as the migration report's PASS 2). The
-		# footer totals remain governorship-scoped (the upstream military-supply model is; a documented
-		# limitation, not introduced here) — the LIST is now complete regardless.
-		every_owned_province = {
-			save_scope_as = this_prov
-			# only provinces producing a military-supply good
-			if = {
-				limit = {
-					scope:this_prov = {
-						OR = {
-							trade_goods = early_munitions
-							trade_goods = late_munitions
-							trade_goods = rifles
-							trade_goods = naval_supplies
-						}
-					}
-				}
-				root = {
-					add_to_variable_list = {
-						name = qing_milsupply_report_provinces
-						target = scope:this_prov
-					}
-				}
-			}
-		}
 	}
-}
-
-# EMPTY-STATE gate (proven has_variable_list negation idiom) — no province
-# produces a military-supply good yet (true at a 1763 start before the
-# Self-Strengthening arsenals/yards stand up).
-qing_report_milsupply_empty = {
-	scope = country
-	ai_is_valid = { always = no }
-	is_shown = { NOT = { has_variable_list = qing_milsupply_report_provinces } }
 }
 
 # ======================================================================
@@ -585,18 +553,13 @@ qing_report_open_admin = {
 				# available = provided - required (negative = deficit).
 				set_variable = { name = qing_admin_rep_available  value = ADMIN_provided_state }
 				change_variable = { name = qing_admin_rep_available  subtract = ADMIN_required_state }
-				# yamen + admin-district counts across the state's provinces. Inside
-				# every_state_province THIS = the province and prev = this state (scope:this_state);
-				# read the per-province building count on the province and accumulate onto the state var.
-				set_variable = { name = qing_admin_rep_yamens  value = 0 }
-				set_variable = { name = qing_admin_rep_districts  value = 0 }
-				every_state_province = {
-					save_scope_as = admin_rep_prov
-					scope:this_state = {
-						change_variable = { name = qing_admin_rep_yamens  add = scope:admin_rep_prov.num_of_qing_yamen_building }
-						change_variable = { name = qing_admin_rep_districts  add = scope:admin_rep_prov.num_of_URB_administration_district }
-					}
-				}
+				# [#49 fix] yamen + admin-district counts across the state's provinces. The prior
+				# form (change_variable add = scope:prov.num_of_<building>) is NOT a valid script-value
+				# read (error.log: "Cannot read as a script value"). Use the state-scope count svalues
+				# (ADMIN_svalues.txt), which sum the bare per-province num_of_<building> over
+				# every_state_province — the proven idiom ADMIN_provided_state itself uses.
+				set_variable = { name = qing_admin_rep_yamens     value = ADMIN_report_yamen_count_state }
+				set_variable = { name = qing_admin_rep_districts  value = ADMIN_report_district_count_state }
 				root = {
 					add_to_variable_list = {
 						name = qing_admin_report_states

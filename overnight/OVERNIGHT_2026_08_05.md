@@ -455,3 +455,42 @@ Root cause: the two candidate-draw filters did not cross-exclude.
 Verified no OTHER draw path posts either role from existing chars: se_QING_COUNCIL refs are counts
 (:245-246) + leave-all-posts cleanup (:1408/1415); se_QING_DELIBERATIVE already excludes
 qing_amban_marker (:76/96). Braces balanced both files.
+
+## #44 / #45 / #49 / #36 / #32 — military-supplies + admin reports rework
+#44 (topbar production breakdown): added a "Production by good (quarterly, supplied)" section to
+MILITARY_SUPPLIES_TT above the consumption breakdown, reading 5 new MILITARY_supplies_prod_* svalues
+(INCOME_svalues.txt) = each good's fulfilled demand (DEMAND_<good> × (1 − shortage_<good>)), mirroring
+the income-total addends. (Late artillery omitted — undefined upstream, always 0.)
+
+#45 (Military Supplies Ledger — comprehensive input breakdown): REPLACED the broken province-list
+report (which could only ever show provinces whose trade_good was a military good — Beijing's rifles
+at 1763 — and never clothing/pharma/construction/artillery, which are stockpile-fulfilled demand not
+province goods). Now a fixed 6-row per-good TABLE (Good | Produced | Consumed) for munitions
+(early/late), artillery, clothing, pharmaceuticals, construction — reading the MILITARY_supplies_prod_*
+/ _country_* svalues live in the window. Footer = realm income / consumption / stockpile. Opener is
+now a no-op (the table reads svalues directly; removed the province-list walk + the empty-gate
+scripted_gui + its dangling refs). New loc: column headers + 6 good names.
+
+#49 / #36 / #32 (Admin Capacity report — fix the broken var reads): the scope:prov.num_of_<building>
+reads (error.log "Cannot read as a script value") are REPLACED by two new state-scope count svalues
+ADMIN_report_yamen_count_state / ADMIN_report_district_count_state (ADMIN_svalues.txt) that sum bare
+num_of_<building> over every_state_province — the SAME idiom ADMIN_provided_state uses. The report's
+set_variable now reads those svalues. All 6 qing_admin_rep_* vars are consumed by the window (the
+provided/required/available/yamen/district columns + the deficit gate) — the earlier "set but never
+used" was because those GUI columns were uncommitted at the Aug 5 boot. #32 (yamen→capacity legibility)
+is delivered by #36's yamen column + its 8-per-yamen tooltip.
+
+All files brace-balanced; loc single-line clean.
+
+**Review (batch #44/#45/#49/#36/#32):** code-review found 1 CONFIRMED defect + accepted notes.
+- CONFIRMED (fixed): the Artillery row's Produced cell read MILITARY_supplies_prod_early_artillery,
+  which doesn't exist (artillery production is intentionally unmodelled; income model = 5 goods only).
+  FIXED: artillery Produced shows a static dash "—" (qing_milsupply_not_modelled + tooltip); Consumed
+  stays real.
+- Accepted (finding #2, not changed): the admin report walks every_governorships (excludes capital
+  domain) — but this is the PRE-EXISTING ADMIN model (ADMIN_required/supplied_country are themselves
+  governorship-scoped), so rows + footer are mutually consistent; changing it is a model change beyond
+  this fix's scope (Sobisonator-upstream-caution). NOTE for the user: the report will look sparse for
+  CHI because the model itself doesn't credit capital-domain yamens.
+- Cleaned (finding #3): dropped the orphaned qing_milsupply_report_empty loc key.
+All else verified clean (svalue scopes, 1−shortage arithmetic form, no dangling refs, BOM, braces).
