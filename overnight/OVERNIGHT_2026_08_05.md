@@ -494,3 +494,24 @@ All files brace-balanced; loc single-line clean.
   CHI because the model itself doesn't credit capital-domain yamens.
 - Cleaned (finding #3): dropped the orphaned qing_milsupply_report_empty loc key.
 All else verified clean (svalue scopes, 1−shortage arithmetic form, no dangling refs, BOM, braces).
+
+## #42 — building Fortress 6-section tooltip — MECHANISM PINNED + yamen reference built
+Finally pinned the render mechanism (after repeatedly building the wrong layer):
+- The mod's buildings use a custom building_tooltip widget (custom_tooltip.gui:11). It renders
+  the flavor text (description block, from _desc) + an extra_data block. The "Results/effects"
+  section a building shows is the extra_data block's new_tooltip_text_area, pointing at a
+  tooltip_<building> loc string (this is what Fortress does: tooltip_fortress_building).
+- gen_building_tooltips.py wired 113 templates to override "description" (flavor only) and leave
+  extra_data EMPTY -> those buildings show flavor but NO effects block. The 34 templates that
+  override "extra_data" (fortress/arsenal/works + yamen) are the correct pattern.
+- So #33's modification_display expansion was the wrong layer entirely (the custom tooltip never
+  reads modification_display). The RIGHT fix = convert each description-override template to the
+  fortress extra_data format + author its tooltip_<building> loc with the 6 sections (Results +
+  Other Results; "None" where empty).
+YAMEN REFERENCE (built + committed for boot-verification before the other 112):
+  - authored tooltip_qing_yamen_building with #T Results:#! (the 4 vanilla modifiers) +
+    #T Other Results:#! (the +8 admin capacity — no vanilla modifier, exactly the user's example).
+  - the yamen template already overrode extra_data -> tooltip_qing_yamen_building, but that loc key
+    DID NOT EXIST (so extra_data rendered blank). Authoring it fixes the yamen.
+PLAN: after user confirms the yamen renders correctly, apply the same extra_data+loc pattern BY HAND
+to the other 112 description-override buildings (no script). Braces balanced.
