@@ -748,14 +748,20 @@ SUBJ_QING_resolve_integ_actors = {
 		ROOT = { change_variable = { name = integ_garrison_size  add = prev.unit_size } }
 	}
 
-	# --- SUBJECT strength: sum the subject's OWN army unit_size --------------------------
-	set_variable = { name = integ_subject_size  value = 0 }
-	scope:target = {
-		every_army = {
-			limit = { exists = unit_location }
-			ROOT = { change_variable = { name = integ_subject_size  add = prev.unit_size } }
-		}
-	}
+	# --- SUBJECT strength: the subject's POTENTIAL RISING, measured by its MANPOWER pool -----
+	# [#task-20 refine 2026-08-04] was the subject's STANDING-army unit_size, which read ~0 for a
+	# frontier governorate that fields no peacetime army — so a subject that levies a rising the moment
+	# it revolts (e.g. Yili, which raised 500 the instant war was declared) looked defenceless and the
+	# garrison always read dominant. Potential LEVY strength is the right measure but is NOT script-
+	# readable (levy_size exists only as a modifier/law key in vanilla + both oracle repos, never as a
+	# value/trigger). So use MANPOWER as the accessible proxy for how large a rising the subject can
+	# field. Garrison strength is in COHORTS (unit_size); manpower is a men-scale pool, and 1 cohort =
+	# 500 manpower in this measure, so convert the subject's manpower to cohort-equivalents (÷500) to
+	# compare on one axis and reuse the edge bands below. Read scope:target.manpower directly in the
+	# value field (the proven scope:X.<property> idiom, se_QING_MINISTRY.txt:201 etc.). manpower is
+	# always readable on a country scope; default 0.
+	set_variable = { name = integ_subject_size  value = scope:target.manpower }
+	change_variable = { name = integ_subject_size  divide = 500 }
 
 	# --- GARRISON EDGE band: garrison vs subject. Compare via a scratch delta so the RHS
 	#     stays a literal (the RHS-comparison rule bars a var-ref on a comparison RHS). -----
@@ -793,13 +799,27 @@ SUBJ_QING_clear_integ_actors = {
 }
 
 # ======================================================================
-# [#task-7 2026-08-04] SUBJ_QING_crush_revolt_war — the "crush the rising" option made a REAL war.
-# A subject in open armed revolt has in effect thrown off the yoke, so crushing it is a
-# RE-SUBJUGATION war, not an abstract counter tick. Proven idiom (se_QING_JAPAN_PREPERRY.txt:199-214
-# release_subject + civil war; imp19c_setup_events.txt:54 FUNC_declare_war_with_wargoal_province):
-# free the subject, reparent its sub-subjects first (so they don't dangle under a vanishing overlord
-# — SUBJ_QING_reparent_sub_subjects), then declare a conquer war to take it back by force. Scope:
-# COUNTRY (ROOT = CHI); expects scope:target. Guarded so a non-subject / landless target no-ops.
+# [#task-7 2026-08-04; REWRITTEN 2026-08-04 flood-fix] SUBJ_QING_crush_revolt_war — the "crush the
+# rising" option made a REAL war, via the VANILLA independence-war path.
+#
+# The chieftain resists = the subject rises in an INDEPENDENCE WAR against its overlord. This is the
+# engine-native model: the SUBJECT (still a subject — independence_wargoal is gated on is_subject = yes,
+# common/wargoals/00_default.txt:43) declares independence_wargoal on ROOT (CHI); the player then wins
+# it militarily = the crush. Scope: COUNTRY (ROOT = CHI); expects scope:target.
+#
+# PROVEN IDIOM (UPSTREAM): Invictus epigoni.txt:1008 — a subject declares its independence war with the
+# BARE engine effect `declare_war_with_wargoal = { war_goal = independence_wargoal  province =
+# <own capital>  target = <overlord> }`, from the SUBJECT scope, with NO release_subject. This is the
+# proven form and is what this mirrors. (imp19c_setup.2 does the same shape for USA-on-GBR, but that is
+# MOD code, not a proof — the proof is epigoni.) independence_wargoal is defined locally
+# (common/wargoals/00_default.txt:43, gated is_subject = yes, which scope:target satisfies).
+#
+# DELIBERATELY NOT via FUNC_declare_war_with_wargoal_province: that wrapper runs an unconditional
+# every_subject { add_to_war = scope:current_war_scope } loop, and current_war_scope only saves if its
+# random_current_war leader-limit matches — the exact point that FAILED in the prior version and threw
+# once per CHI subject (part of the 858k-line boot-18:10 flood). The bare engine verb skips that loop
+# entirely, so it cannot reproduce the flood. The prior version ALSO release_subject'd + reparented +
+# declared a CONQUER war (overlord-as-declarer) — all wrong for an independence war; all removed.
 # ======================================================================
 SUBJ_QING_crush_revolt_war = {
 	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_crush_revolt_war" }
@@ -809,24 +829,17 @@ SUBJ_QING_crush_revolt_war = {
 			scope:target = { is_subject_of = ROOT }
 			scope:target = { any_owned_province = { count >= 1 } }
 		}
-		# preserve the sub-subject chain before the intermediary is freed (proven helper)
-		SUBJ_QING_reparent_sub_subjects = yes
-		# anchor the wargoal on one of the rebel's own provinces
+		# The subject rises: it declares its independence war on the overlord (ROOT) with the bare
+		# engine verb (upstream epigoni idiom). NO release_subject (independence_wargoal requires the
+		# declarer to STILL be a subject) and NO reparent (nothing vanishes — the subject goes to war).
 		scope:target = {
-			ordered_owned_province = { order_by = total_population  max = 1  save_scope_as = integ_wargoal_prov }
+			declare_war_with_wargoal = {
+				war_goal = independence_wargoal
+				province = capital_scope
+				target = ROOT
+			}
 		}
-		# [review-fix low#1] clear the integration meter on the rebel BEFORE freeing it, so if CHI
-		# re-subjugates it later it re-enters the chain fresh rather than carrying a stale progress=5
-		# meter that could fire the .30 capstone immediately. Mirrors SUBJ_QING_absorb_subject's clear.
-		scope:target = { SUBJ_QING_clear_integration_state = yes }
-		# free the rebel, then declare a real re-subjugation war on it
-		release_subject = scope:target
-		FUNC_declare_war_with_wargoal_province = {
-			war_goal = conquer_wargoal
-			province = scope:integ_wargoal_prov
-			target = scope:target
-		}
-		LOG_line = { sys = SUBJ  msg = "crush-revolt: freed the rebel dependency and declared a re-subjugation war on subject" }
+		LOG_line = { sys = SUBJ  msg = "crush-revolt: the subject rises in an INDEPENDENCE WAR against the throne" }
 		LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_crush_revolt_war"  result = OK }
 	}
 	else = {

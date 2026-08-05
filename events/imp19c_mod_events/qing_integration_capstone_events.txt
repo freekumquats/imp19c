@@ -162,7 +162,17 @@ qing_integ.30 = {
 qing_integ.40 = {
 	type = country_event
 	title = "qing_integ.40.t"
-	desc = "qing_integ.40.desc"
+	# [#task-20 2026-08-04] base text + actor-status addendum naming the local amban / garrison when
+	# present (resolved in the immediate by SUBJ_QING_resolve_integ_actors). Mutually exclusive on presence.
+	desc = {
+		desc = "qing_integ.40.desc"
+		first_valid = {
+			triggered_desc = { trigger = { has_variable = integ_amban_present  has_variable = integ_garrison_size  var:integ_garrison_size >= 1 }  desc = "qing_integ.40.desc_actors_both" }
+			triggered_desc = { trigger = { has_variable = integ_amban_present }  desc = "qing_integ.40.desc_actors_amban" }
+			triggered_desc = { trigger = { has_variable = integ_garrison_size  var:integ_garrison_size >= 1 }  desc = "qing_integ.40.desc_actors_garrison" }
+			triggered_desc = { trigger = { always = yes }  desc = "qing_integ.40.desc_actors_none" }
+		}
+	}
 	picture = senate_debate
 
 	left_portrait = root.current_ruler
@@ -183,6 +193,9 @@ qing_integ.40 = {
 
 	immediate = {
 		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.40 (decree) overlord=[ROOT.GetTag] subject=[scope:target.GetTag] progress=[scope:target.MakeScope.GetVariable('SUBJ_integration_progress').GetValue|0]/5" }
+		# [#task-20] resolve the resident amban + garrison so the decree's options + resistance roll
+		# below can key off them (a garrison on the spot / a loyal amban makes forcing the pace safer).
+		SUBJ_QING_resolve_integ_actors = yes
 	}
 
 	# --- Issue the incorporation decree: force the pace ------------------
@@ -204,7 +217,8 @@ qing_integ.40 = {
 			set_variable = { name = SUBJ_integration_progress  value = 5 }
 		}
 		# Roll for resistance: proud dependencies, culturally alien ones, or
-		# those with high total_population are likelier to resist.
+		# those with high total_population are likelier to resist — but a garrison
+		# on the spot and a loyal resident amban make forcing the pace SAFER.
 		random_list = {
 			40 = {
 				# Resistance event fires
@@ -216,6 +230,25 @@ qing_integ.40 = {
 					factor = 1.5
 					scope:target = { any_owned_province = { total_population >= 30 } }
 				}
+				# [#task-20] a dominant imperial garrison overawes the dependency — a decree backed by
+				# banner troops on the ground is far likelier to be swallowed without a rising (e.g. the
+				# TWO garrisons in Yili). Rough parity still helps a little.
+				modifier = {
+					factor = 0.4
+					has_variable = integ_garrison_edge
+					var:integ_garrison_edge = 2
+				}
+				modifier = {
+					factor = 0.7
+					has_variable = integ_garrison_edge
+					var:integ_garrison_edge = 1
+				}
+				# [#task-20] a staunch resident amban prepares the ground and softens the blow.
+				modifier = {
+					factor = 0.6
+					has_variable = integ_amban_present
+					var:integ_amban_band = 2
+				}
 				LOG_line = { sys = SUBJ  msg = "decree RESISTANCE subject=[scope:target.GetTag]" }
 				trigger_event = { id = qing_integ.41  days = { 10 30 } }
 			}
@@ -226,6 +259,33 @@ qing_integ.40 = {
 				# fire next (via the normal integrate button flow or the pulse).
 			}
 		}
+		SUBJ_QING_clear_integ_actors = yes
+	}
+
+	# --- [#task-20] Let the resident amban prepare the ground first -------
+	# Shown only when a STAUNCH resident amban (band 2) sits in the dependency: rather than force
+	# the decree cold, he spends months smoothing the local elite — the pace is forced AND resistance
+	# is far less likely (skips the .41 roll). Cheaper on legitimacy than the raw decree; the amban's
+	# standing rises for the service. Absent / lesser amban => option hidden.
+	option = {
+		name = "qing_integ.40.c"
+		custom_tooltip = "qing_integ.40.c.tt"
+		trigger = {
+			treasury >= 80
+			has_variable = integ_amban_present
+			var:integ_amban_band = 2
+			exists = scope:integ_amban
+		}
+		add_treasury = -80
+		add_legitimacy = -10
+		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = -10 }
+		scope:target = {
+			set_variable = { name = SUBJ_integration_progress  value = 5 }
+		}
+		scope:integ_amban = { add_prominence = 10  add_popularity = 5 }
+		# a decree brokered by a trusted resident lands without a rising.
+		LOG_line = { sys = SUBJ  msg = "decree SMOOTHED by resident amban (no resistance roll) subject=[scope:target.GetTag]" }
+		SUBJ_QING_clear_integ_actors = yes
 	}
 
 	# --- Wait: let the process mature naturally ---------------------------
@@ -235,6 +295,7 @@ qing_integ.40 = {
 		custom_tooltip = "qing_integ.40.b.tt"
 		add_stability = 2
 		LOG_line = { sys = SUBJ  msg = "decree DECLINED (patient path) subject=[scope:target.GetTag]" }
+		SUBJ_QING_clear_integ_actors = yes
 	}
 }
 
@@ -365,39 +426,79 @@ qing_integ.41 = {
 		SUBJ_QING_clear_integ_actors = yes
 	}
 
-	# --- Crush: send in the Green Standard Army to suppress the rising ---
-	# [#task-7] Now a REAL war. A dependency in open armed revolt has thrown off the yoke — so the
-	# crush is a re-subjugation WAR (release_subject + declare a conquer war), not an abstract tick.
-	# [#task-8] Gated on the means to prosecute it: a garrison at rough parity or better (edge >= 1)
-	# OR a treasury deep enough to field a fresh expedition. When the garrison is DOMINANT (edge 2)
-	# it marches out and the war opens with the rebel already pressed (cheaper); when it can only
-	# hold its fortress (edge <= 1) the campaign is the full Jinchuan bloodletting. A wavering /
-	# absent amban abandons his post as the fighting starts.
+	# --- [#task-20 garrison actor] The local GARRISON marches out and breaks the rising ----
+	# Shown only when an imperial garrison strong enough to take the field (edge >= 1) already sits
+	# on the dependency's soil — including the case of MULTIPLE garrisons stacking (e.g. the two in
+	# Yili), which the resolver sums into the edge. The banner troops are ALREADY there, so this puts
+	# the revolt down IN THE FIELD at once: no re-subjugation war to declare, no releasing the subject,
+	# and far less tyranny/AE than the full expedition (.41.b) that a garrison-less throne must mount.
+	# A DOMINANT garrison (edge 2) crushes it cleanly; rough parity (edge 1) still wins but bloodier.
+	# The subject stays a subject (integration is NOT rolled back — the rising is simply broken), and
+	# the garrison commander's standing rises for the service. This is the garrison's OWN action, the
+	# counterpart to the amban's .41.d — distinct from .41.b (the from-scratch war when no garrison can
+	# do the job).
+	option = {
+		name = "qing_integ.41.e"
+		custom_tooltip = "qing_integ.41.e.tt"
+		trigger = {
+			has_variable = integ_garrison_edge
+			var:integ_garrison_edge >= 1
+		}
+		add_tyranny = 3
+		add_aggressive_expansion = 3
+		# [cost 2026-08-04] no GOLD — like the expedition, the garrison crush is paid in STABILITY and
+		# LEGITIMACY, but LIGHTER than .41.b: the troops are already on the spot, no war is declared,
+		# and the subject is held. A dominant garrison breaks it cleanly (small toll); rough parity
+		# wins but bloodier (larger toll).
+		if = {
+			limit = { var:integ_garrison_edge = 2 }
+			add_stability = -1
+			add_legitimacy = -3
+			add_war_exhaustion = 1
+			LOG_line = { sys = SUBJ  msg = "resistance BROKEN in the field by a dominant local garrison, subject=[scope:target.GetTag]" }
+		}
+		else = {
+			add_stability = -3
+			add_legitimacy = -6
+			add_war_exhaustion = 2
+			LOG_line = { sys = SUBJ  msg = "resistance broken in the field by the local garrison (hard-fought), subject=[scope:target.GetTag]" }
+		}
+		# the rising is put down where it stands; local unrest lingers but the subject is held.
+		if = {
+			limit = { exists = scope:resistance_province }
+			scope:resistance_province = { add_province_modifier = { name = local_unrest_harsh  duration = 730 } }
+		}
+		# the subject resents the garrison's heavy hand, but the bond holds (a standing occupation-
+		# style resentment, not the full re-subjugation aftermath of .41.b).
+		add_country_modifier = { name = qing_integ_frontier_resentment  duration = 1095 }
+		LOG_line = { sys = SUBJ  msg = "resistance CRUSHED-IN-PLACE by garrison (no war, subject held) subject=[scope:target.GetTag]" }
+		SUBJ_QING_clear_integ_actors = yes
+	}
+
+	# --- Crush: let the revolt become open war, and break it by arms ---
+	# [#task-7; flood-fix 2026-08-04] Now a REAL war via the VANILLA independence path: the subject
+	# declares its war of independence on the throne (SUBJ_QING_crush_revolt_war → the subject-scope bare
+	# declare_war_with_wargoal { independence_wargoal, target = ROOT }, upstream epigoni idiom). NO
+	# release_subject and NO conquer war — the dependency stays a subject unless it WINS; the player
+	# crushes the rising by winning the defence. (The prior release+conquer+reparent implementation
+	# flooded the boot log 858k lines — removed.)
+	# [#task-8] This is the from-scratch war for when no garrison marches out (that path is .41.e above).
+	# Always available (no trigger) as the hard option. A wavering / absent amban abandons his post as
+	# the fighting starts.
 	option = {
 		name = "qing_integ.41.b"
 		custom_tooltip = "qing_integ.41.b.tt"
-		trigger = {
-			OR = {
-				treasury >= 150
-				AND = { has_variable = integ_garrison_edge  var:integ_garrison_edge >= 1 }
-			}
-		}
-		# cost scales with whether the garrison can carry the fight: a dominant garrison (edge 2)
-		# marches out and the expedition is cheaper; otherwise it is the full costly campaign.
-		if = {
-			limit = { has_variable = integ_garrison_edge  var:integ_garrison_edge = 2 }
-			add_treasury = -80
-			add_war_exhaustion = 1
-			LOG_line = { sys = SUBJ  msg = "crush: dominant garrison marches out to break the rising, subject=[scope:target.GetTag]" }
-		}
-		else = {
-			add_treasury = -150
-			add_war_exhaustion = 3
-			LOG_line = { sys = SUBJ  msg = "crush: garrison holds its fortress; a full field expedition is mounted, subject=[scope:target.GetTag]" }
-		}
+		# [#task-20] the open war of independence. The garrison-marches-out path is now its OWN option
+		# (.41.e); this is the full field campaign the throne fights when the revolt flares into open war
+		# (the subject declares independence; the player wins the defence to crush it). [cost 2026-08-04]
+		# The crush costs no GOLD directly — its price is paid in STABILITY and LEGITIMACY (plus tyranny /
+		# aggressive expansion / war exhaustion), the political toll of the war, not a treasury debit.
+		add_war_exhaustion = 3
 		add_tyranny = 10
 		add_aggressive_expansion = 10
 		add_stability = -5
+		add_legitimacy = -15
+		LOG_line = { sys = SUBJ  msg = "crush: a full field expedition is mounted (re-subjugation war), subject=[scope:target.GetTag]" }
 		# a wavering / absent amban abandons his post when the shooting starts (flavour + a small ding)
 		if = {
 			limit = {
@@ -419,7 +520,8 @@ qing_integ.41 = {
 				}
 			}
 		}
-		# [#task-7] the actual war: free the rebel and declare a re-subjugation conquer war.
+		# [#task-7] the actual war: the subject declares its war of independence on the throne (no
+		# release, no conquer — vanilla independence path; see SUBJ_QING_crush_revolt_war).
 		SUBJ_QING_crush_revolt_war = yes
 		LOG_line = { sys = SUBJ  msg = "resistance CRUSHED (real war declared) subject=[scope:target.GetTag]" }
 		SUBJ_QING_clear_integ_actors = yes
