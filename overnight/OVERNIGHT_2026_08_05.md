@@ -256,3 +256,36 @@ Minor tool-regex note (leading-dot decimals like `.05` would be missed) — conf
 (grepped: no such values in any touched file). No changes needed.
 
 **Status:** DONE — committed (see git log).
+
+---
+
+## #34 — Surface the Military Supplies breakdown in the topbar tooltip — IMPLEMENTED
+
+**Why:** the topbar Military-supplies figure is a black box — the old MILITARY_SUPPLIES_TT showed
+only total income and total consumption ("gains X, consumes Y"). User wants the breakdown surfaced.
+
+**What I did:** enriched MILITARY_SUPPLIES_TT (imp19c_tooltips_l_english.yml) with a per-good
+"Consumption by good (quarterly)" section: munitions (early/late), artillery, clothing,
+pharmaceuticals, construction materials.
+
+**Correctness catch:** the obvious country-scope reads (DEMAND_country_clothing / _pharmaceuticals /
+_construction_materials) sum CIVILIAN + military demand and would massively overstate military
+consumption. Added SEVEN new country-scope MILITARY-only svalues in INCOME_svalues.txt that sum the
+exact same `_base` military addends MILITARY_supplies_country_consumed_quarterly uses, so the
+breakdown is internally consistent with the displayed total.
+
+**Dangling-ref catch:** DEMAND_late_artillery_base is UNDEFINED upstream (the existing consumed-total
+svalue references it too; DEMAND_late_artillery Total is stubbed value=0 — late artillery isn't
+modelled yet), so it always contributes 0. Omitted the late-artillery line rather than propagate the
+dangling reference / show a permanent 0.00; documented for when it's modelled.
+
+**Files:** localization/english/imp19c_tooltips_l_english.yml, common/script_values/INCOME_svalues.txt.
+
+**Review:** code-review CLEAN — all 8 tooltip ScriptValue refs resolve, new svalues read the correct
+military-only `_base` addends (not civilian DEMAND_country_*), scope idiom proven, single valid YAML
+line, braces balanced, no double-count. One LOW: the total-consumption line rendered NEGATIVE (the
+canonical consumed svalue is ×-1) while the positive per-good breakdown summed to +X — a sign
+mismatch made adjacent by this change. FIXED: added MILITARY_supplies_country_consumed_quarterly_magnitude
+(same addends, positive) and used it in the "consumes X" clause so total + breakdown agree in sign.
+
+**Status:** DONE — committed (see git log).
