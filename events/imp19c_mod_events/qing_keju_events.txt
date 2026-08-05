@@ -191,28 +191,18 @@ qing_keju.2 = {
 	option = {
 		name = "qing_keju.2.a"
 		custom_tooltip = "qing_keju.2.a.tt"
-		# [Talleyrand-fix 2026-08-04] hidden_effect wraps the laureate-effects (same class as 4.a): when
-		# the laureate is a FRESHLY-MINTED fallback (no eligible courtier -> the create_character at ~172),
-		# the option's effect-tooltip EVAL runs QING_char_bind -> QING_char_affinity var ops against the
-		# not-yet-bound scope -> char:0 (Talleyrand) + flood. Did not manifest this boot (an existing
-		# courtier was picked, whose scope resolves), but the fallback path is the same latent bug — guard
-		# it. custom_tooltip=qing_keju.2.a.tt carries the player text; runtime unchanged.
-		hidden_effect = {
-			scope:laureate = {
-				add_trait = jinshi
-				add_loyalty = loyalty_qing_exam_laureate
-				add_popularity = 15
-				add_character_experience = 10
-				# passing under the emperor's own eye seasons a man's charm and learning
-				# (the 天子門生 bond) — cultivate the factors, then bind him to the throne.
-				QING_char_cultivate = { stat = charisma  amount = 1 }
-				QING_char_cultivate = { stat = finesse  amount = 1 }
-				# the degree confers a clientele of students & protégés (門生故吏) — a
-				# real power base, but one bound to the throne that examined him.
-				add_loyal_veterans = 6
-				QING_char_bind = yes
-			}
-		}
+		# [keju-flood-fix 2026-08-04] The laureate-binding effects are DEFERRED to a hidden follow-up event
+		# (qing_keju.20) fired at days = 0, NOT run inline here. WHY: this is a country_event with an open
+		# window, so the option's effects are TOOLTIP-PREVIEW-EVALUATED when the window renders. The prior
+		# [Talleyrand-fix] wrapped them in hidden_effect believing that suppresses the preview eval — the
+		# Aug-4 boot DISPROVED that: keju.2 fired ONCE yet threw ~793 errors from INSIDE the hidden_effect
+		# (QING_char_affinity's set_variable does not COMMIT during preview eval, so its own later var: reads
+		# throw "used but never set"). hidden_effect only hides the RESULT TEXT; it does not stop the eval.
+		# The PROVEN dodge (keju.4's own #31 revert note: "immediate runs BEFORE the window renders") is to
+		# move the var-heavy work into a follow-up event's IMMEDIATE, which executes only at real runtime and
+		# is never previewed. scope:laureate survives the trigger_event (proven: qing_amban.1 reads scopes
+		# saved before its trigger_event). custom_tooltip = qing_keju.2.a.tt still carries the player text.
+		trigger_event = { id = qing_keju.20  days = 0 }
 		# [#321] beyond the named laureate, the cycle mints a COHORT of graduate
 		# characters into the hiring pool (scaled by the ladder's health) — the
 		# concrete talent pipeline office-appointment draws on first.
@@ -365,29 +355,16 @@ qing_keju.4 = {
 		custom_tooltip = "qing_keju.4.a.tt"
 		trigger = { political_influence >= 15 }
 		add_political_influence = -15
-		# [Talleyrand-fix 2026-08-04] hidden_effect wraps the scholar-effects. The Talleyrand (char:0)
-		# sighting + the 76,455-line QING_char_bind/QING_char_affinity flood (boot Aug-4 01:32) are ONE
-		# bug: this option's effect TOOLTIP is EVALUATED when the event window renders, but scope:failed_
-		# scholar (minted in immediate) is not bound in that preview pass, so QING_char_bind -> QING_char_
-		# affinity ran its ~20 var ops (set_variable qing_char_affinity + reads) against an unbound scope,
-		# resolving to char:0 = Talleyrand. hidden_effect suppresses the tooltip-EVAL (proven: the mod's
-		# qing_new_world_missions.txt:155 does exactly this for a preview-none svalue; INV 971 / TI 621
-		# options pair custom_tooltip+hidden_effect). Runtime unchanged. custom_tooltip=qing_keju.4.a.tt
-		# carries the player-facing text. NOTE: this is the OPTION effect — NOT the immediate mint that
-		# the reverted fc4b53970 wrongly wrapped (immediate runs before preview, so wrapping it was inert).
-		# Only 4.a needs this: 4.b/4.c reference scope:failed_scholar too but call no var-heavy QING_char_*
-		# and threw ZERO errors this boot.
-		hidden_effect = {
-			scope:failed_scholar = {
-				add_trait = juren
-				add_loyalty = loyalty_qing_elevated
-				add_popularity = 10
-				set_home_country = ROOT
-				# recognised and taken into service against the odds — a debt of
-				# gratitude. Score him fresh in his new station and bind him.
-				QING_char_bind = yes
-			}
-		}
+		# [keju-flood-fix 2026-08-04] The scholar-binding effects are DEFERRED to a hidden follow-up
+		# (qing_keju.21, days = 0) rather than run inline in hidden_effect — IDENTICAL fix + rationale to
+		# .2.a (qing_keju.20). The prior [Talleyrand-fix] believed hidden_effect suppresses the option's
+		# tooltip-preview eval; the Aug-4 boot DISPROVED that for the .2.a twin (fired once, flooded ~793
+		# lines from inside its hidden_effect — QING_char_affinity's set_variable does not commit in preview
+		# eval, so its var: reads throw). keju.4 did NOT fire this boot so it did not manifest here, but it
+		# is the same latent bug (its own comment records a 76,455-line flood when it DID fire). A follow-up
+		# event's immediate runs only at real execution, never previewed. scope:failed_scholar survives the
+		# trigger_event. custom_tooltip = qing_keju.4.a.tt carries the player text.
+		trigger_event = { id = qing_keju.21  days = 0 }
 		add_stability = 1
 	}
 
@@ -584,5 +561,73 @@ qing_keju.7 = {
 		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
 		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 6 }
 		QING_DECLINE_nudge = { var = qing_exam_ladder  amount = -8 }
+	}
+}
+
+########################################################################
+# .20  [keju-flood-fix 2026-08-04] HIDDEN LAUREATE-BINDING FOLLOW-UP.
+# Fired at days = 0 from qing_keju.2's option .2.a, this carries the var-heavy
+# laureate-binding effects that must NOT run in the option's tooltip PREVIEW.
+# An option's effects are preview-evaluated when the event window renders; a
+# follow-up event's IMMEDIATE runs only at real execution and is never previewed
+# (the proven dodge — see the qing_keju.4 #31 revert note). QING_char_affinity's
+# set_variable does not commit during preview eval, so running it inline in .2.a
+# flooded error.log ~793 lines/fire with "qing_char_affinity used but never set"
+# (Aug-4 boot). scope:laureate survives the trigger_event (proven: qing_amban.1).
+# Hidden + guarded on the laureate still existing so a race can't misfire.
+########################################################################
+qing_keju.20 = {
+	type = country_event
+	hidden = yes
+
+	trigger = {
+		exists = scope:laureate
+	}
+
+	immediate = {
+		scope:laureate = {
+			add_trait = jinshi
+			add_loyalty = loyalty_qing_exam_laureate
+			add_popularity = 15
+			add_character_experience = 10
+			# passing under the emperor's own eye seasons a man's charm and learning
+			# (the 天子門生 bond) — cultivate the factors, then bind him to the throne.
+			QING_char_cultivate = { stat = charisma  amount = 1 }
+			QING_char_cultivate = { stat = finesse  amount = 1 }
+			# the degree confers a clientele of students & protégés (門生故吏) — a
+			# real power base, but one bound to the throne that examined him.
+			add_loyal_veterans = 6
+			QING_char_bind = yes
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_keju.20 (laureate bound, deferred from .2.a) for" }
+	}
+}
+
+########################################################################
+# .21  [keju-flood-fix 2026-08-04] HIDDEN SPECIAL-APPOINTMENT BINDING FOLLOW-UP.
+# Twin of qing_keju.20, for qing_keju.4's option .4.a: carries the var-heavy
+# QING_char_bind on scope:failed_scholar out of the option's tooltip-preview eval
+# and into an immediate (never previewed). Same rationale as .20. scope:failed_
+# scholar survives the trigger_event; guarded on it still existing.
+########################################################################
+qing_keju.21 = {
+	type = country_event
+	hidden = yes
+
+	trigger = {
+		exists = scope:failed_scholar
+	}
+
+	immediate = {
+		scope:failed_scholar = {
+			add_trait = juren
+			add_loyalty = loyalty_qing_elevated
+			add_popularity = 10
+			set_home_country = ROOT
+			# recognised and taken into service against the odds — a debt of
+			# gratitude. Score him fresh in his new station and bind him.
+			QING_char_bind = yes
+		}
+		LOG_line = { sys = QING  msg = "EVENT qing_keju.21 (special-appointment scholar bound, deferred from .4.a) for" }
 	}
 }
