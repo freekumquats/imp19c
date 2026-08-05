@@ -439,3 +439,19 @@ Character window:
 REVERTED my earlier over-reach: the gui_base.gui shared-template change (4 party-chip lines) was
 NOT what was asked (it affects many other windows) — reverted; only the two Character-window files
 are touched. Braces balanced both.
+
+## #46 — Amban vs Tutor of the Upper Study mutual exclusivity — FIXED
+Symptom: a Tutor of the Upper Study (上書房 師傅, qing_is_upperstudy) was serving as an amban.
+Root cause: the two candidate-draw filters did not cross-exclude.
+- se_QING_AMBAN.txt QING_amban_post: the any_character gate (:55) + ordered_character limit (:81)
+  excluded qing_office_held / qing_amban_marker / ruler / heir / commanders / governors — but NOT
+  qing_is_upperstudy. So a sitting tutor was eligible for the amban draw. ADDED
+  NOT = { has_variable = qing_is_upperstudy } to both (lines 68, 99).
+  (QING_amban_seed_one CREATES a fresh historical character, no draw-from-pool → no filter needed.)
+- se_QING_UPPERSTUDY.txt QING_upperstudy_draw_tutor: any_in_list (:267) + ordered_in_list (:275)
+  over qing_scholar_pool excluded qing_office_held / qing_is_upperstudy — but NOT qing_amban_marker.
+  ADDED NOT = { has_variable = qing_amban_marker } to both (reverse guard; a posted amban is normally
+  already out of the pool, but guard explicitly).
+Verified no OTHER draw path posts either role from existing chars: se_QING_COUNCIL refs are counts
+(:245-246) + leave-all-posts cleanup (:1408/1415); se_QING_DELIBERATIVE already excludes
+qing_amban_marker (:76/96). Braces balanced both files.
