@@ -234,13 +234,6 @@ QING_council_autofill_office = {
 # (> 1), the only legal relational-RHS form (see the RHS-comparison rule). Scratch var removed per char.
 # ======================================================================
 QING_validate_one_position = {
-	# [meter-concretize #2 2026-08-06] this walk ALSO accumulates the officialdom-corruption aggregate — the
-	# per-character position count (pos_marker_ct >= 1) is exactly "holds a court position", so a SECOND
-	# full-pool every_character sweep for corruption was redundant. Merged here (one sweep). Reset the
-	# accumulators before the walk; QING_council_recompute reads them into qing_officialdom_corruption_target
-	# (validate runs at QING_GOV_pulse:340, recompute at :343 — totals are fresh).
-	set_variable = { name = qing_officialdom_corr_total  value = 0 }
-	set_variable = { name = qing_officialdom_holder_ct   value = 0 }
 	every_character = {
 		limit = { employer = ROOT  is_alive = yes }
 		set_variable = { name = qing_pos_marker_ct  value = 0 }
@@ -254,15 +247,6 @@ QING_validate_one_position = {
 		if = { limit = { has_variable = qing_is_palace_eunuch }      change_variable = { name = qing_pos_marker_ct  add = 1 } }
 		if = { limit = { has_variable = qing_is_harem_consort }      change_variable = { name = qing_pos_marker_ct  add = 1 } }
 		if = { limit = { has_variable = qing_march_gg }              change_variable = { name = qing_pos_marker_ct  add = 1 } }
-		# [meter-concretize #2] a character holding ANY court position (count >= 1) contributes his vanilla
-		# corruption to the officialdom aggregate. prev = the iterated character inside the ROOT block.
-		if = {
-			limit = { var:qing_pos_marker_ct >= 1 }
-			ROOT = {
-				change_variable = { name = qing_officialdom_corr_total  add = prev.corruption }
-				change_variable = { name = qing_officialdom_holder_ct   add = 1 }
-			}
-		}
 		if = {
 			limit = { var:qing_pos_marker_ct > 1 }
 			LOG_line = { sys = QING  msg = "1:1 VIOLATION — character holds MORE THAN ONE court position (count above); check appointment/enrol gates for" }
@@ -476,13 +460,19 @@ QING_council_recompute = {
 	# toward this — §2 single-store mirror). [USER 2026-08-06] scope = ALL sub-positions, not just the 13
 	# council seats: reuse QING_char_holds_court_position (qing_dynasty_triggers.txt), the mod's canonical
 	# "holds any of the 10 court posts" trigger (office / zongli diplomat / censor-inspector / imperial guard /
-	# both palace studies / amban / palace eunuch / harem consort / Protector-General). Historically right —
-	# amban/eunuch/diplomat graft are central corruption vectors. Div/0 floor. BASELINE_K = 12: setup autofills
-	# carry ZERO corruption, so a pristine officialdom averages ~0 → target lands at 12, reproducing the seed
-	# and sitting just above clean_government (≤10).
-	# [merged 2026-08-06] corr_total/holder_ct are accumulated in QING_validate_one_position's sweep (called
-	# just before QING_council_recompute in QING_GOV_pulse) — its per-char pos_marker_ct>=1 IS "holds a court
-	# position", so a separate every_character walk here was redundant and is removed (one full-pool sweep).
+	# both palace studies / amban / palace eunuch / harem consort / Protector-General). Dedicated walk (own
+	# count, NOT council filled_count). Historically right — amban/eunuch/diplomat graft are central corruption
+	# vectors. Div/0 floor. BASELINE_K = 12: setup autofills carry ZERO corruption, so a pristine officialdom
+	# averages ~0 → target lands at 12, reproducing the seed and sitting just above clean_government (≤10).
+	set_variable = { name = qing_officialdom_corr_total  value = 0 }
+	set_variable = { name = qing_officialdom_holder_ct  value = 0 }
+	every_character = {
+		limit = { employer = ROOT  is_alive = yes  QING_char_holds_court_position = yes }
+		ROOT = {
+			change_variable = { name = qing_officialdom_corr_total  add = prev.corruption }
+			change_variable = { name = qing_officialdom_holder_ct   add = 1 }
+		}
+	}
 	set_variable = { name = qing_officialdom_corruption_target  value = 12 }
 	if = {
 		limit = { var:qing_officialdom_holder_ct > 0 }
