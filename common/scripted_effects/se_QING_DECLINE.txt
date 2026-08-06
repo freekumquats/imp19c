@@ -420,13 +420,44 @@ QING_DECLINE_drift_modernarmy_share = {
 # ======================================================================
 QING_DECLINE_drift_han_provincial_power = {
 	if = { limit = { NOT = { has_variable = qing_han_provincial_power } }  set_variable = { name = qing_han_provincial_power  value = 0 } }
-	# target = mean of the two central-army decay meters...
+	# [meter-concretize #6 2026-08-06] BLEND a CONCRETE magnate-governor COUNT into the target. The decay
+	# proxy below models the LATENT pressure (rotting central armies FORCE devolution); this term adds the
+	# REALIZED devolution — how many Han governors-general actually hold personal power bases. COUNT
+	# (not a cohort-sum): num_loyal_cohorts is a TRIGGER only (proven char_events.txt:175), NOT a readable
+	# value, so we count magnate-governors. A magnate = an alive Han governor employed by the throne who
+	# EITHER carries the #105 sanction modifier (qing_regional_magnate) OR commands >= 10 loyal cohorts.
+	# every_character{employer=ROOT is_governor is_alive} is the proven effect-iterator (se_QING_PERSONNEL.txt:47);
+	# has_culture=han is the proven selection (QING_mechanics_actions.txt:153). Opens at 0 in 1763 (no
+	# sanctioned magnates, no Han governors with private armies at the zenith) — matches the seed.
+	set_variable = { name = qing_han_magnate_tally  value = 0 }
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_governor = yes
+			is_alive = yes
+			has_culture = han
+			OR = {
+				has_character_modifier = qing_regional_magnate
+				num_loyal_cohorts >= 10
+			}
+		}
+		ROOT = { change_variable = { name = qing_han_magnate_tally  add = 1 } }
+	}
+	# target = mean of the two central-army decay meters (LATENT pressure)...
 	set_variable = { name = qing_han_prov_target_tmp  value = var:qing_banner_decay }
 	change_variable = { name = qing_han_prov_target_tmp  add = var:qing_greenstandard_decay }
 	change_variable = { name = qing_han_prov_target_tmp  divide = 2 }
 	# ...minus the modern national-army share (the centralizing counterweight).
 	if = { limit = { NOT = { has_variable = qing_modernarmy_share } }  set_variable = { name = qing_modernarmy_share  value = 0 } }
 	change_variable = { name = qing_han_prov_target_tmp  subtract = var:qing_modernarmy_share }
+	# ...PLUS the concrete magnate-count (REALIZED devolution). 12/magnate (user-decided 2026-08-06):
+	# 6 magnates = "heavily-devolved" reference → 12×6 = 72 from the count, + the decay-pressure term once
+	# central armies rot → crosses the ~80 separatism-warlord arm floor (se_SEPARATISM). A mildly-devolved
+	# realm (1-2 magnates → 12-24) stays well below. WEIGHTED SUM (not max) so a modern national army still
+	# suppresses the vector. PLACEHOLDER-playtest the 12.
+	set_variable = { name = qing_han_magnate_term_tmp  value = var:qing_han_magnate_tally }
+	change_variable = { name = qing_han_magnate_term_tmp  multiply = 12 }
+	change_variable = { name = qing_han_prov_target_tmp  add = var:qing_han_magnate_term_tmp }
 	# [law #14 bias 2026-07-24] Provincial Militarization law biases the han-provincial-power TARGET BEFORE
 	# the clamp (delegated +10 / centralized -10 / sanctioned 0). Biasing the TARGET (not the +/-2 chase
 	# nudge) is what gives a durable effect — the meter eases toward this. Guarded → default byte-identical.
