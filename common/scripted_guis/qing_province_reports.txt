@@ -516,15 +516,42 @@ qing_report_open_milsupply = {
 	is_shown = { tag = CHI }
 	is_valid = { always = yes }
 	effect = {
-		# [#45 2026-08-05] The ledger is now a fixed per-good TABLE (produced vs consumed for
-		# the six military-supply goods), reading the MILITARY_supplies_prod_* / _country_*
-		# svalues live in the window — NOT a province variable-list. So the opener has no data
-		# to build; it exists only so the hub button has a scripted_gui to Execute (and to log).
-		# (The old province-list model could only ever show provinces whose trade_good was a
-		# military good — Beijing's rifles at 1763 — and never clothing/pharma/construction/
-		# artillery, which are demand-fulfilled from stockpiles, not province trade_goods.)
+		# [#45 2026-08-05] The ledger's TOP table is a fixed per-good produced-vs-consumed table
+		# reading MILITARY_supplies_prod_* / _country_* live in the window (country totals).
+		# [#57 2026-08-05] PLUS a per-STATE production breakdown beneath it (the reported gap: the
+		# ledger only showed totals). Build a state variable-list of the states that actually PRODUCE
+		# a military-supply good (munitions/clothing/naval supplies from arsenal/depot/machine_works/
+		# textile_mill/navy_yard), snapshotting each good's per-state capacity so the window can list
+		# them — same pattern as the admin report's qing_admin_report_states.
 		LOG_line = { sys = QING  msg = "military-supply ledger opened by" }
+		clear_variable_list = qing_milsupply_report_states
+		every_governorships = {
+			every_governorship_state = {
+				save_scope_as = this_state
+				if = {
+					# only list states with non-zero production capacity (keeps the list to real producers).
+					limit = { MILITARY_state_prod_total > 0 }
+					set_variable = { name = qing_milsup_rep_munitions  value = MILITARY_state_prod_munitions }
+					set_variable = { name = qing_milsup_rep_clothing   value = MILITARY_state_prod_clothing }
+					set_variable = { name = qing_milsup_rep_naval      value = MILITARY_state_prod_naval_supplies }
+					root = {
+						add_to_variable_list = {
+							name = qing_milsupply_report_states
+							target = scope:this_state
+						}
+					}
+				}
+			}
+		}
 	}
+}
+
+# EMPTY-STATE gate — no state produces a military-supply good yet (e.g. a 1763 start with only
+# arsenals; shown so the per-state section explains itself rather than rendering blank).
+qing_report_milsupply_empty = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { NOT = { has_variable_list = qing_milsupply_report_states } }
 }
 
 # ======================================================================

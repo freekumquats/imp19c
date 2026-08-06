@@ -548,3 +548,44 @@ VISIBILITY (#43, re-verified): all buildings have a build_item_<X> type + instan
 province_window.gui; NO building carries potential={always=no}. yamen/great_wall/grand_canal/dujiangyan
 all show under Public Works; the two monuments (great_wall/grand_canal) are potential=real-gate +
 allow=always no, so they show visible-but-greyed (event-built via add_building_level, which bypasses allow).
+
+## Autonomous bug-fix run (Aug 5 evening) — log-bug + all reported test-result issues
+Mandate: fix freekumquats-authored bugs from the log, then all reported issues; note here; review before each commit.
+
+LOG TRIAGE (logs.zip Aug 5 19:22, post-#42): ranked error.log. Triaged authorship:
+- 936 flood @ qing_character_events.txt:44/51 (qing_manchu_identity unset) = freekumquats -> #61 FIXED.
+- has_law wrong-scope (638, EDU_svalues:78), debug_demand:23, SHIPPING/CURRENCY Div-0, oa_wealth:337
+  reserve reads = ALL Sobisonator upstream / benign read-before-set noise -> OUT OF SCOPE (proven-code rule;
+  see memory imp19c-econ-log-noise-not-bugs). #37 gold/silver closed as FALSE POSITIVE; probe removed (af13301b7).
+
+#61 (7da5fc84e) — qing_char tooltip-eval var-flood. qing_char.10/.11/.20/.22 open-window options ran
+set-then-read var effects (QING_char_shift_identity reads qing_manchu_identity; QING_DECLINE_nudge reads
+its counter) that throw in tooltip-preview eval. Deferred all 6 flooding options' var effects to hidden
+days=0 follow-ups qing_char.30-.35 (proven keju.2 dodge 64ada0d69). Non-var effects kept inline. Review
+CAUGHT 3 nudge options (.11.b/.20.b/.22.b) I first missed — added .33/.34/.35. Only .10 fired this boot;
+.11/.20/.22 were latent. Braces 80/80.
+
+#55/#56 (af0f4a7a1) — Admin Capacity report. Window 540->620, header/scroll/rows widened + header
+margin_left 36->30 to align columns (衙門/Dist no longer clipped; 衙門=0 is accurate, not a binding bug).
+Footer 'The Realm's Administration' left-spill fixed: fixed width 580 + align=center + max_width, dropped
+autoresize/position. Review CLEAN (its column-misalign flag was a sibling-vs-stacked misread; screenshot disproves).
+
+#58/#59/#60 (9c99b8eba):
+- #58 Cashier (qing_war.1.b) now actually relieves command: remove_command (guarded is_general/is_admiral
+  OR qing_officer_marker — the marker catches Green-Standard garrison officers like Songchun that don't read
+  is_general, the BT-7 gap) + remove_as_governor. Review caught the is_general gap; marker added.
+- #59 'Govern by the resident' (qing_frontier.1.b): removed the wrongful remove of qing_frontier_occupied
+  (Under Imperial Garrison) — the garrison isn't disbanded, modifier must persist. Opinion/loyalty kept.
+- #60 reserve-row tooltip (RESERVE_VALUE_GOLD/SILVER_TT): added the three-numbers legend (total held /
+  actual change last qtr / target buy-rate lb) + why change != target.
+
+#54 (e3879c043) — Fortress Results/Other Results for the 17 VANILLA-DERIVED buildings (port/river_port/
+school/university/industrial_estate/RGO/sewer/hospital/canal/railway/depot/commerce/admin/residential/
+cultural districts + row_manufactory/row_plantation). Live per-province data preserved as Other Results.
+Values verified vs defs. migration_attraction/_speed kept FLAT per in-game proof (HOLY_SITE_TT renders
++5.00 flat) — NOT percent (a code-review convention guess the game text disproves).
+
+#57 — Military Supplies Ledger per-state production breakdown (was totals-only). Added STATE-scope svalues
+MILITARY_state_prod_munitions/clothing/naval_supplies/total (count arsenal 2 + depot 1 + machine_works 3;
+textile_mill 2; navy_yard 2, per GOODS_svalues), opener builds qing_milsupply_report_states (states with
+capacity>0, mirroring the admin report), GUI per-state scroll section + fixed footer, loc keys. [pending review/commit]
