@@ -1,6 +1,13 @@
 # DESIGN — Canton trade feeds the silver reserve (粵海關白銀入庫)
 
-**Branch:** merge-overnight. **Status:** DESIGN (not built). **Scope:** CHI only.
+**Branch:** merge-overnight. **Status:** ✅ **IMPLEMENTED + committed `54b771e80`** (2026-08-06). **Scope:** CHI only.
+
+> **BUILT:** the Canton silver-inflow leg is live in `se_QING_CANTON.txt` — the quarterly Canton yield
+> (`qing_canton_yield_tmp`, 萬兩) is converted ×10 to the engine's 千兩 units and credited into
+> `silver_reserve_size` (the currency-backing reserve; moves ONLY that var, not the retired
+> `qing_silver_reserve`). Publishes `qing_canton_last_silver_in` for the panel. Shipped alongside the
+> silver-reserve hard-cap removal (peak now event-marked, not a wall) in the same commit. Design→review→
+> implement→review all complete. The rest of this doc is the design of record.
 
 ## 1. Thesis — close the one gap the money model leaves open
 
