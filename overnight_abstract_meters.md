@@ -621,3 +621,30 @@ NOT STARTED:
 FUTURE (design-noted, not a task): dedicated banner/GS commander-rot driver mechanic (USER, banner doc §6).
 
 COUNT: 5 shipped · 1 in review · 2 ready-to-build · 3 closed · 1 not-started.
+
+---
+## 2026-08-06 — post-hoc reviews: #2 CLEAR, #10B NOT READY
+
+#2 corruption widening (commit 6ad04d8ea) — REVIEWED SOUND, no critical/medium. prev.corruption resolves to
+the character (proven by sibling banner walk :582), ROOT=CHI, div/0 guarded, legal _cmpsvalue, no
+double-count. Flag #1 CLEARED: no seeded 1763 char carries corruption (ambans runtime-assigned) → opens 12 =
+seed. Flag #2 (consorts in "officialdom"): USER ruled KEEP AS-IS. Optional perf (3rd full-pool every_character
+walk) noted, not required. #2 DONE + verified.
+
+#10B Xinjiang concrete-reward design — REVIEWED: NOT READY (2 CRIT + 2 HIGH). Directionally right (cuts,
+area-iter, option-b, choose-coast collapse CONFIRMED sound) but:
+- CRIT-1: "retire apply_prov_band" misses 4 MORE live callers — integrate_fully capstone (se_QING_XINJIANG:544),
+  qing_ili.4 compromise (:190), choose-coast (se_QING_ILI:106), break_ili_free fallback (:466). Also drops the
+  mutual-exclusion + mid-range self-clearing bookkeeping (documented stuck-secured bug precedent). SAME
+  incomplete-census failure as prior Xinjiang passes.
+- CRIT-2: qing_ili.4 set control=60 NOT converted (filed "keep override" but that fights the one-way derive);
+  which pulse hosts the derive is unspecified (matters for the integrate=100 lock).
+- HIGH-3: xiexiang 協餉 (the key paid grip lever) has NO derive term → paying it becomes inert. Plus ~8 other
+  nudge-writers (discipline_beg, mission nudges, caravan levers, events) still fight the derive.
+- HIGH-4: option-b ≥85 capstone gate may be UNREACHABLE under the derive (control ceils ~74 pre-Ili +
+  consolidation ~82 < 85 under beg-indirect law). Needs arithmetic vs all 3 admin-law biases.
+- MED-5: W_sec/W_front/W_cont unassigned; secured-province signal near-inert early (ILI+begs+tuntian already
+  ~74, so the concrete centerpiece contributes little at the margin).
+DEEPER ISSUE: Xinjiang control has FAR more live writers than the Ili story beats. A pure one-way derive can't
+absorb them all without converting every writer to concrete (much larger scope than "convert 6 beats"). This
+is a scoping decision for the user. #10B REMAINS DEFERRED — needs a redesign pass, not a build.
