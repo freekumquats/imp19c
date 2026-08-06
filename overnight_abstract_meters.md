@@ -581,3 +581,43 @@ CONCRETE outcomes and control DERIVES one-way from them:
   − W_cont·contested-count. No max-floor, no cooldown needed (the old §5 machinery is obsolete).
 This is concrete-over-abstract applied to the REWARDS, not just the meter. Doc §5/§3/§7/§8/§9 updated.
 NEXT: dispatch a review of the revised #10B before building (hardest piece; design-review caught breaks 2x).
+
+---
+## 2026-08-06 — CONSOLIDATED STATUS SNAPSHOT (all designs)
+
+SHIPPED (built + boot-crash-reviewed + committed + pushed to merge-overnight):
+- #6 Han provincial power — magnate-governor COUNT blended into target; dropped double-counting +15 nudge.
+- #2 corruption — vanilla `corruption` of ALL court-position holders (widened per user: via
+  QING_char_holds_court_position — office/diplomat/censor/guard/2 studies/amban/eunuch/consort/Protector-Gen),
+  single-store mirror of council-effectiveness.
+- #8 treaty ports — live recount of real qing_treaty_port modifiers; retired +5/+1 tally; _dominant 12→9.
+- #9 banner/GS decay — garrison-commander corruption+martial (rot IS the decay); deleted passive creep;
+  drill/sanction/Napoleon levers now move real commander stats (add_corruption/add_martial).
+- #10A caravan prosperity — real oasis TRADE = num_goods_produced + regional_center_of_trade bonus (per user:
+  production drives trade but isn't trade; center-of-trade = live MOD trade infra, not obsolete vanilla).
+
+IN REVIEW:
+- #10B Xinjiang control — REDESIGNED around concrete-reward (beats stamp secured/contested/frontier objects,
+  control derives ONE-WAY; retire apply_prov_band as control→province stamper; option-b consolidation).
+  Design committed; adversarial review dispatched + running. Build follows on clear.
+
+READY TO BUILD (unblocked, not yet built):
+- #1 bureau/exam — UNBLOCKED by USER "assume admin capacity is flat (≈0)": 9 gates anchor on
+  ADMIN_available_country (deep reforms → surplus, early tasks → not-deep-deficit). Design review-clear;
+  max_amount cap fix DONE; 2 named academies BUILT (uncommitted, ride with #1). NEXT to build.
+- #3 currency — logs bound reserve_ratio_impact ∈ [0.5,1.0] → calibrated transfer opens calm, no upward
+  re-center. Buildable with a confirming LOG probe. Review-clear.
+
+CLOSED — won't build (design conclusions):
+- #5 sect pressure — no valid on-map referent (pure_land = accepted faith, moves wrong way; no White Lotus
+  religion object; rebellion-derive circular). RETRACTED.
+- #7 tributary/suzerain — derive collapses the meter (subject-type key mismatch + double-count). WON'T-FIX.
+- GP tension, customs — retracted earlier (capability/derivation didn't hold).
+
+NOT STARTED:
+- #11 meter-of-meters revisit (reform_pressure, modernarmy) — several addressed as side-effects of #2/#9;
+  the rest pending.
+
+FUTURE (design-noted, not a task): dedicated banner/GS commander-rot driver mechanic (USER, banner doc §6).
+
+COUNT: 5 shipped · 1 in review · 2 ready-to-build · 3 closed · 1 not-started.
