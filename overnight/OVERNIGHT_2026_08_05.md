@@ -471,3 +471,46 @@ FIX (copied the Fortress/coal_mine build_item pattern exactly — a proven worki
   Monuments/seed-only buildings with allow=always no render visible-but-not-buildable (the
   user's "no hidden buildings, effects described" intent), exactly as any gated building does.
 Braces balanced (gui_templates 1740/1740, province_window 2094/2094).
+
+## #37 — PRICE_PROBE render fix (fix the probe, no speculation) — PROBE FIXED, awaiting log
+The gold/silver reserve price-when-untraded question is diagnosed via the PRICE_PROBE in
+oa_wealth_changes.txt (quarterly_global_trade_6, right after the type-6 trade split that
+computes global_base_import_price_gold/silver). The probe emitted "gold=ERROR:[..." instead
+of a value.
+ROOT CAUSE: the render string used [ROOT.MakeScope.GetVariable('name').GetValue|3] — .GetVariable(
+is NOT a valid render promote (engine: "Could not find promote"). The proven promote is .Var('name'):
+this repo's WAR_scripted_effects.txt:24 debug_log uses [Player.MakeScope.Var('bad_guys_var')...];
+Terra-Indomita chinese_empire.gui:56 + Invictus event loc use [<scope>.MakeScope.Var('name').GetValue].
+FIX (841d9cb89): one-token change per var, .GetVariable( -> .Var(. Probe stays read-only, still marked
+REMOVE AFTER DIAGNOSIS. NO reserve/income code touched (user: "fix the fucking probe, not make changes
+off speculation"). code-review CLEAN (idiom correct, ROOT is country in this on_action, braces balanced).
+NEXT: boot with -debug_mode, read debug.log for "IMP19C PRICE_PROBE gold=X silver=Y" across quarters —
+answers (a) is the global base import price nonzero at runtime, (b) does it swing quarter-to-quarter.
+
+## Protector-General added to the 1:1 court-position rule (d5074d4d8)
+User: QING_char_holds_court_position must include the Protector-General (都護 march GG, #39).
+Its PERSON marker is qing_march_gg (se_QING_MARCH.txt:289, stamped on the minted GG character);
+qing_march / qing_march_maritime are subject-COUNTRY vars, deliberately NOT included. Added the
+clause to BOTH the shared exclusion trigger (qing_dynasty_triggers.txt) AND the 1:1-violation audit
+(se_QING_COUNCIL.txt QING_validate_one_position) so the two marker lists stay in lockstep.
+code-review CLEAN: appointment mints fresh characters (no candidate-starvation regression), lists match.
+
+## #53 — Drill unattributed error classes from the Aug 5 14:58 log to file:line — DONE
+"Script system error" (3913) == the jomini_script_system.cpp wrapper count exactly; it is the umbrella
+line, not its own class. Real classes, pinned:
+- 1166  has_law wrong-scope (province, expected country) — EDU_svalues.txt:78 (EDU_university_national_bonus,
+        Scope:Country, but evaluated province-side via se_EDU.txt:189). UPSTREAM (Sobisonator 49e0be6ef).
+- 766/452  event-target 'var' unset + invalid-left-side 'var' — SHIPPING_svalues.txt tradezone-penetration
+        var:shipping_* reads (~1377+), oa_wealth_changes:337, debug_demand.txt:23. UPSTREAM (Sobisonator).
+- 534   'Variable <X> used but never set' — *_stockpile_*_tradezone / *_total trade svalue reads. UPSTREAM.
+- 248   change_variable effect — oa_wealth_changes:180/200 (inside WEALTH_*/INCOME_* all-country effects). UPSTREAM econ.
+- 157   event-target 'local_var' unset — trade svalues. UPSTREAM.
+- 127   Div/0 — CURRENCY_svalues.txt:1118/1141, oa_economy_setup.txt:2530. UPSTREAM (Sobisonator).
+- 47+47 reserve-deficit vars unset (silver_needed_for_deficit / gold_reserve_value_greater_than_silver)
+        — DEBT_events.txt:13 -> INCOME_sell_largest_reserve (se_INCOME.txt:622). This IS the #37 reserve
+        system; already guarded once (logfix #19) but still leaking. NOT touched — the fixed PRICE_PROBE
+        is the diagnostic for this subsystem; no speculative edits.
+HEADLINE: every high-count class is UPSTREAM Sobisonator economy code (trade/shipping/currency svalue sim
+reading var: before the quarterly pulse sets it — a read-before-set ordering issue in the trade engine),
+not mod-added regressions. debug_demand.1/.2 (300 hits) are Sobisonator DEBUG food-demand test events still
+wired into the quarterly pulse (oa_wealth_changes:220-221) — removable noise, but a behaviour change, flagged not touched.
