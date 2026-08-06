@@ -181,6 +181,31 @@ QING_DECLINE_apply_corruption_band = {
 	}
 }
 
+# ======================================================================
+# [meter-concretize #2 2026-08-06] CORRUPTION — drift the live meter toward the character-derived target.
+# Single-store mirror of qing_council_effectiveness (design DESIGN_CORRUPTION_CONCRETIZE.md §2): the target
+# qing_officialdom_corruption_target = avg seated-holder vanilla `corruption` + baseline-K (computed in
+# QING_council_recompute, se_QING_COUNCIL.txt). The ~108 event nudges STAY on the live var — they are
+# impulses that decay as the drift re-converges toward the character truth (the damped behavior effectiveness
+# already ships). So a scandal spikes corruption then it eases back toward what the actual officials are.
+# ±2/pulse (slower than effectiveness's ±3 — graft is stickier). RHS-compare needs the _cmpsvalue wrapper.
+# Gated on the target existing (recompute has run at least once); self-seeds the level if absent.
+# ======================================================================
+QING_DECLINE_drift_corruption = {
+	if = { limit = { NOT = { has_variable = qing_corruption_level } }  set_variable = { name = qing_corruption_level  value = 12 } }
+	if = {
+		limit = { has_variable = qing_officialdom_corruption_target }
+		if = {
+			limit = { var:qing_corruption_level < qing_officialdom_corruption_target_cmpsvalue }
+			QING_DECLINE_nudge = { var = qing_corruption_level  amount = 2 }
+		}
+		else_if = {
+			limit = { var:qing_corruption_level > qing_officialdom_corruption_target_cmpsvalue }
+			QING_DECLINE_nudge = { var = qing_corruption_level  amount = -2 }
+		}
+	}
+}
+
 QING_DECLINE_apply_sect_band = {
 	remove_country_modifier = qing_sect_infiltration
 	if = {
@@ -1000,6 +1025,9 @@ QING_DECLINE_pulse = {
 	# L3), MINUS civic relief. Runs BEFORE reform pressure so the latter reads a
 	# fresh value.
 	QING_DECLINE_drift_ethnic_tension = yes
+	# [meter-concretize #2] drift corruption toward its character-derived target BEFORE reform_pressure reads
+	# qing_corruption_level (:350), so the sum sees the fresh value.
+	QING_DECLINE_drift_corruption = yes
 	QING_DECLINE_update_reform_pressure = yes
 
 	QING_DECLINE_apply_currency_band = yes
