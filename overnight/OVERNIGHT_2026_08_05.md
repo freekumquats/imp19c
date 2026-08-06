@@ -514,3 +514,37 @@ HEADLINE: every high-count class is UPSTREAM Sobisonator economy code (trade/shi
 reading var: before the quarterly pulse sets it — a read-before-set ordering issue in the trade engine),
 not mod-added regressions. debug_demand.1/.2 (300 hits) are Sobisonator DEBUG food-demand test events still
 wired into the quarterly pulse (oa_wealth_changes:220-221) — removable noise, but a behaviour change, flagged not touched.
+
+## #42/#33 — Fortress-format tooltip for EVERY mod building (14db4f1d3) — DONE
+User rejected the auto-summary/BuildIconSummary approach repeatedly: "copy the fucking working
+template", "the same way Fortress does". Fortress hand-writes its effects text into an extra_data
+loc string; it does NOT use BuildIconSummary. Redone the Fortress way, by hand, for all 61 buildings.
+MECHANISM (custom building_tooltip widget, custom_tooltip.gui:11): renders flavor from
+[BuildingItem.GetBuilding.GetDescription] (section 1) + the extra_data block (sections 2+6);
+count/cost/cost-mods (sections 3/4/5) render natively on the build button. So each building's
+6-section tooltip = _desc (flavor) + extra_data loc (Results/Other Results) + native button fields.
+WORK:
+- 47 flavor-only templates flipped from blockoverride "description" -> blockoverride "extra_data"
+  pointing at a new tooltip_<building> loc (custom_tooltip.gui). Flavor auto-returns via GetDescription.
+- 14 pre-existing extra_data tooltips (shuyuan/hanlin/guozijian/selfstr_wonder/dujiangyan/customs_house/
+  temple_of_heaven/ancestral_temple/foreign_works/frontier_colony/frontier_fort/embassy/treaty_port/
+  mission_cathedral) rewritten from flavor-jammed style into strict #T Results:#! / #T Other Results:#!.
+- Stale duplicate tooltip_qing_yamen_building deleted (dup loc keys clobber).
+PERCENT-VS-FLAT (the trap that failed #33): convention derived from accepted HEAD tooltips + verified
+against every def. FLAT: monthly_civilization, monthly_state_loyalty, population_happiness,
+population_growth, migration_attraction, state_trade_routes, food_capacity, monthly_food(flat),
+fort_level, base_resources, population_capacity(no _modifier). PERCENT (x100): *_modifier, *_output,
+*_desired_pop_ratio, local_defensive, country_civilization_value, army_movement_speed,
+ship_recruit_speed, pop_promotion_speed_modifier, local_output_modifier, monthly_food_modifier.
+Caught + fixed my own systematic error: had rendered monthly_civ/loyalty/pop_capacity as percent;
+corrected ~50 occurrences to flat, then re-verified both directions clean.
+OTHER RESULTS (non-vanilla): machine_works +3 munitions/qtr, textile_mill +2 clothing/qtr, navy_yard
++2 naval supplies/qtr (per GOODS_svalues); base_resources raw-good emission for the specialty/mining
+workshops; yamen +8 admin capacity. Empty -> "None".
+REVIEW: code-review adversarial value-by-value pass over all 61 buildings CLEAN except ONE omission
+(imperial_bank missing +3% country civilization value from local_country_civilization_value=0.03) —
+FIXED before commit. Braces 1128/1128, BOM intact, quotes balanced, no orphan/dup loc keys.
+VISIBILITY (#43, re-verified): all buildings have a build_item_<X> type + instantiation in
+province_window.gui; NO building carries potential={always=no}. yamen/great_wall/grand_canal/dujiangyan
+all show under Public Works; the two monuments (great_wall/grand_canal) are potential=real-gate +
+allow=always no, so they show visible-but-greyed (event-built via add_building_level, which bypasses allow).
