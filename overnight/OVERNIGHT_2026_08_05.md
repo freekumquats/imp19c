@@ -440,78 +440,19 @@ REVERTED my earlier over-reach: the gui_base.gui shared-template change (4 party
 NOT what was asked (it affects many other windows) — reverted; only the two Character-window files
 are touched. Braces balanced both.
 
-## #46 — Amban vs Tutor of the Upper Study mutual exclusivity — FIXED
-Symptom: a Tutor of the Upper Study (上書房 師傅, qing_is_upperstudy) was serving as an amban.
-Root cause: the two candidate-draw filters did not cross-exclude.
-- se_QING_AMBAN.txt QING_amban_post: the any_character gate (:55) + ordered_character limit (:81)
-  excluded qing_office_held / qing_amban_marker / ruler / heir / commanders / governors — but NOT
-  qing_is_upperstudy. So a sitting tutor was eligible for the amban draw. ADDED
-  NOT = { has_variable = qing_is_upperstudy } to both (lines 68, 99).
-  (QING_amban_seed_one CREATES a fresh historical character, no draw-from-pool → no filter needed.)
-- se_QING_UPPERSTUDY.txt QING_upperstudy_draw_tutor: any_in_list (:267) + ordered_in_list (:275)
-  over qing_scholar_pool excluded qing_office_held / qing_is_upperstudy — but NOT qing_amban_marker.
-  ADDED NOT = { has_variable = qing_amban_marker } to both (reverse guard; a posted amban is normally
-  already out of the pool, but guard explicitly).
-Verified no OTHER draw path posts either role from existing chars: se_QING_COUNCIL refs are counts
-(:245-246) + leave-all-posts cleanup (:1408/1415); se_QING_DELIBERATIVE already excludes
-qing_amban_marker (:76/96). Braces balanced both files.
-
-## #44 / #45 / #49 / #36 / #32 — military-supplies + admin reports rework
-#44 (topbar production breakdown): added a "Production by good (quarterly, supplied)" section to
-MILITARY_SUPPLIES_TT above the consumption breakdown, reading 5 new MILITARY_supplies_prod_* svalues
-(INCOME_svalues.txt) = each good's fulfilled demand (DEMAND_<good> × (1 − shortage_<good>)), mirroring
-the income-total addends. (Late artillery omitted — undefined upstream, always 0.)
-
-#45 (Military Supplies Ledger — comprehensive input breakdown): REPLACED the broken province-list
-report (which could only ever show provinces whose trade_good was a military good — Beijing's rifles
-at 1763 — and never clothing/pharma/construction/artillery, which are stockpile-fulfilled demand not
-province goods). Now a fixed 6-row per-good TABLE (Good | Produced | Consumed) for munitions
-(early/late), artillery, clothing, pharmaceuticals, construction — reading the MILITARY_supplies_prod_*
-/ _country_* svalues live in the window. Footer = realm income / consumption / stockpile. Opener is
-now a no-op (the table reads svalues directly; removed the province-list walk + the empty-gate
-scripted_gui + its dangling refs). New loc: column headers + 6 good names.
-
-#49 / #36 / #32 (Admin Capacity report — fix the broken var reads): the scope:prov.num_of_<building>
-reads (error.log "Cannot read as a script value") are REPLACED by two new state-scope count svalues
-ADMIN_report_yamen_count_state / ADMIN_report_district_count_state (ADMIN_svalues.txt) that sum bare
-num_of_<building> over every_state_province — the SAME idiom ADMIN_provided_state uses. The report's
-set_variable now reads those svalues. All 6 qing_admin_rep_* vars are consumed by the window (the
-provided/required/available/yamen/district columns + the deficit gate) — the earlier "set but never
-used" was because those GUI columns were uncommitted at the Aug 5 boot. #32 (yamen→capacity legibility)
-is delivered by #36's yamen column + its 8-per-yamen tooltip.
-
-All files brace-balanced; loc single-line clean.
-
-**Review (batch #44/#45/#49/#36/#32):** code-review found 1 CONFIRMED defect + accepted notes.
-- CONFIRMED (fixed): the Artillery row's Produced cell read MILITARY_supplies_prod_early_artillery,
-  which doesn't exist (artillery production is intentionally unmodelled; income model = 5 goods only).
-  FIXED: artillery Produced shows a static dash "—" (qing_milsupply_not_modelled + tooltip); Consumed
-  stays real.
-- Accepted (finding #2, not changed): the admin report walks every_governorships (excludes capital
-  domain) — but this is the PRE-EXISTING ADMIN model (ADMIN_required/supplied_country are themselves
-  governorship-scoped), so rows + footer are mutually consistent; changing it is a model change beyond
-  this fix's scope (Sobisonator-upstream-caution). NOTE for the user: the report will look sparse for
-  CHI because the model itself doesn't credit capital-domain yamens.
-- Cleaned (finding #3): dropped the orphaned qing_milsupply_report_empty loc key.
-All else verified clean (svalue scopes, 1−shortage arithmetic form, no dangling refs, BOM, braces).
-
-## #42 — building Fortress 6-section tooltip — MECHANISM PINNED + yamen reference built
-Finally pinned the render mechanism (after repeatedly building the wrong layer):
-- The mod's buildings use a custom building_tooltip widget (custom_tooltip.gui:11). It renders
-  the flavor text (description block, from _desc) + an extra_data block. The "Results/effects"
-  section a building shows is the extra_data block's new_tooltip_text_area, pointing at a
-  tooltip_<building> loc string (this is what Fortress does: tooltip_fortress_building).
-- gen_building_tooltips.py wired 113 templates to override "description" (flavor only) and leave
-  extra_data EMPTY -> those buildings show flavor but NO effects block. The 34 templates that
-  override "extra_data" (fortress/arsenal/works + yamen) are the correct pattern.
-- So #33's modification_display expansion was the wrong layer entirely (the custom tooltip never
-  reads modification_display). The RIGHT fix = convert each description-override template to the
-  fortress extra_data format + author its tooltip_<building> loc with the 6 sections (Results +
-  Other Results; "None" where empty).
-YAMEN REFERENCE (built + committed for boot-verification before the other 112):
-  - authored tooltip_qing_yamen_building with #T Results:#! (the 4 vanilla modifiers) +
-    #T Other Results:#! (the +8 admin capacity — no vanilla modifier, exactly the user's example).
-  - the yamen template already overrode extra_data -> tooltip_qing_yamen_building, but that loc key
-    DID NOT EXIST (so extra_data rendered blank). Authoring it fixes the yamen.
-PLAN: after user confirms the yamen renders correctly, apply the same extra_data+loc pattern BY HAND
-to the other 112 description-override buildings (no script). Braces balanced.
+## #46 — one man, one post (REDONE generically per user)
+User feedback: my first #46 was a "special rule for a generic case" (pairwise NOT=has_variable
+guards, amban↔upperstudy only, missing southern study). There was NO single shared "already holds
+a post" trigger — the user: "then that is a mistake"; the 1:1-violation audit (se_QING_COUNCIL:240-248)
+enumerated the full marker set but only LOGGED a clash — the user: "it should explicitly prevent".
+REDONE:
+- NEW canonical trigger QING_char_holds_court_position (qing_dynasty_triggers.txt) = OR of the exact
+  1:1-audit marker set (office_held / zongli_diplomat / censor_inspector / imperial_guardsman /
+  southernstudy / upperstudy / amban_marker / palace_eunuch / harem_consort). One place, enumerated once.
+- Gated the THREE candidate draws on NOT={QING_char_holds_court_position=yes}, replacing the hand-rolled
+  per-marker NOTs: amban draw (se_QING_AMBAN QING_amban_post, both any_/ordered_ filters), Upper Study
+  draw (se_QING_UPPERSTUDY, both), Southern Study draw (se_QING_SOUTHERNSTUDY, both). So ANY post-holder
+  is now explicitly PREVENTED from being drawn into a second post — covers every pair incl. both studies.
+- Reverted my pairwise #46 guards. The 4 remaining office_held NOTs are roster-REBUILD filters (a tutor
+  promoted to a great office leaves the corps) — a different, correct use, left as-is.
+Braces balanced all 4 files.
