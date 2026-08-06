@@ -962,42 +962,48 @@ QING_DECLINE_pulse = {
 	# Green Standard held a realm at peace, so neither creeps until the Heshen inflection
 	# (qing_decline.40) ends the era. The 1815 start has no qing_high_qing_era flag, so it
 	# rots as before.
+	# [meter-concretize #9 2026-08-06] BANNER/GS DECAY is now DERIVED from garrison-commander rot (廢弛): the
+	# targets qing_banner_decay_target / qing_greenstandard_decay_target = base + K×(avg commander corruption
+	# + (10 − avg commander martial)) are computed in QING_council_recompute (se_QING_COUNCIL.txt). The old
+	# passive +1/+1 creep + the GS-accel are DELETED — the rot IS the decay (USER), not a synthetic creep on
+	# top. Drift the live counters ±2/pulse toward the targets. Gated NOT fully_modernized AND NOT
+	# high_qing_era (mirrors the old creep gate — protects the self-str capstone hard-set-to-5 and the calm
+	# zenith). Target existence guarded (recompute has run). NOTE (USER ruling b): nothing artificially drives
+	# commander corruption up — a clean corps keeps decay low; a dedicated rot-driver mechanic comes later.
 	if = {
 		limit = {
 			NOT = { has_variable = qing_fully_modernized }
 			NOT = { has_variable = qing_high_qing_era }
 		}
-		QING_DECLINE_nudge = { var = qing_banner_decay  amount = 1 }
-		# task #88 — the Green Standard rots in parallel, and slightly faster: the more
-		# neglected, garrison-bound Han standing army. Green-standard drills push back.
-		QING_DECLINE_nudge = { var = qing_greenstandard_decay  amount = 1 }
-		# [MO-ENH #12] make the promised asymmetry REAL, gently: an EXTRA +1 only ONCE the neglect has
-		# compounded (decay >= 40), so the Green Standard's rot ACCELERATES in the late decline — the
-		# historical arc by which the 綠營 collapse opened the door to the gentry armies (勇營 -> 湘軍/淮軍).
-		# Early game the two central armies rot in lockstep (no premature warlord spike); the divergence
-		# only bites once the force is already hollow. Clamped by QING_DECLINE_nudge.
 		if = {
-			limit = { has_variable = qing_greenstandard_decay  var:qing_greenstandard_decay >= 40 }
-			QING_DECLINE_nudge = { var = qing_greenstandard_decay  amount = 1 }
+			limit = { has_variable = qing_banner_decay_target }
+			if = {
+				limit = { var:qing_banner_decay < qing_banner_decay_target_cmpsvalue }
+				QING_DECLINE_nudge = { var = qing_banner_decay  amount = 2 }
+			}
+			else_if = {
+				limit = { var:qing_banner_decay > qing_banner_decay_target_cmpsvalue }
+				QING_DECLINE_nudge = { var = qing_banner_decay  amount = -2 }
+			}
+		}
+		if = {
+			limit = { has_variable = qing_greenstandard_decay_target }
+			if = {
+				limit = { var:qing_greenstandard_decay < qing_greenstandard_decay_target_cmpsvalue }
+				QING_DECLINE_nudge = { var = qing_greenstandard_decay  amount = 2 }
+			}
+			else_if = {
+				limit = { var:qing_greenstandard_decay > qing_greenstandard_decay_target_cmpsvalue }
+				QING_DECLINE_nudge = { var = qing_greenstandard_decay  amount = -2 }
+			}
 		}
 	}
 
-	# [P7 2026-07-24 / Task #32 fix 2026-07-25] LAW POLICY-BIAS — HOISTED OUT of the not-high-Qing guard.
-	# The military-upkeep law (qing_military_upkeep_law) sets a STANDING bias-input var per force; the pulse
-	# APPLIES it here, at the same decay meter the base rot uses -- so the law shapes the rot without ever
-	# writing the meter itself. A reformist drill stance biases NEGATIVE (rot slows); a frugal/neglectful
-	# stance biases POSITIVE (rot quickens). ORIGINALLY these two lines sat INSIDE the base-rot guard
-	# (NOT high_qing_era), so a player who enacted the law at the 1763 High-Qing start got NO effect until
-	# ~1772 when the era ended -- the law was DORMANT for a decade (the Task #32 dead-law flaw). Hoisted to
-	# fire every pulse regardless of era: during the golden age a frugal stance now begins the rot early
-	# (the player CHOOSING neglect), while a reformist stance clamps harmlessly at 0. STILL guarded on
-	# NOT fully_modernized (Task #88: a modernized realm escaped the cycle -- no bias re-rot) and on
-	# has_variable (unset until the law is enacted -> default stance is a clean no-op). Self-clamping 0..100.
-	if = {
-		limit = { NOT = { has_variable = qing_fully_modernized } }
-		if = { limit = { has_variable = qing_banner_upkeep_bias }        QING_DECLINE_nudge = { var = qing_banner_decay        amount = var:qing_banner_upkeep_bias } }
-		if = { limit = { has_variable = qing_greenstandard_upkeep_bias } QING_DECLINE_nudge = { var = qing_greenstandard_decay amount = var:qing_greenstandard_upkeep_bias } }
-	}
+	# [meter-concretize #9] NOTE: the military-upkeep law-bias (qing_banner_upkeep_bias / _greenstandard_) is
+	# now folded into the decay TARGET inside QING_council_recompute (se_QING_COUNCIL.txt), NOT nudged here —
+	# a per-pulse counter nudge would be washed out by the ±2 drift (the Task #32 dead-law flaw), and adding
+	# it to the target in THIS pulse would be clobbered by the recompute's set_variable next quarter. Biasing
+	# the target at its compute site gives the law a durable, drift-respected effect.
 
 	# task #88 — the modern national-army share drifts toward its self-strengthening
 	# ceiling FIRST, so the Han-provincial derivation below reads a fresh value (a

@@ -545,6 +545,18 @@ QING_council_recompute = {
 	# banner general, and the historical naval commanders are seeded too.
 	set_variable = { name = qing_officer_corps_count  value = 0 }
 	set_variable = { name = qing_officer_corps_martial  value = 0 }
+	# [meter-concretize #9 2026-08-06] fold the banner/GS garrison-commander ROT accumulation into this SAME
+	# walk (USER: one-quarter-stale + all-commander council avg are both fine). These are ADDITIONAL in-body
+	# buckets — they do NOT narrow the walk's limit, so the council-martial average above is untouched. Sum
+	# each banner/GS legion commander's corruption + martial + count into split buckets (any_sub_unit filter:
+	# sub_unit_type is sub_unit-scope only). A mixed legion counts in BOTH buckets (documented). n=0 → the
+	# target recompute is skipped (correct: no garrisons = no commanders to rot).
+	set_variable = { name = qing_banner_officer_corr  value = 0 }
+	set_variable = { name = qing_banner_officer_mart  value = 0 }
+	set_variable = { name = qing_banner_officer_n     value = 0 }
+	set_variable = { name = qing_gs_officer_corr  value = 0 }
+	set_variable = { name = qing_gs_officer_mart  value = 0 }
+	set_variable = { name = qing_gs_officer_n     value = 0 }
 	every_unit = {
 		limit = { has_commander = yes  commander = { is_alive = yes  employer = ROOT } }
 		commander = {
@@ -553,6 +565,28 @@ QING_council_recompute = {
 			ROOT = {
 				change_variable = { name = qing_officer_corps_count  add = 1 }
 				change_variable = { name = qing_officer_corps_martial  add = prev.martial }
+			}
+		}
+		# [meter-concretize #9] banner bucket — this legion contains a banner sub_unit.
+		if = {
+			limit = { any_sub_unit = { sub_unit_type = qing_eight_banners } }
+			commander = {
+				ROOT = {
+					change_variable = { name = qing_banner_officer_corr  add = prev.corruption }
+					change_variable = { name = qing_banner_officer_mart  add = prev.martial }
+					change_variable = { name = qing_banner_officer_n     add = 1 }
+				}
+			}
+		}
+		# green-standard bucket.
+		if = {
+			limit = { any_sub_unit = { sub_unit_type = qing_green_standard } }
+			commander = {
+				ROOT = {
+					change_variable = { name = qing_gs_officer_corr  add = prev.corruption }
+					change_variable = { name = qing_gs_officer_mart  add = prev.martial }
+					change_variable = { name = qing_gs_officer_n     add = 1 }
+				}
 			}
 		}
 	}
@@ -567,6 +601,50 @@ QING_council_recompute = {
 		change_variable = { name = qing_officer_corps_mod  subtract = 7 }    # deviation from the competent baseline
 		change_variable = { name = qing_officer_corps_mod  divide = 1.2 }    # scale to ~+/-6 band
 		change_variable = { name = qing_council_eff_target  add = var:qing_officer_corps_mod }
+	}
+
+	# [meter-concretize #9 2026-08-06] BANNER/GS DECAY TARGETS from garrison-commander rot (廢弛). The rot IS
+	# the decay (USER): target = base_force + K × (avg_corruption + (M0 − avg_martial)), K=2, M0=10 (competent
+	# officer line — NOT the council's 7, a different meter), base_banner=0 / base_gs=5 (reproduces the softer
+	# banner-vs-GS seeds 10/15 at a healthy corps: corr~4/mart~9 → banner 2×(4+1)=10, GS 5+10=15). A rotten
+	# corps (corr~25/mart~3) → banner 2×(25+7)=64, GS 69: crosses the ≥60 severe band. NOTE (USER ruling b):
+	# nothing artificially drives commander corruption up — decay rises only when real events/traits corrupt
+	# officers; a clean corps stays low (intended, quieter arc; a dedicated driver mechanic comes later). n=0
+	# → skip (meter holds; no garrisons = nothing to measure). /0-guarded on the bucket counts.
+	if = {
+		limit = { var:qing_banner_officer_n > 0 }
+		set_variable = { name = qing_banner_decay_target  value = var:qing_banner_officer_corr }
+		change_variable = { name = qing_banner_decay_target  divide = var:qing_banner_officer_n }  # avg corruption
+		set_variable = { name = qing_banner_mart_avg_tmp  value = var:qing_banner_officer_mart }
+		change_variable = { name = qing_banner_mart_avg_tmp  divide = var:qing_banner_officer_n }  # avg martial
+		# add (M0 − avg_martial): a competent corps (>10) reduces decay, a weak one adds.
+		change_variable = { name = qing_banner_decay_target  add = 10 }
+		change_variable = { name = qing_banner_decay_target  subtract = var:qing_banner_mart_avg_tmp }
+		change_variable = { name = qing_banner_decay_target  multiply = 2 }   # K
+		# base_banner = 0 (no offset).
+		# [meter-concretize #9] fold the military-upkeep law-bias into the TARGET before the clamp (durable,
+		# drift-respected — not a counter nudge that the drift would wash out). Guarded → default no-op.
+		if = { limit = { has_variable = qing_banner_upkeep_bias }  change_variable = { name = qing_banner_decay_target  add = var:qing_banner_upkeep_bias } }
+		# [meter-concretize #9] the deliberative-law posture bias is ALSO a standing per-pulse banner-decay
+		# input (se_QING_DELIBERATIVE.txt) — fold it into the target too (else the drift washes out its counter
+		# nudge). One-quarter-stale read of the stored var is fine. Guarded → default no-op.
+		if = { limit = { has_variable = qing_delib_posture_bias }  change_variable = { name = qing_banner_decay_target  add = var:qing_delib_posture_bias } }
+		if = { limit = { var:qing_banner_decay_target < 0 }   set_variable = { name = qing_banner_decay_target  value = 0 } }
+		if = { limit = { var:qing_banner_decay_target > 100 } set_variable = { name = qing_banner_decay_target  value = 100 } }
+	}
+	if = {
+		limit = { var:qing_gs_officer_n > 0 }
+		set_variable = { name = qing_greenstandard_decay_target  value = var:qing_gs_officer_corr }
+		change_variable = { name = qing_greenstandard_decay_target  divide = var:qing_gs_officer_n }
+		set_variable = { name = qing_gs_mart_avg_tmp  value = var:qing_gs_officer_mart }
+		change_variable = { name = qing_gs_mart_avg_tmp  divide = var:qing_gs_officer_n }
+		change_variable = { name = qing_greenstandard_decay_target  add = 10 }
+		change_variable = { name = qing_greenstandard_decay_target  subtract = var:qing_gs_mart_avg_tmp }
+		change_variable = { name = qing_greenstandard_decay_target  multiply = 2 }   # K
+		change_variable = { name = qing_greenstandard_decay_target  add = 5 }   # base_gs = 5 (softer GS start)
+		if = { limit = { has_variable = qing_greenstandard_upkeep_bias }  change_variable = { name = qing_greenstandard_decay_target  add = var:qing_greenstandard_upkeep_bias } }
+		if = { limit = { var:qing_greenstandard_decay_target < 0 }   set_variable = { name = qing_greenstandard_decay_target  value = 0 } }
+		if = { limit = { var:qing_greenstandard_decay_target > 100 } set_variable = { name = qing_greenstandard_decay_target  value = 100 } }
 	}
 
 	# --- [#347+ / D8] MINISTRY-PERFORMANCE FOLD. Each ministry bureaucracy panel (War #349,
