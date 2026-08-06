@@ -266,10 +266,6 @@ QING_council_recompute = {
 
 	# --- reset accumulators + rebuild the DERIVED office-holder roster
 	set_variable = { name = qing_council_skill_total  value = 0 }
-	# [meter-concretize #2 2026-08-06] piggyback the SAME office-holder walk to sum seated holders' vanilla
-	# `corruption` into an aggregate — the concrete backing for qing_corruption_level (mirrors how skill_total
-	# backs qing_council_effectiveness). Divided by the same filled_count below → avg officialdom corruption.
-	set_variable = { name = qing_officialdom_corr_total  value = 0 }
 	set_variable = { name = qing_council_filled_count  value = 0 }
 	set_variable = { name = qing_council_figurehead_count  value = 0 }
 	set_variable = { name = qing_council_manchu_count  value = 0 }
@@ -459,18 +455,29 @@ QING_council_recompute = {
 		change_variable = { name = qing_council_eff_target  multiply = 7 }
 	}
 
-	# --- [meter-concretize #2 2026-08-06] OFFICIALDOM CORRUPTION target = avg seated-holder corruption +
-	# baseline-K. Concrete backing for qing_corruption_level (the decline pulse drifts the live meter toward
-	# this — §2 single-store mirror). Div/0 floor on filled_count. BASELINE_K = 12: the setup autofills
-	# officials with ZERO corruption (QING_council autofill adds skills+degree only, no add_corruption), so a
-	# pristine court averages ~0 → target lands at the baseline 12, reproducing the 1763 seed and sitting just
-	# above the clean_government band (≤10). Real corrupt holders (add_corruption / corrupt trait) lift it;
-	# a purge lowers it. PLACEHOLDER-playtest the 12.
+	# --- [meter-concretize #2 2026-08-06] OFFICIALDOM CORRUPTION target = avg corruption of EVERY court-position
+	# holder + baseline-K. Concrete backing for qing_corruption_level (the decline pulse drifts the live meter
+	# toward this — §2 single-store mirror). [USER 2026-08-06] scope = ALL sub-positions, not just the 13
+	# council seats: reuse QING_char_holds_court_position (qing_dynasty_triggers.txt), the mod's canonical
+	# "holds any of the 10 court posts" trigger (office / zongli diplomat / censor-inspector / imperial guard /
+	# both palace studies / amban / palace eunuch / harem consort / Protector-General). Dedicated walk (own
+	# count, NOT council filled_count). Historically right — amban/eunuch/diplomat graft are central corruption
+	# vectors. Div/0 floor. BASELINE_K = 12: setup autofills carry ZERO corruption, so a pristine officialdom
+	# averages ~0 → target lands at 12, reproducing the seed and sitting just above clean_government (≤10).
+	set_variable = { name = qing_officialdom_corr_total  value = 0 }
+	set_variable = { name = qing_officialdom_holder_ct  value = 0 }
+	every_character = {
+		limit = { employer = ROOT  is_alive = yes  QING_char_holds_court_position = yes }
+		ROOT = {
+			change_variable = { name = qing_officialdom_corr_total  add = prev.corruption }
+			change_variable = { name = qing_officialdom_holder_ct   add = 1 }
+		}
+	}
 	set_variable = { name = qing_officialdom_corruption_target  value = 12 }
 	if = {
-		limit = { var:qing_council_filled_count > 0 }
+		limit = { var:qing_officialdom_holder_ct > 0 }
 		set_variable = { name = qing_officialdom_corr_avg_tmp  value = var:qing_officialdom_corr_total }
-		change_variable = { name = qing_officialdom_corr_avg_tmp  divide = var:qing_council_filled_count }
+		change_variable = { name = qing_officialdom_corr_avg_tmp  divide = var:qing_officialdom_holder_ct }
 		change_variable = { name = qing_officialdom_corruption_target  add = var:qing_officialdom_corr_avg_tmp }
 	}
 	if = { limit = { var:qing_officialdom_corruption_target < 0 }   set_variable = { name = qing_officialdom_corruption_target  value = 0 } }
@@ -821,9 +828,6 @@ QING_council_score_office = {
 			# the proven prev.<skill> value-read idiom from the old list recompute).
 			ROOT = {
 				change_variable = { name = qing_council_skill_total  add = prev.$skill$ }
-				# [meter-concretize #2] sum this holder's vanilla corruption (proven prev.<value> read, same
-				# idiom as prev.$skill$ above) — concrete backing for qing_corruption_level.
-				change_variable = { name = qing_officialdom_corr_total  add = prev.corruption }
 				change_variable = { name = qing_council_filled_count  add = 1 }
 				add_to_variable_list = { name = qing_council_members  target = prev }
 			}
@@ -852,9 +856,6 @@ QING_council_score_chancellor = {
 				change_variable = { name = qing_council_tmp  add = prev.finesse }
 				change_variable = { name = qing_council_tmp  add = prev.charisma }
 				change_variable = { name = qing_council_tmp  add = prev.zeal }
-				# [meter-concretize #2] the chancellor is a seated office (counts in filled_count) — sum his
-				# corruption into the officialdom aggregate too.
-				change_variable = { name = qing_officialdom_corr_total  add = prev.corruption }
 				add_to_variable_list = { name = qing_council_members  target = prev }
 			}
 			# [#157 fix] see QING_council_score_office: scope-link culture compare.
