@@ -27,8 +27,12 @@
 #
 # Yield scales with the regime being OPEN + Guangzhou's port development (the concrete
 # on-map trade capacity, port_building on province 9298) + the Hoppo's competence, so a
-# richer, better-run port pays the throne more. All figures in 萬兩 (10k-tael units), the
-# same scale as the #372 戶部銀庫 reserve, so the bypass is numerically legible.
+# richer, better-run port pays the throne more. All Canton figures here are in 萬兩 (10k-tael units).
+# [2026-08-06 CORRECTION] This once read "same scale as the #372 戶部銀庫 reserve" — that is STALE and
+# WRONG since #425 retired the old qing_silver_reserve (萬兩) counter and moved the 戶部 mechanic onto the
+# engine reserve silver_reserve_size, which is counted in 千兩 (1000-tael units). So Canton 萬兩 and the
+# reserve 千兩 differ by 10× (1 萬兩 = 10 千兩). Any code crediting a Canton 萬兩 figure into
+# silver_reserve_size MUST multiply by 10 first (see design/DESIGN_CANTON_SILVER_RESERVE.md §5).
 #
 # Sources: Van Dyke, The Canton Trade (2005); Chang Te-Ch'ang, "The Economic Role of the
 # Imperial Household in the Ch'ing Dynasty" (JAS 1972); Torbert, The Ch'ing Imperial
@@ -54,6 +58,7 @@ QING_canton_init = {
 	if = { limit = { NOT = { has_variable = qing_canton_customs } }     set_variable = { name = qing_canton_customs  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_canton_last_yield } }  set_variable = { name = qing_canton_last_yield  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_canton_last_state } }  set_variable = { name = qing_canton_last_state  value = 0 } }   # [#426] state share of the yield (Revenue ledger)
+	if = { limit = { NOT = { has_variable = qing_canton_last_silver_in } }  set_variable = { name = qing_canton_last_silver_in  value = 0 } }   # [2026-08-06] Canton→reserve specie inflow last qtr, 千兩 (panel-safe first read)
 	# the Hoppo's post ran on squeeze even at the zenith — seed a moderate baseline.
 	if = { limit = { NOT = { has_variable = qing_hoppo_squeeze } }      set_variable = { name = qing_hoppo_squeeze  value = 30 } }
 	# [#426] the Canton revenue split (percent of the yield to the emperor's privy purse 內帑 vs the
@@ -156,6 +161,36 @@ QING_canton_pulse = {
 		# Canton Contribution line reads qing_canton_last_state).
 		set_variable = { name = qing_canton_last_yield  value = var:qing_canton_yield_tmp }
 		set_variable = { name = qing_canton_last_state  value = var:qing_canton_state_tmp }
+
+		# --- [Canton silver inflow] the specie the Western traders paid IN for the tea/silk/porcelain
+		# they shipped OUT. The customs YIELD above is only the ad-valorem LEVY (→ treasury/purse); the
+		# silver that actually entered the empire was the PAYMENT for the goods, far larger than the levy,
+		# and it is credited here to the engine's currency-backing reserve (silver_reserve_size), the
+		# historical pre-Opium-War specie inflow the money model previously never modelled. Derived from
+		# qing_canton_yield_tmp so it inherits every gating already applied above (open regime, port level,
+		# Hoppo squeeze, tariff law) for free — close the port → yield 0 → inflow 0.
+		# UNITS: qing_canton_yield_tmp is 萬兩; silver_reserve_size is 千兩 → ×10 conversion (fixed), then
+		# ×1.5 trade-specie multiple tuned to the sourced ~100 tons/yr Canton inflow (Deng 2008;
+		# research/1763_CANTON_SILVER_INFLOW.md): 45萬兩 → ×10=450 → ×1.5=675 千兩/qtr ≈ ~100 tons/yr.
+		# NO upper cap (the 1777 peak is a milestone EVENT, not a ceiling — the peak clamp was removed
+		# from QING_revenue_reserve_drift 2026-08-06); this is a data-driven MARKET writer, so real trade
+		# specie may carry the reserve above the historic peak. Moves silver_reserve_size ONLY — does NOT
+		# write silver_reserve_actual_change (a LIVE minting input; mirrors the revenue drift's abstention).
+		# See design/DESIGN_CANTON_SILVER_RESERVE.md.
+		if = {
+			limit = { has_variable = silver_reserve_size }
+			set_variable = { name = qing_canton_silver_in_tmp  value = var:qing_canton_yield_tmp }
+			change_variable = { name = qing_canton_silver_in_tmp  multiply = 10 }   # 萬兩 → 千兩 unit conversion (fixed)
+			change_variable = { name = qing_canton_silver_in_tmp  multiply = 1.5 }  # trade-specie multiple (tuned knob)
+			change_variable = { name = silver_reserve_size          add = var:qing_canton_silver_in_tmp }
+			set_variable    = { name = qing_canton_last_silver_in    value = var:qing_canton_silver_in_tmp }  # panel readout
+			remove_variable = qing_canton_silver_in_tmp
+			LOG_line = { sys = QING  msg = "canton: silver inflow credited to the reserve for" }
+		}
+		else = {
+			# reserve unseeded (should never happen for CHI — seeded in CURRENCY_setup_all_reserves): honest 0.
+			set_variable = { name = qing_canton_last_silver_in  value = 0 }
+		}
 
 		# --- the Hoppo milks the trade: squeeze drifts UP while the port is open, faster if the
 		# post is vacant (no accountable holder) — feeding the empire's corruption meter.

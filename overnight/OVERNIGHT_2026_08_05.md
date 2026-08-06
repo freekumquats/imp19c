@@ -588,4 +588,135 @@ Values verified vs defs. migration_attraction/_speed kept FLAT per in-game proof
 #57 — Military Supplies Ledger per-state production breakdown (was totals-only). Added STATE-scope svalues
 MILITARY_state_prod_munitions/clothing/naval_supplies/total (count arsenal 2 + depot 1 + machine_works 3;
 textile_mill 2; navy_yard 2, per GOODS_svalues), opener builds qing_milsupply_report_states (states with
-capacity>0, mirroring the admin report), GUI per-state scroll section + fixed footer, loc keys. [pending review/commit]
+capacity>0, mirroring the admin report), GUI per-state scroll section + fixed footer, loc keys.
+REVIEW (2b8b594cd): code-review CLEAN on scope/idiom/opener/datamodel (matches proven admin pattern). Its
+ONE blocking finding — the per-state 4-column row (160+70+70+70) OVERFLOWED the 430px window — was FIXED by
+widening the window 430->620 + columns to 220/90/90/90. Semantic note (informational, kept): per-state shows
+CAPACITY (buildings x output), distinct from the demand-based top-table totals; the section header says so.
+Braces gui 550/550, svalues 362/362, scripted_gui 204/204; BOM + quotes intact.
+
+---
+
+## OPEN BUGS — observed in-game on merge-overnight build (NOT YET FIXED, tracked for next session)
+
+**BUG-A: Admin Capacity report — data STILL cut off on the right despite #55 widen (af0f4a7a1).**
+Reported in-game: everything right of the Dist. column — including all the numbers IN the Dist.
+column — is clipped off the right edge, "EXACTLY THE SAME as before the fix." The window looks the
+same size as pre-fix. BUT the #56 footer ('The Realm's Administration') IS now correctly placed,
+which confirms the build DID load af0f4a7a1 (footer fix and width change were the same commit).
+So: #56 worked, #55 (window 540->620 + header/scroll/rows to 602/598) did NOT visibly take effect.
+Source at HEAD is correct (qing_province_reports.gui:1460 size={620 650}; single def, no stale
+copy; type window in defaults.gui:108 has no size cap). Root cause NOT yet found — the 620 frame
+should render wider than 540 but doesn't. Next: figure out why the base_sub_window frame ignores
+the widened size (candidate leads: the footer centers on content not frame so its move proves
+nothing about frame width; investigate whether something clamps base_sub_window width, or whether
+the visible clip is the scrollarea's scissor/cutoff at a fixed extent rather than the frame).
+Do NOT trust "footer moved" as proof the window widened.
+
+SCREENSHOT (20260805225559_1.jpg, 24 Feb 1764): confirms the clip. Header shows the six columns
+State | Prov. | Req. | Avail. | 衙門 | Dist. The 衙門 (yamen) column data renders (0/1 per row), but
+the Dist. column HEADER sits right at the window's right border and its data values are clipped off
+the right edge (partial digits peek past the frame). So the window did NOT widen enough / content is
+right-shifted: the last column still spills. Footer 'The Realm's Administration' IS centered (#56 OK).
+The window looks only marginally wider than pre-fix, if at all — 620 did not visibly apply, or content
+right edge exceeds even the frame. Note the 衙門/Dist columns are the two NEW narrow (44px) columns; the
+overflow is exactly them. Next-session lead: compare rendered frame width to a known-620 window, and
+check whether vbox parentanchor=hcenter + the 602 header box actually center in the frame or left-anchor.
+
+PRE-FIX vs POST-FIX COMPARE (20260805190237_1.jpg @ 8 Apr 1763 [pre] vs 20260805225559_1.jpg @ 24 Feb
+1764 [post]): #55 DID widen the frame (~515px -> ~605px, i.e. 540->620 applied) and #56 DID center the
+footer (pre-fix footer spilled LEFT over the map). SO THE FIX PARTIALLY WORKED. But the Dist column
+STILL clips post-fix. Column math doesn't explain it: 30(margin_left)+150+66+66+66+44+44 + 5*6(spacing)
+= 496px inside a 602 box => ~106px slack, Dist should be nowhere near the edge. Widening 80px pushed
+slack to the RIGHT of Dist yet Dist stayed pinned at the border => the RENDERED row content is ~100px
+wider than source specifies, OR the row right-shifts. NEXT-SESSION LEAD: the real bug is NOT window
+width (now correct) — it's that row content overflows its 598 box. Check: does the data-row hbox
+(size=100% inside the 598 margin_widget, itself inside goto_button sibling layout) actually get 598, or
+does the goto_button (26px) + margin_left 30 double-count so the hbox starts at 56 and 496+56=552... still
+<602. Suspect instead the header/rows are NOT centered the same: vbox parentanchor=hcenter centers the
+602 box, but if the scrollarea content is wider (scrollbar gutter ~20px eats into 602) Dist clips. Verify
+against a KNOWN-GOOD 620 report (milsupply #57 uses identical pattern — does ITS last column clip too?).
+
+**BUG-B: Economy window — Quarterly Balance not displaying properly.**
+GUI: gui/economy_view.gui:1461-~1620, flowcontainer name="balance_history" (#162). 8 quarters x 2
+progressbars (pos green top / neg red bottom), each reads Player.MakeScope var balance_hist_pos_q0..q7 /
+balance_hist_neg_q0..q7. Setter = common/scripted_effects/se_BALANCE_HISTORY.txt (BALHIST_record_quarter
+-> BALHIST_recompute_scale -> BALHIST_normalise_slot), called per-quarter per-country from
+INCOME_update_treasury_country (se_INCOME.txt). Var names + country scope MATCH the GUI reads exactly.
+LOG CHECK: error.log shows only "balance_hist_pos_q7 is set but is never used" x16 — that is STATIC-
+ANALYSIS NOISE (GUI reads don't count as script 'uses'; per imp19c-econ-log-noise-not-bugs). NOT the
+cause; the vars ARE set on the right scope. So the bug is in the RENDER, not the data: bars invisible
+despite values present. NEXT: likely the progressbar value binding (FixedPointToFloat of a 0..1 var) or
+the widget's frame/framesize/progresstexture, OR the pre-normalised heights are ~0 because
+balance_hist_max_abs is huge (one giant quarter swamps the rest to sub-pixel). Inspect
+BALHIST_normalise_slot output magnitudes + confirm the progressbar 'Value' block wiring renders.
+SCREENSHOT (20260805230233_1.jpg, 10 Oct 1764): the 'Quarterly Balance' TOOLTIP renders correctly
+(floating near map bottom: "Net treasury change for this quarter. Green rises above the line for a
+surplus; red falls below for a deficit. The eight columns run oldest (left) to newest (right), scaled
+to the largest swing in the window."). But the actual 8-bar CHART widget it describes is NOT visibly
+drawn — the left Economy panel shows Currency / National debt / Privately held cash / Taxation /
+Expenses, and the Quarterly Balance bars aren't rendering (the tooltip is attached to an empty/blank
+widget at the panel bottom). So the tooltip + widget exist but the bar visuals don't display. Next:
+inspect the Economy window GUI Quarterly Balance widget (likely the 8-column bar container) and its
+data binding — bars may be zero-height/invisible or the datamodel isn't populating.
+
+---
+
+## BUG-A + BUG-B FIXED (2026-08-05, uncommitted)
+
+**BUG-A — Admin Capacity right-clip: FIXED.** Root cause (found via the pre/post screenshot compare
+the user requested): #55 widened window+content boxes TOGETHER (540->620, 522->602), preserving the same
+(620-602)/2 = 9px side margin the pre-fix had — and the base_sub_window frame border is spriteborder 19,
+so the frame overlapped both edges and clipped the Dist column. That's why post-fix "looked identical."
+FIX: shrank admin content boxes to the PROVEN milsupply-report (#57) sizing that does NOT clip in the
+same 620 window — header 602->560, scrollarea 602->560, data row 598->556 (30px margin each side, clears
+the 19px frame). Columns total ~496px so 560 fits comfortably. gui/qing_province_reports.gui:1491/1506/1528.
+Braces 550/550.
+
+**BUG-B — Quarterly Balance bars invisible: FIXED.** Data was NEVER the problem: log triage confirmed
+BALHIST_record_quarter ran 4298x with ENTER/EXIT OK and vars set on the country scope the GUI reads (the
+"set but never used" x16 was static-analysis noise). Bug was in the WIDGET (economy_view.gui balance_history,
+16 bars): each was a bare progressbar with (a) progresstexture = a Corneredtiled TILE + framesize={40 40}
++ frame=1 — a frame index on a tile texture renders nothing; and (b) a block "Value" override — a BARE
+progressbar has no Value block to override, so the value binding never applied and every bar sat at 0.
+FIX (python transform): replaced the tile+framesize+frame triple with the proven templates
+progressbar_green_vertical / progressbar_red_vertical (gui/shared/standard.gui:751/791), and unwrapped
+block "Value"{ value=... } into a DIRECT value=... (matching working qing_guard.gui:166). 8 green + 8 red
+bars converted; braces 543/543, quotes even.
+
+STILL PENDING (not touched): Foreign category two-row fix (uncommitted, from earlier this session).
+Currency bugs surfaced by economy research (silver sell-10 sells 1; wealth_value_100k off-by-10; silver
+accumulation negative-guard missing; wealth_value_1_unit 999 TEST stub) — REPORTED to user, not yet fixed.
+
+---
+
+## 2026-08-06 continuation — currency bug fixes, silver-cap removal, Canton silver feature
+
+CURRENCY BUGS (verified real, fixed) — common/scripted_guis/EE_scripted_guis.txt:
+- Silver S-sell-10 (reserve-row right-click) sold only 1 unit: CURRENCY_sell_off_reserve_silver_10
+  guarded >10 but had amount=1 (gold's _10 = 10). Fixed amount=1->10 + comment fixed.
+- CURRENCY_decrease_reserve_accumulation_silver had no >0 guard (gold's did): clicking - at rate 0
+  drove silver_accumulation_rate negative. Added is_valid { silver_accumulation_rate > 0 }.
+(The other 3 flags were FALSE POSITIVES / dead code / test stub — NOT fixed, see verdicts above.)
+
+SILVER-RESERVE HARD CAP REMOVED — se_QING_REVENUE.txt: QING_revenue_reserve_drift had an
+unconditional quarterly clamp (if size > peak -> set to peak) that DELETED any silver pushed above
+81820 千兩 by ANY writer. User: peak should be an EVENT marker, not an in-game wall. Removed the clamp;
+kept the zero floor, the drift's own <peak self-gate (line 108, passive-drift ratchet guard), and the
+qing_revenue.5 milestone event (>=80000, one-shot). Reserve can now exceed the historic peak via
+market writers (deflation-buy, the new Canton feed).
+
+CANTON SILVER FEATURE (implemented per design/DESIGN_CANTON_SILVER_RESERVE.md, adversarially reviewed):
+- se_QING_CANTON.txt QING_canton_pulse: new specie-inflow leg (after emperor/state split, before Hoppo).
+  Credits silver_reserve_size += qing_canton_yield_tmp ×10 (萬兩→千兩) ×1.5 (trade-specie multiple, tuned
+  to Deng 2008 ~100 tons/yr Canton inflow -> ~675 千兩/qtr at zenith). Inherits open-port/tariff/Hoppo
+  gating via yield_tmp; moves size ONLY (not actual_change, a live minting input); no cap. Panel var
+  qing_canton_last_silver_in + else-zero when unseeded. LOG_line added.
+- QING_canton_init: seed qing_canton_last_silver_in = 0.
+- gui/qing_revenue_ministry.gui: "Canton Silver Inflow (粵海關銀入)" read-out row.
+- localization: QING_REVENUE_MINISTRY_CANTON_SILVER_LABEL / _TT.
+- se_QING_CANTON.txt:30 stale unit comment CORRECTED (萬兩 vs 千兩 10× gap).
+RESEARCH: research/1763_CANTON_SILVER_INFLOW.md (sourced figures; flags mod's 81.8M peak as unverified
+vs academic ~70M — user said LEAVE the seed/peak figures as-is).
+
+REVIEW+COMMIT pending: adversarial code-review of the Canton impl in flight; commit after it clears.
