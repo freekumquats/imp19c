@@ -233,27 +233,9 @@ QING_council_autofill_office = {
 # Scope: COUNTRY (CHI), called from QING_GOV_pulse. O(court); the count compare uses a LITERAL RHS
 # (> 1), the only legal relational-RHS form (see the RHS-comparison rule). Scratch var removed per char.
 # ======================================================================
-QING_validate_one_position = {
-	every_character = {
-		limit = { employer = ROOT  is_alive = yes }
-		set_variable = { name = qing_pos_marker_ct  value = 0 }
-		if = { limit = { has_variable = qing_office_held }           change_variable = { name = qing_pos_marker_ct  add = 1 } }
-		if = { limit = { has_variable = qing_zongli_diplomat }       change_variable = { name = qing_pos_marker_ct  add = 1 } }
-		if = { limit = { has_variable = qing_is_censor_inspector }   change_variable = { name = qing_pos_marker_ct  add = 1 } }
-		if = { limit = { has_variable = qing_is_imperial_guardsman } change_variable = { name = qing_pos_marker_ct  add = 1 } }
-		if = { limit = { has_variable = qing_is_southernstudy }      change_variable = { name = qing_pos_marker_ct  add = 1 } }
-		if = { limit = { has_variable = qing_is_upperstudy }         change_variable = { name = qing_pos_marker_ct  add = 1 } }
-		if = { limit = { has_variable = qing_amban_marker }          change_variable = { name = qing_pos_marker_ct  add = 1 } }
-		if = { limit = { has_variable = qing_is_palace_eunuch }      change_variable = { name = qing_pos_marker_ct  add = 1 } }
-		if = { limit = { has_variable = qing_is_harem_consort }      change_variable = { name = qing_pos_marker_ct  add = 1 } }
-		if = { limit = { has_variable = qing_march_gg }              change_variable = { name = qing_pos_marker_ct  add = 1 } }
-		if = {
-			limit = { var:qing_pos_marker_ct > 1 }
-			LOG_line = { sys = QING  msg = "1:1 VIOLATION — character holds MORE THAN ONE court position (count above); check appointment/enrol gates for" }
-		}
-		remove_variable = qing_pos_marker_ct
-	}
-}
+# [one-sweep 2026-08-06] QING_validate_one_position DELETED — its 1:1-position audit moved INTO
+# QING_council_recompute's court-holder walk (always fresh, 21 callers; the pulse-only validate ran the audit
+# just once/quarter). One full-pool every_character sweep now does both the audit and the corruption sum.
 
 QING_council_recompute = {
 	# [#103] se_LOG enter/exit wiring (council-is-offices rewrite)
@@ -464,6 +446,12 @@ QING_council_recompute = {
 	# count, NOT council filled_count). Historically right — amban/eunuch/diplomat graft are central corruption
 	# vectors. Div/0 floor. BASELINE_K = 12: setup autofills carry ZERO corruption, so a pristine officialdom
 	# averages ~0 → target lands at 12, reproducing the seed and sitting just above clean_government (≤10).
+	# [meter-concretize #2 / one-sweep 2026-08-06] this walk ALSO runs the 1:1-position audit (formerly the
+	# separate QING_validate_one_position, now DELETED). recompute is the RIGHT host: it runs on EVERY court
+	# change (21 callers), so the audit + the corruption totals are always FRESH — unlike the pulse-only
+	# validate (1 caller), whose totals went stale on non-pulse recompute calls (the reverted merge's bug).
+	# The corruption sum needs only holders (limit already filters), and only holders can violate 1:1, so both
+	# ride the same holder-filtered walk. Count the position markers per holder: >1 = a 1:1 violation (LOG).
 	set_variable = { name = qing_officialdom_corr_total  value = 0 }
 	set_variable = { name = qing_officialdom_holder_ct  value = 0 }
 	every_character = {
@@ -472,6 +460,27 @@ QING_council_recompute = {
 			change_variable = { name = qing_officialdom_corr_total  add = prev.corruption }
 			change_variable = { name = qing_officialdom_holder_ct   add = 1 }
 		}
+		# 1:1 audit (moved from QING_validate_one_position): count how many position markers this holder
+		# carries; >1 means he holds more than one court post — LOG the violation (read-only, does NOT strip).
+		# ⚠️ These 10 markers MUST stay in lockstep with QING_char_holds_court_position's OR set
+		# (qing_dynasty_triggers.txt) — if an 11th court post is ever added there, add its `if` line HERE too,
+		# else the audit silently under-counts that post. (review note 2026-08-06)
+		set_variable = { name = qing_pos_marker_ct  value = 0 }
+		if = { limit = { has_variable = qing_office_held }           change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_zongli_diplomat }       change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_is_censor_inspector }   change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_is_imperial_guardsman } change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_is_southernstudy }      change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_is_upperstudy }         change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_amban_marker }          change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_is_palace_eunuch }      change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_is_harem_consort }      change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = { limit = { has_variable = qing_march_gg }              change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		if = {
+			limit = { var:qing_pos_marker_ct > 1 }
+			LOG_line = { sys = QING  msg = "1:1 VIOLATION — character holds MORE THAN ONE court position (count above); check appointment/enrol gates for" }
+		}
+		remove_variable = qing_pos_marker_ct
 	}
 	set_variable = { name = qing_officialdom_corruption_target  value = 12 }
 	if = {
