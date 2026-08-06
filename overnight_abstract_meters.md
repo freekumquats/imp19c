@@ -534,3 +534,50 @@ REMAINING:
   would guess the numbers. Design + code-cap-fix (yamen/shuyuan max_amount) are DONE; the reach svalue + gate
   repoint + reseed for #1, and the two-store + calibration for #3, await either the measurement or a decision
   to ship with PLACEHOLDER thresholds + a build-probe LOG.
+
+---
+## 2026-08-06 — trade-metric provenance findings + admin=flat + corruption widening [autonomous]
+
+TRADE METRIC (caravan #10A, user pushed on num_goods_produced=production not trade):
+- regional_center_of_trade_level_N modifiers = LIVE MOD trade (stamped by tradezone_setup_effect /
+  TRADE_setup_tradezones at game start, se_TRADE.txt:1898; tracked in list_of_trade_centers). NOT obsolete
+  vanilla trade-node artifacts. So reading them is rule-compliant.
+- BUT limitation found: tradezone_setup only ever stamps LEVEL_1 (one center per tradezone), and the oases
+  fall in western_steppe_tradezone (bundles Siberia/Moscow/Caucasus — coarse). So at most ONE oasis province
+  gets +5, often none. The center-of-trade bonus I added is thus mostly inert for the oases — the metric is
+  effectively num_goods_produced + a rare +5. Correct in principle (credits throughput, live mod), marginal
+  in practice. Honest: caravan prosperity remains production-dominated because the mod's TZ granularity puts
+  no real trade center in the oases.
+- state_commerce_income = VANILLA engine field (present in both oracle repos). Mod trade income flows through
+  national_trade_income_pool (se_TRADE.txt:2363), NOT vanilla commerce — and the EE trade svalue wrappers
+  (all_governorship_trade_svalue / all_region_trade_svalue / player_trade_total_value) are DEAD (0 callers).
+  So state_commerce_income is NOT a good fallback either (vanilla, and mod income is pooled elsewhere). The
+  center-of-trade-modifier read remains the best area-reachable trade signal, weak as it is.
+
+ADMIN CAPACITY (#1) — USER 2026-08-06: assume 1763 ADMIN_available_country is FLAT (neither deficit nor
+surplus, ≈ 0). This UNBLOCKS #1 gate calibration without a probe boot: the 9 reform/self-str gates that today
+require qing_bureau_capacity >= 40..60 become ADMIN_available_country thresholds anchored on 0 = the 1763
+baseline. Deep reforms (constitutional draft, high self-str) → require a positive cushion (surplus, must
+IMPROVE admin past the flat baseline); early tasks → require not-deep-deficit (>= a small negative floor).
+Logs confirm nothing admin is logged, so flat=0 is the working assumption. (currency #3: logs show the old
+1-bit branch fired +=-1 ×8 only → reserve_ratio_impact ∈ [0.5,1.0] → calibrated transfer opens calm, no
+upward re-center; buildable with a confirming LOG probe.)
+
+CORRUPTION (#2) widened + committed: now walks ALL court-position holders via QING_char_holds_court_position
+(office/diplomat/censor/guard/2 studies/amban/eunuch/consort/Protector-General), not just 13 council seats.
+
+---
+## 2026-08-06 — #10B RESOLVED via concrete-reward reframe (USER)
+
+The story-beat-vs-derive fight (the reason #10B was paused) is DISSOLVED: instead of the Ili win/loss beats
+SETTING the abstract control meter (80/90/10/−25) which a per-pulse derive then fights, the beats now produce
+CONCRETE outcomes and control DERIVES one-way from them:
+- reconquest-win: stamp qing_xinjiang_prov_secured on the oases DIRECTLY + a qing_ili_reconquered modifier
+  (drop set control=80). zeng-triumph: keep frontier_secured, stamp full secured set (drop set=90).
+- reconquest-fail/ratify: stamp qing_xinjiang_prov_contested (drop set 10 / −25).
+- RETIRE QING_ili_apply_prov_band as the control→province stamper (it was the CRIT-3 loop source: it stamped
+  secured FROM control≥70). Now beats stamp secured/contested directly → control derives from them ONE-WAY.
+- control_target = W_ili·ILI-subject + W_beg·begs + W_tun·tuntian + W_sec·secured-count + W_front·frontier
+  − W_cont·contested-count. No max-floor, no cooldown needed (the old §5 machinery is obsolete).
+This is concrete-over-abstract applied to the REWARDS, not just the meter. Doc §5/§3/§7/§8/§9 updated.
+NEXT: dispatch a review of the revised #10B before building (hardest piece; design-review caught breaks 2x).
