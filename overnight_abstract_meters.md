@@ -648,3 +648,38 @@ area-iter, option-b, choose-coast collapse CONFIRMED sound) but:
 DEEPER ISSUE: Xinjiang control has FAR more live writers than the Ili story beats. A pure one-way derive can't
 absorb them all without converting every writer to concrete (much larger scope than "convert 6 beats"). This
 is a scoping decision for the user. #10B REMAINS DEFERRED — needs a redesign pass, not a build.
+
+---
+## 2026-08-06 — review outcomes: #2 sweep-merge REVERTED (real bug); #10B still not safe; #10A inert
+
+#2 SWEEP-MERGE (commit 5ed90ea5c) — REVIEW FOUND A REAL MEDIUM BUG (I had committed without review):
+moving the corruption accumulation into QING_validate_one_position (1 caller, pulse-only) made
+QING_council_recompute (21 callers) read STALE totals on every non-pulse call (appoint/vacate/death events
+compute the target from the pre-change court). "behaviour identical" was false. REVERTED (commit 0fceb1f53)
+back to the reviewed-clean 6ad04d8ea state (dedicated walk in recompute = always fresh). PROCESS FAILURE:
+committed a perf refactor without review; the revert restores correctness. If the one-sweep win is still
+wanted, the CORRECT form is fold-into-recompute + drop the pulse-only validate call (recompute has 21 callers
+and is always fresh; validate has 1) — that is a NEW change needing its own review, NOT bolted on.
+
+#10B CONVERT-ALL-WRITERS (design §10) — REVIEWED: NOT SAFE (2 HIGH + 3 MED). Direction sound (xiexiang derive
+term CONFIRMED; one-way acyclic; capstone reachable) BUT:
+- HIGH-1: apply_prov_band has 8 callers not 6 — MISSED break_ili_free:466 AGAIN (3rd incomplete-census). Every
+  caller must pass $intent$; :466 wants contested or it no-ops/parse-fails.
+- HIGH-2: deleting the pulse neglect −1/qtr drift is NOT redundant — it's a TIME-INTEGRATING RATCHET that
+  walks control down to the ≤30 khoja-revolt-scare threshold. A static W_xiexiang offset can't do that.
+  Deleting it (+ secured stamps pinning control high forever, mid-range self-clear now dead) makes the khoja
+  revolt (the core #367 threat) UNREACHABLE after a win. KEEP the drift or re-arm the scare another way.
+- MED-3: 3 mission nudges (fortify+6/governor+8/pacify+6) have no derive-read object (fort isn't a term;
+  governor/pacify change nothing on completion) — need a new derive term or keep the nudges.
+- MED-4: table MISSED 2 caravan-event writers (qing_caravan_events.txt:87 −4, :175 −3).
+- MED-5: qing_ili.4 "partial secured + some contested" infeasible with a single-intent all-provinces helper.
+#10B needs ANOTHER design iteration (fix the 5) before build. Still deferred.
+
+#10A trade-center bonus (commit 3052a2bba) — REVIEWED: EFFECTIVELY INERT. tradezone_setup stamps ONE level_1
+center per tradezone on the most-populous province; Dzungaria→western_steppe (center = a Russian/CA city),
+Tarim→eastern_steppe/Gansu (center = Beijing). NO oasis ever carries a center-of-trade modifier → all 10
+branches always false → svalue still returns pure num_goods_produced. Levels 2-5 dead game-wide. My inline
+comment (both oases in western_steppe) is also factually wrong (Tarim = eastern_steppe). USER DECISION: build
+a BESPOKE oasis-entrepôt signal (caravan system stamps its own trade-hub modifier on Kashgar/Yarkand scaled
+by aqsaqal + bazaar) — net-new mechanic, own design+review cycle. The inert trade-center branches to be
+removed as part of that.
