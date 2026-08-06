@@ -41,15 +41,19 @@ qing_char.10 = {
 		name = "qing_char.10.a"
 		custom_tooltip = "qing_char.10.a.tt"
 		current_ruler = { add_popularity = 10 }
-		scope:qing_char = { QING_char_shift_identity = { amount = -30 } }
+		# [#61 tooltip-eval flood fix] QING_char_shift_identity SETS then READS var:qing_manchu_identity;
+		# in a country_event option that read is TOOLTIP-PREVIEW-EVALUATED before the set commits, throwing
+		# the qing_manchu_identity flood. Deferred to a hidden days=0 follow-up (real exec, never previewed),
+		# the proven dodge from the keju.2 fix (64ada0d69). custom_tooltip .10.a.tt carries the player text.
+		trigger_event = { id = qing_char.30  days = 0 }
 	}
 
 	# --- Forbid it; uphold banner endogamy --------------------------------
 	option = {
 		name = "qing_char.10.b"
 		custom_tooltip = "qing_char.10.b.tt"
-		scope:qing_char = { QING_char_shift_identity = { amount = 15 } }
-		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 3 }
+		# [#61] both effects here (shift_identity + QING_DECLINE_nudge) set-then-read a var; deferred.
+		trigger_event = { id = qing_char.31  days = 0 }
 	}
 }
 
@@ -78,25 +82,20 @@ qing_char.11 = {
 		custom_tooltip = "qing_char.11.a.tt"
 		trigger = { treasury >= 50 }
 		add_treasury = -50
-		# Push every Manchu courtier a step back toward staunch identity.
-		every_character = {
-			limit = {
-				employer = ROOT
-				is_adult = yes
-				# [logfix] invalid on char scope; ruler-culture link
-				culture = root.current_ruler.culture
-			}
-			QING_char_shift_identity = { amount = 12 }
-		}
-		QING_DECLINE_nudge = { var = qing_banner_decay  amount = -8 }
+		# [#61 tooltip-eval flood fix] the every_character QING_char_shift_identity loop + the
+		# QING_DECLINE_nudge both set-then-read a var, which throws in the option's tooltip-preview eval.
+		# Deferred to a hidden days=0 follow-up (real exec only). add_treasury stays inline (no var read);
+		# the trigger gate treasury>=50 stays inline so the option is only offered when affordable.
+		trigger_event = { id = qing_char.32  days = 0 }
 	}
 
 	# --- Let the language fade -------------------------------------------
 	option = {
 		name = "qing_char.11.b"
 		custom_tooltip = "qing_char.11.b.tt"
-		QING_DECLINE_nudge = { var = qing_banner_decay  amount = 5 }
+		# [#61] QING_DECLINE_nudge set-then-reads var:qing_banner_decay -> tooltip-preview flood; deferred.
 		add_stability = 1
+		trigger_event = { id = qing_char.33  days = 0 }
 	}
 }
 
@@ -134,7 +133,8 @@ qing_char.20 = {
 		custom_tooltip = "qing_char.20.b.tt"
 		add_stability = -2
 		set_variable = { name = qing_succession_contested  days = 3650  value = 1 }
-		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 5 }
+		# [#61] QING_DECLINE_nudge set-then-reads var:qing_ethnic_tension -> tooltip-preview flood; deferred.
+		trigger_event = { id = qing_char.34  days = 0 }
 	}
 
 	# --- Let the princes contend (highest risk) ---------------------------
@@ -230,6 +230,77 @@ qing_char.22 = {
 		custom_tooltip = "qing_char.22.b.tt"
 		add_treasury = -60
 		add_stability = 2
+		# [#61] QING_DECLINE_nudge set-then-reads var:qing_corruption_level -> tooltip-preview flood; deferred.
+		trigger_event = { id = qing_char.35  days = 0 }
+	}
+}
+
+########################################################################
+# [#61] HIDDEN days=0 FOLLOW-UPS — carry the var-heavy effects of qing_char.10/.11 options
+# out of the open-window options (where option effects are TOOLTIP-PREVIEW-EVALUATED and the
+# set-then-read var ops — QING_char_shift_identity, QING_DECLINE_nudge — throw the
+# qing_manchu_identity flood). An immediate runs at REAL execution only, never previewed
+# (proven dodge, keju.2 fix 64ada0d69). scope:qing_char survival across trigger_event is
+# proven in-repo (qing_amban.1); days=0 is immediate. hidden = yes, no window, no options.
+########################################################################
+qing_char.30 = {
+	type = country_event
+	hidden = yes
+	immediate = {
+		if = { limit = { exists = scope:qing_char }  scope:qing_char = { QING_char_shift_identity = { amount = -30 } } }
+	}
+}
+
+qing_char.31 = {
+	type = country_event
+	hidden = yes
+	immediate = {
+		if = { limit = { exists = scope:qing_char }  scope:qing_char = { QING_char_shift_identity = { amount = 15 } } }
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 3 }
+	}
+}
+
+qing_char.32 = {
+	type = country_event
+	hidden = yes
+	immediate = {
+		# Push every Manchu courtier a step back toward staunch identity.
+		every_character = {
+			limit = {
+				employer = ROOT
+				is_adult = yes
+				culture = root.current_ruler.culture
+			}
+			QING_char_shift_identity = { amount = 12 }
+		}
+		QING_DECLINE_nudge = { var = qing_banner_decay  amount = -8 }
+	}
+}
+
+# [#61] follow-ups for the QING_DECLINE_nudge-only options (.11.b / .20.b / .22.b). Same latent
+# tooltip-preview flood (the nudge clamp reads var:$var$ after change_variable, which does not commit
+# in preview eval). These events did NOT fire in the Aug-5 boot so the flood is latent, but the class
+# is identical to .10/.11.a — deferred for consistency. Country scope (ROOT = CHI) carries through.
+qing_char.33 = {
+	type = country_event
+	hidden = yes
+	immediate = {
+		QING_DECLINE_nudge = { var = qing_banner_decay  amount = 5 }
+	}
+}
+
+qing_char.34 = {
+	type = country_event
+	hidden = yes
+	immediate = {
+		QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = 5 }
+	}
+}
+
+qing_char.35 = {
+	type = country_event
+	hidden = yes
+	immediate = {
 		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 6 }
 	}
 }
