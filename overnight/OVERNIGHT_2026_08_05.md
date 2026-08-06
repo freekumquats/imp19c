@@ -456,3 +456,18 @@ REDONE:
 - Reverted my pairwise #46 guards. The 4 remaining office_held NOTs are roster-REBUILD filters (a tutor
   promoted to a great office leaves the corps) — a different, correct use, left as-is.
 Braces balanced all 4 files.
+
+## #43 — make yamen + all other new mod buildings VISIBLE in the build menu — DONE
+Audit: 15 mod buildings had NO build_item_<X> type in gui_templates.gui, and 17 were not
+instantiated in the province_window.gui build list (incl. the yamen — which is why the #42
+yamen tooltip was invisible; visibility must precede the tooltip).
+FIX (copied the Fortress/coal_mine build_item pattern exactly — a proven working template):
+- Added 15 build_item_<X> types (gui_templates.gui), each pointing at its already-existing
+  building_<X>_tooltip widget. (grand_canal + great_wall already had types.)
+- Instantiated all 17 in the province build list under the right sections: yamen/dujiangyan/
+  great_wall/grand_canal → PublicWorks; customs_house/embassy/foreign_works/treaty_port/
+  mission_cathedral → Foreign; frontier_colony/frontier_fort → Garrison; hanlin/guozijian/
+  shuyuan → Scholarship; temple_of_heaven/ancestral_temple → Religion; selfstr_wonder → Modern.
+  Monuments/seed-only buildings with allow=always no render visible-but-not-buildable (the
+  user's "no hidden buildings, effects described" intent), exactly as any gated building does.
+Braces balanced (gui_templates 1740/1740, province_window 2094/2094).
