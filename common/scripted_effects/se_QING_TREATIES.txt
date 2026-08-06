@@ -66,18 +66,18 @@ QING_treaty_impose = {
 		limit = { NOT = { has_variable = qing_treaty_system_imposed } }
 		set_variable = { name = qing_treaty_system_imposed  value = 1 }
 		add_country_modifier = { name = qing_treaty_system_active  duration = -1 }
-		# the first treaty ports open (Nanjing's five: Canton, Xiamen, Fuzhou,
-		# Ningbo, Shanghai).
-		change_variable = { name = qing_treaty_ports  add = 5 }
-		# [#91 item B] stamp the five as REAL treaty ports on the map (concrete
-		# objects the counter now summarises), largest coastal ports first.
+		# [#91 item B] stamp the first five (Nanjing's five: Canton, Xiamen, Fuzhou, Ningbo, Shanghai) as
+		# REAL treaty ports on the map, largest coastal ports first. [meter-concretize #8] the +5 counter
+		# bump is RETIRED — the count is now recounted from the real modifiers below.
 		while = { count = 5  QING_treaty_stamp_port = yes }
 		# the order lands as a heavy humiliation.
 		QING_DECLINE_nudge = { var = qing_treaty_burden  amount = 60 }
 		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 10 }
 		# tariff autonomy is lost to the treaty-fixed ceiling.
 		set_variable = { name = qing_tariff_autonomy  value = 0 }
-		QING_treaty_apply_ports_modifier = yes
+		# [meter-concretize #8 F1] recount from the just-stamped modifiers (MUST be AFTER the while-stamp loop
+		# — else the applier reads 0 ports right after imposing 5, dropping the commerce tier for a quarter).
+		QING_treaty_recount_ports = yes
 		LOG_line = { sys = QING  msg = "treaty: unequal-treaty system imposed for (ports=)" }
 	}
 	else = {
@@ -96,11 +96,13 @@ QING_treaty_open_port = {
 	QING_treaty_init = yes
 	if = {
 		limit = { has_variable = qing_treaty_system_imposed }
-		change_variable = { name = qing_treaty_ports  add = 1 }
 		QING_DECLINE_nudge = { var = qing_treaty_burden  amount = 5 }
-		# [#91 item B] stamp this further port as a REAL object on the map.
+		# [#91 item B] stamp this further port as a REAL object on the map. [meter-concretize #8] the +1
+		# counter bump is RETIRED; the recount below reads the real modifiers. NOTE burden (+5 above) and the
+		# count can now diverge on a FAILED stamp (all coastal cities already stamped): burden rises, count
+		# holds — intended (burden = path-dependent grievance, count = current footprint; §0).
 		QING_treaty_stamp_port = yes
-		QING_treaty_apply_ports_modifier = yes
+		QING_treaty_recount_ports = yes
 		LOG_line = { sys = QING  msg = "treaty: further port opened for (ports=)" }
 	}
 	else = {
@@ -189,7 +191,7 @@ QING_treaty_stamp_port = {
 		}
 	}
 	else = {
-		LOG_fail = { sys = QING  fn = "QING_treaty_stamp_port"  reason = "no un-stamped coastal province owned; counter advanced but no on-map port stamped for" }
+		LOG_fail = { sys = QING  fn = "QING_treaty_stamp_port"  reason = "no un-stamped coastal city owned; no on-map port stamped for" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_treaty_stamp_port"  result = OK }
 }
@@ -198,12 +200,33 @@ QING_treaty_stamp_port = {
 # THE COMMERCE ENGINE — swap the treaty-ports modifier to the tier matching the
 # number of open ports. More ports = a greater entrepôt commerce/tax lift. O(1).
 # ======================================================================
+# [meter-concretize #8 2026-08-06] RECOUNT the treaty-port count from the REAL qing_treaty_port province
+# modifiers, then apply the tier band. Replaces the hand-maintained +5/+1 counter (retired) — the count is
+# now "N treaty ports currently OWNED" (user-decided: losing a port drops it out → its tier can fall, which
+# is intended; a foreign foothold expelled correctly eases the humiliation). ⚠️ This effect FOLDS IN the
+# applier (review F1): the tier bands read qing_treaty_ports INLINE, so recount MUST run immediately before
+# apply at every stamp site — a pulse-only recount would leave the applier reading a stale/zeroed count for
+# up to a quarter. Proven idiom: FUNC_num_ports_in_country (FUNC_svalues.txt:71) — every_owned_province +
+# limit{has_province_modifier} + ROOT change_variable add=1 (all treaty effects run country-scope ROOT=CHI).
+QING_treaty_recount_ports = {
+	set_variable = { name = qing_treaty_ports  value = 0 }
+	every_owned_province = {
+		limit = { has_province_modifier = qing_treaty_port }
+		ROOT = { change_variable = { name = qing_treaty_ports  add = 1 } }
+	}
+	QING_treaty_apply_ports_modifier = yes
+}
+
 QING_treaty_apply_ports_modifier = {
 	remove_country_modifier = qing_treaty_ports_minor
 	remove_country_modifier = qing_treaty_ports_major
 	remove_country_modifier = qing_treaty_ports_dominant
+	# [meter-concretize #8] _dominant lowered 12 -> 9 (review F2): under OWNED-semantics + the coastal-CITY
+	# stamp guard (is_coastal + has_city_status), most historical river treaty ports (Hankou/Nanjing/Chongqing
+	# on the Yangtze) FAIL is_coastal and are unstampable, so 12 simultaneous coastal-city ports is likely
+	# unreachable. 9 is a reachable late-game apex. PLACEHOLDER-playtest against CHI's real coastal-city supply.
 	if = {
-		limit = { var:qing_treaty_ports >= 12 }
+		limit = { var:qing_treaty_ports >= 9 }
 		add_country_modifier = { name = qing_treaty_ports_dominant  duration = -1 }
 	}
 	else_if = {
@@ -255,7 +278,10 @@ QING_treaty_pulse = {
 		LOG_line = { sys = QING  msg = "treaty: a heavy burden radiates weakness to the tributary order for" }
 	}
 
-	QING_treaty_apply_ports_modifier = yes
+	# [meter-concretize #8] the quarterly recount — this is where DEMOTION-ON-LOSS lands: a treaty port ceded
+	# or conquered drops out of the count, so its tier can fall. There is NO province-cession event hook, so
+	# the loss lags up to one quarter (this pulse cadence, matching QING_fbuild_upkeep_sweep) — fine.
+	QING_treaty_recount_ports = yes
 	QING_treaty_apply_burden_band = yes
 	LOG_exit = { sys = QING  fn = "QING_treaty_pulse"  result = OK }
 }
