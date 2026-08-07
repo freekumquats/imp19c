@@ -11,12 +11,18 @@
 #   balance_hist_q0 .. balance_hist_q7   — raw net balance, q0 = most recent.
 #   balance_hist_max_abs                 — max |value| over the 8 slots, floored
 #                                          at 1 (the histogram's full-scale ref).
-#   balance_hist_pos_q0..q7 / _neg_q0..q7 — pre-normalised 0.0..1.0 bar heights.
+#   balance_hist_pos_q0..q7 / _neg_q0..q7 — pre-normalised 0..100 bar heights.
 #                                          A surplus fills the green (positive)
 #                                          bar; a deficit fills the red (negative)
 #                                          bar. Pre-computed HERE so the GUI does
-#                                          no arithmetic — progressbars take a
-#                                          0..1 value directly.
+#                                          no arithmetic.
+#   [BUG-B2 2026-08-07] a progressbar's `value` is on a 0..100 scale, NOT 0..1
+#   (proven: vanilla vertical_moralebar feeds GetAverageMoralePercent 0..100 with
+#   no min/max override, gui_base.gui:11994/mapiconlayer.gui:1892; the shipped
+#   Qing ministry bars feed qing_min_perf_* clamped 0..100, qing_war_ministry.gui:173).
+#   The earlier fix (54b771e80) fixed the invisible-tile/stuck-at-0 bug but left the
+#   heights at 0..1, so on the 0..100 scale every bar rendered ~1% = empty columns.
+#   Normalise to 0..100 here to match the proven progressbar contract.
 #
 # Called once per quarter, per country, from INCOME_update_treasury_country
 # (right after INCOME_national_total_quarterly is set). se_LOG-traced.
@@ -115,20 +121,22 @@ BALHIST_fold_abs = {
 	}
 }
 
-# ---- Normalise slot N to 0.0..1.0 positive/negative bar heights --------------
+# ---- Normalise slot N to 0..100 positive/negative bar heights ----------------
 # $slot$ = 0..7. Writes balance_hist_pos_q$slot$ and balance_hist_neg_q$slot$.
-# positive = value/max_abs clamped [0,1] (0 for a deficit quarter);
-# negative = (-value)/max_abs clamped [0,1] (0 for a surplus quarter).
+# positive = 100 * value/max_abs clamped [0,100] (0 for a deficit quarter);
+# negative = 100 * (-value)/max_abs clamped [0,100] (0 for a surplus quarter).
+# [BUG-B2 2026-08-07] scale is 0..100 (the progressbar `value` contract), NOT 0..1.
 BALHIST_normalise_slot = {
 	# Scope: Country
-	# clamp to [0,1]: min = 0 is the FLOOR, max = 1 is the CEILING.
+	# clamp to [0,100]: min = 0 is the FLOOR, max = 100 is the CEILING.
 	set_variable = {
 		name = balance_hist_pos_q$slot$
 		value = {
 			value = var:balance_hist_q$slot$
 			divide = var:balance_hist_max_abs
+			multiply = 100
 			min = 0
-			max = 1
+			max = 100
 		}
 	}
 	set_variable = {
@@ -137,8 +145,9 @@ BALHIST_normalise_slot = {
 			value = var:balance_hist_q$slot$
 			multiply = -1
 			divide = var:balance_hist_max_abs
+			multiply = 100
 			min = 0
-			max = 1
+			max = 100
 		}
 	}
 }
