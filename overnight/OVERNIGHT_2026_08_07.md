@@ -222,6 +222,81 @@ Guard-widen reviewed SOUND: no double-raise (mutually-exclusive pre-1772/1815 br
 1763, CHI-employed). Committed + pushed. Kashgar garrison should now appear in the Outliner. #21 marked done
 (minimal fix; Yarkand/Aksu additions deferred to a follow-up once boot-verified).
 
+### [T21] AUTONOMOUS PUSH (user: finish ALL tasks, best-guess if blocked, log decisions)
+Stopped gating on boot-tests; building all buildable tasks with best judgment + review-before-commit.
+- #19 BUILT: garrison term in QING_xj_derive_control — count qing_hist_garrison_prov over area:Dzungaria+
+  Tarim, +3/seat cap +12, GATED by xiexiang (replaces the flat +10, avoids double-count, stays degradable).
+  Verified Ili/Kashgar/Ürümqi are all in area:Tarim + carry the stamp. Impl review dispatched. (Guesses logged below.)
+- #20 BUILT: split qing_xinjiang.1 SUPPRESS into suppress_local (gated on qing_hist_garrison_prov present;
+  500 gold + add_manpower -2 = ~1000 men) vs suppress_external (always; 900 gold + -5 = ~2500 men + war
+  exhaustion), mirroring capstone .41.e/.41.b. Same grip effect both. 4 loc keys; old suppress.tt removed.
+  qing_xinjiang.1 is the ONLY military-choice event in the chain (.2 = tuntian trampoline). Impl review dispatched.
+- #22 design review dispatched (the amban-retarget).
+
+## GUESSES / JUDGMENT CALLS (user said: best-guess if blocked, note them here)
+
+These are decisions I made autonomously without user confirmation where the design left a choice open or
+a value needed picking. Flag for user review / boot-test tuning:
+
+- **[#19] Garrison term = REPLACE the flat xiexiang +10 with a xiexiang-GATED garrison-seat count.** The
+  review said "reframe xiexiang as a gate/multiplier, don't stack" and "decide it." I chose: delete the flat
+  +10, and add +3 per qing_hist_garrison_prov seat (cap +12) ONLY when qing_xj_xiexiang flows. GUESS on the
+  numbers: +3/seat (matches tuntian/secured), cap +12 (~4 seats). At 1763 CHI holds ~Ili+Kashgar+Ürümqi
+  garrison seats in the two areas = ~+9 when paid (vs the old flat +10) — deliberately close to the old value
+  so the 1763 opening (~40) and the khoja ≤30 reachability are roughly preserved. NOT boot-verified — the
+  cap/per-seat may need tuning, and the exact count of qing_hist_garrison_prov seats in area:Dzungaria+Tarim
+  at 1763 should be confirmed in a boot (I verified Ili/Kashgar/Ürümqi are in area:Tarim + carry the stamp,
+  but there may be more/fewer seats than assumed). If control opens too high or the khoja scare can't reach
+  ≤30, lower the cap or per-seat.
+- **[#19] Gated-not-stacked means a built-but-UNPAID garrison contributes 0 control.** Judgment: this is
+  correct per the rot model (xiexiang funds the garrison), and it PRESERVES the neglect→khoja path. But it
+  means the garrison gives NO baseline control when the subsidy is cut — arguably a built garrison should
+  give *some* floor. Left as gated-only (cleaner, degradable); revisit if playtest wants a small unpaid floor.
+- **[#20] Cost numbers for the khoja suppress split.** User earlier gave "local 500 gold + 1000 manpower,
+  external more" for the caravan escort context; I reused those for the khoja event's local option and set
+  external at 900 gold + 2500 men + 1 war exhaustion. GUESS on external's exact numbers (900/2500) — dearer
+  than local, but not boot-tuned. The khoja scare can RECUR, so if these bleed the player too hard on repeat
+  scares, lower them. Manpower in script-scale (-2/-5 = ~1000/2500 displayed at the ~500x scale).
+- **[#20] Both suppress options show when a garrison is present** (local cheaper, external dearer); only
+  external shows when no garrison. Judgment: gives the player a meaningful cheap-vs-dear choice with a
+  garrison, and a fallback without. Alternative (hide external when local available) rejected — the player
+  may want to spare the local garrison. Revisit if it feels redundant.
+
+### [T22] #23 deflation — DELIBERATELY NOT auto-fixed (best-guess = don't gamble upstream currency)
+User said best-guess-if-blocked + finish all. For #23 the best guess is to NOT apply a speculative fix,
+because the fix DIRECTION is genuinely ambiguous and the wrong guess WORSENS the exact symptom:
+- If #23 is the #14 undamped-SWING (feedback overshoots), the fix is to DAMP the correction.
+- If #23 is the #28-review's reframe (deflation is the EQUILIBRIUM CEILING of a chronically STARVED money
+  supply — ratio pinned low because circulation < need), then damping the deflation-side correction
+  (CURRENCY_deflation_money_demand_amt, which INJECTS money) would SLOW recovery → make deflation WORSE.
+These are OPPOSITE fixes. Only the #28 band trace (now shipped) disambiguates. Plus: editing the shared
+Sobisonator currency svalues on a hunch violates a hard standing rule (upstream-caution / "not without
+being 100% certain"). So #23's responsible completion = TOOLING DELIVERED (#28 shipped) + diagnosis
+documented (design/DIAGNOSIS_CURRENCY_INFLATION_SWINGS.md); the formula change is one boot-trace away.
+If forced to pick blind, the CHI-only damping modifier (Option 1 in the diagnosis) is the SAFE-if-it's-#14
+choice — but it's the WRONG choice if it's the starved-supply equilibrium, so NOT applied. Marked #23
+blocked-on-trace (not a punt — a correctness call).
+
+### [T23] #26 amban-picker Phase 1 — BUILT + reviewed SOUND-WITH-FIXES → COMMITTED be70e901d
+Built the full picker machinery: candidate builder (QING_amban_refresh_candidates), trampoline (qing_amban.6
+posts the PICKED char via QING_amban_wire — no draw), row handler (qing_amban_appoint_selected, 25 PI moved
+here), cloned picker window (qing_amban_picker_window), rewired both Diplomacy post-button sites to
+prepare+createwidget, 4 loc keys. Review confirmed the make-or-break scope handoff (char→player→event) is
+correct. Applied fixes: Lifan-Yuan gate on the row is_valid (mid-picker race), PI refund on .6 else-branch,
+dropped a dead save_scope. GUESS/DECISION: built PHASE 1 (Diplomacy button) only; Phase 2 (Lifan-Yuan-screen
+entry + subject sub-picker) DEFERRED — the design flagged it as net-new GUI (a country-list subject picker
+doesn't exist) + unproven two-step picker chaining (a genuine spike). Replace button still auto-draws via .5
+(design-deferred inconsistency). #26 is functionally delivered for the Subjects-tab flow; Phase 2 is a
+follow-up. Marking #26 done (Phase 1 shipped; Phase 2 noted).
+
+### [T24] #27 senior-minister scandal — REFRAMED (extend, not new chain) + BUILT → review dispatched
+Review of the design caught that qing_office.1 + qing_revenue.4 + qing_works.4 ALREADY occupy the space;
+only the TRIAL + death/imprison is novel. So built qing_gcscandal.1/.2/.3 (trial → convict → confiscation +
+DURABLE vacancy via QING_office_vacate_dispatch_nobackfill + mercy/rigour(death_execution); acquit →
+corruption entrenches), and added a 'tribunal' option to qing_revenue.4 (.d) + qing_works.4 (.c), gated
+corruption>=60 + the court slot. VACATE-BEFORE-KILL honored; death_execution (death_suicide doesn't exist);
+19 loc keys; pictures valid. Impl review dispatched before commit.
+
 ## RUN SUMMARY (2026-08-07 autonomous session)
 
 SHIPPED + pushed (each adversarially reviewed BEFORE commit):
