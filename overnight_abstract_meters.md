@@ -707,3 +707,54 @@ BUILD REVIEW: CLEAN — no boot-crash, ordering correct (rot→derive→consolid
 (no CRIT-1), no double-count, no stray writer, ≥85 capstone reachable. One MEDIUM (neglect_quarters init)
 FIXED. LOW discipline_beg one-pulse lag accepted (landmine-9). Weights PLACEHOLDER-playtest.
 This closes the Xinjiang cluster: #10A caravan (oasis trade) + #10B control (concrete derive). #10 DONE.
+
+---
+## 2026-08-06 — #10A bespoke oasis-bazaar: verified system facts (pre-design)
+
+USER rulings: bazaar = a BUILDING, buildable by the user; aqsaqal = a diplomatic CONCESSION (flag, not a
+building — Kokand consul over Andijani merchants, 1832). The inert regional_center_of_trade branches (shipped
+in 3052a2bba) to be REMOVED.
+
+VERIFIED (read the code myself):
+- ALL Tarim (XNG) + Dzungaria (ILI) oasis provinces are SUBJECT-held at 1763; ZERO CHI-direct. So the player
+  cannot use the province BUILD MENU on them early. BUT the Xinjiang/#367 tree's whole point is CHI
+  progressively ANNEXING ILI/XNG (QING_xj_integrate_fully → "a normal province"), so the oases BECOME
+  CHI-direct as the tree advances → the bazaar becomes province-menu-buildable then. Historically right
+  (bazaars flourished once Xinjiang made a full province, 1884).
+- PRECEDENT: QING_caravan_invest_market (se_QING_CARAVAN.txt:305) is ALREADY the bazaar lever — country-scope
+  panel button, treasury −40, yarkand_market counter (cap 4), and it ALREADY advances c:ILI integration
+  (the annex arc). QING_xj_plant_tuntian similarly stamps qing_xj_tuntian_colony on subject Dzungaria via
+  area:+random_area_province (owner-independent) — the proven "player builds on subject land via a
+  country-scope lever" pattern.
+- QING_seed_frontier_building macro accepts owner=CHI OR is_subject_of=CHI → can seed on subject oases.
+
+DESIGN (to draft + review before build): qing_oasis_bazaar_building. (a) invest_market lever STAMPS the real
+building on an oasis (area-iterated), replacing the abstract yarkand_market×5 counter; (b) prosperity derives
+from COUNT of bazaar buildings in the oases (area iteration, owner-independent); (c) once an oasis is
+CHI-annexed the building is also province-menu-buildable (potential = oasis area + owner CHI + tech);
+(d) aqsaqal stays a flag = a merchant-draw MULTIPLIER on bazaar throughput; (e) REMOVE the dead
+regional_center_of_trade branches from QING_caravan_oasis_trade_svalue.
+
+---
+## 2026-08-06 — BUILD #10A oasis-bazaar (COMMIT) [autonomous] — REVIEWED CLEAN
+
+Replaced the abstract qing_caravan_yarkand_market counter with a REAL building qing_oasis_bazaar_building:
+- New building (qing_fiscal_buildings.txt after guild_hall): max_amount=1; potential = owner-OR-overlord
+  jurchen/chinese (copied EXACTLY from qing_great_mosque_building → lands on XNG-owned Tarim via overlord
+  ILI=manchu; Kashgar 2700 passes) + is_in_region Turkestan/Gansu (covers Dzungaria+Tarim, verified);
+  NO city gate (USER, same as yamen); guild-hall commerce modifiers; allow tech_urbanization. loc/tooltip/icon.
+- QING_caravan_invest_market: stamps the building (random_area_province + add_building_level — proven
+  iterator+effect composition: yamen band-track :239 + tuntian random_area_province) instead of yarkand_market
+  +1. Cap-gate ≡ pick-gate on potential-eligible (owner-OR-overlord + NOT has_building) → no −40 money-sink.
+- Prosperity term: count real bazaars over area:Dzungaria/Tarim into cached qing_caravan_bazaar_count (GUI-
+  readable), ×5; aqsaqal now a ×1.5 THROUGHPUT MULTIPLIER (was flat +8) — scales with the bazaar network.
+- Retired qing_caravan_yarkand_market (init/header/panel is_valid/GUI all migrated to bazaar count / building
+  eligibility). NO 1763 seed → opens at 0 bazaars, prosperity ~45, stays sub-55 ultimatum gate.
+- LEFT QING_caravan_oasis_trade_svalue UNTOUCHED — the regional_center_of_trade branches are LIVE (verified:
+  tradezone_setup picks random member region THEN most-populous province; Gansu∈eastern_steppe, Tarim∈Gansu →
+  a Tarim oasis CAN carry a center). My earlier "dead branches" claim was WRONG — corrected by reading the code.
+BUILD REVIEW: CLEAN — no boot-crash, potential+iterator both confirmed, gate≡gate (no money-sink), counter
+retired w/ no stray reader, opening neutral. 3 cosmetic LOW (pre-existing BOM, unused macro-title, doc
+citation). #10A DONE → the Xinjiang cluster (#10A caravan + #10B control) is COMPLETE.
+PROCESS NOTE: built under the corrected discipline — verified every assumption in-code (potential, iterator,
+multiply, region coverage, live branches) BEFORE writing, no phantom blockers escalated.

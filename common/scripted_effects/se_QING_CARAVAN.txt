@@ -42,7 +42,9 @@
 #   qing_caravan_prosperity_target scratch: the recomputed target the meter eases toward (hysteresis)
 #   qing_caravan_customs_rate      0/1/2   輕稅 light / 中稅 moderate / 重稅 heavy
 #   qing_caravan_aqsaqal_granted   flag    the Kokand aqsaqal concession is in force (1832-style)
-#   qing_caravan_yarkand_market    int     count of oasis market investments (bazaar/caravanserai), cap 4
+#   [#10A 2026-08-06] qing_caravan_yarkand_market RETIRED — replaced by the real qing_oasis_bazaar_building
+#     (counted into qing_caravan_bazaar_count each recompute; the building IS the source of truth).
+#   qing_caravan_bazaar_count      int     cached count of qing_oasis_bazaar_building in the oases (GUI read)
 #   qing_caravan_initialized       init guard
 # Reads/drives EXISTING state: qing_xinjiang_control (#367 grip), qing_xj_consolidation (#367),
 #   qing_xj_khoja_pending (#367 scare), the KOK opinion qing_xj_kokand_emboldened.
@@ -72,7 +74,9 @@ QING_caravan_init = {
 		set_variable = { name = qing_caravan_initialized      value = 1 }
 		set_variable = { name = qing_caravan_prosperity        value = 45 }
 		set_variable = { name = qing_caravan_customs_rate      value = 1 }
-		set_variable = { name = qing_caravan_yarkand_market    value = 0 }
+		set_variable = { name = qing_caravan_bazaar_count      value = 0 }   # [#10A] cached bazaar-building count (recompute rebuilds it); qing_caravan_yarkand_market RETIRED
+		# [#10A 2026-08-06] NO 1763 bazaar seed — opens at 0 bazaars (like the old counter), so prosperity
+		# stays ~45 and does NOT trip the ≥55 Kokand-ultimatum gate. The player builds bazaars via the lever.
 		# recompute at once so the target is tallied and the Lifan fold reads a real value FROM TURN 1
 		# (nothing folds this into a game-start dispatcher, so init must recompute itself — #336 lesson).
 		QING_caravan_recompute_target = yes
@@ -109,18 +113,25 @@ QING_caravan_recompute_target = {
 	remove_variable = qing_caravan_oasis_tmp
 	LOG_line = { sys = QING  msg = "caravan: oasis-trade term (raw num_goods_produced summed over Dzungaria+Tarim) for" }
 
-	# --- + MARKET INFRASTRUCTURE: each bazaar/caravanserai investment at the oases +5 (cap 4 -> +20).
-	set_variable = { name = qing_caravan_mkt_tmp  value = var:qing_caravan_yarkand_market }
+	# --- [meter-concretize #10A 2026-08-06] + MARKET INFRASTRUCTURE, now CONCRETE: count the real
+	# qing_oasis_bazaar_building on the map (replaces the abstract qing_caravan_yarkand_market counter). Each
+	# bazaar +5. Area-iterated (owner-independent — the oases are subject-held; every_owned_province returns 0).
+	# Cache the count into qing_caravan_bazaar_count for the GUI (a GUI GetVariable cannot read a script_value).
+	set_variable = { name = qing_caravan_bazaar_count  value = 0 }
+	area:Dzungaria = { every_area_province = { limit = { has_building = qing_oasis_bazaar_building }  ROOT = { change_variable = { name = qing_caravan_bazaar_count  add = 1 } } } }
+	area:Tarim     = { every_area_province = { limit = { has_building = qing_oasis_bazaar_building }  ROOT = { change_variable = { name = qing_caravan_bazaar_count  add = 1 } } } }
+	set_variable = { name = qing_caravan_mkt_tmp  value = var:qing_caravan_bazaar_count }
 	change_variable = { name = qing_caravan_mkt_tmp  multiply = 5 }
-	change_variable = { name = qing_caravan_prosperity_target  add = var:qing_caravan_mkt_tmp }
-	remove_variable = qing_caravan_mkt_tmp
-
-	# --- + AQSAQAL CONCESSION: with the Kokand consul recognised, the Andijani merchants flock to
-	# Kashgar and the volume swells (+8) — the commercial upside of the 1832 surrender.
+	# --- AQSAQAL CONCESSION as a THROUGHPUT MULTIPLIER (USER 2026-08-06: aqsaqal = a diplomatic concession,
+	# not a building): the Kokand consul draws the Andijani merchants THROUGH the bazaars, so its value SCALES
+	# with the bazaar network (×1.5) instead of a flat +8. A concession with no markets draws little; a full
+	# network swells the volume. (multiply=1.5 is proven in-file, se_QING_CARAVAN.txt.)
 	if = {
 		limit = { has_variable = qing_caravan_aqsaqal_granted }
-		change_variable = { name = qing_caravan_prosperity_target  add = 8 }
+		change_variable = { name = qing_caravan_mkt_tmp  multiply = 1.5 }
 	}
+	change_variable = { name = qing_caravan_prosperity_target  add = var:qing_caravan_mkt_tmp }
+	remove_variable = qing_caravan_mkt_tmp
 
 	# --- - CUSTOMS DRAG: heavy tariffs depress volume and breed smuggling. light 0 / moderate -5 /
 	# heavy -15 (the historical trade-off — more revenue per unit, less trade).
@@ -306,12 +317,49 @@ QING_caravan_invest_market = {
 	LOG_enter = { sys = QING  fn = "QING_caravan_invest_market" }
 	QING_caravan_init = yes
 	if = {
+		# [meter-concretize #10A 2026-08-06] cap = "an ELIGIBLE un-bazaared oasis province exists" — mirror the
+		# building's potential (owner-OR-overlord jurchen/chinese) so we only charge −40 when the stamp will
+		# actually land (add_building_level respects potential → a bad pick silently drops; gate BOTH the
+		# cap-check and the pick on eligibility). Replaces the abstract var:qing_caravan_yarkand_market < 4.
 		limit = {
 			treasury >= 40
-			var:qing_caravan_yarkand_market < 4
+			OR = {
+				area:Dzungaria = { any_area_province = {
+					NOT = { has_building = qing_oasis_bazaar_building }
+					OR = { owner = { OR = { country_culture_group = jurchen  country_culture_group = chinese_group } }  owner = { exists = overlord  overlord = { OR = { country_culture_group = jurchen  country_culture_group = chinese_group } } } }
+				} }
+				area:Tarim = { any_area_province = {
+					NOT = { has_building = qing_oasis_bazaar_building }
+					OR = { owner = { OR = { country_culture_group = jurchen  country_culture_group = chinese_group } }  owner = { exists = overlord  overlord = { OR = { country_culture_group = jurchen  country_culture_group = chinese_group } } } }
+				} }
+			}
 		}
 		add_treasury = -40
-		change_variable = { name = qing_caravan_yarkand_market  add = 1 }
+		# stamp the CONCRETE bazaar building on an eligible un-bazaared oasis (proven scope-pick form:
+		# random_area_province with the eligibility limit → add_building_level in province scope). Prefer
+		# Tarim (the great entrepôts Kashgar/Yarkand) if it has a slot, else Dzungaria.
+		if = {
+			limit = { area:Tarim = { any_area_province = {
+				NOT = { has_building = qing_oasis_bazaar_building }
+				OR = { owner = { OR = { country_culture_group = jurchen  country_culture_group = chinese_group } }  owner = { exists = overlord  overlord = { OR = { country_culture_group = jurchen  country_culture_group = chinese_group } } } }
+			} } }
+			area:Tarim = { random_area_province = {
+				limit = {
+					NOT = { has_building = qing_oasis_bazaar_building }
+					OR = { owner = { OR = { country_culture_group = jurchen  country_culture_group = chinese_group } }  owner = { exists = overlord  overlord = { OR = { country_culture_group = jurchen  country_culture_group = chinese_group } } } }
+				}
+				add_building_level = qing_oasis_bazaar_building
+			} }
+		}
+		else = {
+			area:Dzungaria = { random_area_province = {
+				limit = {
+					NOT = { has_building = qing_oasis_bazaar_building }
+					OR = { owner = { OR = { country_culture_group = jurchen  country_culture_group = chinese_group } }  owner = { exists = overlord  overlord = { OR = { country_culture_group = jurchen  country_culture_group = chinese_group } } } }
+				}
+				add_building_level = qing_oasis_bazaar_building
+			} }
+		}
 		QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = 8 }
 		# a thriving oasis market tightens the Inner-Asian dependency's integration into the empire.
 		# [review-fix] advance c:ILI — the DIRECT autonomous_governorship subject of CHI (setup
