@@ -382,13 +382,10 @@ QING_selfstr_found_evarmy = {
 		# task #88: the 常勝軍 is the SEED of the modern centrally-commanded army — the
 		# centralizing answer to banner/green-standard rot and Han provincial power.
 		# A one-time +30 boost to the modern-army share (it then drifts toward the
-		# self-strengthening ceiling). Guarded on < 30 so it lifts a fresh realm to at
-		# least the emerging band and fires only once.
-		if = {
-			limit = { var:qing_modernarmy_share < 30 }
-			QING_DECLINE_nudge = { var = qing_modernarmy_share  amount = 30 }
-			LOG_line = { sys = QING  msg = "Ever-Victorious Army seeds the modern national army; modernarmy_share boosted for" }
-		}
+		# [meter-concretize #11 2026-08-06] the old permanent +30 share nudge is DROPPED — this event already
+		# raises the REAL Ever-Victorious legion (QING_selfstr_raise_modern_army below), which the derived
+		# QING_DECLINE_drift_modernarmy_share now counts (1 legion → target 30 = emerging band). The share
+		# climbs via the count next pulse; if the legion is later wiped the share falls (no permanent boost).
 		QING_selfstr_advance = { amount = 12 }
 		# [#mil-law] guarantee the New-Model Drill doctrine threshold (progress >= 25) so the player can keep building the EVA unit type they were handed.
 		QING_selfstr_set_floor = { floor = 25 }
@@ -465,13 +462,9 @@ QING_selfstr_found_beiyang_army = {
 		unlock_invention = tech_rifles
 		unlock_invention = tech_cannons
 		# task #88: the 北洋新軍 IS the modern national army — the centralizing successor
-		# to banner/green-standard rot. A one-time +35 to the modern-army share (larger
-		# than the Ever-Victorious seed), then it drifts toward the ceiling.
-		if = {
-			limit = { var:qing_modernarmy_share < 40 }
-			QING_DECLINE_nudge = { var = qing_modernarmy_share  amount = 35 }
-			LOG_line = { sys = QING  msg = "Beiyang Army seeds the modern national army; modernarmy_share boosted for" }
-		}
+		# [meter-concretize #11 2026-08-06] the old permanent +35 share nudge is DROPPED — this event raises the
+		# REAL Beiyang legion (below), which the derived share now counts (a 2nd modern legion → target 60 =
+		# national band). Climbs via the count; falls if the legion is lost.
 		QING_selfstr_advance = { amount = 15 }
 		# [#mil-law] guarantee the New-Model Drill doctrine threshold (progress >= 25) so the Beiyang unit type stays buildable.
 		QING_selfstr_set_floor = { floor = 25 }
@@ -502,11 +495,8 @@ QING_selfstr_found_nanyang_army = {
 		limit = { NOT = { has_country_modifier = qing_selfstr_nanyang_army } }
 		add_country_modifier = { name = qing_selfstr_nanyang_army  duration = -1 }
 		unlock_invention = tech_rifles
-		if = {
-			limit = { var:qing_modernarmy_share < 30 }
-			QING_DECLINE_nudge = { var = qing_modernarmy_share  amount = 25 }
-			LOG_line = { sys = QING  msg = "Nanyang Army seeds the modern national army; modernarmy_share boosted for" }
-		}
+		# [meter-concretize #11 2026-08-06] the old permanent +25 share nudge is DROPPED — this event raises the
+		# REAL Nanyang legion (below), counted by the derived share. Climbs via the count; falls if lost.
 		QING_selfstr_advance = { amount = 10 }
 		# [#mil-law] guarantee the New-Model Drill doctrine threshold (progress >= 25) so the Nanyang unit type stays buildable.
 		QING_selfstr_set_floor = { floor = 25 }
@@ -782,11 +772,19 @@ QING_selfstr_capstone_modernized = {
 	# a low residual for the two central-army decay meters (below every band floor).
 	set_variable = { name = qing_banner_decay         value = 5 }
 	set_variable = { name = qing_greenstandard_decay  value = 5 }
-	# the modern national army is now the realm's shield: seed the share at 100. The
-	# monthly drift (QING_DECLINE_drift_modernarmy_share) will ease it back toward the
-	# self-strengthening ceiling over time, but it stays well inside the national band
-	# (>=60) — and the capstone force-adds qing_modernarmy_national below regardless.
-	set_variable = { name = qing_modernarmy_share     value = 100 }
+	# [meter-concretize #11 2026-08-06] the modern national army is now the realm's shield — but the share is
+	# DERIVED from the real modern-legion count, so a bare `set share = 100` would be overwritten next pulse
+	# (the #3 lesson). Instead RAISE A REAL capstone New Army legion (guarded once via qing_capstone_army_raised)
+	# so the derive counts it; combined with the mission-founded armies + spawn_newarmy the count reaches the
+	# national band concretely. The force-added qing_modernarmy_national modifier below is the instant reward
+	# (the derive confirms national next pulse). No permanent floor — a post-capstone realm that loses all its
+	# modern armies SHOULD see the share fall (consistent with the concrete-over-abstract thesis).
+	if = {
+		limit = { NOT = { has_variable = qing_capstone_army_raised }  exists = capital_scope }
+		set_variable = { name = qing_capstone_army_raised  value = 1 }
+		capital_scope = { state.governorship = { QING_selfstr_raise_modern_army = { loc = ROOT.capital_scope  armyname = QING_ARMY_NEWARMY } } }
+		LOG_line = { sys = QING  msg = "CAPSTONE: a modern New Army legion raised at the capital (share now derives national) for" }
+	}
 
 	# --- strip every active decline / decay / corruption malus band ------------
 	remove_country_modifier = qing_corrupt_endemic

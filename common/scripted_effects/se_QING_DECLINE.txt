@@ -482,18 +482,35 @@ QING_DECLINE_update_reform_pressure = {
 # real modern force. Cheap O(1). Mirrors QING_DECLINE_drift_civic_identity.
 # ======================================================================
 QING_DECLINE_drift_modernarmy_share = {
+	# [meter-concretize #11 2026-08-06] The share is now DERIVED from the REAL modern-legion count on the map,
+	# not the abstract qing_selfstr_progress ceiling (design/DESIGN_MODERNARMY_SHARE_CONCRETIZE.md). The
+	# founding events (Ever-Victorious / Beiyang / Nanyang / Napoleon levée / spawn_newarmy / capstone) each
+	# raise a REAL legion of qing_ever_victorious sub-units; the derive counts those legions × K. The WIN: a
+	# modern army annihilated (the Yalu 1894 collapse) now DROPS the share — which re-arms the warlord vector
+	# via #6 (QING_DECLINE_drift_han_provincial_power subtracts this share). No permanent stored boost / floor.
 	if = { limit = { NOT = { has_variable = qing_modernarmy_share } }  set_variable = { name = qing_modernarmy_share  value = 0 } }
-	QING_selfstr_init = yes
-	set_variable = { name = qing_modernarmy_target_tmp  value = var:qing_selfstr_progress }
-	# a hollow, for-show modernization fields no real modern army — halve the ceiling.
+	# --- count the country's modern legions. BARE any_sub_unit filter — NO commander/owner guard: the
+	# founding raises attach no commander (copying #9's has_commander guard would filter them out → count 0),
+	# and country-scope every_unit only iterates ROOT's own legions (proven se_QING_COUNCIL.txt), so
+	# foreign/rebel EVA is already excluded (review C1). Count LEGIONS, not sub-units.
+	set_variable = { name = qing_modernarmy_legion_ct  value = 0 }
+	every_unit = {
+		limit = { any_sub_unit = { sub_unit_type = qing_ever_victorious } }
+		ROOT = { change_variable = { name = qing_modernarmy_legion_ct  add = 1 } }
+	}
+	# --- target = legion_count × K (K=30 PLACEHOLDER-playtest: 1 legion→30 emerging, 2→60 national, matching
+	# the current founding band-crossings; spawn_newarmy adds a 4th at share>=60 → settles ~100).
+	set_variable = { name = qing_modernarmy_target_tmp  value = var:qing_modernarmy_legion_ct }
+	change_variable = { name = qing_modernarmy_target_tmp  multiply = 30 }
+	# a hollow, for-show modernization fields a paper force — halve the count-target (the flag survives from
+	# the refraction test; a real legion is real, but a hollow movement fields fewer effective ones).
 	if = {
 		limit = { has_variable = qing_selfstr_hollow_flag  var:qing_selfstr_hollow_flag = 1 }
 		change_variable = { name = qing_modernarmy_target_tmp  divide = 2 }
 	}
-	# [#15 Batch 4i 2026-07-25] DRILL POSTURE bias (操練之制). qing_drill_posture_law writes
-	# qing_drill_posture_bias; it lifts/lowers the modern-army CEILING the share chases (intensive 新式操練
-	# fields more of a real modern army; a lax posture fields less). Added to the target BEFORE the clamp +
-	# chase compare (bias-B target-lift, LHS var). Guarded on has_variable (default posture = unchanged).
+	# [#15 Batch 4i] DRILL POSTURE bias (操練之制). qing_drill_posture_law writes qing_drill_posture_bias;
+	# intensive 新式操練 lifts the target the share chases, a lax posture lowers it. Relocated from the old
+	# selfstr ceiling onto the count-target (review L4). Guarded → default byte-identical.
 	if = {
 		limit = { has_variable = qing_drill_posture_bias }
 		change_variable = { name = qing_modernarmy_target_tmp  add = var:qing_drill_posture_bias }
@@ -508,6 +525,8 @@ QING_DECLINE_drift_modernarmy_share = {
 		limit = { var:qing_modernarmy_share > qing_modernarmy_target_tmp_cmpsvalue }
 		QING_DECLINE_nudge = { var = qing_modernarmy_share  amount = -2 }
 	}
+	# [error-logging rule] report the concrete legion count -> target so the derive is traceable in debug.log.
+	LOG_line = { sys = QING  msg = "modernarmy share: real modern-legion count -> target (legions=) for" }
 }
 
 # ======================================================================

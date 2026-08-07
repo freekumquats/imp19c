@@ -833,3 +833,51 @@ Adversarial review: build structurally sound, grammar legal, braces 0, writer ce
 - **LOW-2 (selfstr zeroing qing_opium_stress_flow is inert): left as-is** — harmless no-op (flow recomputes next pulse), reads as intent alongside the meaningful residual-zero.
 - **LOW-3 (latent stale-flow coupling if opium-assess ever gated off): not reachable today** (both run unconditionally); flagged only. No change.
 #3 DONE → commit.
+
+---
+## 2026-08-06 — #11 meter-of-meters investigation (reform_pressure / caravan / modernarmy)
+
+Investigated all three per the "concretize ONLY where a real referent exists; don't force" rule.
+
+**caravan (qing_caravan_prosperity) — ALREADY CONCRETE (no action).** Done in #10A: the prosperity target
+derives from real oasis TRADE (num_goods_produced + regional_center_of_trade over Dzungaria/Tarim, the
+center-of-trade branches VALID per the stochastic tradezone_setup — see the 2026-08-06 retraction above) + a
+real qing_oasis_bazaar_building COUNT (×5) − customs drag, × aqsaqal concession. Already the reviewed #10A
+rework; nothing to do.
+
+**qing_reform_pressure — DON'T FORCE (already derived, no cleaner referent).** Its TARGET
+(QING_DECLINE_update_reform_pressure, se_QING_DECLINE.txt) is a live blend/sum of the OTHER decline meters
+(corruption + currency_stress + ethnic_tension + banner_decay + …), and those inputs are now themselves
+concrete after #2/#3/#9. It is a roll-up gauge, not a free-floating accumulator — exactly the legitimate
+"readout of concrete state" pattern (like council_effectiveness). The ~40 event nudges are DELIBERATE discrete
+political shocks (treaties, embassies, mission completions, Ili beats) — the correct model for a "pressure"
+gauge; there is no single on-map object that IS reform pressure. Concretizing further would mean inventing a
+fake referent. Verdict: leave as-is (the concrete-over-abstract rule is already satisfied transitively).
+
+**qing_modernarmy_share — CONCRETIZE (real referent found).** USER RULING: "concretize it (recalibrated)."
+Real referent = modern legions built from the qing_ever_victorious sub-unit (raised by the 3 founding events
+via QING_selfstr_raise_modern_army; the unit is player-buildable). The concrete WIN: today the founding boosts
+are PERMANENT, so a modern army annihilated at the Yalu still reads "modernized" forever — a lie; deriving from
+a live legion count makes the share FALL when the army is lost, which feeds warlordism via #6 (han-provincial
+subtracts the share). Design written: DESIGN_MODERNARMY_SHARE_CONCRETIZE.md — target = modern_legion_count×K
+(K=25 placeholder, so 3 foundings ≈ 75 = national band) + doctrine_floor (law-gated, prevents total collapse
+on one lost battle) + Napoleon-levée floor (§5) + capstone floor (§6); drop the founding/lever nudges; keep the
+±2 drift + bands + all readers. Pre-verified: sub_unit_type key (qing_ever_victorious), every_unit country-scope
++ employer=ROOT guard, raise-token=count-token — all match the #9 precedent. Design review dispatched.
+
+### #11 modernarmy DESIGN REVIEW outcome (2026-08-06): 3 CONFIRMED factual errors → design REWRITTEN, then BUILT
+Adversarial design review (pre-build) found 3 design-breaking factual errors + 2 mediums, ALL verified against code:
+- **C1 (count guard):** copying #9's has_commander guard would zero the count — the founding raises attach NO commander. FIX: bare any_sub_unit filter, no commander/owner guard (every_unit is already ROOT-only).
+- **C2 (Napoleon):** my §5 was WRONG — the levée DOES raise a countable qing_ever_victorious legion (La Grande Armee, 15 EVA). FIX: drop the +60 nudge, no floor (its real legion is counted; falls if wiped).
+- **C3 (capstone):** my §6 opt-(a) was WRONG — the capstone raises ZERO legions, only set share=100. FIX: replace with a real guarded QING_selfstr_raise_modern_army (capstone New Army legion) so the count reflects it.
+- **M1:** doctrine_floor ≈ always 0 (no add_law/activate_law exists in the repo). **DROPPED the floor entirely** → pure count×K, which is simpler AND maximizes the user-approved "army dies → share falls" everywhere.
+- **M3/M4:** spawn_newarmy raises a 4th EVA legion at share>=60 (self-limiting); K recalibrated 25→30 so 1 legion→30 (emerging, matches current first-founding behavior), 2→60 (national). L1/L2/L3 confirmed sound (no ordering hazard, no #6 runaway, selfstr_progress not orphaned).
+
+BUILT (pure count×K=30, no floors): QING_DECLINE_drift_modernarmy_share now counts real qing_ever_victorious legions (bare every_unit filter) ×30, ÷2 if hollow, + drill_posture_bias, ±2 drift kept. Dropped ALL permanent boosts: 3 founding nudges (+30/+35/+25), Napoleon +60, mechanics +12, reform-event +8/+5 (kept their other effects). Capstone set-100 → raises a real New Army legion (QING_ARMY_NEWARMY loc added; guarded qing_capstone_army_raised). Only remaining share writers = the ±2 drift in the derive. Ordering derive-before-#6 confirmed (:1115 < :1120). Braces 0, cmpsvalue intact, capstone raise byte-matches the proven Beiyang idiom. Dispatching build review.
+
+### #11 modernarmy BUILD REVIEW outcome (2026-08-06): CLEAN — 0 crit/med, 3 LOW (all no-fix)
+All 9 design-critical items verified correct in code: bare count guard (C1), no surviving permanent writers (only the ±2 drift), capstone raise byte-matches the proven Beiyang idiom + guarded once, K=30 bands inclusive (1→30 emerging, 2→60 national), ordering derive-before-#6, dropped-nudge side effects preserved, hollow÷2/drill-bias order correct (×30→÷2→+bias→clamp), vars seeded, cmpsvalue intact, braces balanced.
+- LOW-1: LOG_line "(legions=)" prints no value — house pattern, log-macro constraint. No change.
+- LOW-2: FIXED the stale §2 table row (said "keep a mechanism to reach national" — superseded by §5's drop). BEHAVIOR CHANGE surfaced: a pure-Napoleon path (no SS foundings) now reaches EMERGING not national (1 legion). Accepted.
+- LOW-3: capstone-without-foundings → the instant qing_modernarmy_national modifier is transient (share drifts to 30). Design §6 explicitly accepts (no permanent floor). No change.
+#11 modernarmy DONE. #11 as a whole: caravan already-concrete (#10A), reform_pressure DON'T-FORCE (derived roll-up), modernarmy CONCRETIZED. The meter-concretization program is COMPLETE.
