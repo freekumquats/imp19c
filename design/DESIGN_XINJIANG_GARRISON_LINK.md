@@ -17,7 +17,30 @@ exists = unit_location  unit_location = { owner = scope:target } }  ROOT = { cha
 integ_garrison_size  add = prev.unit_size } } }` — sums CHI standing-army cohorts on the target's provinces
 into a country var, then bands it. This is the concrete garrison-strength measure.
 
-## 2. Design — a concrete garrison term in the derive
+## 1b. [REVIEW-DECISIVE 2026-08-07] Count `qing_hist_garrison_prov`, NOT a building or army
+The adversarial review found BOTH G1 (army count) and G2 (building count) count the WRONG object:
+- G2 (buildings) misses the Tarim: `qing_banner_garrison_building` AND `qing_green_standard_post_building`
+  both reject uighur XNG on their culture potential; #21 doesn't seed a building anyway (it's a create_unit).
+- G1 (army count) as written is BROKEN: `unit_location = { area = area:X }` is NOT a valid trigger — the
+  proven form is `is_in_area = Dzungaria` (no `area:` prefix, se_QING_ILI.txt:419). Plus armies move + need
+  unit_size division.
+- **THE RIGHT OBJECT ALREADY EXISTS:** the OOB garrison raise stamps a PERMANENT, OWNER-INDEPENDENT province
+  variable **`qing_hist_garrison_prov`** (imp19c_effects_legion_setup.txt:130/156) on every garrison seat —
+  and #21's guard-widen means Kashgar p:2700 now gets it too. So the term is a TUNTIAN-SHAPED count of
+  `has_variable = qing_hist_garrison_prov` over `area:Dzungaria` + `area:Tarim` — owner-independent, covers
+  Kashgar, no culture gate, no army fiddliness, works TODAY. This REPLACES G1 and G2.
+```
+set_variable = { name = qing_xj_ctl_term  value = 0 }
+area:Dzungaria = { every_area_province = { limit = { has_variable = qing_hist_garrison_prov }  ROOT = { change_variable = { name = qing_xj_ctl_term  add = <N> } } } }
+area:Tarim     = { every_area_province = { limit = { has_variable = qing_hist_garrison_prov }  ROOT = { change_variable = { name = qing_xj_ctl_term  add = <N> } } } }
+# cap the term, then add to qing_xj_control_tmp BEFORE the :266 clamp.
+change_variable = { name = qing_xj_control_tmp  add = var:qing_xj_ctl_term }
+```
+(NOTE: verify `qing_hist_garrison_prov` is a PROVINCE var readable via has_variable in every_area_province —
+it's set on $prov$ at :148; confirm scope. Also #346 se_QING_FRONTIER.txt:51-72 has garrison-detection — check
+it doesn't already provide a cleaner count.)
+
+## 2. [SUPERSEDED by §1b] Original G1/G2 sketch — a concrete garrison term in the derive
 Add to `QING_xj_derive_control`, using the `qing_xj_ctl_term` scratch pattern (set 0 → accumulate → add to
 `qing_xj_control_tmp`), BEFORE the :266 clamp:
 
@@ -80,8 +103,22 @@ garrison) in the relevant area, OR the derived garrison term > 0 — a concrete,
 5. Boot-test: control rises when garrisons are seeded/built; falls if a garrison is lost; log via se_LOG.
 6. Build AFTER/WITH #21 (needs the seeded objects to count).
 
+## 6b. [REVIEW-DECISIVE] Two more fixes before build
+- **XIEXIANG OVERLAP — reframe, don't stack.** The in-code comment (se_QING_XINJIANG.txt:442-443) says
+  "xiexiang paid the GARRISON, not the begs" — so the existing +10 xiexiang term IS the garrison-funding
+  proxy. Adding a garrison-EXISTENCE term while keeping xiexiang as an independent additive +10 double-scores
+  one garrison (built + paid). FIX: make xiexiang a GATE/MULTIPLIER on the garrison term (a built-but-unpaid
+  garrison contributes less), NOT a parallel flat additive. Decide this, don't stack.
+- **HOT-FROM-TURN-1 CALIBRATION.** Unlike a buildable object, the Ili + Kashgar garrisons EXIST at 1763 game
+  start, so this term is NON-ZERO at open. The shipped derive must keep: 1763 opens ~40 (ILI +30 + 2 begs),
+  khoja trigger reachable at ≤30, capstone ≥85 reachable. A non-zero-at-open garrison term raises the opening
+  AND the permanent floor — risking making the khoja ≤30 band UNREACHABLE (the exact landmine #11.2/CRITICAL-2
+  of the control-concretize design fought). So: small +N/seat, capped ~10-12, AND re-derive the ≤30
+  reachability + rebalance other weights if needed. Confirm the khoja scare can still fire on a neglected
+  frontier after this term is added.
+
 ## 7. Risks
-- **R1 double-count with #21/xiexiang** — §3. Decide existence(buildings) vs funding(xiexiang) split.
+- **R1 double-count with #21/xiexiang** — §6b. Reframe xiexiang as a gate/multiplier, not a parallel additive.
 - **R2 area coverage** — if the Tarim oases aren't in area:Tarim (or XNG's provinces are in a different area),
   the count misses them. Verify area membership of the seeded garrison provinces.
 - **R3 magnitude/tuning** — +N per garrison must be calibrated so North (many garrisons) doesn't trivialise

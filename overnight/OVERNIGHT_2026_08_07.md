@@ -176,3 +176,42 @@ garrison for the Tarim (B2, historically apt — the Tarim had rotating Green St
 (p:2930) is ILI-owned (manchu) → banner building works directly. Coupled with #19 (don't double-count
 garrisons in control derive). Review will settle B1/B2 + whether the building spawns the army or it's seeded
 separately. Design-only until reviewed.
+
+### [T16] #21 review = BROKEN (v1 solved the wrong problem) → REWROTE to v2. KEY CATCH.
+The review found my v1 premise FALSE: the Outliner garrison is a create_unit (SE_qing_raise_garrison_cmd,
+imp19c_effects_legion_setup.txt:139), NOT a building. qing_banner_garrison_building is pure-modifier, spawns
+nothing. And a KASHGAR garrison army ALREADY EXISTS in the OOB (:267, p:2700, size 3, Hailancha) — it's
+SILENTLY DROPPED because the ownership guard (:83, :144) is `owner=c:CHI OR is_subject_of=c:CHI` (non-recursive),
+and Kashgar p:2700 is XNG-owned = nested CHI->ILI->XNG. Ürümqi (2930, ILI-owned=direct) passes → visible.
+EXACTLY the boot symptom. REAL FIX = one-branch guard widen (add owner={exists=overlord overlord={is_subject_of=c:CHI}})
+on both helpers → resurrects Kashgar. My entire building-seed program was orthogonal (0 soldiers). REWROTE
+design/DESIGN_ALTISHAHR_GARRISONS.md v2 around this. This is exactly why design→review→build exists.
+KNOCK-ON for #19: the garrison the player sees is an ARMY, and the control derive counts MODIFIERS (not armies
+or buildings) — so #19's G2 (count buildings) is WRONG; if a garrison should raise control it must be G1
+(army count) or a garrison modifier. #19 design needs updating (see its review when it lands).
+v2 is a clean one-branch fix — will re-review design + impl together before commit.
+
+### [T17] #28 COMMITTED — d75f95b4e (reviewed SOUND-WITH-FIXES, 2 fixes applied)
+Impl review passed all 9 correctness checks. Applied: (MEDIUM) added a currency-snapshot call at the
+FRESH-value site (after CURRENCY_update_amt_circulated, oa_wealth_changes.txt:351) — the ECON_LOG_quarter
+site (:209) runs earlier = last-quarter values; (LOW) has_variable-guarded the minting-rate capped check
+(unset if minting didn't run that month). Committed. Reserve-correction band (design §2c) deferred.
+
+### [T18] #21 v2 fix BUILT (guard widen) + design v2 → combined review dispatched
+Applied the one-branch guard widen to BOTH garrison helpers (SE_qing_raise_garrison :83,
+SE_qing_raise_garrison_cmd :144): added owner={exists=overlord overlord={is_subject_of=c:CHI}} → admits
+nested Kashgar (XNG under ILI) → resurrects the already-authored Kashgar garrison (Hailancha, size 3).
+Braces balanced; commander-attach logic (:162, employer=c:CHI) confirmed to still attach Hailancha. Kept #21
+minimal (guard fix only; Yarkand/Aksu deferred until boot-verified). Combined design+impl review dispatched.
+
+### [T19] #19 review = SOUND-WITH-FIXES, DECISIVE object correction → design updated
+Both my G1 (army) and G2 (building) counted the WRONG object. The RIGHT one ALREADY EXISTS: the OOB garrison
+raise stamps a PERMANENT owner-independent province var qing_hist_garrison_prov (imp19c_effects_legion_setup.txt
+:130/156), and #21's guard-widen gives Kashgar it too. So #19 = a TUNTIAN-SHAPED count of qing_hist_garrison_prov
+over area:Dzungaria+area:Tarim — no culture gate, no army fiddliness, works today. Also: G1's `area=area:X` is
+invalid (use is_in_area=Dzungaria); xiexiang overlap must be a GATE/MULTIPLIER not a stacked additive (xiexiang
+IS the garrison-funding proxy per se_QING_XINJIANG:442); and the term is HOT-FROM-TURN-1 (Ili+Kashgar exist at
+open) so the khoja ≤30 reachability must be re-derived (the #11.2 landmine). Updated design/DESIGN_XINJIANG_
+GARRISON_LINK.md (§1b supersedes G1/G2; §6b adds the two fixes). Confirmed sound: derive structure, area keys
+(all 20 XNG provs + Ürümqi in area:Tarim), one-way discipline, right meter (control not consolidation).
+#19 build DEFERRED — depends on #21 landing (needs qing_hist_garrison_prov on Kashgar) + the calibration re-derive.
