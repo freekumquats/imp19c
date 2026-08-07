@@ -1,6 +1,6 @@
 # DESIGN — Concretize `qing_xinjiang_control` from the real ILI subject + Xinjiang provinces (控馭新疆)
 
-**Branch:** merge-overnight. **Status:** DESIGN (not built). **Scope:** CHI. #91 item D.
+**Branch:** merge-overnight. **Status:** ✅ SHIPPED 2026-08-06 (#10B commit 64de2b6ed). **Scope:** CHI. #91 item D.
 
 ## 0. Problem (verified)
 `qing_xinjiang_control` (0–100, seed 40) is event-set/nudged (`se_QING_ILI.txt:98/125/153/232` set to

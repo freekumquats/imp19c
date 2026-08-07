@@ -1,6 +1,6 @@
 # DESIGN — Concretize `qing_banner_decay` / `qing_greenstandard_decay` from garrison-commander corruption + low martial (八旗/綠營廢弛)
 
-**Branch:** merge-overnight. **Status:** DESIGN (not built). **Scope:** CHI. #91 item G — **redesigned** after the
+**Branch:** merge-overnight. **Status:** ✅ SHIPPED 2026-08-06 (commit f30c303ea; se_LOG follow-up 18ad79f46). **Scope:** CHI. #91 item G — **redesigned** after the
 building-count approach was REJECTED.
 
 ## 0. Why the FIRST design was rejected, why the SECOND stalled, and why THIS one works

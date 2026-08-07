@@ -1,6 +1,6 @@
 # DESIGN — Concretize `qing_corruption_level`: derive it from real character corruption (吏治貪腐)
 
-**Branch:** merge-overnight. **Status:** DESIGN (not built). **Scope:** CHI only.
+**Branch:** merge-overnight. **Status:** ✅ SHIPPED 2026-08-06 (commit 748ab8e2a, one-sweep fold into QING_council_recompute). **Scope:** CHI only.
 **Companion to:** `DESIGN_BUREAU_CAPACITY_CONCRETIZE.md` (same concrete-over-abstract program).
 
 ## 0. The problem & the user's test

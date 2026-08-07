@@ -1,6 +1,6 @@
 # DESIGN — Retire `qing_bureau_capacity` AND `qing_exam_ladder`; make the yamen + shuyuan networks the source of truth (衙門治理 / 書院文教)
 
-**Branch:** merge-overnight. **Status:** DESIGN (not built). **Scope:** CHI only.
+**Branch:** merge-overnight. **Status:** ✅ SHIPPED 2026-08-06 (commit 23771cdf3; se_LOG follow-up 30e27023e). **Scope:** CHI only.
 
 > **Two parallel conversions, same pattern (USER 2026-08-06: "do both").** #91 shipped items I (yamen ↔
 > `qing_bureau_capacity`) and J (shuyuan ↔ `qing_exam_ladder`) as the *identical* hybrid anti-pattern:

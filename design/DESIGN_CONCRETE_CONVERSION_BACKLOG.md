@@ -1,5 +1,13 @@
 # Abstract→Concrete Conversion Backlog (Qing suite)
 
+> **✅ SUPERSEDED / COMPLETE (2026-08-06).** This is the ORIGINAL #91 planning backlog (2026-07-05). The
+> concretization program has since been executed in full — see `research/QING_METER_CONCRETIZATION_AUDIT.md`
+> (the authoritative status ledger) and the per-meter `DESIGN_*_CONCRETIZE.md` docs. Every meter with a valid
+> concrete referent was shipped (bureau/exam, corruption, currency, han-provincial, treaty-port count,
+> banner/GS decay, xinjiang, caravan/oasis-bazaar, modernarmy); the rest were formally retracted as don't-force
+> (sect, gp_tension, suzerain/tributary prestige, reform_pressure, treaty_burden). This doc is kept for the
+> historical ranking/rationale only; do NOT treat its "ranked backlog" as open work.
+
 _Migrated from memory imp19c-concrete-conversion-backlog per the research/design-digest-location rule. Design spec — see the memory pointer for status._
 
 Deep-research audit (agent ConcreteAudit/ConcreteAudit2, read-only, 2026-07-05) of where the mod's Qing suite still uses ABSTRACT variables/flags/counters whose in-fiction referent is ALREADY a real object on the 1815 map. Backs the [[imp19c-concrete-over-abstract-rule]] standing rule. The #90 Han magnate is the cited exemplar of the target pattern (counter kept as summary + real character hung off it). ALL candidates are HYBRID (keep counter as AI/summary layer, add concrete face) and low-risk additive; every proposed hook is already proven in-mod.

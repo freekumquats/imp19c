@@ -1,6 +1,6 @@
 # DESIGN — Concretize `qing_han_provincial_power`: derive from Han governors' loyal cohorts (漢族督撫坐大)
 
-**Branch:** merge-overnight. **Status:** DESIGN (not built). **Scope:** CHI.
+**Branch:** merge-overnight. **Status:** ✅ SHIPPED 2026-08-06 (commit 5a7f1c798; se_LOG follow-up 18ad79f46). **Scope:** CHI.
 **Part of** the meter-concretization program ([[imp19c-concrete-over-abstract-rule]]).
 
 ## 0. The problem — a meter-of-meters that ignores a fully-built concrete system

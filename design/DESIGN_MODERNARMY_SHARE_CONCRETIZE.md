@@ -1,6 +1,6 @@
 # DESIGN — Derive `qing_modernarmy_share` from the real modern-legion count (新軍)
 
-**Branch:** merge-overnight. **Status:** DESIGN (not built). **Scope:** CHI only.
+**Branch:** merge-overnight. **Status:** ✅ SHIPPED 2026-08-06 (commit f0139a38f; rewritten to pure count×K after design review). **Scope:** CHI only.
 **Sibling to:** the banner/GS decay (#9) and han-provincial (#6) docs — same [[imp19c-concrete-over-abstract-rule]],
 same `every_unit` + `any_sub_unit = { sub_unit_type = … }` counting idiom, same count×K target-blend shape.
 **User ruling 2026-08-06:** "Concretize it (recalibrated)" — derive from a real modern-legion count, accept the

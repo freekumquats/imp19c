@@ -1,6 +1,6 @@
 # DESIGN — Tighten `qing_currency_stress` onto the concrete reserve/inflation model (銀荒)
 
-**Branch:** merge-overnight. **Status:** DESIGN (not built). **Scope:** CHI (the Qing-flavoured meter).
+**Branch:** merge-overnight. **Status:** ✅ SHIPPED 2026-08-06 (commit f1a78b90c; knee lowered 0.7→0.6 per build review). **Scope:** CHI (the Qing-flavoured meter).
 **Sibling to:** the yamen/exam/corruption concretization docs. Same [[imp19c-concrete-over-abstract-rule]].
 
 ## 0. Why this is a target — and why it's the LEAST-bad of the accumulators

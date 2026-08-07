@@ -1,6 +1,6 @@
 # DESIGN — Concretize the oasis bazaar: retire `qing_caravan_yarkand_market` → a real `qing_oasis_bazaar_building` (回疆巴札)
 
-**Branch:** merge-overnight. **Status:** DESIGN (not built). **Scope:** CHI. #10A bespoke-entrepôt (supersedes the
+**Branch:** merge-overnight. **Status:** ✅ SHIPPED 2026-08-06 (#10A commit 0fda07d2b; caravan derive 3b6daa4d8/3052a2bba). **Scope:** CHI. #10A bespoke-entrepôt (supersedes the
 inert `regional_center_of_trade` bonus shipped in `3052a2bba`). Part of the meter-concretization program
 ([[imp19c-concrete-over-abstract-rule]]).
 

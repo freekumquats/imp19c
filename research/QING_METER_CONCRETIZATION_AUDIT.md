@@ -4,6 +4,18 @@ Systematic sweep of the Qing suite for abstract 0–100 "drift meters" (the `_ta
 `_cmpsvalue` signature) and nudge-accumulators, triaged by the [[imp19c-concrete-over-abstract-rule]]
 test. Backs the ongoing conversion program (bureau_capacity/exam_ladder/corruption docs).
 
+## ✅ PROGRAM COMPLETE (2026-08-06) — all targets resolved
+Every target below is now SHIPPED (built, adversarially reviewed, committed to merge-overnight) or
+formally RETRACTED as a don't-force. One commit per meter; decision log in `overnight_abstract_meters.md`.
+- **SHIPPED (concretized):** bureau_capacity + exam_ladder (23771cdf3, +LOG 30e27023e) · corruption
+  (748ab8e2a) · currency_stress (f1a78b90c) · han_provincial_power (5a7f1c798) · treaty_ports count
+  (6fcb91bb5) · banner/greenstandard decay (f30c303ea) · xinjiang_control #10B (64de2b6ed) · caravan
+  prosperity + oasis bazaar #10A (3b6daa4d8/3052a2bba/0fda07d2b) · modernarmy_share (f0139a38f) ·
+  se_LOG derive-site follow-up (18ad79f46).
+- **RETRACTED (don't-force — no valid concrete referent / would break more than it cleans):** sect_pressure ·
+  gp_tension ×3 · suzerain/tributary prestige · reform_pressure (a legitimate derived roll-up of the
+  now-concrete inputs) · treaty_burden (path-dependent grievance, count-derive backwards).
+
 ## Classification test
 - **DERIVED** (leave — imitate): value computed live from concrete state (characters/buildings/provinces/pops).
 - **ABSTRACT-OK** (leave): no single on-map referent — a genuinely systemic gauge.
