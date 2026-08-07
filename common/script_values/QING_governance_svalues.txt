@@ -226,3 +226,65 @@ QING_caravan_oasis_trade_svalue = {
 		}
 	}
 }
+
+# ======================================================================
+# [meter-concretize #1 2026-08-06] CONCRETE governance reach — the yamen 衙門 and
+# shuyuan 書院 networks ARE the source of truth (design/DESIGN_BUREAU_CAPACITY_CONCRETIZE.md).
+# The old stored 0..100 drift meters (qing_bureau_capacity / qing_exam_ladder) and their
+# band-track spawn/remove loops are DELETED (se_QING_GOVERNANCE.txt); reach is now DERIVED
+# live from the real buildings the player seeds/builds/loses. These pure svalues are cached
+# once per pulse into qing_bureau_reach_cache / qing_exam_reach_cache (QING_GOV_pulse) so the
+# many hot readers (censorate per-candidate gate, GUI, pass-rate base, band, selfstr backing)
+# stay O(1) — a from-scratch recompute cache is NOT a nudged accumulator, so it honours the
+# concrete-over-abstract rule.  Scope: COUNTRY (CHI).
+# ======================================================================
+
+# Denominator: coverable county seats = owned CITY provinces (mirrors the 1763 seed's own
+# has_city_status gate, se_QING_BUILDINGS.txt:182). has_city_status in an svalue limit is
+# proven (EDU_svalues.txt). Scope: Country.
+QING_city_province_count = {
+	value = 0
+	every_owned_province = {
+		limit = { has_city_status = yes }
+		add = 1
+	}
+}
+
+# Bureau reach 0..100 = fraction of coverable county seats that have a 衙門. COUNTS COVERED
+# PROVINCES, not building levels (max_amount=1 on the yamen makes num ∈ {0,1}/province, so
+# `add = 1` under a has_building limit = a true coverage fraction — cf. FUNC_num_ports_in_country
+# shape). div/0 floored at 1 (proven ADMIN_svalues idiom). Scope: Country.
+QING_bureau_reach = {
+	value = 0
+	every_owned_province = {
+		limit = { has_building = qing_yamen_building }
+		add = 1
+	}
+	multiply = 100
+	divide = { value = QING_city_province_count  min = 1 }
+	min = 0
+	max = 100
+}
+
+# Exam reach 0..100 = COVERED-PROVINCE academy count × K, clamped. Counts provinces that hold
+# ANY academy — generic 書院 OR either named great academy (嶽麓 / 白鹿洞) — NOT levels
+# (max_amount=1 on the generic shuyuan; the named pair are single unique buildings). K=3: the
+# 1763 reseed lands 19 covered provinces (17 generic + Yuelu + White Deer Grotto) → reach ~57
+# (mid-band, matching the old 60-seed intent); ≥70 vigorous needs ~24 academies, ≤30 clogged
+# ~10 (§9c calibration). Scope: Country.
+QING_exam_reach = {
+	value = 0
+	every_owned_province = {
+		limit = {
+			OR = {
+				has_building = qing_shuyuan_building
+				has_building = qing_yuelu_academy_building
+				has_building = qing_bailudong_academy_building
+			}
+		}
+		add = 1
+	}
+	multiply = 3
+	min = 0
+	max = 100
+}

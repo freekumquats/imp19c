@@ -8,18 +8,21 @@
 # pulse (QING_GOV_pulse) that swaps the modifier band matching each counter.
 # It reuses QING_DECLINE_nudge (generic over var name) for all clamped nudges.
 #
-# The hierarchy itself (tens of thousands of clerks) is NOT modelled per-clerk;
-# it is compressed into two meters:
-#   qing_bureau_capacity   0..100  administrative throughput / reach of edicts
+# The hierarchy itself (tens of thousands of clerks) is NOT modelled per-clerk.
+# [meter-concretize #1 2026-08-06] The two old stored 0..100 drift meters
+# qing_bureau_capacity and qing_exam_ladder are RETIRED — their update/drift effects and
+# band-track spawn loops are deleted. Administrative reach and examination reach are now
+# DERIVED live from the real 衙門 (yamen) and 書院 (academy) networks on the map:
+#   QING_bureau_reach  0..100  = covered county seats ÷ coverable seats  (yamen coverage)
+#   QING_exam_reach    0..100  = academy-covered provinces × 3           (書院 coverage)
+# (both in QING_governance_svalues.txt; cached once per pulse into qing_bureau_reach_cache /
+# qing_exam_reach_cache by QING_GOV_cache_reach so hot readers stay O(1)). The player owns the
+# count — seed at 1763, build from the province menu, lose to war — and reach just reads it.
+# Still stored/nudged here:
 #   qing_bureau_integrity  0..100  merit (科舉) vs patronage (捐納) staffing
-# and the Grand Council's own quality:
 #   qing_council_effectiveness  0..100  derived from seated councillors
-#
-# Capacity is FED BY the Grand Council (a responsive council drives the whole
-# machine) and DRAINED BY corruption and purchased ranks; integrity tracks the
-# balance of exam-selected vs bought office. This is the connective tissue the
-# user asked for: the Council sits atop the hierarchy, and both feed and are fed
-# by the existing decline/reform meters in se_QING_DECLINE.txt.
+# The mission gates that once read qing_bureau_capacity now read the concrete ADMIN_available_
+# country (the real administrative surplus/deficit). See design/DESIGN_BUREAU_CAPACITY_CONCRETIZE.md.
 #
 #   ROOT / this = the Qing overlord (CHI, human)
 #
@@ -31,14 +34,41 @@
 # ======================================================================
 QING_GOV_init = {
 	LOG_enter = { sys = QING  fn = "QING_GOV_init" }
-	if = { limit = { NOT = { has_variable = qing_bureau_capacity } }       set_variable = { name = qing_bureau_capacity  value = 60 } }
 	if = { limit = { NOT = { has_variable = qing_bureau_integrity } }      set_variable = { name = qing_bureau_integrity  value = 60 } }
 	if = { limit = { NOT = { has_variable = qing_council_effectiveness } } set_variable = { name = qing_council_effectiveness  value = 50 } }
-	# the lower examination ladder (prefectural 生員 + provincial 舉人 tiers),
-	# abstracted like the sub-bureaucracy — a single meter for the health of the
-	# merit-selection apparatus that feeds candidates up to the metropolitan exam.
-	if = { limit = { NOT = { has_variable = qing_exam_ladder } }           set_variable = { name = qing_exam_ladder  value = 60 } }
+	# [meter-concretize #1 2026-08-06] qing_bureau_capacity + qing_exam_ladder RETIRED. Both are now
+	# DERIVED live from the real 衙門/書院 networks (QING_bureau_reach / QING_exam_reach svalues,
+	# QING_governance_svalues.txt), cached once per pulse below. Drop the stale saved-game meters and
+	# their target/band-track bookkeeping so nothing lingers (design §5/§9d). The derived svalues read
+	# live buildings already in the save — no migration needed.
+	remove_variable = qing_bureau_capacity
+	remove_variable = qing_bureau_capacity_target
+	remove_variable = qing_gov_corruption_drag
+	remove_variable = qing_yamen_band_cur
+	remove_variable = qing_yamen_band_prev
+	remove_variable = qing_exam_ladder
+	remove_variable = qing_exam_ladder_target
+	remove_variable = qing_exam_corruption_drag
+	remove_variable = qing_shuyuan_band_cur
+	remove_variable = qing_shuyuan_band_prev
+	# [meter-concretize #1] guarantee the derived-reach caches exist from the first frame, so any
+	# event-fired reader (e.g. QING_censorate_find_corrupt) that runs BEFORE the first governance
+	# pulse still reads a real coverage value, not a missing var. Refreshed every pulse by
+	# QING_GOV_cache_reach.
+	if = { limit = { NOT = { has_variable = qing_bureau_reach_cache } } set_variable = { name = qing_bureau_reach_cache  value = QING_bureau_reach } }
+	if = { limit = { NOT = { has_variable = qing_exam_reach_cache } }   set_variable = { name = qing_exam_reach_cache    value = QING_exam_reach } }
 	LOG_exit = { sys = QING  fn = "QING_GOV_init"  result = OK }
+}
+
+# ======================================================================
+# [meter-concretize #1 2026-08-06] CACHE the two DERIVED reach meters once per pulse from the
+# concrete building networks. A from-scratch recompute (never nudged) — NOT an accumulator; it
+# just spares the many hot readers (censorate per-candidate gate, GUI, pass-rate base, bands,
+# selfstr backing) an every_owned_province sweep each read. Scope: CHI.
+# ======================================================================
+QING_GOV_cache_reach = {
+	set_variable = { name = qing_bureau_reach_cache  value = QING_bureau_reach }
+	set_variable = { name = qing_exam_reach_cache    value = QING_exam_reach }
 }
 
 # ======================================================================
@@ -71,37 +101,18 @@ QING_GOV_update_integrity = {
 	LOG_exit = { sys = QING  fn = "QING_GOV_update_integrity"  result = OK }
 }
 
-# Capacity drifts toward a blend of council effectiveness + integrity, minus a
-# corruption drag. This is where the Grand Council "drives the machine": a
-# capable council raises the ceiling of the whole abstracted hierarchy.
-QING_GOV_update_capacity = {
-	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
-	LOG_enter = { sys = QING  fn = "QING_GOV_update_capacity" }
-	set_variable = { name = qing_bureau_capacity_target  value = 0 }
-	change_variable = { name = qing_bureau_capacity_target  add = var:qing_council_effectiveness }
-	change_variable = { name = qing_bureau_capacity_target  add = var:qing_bureau_integrity }
-	# average the two positive drivers
-	change_variable = { name = qing_bureau_capacity_target  divide = 2 }
-	# corruption drags the achievable capacity down (half its value)
-	set_variable = { name = qing_gov_corruption_drag  value = var:qing_corruption_level }
-	change_variable = { name = qing_gov_corruption_drag  divide = 2 }
-	change_variable = { name = qing_bureau_capacity_target  subtract = var:qing_gov_corruption_drag }
-	if = { limit = { var:qing_bureau_capacity_target < 0 }   set_variable = { name = qing_bureau_capacity_target  value = 0 } }
-	if = { limit = { var:qing_bureau_capacity_target > 100 } set_variable = { name = qing_bureau_capacity_target  value = 100 } }
-	# smooth drift toward the target (+/-2 per pulse)
-	if = {
-		limit = { var:qing_bureau_capacity < qing_bureau_capacity_target_cmpsvalue }
-		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = 2 }
-	}
-	else_if = {
-		limit = { var:qing_bureau_capacity > qing_bureau_capacity_target_cmpsvalue }
-		QING_DECLINE_nudge = { var = qing_bureau_capacity  amount = -2 }
-	}
-	LOG_exit = { sys = QING  fn = "QING_GOV_update_capacity"  result = OK }
-}
+# [meter-concretize #1 2026-08-06] QING_GOV_update_capacity DELETED — capacity is no longer a
+# stored drift meter. Administrative reach is DERIVED live from the 衙門 network (QING_bureau_reach),
+# cached in QING_GOV_cache_reach. Nothing computes a target or drifts a counter any more; the player
+# owns the yamen count (1763 seed + construction + war loss). See design §1/§2.
 
 # ======================================================================
-# BAND APPLICATION — one active modifier per family, matching the counter.
+# BAND APPLICATION — one active modifier per family, matching the DERIVED reach.
+# [meter-concretize #1] Bands now key off qing_bureau_reach_cache (the yamen coverage fraction,
+# 0..100). The decline SEMANTICS shift is intended (design §4.5): the 1763 seed covers all city
+# provinces so reach starts ~100; the empire reaches "paralysed" by out-expanding its administration
+# (annexing uncovered land / losing covered seats), not by governance rotting under corruption — the
+# corruption-driven rot path now lives on the corruption band (DESIGN_CORRUPTION_CONCRETIZE).
 # ======================================================================
 QING_GOV_apply_capacity_band = {
 	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
@@ -110,19 +121,19 @@ QING_GOV_apply_capacity_band = {
 	remove_country_modifier = qing_bureau_strained
 	remove_country_modifier = qing_bureau_paralysed
 	if = {
-		limit = { var:qing_bureau_capacity >= 70 }
+		limit = { var:qing_bureau_reach_cache >= 70 }
 		add_country_modifier = { name = qing_bureau_capable  duration = -1 }
-		LOG_line = { sys = QING  msg = "band capacity = capable for (capacity=)" }
+		LOG_line = { sys = QING  msg = "band capacity = capable for (reach=)" }
 	}
 	else_if = {
-		limit = { var:qing_bureau_capacity < 30 }
+		limit = { var:qing_bureau_reach_cache < 30 }
 		add_country_modifier = { name = qing_bureau_paralysed  duration = -1 }
-		LOG_line = { sys = QING  msg = "band capacity = paralysed for (capacity=)" }
+		LOG_line = { sys = QING  msg = "band capacity = paralysed for (reach=)" }
 	}
 	else_if = {
-		limit = { var:qing_bureau_capacity < 50 }
+		limit = { var:qing_bureau_reach_cache < 50 }
 		add_country_modifier = { name = qing_bureau_strained  duration = -1 }
-		LOG_line = { sys = QING  msg = "band capacity = strained for (capacity=)" }
+		LOG_line = { sys = QING  msg = "band capacity = strained for (reach=)" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_GOV_apply_capacity_band"  result = OK }
 }
@@ -154,168 +165,39 @@ QING_GOV_apply_integrity_band = {
 # apparatus grades fairly) and council effectiveness (a capable court funds and
 # oversees the halls), dragged down by corruption (bought degrees at the base).
 # ======================================================================
-QING_GOV_update_exam_ladder = {
-	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
-	LOG_enter = { sys = QING  fn = "QING_GOV_update_exam_ladder" }
-	set_variable = { name = qing_exam_ladder_target  value = 0 }
-	change_variable = { name = qing_exam_ladder_target  add = var:qing_bureau_integrity }
-	change_variable = { name = qing_exam_ladder_target  add = var:qing_council_effectiveness }
-	change_variable = { name = qing_exam_ladder_target  divide = 2 }
-	# corruption at the base (examiner bribery, bought shengyuan places) drags it
-	set_variable = { name = qing_exam_corruption_drag  value = var:qing_corruption_level }
-	change_variable = { name = qing_exam_corruption_drag  divide = 2 }
-	change_variable = { name = qing_exam_ladder_target  subtract = var:qing_exam_corruption_drag }
-	# a fresh, well-run metropolitan cycle lifts the whole ladder for its duration
-	if = {
-		limit = { has_country_modifier = qing_keju_fresh_intake }
-		change_variable = { name = qing_exam_ladder_target  add = 10 }
-	}
-	if = {
-		limit = { has_country_modifier = qing_keju_scandal }
-		change_variable = { name = qing_exam_ladder_target  subtract = 15 }
-	}
-	if = { limit = { var:qing_exam_ladder_target < 0 }   set_variable = { name = qing_exam_ladder_target  value = 0 } }
-	if = { limit = { var:qing_exam_ladder_target > 100 } set_variable = { name = qing_exam_ladder_target  value = 100 } }
-	# smooth drift toward the target (+/-2 per pulse)
-	if = {
-		limit = { var:qing_exam_ladder < qing_exam_ladder_target_cmpsvalue }
-		QING_DECLINE_nudge = { var = qing_exam_ladder  amount = 2 }
-	}
-	else_if = {
-		limit = { var:qing_exam_ladder > qing_exam_ladder_target_cmpsvalue }
-		QING_DECLINE_nudge = { var = qing_exam_ladder  amount = -2 }
-	}
-	LOG_exit = { sys = QING  fn = "QING_GOV_update_exam_ladder"  result = OK }
-}
+# [meter-concretize #1 2026-08-06] QING_GOV_update_exam_ladder DELETED — the exam ladder is no
+# longer a stored drift meter. Exam reach is DERIVED live from the 書院/academy network
+# (QING_exam_reach = covered-province academy count × 3), cached in QING_GOV_cache_reach. The old
+# fresh-intake/scandal ±nudges into the target are gone; a keju scandal now bites through a temporary
+# band modifier, not a drift on a dead var (design §9/§9b).
 
 QING_GOV_apply_exam_ladder_band = {
 	# [#98-fix task #98] se_LOG enter/exit wiring (deep-audit)
+	# [meter-concretize #1] bands now key off qing_exam_reach_cache (academy coverage, 0..100). Semantics
+	# shift (design §9b): "clogged" now means "few academies on the map," not "the ladder rotted under
+	# corruption" — the corruption→ladder linkage is relocated to the corruption system.
 	LOG_enter = { sys = QING  fn = "QING_GOV_apply_exam_ladder_band" }
 	remove_country_modifier = qing_exam_ladder_vigorous
 	remove_country_modifier = qing_exam_ladder_clogged
 	if = {
-		limit = { var:qing_exam_ladder >= 70 }
+		limit = { var:qing_exam_reach_cache >= 70 }
 		add_country_modifier = { name = qing_exam_ladder_vigorous  duration = -1 }
-		LOG_line = { sys = QING  msg = "band exam_ladder = vigorous for (ladder=)" }
+		LOG_line = { sys = QING  msg = "band exam_ladder = vigorous for (reach=)" }
 	}
 	else_if = {
-		limit = { var:qing_exam_ladder <= 30 }
+		limit = { var:qing_exam_reach_cache <= 30 }
 		add_country_modifier = { name = qing_exam_ladder_clogged  duration = -1 }
-		LOG_line = { sys = QING  msg = "band exam_ladder = clogged for (ladder=)" }
+		LOG_line = { sys = QING  msg = "band exam_ladder = clogged for (reach=)" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_GOV_apply_exam_ladder_band"  result = OK }
 }
 
 # ======================================================================
-# [#91 item I] CONCRETE 衙門 (YAMEN) — bureaucracy-CAPACITY made real.
-# The 0..100 qing_bureau_capacity counter is KEPT as the AI/summary layer; here
-# we hang a REAL building off it. We track the counter's band (0=<30, 1=30..49,
-# 2=50..69, 3=>=70) in qing_yamen_band_prev and, whenever the band CROSSES, add a
-# level of qing_yamen_building to the empire's most-populous province on a RISE,
-# or remove one on a FALL. Additive: the counter/modifier bands are untouched.
-# Uses the proven QING_selfstr_build idiom (ordered_owned_province / max=1) and
-# remove_building_level (guarded by has_building). O(1)-ish; one province op only
-# on the rare pulse where a band boundary is crossed.
-# ======================================================================
-QING_GOV_yamen_band_track = {
-	LOG_enter = { sys = QING  fn = "QING_GOV_yamen_band_track" }
-	# current band of the capacity counter
-	set_variable = { name = qing_yamen_band_cur  value = 0 }
-	if = { limit = { var:qing_bureau_capacity >= 30 } set_variable = { name = qing_yamen_band_cur  value = 1 } }
-	if = { limit = { var:qing_bureau_capacity >= 50 } set_variable = { name = qing_yamen_band_cur  value = 2 } }
-	if = { limit = { var:qing_bureau_capacity >= 70 } set_variable = { name = qing_yamen_band_cur  value = 3 } }
-	if = {
-		# first sighting: seed the tracker to the current band WITHOUT building, so
-		# a fresh/loaded game does not spawn a burst of yamens.
-		limit = { NOT = { has_variable = qing_yamen_band_prev } }
-		set_variable = { name = qing_yamen_band_prev  value = var:qing_yamen_band_cur }
-		LOG_line = { sys = QING  msg = "yamen band seeded at for" }
-	}
-	else_if = {
-		limit = { var:qing_yamen_band_cur > qing_yamen_band_prev_cmpsvalue }
-		# RISE — build a real 衙門 in the most-populous owned province.
-		if = {
-			limit = { any_owned_province = { count >= 1 } }
-			ordered_owned_province = {
-				order_by = total_population
-				max = 1
-				add_building_level = qing_yamen_building
-			}
-			LOG_line = { sys = QING  msg = "yamen band ROSE to -> built qing_yamen_building for" }
-		}
-		else = { LOG_fail = { sys = QING  fn = "QING_GOV_yamen_band_track"  reason = "no owned province to build yamen" } }
-		set_variable = { name = qing_yamen_band_prev  value = var:qing_yamen_band_cur }
-	}
-	else_if = {
-		limit = { var:qing_yamen_band_cur < qing_yamen_band_prev_cmpsvalue }
-		# FALL — tear down a real 衙門 (guarded: only where one stands).
-		if = {
-			limit = { any_owned_province = { has_building = qing_yamen_building } }
-			ordered_owned_province = {
-				limit = { has_building = qing_yamen_building }
-				order_by = total_population
-				max = 1
-				remove_building_level = qing_yamen_building
-			}
-			LOG_line = { sys = QING  msg = "yamen band FELL to -> removed qing_yamen_building for" }
-		}
-		else = { LOG_fail = { sys = QING  fn = "QING_GOV_yamen_band_track"  reason = "no standing yamen to remove" } }
-		set_variable = { name = qing_yamen_band_prev  value = var:qing_yamen_band_cur }
-	}
-	LOG_exit = { sys = QING  fn = "QING_GOV_yamen_band_track"  result = OK }
-}
-
-# ======================================================================
-# [#91 item J] CONCRETE 書院 (SHUYUAN / ACADEMY) — the exam-LADDER made real.
-# The 0..100 qing_exam_ladder counter is KEPT as the summary layer; here we hang
-# a REAL academy off it. We track the ladder's band (0=<=30 clogged, 1=31..69,
-# 2=>=70 vigorous) in qing_shuyuan_band_prev and, on a band CROSS, add a level of
-# qing_shuyuan_building to the most-populous province on a RISE (able men rise,
-# academies flourish) or remove one on a FALL (halls silt up and close). Additive:
-# the counter/modifier bands are untouched. Same proven idiom as the yamen tracker.
-# ======================================================================
-QING_GOV_shuyuan_band_track = {
-	LOG_enter = { sys = QING  fn = "QING_GOV_shuyuan_band_track" }
-	set_variable = { name = qing_shuyuan_band_cur  value = 0 }
-	if = { limit = { var:qing_exam_ladder > 30 } set_variable = { name = qing_shuyuan_band_cur  value = 1 } }
-	if = { limit = { var:qing_exam_ladder >= 70 } set_variable = { name = qing_shuyuan_band_cur  value = 2 } }
-	if = {
-		limit = { NOT = { has_variable = qing_shuyuan_band_prev } }
-		set_variable = { name = qing_shuyuan_band_prev  value = var:qing_shuyuan_band_cur }
-		LOG_line = { sys = QING  msg = "shuyuan band seeded at for" }
-	}
-	else_if = {
-		limit = { var:qing_shuyuan_band_cur > qing_shuyuan_band_prev_cmpsvalue }
-		if = {
-			limit = { any_owned_province = { count >= 1 } }
-			ordered_owned_province = {
-				order_by = total_population
-				max = 1
-				add_building_level = qing_shuyuan_building
-			}
-			LOG_line = { sys = QING  msg = "shuyuan band ROSE to -> built qing_shuyuan_building for" }
-		}
-		else = { LOG_fail = { sys = QING  fn = "QING_GOV_shuyuan_band_track"  reason = "no owned province to build shuyuan" } }
-		set_variable = { name = qing_shuyuan_band_prev  value = var:qing_shuyuan_band_cur }
-	}
-	else_if = {
-		limit = { var:qing_shuyuan_band_cur < qing_shuyuan_band_prev_cmpsvalue }
-		if = {
-			limit = { any_owned_province = { has_building = qing_shuyuan_building } }
-			ordered_owned_province = {
-				limit = { has_building = qing_shuyuan_building }
-				order_by = total_population
-				max = 1
-				remove_building_level = qing_shuyuan_building
-			}
-			LOG_line = { sys = QING  msg = "shuyuan band FELL to -> removed qing_shuyuan_building for" }
-		}
-		else = { LOG_fail = { sys = QING  fn = "QING_GOV_shuyuan_band_track"  reason = "no standing shuyuan to remove" } }
-		set_variable = { name = qing_shuyuan_band_prev  value = var:qing_shuyuan_band_cur }
-	}
-	LOG_exit = { sys = QING  fn = "QING_GOV_shuyuan_band_track"  result = OK }
-}
-
+# [meter-concretize #1 2026-08-06] QING_GOV_yamen_band_track + QING_GOV_shuyuan_band_track DELETED.
+# These were the #91 hybrid anti-pattern: a stored meter SPAWNING/removing a building on a band cross
+# (causation backwards). The buildings are now the INPUT, not an output — the player seeds (1763),
+# builds (province menu), and loses (war) yamens and academies, and QING_bureau_reach / QING_exam_reach
+# read the resulting network live. No script spawn/demolish loop remains. See design §1/§2/§9.
 # ======================================================================
 # THE GOVERNANCE PULSE ENTRY POINT
 # Called from the throttled monthly pulse (00_monthly_country.txt) right after
@@ -357,11 +239,12 @@ QING_GOV_pulse = {
 	#     (the list is fresh whenever a picker actually opens). Saves one full ordered_character sort/quarter.
 	#     QING_council_refresh_candidates = yes   # <-- removed
 
-	# 2. recompute the abstracted hierarchy meters (integrity & capacity first, as
-	#    the exam-ladder meter is derived from them)
+	# 2. recompute the abstracted integrity meter, then CACHE the two DERIVED reach meters
+	#    (bureau/exam) from the live 衙門/書院 networks. [meter-concretize #1] capacity and
+	#    exam-ladder are no longer stored drift meters — QING_GOV_cache_reach recomputes
+	#    qing_bureau_reach_cache / qing_exam_reach_cache from scratch off the buildings.
 	QING_GOV_update_integrity = yes
-	QING_GOV_update_capacity = yes
-	QING_GOV_update_exam_ladder = yes
+	QING_GOV_cache_reach = yes
 
 	# 3. re-apply every band
 	QING_council_apply_band = yes
@@ -388,11 +271,9 @@ QING_GOV_pulse = {
 	QING_GOV_apply_integrity_band = yes
 	QING_GOV_apply_exam_ladder_band = yes
 
-	# 3b. [#91 items I & J] Hang REAL buildings off the capacity + exam-ladder
-	#     counters: build/remove a 衙門 (yamen) or 書院 (academy) on a band cross.
-	#     Counters kept as the summary layer; these add the concrete on-map object.
-	QING_GOV_yamen_band_track = yes
-	QING_GOV_shuyuan_band_track = yes
+	# 3b. [meter-concretize #1 2026-08-06] The old band-track spawn/remove loops
+	#     (QING_GOV_yamen_band_track / QING_GOV_shuyuan_band_track) are DELETED — the yamen/書院
+	#     networks are now the INPUT that QING_GOV_cache_reach reads, not an output of a meter.
 
 	# 4. Self-Strengthening progress band (reads qing_selfstr_progress, advanced
 	#    by the Self-Strengthening mission tree). Cheap O(1) band swap.

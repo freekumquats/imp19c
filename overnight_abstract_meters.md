@@ -758,3 +758,49 @@ retired w/ no stray reader, opening neutral. 3 cosmetic LOW (pre-existing BOM, u
 citation). #10A DONE → the Xinjiang cluster (#10A caravan + #10B control) is COMPLETE.
 PROCESS NOTE: built under the corrected discipline — verified every assumption in-code (potential, iterator,
 multiply, region coverage, live branches) BEFORE writing, no phantom blockers escalated.
+
+---
+## 2026-08-06 — #1 bureau/exam deep-read: two findings that change the design
+
+Full census done (se_QING_GOVERNANCE end-to-end + all consumers). Two material surprises vs the design doc:
+
+1. qing_exam_ladder is the BASE of qing_exam_pass_rate (se_QING_EXAM.txt:78-79), which drives the ENTIRE
+   exam-hire candidate pool (per-candidate pass/fail :477/:490/:527...) + 2 GUIs (qing_hanlin.gui:205,
+   qing_rites_ministry.gui:185). "Retire exam_ladder" is far more invasive than a gate meter — pass_rate must
+   be re-based on the exam-reach derive or the whole hire pipeline shifts. AND QING_bureau_reach/QING_exam_reach
+   DO NOT EXIST (comment-prose only) — must be built.
+2. LANDMINE: the generic qing_shuyuan_building has NO 1763 seed — it's placed ONLY by the shuyuan band-track
+   (being deleted). So a shuyuan-count exam metric counts ~0 (just the 2 named academies). The design's
+   "reseed ~18 provincial capitals" is LOAD-BEARING, not optional.
+Other confirmed: 9 gates verified (SS ×7 @40/50/60/55/45/60/55, reform ×2 @40/55) + the SelfStr:55 dampener +
+the :694 refraction-backing FIRST-term (3-way avg). ADMIN_available_country is a RAW signed admin-point figure
+(not 0..100) — gates need recalibrated thresholds (admin=flat → anchor ~0). QING_DECLINE_nudge auto-creates
+deleted vars → ALL ~15 writers must be repointed/dropped or the meter resurrects as phantom-0. Band modifiers
+(duration=-1) persist if apply_*_band stops being called — must clear or keep applying. keju.4 doubling reads
+the qing_exam_ladder_clogged MODIFIER not the var.
+
+DECISION POINT: #1 is much larger + higher-blast-radius than the other meters (esp. the exam/pass_rate/hire
+coupling). Folding findings into the design doc; the design needs a re-review before building (deep-read
+changed 2 assumptions the earlier review didn't have). Consider splitting: bureau_capacity half (yamen +
+ADMIN gates, self-contained) vs exam_ladder half (pass_rate re-base + shuyuan reseed, larger).
+
+---
+## 2026-08-06 — #1 bureau/exam BUILT (yamen/shuyuan networks are now the source of truth)
+
+Built end-to-end per DESIGN_BUREAU_CAPACITY_CONCRETIZE.md. Both stored drift meters retired; reach DERIVED live from the real building networks. 18 files, +288/−261.
+
+**Svalues (QING_governance_svalues.txt):** `QING_city_province_count`, `QING_bureau_reach` (covered yamen provinces ÷ city provinces × 100), `QING_exam_reach` (academy-covered provinces × 3, counts generic 書院 + Yuelu + White Deer Grotto). Cached once/pulse into `qing_bureau_reach_cache` / `qing_exam_reach_cache` (`QING_GOV_cache_reach`) so hot readers stay O(1); also seeded in `QING_GOV_init` so event-fired readers before the first pulse see a real value.
+
+**se_QING_GOVERNANCE.txt:** deleted the two seeds, `QING_GOV_update_capacity`, `QING_GOV_update_exam_ladder`, `QING_GOV_yamen_band_track`, `QING_GOV_shuyuan_band_track`; `QING_GOV_init` now `remove_variable`s all 10 dead vars; bands re-keyed on the caches; pulse calls `QING_GOV_cache_reach` in place of the two updates and drops the two band-tracks.
+
+**Gates (9):** repointed to `ADMIN_available_country` via admin=(old−50)×2 → SS: −20/0/20/10/−10/20/10; reform: −20/10. Runtime SelfStr:55 dampener → `ADMIN_available_country >= 0`. Gate tooltips reworded to "administrative capacity."
+
+**pass_rate** re-based on `QING_exam_reach` (kept all downstream corruption/purchased-rank/civic/curriculum terms). **Censorate** ×2 gates → cached `qing_exam_reach_cache < 40`. **SelfStr refraction backing** :694 first term → `qing_bureau_reach_cache` (kept the 3-way avg). **keju.4 doubling** reads the KEPT `qing_exam_ladder_clogged` modifier (band preserved, semantics reframed §9b).
+
+**Writers dropped (all ~15):** selfstr telegraph +6, students +4, mechanics +2, reform.35 +8, 7 capstone −5..−15 (integration adds uncovered provinces → reach auto-drops, strain captured concretely), 4 keju ±. HARD GATE PASSED: `rg 'QING_DECLINE_nudge.*qing_(bureau_capacity|exam_ladder)'` = clean.
+
+**Shuyuan reseed (LOAD-BEARING):** 17 generic 書院 at provincial capitals (Beijing/Jiangning/Hangzhou/Jinan/Taiyuan/Kaifeng/Nanchang/Fuzhou/Wuchang/Chengdu/Guilin/Kunming/Guiyang/Xi'an/Guangzhou/Suzhou/Ningxia) + 2 named = ~19 covered → QING_exam_reach starts ~51 (mid-band). Yamen already blankets all city provinces (unchanged seed) → bureau_reach starts ~100 (§4.5 decline-semantics reframe: paralysed via over-expansion, not rot).
+
+**Orphans deleted:** 4 cmpsvalue passthroughs (bureau_capacity_target / exam_ladder_target / shuyuan_band_prev / yamen_band_prev).
+
+Brace-balance 0 on all edited files (00_event_values pre-existing +1, my 4 edits balanced). Dispatching adversarial build review before commit.
