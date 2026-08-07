@@ -236,16 +236,11 @@ qing_integ.10 = {
 qing_integ.11 = {
 	type = country_event
 	title = "qing_integ.11.t"
-	# [#task-20 2026-08-04] base text + shared actor-status addendum (amban/garrison present).
-	desc = {
-		desc = "qing_integ.11.desc"
-		first_valid = {
-			triggered_desc = { trigger = { has_variable = integ_amban_present  has_variable = integ_garrison_size  var:integ_garrison_size >= 1 }  desc = "qing_integ.actors_both" }
-			triggered_desc = { trigger = { has_variable = integ_amban_present }  desc = "qing_integ.actors_amban" }
-			triggered_desc = { trigger = { has_variable = integ_garrison_size  var:integ_garrison_size >= 1 }  desc = "qing_integ.actors_garrison" }
-			triggered_desc = { trigger = { always = yes }  desc = "qing_integ.actors_none" }
-		}
-	}
+	# [boot-fix 2026-08-07] plain desc — the shared amban/garrison actor-status addendum ("the amban and
+	# garrison stand ready") was added indiscriminately by #task-20 but is NONSENSICAL on a court-corruption
+	# scandal (the amban/garrison have nothing to do with a courtier skimming silver). The addendum belongs
+	# only on the resistance/decree events (.10/.12/.40/.41) where the on-the-ground actors are the point.
+	desc = "qing_integ.11.desc"
 	picture = dagger_behind_back
 
 	left_portrait = root.current_ruler
@@ -262,47 +257,67 @@ qing_integ.11 = {
 
 	immediate = {
 		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.11 (scandal) overlord=[ROOT.GetTag] subject=[scope:target.GetTag]" }
-		SUBJ_QING_resolve_integ_actors = yes  # [#task-20] resolve amban/garrison for the desc addendum
-		# Find a disloyal official at court to pin the scandal on; fall back
-		# to any adult courtier if none are outright disloyal.
+		# [boot-fix 2026-08-07] the scandal must be pinned on someone who PLAUSIBLY handled the diverted
+		# silver — a fiscal/administrative official (steward = the treasury office, magistrate, a provincial
+		# governor) or at least an office-holder — NOT a random courtier (a physician or tutor could not have
+		# skimmed canal/garrison funds). Tiered: (1) a disloyal fiscal/admin official; (2) any disloyal
+		# office-holder/governor; (3) any office-holder/governor (loyal but implicated); (4) any adult
+		# courtier (last resort so the scope is always set); (5) ruler stands in. Scope always ends set —
+		# the desc + right_portrait reference scope:corrupt_official.
 		if = {
 			limit = {
 				any_character = {
-					employer = ROOT
-					is_ruler = no
-					is_adult = yes
-					prisoner = no
-					loyalty < 50
+					employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  loyalty < 50
+					OR = { is_governor = yes  has_office = office_steward  has_office = office_magistrate }
 				}
 			}
 			random_character = {
 				limit = {
-					employer = ROOT
-					is_ruler = no
-					is_adult = yes
-					prisoner = no
-					loyalty < 50
+					employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  loyalty < 50
+					OR = { is_governor = yes  has_office = office_steward  has_office = office_magistrate }
 				}
 				weight = {
+					modifier = { factor = 3  has_office = office_steward }   # the treasury office — likeliest skimmer
+					modifier = { factor = 2  is_governor = yes }
 					modifier = { factor = 2  prominence >= 50 }
-					modifier = { factor = 2  has_any_office = yes }
 				}
 				save_scope_as = corrupt_official
 			}
 		}
 		else_if = {
+			# no disloyal fiscal/admin official — widen to any disloyal office-holder or governor.
 			limit = {
-				any_character = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no }
+				any_character = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  loyalty < 50  OR = { has_any_office = yes  is_governor = yes } }
 			}
+			random_character = {
+				limit = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  loyalty < 50  OR = { has_any_office = yes  is_governor = yes } }
+				weight = { modifier = { factor = 2  prominence >= 50 } }
+				save_scope_as = corrupt_official
+			}
+		}
+		else_if = {
+			# none disloyal — pin it on ANY office-holder/governor (implicated by their post, not their loyalty).
+			limit = {
+				any_character = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  OR = { has_any_office = yes  is_governor = yes } }
+			}
+			random_character = {
+				limit = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  OR = { has_any_office = yes  is_governor = yes } }
+				weight = { modifier = { factor = 3  has_office = office_steward }  modifier = { factor = 2  is_governor = yes } }
+				save_scope_as = corrupt_official
+			}
+		}
+		else_if = {
+			# no office-holders at all — any adult courtier, so the scope is still set.
+			limit = { any_character = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no } }
 			random_character = {
 				limit = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no }
 				save_scope_as = corrupt_official
 			}
 		}
 		else = {
-			# Last-resort fallback so scope:corrupt_official is ALWAYS set — the
-			# desc text and right_portrait reference it, and an unset scope would
-			# render a broken portrait and an unresolved name. The ruler stands in.
+			# Last-resort fallback so scope:corrupt_official is ALWAYS set — the desc text and
+			# right_portrait reference it, and an unset scope would render a broken portrait and an
+			# unresolved name. The ruler stands in.
 			current_ruler = { save_scope_as = corrupt_official }
 			LOG_line = { sys = SUBJ  msg = "qing_integ.11 no courtier available; ruler stands in as corrupt_official" }
 		}
