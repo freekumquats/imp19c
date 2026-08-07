@@ -1,92 +1,98 @@
-# DESIGN — Seed Qing garrisons in Altishahr/Tarim for 1763 (#21)
+# DESIGN — Fix the dropped Altishahr/Tarim garrison for 1763 (#21) — v2 (post-review rewrite)
 
-**Branch:** merge-overnight. **Status:** DESIGN (needs adversarial review before build). **Scope:** setup seed.
+**Branch:** merge-overnight. **Status:** DESIGN v2 (v1 was BROKEN — solved the wrong problem). **Scope:** setup.
 **Research:** research/RESEARCH_QING_XINJIANG_GARRISONS_1763.md.
 
-## 0. Problem
-Boot test: the Outliner shows an Ili Banner Garrison (4,500) + interior banner garrisons, but **Altishahr/Tarim
-has NO garrison** — historically wrong. The Ili General (est. 1762) garrisoned the Tarim oases (Kashgar,
-Yarkand, Aksu, Ush, Khotan, …) with rotating Green Standard under Resident Ministers over beg 伯克 rule.
+## 0. What v1 got WRONG (why this is a rewrite)
+v1 assumed the Outliner garrison is a `qing_banner_garrison_building` seed. **FALSE.** The adversarial review
+proved:
+- The garrison the player sees is a **`create_unit`** raised by `SE_qing_raise_garrison_cmd`
+  (common/scripted_effects/imp19c_effects_legion_setup.txt:139). `qing_banner_garrison_building` is a
+  PURE-MODIFIER building (local_defensive/loyalty) that spawns NO unit — seeding it puts nothing in the Outliner.
+- **A Kashgar garrison army ALREADY EXISTS in the 1763 OOB** — `imp19c_effects_legion_setup.txt:267`
+  (`prov = p:2700  QING_UNIT_KASHGAR_BANNER_GARRISON  size = 3  cmd = char:584` Hailancha 海蘭察), plus a
+  fallback at :324. It is **silently DROPPED**, which is the actual bug.
 
-## 1. How garrisons are currently seeded (verified)
-`imp19c_setup.12` (events/imp19c_mod_events/imp19c_setup_events.txt:290, the #234 seed) places the BUILDING
-`qing_banner_garrison_building` (and `qing_military_colony_building` tuntian) on named subject-capital province
-IDs, each guarded: `exists = p:N`, `p:N = { owner = { is_subject_of = ROOT } NOT = { has_building = ... } }`.
-ILI's garrison is on p:3534. It is a BUILDING seed, not create_unit. (The "4,500 army" the player sees is the
-garrison the building represents / spawns.)
+## 1. ROOT CAUSE (verified)
+Both garrison helpers guard ownership NON-recursively:
+- `SE_qing_raise_garrison` (:83): `limit = { exists = $prov$  $prov$ = { OR = { owner = c:CHI  owner = { is_subject_of = c:CHI } } } }`
+- `SE_qing_raise_garrison_cmd` (:144): same OR + `exists = $cmd$`.
 
-## 2. TWO BLOCKERS that make this NOT a copy-paste of the ILI seed
+**Kashgar p:2700 is owned by XNG** (in XNG's own_control_core), and **XNG is `client_state of ILI`**, ILI is
+CHI's subject → nested CHI→ILI→XNG. `is_subject_of = c:CHI` is NON-RECURSIVE, so XNG is NOT a direct CHI
+subject → the OR is false → `else` → `LOG_fail` → **Kashgar garrison not raised.** Ürümqi p:2930 is ILI-owned
+(a DIRECT CHI subject) → passes → shows up. This exactly matches the boot symptom: Ili + Ürümqi + interior
+garrisons visible, Kashgar/Tarim missing.
 
-### BLOCKER A — XNG is a NESTED subject; `is_subject_of = ROOT` fails
-Kashgaria/Altishahr = tag **XNG**, capital **Kashgar p:2700**, owns the Tarim belt (own_control_core: 2700
-2977[Aksu] 2075 3659 5271 174 1732 4527 5280 6880 2062 8872 8129 498 5226 8648 4253 2354 6065 6396 — 20 provs).
-XNG is `client_state of ILI`, and ILI is a subject of CHI → **nested CHI→ILI→XNG**. `is_subject_of` is
-NON-RECURSIVE ([[imp19c-is-subject-of-not-recursive]]), so the seed's `owner = { is_subject_of = ROOT }` guard
-is FALSE for XNG-owned provinces. **FIX: use the nested-overlord guard** `owner = { overlord = { is_subject_of
-= ROOT } }` for XNG provinces (one extra `overlord` level per nesting tier).
+## 2. THE FIX (one branch, both helpers)
+Widen the ownership guard on BOTH `SE_qing_raise_garrison` (:83) and `SE_qing_raise_garrison_cmd` (:144) to
+admit a NESTED CHI subject, using the proven `exists = overlord` wrapper (the idiom already in the sibling
+seed at imp19c_setup_events.txt:417 Khovd, and in qing_military_colony_building's potential):
+```
+$prov$ = { OR = {
+    owner = c:CHI
+    owner = { is_subject_of = c:CHI }
+    owner = { AND = { exists = overlord  overlord = { is_subject_of = c:CHI } } }   # [#21] nested subject (CHI->ILI->XNG): Kashgar/Tarim
+} }
+```
+This RESURRECTS the already-authored Kashgar garrison (both the _cmd version :267 with Hailancha and the
+fallback :324) — no new garrison calls needed for Kashgar. It ALSO fixes any other nested-subject garrison
+seat that was silently dropped (audit the call list for other XNG-owned provinces).
 
-### BLOCKER B — the garrison building's POTENTIAL gate rejects uighur XNG
-`qing_banner_garrison_building` potential = `owner = { country_culture_group = jurchen }`
-(qing_military_buildings.txt:39-41). ILI is **manchu** (jurchen group) → passes. XNG is **uighur** (east_turkic
-group, 00_east_turkic.txt:49) → **FAILS**. And `add_building_level` RESPECTS potential — force-adding to a
-gate-failing province HIDES the building ([[imp19c-add-building-level-respects-potential]]). So even with the
-guard fixed, the building would not take on XNG soil.
-**FIX OPTIONS (pick in review):**
-- (B1) WIDEN the garrison building potential to also admit a Qing-subject owner regardless of culture group
-  (e.g. `OR = { owner={country_culture_group=jurchen}  owner={overlord={is_subject_of=CHI}}  ... }`) — the
-  #234 precedent widened building gates to admit Qing subjects. Cleanest if the building is the right object.
-- (B2) Use a DIFFERENT representation for the Tarim (light, non-banner) garrison — the history is ROTATING
-  GREEN STANDARD, not banner. A Green-Standard/rotating-garrison building (if one exists) or a lighter modifier
-  is more historically apt for Altishahr than the banner-garrison building (which is a 駐防八旗 — a NORTHERN
-  institution). Check what garrison/military buildings exist besides qing_banner_garrison_building.
-- **LEANING B2** (or a mix): Kashgar/Yarkand get a Green-Standard-style garrison (historically correct), NOT the
-  banner building. Confirm the building vocabulary in review.
-
-## 3. Per-province ownership (verify EACH before seeding — owner varies)
-- Tarim oases (Kashgar 2700, Aksu 2977, + the 20 XNG core provs) → owner XNG (nested; guard via overlord).
-- Ürümqi p:2930 → owner **ILI** (in ILI's core, not XNG) → direct `is_subject_of = ROOT` guard works, manchu
-  culture passes the banner gate → Ürümqi can take the banner building directly.
-- So the seed splits: NORTH (Ürümqi, ILI-owned, manchu → banner building, existing guard) vs SOUTH (Tarim,
-  XNG-owned, uighur → the B1/B2 fix + overlord guard). This mirrors the research's N-heavy/S-light asymmetry.
+## 3. Do we need MORE Tarim garrisons than Kashgar?
+The OOB currently authors garrisons at Kashgar (2700) + Ürümqi (2930) for the west. The research says the Tarim
+had garrisons at Yarkand, Aksu, Ush, Khotan too (smaller). DECISION for review:
+- **Minimum (fixes the bug):** just widen the guard → Kashgar garrison appears. This alone resolves the user's
+  report ("none in Altishahr").
+- **Fuller (historical):** ALSO add `SE_qing_raise_garrison` calls for Yarkand/Aksu/Ush/Khotan (small sizes,
+  no commander → the plain helper), guarded by the now-widened helper. Sizes per research: Kashgar 3 (exists),
+  Yarkand ~1-2, Aksu/Ush/Khotan ~1 each. N-heavy/S-light preserved (Ili 8, Ürümqi 4, Kashgar 3, others 1-2).
+- **RECOMMEND:** ship the guard widen (bug fix) + add Yarkand + Aksu (the two next-largest Tarim seats) for
+  historical texture; leave Ush/Khotan optional. Pin their province IDs first (00_Turkestan.txt).
 
 ## 4. Anachronism gate (research caveat)
-Do NOT seed cities that post-date 1763: Tarbagatai (built 1764), Huiyuan finished 1766, the Sibe battalion
-(arrived 1764). Kashgar/Yarkand/Aksu/Ush/Khotan garrisons + Ürümqi ARE 1763-extant (post-1759 conquest). Seed
-only those.
+Kashgar/Yarkand/Aksu/Ush/Khotan garrisons ARE 1763-extant (post-1759 conquest). Do NOT add Tarbagatai (1764),
+and note the Ili garrison's Huiyuan seat finished 1766 / Sibe arrived 1764 — but those are the EXISTING Ili
+seed's concern, not new. Any NEW Tarim call must use a real 1763 commander or the commanderless plain helper
+(the research's commanders — Hailancha at Kashgar — are already wired).
 
-## 5. Proposed seed (subject to B1/B2 decision + review)
-Add to imp19c_setup.12, SOUTH block (XNG, overlord guard + culture-safe building):
-- Kashgar p:2700 — the Tarim command seat (largest southern garrison).
-- Yarkand, Aksu p:2977, Ush, Khotan — smaller oasis garrisons.
-NORTH block (ILI, existing guard + banner building):
-- Ürümqi p:2930 — banner garrison (size between Ili and the Tarim oases).
-Sizes: the buildings are level-based, not troop-count; the N-heavy/S-light asymmetry is expressed by WHICH
-building (banner vs green-standard) + whether a tuntian colony accompanies it (North yes, South no — Han
-settlement was banned in the Tarim). Verify province IDs for Yarkand/Ush/Khotan (not yet pinned — grep
-setup/provinces/00_Turkestan.txt).
+## 5. Buildings? (v1's dead end — keep as SEPARATE, low-value)
+`qing_banner_garrison_building` / `qing_green_standard_post_building` are pure-modifier infrastructure. If ever
+wanted on Tarim soil as flavor, BOTH reject uighur XNG on their culture potential (banner=jurchen;
+green-standard=jurchen|chinese_group) and would need the overlord-culture widening (the tuntian building's
+potential shows the precedent). But this is ORTHOGONAL to the Outliner-garrison bug and has near-zero mechanical
+payoff (the control derive counts MODIFIERS, not buildings — see #19). DEFER; not part of #21.
 
-## 6. Files affected
-- `events/imp19c_mod_events/imp19c_setup_events.txt` — extend imp19c_setup.12 (SOUTH XNG block + Ürümqi).
-- `common/buildings/qing_military_buildings.txt` — IF B1: widen qing_banner_garrison_building potential; OR
-  identify/point at a Green-Standard garrison building for the Tarim (B2).
-- (loc only if a new building is introduced.)
+## 6. Coupling with #19
+#19 (concrete garrison → control) counts province MODIFIERS (qing_xj_tuntian_colony, qing_xinjiang_prov_secured),
+NOT armies or buildings — confirmed by the review. So resurrecting the Kashgar ARMY (this task) does NOT feed
+#19's control derive. If we WANT the garrison to raise control, #19 must add a term that reads the army
+(SE garrison unit_location) OR a garrison MODIFIER stamped alongside. Re-examine #19's G1-vs-G2 in light of this:
+the "garrison" the player sees is an ARMY, so #19's G1 (army count) is the honest link, not G2 (buildings that
+don't exist). → UPDATE #19 accordingly.
 
-## 7. Build checklist
-1. RESOLVE B1 vs B2 in review (widen banner potential vs use a Green-Standard garrison for the Tarim).
-2. Pin the remaining Tarim province IDs (Yarkand/Ush/Khotan) from setup/provinces/00_Turkestan.txt.
-3. Verify each target province's actual 1763 owner (XNG vs ILI vs CHI) → pick the right guard per province.
-4. Add the seed blocks (overlord guard for XNG; direct guard for ILI's Ürümqi), each guarded exists +
-   not-already-present, matching the existing imp19c_setup.12 idiom.
-5. Boot-test: confirm the garrison buildings TAKE (has_building true after day 2) on the Tarim provinces
-   (i.e. the potential fix worked — not silently hidden), and appear in the Outliner.
-6. Confirm no new error.log classes; confirm anachronistic cities NOT seeded.
+## 7. Files affected
+- `common/scripted_effects/imp19c_effects_legion_setup.txt` — widen the guard on SE_qing_raise_garrison (:83)
+  and SE_qing_raise_garrison_cmd (:144); (optional) add Yarkand/Aksu garrison calls (~:324 block).
+- NO changes to imp19c_setup_events.txt or the buildings file (v1's targets — both wrong).
 
-## 8. Risks
-- **R1 (BLOCKER B):** add_building_level respects potential — if the culture gate isn't fixed, the seed
-  SILENTLY no-ops (building hidden). MUST resolve B1/B2 or the whole task fails invisibly. Boot-verify has_building.
-- **R2 (BLOCKER A):** wrong guard → seed skips XNG. Use the overlord guard.
-- **R3 double-count with #19:** #19 (concrete-garrison-link) will make QING_xj_derive_control COUNT garrison
-  objects. If #21 seeds garrison buildings that #19 then counts, the two must be designed together so control
-  isn't double-fed. Sequence #21 (seed the objects) before/with #19 (count them).
-- **R4 historical building choice:** the banner building (駐防八旗) is a NORTHERN institution; using it for the
-  Tarim (which had Green Standard, not banners) is a fidelity compromise. B2 (green-standard) is more correct.
+## 8. Build checklist
+1. Widen the ownership guard (both helpers) with the nested-overlord branch (`exists = overlord` wrapped).
+2. Boot-test: Kashgar Banner Garrison (海蘭察, size 3) now appears in the Outliner on p:2700.
+3. (Optional) add Yarkand/Aksu (+Ush/Khotan) plain-helper calls; pin IDs from 00_Turkestan.txt; boot-verify.
+4. Audit the full garrison call list for OTHER nested-subject provinces silently dropped by the old guard.
+5. grep error/debug.log: confirm the "province not held by Qing; garrison not raised" LOG_fail for Kashgar is
+   GONE and the create_unit succeeded.
+6. Update #19's design (G1 army-count, not G2 buildings) per §6.
+
+## 9. Risks
+- **R1 guard widen too broad:** admitting `overlord = { is_subject_of = c:CHI }` could raise garrisons on OTHER
+  nested subjects' land unintentionally. But garrisons are only raised where a `SE_qing_raise_garrison[_cmd]`
+  CALL exists (a fixed authored list) — the guard only gates whether an AUTHORED call fires, it doesn't spawn
+  anywhere new. So the widen only un-drops already-intended garrisons. Low risk; audit the call list (step 4).
+- **R2 commander eligibility:** the _cmd Kashgar garrison attaches char:584 (Hailancha) — the _cmd helper's
+  extra `exists = $cmd$` + the CHI-employed-commander logic (:162) must still pass for a nested-subject
+  province. Verify Hailancha attaches (or the commanderless fallback :324 fires) after the widen.
+- **R3 double depth:** the guard handles ONE overlord level (CHI→ILI→XNG: XNG.overlord=ILI, ILI is_subject_of
+  CHI ✓). If any garrison seat is TWO levels nested, it'd need another overlord level — but Kashgar is exactly
+  one level. Confirm no deeper nesting among garrison seats.
