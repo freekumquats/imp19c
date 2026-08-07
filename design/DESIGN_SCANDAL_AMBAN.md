@@ -58,6 +58,34 @@ in the desc). LEAN: no addendum needed — the desc already names the culprit; k
 - `localization/english/qing_subject_integration_l_english.yml` — reword .11.desc/.a.tt to name the amban
   (currently references Heshen archetype + [corrupt_official.GetName] — keep the name, adjust framing).
 
+## 5b. [REVIEW-DECISIVE 2026-08-07] Five fixes before build
+1. **GATE ON THE RAW `qing_amban_here` PREDICATE, not integ_amban_present.** CRITICAL: SUBJ_QING_resolve_integ_actors
+   runs only in each event's IMMEDIATE (post-dispatch), so integ_amban_present / scope:integ_amban do NOT exist
+   at dispatch time (SUBJ_QING_roll_reaction) OR at the event's trigger-eval time. Both the dispatch branch gate
+   AND the event self-abort guard MUST use the raw state resolve itself reads:
+   `scope:target = { has_variable = qing_amban_here  var:qing_amban_here = { is_alive = yes  employer = scope:target } }`
+   (se_SUBJECT_QING.txt:801-812). This is expressible in the random_list branch trigger (scope:target is set
+   there, :531-536) and the event trigger.
+2. **FULL LOC REWRITE of .11.t/.desc/.a.tt** — the current text is court-grandee/Heshen ("Seize the grandee's
+   estate", dyke funds drowning prefectures, title "A Scandal at Court"). A frontier resident amban is not a
+   Heshen-scale grandee. Rewrite to the frontier-amban register. NOTE: qing_household.4 ("Grand Secretary as
+   Heshen", qing_household_events.txt:191) ALREADY is the court-grandee-Heshen scandal — so retargeting .11
+   to the amban REDUCES overlap with it (good) and #27 becomes the senior-minister version.
+3. **RESCALE the .11.a windfall.** It grants add_treasury = 150 ("Heshen-scale"). An amban's confiscated estate
+   is not Heshen-scale — drop to a modest figure (e.g. +40-60).
+4. **QING_amban_recall IS MANDATORY on the impeach path, not optional.** .11.a currently does
+   `corrupt_official = { add_corruption 20  add_loyalty = inspired_disloyalty_other_l }`. If corrupt_official is
+   the POSTED amban, that leaves a freshly-disloyaled amban IN PLACE, which QING_amban_evaluate then scores →
+   subject drift / recall crises. So impeach MUST `QING_amban_recall = { subject = scope:target  reason = "impeached-for-graft" }`
+   (se_QING_AMBAN.txt:220 — moves him back to CHI, char survives, clears qing_amban_here; safe mid-event, scope
+   still valid for the portrait).
+5. **REMOVE the dead a04a346c7 selection ladder** (qing_subject_integration.txt:267-327, the 5-tier
+   is_governor/office_steward/courtier/ruler fallback). Setting corrupt_official = scope:integ_amban makes it
+   all unreachable — this task substantially REVERTS a04a346c7. State that plainly in the commit. Keep ONE
+   safety: if the amban died during the 3-10 day delay (scope:integ_amban unset at fire), self-abort via the
+   trigger guard (#1) OR a minimal fallback — pick the trigger guard (cleaner; no scandal fires if the amban
+   is gone, consistent with the dispatch gate).
+
 ## 6. Build checklist
 1. Add amban-present gate to the scandal dispatch branch (se_SUBJECT_QING.txt:558-566).
 2. qing_integ.11 immediate: SUBJ_QING_resolve_integ_actors = yes; if exists scope:integ_amban →

@@ -247,99 +247,42 @@ qing_integ.11 = {
 	right_portrait = scope:corrupt_official
 
 
-	# [playtest loc-fix] Self-abort if the subject vanished during the delay — the
-	# LOG line and (via .a) the desc reference scope:target. corrupt_official is
-	# re-derived with a fallback below, but target cannot be. Mirrors qing_integ.30.
+	# [#22 2026-08-07] Self-abort unless the subject still exists AND a live resident amban is still posted
+	# to it. The scandal is the diverted integration-silver, which is the AMBAN's remit — so the culprit is
+	# the resident amban (scope:integ_amban, set in the immediate). Gate on the RAW qing_amban_here predicate
+	# (NOT integ_amban_present / scope:integ_amban — those are resolved only in the immediate, AFTER the
+	# trigger/dispatch): if the amban died in the 3-10 day dispatch delay, no scandal fires (mirrors the
+	# dispatch gate in SUBJ_QING_roll_reaction). This REPLACES the old random-courtier selection ladder
+	# (reverts most of a04a346c7 — the fiscal-official tiers are unreachable once the culprit is the amban).
 	trigger = {
 		exists = scope:target
 		scope:target = { is_subject_of = ROOT }
+		scope:target = { has_variable = qing_amban_here  var:qing_amban_here = { is_alive = yes  employer = scope:target } }
 	}
 
 	immediate = {
-		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.11 (scandal) overlord=[ROOT.GetTag] subject=[scope:target.GetTag]" }
-		# [boot-fix 2026-08-07] the scandal must be pinned on someone who PLAUSIBLY handled the diverted
-		# silver — a fiscal/administrative official (steward = the treasury office, magistrate, a provincial
-		# governor) or at least an office-holder — NOT a random courtier (a physician or tutor could not have
-		# skimmed canal/garrison funds). Tiered: (1) a disloyal fiscal/admin official; (2) any disloyal
-		# office-holder/governor; (3) any office-holder/governor (loyal but implicated); (4) any adult
-		# courtier (last resort so the scope is always set); (5) ruler stands in. Scope always ends set —
-		# the desc + right_portrait reference scope:corrupt_official.
-		if = {
-			limit = {
-				any_character = {
-					employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  loyalty < 50
-					# [review 2026-08-07] office_magistrate DROPPED — it is a TRIBAL office (00_tribal.txt);
-					# CHI is a monarchy so no CHI character can hold it (dead clause). office_steward is the
-					# monarchy fiscal office (the treasury post — the plausible skimmer); is_governor covers
-					# provincial officials who handled the diverted canal/granary/garrison silver.
-					OR = { is_governor = yes  has_office = office_steward }
-				}
-			}
-			random_character = {
-				limit = {
-					employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  loyalty < 50
-					OR = { is_governor = yes  has_office = office_steward }   # mirrors the if-limit above
-				}
-				weight = {
-					modifier = { factor = 3  has_office = office_steward }   # the treasury office — likeliest skimmer
-					modifier = { factor = 2  is_governor = yes }
-					modifier = { factor = 2  prominence >= 50 }
-				}
-				save_scope_as = corrupt_official
-			}
-		}
-		else_if = {
-			# no disloyal fiscal/admin official — widen to any disloyal office-holder or governor.
-			limit = {
-				any_character = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  loyalty < 50  OR = { has_any_office = yes  is_governor = yes } }
-			}
-			random_character = {
-				limit = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  loyalty < 50  OR = { has_any_office = yes  is_governor = yes } }
-				weight = { modifier = { factor = 2  prominence >= 50 } }
-				save_scope_as = corrupt_official
-			}
-		}
-		else_if = {
-			# none disloyal — pin it on ANY office-holder/governor (implicated by their post, not their loyalty).
-			limit = {
-				any_character = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  OR = { has_any_office = yes  is_governor = yes } }
-			}
-			random_character = {
-				limit = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no  OR = { has_any_office = yes  is_governor = yes } }
-				weight = { modifier = { factor = 3  has_office = office_steward }  modifier = { factor = 2  is_governor = yes } }
-				save_scope_as = corrupt_official
-			}
-		}
-		else_if = {
-			# no office-holders at all — any adult courtier, so the scope is still set.
-			limit = { any_character = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no } }
-			random_character = {
-				limit = { employer = ROOT  is_ruler = no  is_adult = yes  prisoner = no }
-				save_scope_as = corrupt_official
-			}
-		}
-		else = {
-			# Last-resort fallback so scope:corrupt_official is ALWAYS set — the desc text and
-			# right_portrait reference it, and an unset scope would render a broken portrait and an
-			# unresolved name. The ruler stands in.
-			current_ruler = { save_scope_as = corrupt_official }
-			LOG_line = { sys = SUBJ  msg = "qing_integ.11 no courtier available; ruler stands in as corrupt_official" }
-		}
+		LOG_line = { sys = SUBJ  msg = "EVENT qing_integ.11 (amban graft scandal) overlord=[ROOT.GetTag] subject=[scope:target.GetTag]" }
+		# resolve the resident amban + pin the scandal on HIM (the plausible skimmer of the integration-silver).
+		SUBJ_QING_resolve_integ_actors = yes
+		scope:integ_amban = { save_scope_as = corrupt_official }
 	}
 
-	# --- Impeach and confiscate (the Jiaqing solution) -------------------
+	# --- Impeach and recall (the Jiaqing solution) -----------------------
 	option = {
 		name = "qing_integ.11.a"
 		custom_tooltip = "qing_integ.11.a.tt"
 		trigger = { exists = scope:corrupt_official }
-		# Seize the grandee's fortune — a Heshen-scale windfall to the treasury.
-		add_treasury = 150
-		add_stability = 3
-		add_tyranny = 5
-		scope:corrupt_official = {
-			add_corruption = 20
-			add_loyalty = inspired_disloyalty_other_l
-		}
+		# [#22] confiscate the amban's ill-gotten gains — a MODEST windfall (an amban's estate is not
+		# Heshen-scale, so +50 not +150), and the Lifan Yuan is marked down for the graft on its watch.
+		add_treasury = 50
+		add_stability = 2
+		add_tyranny = 3
+		scope:corrupt_official = { add_corruption = 20 }
+		SUBJ_QING_lifan_amban_outcome = { delta = -5 }   # a corrupt resident is a Lifan Yuan failing
+		# [#22 review-fix] RECALL him — MANDATORY: leaving a just-disgraced amban posted would let
+		# QING_amban_evaluate score his fall as subject drift / a recall crisis. Pull him back to Peking
+		# (char survives, qing_amban_here cleared). Must run BEFORE clear_integ_actors (reads scope:target).
+		QING_amban_recall = { subject = scope:target  reason = "impeached-for-graft" }
 		SUBJ_QING_clear_integ_actors = yes  # [#task-20 hygiene] clear the resolver scratch vars
 	}
 
