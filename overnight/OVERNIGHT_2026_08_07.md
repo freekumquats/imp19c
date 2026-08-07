@@ -215,3 +215,35 @@ open) so the khoja ≤30 reachability must be re-derived (the #11.2 landmine). U
 GARRISON_LINK.md (§1b supersedes G1/G2; §6b adds the two fixes). Confirmed sound: derive structure, area keys
 (all 20 XNG provs + Ürümqi in area:Tarim), one-way discipline, right meter (control not consolidation).
 #19 build DEFERRED — depends on #21 landing (needs qing_hist_garrison_prov on Kashgar) + the calibration re-derive.
+
+### [T20] #21 v2 COMMITTED — 880d5edc3 (reviewed SOUND)
+Guard-widen reviewed SOUND: no double-raise (mutually-exclusive pre-1772/1815 branches), not over-broad
+(Kashgar is the ONLY nested-subject province in the authored call list), commander attaches (Hailancha alive
+1763, CHI-employed). Committed + pushed. Kashgar garrison should now appear in the Outliner. #21 marked done
+(minimal fix; Yarkand/Aksu additions deferred to a follow-up once boot-verified).
+
+## RUN SUMMARY (2026-08-07 autonomous session)
+
+SHIPPED + pushed (each adversarially reviewed BEFORE commit):
+- 24a6ced6f Quarterly Balance histogram geometry (bars no longer overflow the panel)
+- a6bf29bf2 pop-recompute country-scope guard (log-triage bug: province-only trigger at country scope)
+- 73a50b8b1 #24 C-chip suppression (event portraits + all Diplomacy-view portraits incl. the Subjects-tab leak)
+- d75f95b4e #28 currency band-logging (CHI-only, -debug_mode; to diagnose #23)
+- 880d5edc3 #21 Kashgar/Altishahr garrison (nested-subject ownership guard widen)
+
+DESIGN DOCS written + adversarially reviewed (build-ready or with findings folded in):
+- #21 (built), #19 (deferred behind #21+calibration), #26 amban picker, #22 Scandal->amban, #28 v2.
+  Key wins: review caught #21-v1 (building vs army) and #19 (wrong count object) as solving-the-wrong-problem
+  BEFORE any bad code shipped.
+- RESEARCH_QING_XINJIANG_GARRISONS_1763.md written (memory pointer saved).
+
+LOG TRIAGE (logs.zip Aug 7 03:24): flood = known upstream/econ read-before-set noise; 1 compile failure (a
+DEBUG file); 2 real mod bugs — pop-scope (FIXED a6bf29bf2), ROOT.GetTag tooltip (RETRACTED — vanilla/MIUNO,
+not ours). No new error classes from the day's commits.
+
+PENDING (need user boot-test or gated):
+- #23 deflation: BUILD #28 logging first (done) → USER boots -debug_mode ~2yr → read the CURR band trace →
+  confirm equilibrium-ceiling vs bug → then design the CHI-safe fix. BLOCKED ON A BOOT TEST.
+- #19 garrison->control + #20 khoja garrison options: gated on #21 boot-verify + #19 calibration re-derive.
+- #22 Scandal->amban, #26 amban picker: designs reviewed/ready; multi-file — better after a boot test of shipped.
+- #27 senior-minister scandal chain: notes only (not yet designed).
