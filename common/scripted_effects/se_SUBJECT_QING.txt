@@ -88,6 +88,13 @@ SUBJ_QING_change_type = {
 		}
 
 		# Perform the type change via the mod's make_subject wrapper.
+		# ⚠️ [BOOT-FIX 2026-08-06] KNOWN BUG (NOT fixed here — see task): make_subject HARD-ERRORS + no-ops on
+		# a country that ALREADY has an overlord ("<X> already has an overlord!" — same class as the capstone
+		# authorize bug fixed in SUBJ_QING_authorize_integration). So promote/demote via the GUI currently does
+		# NOTHING. The fix is release-then-rebind, BUT unlike the authorize path this ladder does NOT reparent
+		# the subject's OWN sub-subjects first — and releasing a nested subject (e.g. ILI holding XNG) may
+		# orphan the grandchild (unverified engine behaviour). Deferred to a task so the sub-subject handling
+		# is designed + boot-verified before shipping, rather than trading a silent no-op for a lost subject.
 		FUNC_make_subject = {
 			overlord = ROOT
 			target = scope:target
@@ -394,8 +401,15 @@ SUBJ_QING_authorize_integration = {
 		# left to strand. No-op when the subject holds no sub-subjects (the common case).
 		SUBJ_QING_reparent_sub_subjects = yes
 
-		# Convert to the integrable transient type (lights up the engine's native
-		# Integrate action). FUNC_make_subject preserves the overlord bond + latest_overlord.
+		# Convert to the integrable transient type (lights up the engine's native Integrate action).
+		# [BOOT-FIX 2026-08-06] make_subject HARD-ERRORS + no-ops on a country that ALREADY has an
+		# overlord ("<X> already has an overlord!" in error.log — the subject stayed autonomous_governorship,
+		# so the capstone appeared to do nothing). The engine has no re-type-in-place command
+		# (change_subject_type does not exist); the proven idiom is RELEASE-THEN-REBIND
+		# (se_DIPLOMACY.txt:1082-1092 subjugate transfer / :1415). Sub-subjects were already reparented to
+		# ROOT above (BEFORE this release), so the brief release strands no children. Release from ROOT,
+		# then re-bind as integrating_governorship.
+		ROOT = { release_subject = scope:target }
 		FUNC_make_subject = { overlord = ROOT  target = scope:target  type = integrating_governorship }
 		scope:target = { SUBJ_QING_derive_rung = yes }
 
