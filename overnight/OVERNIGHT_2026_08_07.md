@@ -297,6 +297,26 @@ corruption entrenches), and added a 'tribunal' option to qing_revenue.4 (.d) + q
 corruption>=60 + the court slot. VACATE-BEFORE-KILL honored; death_execution (death_suicide doesn't exist);
 19 loc keys; pictures valid. Impl review dispatched before commit.
 
+### [T25] #27 COMMITTED — dac766dc4 (reviewed SOUND-WITH-FIXES)
+Applied: is_alive guards (×3) + a .1.press short-circuit to acquit if the minister died in the ~20-day
+delay (the death-during-delay gap — else a dead-minister conviction banked the windfall with the vacancy
+mechanic silently defeated); added the ~decade qing_gcscandal_cooldown. Vacate-before-kill + no-backfill
+verified correct. #27 DONE.
+
+## FINAL BOARD (end of autonomous run)
+- #19 DONE (garrison->control link) · #20 DONE (khoja garrison/external options) · #21 DONE (Kashgar garrison)
+- #22 DONE (Scandal->amban) · #24 DONE (C-chip) · #26 DONE (amban picker Phase 1; Phase 2 deferred as a
+  GUI spike) · #27 DONE (senior-minister tribunal) · #28 DONE (currency logging)
+- #23 HELD — deflation: fix direction is genuinely ambiguous (damp-the-swing vs starved-supply equilibrium
+  are OPPOSITE fixes); the #28 trace (shipped) disambiguates. A blind guess risks worsening the symptom +
+  editing upstream currency on a hunch (hard-rule violation). Needs ONE boot-trace read, then the fix.
+- Plus earlier this session: Quarterly Balance geometry, pop-recompute country-scope logfix, manpower ×500
+  scale fix, Khoja-Stirs art + diplomatic option, office_magistrate dead-clause removal.
+
+Every code change adversarially reviewed BEFORE commit. The review process caught THREE designs solving the
+wrong problem before any bad code shipped (#21 building-vs-army, #19 wrong-count-object, #27 redundant-vs-
+extend) + numerous MEDIUM/LOW fixes. All committed + pushed to merge-overnight. Awaiting user boot-test.
+
 ## RUN SUMMARY (2026-08-07 autonomous session)
 
 SHIPPED + pushed (each adversarially reviewed BEFORE commit):
