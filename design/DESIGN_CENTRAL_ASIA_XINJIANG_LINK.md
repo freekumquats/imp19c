@@ -33,13 +33,27 @@ se_QING_CARAVAN.txt:168-174), NOT a settable stock. A one-shot `+12`/`+15` `QING
 off within a few pulses — worse, "Absorb route" set `customs_rate = 2` (heavy), which *lowers* the
 prosperity target by −15 (recompute_target :138-141), so the heavy-customs penalty would persist while
 the +15 vanished (net negative — self-defeating, the same class as the #10B control error). Instead the
-two paths change what the derive READS:
-- Dictate terms: the `qing_caravan_kok_terms_dictated` flag restores FULL customs (guard the :217 haircut
-  on `NOT` this flag, §3), which raises the prosperity *target* through the existing recompute — a
-  durable gain, not a decaying nudge.
-- Absorb route: pick ONE — either keep the state monopoly (`customs_rate = 2`) and accept it lowers the
-  prosperity target (thematically correct: monopoly extraction over volume), OR frame it as full customs
-  like dictate-terms. Do NOT do both "heavy customs AND +15 prosperity". Design decision flagged for build.
+two paths change what the derive READS.
+
+**[FIX 2026-08-07 — NEW-MEDIUM-1] correct the prosperity lever.** The re-review found the "restores full
+customs → raises the prosperity target" chain is MECHANICALLY FALSE: the `:217` aqsaqal haircut operates
+on `qing_caravan_income_tmp` (the quarterly TREASURY take, computed *downstream* of prosperity as
+`income = goods × prosperity/100 × rate`, :201-218). `QING_caravan_recompute_target` (:93-156) never
+reads the haircut or the `kok_terms_dictated` flag — so un-halving the haircut raises **treasury income**,
+NOT the prosperity target (the #10B couples that fed income back into prosperity were deleted). The ONE
+durable prosperity lever caravan.3 actually pulls is **clearing `qing_xj_khoja_pending`**, which removes
+the −15 route-disruption term in `recompute_target` (:148-151). So:
+- Dictate terms: durable prosperity gain comes from **clearing the khoja scare** (−15 term drops out →
+  target rises). Separately, the `kok_terms_dictated` flag restores full **treasury customs** (the :217
+  haircut guard) — a treasury gain, NOT a prosperity gain. Keep both effects but attribute each to the
+  right meter; do NOT claim the haircut moves prosperity.
+- Absorb route: `customs_rate = 2` LOWERS the prosperity target (−15, monopoly extraction over volume) —
+  thematically fine, but then do NOT also promise a prosperity boost. Its durable prosperity gain, like
+  dictate, is only the khoja-clear. Pick the customs model deliberately; do not pair heavy customs with a
+  prosperity-boost claim.
+- If a bigger *durable* prosperity target lift is wanted for either path, add a `kok_terms_dictated`/
+  `kok_absorbed` term to `recompute_target` itself (the only place that moves the target) — the concrete,
+  #10B-clean way. Flagged for build.
 
 **[FIX — LOW-7] "+8 control" corrected to +3.** One `secure_one` stamp = one `qing_xinjiang_prov_secured`
 modifier = **+3** in `QING_xj_derive_control` (:249-252). Post-#10B you cannot "add 8 control" — you
@@ -48,18 +62,21 @@ secure map objects and control DERIVES. If a bigger conquest payoff is wanted, s
 
 **Trigger:** `qing_caravan.3` fires from `QING_caravan_pulse` when:
 ```
-OR = {
-    AND = {  # refused/revoked the aqsaqal AND Kokand hostile
-        NOT = { has_variable = qing_caravan_aqsaqal_granted }
-        exists = c:KOK
-        c:KOK = { opinion = { target = ROOT  value < 0 } }   # proven idiom, se_QING_CARAVAN.txt:269
-        NOT = { c:KOK = { is_subject_of = ROOT } }
-        NOT = { owns_or_subject_owns = p:110 }               # not already holding Kokand city
-    }
-    QING_kok_conquered_trigger = yes   # scripted_trigger, see below — subjugated OR Fergana held
-}
+QING_kok_conquered_trigger = yes                   # subjugated OR Kokand city held — CONQUEST ONLY
 NOT = { has_variable = qing_caravan_kok_yielded }  # once-only (set in the event IMMEDIATE, mirrors .1/.2)
 ```
+
+**[FIX 2026-08-07 — NEW-MEDIUM-3] caravan.3 is STRICTLY CONQUEST-GATED.** The prior draft had a first
+OR-branch that fired on merely "refused the aqsaqal AND KOK hostile AND explicitly NOT conquered" — which
+would hand the full "The Khanate Yields" (浩罕屈服) dictate/absorb rewards (secure an oasis, suppress the
+khoja scare, restore full customs / state monopoly) to an unbeaten, independent, hostile Kokand. That is
+incoherent with the event's premise and, unlike caravan.1 (gated `current_date >= 1820.1.1` +
+`prosperity >= 55`), that branch had NO date and NO prosperity throttle, so it could pre-empt the entire
+aqsaqal arc as early as 1763 the moment `c:KOK opinion < 0`. It also contradicted §7 Q1's own mental
+model ("dictate-terms is offered when KOK subjugated"). **Fix: drop the un-conquered branch entirely.**
+The refuse-the-aqsaqal path already has its own consequences (caravan.1 refuse → arms the khoja scare →
+route-cut cycle); "The Khanate Yields" now fires ONLY when Kokand is actually beaten (subjugated or its
+city held). This also makes the event title truthful.
 
 **[FIX 2026-08-07 — CRITICAL-1/2] `is_capital_of` does NOT exist** (absent in-repo AND in both
 oracle repos — confirmed). The prior draft's `count >= 3 … is_capital_of = c:KOK` was doubly broken
@@ -79,16 +96,22 @@ truth, reused by the caravan.3 trigger, the khoja-scare guard §B.2, and the .1/
 QING_kok_conquered_trigger = {   # scope: country (CHI). TRUE once Kokand is neutralised by force.
     OR = {
         AND = { exists = c:KOK  c:KOK = { is_subject_of = ROOT } }   # subjugated
-        owns_or_subject_owns = p:110                                  # hold Kokand city (annexed heartland)
+        owns_or_subject_owns = 110                                    # hold Kokand city (p:110, annexed heartland)
     }
 }
 ```
+**[LOW]** In-repo live script uses the BARE province id (`owns_or_subject_owns = 110`); the `p:110` form
+is attested only in the oracle repos. Both parse; use bare `110` for in-repo consistency. p:110 = Kokand
+city confirmed (setup/main/00_default.txt:46848 `capital = 110`; setup/provinces/00_Fergana.txt `110 = {
+#Kokand … province_rank="city"`), so TODO §9.3 is CLOSED.
 
 **New effects:** se_QING_CARAVAN.txt
-- `QING_caravan_dictate_terms` — set `qing_caravan_kok_terms_dictated` (restores full customs → raises
-  prosperity *target*, §3), `QING_ili_apply_prov_band = { INTENT = secure_one }` + `QING_xj_derive_control`
-  (+3 control on the map), clear `qing_xj_khoja_pending`. Permanently END khoja-scare/route-cut (gate
-  them on `NOT` this flag). NO one-shot prosperity nudge (MEDIUM-5).
+- `QING_caravan_dictate_terms` — set `qing_caravan_kok_terms_dictated` (restores full TREASURY customs
+  via the :217 haircut guard — a treasury gain, NOT prosperity, per NEW-MEDIUM-1), clear
+  `qing_xj_khoja_pending` (THIS is the durable prosperity-target lift: drops the −15 term),
+  `QING_ili_apply_prov_band = { INTENT = secure_one }` guarded on `NOT qing_xj_fully_integrated` (LOW —
+  match the sibling levers) + `QING_xj_derive_control` (+3 control on the map). End the crisis chains by
+  gating .1/.2 on `NOT QING_kok_yielded_flag` (§3, MEDIUM-6). NO one-shot prosperity nudge (MEDIUM-5).
 - `QING_caravan_absorb_route` — set `qing_caravan_kok_absorbed`, clear `qing_xj_khoja_pending`,
   +legitimacy 8. Customs framing is the design decision flagged in MEDIUM-5 above (monopoly-heavy vs
   full) — pick ONE, do not pair heavy customs with a prosperity boost.
@@ -173,9 +196,10 @@ limit = {
         var:qing_xj_beg_venal_count > 0
     }
     NOT = { has_variable = qing_xj_khoja_pending }
-    # [LINK] khoja-scare is 'backed from Kokand' (separatism-backer rule). A subjugated OR annexed
-    # Kokand cannot back pretenders → suppress the scare. Single source of truth = the scripted_trigger.
-    NOT = { QING_kok_conquered_trigger = yes }
+    # [LINK] khoja-scare is 'backed from Kokand' (separatism-backer rule). Suppress it when Kokand is
+    # currently beaten (conquered_trigger) OR was permanently settled by caravan.3 (yielded_flag).
+    # [FIX NEW-MEDIUM-2] BOTH guards, different lifetimes — see below.
+    NOT = { OR = { QING_kok_conquered_trigger = yes  QING_kok_yielded_flag = yes } }
 }
 ```
 
@@ -187,13 +211,24 @@ which is monotonic: subjugated OR Kokand-city-held ⇒ conquered ⇒ scare suppr
 fire. (If KOK is destroyed AND CHI does not hold p:110, the trigger is false and the scare CAN fire —
 which is correct: a driven-off-but-not-held Kokand can still shelter pretenders in the hills.)
 
-**Effect:** once KOK is subjugated OR Kokand city (p:110) is held, `qing_xj_khoja_pending` can never be
-set → caravan.2 route-cut crisis stops firing (it gates on khoja_pending). Central-Asia conquest SOLVES
-the khoja threat permanently.
+**[FIX 2026-08-07 — NEW-MEDIUM-2] the scare guard needs BOTH triggers (different lifetimes).**
+`QING_kok_conquered_trigger` is a LIVE derive — it flips back false if KOK later breaks vassalage and CHI
+does not hold p:110. `QING_kok_yielded_flag` (dictated/absorbed) is PERMANENT. If the scare were gated on
+the live trigger alone, then "resolve via caravan.3 → later lose Kokand" would re-arm the khoja scare
+(re-set `qing_xj_khoja_pending`, re-fire qing_xinjiang.1, re-apply the −15 prosperity drag) while the
+paired caravan route-cut (gated on the permanent `yielded_flag`) stayed dead — a jarring half-resurrected
+crisis, and it breaks §3's "permanently ends the khoja-scare" promise. Gating on
+`NOT = { OR = { conquered_trigger  yielded_flag } }` fixes it: a caravan.3-RESOLVED Kokand stays settled
+forever (yielded_flag), while a merely-driven-off-never-settled Kokand can still re-arm (§7 Q4's desired
+raw case — neither flag set). The two consumers now express two different intents correctly.
+
+**Effect:** once KOK is subjugated / Kokand city held / settled via caravan.3, `qing_xj_khoja_pending` can
+never be set → caravan.2 route-cut crisis stops firing. A never-settled rump Kokand can still stir.
 
 **Also modify:** qing_caravan_events.txt events .1/.2 add ONE line to their `trigger` blocks:
 ```
-# [LINK] Kokand ultimatum/route-cut cannot fire once Kokand is subjugated or Kokand city is held.
+# [LINK] ultimatum/route-cut cannot fire once Kokand is beaten or settled via caravan.3.
+NOT = { QING_kok_yielded_flag = yes }
 NOT = { QING_kok_conquered_trigger = yes }
 ```
 (This also fixes the MEDIUM-3 inversion for the events — the prior `NOT = { exists = c:KOK }` branch
@@ -271,8 +306,11 @@ QING_kok_yielded_flag = { OR = { has_variable = qing_caravan_kok_terms_dictated
 The customs-haircut guard (:217) keys specifically on `kok_terms_dictated` (only dictate restores full
 customs; absorb sets its own customs model per MEDIUM-5).
 
-**Effect:** completing caravan.3 (either option) permanently ends both crisis chains; dictate also
-restores full customs. Conquest is a ONE-TIME alternative to managing the aqsaqal/khoja cycle.
+**Effect:** completing caravan.3 (either option) permanently ends both caravan crisis chains (they gate
+on the permanent `QING_kok_yielded_flag`), AND — because the khoja scare is now gated on `OR {
+conquered_trigger  yielded_flag }` (NEW-MEDIUM-2) — the khoja scare stays suppressed even if Kokand
+later breaks free. Dictate also restores full treasury customs. Conquest/settlement is a ONE-TIME
+alternative to managing the aqsaqal/khoja cycle.
 
 **PROVEN:** flag set + guard (se_QING_CARAVAN.txt :70-84 init, :401 aqsaqal_granted guard). divide operation on var (line :203).
 
@@ -311,8 +349,11 @@ restores full customs. Conquest is a ONE-TIME alternative to managing the aqsaqa
    `qing_xj_ctl_term` scratch, added to `qing_xj_control_tmp` BEFORE the :266 clamp (6 subject checks).
 4. **Modify QING_xj_pulse khoja-scare** (se_QING_XINJIANG.txt :503-519) — add `NOT = {
    QING_kok_conquered_trigger = yes }` to the limit.
-5. **Modify QING_caravan_pulse** (se_QING_CARAVAN.txt) — add caravan.3 offer branch; guard ultimatum/
-   route-cut offers on `NOT QING_kok_yielded_flag`, customs haircut on `NOT kok_terms_dictated`.
+5. **Modify QING_caravan_pulse** (se_QING_CARAVAN.txt) — add the caravan.3 offer as an INDEPENDENT `if`
+   BEFORE the existing `if {ultimatum} else_if {route-cut}` chain (:258-284), so a conquered-but-still-
+   hostile KOK gets "The Khanate Yields", not a shadowed ultimatum; the ultimatum/route-cut offers are in
+   turn guarded on `NOT QING_kok_yielded_flag` + `NOT QING_kok_conquered_trigger` (so they don't compete).
+   Guard the customs haircut on `NOT kok_terms_dictated`.
 6. **Modify caravan.1/.2 triggers** (qing_caravan_events.txt) — add `NOT = { QING_kok_conquered_trigger = yes }`.
 7. **(Optional)** add qing_ca_xinjiang_secured task (qing_central_asia_missions.txt).
 8. **Loc** — qing_caravan.3 strings + tooltips (qing_caravan_l_english.yml, BOM).
@@ -386,17 +427,22 @@ A: No. Aqsaqal path remains for players who don't conquer Central Asia OR grant 
 ## 9. Verification TODOs (before build)
 
 1. ~~**CRITICAL:** verify `is_capital_of`.~~ **RESOLVED** — it does not exist (in-repo or oracle);
-   replaced with `owns_or_subject_owns = p:110` + `is_subject_of` in `QING_kok_conquered_trigger`.
+   replaced with `owns_or_subject_owns = 110` + `is_subject_of` in `QING_kok_conquered_trigger`.
 2. ~~**Verify** `FUNC_make_subject` reparenting.~~ **RESOLVED** — KOK holds no sub-subjects at 1763;
    embrace uses plain `FUNC_make_subject`; this design adds no annexation path. No action.
-3. **[STILL OPEN] Verify `owns_or_subject_owns = p:110`** resolves to Kokand city specifically (confirm
-   p:110 is Kokand's seat, not just a Fergana province — qing_central_asia_missions.txt:146 labels
-   "Kokand (p:110)", so this is high-confidence, but confirm the tag's actual capital at boot).
+3. ~~**Verify `owns_or_subject_owns = 110`** = Kokand city.~~ **RESOLVED** — `capital = 110`
+   (setup/main/00_default.txt:46848); province 110 is Kokand `province_rank="city"`
+   (setup/provinces/00_Fergana.txt). Use the bare `110` form (in-repo convention).
 4. **[STILL OPEN — MEDIUM-4] Verify `trigger_event` in a mission `on_completion`** IF the alternative
    mission-hook path is chosen. Preferred design avoids this entirely (pulse-driven), so this is only a
    blocker for the alternative. Grep TI/Invictus mission trees / console-test.
 5. **Playtest weights:** Central-Asia control term +5/+2 — boot-log raw, verify control ≥ 70 reachable
    via the khanate path, doesn't trivialise the Xinjiang tree.
+6. **Decide the once-only re-fire semantics:** `qing_caravan_kok_yielded` is set in caravan.3's immediate
+   and never cleared → caravan.3 fires exactly ONCE per game even if Kokand is lost and re-taken. This is
+   intended (it is a one-time settlement, and the end-state flags `kok_terms_dictated`/`kok_absorbed`
+   keep the crisis chains suppressed regardless). Confirm at build; if a re-conquest should re-offer,
+   clear `qing_caravan_kok_yielded` on loss of p:110 — but default is DO NOT (keeps it a one-shot).
 
 ## 10. Alternatives considered
 
