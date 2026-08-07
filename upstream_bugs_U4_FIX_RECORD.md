@@ -153,3 +153,41 @@ believed it behaviour-preserving — exactly how this bug class ships); and the 
 branch does NOT build on b78ccc1f6 (it deleted order_size_modifier wholesale in a full rework).
 Only honest caveat: can't read the author's intent, but nothing in the code supports an additive re-spec
 (modifier definition, its comment, and the parallel discount term all say multiplicative).
+
+## EFFECT ON THE TRADE SYSTEM (what the bug actually does)
+wealth_owed_for_$good$ (per governorship) is summed into global_payment_pool_$good$, and a seller's
+income = (for_sale / global_stockpile) * global_payment_pool (se_GLOBALTRADE_split.txt ~:3503-3520). So
+wealth_owed IS the money buyers pay / sellers earn on every global trade; order_size_modifier is the
+fulfilment fraction that shrinks it when market access can't cover demand.
+The distortion is NON-UNIFORM: buggy/correct = (price + mod)/(price * mod).
+- At full fulfilment (mod=1): +100% for a cheap good (price 1), +5% for a dear one (price 20) — scrambles
+  RELATIVE prices between goods.
+- At partial fulfilment (mod=0.25, a supply-constrained good): +333% (price 3) .. +433% — it INVERTS the
+  market-access mechanic: a shortage that should scale wealth to a quarter instead inflates it several-fold.
+Net: a broad, uneven inflation of trade income that inverts the shortage response. Not a coherent balance
+knob (no designer wants "shortages make you pay MORE, and only for cheap goods") — the signature of an
+arithmetic slip, consistent with the "condense multiplications" commit message.
+
+## THE FIX IS A ONE-OPERATOR CORRECTION, NOT A REVERT
+Do NOT revert b78ccc1f6 — its INTENT (fold the two multiplies into one block) is good and worth keeping. A
+revert would restore the two separate change_variable multiplies (functionally correct but throws away the
+author's condense). The correct fix keeps the condense and flips ONE operator:
+    multiply = { value = country_unit_price_$good$   add      = order_size_modifier_$good$ }   # shipped (wrong)
+    multiply = { value = country_unit_price_$good$   multiply = order_size_modifier_$good$ }   # fix (= price*mod)
+This matches the commit's OWN stated intent ("condense MULTIPLICATION calls") — condensing two multiplies is
+a product, not a sum.
+
+## UPSTREAM-REPORT WORDING (if/when taken to Sobisonator)
+> In b78ccc1f6 ("Condense multiplication calls for wealth_owed_for_$..."), the condensed block in
+> GT_split_update_wealth_owed_for_tradegoods uses `add =` where the two original calls were both `multiply`,
+> so it evaluates to price + modifier instead of price * modifier. Since order_size_modifier is the <=1
+> fulfilment fraction, it needs to multiply the owed wealth. Looks like add should be multiply — one-line fix.
+
+## CERTAINTY BAR FOR UPSTREAM (user: won't report without 100%)
+Analytically 100% on: the block == *(A+B) (oracle-proven); behaviour changed from the file's entire-history
+* mod (parent diff); order_size_modifier is an unchanged [0,1] fraction. NOT analytically provable: that the
+author didn't deliberately change behaviour and mislabel the commit (can't prove intent from static code).
+To close that last gap to literal 100% = an IN-GAME / boot-log observation that wealth_owed reads
+(price + mod) post-commit. That is the "positive proof of breakage" [[imp19c-sobisonator-upstream-caution]]
+demands. DO NOT report to Sobisonator until that is observed. The one-line defensive fix stays on THIS branch
+(upstream_bugs) meanwhile; merge-overnight never had the bug (kept the two-multiply form).
