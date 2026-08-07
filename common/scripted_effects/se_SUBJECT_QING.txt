@@ -87,18 +87,84 @@ SUBJ_QING_change_type = {
 			msg = "overlord= subject= from_rung= action=$direction$ new_type=$new_type$"
 		}
 
-		# Perform the type change via the mod's make_subject wrapper.
-		# ⚠️ [BOOT-FIX 2026-08-06] KNOWN BUG (NOT fixed here — see task): make_subject HARD-ERRORS + no-ops on
-		# a country that ALREADY has an overlord ("<X> already has an overlord!" — same class as the capstone
-		# authorize bug fixed in SUBJ_QING_authorize_integration). So promote/demote via the GUI currently does
-		# NOTHING. The fix is release-then-rebind, BUT unlike the authorize path this ladder does NOT reparent
-		# the subject's OWN sub-subjects first — and releasing a nested subject (e.g. ILI holding XNG) may
-		# orphan the grandchild (unverified engine behaviour). Deferred to a task so the sub-subject handling
-		# is designed + boot-verified before shipping, rather than trading a silent no-op for a lost subject.
+		# Perform the type change.
+		# [#17 fix 2026-08-07] make_subject HARD-ERRORS + no-ops on a country that ALREADY has an overlord
+		# ("<X> already has an overlord!" — the same class the capstone authorize path hit). The engine has no
+		# re-type-in-place command (change_subject_type does not exist), so the proven idiom is RELEASE-THEN-
+		# REBIND (SUBJ_QING_authorize_integration; se_DIPLOMACY.txt subjugate transfer). Before this fix the
+		# GUI promote/demote buttons were a SILENT NO-OP.
+		#
+		# CRUCIAL DIFFERENCE from the authorize path: there the intermediary is ANNEXED (destroyed), so its
+		# sub-subjects are reparented UP to CHI. HERE the subject SURVIVES and must KEEP its own sub-subjects
+		# (e.g. ILI holding XNG/KML). release_subject severs the DIRECT CHI->subject bond; whether it ALSO
+		# cascades to the grandchildren is unverified engine behaviour — so we snapshot the subject's children
+		# and their types BEFORE the release, and AFTER the rebind re-assert only those that actually detached
+		# (guarded on is_subject_of, so it is a pure no-op if the release did NOT cascade). Correct either way,
+		# never orphaning a grandchild, never double-binding an intact one.
+		scope:target = {
+			save_scope_as = QING_ct_parent
+			every_subject = { add_to_list = QING_ct_children }
+		}
+		# record each child's current type while the subject->child bond still stands (guarded var writes;
+		# mirrors SUBJ_QING_reparent_sub_subjects). has_variable guards keep the later reads off the var-flood.
+		every_in_list = {
+			list = QING_ct_children
+			save_scope_as = QING_ct_child
+			if = { limit = { is_subject_type = tributary }                     set_variable = { name = QING_ct_type  value = flag:tributary } }
+			else_if = { limit = { is_subject_type = nominal_vassal }           set_variable = { name = QING_ct_type  value = flag:nominal_vassal } }
+			else_if = { limit = { is_subject_type = feudatory }               set_variable = { name = QING_ct_type  value = flag:feudatory } }
+			else_if = { limit = { is_subject_type = semi_autonomous_governorship } set_variable = { name = QING_ct_type  value = flag:semi_autonomous_governorship } }
+			else_if = { limit = { is_subject_type = autonomous_governorship }  set_variable = { name = QING_ct_type  value = flag:autonomous_governorship } }
+			else_if = { limit = { is_subject_type = client_state }            set_variable = { name = QING_ct_type  value = flag:client_state } }
+			else_if = { limit = { is_subject_type = sinosphere_tributary }     set_variable = { name = QING_ct_type  value = flag:sinosphere_tributary } }
+			else_if = { limit = { is_subject_type = protectorate }            set_variable = { name = QING_ct_type  value = flag:protectorate } }
+			else = { set_variable = { name = QING_ct_type  value = flag:feudatory }  LOG_line = { sys = SUBJ  msg = "change_type: sub-subject had an off-ladder type; will re-bind as feudatory if detached" } }
+		}
+
+		# release from CHI, then re-bind at the new rung.
+		# [review 2026-08-07] STATE-SAFETY of release-then-rebind on a SURVIVING subject (vs authorize, where
+		# the subject is annexed): verified PROVEN — Terra Indomita's 000_country_switch_effect.txt does exactly
+		# this (release PREV then re-make_subject at the SAME type, per type, on kept subjects) with NO
+		# opinion/liberty_desire/loyalty restoration afterward, so the transient release+rebind is an accepted,
+		# state-safe upstream idiom. The Qing subject system also tracks its state (integ progress, amban band)
+		# in COUNTRY VARS, which survive release (the country is not destroyed), and the GUI's
+		# qing_recently_changed_type cooldown var likewise persists.
+		ROOT = { release_subject = scope:target }
 		FUNC_make_subject = {
 			overlord = ROOT
 			target = scope:target
 			type = $new_type$
+		}
+		# DEFENSIVE ASSERTION (mirrors the authorize path): if the rebind failed, the subject went PERMANENTLY
+		# independent — a silent, unrecoverable loss. Log loudly so a regression is VISIBLE.
+		if = {
+			limit = { NOT = { scope:target = { is_subject_of = ROOT } } }
+			LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_change_type"  reason = "CRITICAL: rebind FAILED — subject went independent after release (make_subject rejected the new type). Subject=" }
+		}
+
+		# re-assert any grandchild the release cascaded loose (pure no-op if the direct bond survived).
+		# NOTE: release_subject almost certainly severs only the one named bond (CHI->target), so this branch
+		# is expected to be UNEXERCISED — it exists purely as a safety net. Its rebind targets scope:QING_ct_parent
+		# (a country that is itself CHI's subject), an overlord-is-a-subject make_subject the proven reparent path
+		# never does (reparent always rebinds UP to CHI). Untested but only reachable on the unlikely cascade.
+		every_in_list = {
+			list = QING_ct_children
+			save_scope_as = QING_ct_child
+			if = {
+				limit = { NOT = { is_subject_of = scope:QING_ct_parent } }
+				if =      { limit = { has_variable = QING_ct_type  var:QING_ct_type = flag:tributary }                     FUNC_make_subject = { overlord = scope:QING_ct_parent  target = scope:QING_ct_child  type = tributary } }
+				else_if = { limit = { has_variable = QING_ct_type  var:QING_ct_type = flag:nominal_vassal }               FUNC_make_subject = { overlord = scope:QING_ct_parent  target = scope:QING_ct_child  type = nominal_vassal } }
+				else_if = { limit = { has_variable = QING_ct_type  var:QING_ct_type = flag:feudatory }                   FUNC_make_subject = { overlord = scope:QING_ct_parent  target = scope:QING_ct_child  type = feudatory } }
+				else_if = { limit = { has_variable = QING_ct_type  var:QING_ct_type = flag:semi_autonomous_governorship } FUNC_make_subject = { overlord = scope:QING_ct_parent  target = scope:QING_ct_child  type = semi_autonomous_governorship } }
+				else_if = { limit = { has_variable = QING_ct_type  var:QING_ct_type = flag:autonomous_governorship }     FUNC_make_subject = { overlord = scope:QING_ct_parent  target = scope:QING_ct_child  type = autonomous_governorship } }
+				else_if = { limit = { has_variable = QING_ct_type  var:QING_ct_type = flag:client_state }                FUNC_make_subject = { overlord = scope:QING_ct_parent  target = scope:QING_ct_child  type = client_state } }
+				else_if = { limit = { has_variable = QING_ct_type  var:QING_ct_type = flag:sinosphere_tributary }        FUNC_make_subject = { overlord = scope:QING_ct_parent  target = scope:QING_ct_child  type = sinosphere_tributary } }
+				else_if = { limit = { has_variable = QING_ct_type  var:QING_ct_type = flag:protectorate }               FUNC_make_subject = { overlord = scope:QING_ct_parent  target = scope:QING_ct_child  type = protectorate } }
+				else =    { FUNC_make_subject = { overlord = scope:QING_ct_parent  target = scope:QING_ct_child  type = feudatory } }
+				LOG_line = { sys = SUBJ  msg = "change_type: re-asserted a sub-subject that the release cascaded loose, back under the surviving intermediary" }
+			}
+			if = { limit = { has_variable = QING_ct_type }  remove_variable = QING_ct_type }
+			remove_from_list = QING_ct_children
 		}
 
 		# Re-derive the rung from the now-current type so state stays truthful.
