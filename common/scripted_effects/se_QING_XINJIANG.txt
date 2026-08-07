@@ -74,6 +74,7 @@ QING_xj_init = {
 		set_variable = { name = qing_xj_beg_count       value = 0 }
 		set_variable = { name = qing_xj_beg_venal_count value = 0 }
 		set_variable = { name = qing_xj_consolidation   value = 50 }
+		set_variable = { name = qing_xj_neglect_quarters value = 0 }   # [meter-concretize #10B] seed before the pulse accumulates (read-before-set guard)
 		clear_variable_list = qing_xj_begs
 		# the 1763 opening beg corps — two real loyal begs of the early consolidation:
 		#   額敏和卓 (Emin Khoja, the Turfan leader who aided the Qing conquest and was
@@ -200,29 +201,13 @@ QING_xj_recompute_consolidation = {
 			}
 		}
 	}
-	# --- composite score. Build in a scratch var, then clamp into qing_xj_consolidation.
-	# start from the master grip meter (seeded/owned by se_QING_ILI).
+	# --- composite score. [meter-concretize #10B 2026-08-06] Consolidation = control + admin_bias ONLY.
+	# control is now a CONCRETE DERIVE (QING_xj_derive_control) of begs/tuntian/xiexiang/venal/secured/etc.,
+	# so the old +4·begs / +3·tuntian / +8·xiexiang / −6·venal terms would DOUBLE-COUNT those objects into the
+	# Lifan Yuan fold (se_QING_MINISTRY.txt) → the Grand Council. Every concrete input enters exactly once, via
+	# the control base. (review CRIT-1/CRIT-4.)
 	set_variable = { name = qing_xj_consol_scratch  value = 0 }
 	if = { limit = { has_variable = qing_xinjiang_control }  change_variable = { name = qing_xj_consol_scratch  add = var:qing_xinjiang_control } }
-	# begs: +4 each (loyal corps).
-	set_variable = { name = qing_xj_consol_begterm  value = var:qing_xj_beg_count }
-	change_variable = { name = qing_xj_consol_begterm  multiply = 4 }
-	change_variable = { name = qing_xj_consol_scratch  add = var:qing_xj_consol_begterm }
-	# tuntian: +3 each, but cap the colony contribution at +18 (six colonies' worth) so a
-	# runaway coloniser cannot peg the score on farms alone.
-	set_variable = { name = qing_xj_consol_tunterm  value = var:qing_xj_tuntian }
-	change_variable = { name = qing_xj_consol_tunterm  multiply = 3 }
-	if = { limit = { var:qing_xj_consol_tunterm > 18 }  set_variable = { name = qing_xj_consol_tunterm  value = 18 } }
-	change_variable = { name = qing_xj_consol_scratch  add = var:qing_xj_consol_tunterm }
-	# xiexiang subsidy flowing: +8.
-	if = {
-		limit = { has_country_modifier = qing_xj_xiexiang }
-		change_variable = { name = qing_xj_consol_scratch  add = 8 }
-	}
-	# venal begs drag: -6 each.
-	set_variable = { name = qing_xj_consol_venterm  value = var:qing_xj_beg_venal_count }
-	change_variable = { name = qing_xj_consol_venterm  multiply = 6 }
-	change_variable = { name = qing_xj_consol_scratch  subtract = var:qing_xj_consol_venterm }
 	# [law #26 bias 2026-07-24] Xinjiang Administration law biases the consolidation score BEFORE the clamp
 	# (provincialize +10 / military-farm +5 / beg-indirect 0). Guarded → default (unset) byte-identical.
 	if = { limit = { has_variable = qing_xj_admin_bias }  change_variable = { name = qing_xj_consol_scratch  add = var:qing_xj_admin_bias } }
@@ -231,6 +216,57 @@ QING_xj_recompute_consolidation = {
 	if = { limit = { var:qing_xj_consol_scratch > 100 } set_variable = { name = qing_xj_consol_scratch  value = 100 } }
 	set_variable = { name = qing_xj_consolidation  value = var:qing_xj_consol_scratch }
 	LOG_line = { sys = QING  msg = "xinjiang: consolidation score recomputed for" }
+}
+
+# ======================================================================
+# [meter-concretize #10B 2026-08-06] QING_xj_derive_control — qing_xinjiang_control is now a PURE ONE-WAY
+# CONCRETE DERIVE: a straight set_variable from the real Xinjiang objects each pulse (and after any beat that
+# changes those objects). Abstract FOLLOWS concrete — control MODELS grip, never drives it. NO accumulator
+# nudges, NO drift. Scope: country (ROOT = CHI). Areas iterated owner-independently (oases are ILI/XNG-held).
+# WEIGHTS are PLACEHOLDER-playtest — build-probe LOG the components and pin against the real 1763 value:
+#   1763 opens ~40 (ILI-subject 30 + 2 begs ×4 = 38); full-build clamps ~100 (≥85 capstone reachable);
+#   a neglected/rotted frontier derives ≤30 (khoja trigger). See DESIGN §11.1/§11.7.
+# ======================================================================
+QING_xj_derive_control = {
+	set_variable = { name = qing_xj_control_tmp  value = 0 }
+	# ILI subjecthood — the spine (30).
+	if = {
+		limit = { exists = c:ILI  c:ILI = { is_subject_of = ROOT } }
+		change_variable = { name = qing_xj_control_tmp  add = 30 }
+	}
+	# loyal beg corps: +4 each (0..5 → 0..20).
+	set_variable = { name = qing_xj_ctl_term  value = var:qing_xj_beg_count }
+	change_variable = { name = qing_xj_ctl_term  multiply = 4 }
+	change_variable = { name = qing_xj_control_tmp  add = var:qing_xj_ctl_term }
+	# tuntian military colonies — count the REAL qing_xj_tuntian_colony province modifiers (NOT the int, which
+	# the rot path may have decremented in a separate tick), +3 each.
+	set_variable = { name = qing_xj_ctl_term  value = 0 }
+	area:Dzungaria = { every_area_province = { limit = { has_province_modifier = qing_xj_tuntian_colony }  ROOT = { change_variable = { name = qing_xj_ctl_term  add = 3 } } } }
+	area:Tarim     = { every_area_province = { limit = { has_province_modifier = qing_xj_tuntian_colony }  ROOT = { change_variable = { name = qing_xj_ctl_term  add = 3 } } } }
+	change_variable = { name = qing_xj_control_tmp  add = var:qing_xj_ctl_term }
+	# xiexiang subsidy flowing: +10 (the paid garrison).
+	if = { limit = { has_country_modifier = qing_xj_xiexiang }  change_variable = { name = qing_xj_control_tmp  add = 10 } }
+	# secured oasis provinces: +3 each (beat-stamped grip on the map).
+	set_variable = { name = qing_xj_ctl_term  value = 0 }
+	area:Dzungaria = { every_area_province = { limit = { has_province_modifier = qing_xinjiang_prov_secured }  ROOT = { change_variable = { name = qing_xj_ctl_term  add = 3 } } } }
+	area:Tarim     = { every_area_province = { limit = { has_province_modifier = qing_xinjiang_prov_secured }  ROOT = { change_variable = { name = qing_xj_ctl_term  add = 3 } } } }
+	change_variable = { name = qing_xj_control_tmp  add = var:qing_xj_ctl_term }
+	# frontier secured (Zeng Jize's diplomatic recovery — a durable win referent): +10.
+	if = { limit = { has_country_modifier = qing_ili_frontier_secured }  change_variable = { name = qing_xj_control_tmp  add = 10 } }
+	# venal begs drag: −6 each.
+	set_variable = { name = qing_xj_ctl_term  value = var:qing_xj_beg_venal_count }
+	change_variable = { name = qing_xj_ctl_term  multiply = 6 }
+	change_variable = { name = qing_xj_control_tmp  subtract = var:qing_xj_ctl_term }
+	# contested oasis provinces: −4 each (beat/rot-stamped loss of grip).
+	set_variable = { name = qing_xj_ctl_term  value = 0 }
+	area:Dzungaria = { every_area_province = { limit = { has_province_modifier = qing_xinjiang_prov_contested }  ROOT = { change_variable = { name = qing_xj_ctl_term  add = 4 } } } }
+	area:Tarim     = { every_area_province = { limit = { has_province_modifier = qing_xinjiang_prov_contested }  ROOT = { change_variable = { name = qing_xj_ctl_term  add = 4 } } } }
+	change_variable = { name = qing_xj_control_tmp  subtract = var:qing_xj_ctl_term }
+	# clamp 0..100 and publish.
+	if = { limit = { var:qing_xj_control_tmp < 0 }   set_variable = { name = qing_xj_control_tmp  value = 0 } }
+	if = { limit = { var:qing_xj_control_tmp > 100 } set_variable = { name = qing_xj_control_tmp  value = 100 } }
+	set_variable = { name = qing_xinjiang_control  value = var:qing_xj_control_tmp }
+	LOG_line = { sys = QING  msg = "xinjiang: control DERIVED from concrete grip objects for" }
 }
 
 # ======================================================================
@@ -260,14 +296,15 @@ QING_xj_plant_tuntian = {
 				add_province_modifier = { name = qing_xj_tuntian_colony  duration = -1 }
 			}
 		}
-		# a colony raises the throne's grip on the New Dominion.
-		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 5 }
+		# [meter-concretize #10B] the +5 control nudge is DROPPED — the planted qing_xj_tuntian_colony
+		# modifier is now a control DERIVE term (+3/colony), so control rises via the derive below.
 		# settlement tightens the Yili Governorate's integration into the empire.
 		if = {
 			limit = { exists = c:ILI  c:ILI = { is_subject = yes } }
 			c:ILI = { save_scope_as = target }
 			SUBJ_QING_advance_integration = { steps = 1 }
 		}
+		QING_xj_derive_control = yes
 		QING_xj_recompute_consolidation = yes
 		LOG_line = { sys = QING  msg = "xinjiang: a tuntian colony is planted in Dzungaria for" }
 	}
@@ -288,8 +325,8 @@ QING_xj_appoint_beg = {
 			var:qing_xj_beg_count < 5
 		}
 		QING_xj_mint_beg = yes
-		# a well-staffed south steadies the grip.
-		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 4 }
+		# [meter-concretize #10B] +4 control nudge DROPPED — beg_count is a control DERIVE term (+4/beg).
+		QING_xj_derive_control = yes
 		QING_xj_recompute_consolidation = yes
 		LOG_line = { sys = QING  msg = "xinjiang: a loyal beg is appointed for" }
 	}
@@ -335,10 +372,11 @@ QING_xj_discipline_beg = {
 				if = { limit = { has_variable = qing_is_xj_beg }    remove_variable = qing_is_xj_beg }
 				if = { limit = { has_variable = qing_xj_beg_venal } remove_variable = qing_xj_beg_venal }
 			}
-			# a purge of the disloyal restores the throne's grip a notch.
-			QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 3 }
+			# [meter-concretize #10B] +3 control nudge DROPPED — cashiering a venal beg drops venal_count
+			# (a −6/venal derive drag lifts) and the rebuild drops him from beg_count; control derives up.
 			LOG_line = { sys = QING  msg = "xinjiang: a turned beg is cashiered for" }
 		}
+		QING_xj_derive_control = yes
 		QING_xj_recompute_consolidation = yes
 	}
 	LOG_exit = { sys = QING  fn = "QING_xj_discipline_beg"  result = OK }
@@ -355,8 +393,9 @@ QING_xj_xiexiang_on = {
 	if = {
 		limit = { NOT = { has_country_modifier = qing_xj_xiexiang } }
 		add_country_modifier = { name = qing_xj_xiexiang  duration = -1 }
-		# the stipend reaches the garrisons at once — a lift to the grip.
-		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 6 }
+		# [meter-concretize #10B] +6 control nudge DROPPED — qing_xj_xiexiang is a control DERIVE term (+10);
+		# also resume-of-subsidy stops the neglect rot (the pulse gate reads this modifier).
+		QING_xj_derive_control = yes
 		QING_xj_recompute_consolidation = yes
 		LOG_line = { sys = QING  msg = "xinjiang: the xiexiang silver subsidy begins flowing for" }
 	}
@@ -369,8 +408,9 @@ QING_xj_xiexiang_off = {
 	if = {
 		limit = { has_country_modifier = qing_xj_xiexiang }
 		remove_country_modifier = qing_xj_xiexiang
-		# the subsidy lapses — the unpaid frontier begins to fray.
-		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = -6 }
+		# [meter-concretize #10B] −6 control nudge DROPPED — removing qing_xj_xiexiang drops the +10 derive
+		# term; and the pulse's neglect-rot (gated on NOT xiexiang) now begins the concrete fraying.
+		QING_xj_derive_control = yes
 		QING_xj_recompute_consolidation = yes
 		LOG_line = { sys = QING  msg = "xinjiang: the xiexiang silver subsidy is cut for" }
 	}
@@ -398,21 +438,48 @@ QING_xj_pulse = {
 		LOG_exit = { sys = QING  fn = "QING_xj_pulse"  result = OK }
 	}
 	else = {
-	QING_xj_recompute_consolidation = yes
-	# --- maintenance vs neglect drift on the grip (small, so it is a background pressure).
-	if = {
-		# a paid subsidy + a staffed beg corps = a frontier that steadily settles.
-		limit = {
-			has_country_modifier = qing_xj_xiexiang
-			var:qing_xj_beg_count > 0
+		# [meter-concretize #10B 2026-08-06] NEGLECT ROT — an unpaid frontier garrison hollows out and
+		# mutinies (1826 Jahangir pattern). Gated on NO xiexiang ALONE (xiexiang paid the GARRISON, not the
+		# begs); begs modulate the RATE via the rot threshold, not whether. This DEGRADES the concrete objects
+		# (flip a secured oasis → contested, decay a tuntian colony) so control — a pure derive — falls low
+		# because the MAP rotted, reaching the khoja ≤30 trigger even on a built frontier. Replaces the old
+		# −1/pulse abstract ratchet. Runs BEFORE the derive so this pulse's control reflects the rot.
+		if = {
+			limit = { NOT = { has_country_modifier = qing_xj_xiexiang } }
+			change_variable = { name = qing_xj_neglect_quarters  add = 1 }
+			# rate: loyal corps buffers the bleed; bare/venal collapses fast. [PLACEHOLDER-playtest]
+			set_variable = { name = qing_xj_rot_threshold  value = 4 }
+			if = { limit = { var:qing_xj_beg_count >= 3  var:qing_xj_beg_venal_count = 0 }  set_variable = { name = qing_xj_rot_threshold  value = 8 } }
+			if = { limit = { OR = { var:qing_xj_beg_count = 0  var:qing_xj_beg_venal_count > 0 } }  set_variable = { name = qing_xj_rot_threshold  value = 2 } }
+			if = {
+				limit = { var:qing_xj_neglect_quarters >= qing_xj_rot_threshold_cmpsvalue }
+				# flip ONE secured oasis → contested (garrison mutinies).
+				if = {
+					limit = { OR = { area:Dzungaria = { any_area_province = { has_province_modifier = qing_xinjiang_prov_secured } }  area:Tarim = { any_area_province = { has_province_modifier = qing_xinjiang_prov_secured } } } }
+					if = {
+						limit = { area:Dzungaria = { any_area_province = { has_province_modifier = qing_xinjiang_prov_secured } } }
+						area:Dzungaria = { random_area_province = { limit = { has_province_modifier = qing_xinjiang_prov_secured }  remove_province_modifier = qing_xinjiang_prov_secured  add_province_modifier = { name = qing_xinjiang_prov_contested  duration = -1 } } }
+					}
+					else = {
+						area:Tarim = { random_area_province = { limit = { has_province_modifier = qing_xinjiang_prov_secured }  remove_province_modifier = qing_xinjiang_prov_secured  add_province_modifier = { name = qing_xinjiang_prov_contested  duration = -1 } } }
+					}
+				}
+				# decay ONE tuntian colony — remove the modifier AND decrement the int in lockstep (else the
+				# plant guard var:qing_xj_tuntian<8 soft-locks re-planting — review HIGH fix).
+				if = {
+					limit = { var:qing_xj_tuntian > 0  area:Dzungaria = { any_area_province = { has_province_modifier = qing_xj_tuntian_colony } } }
+					area:Dzungaria = { random_area_province = { limit = { has_province_modifier = qing_xj_tuntian_colony }  remove_province_modifier = qing_xj_tuntian_colony } }
+					change_variable = { name = qing_xj_tuntian  subtract = 1 }
+				}
+				set_variable = { name = qing_xj_neglect_quarters  value = 0 }   # reset after each rot-tick
+				LOG_line = { sys = QING  msg = "xinjiang: NEGLECT ROT — an unpaid oasis slips from the throne's grip for" }
+			}
 		}
-		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = 1 }
-	}
-	else_if = {
-		# no subsidy flowing = the garrison goes unpaid, the grip slips.
-		limit = { NOT = { has_country_modifier = qing_xj_xiexiang } }
-		QING_DECLINE_nudge = { var = qing_xinjiang_control  amount = -1 }
-	}
+		else = { set_variable = { name = qing_xj_neglect_quarters  value = 0 } }   # xiexiang resumed → clock resets, rot stops
+		# [meter-concretize #10B] DERIVE control from the concrete grip objects (after any rot this pulse),
+		# then recompute the consolidation composite off the fresh control base.
+		QING_xj_derive_control = yes
+		QING_xj_recompute_consolidation = yes
 	# --- [#367-R2 review-fix] defensive clear of a STRANDED khoja-scare flag. qing_xj_khoja_pending
 	# is set here before queuing qing_xinjiang.1, and is cleared ONLY in that event's immediate. But
 	# the event re-checks its own trigger (grip <= 30) at fire time: if the player pushes grip back
@@ -538,10 +605,15 @@ QING_xj_remove_on_death = {
 QING_xj_integrate_fully = {
 	LOG_enter = { sys = QING  fn = "QING_xj_integrate_fully" }
 	QING_xj_init = yes
-	# peg the grip to the top and re-band (flips country + province bands to SECURED).
-	set_variable = { name = qing_xinjiang_control  value = 100 }
+	# [meter-concretize #10B] stamp the whole New Dominion SECURED (concrete), then DERIVE control — it
+	# lands ~100 from the full secured set + xiexiang + frontier. The old `set control = 100` is DROPPED
+	# (control is a pure derive; setting it would be overwritten next pulse anyway). Then re-band the country.
+	QING_ili_apply_prov_band = { INTENT = secured }
+	QING_xj_derive_control = yes
 	QING_ili_apply_control_band = yes
-	QING_ili_apply_prov_band = yes
+	# [meter-concretize #10B / review LOW-5] clear any pending khoja scare — a stale qing_xj_khoja_pending set
+	# just before integration would otherwise let qing_caravan.2 fire a post-integration route-cut.
+	if = { limit = { has_variable = qing_xj_khoja_pending } remove_variable = qing_xj_khoja_pending }
 	# strip every NEGATIVE band/tension modifier off the New Dominion provinces, and zero
 	# the per-province ethnic-tension counter, so the ground is treated as a normal province.
 	area:Dzungaria = {

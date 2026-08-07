@@ -683,3 +683,27 @@ comment (both oases in western_steppe) is also factually wrong (Tarim = eastern_
 a BESPOKE oasis-entrepôt signal (caravan system stamps its own trade-hub modifier on Kashgar/Yarkand scaled
 by aqsaqal + bazaar) — net-new mechanic, own design+review cycle. The inert trade-center branches to be
 removed as part of that.
+
+---
+## 2026-08-06 — BUILD #10B xinjiang_control (COMMIT) [autonomous] — REVIEWED CLEAN
+
+After 5 design-review rounds + a full self-read of the system, BUILT the pure concrete-derive inversion:
+- QING_xj_derive_control (se_QING_XINJIANG): control = clamp(30·ILI-subject + 4·begs + 3·tuntian-colony-
+  modifiers + 10·xiexiang + 3·secured-provs + 10·frontier_secured − 6·venal − 4·contested-provs, 0,100).
+  Pure set_variable, no drift/accumulation. Area-iterated (owner-independent, oases are ILI/XNG-held).
+- Consolidation = control + admin_bias (dropped begs/tuntian/xiexiang/venal terms — they enter once via
+  control; fixes the CRIT-1 double-count into the Lifan Yuan → Grand Council fold).
+- QING_xj_pulse: deleted the ±1 abstract drift; added NEGLECT-ROT — NO xiexiang → rot_threshold (8 loyal-beg
+  buffer / 4 / 2 bare-or-venal) quarters → flip 1 secured oasis→contested + decay 1 tuntian_colony (modifier
+  AND int in lockstep). Rots the MAP so control derives ≤30 for a BUILT frontier (khoja reachable). USER: gate
+  on NO xiexiang alone (garrison pay, not begs); begs modulate RATE.
+- QING_ili_apply_prov_band: now takes $INTENT$ (secured|contested|secure_one via flag-macro compare), no
+  longer reads control → the loop is inverted (concrete drives bands, control derives). All 8 callers pass
+  INTENT.
+- All 23 control nudge/set writers converted to stamp-concrete + derive; integrate_fully drops set=100 +
+  clears khoja_pending; caravan/event writers gated on NOT fully_integrated (H1).
+- New qing_xj_rot_threshold_cmpsvalue; seeded qing_xj_neglect_quarters=0 in init (review MEDIUM read-before-set).
+BUILD REVIEW: CLEAN — no boot-crash, ordering correct (rot→derive→consolidation→khoja arm), area-iteration
+(no CRIT-1), no double-count, no stray writer, ≥85 capstone reachable. One MEDIUM (neglect_quarters init)
+FIXED. LOW discipline_beg one-pulse lag accepted (landmine-9). Weights PLACEHOLDER-playtest.
+This closes the Xinjiang cluster: #10A caravan (oasis trade) + #10B control (concrete derive). #10 DONE.
