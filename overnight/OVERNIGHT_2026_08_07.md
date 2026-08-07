@@ -394,3 +394,43 @@ MED findings, both FIXED:
 Research (RESEARCH_QING_XINJIANG_GARRISONS_1763.md) confirms the OTHER Tarim oases (Yarkand/Aksu/Ush/Khotan +
 Hami/KML) had light rotating Resident-Minister garrisons c.1760 too — a genuine seeding gap, deferred. LTG/BTG
 (Himalayan indirect rule) correctly have no banner garrison.
+
+---
+
+## [T-late+1] #21-followup — Inner-Asian 藩部 garrison seeding (BUILT + REVIEWED)
+
+**Trigger.** User asked to build the deferred #21 follow-up, then (mid-turn) to (a) audit ALL CHI subjects AND
+sub-subjects, (b) check Kobdo + Kumul specifically, (c) make garrison commanders historically accurate to 1763
+or plausible-invented, and (d) NOT use ambans as garrison commanders.
+
+**Full subject-tree audit (setup/main/00_default.txt dependency blocks).** Walked the entire CHI subject tree.
+- ALREADY seeded (5): Ili/Huiyuan, Kashgar (XNG), Mukden, Heilongjiang, Tibet.
+- GENUINE GAPS → SEEDED (6): Jilin 吉林 p:107 (MNC), Uliastai 烏里雅蘇臺 p:7681 (ULS), Kobdo 科布多 p:6617
+  (KBD→ULS), Urga 庫倫 p:5117 (MGA→ULS), Hami 哈密 p:8884 (KML→ILI), Aksu 阿克蘇 p:2977 (XNG→ILI). All 藩部
+  Lifan-Yuan military-governorate seats with a rotating garrison by 1763. **Kobdo YES** (科布多參贊大臣, est.
+  1761); **Kumul/Hami YES** (哈密辦事大臣, est. 1760).
+- CORRECTLY UNGARRISONED (朝貢國 / indirect rule): Kham feudatories LTG/BTG/CKL/DER/NGQ; Kyrgyz/Kazakh steppe
+  vassals SBG/ADG/GKH + sub-tributaries SYK/BGK; SW/Burma vassals CHH/MLM/TNI/LSU/LAF/FOS; 朝貢 TRH/KOR/RYU/TNN.
+
+**Commanders (amban ≠ garrison commander, per the user + the existing Tibet 傅景-amban/策丹-field-officer split).**
+- REAL 1763 holders of a 將軍-rank (military) command → lead directly: char:641 恒祿 Henglu (吉林將軍, Bordered
+  Blue, 1760-69); char:642 成衮札布 Chenggunzhabu (定邊左副將軍, Khalkha Tüsheet-Khan prince, 1757-71, died in
+  office). Both sourced from zh.wikipedia 將軍 year-tables.
+- INVENTED plausible FIELD OFFICERS (their seats' senior post was a 辦事大臣/參贊大臣 resident minister = amban-
+  class, NOT a garrison commander; sources give no separate 1763 field-officer name): char:643 Kobdo, 644 Urga,
+  645 Hami, 646 Aksu. Culture/clan-appropriate (manchu/mongolian/beihua).
+
+**Sizing** (North>South historical asymmetry, research §6): Manchuria/Mongolia banner-general seats 3; Tarim/Hami
+light rotating garrisons 1-2. All raised via the existing SE_qing_raise_garrison_cmd helper in the PRE-1772 OOB
+branch only (1815 branch byte-for-byte untouched); all six provinces admitted by the helper's 3-way ownership
+guard (1-hop via OR-branch-2, 2-hop via OR-branch-3 overlord wrapper — verified none is secretly 3-hop).
+
+**Files.** imp19c_effects_legion_setup.txt (6 OOB lines), setup/characters/00_Qing.txt (6 chars, ids 641-646),
+imp19c_units_l_english.yml (6 unit-name keys).
+
+**Adversarial review — verdict CLEAN, no defects.** Confirmed: all six ownership chains ≤2 hops (guard admits
+all); char ids 641-646 collision-free + CHI-employed + military_officer + no death_date (attach directly); all
+culture/religion keys exist; no double-raise (inside the qing_armies_setup_done sentinel + date branch); BOM
+intact (setup reader rejects BOM — my write stripped it, RESTORED before review; diff is pure +95 addition);
+1815 branch untouched. One non-defect note (loc keys mix _BANNER_GARRISON vs _GREEN_STANDARD by unit type —
+internally consistent). Committed + pushed to merge-overnight. Awaiting user boot-test.
