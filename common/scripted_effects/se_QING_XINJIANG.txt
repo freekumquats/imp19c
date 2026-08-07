@@ -244,8 +244,24 @@ QING_xj_derive_control = {
 	area:Dzungaria = { every_area_province = { limit = { has_province_modifier = qing_xj_tuntian_colony }  ROOT = { change_variable = { name = qing_xj_ctl_term  add = 3 } } } }
 	area:Tarim     = { every_area_province = { limit = { has_province_modifier = qing_xj_tuntian_colony }  ROOT = { change_variable = { name = qing_xj_ctl_term  add = 3 } } } }
 	change_variable = { name = qing_xj_control_tmp  add = var:qing_xj_ctl_term }
-	# xiexiang subsidy flowing: +10 (the paid garrison).
-	if = { limit = { has_country_modifier = qing_xj_xiexiang }  change_variable = { name = qing_xj_control_tmp  add = 10 } }
+	# [#19 2026-08-07] CONCRETE GARRISON term, GATED by xiexiang (funding). Replaces the old flat
+	# xiexiang +10 with: count the real historical garrison seats on Xinjiang soil (qing_hist_garrison_prov,
+	# the permanent province stamp the OOB garrison raise leaves — imp19c_effects_legion_setup.txt:130/156;
+	# #21's guard-widen means Kashgar now carries it), +3 each, capped at +12, BUT ONLY WHEN THE XIEXIANG
+	# SUBSIDY FLOWS. Rationale (review): xiexiang IS the garrison-funding proxy ("paid the GARRISON, not the
+	# begs", :442) — so make it a GATE on the garrison-existence term, NOT a parallel additive (that would
+	# double-score built+paid). Crucially this keeps the term DEGRADABLE: cut the subsidy → garrison term → 0
+	# → control can fall into the khoja ≤30 band on a neglected frontier (the intended rot path preserved).
+	# The +3/seat matches the tuntian/secured terms; the +12 cap (~4 seats) prevents the many-garrison North
+	# from swamping the 0..100 meter. Counted over the same two areas as the tuntian/secured terms.
+	if = {
+		limit = { has_country_modifier = qing_xj_xiexiang }
+		set_variable = { name = qing_xj_ctl_term  value = 0 }
+		area:Dzungaria = { every_area_province = { limit = { has_variable = qing_hist_garrison_prov }  ROOT = { change_variable = { name = qing_xj_ctl_term  add = 3 } } } }
+		area:Tarim     = { every_area_province = { limit = { has_variable = qing_hist_garrison_prov }  ROOT = { change_variable = { name = qing_xj_ctl_term  add = 3 } } } }
+		if = { limit = { var:qing_xj_ctl_term > 12 }  set_variable = { name = qing_xj_ctl_term  value = 12 } }
+		change_variable = { name = qing_xj_control_tmp  add = var:qing_xj_ctl_term }
+	}
 	# secured oasis provinces: +3 each (beat-stamped grip on the map).
 	set_variable = { name = qing_xj_ctl_term  value = 0 }
 	area:Dzungaria = { every_area_province = { limit = { has_province_modifier = qing_xinjiang_prov_secured }  ROOT = { change_variable = { name = qing_xj_ctl_term  add = 3 } } } }
@@ -393,7 +409,7 @@ QING_xj_xiexiang_on = {
 	if = {
 		limit = { NOT = { has_country_modifier = qing_xj_xiexiang } }
 		add_country_modifier = { name = qing_xj_xiexiang  duration = -1 }
-		# [meter-concretize #10B] +6 control nudge DROPPED — qing_xj_xiexiang is a control DERIVE term (+10);
+		# [meter-concretize #10B] +6 control nudge DROPPED — qing_xj_xiexiang now GATES the garrison-seat derive term (#19, up to +12);
 		# also resume-of-subsidy stops the neglect rot (the pulse gate reads this modifier).
 		QING_xj_derive_control = yes
 		QING_xj_recompute_consolidation = yes
@@ -408,7 +424,7 @@ QING_xj_xiexiang_off = {
 	if = {
 		limit = { has_country_modifier = qing_xj_xiexiang }
 		remove_country_modifier = qing_xj_xiexiang
-		# [meter-concretize #10B] −6 control nudge DROPPED — removing qing_xj_xiexiang drops the +10 derive
+		# [meter-concretize #10B] −6 control nudge DROPPED — removing qing_xj_xiexiang zeroes the garrison-seat derive term (#19)
 		# term; and the pulse's neglect-rot (gated on NOT xiexiang) now begins the concrete fraying.
 		QING_xj_derive_control = yes
 		QING_xj_recompute_consolidation = yes
