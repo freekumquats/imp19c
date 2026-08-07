@@ -62,6 +62,10 @@ qing_caravan.1 = {
 		has_variable = qing_caravan_prosperity
 		var:qing_caravan_prosperity >= 55
 		NOT = { has_variable = qing_caravan_aqsaqal_granted }
+		# [#13 2026-08-07 LINK] a beaten or caravan.3-settled Kokand no longer issues ultimatums (belt-and-braces
+		# with the pulse offer guard; design §B.2 both-guards form).
+		NOT = { QING_kok_conquered_trigger = yes }
+		NOT = { QING_kok_yielded_flag = yes }
 	}
 
 	immediate = {
@@ -142,6 +146,11 @@ qing_caravan.2 = {
 		has_variable = qing_xj_khoja_pending
 		has_variable = qing_caravan_prosperity
 		var:qing_caravan_prosperity >= 40
+		# [#13 2026-08-07 LINK] a beaten or caravan.3-settled Kokand cannot cut the road (belt-and-braces with the
+		# pulse offer guard; design §B.2). The khoja scare itself is now suppressed upstream in this case, so this
+		# is defensive — but keeps the event honest if fired by any other path.
+		NOT = { QING_kok_conquered_trigger = yes }
+		NOT = { QING_kok_yielded_flag = yes }
 	}
 
 	immediate = {
@@ -217,6 +226,77 @@ qing_caravan.2 = {
 		if = {
 			limit = { has_variable = qing_caravan_routecut_seen }
 			remove_variable = qing_caravan_routecut_seen
+		}
+	}
+}
+
+########################################################################
+# .3  THE KHANATE YIELDS (浩罕屈服)  — [#13 2026-08-07]
+# Offered by QING_caravan_pulse ONCE Kokand is beaten by force (QING_kok_conquered_trigger: subjugated as a
+# CHI subject, OR its heartland seat Kokand city p:110 held). The CONQUEST alternative to managing the
+# aqsaqal/khoja cycle: the throne now dictates the terms of the caravan trade rather than conceding them.
+# A one-time settlement — the once-only guard qing_caravan_kok_yielded is set in THIS immediate (mirrors
+# .1/.2), and each option's END-STATE flag (qing_caravan_kok_terms_dictated / _kok_absorbed) permanently
+# suppresses the ultimatum, the route-cut crisis, AND the khoja scare (QING_kok_yielded_flag, §NEW-MEDIUM-2).
+########################################################################
+qing_caravan.3 = {
+	type = country_event
+	title = "qing_caravan.3.t"
+	desc = "qing_caravan.3.desc"
+	picture = steppe_cavalry
+
+	left_portrait = root.current_ruler
+
+
+	trigger = {
+		tag = CHI
+		QING_kok_conquered_trigger = yes
+		NOT = { has_variable = qing_caravan_kok_yielded }
+	}
+
+	immediate = {
+		# [#13] set the once-only offered flag HERE (only when the event actually fires), not in the pulse —
+		# so a re-check failure during the 5-15 day delay never strands it set (the #366/#368 flag-leak fix).
+		set_variable = { name = qing_caravan_kok_yielded  value = 1 }
+		LOG_line = { sys = QING  msg = "EVENT qing_caravan.3 (the khanate yields) fired for CHI" }
+	}
+
+	# --- DICTATE TERMS (天朝定制) — reopen the trade on Qing terms: no foreign aqsaqal, no customs haircut. ---
+	option = {
+		name = "qing_caravan.3.dictate"
+		# [#13-R impl-review MED-1] affordability gate, mirroring qing_caravan.2.escort's own trigger — the
+		# tooltip advertises the 100 treasury as a hard cost, so don't let a cash-poor throne go negative.
+		trigger = { treasury >= 100 }
+		custom_tooltip = "qing_caravan.3.dictate.tt"
+		QING_caravan_dictate_terms = yes
+		add_treasury = -100
+		current_ruler = { add_popularity = 20 }
+	}
+
+	# --- ABSORB THE ROUTE (併商道) — fold the Kokand merchants into a Qing state monopoly of the oasis trade. ---
+	option = {
+		name = "qing_caravan.3.absorb"
+		# [#13-R impl-review MED-1] affordability gate — the tooltip advertises 40 political influence as a
+		# hard cost; gate the option so it can't be taken partly free (mirrors .2.escort's trigger precedent).
+		trigger = { political_influence >= 40 }
+		custom_tooltip = "qing_caravan.3.absorb.tt"
+		QING_caravan_absorb_route = yes
+		add_political_influence = -40
+	}
+
+	# --- DEFER THE SETTLEMENT (緩議) — the always-available fallback. -----
+	# [#13-R impl-review MED-1] Both settlement options above now carry affordability triggers, so a throne that
+	# can afford NEITHER (a costly war just ended) would otherwise face an unclosable event — an Imperator
+	# country_event needs one available option (cf. qing_caravan.2.lapse, the ungated escape). This defers:
+	# clear the once-only offered flag so QING_caravan_pulse re-offers .3 later once the coffers recover.
+	# Kokand stays beaten, so QING_kok_conquered_trigger keeps the ultimatum/route-cut/khoja-scare suppressed
+	# in the meantime — nothing strands.
+	option = {
+		name = "qing_caravan.3.defer"
+		custom_tooltip = "qing_caravan.3.defer.tt"
+		if = {
+			limit = { has_variable = qing_caravan_kok_yielded }
+			remove_variable = qing_caravan_kok_yielded
 		}
 	}
 }

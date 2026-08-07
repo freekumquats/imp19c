@@ -214,7 +214,12 @@ QING_caravan_pulse = {
 	}
 	# moderate rate (1): factor 1 — leave income_tmp as the throughput-scaled base.
 	if = {
-		limit = { has_variable = qing_caravan_aqsaqal_granted }
+		# [#13 2026-08-07] once a beaten Kokand is SETTLED (terms dictated OR route absorbed), conquest supersedes
+		# the treaty — the throne collects FULL customs even if an aqsaqal was historically granted (a treasury
+		# gain, NEW-MEDIUM-1). [#13-R impl-review MED-2] Guard on QING_kok_yielded_flag (ORs both end-states) not
+		# just the dictate flag, else the ABSORB monopoly leaves a foreign consul skimming a route the throne now
+		# supposedly owns outright — an incoherent end-state on the grant→conquer→absorb path.
+		limit = { has_variable = qing_caravan_aqsaqal_granted  NOT = { QING_kok_yielded_flag = yes } }
 		change_variable = { name = qing_caravan_income_tmp  divide = 2 }   # Kokand skims the third-party customs
 	}
 	if = {
@@ -252,10 +257,24 @@ QING_caravan_pulse = {
 		}
 	}
 
+	# --- [#13 2026-08-07] OFFER "THE KHANATE YIELDS" (浩罕屈服) once Kokand is beaten by force — the
+	# conquest alternative to the aqsaqal/khoja cycle. An INDEPENDENT if BEFORE the ultimatum/route-cut
+	# chain (design §5.5): a conquered Kokand gets THIS, not a now-incoherent ultimatum. Once-only via
+	# qing_caravan_kok_yielded (set in the event's OWN immediate, mirroring .1/.2). is_ai=no for parity
+	# with the sibling offers (design LOW-1). The ultimatum/route-cut offers below are guarded on
+	# NOT-conquered + NOT-yielded so they never compete with, or shadow, this one.
+	if = {
+		limit = {
+			QING_kok_conquered_trigger = yes
+			NOT = { has_variable = qing_caravan_kok_yielded }
+			is_ai = no
+		}
+		trigger_event = { id = qing_caravan.3  days = { 5 15 } }
+	}
 	# --- OFFER THE KOKAND ULTIMATUM once the trade is worth extorting AND Kokand is already emboldened
 	# (a festering khoja scare) AND the concession is not yet granted. Player-only; the event re-checks
 	# its own state; the once-only flag is set in qing_caravan.1's OWN immediate (the #366/#368 fix).
-	if = {
+	else_if = {
 		limit = {
 			# [boot-fix 2026-08-06] date gate (mirrors qing_caravan.1's own trigger): the Kokand aqsaqal
 			# ultimatum is an 1820s-1832 phenomenon, not the 1763 zenith. Don't even queue it before then
@@ -268,6 +287,11 @@ QING_caravan_pulse = {
 			# The proven opinion trigger (value test), NOT the unavailable has_opinion.
 			c:KOK = { opinion = { target = ROOT  value < 0 } }
 			NOT = { has_variable = qing_caravan_ultimatum_seen }
+			# [#13 LINK] a beaten or caravan.3-settled Kokand no longer makes demands — both places guarded
+			# (design §B.2 + §5, the authoritative both-guards form; conquered_trigger also keeps this off
+			# the else_if when .3 fires above).
+			NOT = { QING_kok_conquered_trigger = yes }
+			NOT = { QING_kok_yielded_flag = yes }
 			is_ai = no
 		}
 		trigger_event = { id = qing_caravan.1  days = { 5 20 } }
@@ -278,6 +302,9 @@ QING_caravan_pulse = {
 			has_variable = qing_xj_khoja_pending
 			var:qing_caravan_prosperity >= 40
 			NOT = { has_variable = qing_caravan_routecut_seen }
+			# [#13 LINK] the route-cut crisis cannot fire once Kokand is beaten or settled via caravan.3.
+			NOT = { QING_kok_conquered_trigger = yes }
+			NOT = { QING_kok_yielded_flag = yes }
 			is_ai = no
 		}
 		trigger_event = { id = qing_caravan.2  days = { 5 20 } }
@@ -526,4 +553,67 @@ QING_caravan_invoke_aqsaqal = {
 		LOG_fail = { sys = QING  fn = "QING_caravan_invoke_aqsaqal"  reason = "no aqsaqal concession in force to invoke" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_caravan_invoke_aqsaqal"  result = OK }
+}
+
+# ======================================================================
+# [#13 2026-08-07] QING_caravan_dictate_terms (天朝定制) — the DICTATE option of qing_caravan.3, offered
+# once Kokand is beaten (QING_kok_conquered_trigger). Scope: COUNTRY (CHI). The throne reopens the caravan
+# trade on ITS OWN terms: no foreign aqsaqal, no customs haircut. Effects, each attributed to the RIGHT
+# meter (design NEW-MEDIUM-1):
+#   - set qing_caravan_kok_terms_dictated: a TREASURY gain — the pulse's :216 haircut guard stops halving
+#     the take even if an aqsaqal was historically granted (conquest supersedes the treaty). NOT prosperity.
+#   - clear qing_xj_khoja_pending: THIS is the durable PROSPERITY lift (drops the −15 route-disruption term
+#     in recompute_target :148-151); the #13 scare-guard then keeps it from re-arming while Kokand is beaten.
+#   - secure ONE oasis on the map (INTENT = secure_one, +3 in the derive) + re-derive control. Gated on
+#     not-fully-integrated, matching the sibling levers (escort :482).
+# NO one-shot prosperity nudge (prosperity is a hysteresis-eased derive — a nudge would bleed off; MEDIUM-5).
+# ======================================================================
+QING_caravan_dictate_terms = {
+	LOG_enter = { sys = QING  fn = "QING_caravan_dictate_terms" }
+	QING_caravan_init = yes
+	set_variable = { name = qing_caravan_kok_terms_dictated  value = 1 }
+	# conquest reopens the road on Qing terms — call off the pretenders (durable prosperity lift via the
+	# −15 term dropping out of recompute_target).
+	if = {
+		limit = { has_variable = qing_xj_khoja_pending }
+		remove_variable = qing_xj_khoja_pending
+	}
+	# stamp the grip on the map — secure one oasis; control DERIVES up (+3).
+	if = {
+		limit = { NOT = { has_variable = qing_xj_fully_integrated } }
+		QING_ili_apply_prov_band = { INTENT = secure_one }
+		QING_xj_derive_control = yes
+	}
+	QING_caravan_recompute_target = yes
+	LOG_line = { sys = QING  msg = "caravan: terms DICTATED to a beaten Kokand — full customs restored, the road reopens for" }
+	LOG_exit = { sys = QING  fn = "QING_caravan_dictate_terms"  result = OK }
+}
+
+# ======================================================================
+# [#13 2026-08-07] QING_caravan_absorb_route (併商道) — the ABSORB option of qing_caravan.3. Scope: COUNTRY
+# (CHI). The throne folds the Kokand merchants into a Qing STATE MONOPOLY of the oasis trade. Effects:
+#   - set qing_caravan_kok_absorbed: the end-state flag (with kok_terms_dictated, ORs into QING_kok_yielded_flag,
+#     permanently suppressing the caravan crises + khoja scare).
+#   - customs model DECISION (design MEDIUM-5): a state monopoly extracts revenue over volume, so set the
+#     HEAVY customs rate (2) — this LOWERS the prosperity target −15 (recompute_target :139-141). That is a
+#     deliberate monopoly-over-volume trade-off; we therefore do NOT promise any prosperity gain here.
+#   - clear qing_xj_khoja_pending: the only durable prosperity lever (drops the −15 route-disruption term),
+#     partly offsetting the monopoly drag.
+#   - +legitimacy 8: the throne's writ runs unchallenged over the trade.
+# ======================================================================
+QING_caravan_absorb_route = {
+	LOG_enter = { sys = QING  fn = "QING_caravan_absorb_route" }
+	QING_caravan_init = yes
+	set_variable = { name = qing_caravan_kok_absorbed  value = 1 }
+	# state monopoly: heavy customs (revenue over volume) — a deliberate trade-off, NOT paired with a prosperity claim.
+	set_variable = { name = qing_caravan_customs_rate  value = 2 }
+	# the merchants folded into the monopoly no longer shelter pretenders — call off the scare (durable prosperity lever).
+	if = {
+		limit = { has_variable = qing_xj_khoja_pending }
+		remove_variable = qing_xj_khoja_pending
+	}
+	add_legitimacy = 8
+	QING_caravan_recompute_target = yes
+	LOG_line = { sys = QING  msg = "caravan: the Kokand route ABSORBED into the state monopoly (heavy customs) for" }
+	LOG_exit = { sys = QING  fn = "QING_caravan_absorb_route"  result = OK }
 }

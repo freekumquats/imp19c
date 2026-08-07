@@ -342,3 +342,55 @@ PENDING (need user boot-test or gated):
 - #19 garrison->control + #20 khoja garrison options: gated on #21 boot-verify + #19 calibration re-derive.
 - #22 Scandal->amban, #26 amban picker: designs reviewed/ready; multi-file — better after a boot test of shipped.
 - #27 senior-minister scandal chain: notes only (not yet designed).
+
+---
+
+## [T-late] #13 Central-Asia ↔ Xinjiang link — DESIGN-REVIEWED + BUILT + IMPL-REVIEWED
+
+**What it is.** Wire the Central-Asia (Kokand) conquest arc into the #367 Xinjiang / #370 caravan systems,
+which previously assumed a permanently-independent Kokand pressing the aqsaqal/khoja cycle forever. Two pillars:
+- **A (conquest settlement):** new event `qing_caravan.3` "The Khanate Yields" (浩罕屈服), offered by
+  `QING_caravan_pulse` once Kokand is beaten by force. DICTATE terms (天朝定制: full customs, no foreign
+  consul) vs ABSORB the route (併商道: state monopoly, heavy customs) — the conquest alternative to conceding.
+- **B (control coupling):** subjugating the Silk Road khanates (KOK/BUK/KHV +5 each, GKH/ORT/KSH +2) adds a
+  "Central-Asia dominion" term to the derived `qing_xinjiang_control` meter; and a beaten/settled Kokand
+  SUPPRESSES the khoja-scare random roll (separatism-backer rule: the scare is "backed from Kokand").
+
+**Adversarial DESIGN review (code-review agent, pre-build).** Verdict BUILD-READY, 1 MED + 2 LOW folded in:
+use the both-guards form per §5/§B.2 (not the abbreviated §3/§4); add `is_ai = no` (LOW-1); use structural
+anchors not stale line numbers (LOW-2). All adopted.
+
+**Implementation (7 code steps).**
+1. NEW `common/scripted_triggers/qing_kok_triggers.txt` (no BOM): `QING_kok_conquered_trigger` (subjugated
+   OR `owns_or_subject_owns = 110` Kokand city — a LIVE derive) + `QING_kok_yielded_flag` (dictate/absorb
+   end-state flags OR'd — PERMANENT).
+2. se_QING_XINJIANG.txt: Central-Asia dominion term INSIDE `QING_xj_derive_control`'s accumulator (scratch
+   `qing_xj_ctl_term`→`qing_xj_control_tmp add`, before the clamp — #10B honoured); khoja-scare suppression
+   guard on the `random={chance=15}` limit.
+3. se_QING_CARAVAN.txt: customs-haircut guard; the `.3` pulse offer as an INDEPENDENT `if` BEFORE the
+   ultimatum/route-cut chain (.1/.2 changed to `else_if`, both guarded NOT-conquered + NOT-yielded); two new
+   effects `QING_caravan_dictate_terms` + `QING_caravan_absorb_route` (each attributes effects to the RIGHT
+   meter: haircut = treasury; clearing khoja_pending = the ONLY durable prosperity lever; NO one-shot
+   prosperity nudge — MEDIUM-5). ABSORB sets heavy customs (revenue-over-volume trade-off) + legitimacy +8.
+4. qing_caravan_events.txt: both-flag guards on caravan.1/.2 triggers (belt-and-braces); appended the
+   `qing_caravan.3` event (once-only flag set in its OWN immediate, #366/#368 discipline).
+5. loc: `.3.t/.desc/.dictate(.tt)/.absorb(.tt)` (+ `.defer(.tt)`, see below).
+
+**Adversarial IMPL review (code-review agent, pre-commit).** Two pillars confirmed wired correctly (accumulator
+placement, no meter-bleed, no stranded flags, offer-chain can't shadow/double-fire, all idioms/tags real). Two
+MED findings, both FIXED:
+- **MED-1 (no affordability trigger):** `.3` options applied `add_treasury=-100` / `add_political_influence=-40`
+  unconditionally (could drive a war-drained throne negative). FIXED: option-level `trigger` gates (mirrors
+  `.2.escort`). This created a new risk — if BOTH options gate off, an Imperator country_event has no closable
+  option — so ADDED an ungated `.3.defer` (緩議) fallback that clears `qing_caravan_kok_yielded` to re-offer
+  later; Kokand stays beaten so nothing re-arms in the interim.
+- **MED-2 (absorb leaves aqsaqal haircut active):** on grant→conquer→ABSORB, the `:219` customs haircut still
+  halved the take (foreign consul skimming a route the throne now monopolises). FIXED: gate the haircut on
+  `NOT = { QING_kok_yielded_flag = yes }` (ORs both settlement end-states) not just the dictate flag.
+
+**Status.** All files brace-balanced. Committed + pushed to merge-overnight. Awaiting user boot-test.
+
+**Historical-garrison follow-up (surfaced, NOT built):** the #21 nested-subject fix resurrected only Kashgar.
+Research (RESEARCH_QING_XINJIANG_GARRISONS_1763.md) confirms the OTHER Tarim oases (Yarkand/Aksu/Ush/Khotan +
+Hami/KML) had light rotating Resident-Minister garrisons c.1760 too — a genuine seeding gap, deferred. LTG/BTG
+(Himalayan indirect rule) correctly have no banner garrison.
