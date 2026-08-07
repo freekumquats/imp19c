@@ -106,12 +106,99 @@ ECON_LOG_currency_snapshot = {
 	# iterated country, not ROOT.
 	# [#log-noise-fix 2026-08-03] The has_variable=official_currency branch RENDER was removed —
 	# it staged backing/purchasing_power only to feed the unresolvable ROOT.MakeScope render (see
-	# ECON_LOG_country_snapshot note; "Could not find promote" noise, no value). The else branch
-	# (a plain-text LOG_line, which renders fine) is KEPT so the trace still records metal/barter
-	# economies. The if-branch is now empty of output.
+	# ECON_LOG_country_snapshot note; "Could not find promote" noise, no value).
+	# [#28 2026-08-07] REFILLED the if-branch with BAND-BUCKETING (no numeric render — the render is
+	# infeasible in a script debug_log, proven by the removal notes above; IGNORE the stale top-of-file
+	# SYNTAX NOTE that still advertises ROOT.MakeScope). CHI-only (the #23 deflation report is CHI; avoids
+	# flooding every monetary tag). Stage each script_value into a temp var (proven not to error), then
+	# classify with sentinel-guarded band ladders (the ECON_LOG_fx_classify_good idiom, :322) — the band
+	# ladder is NESTED inside the > -999999999 sentinel so an EMPTY/Div0 staged value is labelled EMPTY,
+	# NOT mislabelled as the lowest band. Serves #23: shows whether private_cash_ratio is pinned at the
+	# deflation floor and whether the denominator (private_cash_needed) is what moves.
+	if = {
+		limit = { has_variable = official_currency  tag = CHI }
+		# --- private_cash_ratio: the core signal (0..~2.6; deflation floor at <0.1 ⇒ ~-10%) ---
+		set_variable = { name = ECON_LOG_cur_ratio  value = CURRENCY_private_cash_ratio }
+		if = { limit = { NOT = { has_variable = ECON_LOG_cur_ratio } }        debug_log = "IMP19C CURR ratio = UNSET" }
+		else_if = {
+			limit = { var:ECON_LOG_cur_ratio > -999999999 }
+			if = { limit = { var:ECON_LOG_cur_ratio >= 1 }        debug_log = "IMP19C CURR ratio >= 1.0 (inflation side)" }
+			else_if = { limit = { var:ECON_LOG_cur_ratio >= 0.5 } debug_log = "IMP19C CURR ratio 0.5-1.0 (mild deflation)" }
+			else_if = { limit = { var:ECON_LOG_cur_ratio >= 0.1 } debug_log = "IMP19C CURR ratio 0.1-0.5 (serious deflation)" }
+			else = { debug_log = "IMP19C CURR ratio < 0.1 (deflation FLOOR ~ -10%)" }
+		}
+		else = { debug_log = "IMP19C CURR ratio = EMPTY" }
+		remove_variable = ECON_LOG_cur_ratio
+		# --- private_cash_needed: the DENOMINATOR (does IT move → #23 hypothesis). Coarse magnitude bands. ---
+		set_variable = { name = ECON_LOG_cur_need  value = CURRENCY_private_cash_needed }
+		if = { limit = { NOT = { has_variable = ECON_LOG_cur_need } }        debug_log = "IMP19C CURR needed = UNSET" }
+		else_if = {
+			limit = { var:ECON_LOG_cur_need > -999999999 }
+			if = { limit = { var:ECON_LOG_cur_need >= 100 }       debug_log = "IMP19C CURR needed >= 100" }
+			else_if = { limit = { var:ECON_LOG_cur_need >= 50 }   debug_log = "IMP19C CURR needed 50-100" }
+			else_if = { limit = { var:ECON_LOG_cur_need >= 25 }   debug_log = "IMP19C CURR needed 25-50" }
+			else_if = { limit = { var:ECON_LOG_cur_need >= 10 }   debug_log = "IMP19C CURR needed 10-25" }
+			else_if = { limit = { var:ECON_LOG_cur_need >= 0 }    debug_log = "IMP19C CURR needed 0-10" }
+			else = { debug_log = "IMP19C CURR needed < 0 (negative denominator)" }
+		}
+		else = { debug_log = "IMP19C CURR needed = EMPTY" }
+		remove_variable = ECON_LOG_cur_need
+		# --- amt_circulated_scaled: the NUMERATOR (money in circulation). Coarse magnitude bands. ---
+		set_variable = { name = ECON_LOG_cur_circ  value = CURRENCY_amt_circulated_scaled }
+		if = { limit = { NOT = { has_variable = ECON_LOG_cur_circ } }        debug_log = "IMP19C CURR circ = UNSET" }
+		else_if = {
+			limit = { var:ECON_LOG_cur_circ > -999999999 }
+			if = { limit = { var:ECON_LOG_cur_circ >= 100 }       debug_log = "IMP19C CURR circ >= 100" }
+			else_if = { limit = { var:ECON_LOG_cur_circ >= 50 }   debug_log = "IMP19C CURR circ 50-100" }
+			else_if = { limit = { var:ECON_LOG_cur_circ >= 25 }   debug_log = "IMP19C CURR circ 25-50" }
+			else_if = { limit = { var:ECON_LOG_cur_circ >= 10 }   debug_log = "IMP19C CURR circ 10-25" }
+			else = { debug_log = "IMP19C CURR circ < 10" }
+		}
+		else = { debug_log = "IMP19C CURR circ = EMPTY" }
+		remove_variable = ECON_LOG_cur_circ
+	}
 	if = {
 		limit = { NOT = { has_variable = official_currency } }
 		LOG_line = { sys = ECON  msg = " no official currency (metal/barter economy)" }
+	}
+}
+
+# ======================================================================
+# [#28 2026-08-07] MINTING SNAPSHOT — the MONTHLY minting signal for #23 ("minting 1k barely
+# moves it"). Called from monthly_currency_pulse. CHI-only, band-bucketing (no render). Answers:
+# is the player's minting lever CAPPED (swamped by the model), and what band is the rate in?
+# CURRENCY_minting_rate is a real var (se_CURRENCY.txt:1625); CURRENCY_minting_rate_cap is a
+# script_value — comparing a var against a script_value RHS is LEGAL (proven se_CURRENCY.txt:1376,
+# the clamp this observes). Country scope.
+# ======================================================================
+ECON_LOG_minting_snapshot = {
+	# Scope: country
+	if = {
+		limit = { has_variable = official_currency  tag = CHI }
+		# capped? — the exact comparison the clamp at se_CURRENCY.txt:1376 uses. [review-fix] CURRENCY_minting_rate
+		# is UNSET until CURRENCY_mint_currency first runs (se_CURRENCY.txt:1625) — a month where minting did not
+		# fire (balance within +-0.5) leaves it unset, so guard has_variable first (the file's forensic idiom).
+		if = {
+			limit = { NOT = { has_variable = CURRENCY_minting_rate } }
+			debug_log = "IMP19C CURR minting = rate UNSET (no minting yet this game)"
+		}
+		else_if = {
+			limit = { var:CURRENCY_minting_rate > CURRENCY_minting_rate_cap }
+			debug_log = "IMP19C CURR minting = ABOVE CAP (clamped)"
+		}
+		else_if = {
+			limit = { var:CURRENCY_minting_rate >= CURRENCY_minting_rate_cap }
+			debug_log = "IMP19C CURR minting = AT CAP"
+		}
+		else = { debug_log = "IMP19C CURR minting = below cap" }
+		# minting-rate band (thousands/month). The var is directly readable; classify, don't render.
+		if = { limit = { NOT = { has_variable = CURRENCY_minting_rate } } debug_log = "IMP19C CURR minting_rate = UNSET" }
+		else_if = { limit = { var:CURRENCY_minting_rate >= 100 } debug_log = "IMP19C CURR minting_rate >= 100" }
+		else_if = { limit = { var:CURRENCY_minting_rate >= 50 }  debug_log = "IMP19C CURR minting_rate 50-100" }
+		else_if = { limit = { var:CURRENCY_minting_rate >= 10 }  debug_log = "IMP19C CURR minting_rate 10-50" }
+		else_if = { limit = { var:CURRENCY_minting_rate >= 1 }   debug_log = "IMP19C CURR minting_rate 1-10" }
+		else_if = { limit = { var:CURRENCY_minting_rate > -999999999 } debug_log = "IMP19C CURR minting_rate 0 or negative" }
+		else = { debug_log = "IMP19C CURR minting_rate = EMPTY" }
 	}
 }
 
