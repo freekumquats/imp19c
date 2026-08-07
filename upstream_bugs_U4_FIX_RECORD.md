@@ -94,9 +94,12 @@ corrected — the committed diff is purely the semantic guards, verified with gi
 # AREA TO INVESTIGATE (not yet fixed): U-trade — b78ccc1f6 wealth_owed multiply typo
 
 ## STATUS
-OPEN — flagged 2026-07-25 during the 1763-branch upstream review. Present on THIS branch (upstream_bugs
-is built on upstream/master, so b78ccc1f6 is an ancestor). The 1763 branch (merge-overnight) does NOT
-have it — its GT_split_update_wealth_owed_for_tradegoods still uses the correct two-multiply form.
+**FIXED 2026-08-06** on this branch (upstream_bugs) — the committed `add =` reverted to `multiply =` in the
+one block (se_GLOBALTRADE_split.txt GT_split_update_wealth_owed_for_tradegoods). Behaviour-preserving:
+restores `wealth_owed = order_size * price * modifier`. PR-able upstream (Sobisonator's own code, same class
+as the U4 guards). The 1763 branch (merge-overnight) never had the bug — it kept the correct two-multiply
+form and correctly REJECTED cherry-picking b78ccc1f6 (see design/UPSTREAM_SOBISONATOR_DIVERGENCE.md).
+(Was: OPEN, flagged 2026-07-25 during the 1763-branch upstream review.)
 
 ## THE COMMIT
 b78ccc1f6 "Condense multiplication calls for wealth_owed_for_$ ... from 2 to 1"
@@ -123,7 +126,30 @@ order_size_modifier function is shared, un-forked code, so the semantics are the
 - `multiply = { value = 1  subtract = X }` -> multiply by (1 - X)  [se_GLOBALTRADE_split.txt:2472, 5094]
 - correct two-multiply condense: `multiply = { value = A  multiply = B }` -> A*B  [se_ECON_wealth.txt:525-527]
 
-## FIX (when we act)
-Change the committed `add =` back to `multiply =` in that one block. One-line semantic fix. PR-able upstream
-(same class as the U4 guards — Sobisonator's own code). Verify order_size_modifier is still a fraction at
-the time of merge, then re-check trade-wealth figures against a pre-b78ccc1f6 baseline.
+## FIX (APPLIED 2026-08-06)
+Changed the committed `add =` back to `multiply =` in that one block (se_GLOBALTRADE_split.txt, the
+`multiply = { value = owner.var:country_unit_price_$tradegood$  multiply = owner.var:order_size_modifier_$tradegood$ }`
+form). One-line semantic fix, behaviour-preserving.
+
+## DEEP VERIFICATION (2026-08-06, before applying — every link re-proven, not assumed)
+The verdict was re-derived from scratch against the actual code + oracle repos, because the fork has a
+history of misdiagnosed "upstream bugs" (see U1 WITHDRAWN above). All four links hold:
+1. **Block semantics `multiply = { value = A  add = B }` == `* (A+B)`** — proven by the Invictus ORACLE
+   idiom `multiply = { value = 1.00  add = modifier:local_research_points_modifier  add = ... }`
+   (Invictus ai_inventions_values.txt:1594 — the canonical "multiply by 1+Sigma-modifiers" pattern) AND the
+   sibling in THIS file `multiply = { value = 1  subtract = CURRENCY_power_trade_bonus_cached }` (= *(1-bonus)).
+   The inner block resolves to ONE number, which becomes the multiplier.
+2. **order_size_modifier is unchanged + is a <=1 fulfilment fraction** — GT_split_get_order_size_modifier_
+   tradegood is byte-identical on b78ccc1f6 vs its parent (upstream did NOT re-spec it): market-access
+   percentage, `divide = DEMAND`, clamp `max 1`, default 1; its own comment: "All orders ... reduced by this amount".
+3. **The downstream formula proves multiplicative is required** — the full calc is
+   `order_size * (price * modifier) * (1 - trade_bonus)` -> payment pools; order_size_modifier sits in the
+   exact same multiplicative-scaler role as the `(1 - trade_bonus)` discount block immediately below it.
+4. **Concrete failure** — at the COMMON default modifier=1: correct `* price * 1` vs buggy `* (price + 1)`
+   (inflates every wealth-owed by a whole order_size unit); at partial access a 0.5 fulfilment should HALVE
+   the wealth (`* 0.5`) but instead just adds 0.5 to the price. Corrupts every trade-wealth calc.
+Corroborating (non-decisive): the commit message calls it a mechanical "condense from 2 to 1" (the author
+believed it behaviour-preserving — exactly how this bug class ships); and the newer unstable-shipping-and-trade
+branch does NOT build on b78ccc1f6 (it deleted order_size_modifier wholesale in a full rework).
+Only honest caveat: can't read the author's intent, but nothing in the code supports an additive re-spec
+(modifier definition, its comment, and the parallel discount term all say multiplicative).
