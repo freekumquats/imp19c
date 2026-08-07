@@ -150,3 +150,29 @@ Updated understanding: the -10% is the deflation script_value's ceiling recomput
 private_cash_ratio is pinned low, not a yearly event. The v2 currency log (#28) will confirm whether the
 ratio is simply floored by a chronically tight money supply (→ #23 becomes a BALANCE question: is the
 money-supply model too tight for CHI's scale?) vs an actual reset. Task #23 note to be updated after #28 lands.
+
+### [T14] #28 currency logging — v2 RE-REVIEWED (SOUND-WITH-FIXES) → BUILT
+v2 re-review verified the approach + reframing. 3 fixes folded into the build:
+- CRITICAL name collision: ECON_LOG_currency_snapshot ALREADY EXISTS (se_ECON_LOG.txt:102, empty stub) and
+  is ALREADY wired into ECON_LOG_quarter:129 (runs quarterly per-country). → FILLED the stub's if-branch;
+  did NOT define a new effect or add a duplicate call site.
+- MEDIUM: band ladder must NEST inside the > -999999999 sentinel (else EMPTY value mislabelled as lowest
+  band). → all 3 quarterly bands (ratio/need/circ) nested correctly.
+- LOW: minting-capped compare = var:CURRENCY_minting_rate > CURRENCY_minting_rate_cap (script_value RHS
+  legal, proven at se_CURRENCY.txt:1376); ignore the stale top-of-file SYNTAX NOTE.
+BUILT: filled ECON_LOG_currency_snapshot (CHI-only band-bucketing: ratio/needed/circ, no render); new
+ECON_LOG_minting_snapshot (capped? + rate band) wired into monthly_currency_pulse. Braces balanced, no
+render, no bad glyphs. code-review dispatched before commit.
+Omitted from build (design §2c): the reserve-correction band — deferred (the ratio+needed+circ+minting-cap
+lines already answer #23's core question; can add later if the trace is inconclusive). Yearly site correctly
+NOT used (it has no currency logic).
+
+### [T15] #21 Altishahr garrisons — DESIGN DOC written → adversarial review dispatched
+design/DESIGN_ALTISHAHR_GARRISONS.md. TWO blockers found + must resolve in review: (A) XNG is a NESTED
+subject (CHI→ILI→XNG) so the seed's is_subject_of=ROOT guard fails → use owner={overlord={is_subject_of=ROOT}};
+(B) qing_banner_garrison_building potential = owner country_culture_group=jurchen, but XNG is UIGHUR
+(east_turkic) so add_building_level SILENTLY hides it → either widen the potential (B1) or use a Green-Standard
+garrison for the Tarim (B2, historically apt — the Tarim had rotating Green Standard, not banners). Ürümqi
+(p:2930) is ILI-owned (manchu) → banner building works directly. Coupled with #19 (don't double-count
+garrisons in control derive). Review will settle B1/B2 + whether the building spawns the army or it's seeded
+separately. Design-only until reviewed.
