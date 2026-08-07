@@ -675,14 +675,17 @@ term CONFIRMED; one-way acyclic; capstone reachable) BUT:
 - MED-5: qing_ili.4 "partial secured + some contested" infeasible with a single-intent all-provinces helper.
 #10B needs ANOTHER design iteration (fix the 5) before build. Still deferred.
 
-#10A trade-center bonus (commit 3052a2bba) — REVIEWED: EFFECTIVELY INERT. tradezone_setup stamps ONE level_1
-center per tradezone on the most-populous province; Dzungaria→western_steppe (center = a Russian/CA city),
-Tarim→eastern_steppe/Gansu (center = Beijing). NO oasis ever carries a center-of-trade modifier → all 10
-branches always false → svalue still returns pure num_goods_produced. Levels 2-5 dead game-wide. My inline
-comment (both oases in western_steppe) is also factually wrong (Tarim = eastern_steppe). USER DECISION: build
-a BESPOKE oasis-entrepôt signal (caravan system stamps its own trade-hub modifier on Kashgar/Yarkand scaled
-by aqsaqal + bazaar) — net-new mechanic, own design+review cycle. The inert trade-center branches to be
-removed as part of that.
+#10A trade-center bonus (commit 3052a2bba) — INITIAL REVIEW SAID "INERT"; **RETRACTED 2026-08-06 (this was WRONG).**
+The first-pass reasoning — "tradezone_setup deterministically stamps ONE level_1 center on the most-populous
+province of a fixed region, which is never an oasis, so all 10 branches are always false" — is FALSE. Re-reading
+tradezone_setup_effect (se_TRADE.txt): the center-of-trade assignment is STOCHASTIC — it picks a RANDOM member
+region of the tradezone, THEN the most-populous province within it (tracked in list_of_trade_centers). So a Tarim
+oasis (Tarim ∈ Gansu) or a Dzungaria oasis genuinely CAN draw a regional_center_of_trade in a given game. The
+branches are VALID trade infrastructure, not dead code. FINAL SHIPPED STATE: the center-of-trade branches were
+KEPT in QING_caravan_oasis_trade_svalue (QING_governance_svalues.txt:196-228) with a corrected comment saying so
+(they credit a real oasis trade hub for throughput, not just output). The bespoke oasis-BAZAAR building (#10A,
+commit 0fda07d2b) was layered ON TOP as a separate guaranteed signal — NOT a replacement forced by the branches
+being dead. The earlier "remove the inert branches" plan is void: they stay.
 
 ---
 ## 2026-08-06 — BUILD #10B xinjiang_control (COMMIT) [autonomous] — REVIEWED CLEAN
@@ -804,3 +807,29 @@ Built end-to-end per DESIGN_BUREAU_CAPACITY_CONCRETIZE.md. Both stored drift met
 **Orphans deleted:** 4 cmpsvalue passthroughs (bureau_capacity_target / exam_ladder_target / shuyuan_band_prev / yamen_band_prev).
 
 Brace-balance 0 on all edited files (00_event_values pre-existing +1, my 4 edits balanced). Dispatching adversarial build review before commit.
+
+---
+## 2026-08-06 — #3 currency stress BUILT (two-store: reserve-derived base + opium flow + decaying event residual)
+
+Built per DESIGN_CURRENCY_STRESS_CONCRETIZE.md. The 0..100 qing_currency_stress LEVEL is no longer a 1-bit-threshold drift accumulator — it is DERIVED each pulse:
+`level = clamp( reserve_base + opium_flow + residual , 0, 100 )`.
+
+**Calibration (design §6.0 blocking measurement) — settled analytically, no boot-probe (standing rule).** Logs recorded that at the 1763 start the old 1-bit branch fired −1 every quarter across 8 quarters → CHI's CURRENCY_reserve_ratio_impact ∈ [0.5,1.0]. The 0.7-knee transfer `base = clamp((0.7−impact)/0.7×100)` opens ≤28.6 across that whole range → below the 30 strain threshold → calm at the High-Qing zenith regardless of where in the range the true value sits. (CHI is silver_standard w/o public_debt → impact = reserve_ratio_total÷3, so the naive (1−impact)×100 would have fired silver_drain at zenith — avoided.)
+
+**Base** (QING_DECLINE_recompute_currency_stress, se_QING_DECLINE.txt): reserve transfer (knee 0.7) + deflation term (CURRENCY_amt_circulated_deflation×100 — the DEFLATION side per review M2, since 銀荒 is deflationary silver-scarcity, not inflation). **Opium flow**: QING_opium_assess_trade_balance now STORES its signed net-flow in qing_opium_stress_flow (was a direct level nudge) — concrete computation (§3) preserved verbatim, just recomputed-from-scratch each pulse as a standing term, so it can't integrate to the rails. **Residual**: new SIGNED store qing_currency_stress_residual (seeded 0 in decline init), decays ×0.85/quarter both sides (proportional, so no persistent-flow runaway); holds the discrete event shocks.
+
+New helper QING_DECLINE_nudge_signed (no 0-floor — review CRITICAL 2). Retargeted all ~15 discrete-event nudges to the residual via it: opium beats (2) + opium event, revenue events (4), rebellion (12), canton (4), frontier-sea (8), mechanics suppress/close (−25/−5), roster (2), revenue vacant-minister backfeed (:277). Opium FLOW (208) → the flow store. Level readers/gates (treaty.1 ≥40, ministry drag /6, reform_pressure sum) UNCHANGED — they read the derived level.
+
+**Feedback-loop fixes (design §5/§7):** (1) reserve-DRAIN (se_QING_REVENUE:127) regated off the LEVEL onto the residual (≥15) — else "low reserve → high base → drains reserve → higher base" runaway. (2) low-reserve backfeed (:158, was +1 on <10000) DELETED as a double-count — the base already captures low reserve via low impact; re-adding to the ×0.85 residual would settle at a spurious ~+6.7.
+
+**Selfstr full-modernization reset:** was set level=0 (would be overwritten next pulse) → now zeros the writable stores (residual + opium flow); base reflects the healthy modernized fisc.
+
+Replaced QING_DECLINE_update_currency_stress call in the pulse (after opium assess) with the recompute; old wrapper deleted. Generic non-CHI CURR_STRESS_update untouched (§4b). Braces 0 on all 12 files; decimal-literal multiply/divide + set_variable value=<svalue> both proven. Dispatching adversarial review before commit.
+
+### #3 review outcome (2026-08-06): 0 CRIT, 1 MED, 3 LOW — MED fixed, LOWs resolved
+Adversarial review: build structurally sound, grammar legal, braces 0, writer census complete, ordering correct, clamp split right, no runaway.
+- **MED (calm-edge fragility): FIXED.** At knee 0.7, base(impact=0.5)=28.6 and the +0..10 deflation term could tip the 1763 opening over the 30 strain threshold (false silver_drain at the zenith — the exact thing §6.0 wanted measured away). Can't boot-probe (standing rule), so built in MARGIN: lowered knee 0.7→0.6. Now base(0.5)=16.7, +max deflation(10)=26.7 < 30 — calm across the ENTIRE measured impact range [0.5,1.0] AND under max deflation. Crisis end preserved (impact 0.3→50, →0→100). Downstream (reform_pressure sum, Board /6 drag) open even closer to the old seed-0 baseline now.
+- **LOW-1 (vacant-Board +1/pulse persistent flow, se_QING_REVENUE:278): documented as the ONE intended standing flow.** A vacant ministry is an ongoing condition (not a discrete shock); +1 vs ×0.85 decay self-limits at ~+6.7, below the residual>=15 drain gate (no runaway). Distinct from the deleted :158 backfeed (that was a reserve-signal double-count; this is a governance penalty with no base equivalent). With knee 0.6 the >=20 gate stays dormant at a calm 1763.
+- **LOW-2 (selfstr zeroing qing_opium_stress_flow is inert): left as-is** — harmless no-op (flow recomputes next pulse), reads as intent alongside the meaningful residual-zero.
+- **LOW-3 (latent stale-flow coupling if opium-assess ever gated off): not reachable today** (both run unconditionally); flagged only. No change.
+#3 DONE → commit.

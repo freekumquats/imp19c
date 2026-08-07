@@ -41,6 +41,23 @@ QING_DECLINE_nudge = {
 	LOG_line = { sys = QING  msg = "counter $var$ += $amount$ ->" }
 }
 
+# ---- SIGNED nudge (NO 0-floor) — for two-store meters whose LEVEL is derived --
+# [meter-concretize #3 2026-08-06] Like QING_DECLINE_nudge but WITHOUT the 0/100 clamp, so the
+# target var may go NEGATIVE and be eased from BOTH sides. Used for qing_currency_stress_residual:
+# the currency-stress LEVEL is clamp(reserve-derived base + residual), so the residual itself must
+# stay signed (a surplus/relief event pushes it negative; a crisis pushes it positive) — the plain
+# floored nudge would make every negative event inert once the residual hit 0, discarding the
+# High-Qing calm that comes from trade-surplus relief. The clamp happens only on the LEVEL, in
+# QING_DECLINE_recompute_currency_stress. Scope: country. $var$ = var name, $amount$ = signed int.
+QING_DECLINE_nudge_signed = {
+	if = {
+		limit = { NOT = { has_variable = $var$ } }
+		set_variable = { name = $var$  value = 0 }
+	}
+	change_variable = { name = $var$  add = $amount$ }
+	LOG_line = { sys = QING  msg = "signed counter $var$ += $amount$ ->" }
+}
+
 # Initialise every counter to 0 if unset. Called once on game start for CHI.
 QING_DECLINE_init = {
 	LOG_enter = { sys = QING  fn = "QING_DECLINE_init" }
@@ -94,6 +111,10 @@ QING_DECLINE_init = {
 	if = { limit = { NOT = { has_variable = qing_modernarmy_share } }     set_variable = { name = qing_modernarmy_share  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_ethnic_tension } }    set_variable = { name = qing_ethnic_tension  value = 20 } }
 	if = { limit = { NOT = { has_variable = qing_currency_stress } }   set_variable = { name = qing_currency_stress  value = 0 } }
+	# [meter-concretize #3 2026-08-06] the SIGNED event-shock residual for the two-store currency-stress
+	# meter (the base is derived from the reserve ratio in QING_DECLINE_recompute_currency_stress; this
+	# holds the discrete event nudges and decays toward 0). Seeded 0; may go negative.
+	if = { limit = { NOT = { has_variable = qing_currency_stress_residual } } set_variable = { name = qing_currency_stress_residual  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_reform_pressure } }   set_variable = { name = qing_reform_pressure  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_granary_stock } }     set_variable = { name = qing_granary_stock  value = 30 } }
 	# [#369] Population pressure (人口壓力 / 人地矛盾) — the standing Malthusian meter. Starts LOW
@@ -135,8 +156,69 @@ QING_DECLINE_init = {
 # so the qing decline suite keeps its own meter and its feed into reform pressure
 # and the opium/treaty events — only the underlying transfer function is shared.
 # (Historically the "silver drain": a low reserve ratio = silver drained away.)
-QING_DECLINE_update_currency_stress = {
-	CURR_STRESS_update = { counter = qing_currency_stress }
+# [meter-concretize #3 2026-08-06] TWO-STORE recompute — the LEVEL is now DERIVED from the concrete
+# monetary state, not a 1-bit drift accumulator (design/DESIGN_CURRENCY_STRESS_CONCRETIZE.md).
+#   qing_currency_stress = clamp( base + opium_flow + residual , 0, 100 )
+# where
+#   base    = the CALIBRATED reserve-backing transfer (silver famine 銀荒 = a drained 戶部銀庫), NOT the
+#             naive (1−impact)×100 (CHI is silver_standard w/o public_debt → impact = reserve_ratio_total÷3,
+#             a high bar; the naive map would fire silver_drain at the High-Qing zenith). Knee at 0.6
+#             (lowered from 0.7 per review MEDIUM — headroom for the deflation term below): impact 0.6→0,
+#             0.5→~17, 0.4→~33 (strain), 0.3→~50, 0→100. Logs bound CHI's 1763 impact in [0.5,1.0] → base
+#             opens ≤~17, and even the MAX deflation term (+10) keeps the opening ≤~27 (< the 30 strain
+#             threshold) — so no false silver_drain at the zenith regardless of where in [0.5,1.0] the true
+#             impact sits OR whether 1763 carries any deflation. PLUS that deflation term (銀荒 is a
+#             DEFLATIONARY silver scarcity — private_cash_ratio<1, review M2), 0..+10.
+#   opium   = the CONCRETE trade-balance flow (tea/silk/porcelain export inflow − opium-import drain),
+#             computed in QING_opium_assess_trade_balance and stored SIGNED in qing_opium_stress_flow
+#             (surplus negative = eases, drain positive = worsens). A FLOW term, not the reserve STOCK —
+#             complementary, not double-counting (design §3).
+#   residual = the SIGNED, PROPORTIONALLY-DECAYING store of discrete event shocks (rebellion/canton/
+#             reform resets/etc.), retargeted off the old direct-to-level nudges. Decays ×0.85/quarter
+#             toward 0 from both sides so a shock fades over ~a decade and no persistent flow integrates
+#             to the rails.
+# The generic (non-CHI) CURR_STRESS_update is UNTOUCHED — this is CHI's own recompute (design §4b).
+QING_DECLINE_recompute_currency_stress = {
+	LOG_enter = { sys = QING  fn = "QING_DECLINE_recompute_currency_stress" }
+	if = {
+		limit = { has_variable = official_currency }
+		# --- base: reserve-backing transfer, knee 0.6 (review MEDIUM: headroom for deflation) ---------
+		# base = clamp( (0.6 − impact) / 0.6 × 100 , 0, 100 ). Stage impact, then transform.
+		set_variable = { name = qing_curr_base_tmp  value = CURRENCY_reserve_ratio_impact }
+		change_variable = { name = qing_curr_base_tmp  multiply = -1 }
+		change_variable = { name = qing_curr_base_tmp  add = 0.6 }
+		change_variable = { name = qing_curr_base_tmp  divide = 0.6 }
+		change_variable = { name = qing_curr_base_tmp  multiply = 100 }
+		if = { limit = { var:qing_curr_base_tmp < 0 }   set_variable = { name = qing_curr_base_tmp  value = 0 } }
+		if = { limit = { var:qing_curr_base_tmp > 100 } set_variable = { name = qing_curr_base_tmp  value = 100 } }
+		# --- deflation term: a silver-scarcity money shortage adds stress (0..~10) ------
+		# CURRENCY_amt_circulated_deflation = (1 − private_cash_ratio)/10 when ratio<1, else 0.
+		# ×100 puts a full deflation (ratio→0) at ~10 stress points; 0 during inflation/glut.
+		set_variable = { name = qing_curr_defl_tmp  value = CURRENCY_amt_circulated_deflation }
+		change_variable = { name = qing_curr_defl_tmp  multiply = 100 }
+		change_variable = { name = qing_curr_base_tmp  add = var:qing_curr_defl_tmp }
+		# --- level = base + opium flow + residual, clamped 0..100 -----------------------
+		set_variable = { name = qing_currency_stress  value = var:qing_curr_base_tmp }
+		if = {
+			limit = { has_variable = qing_opium_stress_flow }
+			change_variable = { name = qing_currency_stress  add = var:qing_opium_stress_flow }
+		}
+		if = {
+			limit = { has_variable = qing_currency_stress_residual }
+			change_variable = { name = qing_currency_stress  add = var:qing_currency_stress_residual }
+		}
+		if = { limit = { var:qing_currency_stress < 0 }   set_variable = { name = qing_currency_stress  value = 0 } }
+		if = { limit = { var:qing_currency_stress > 100 } set_variable = { name = qing_currency_stress  value = 100 } }
+		remove_variable = qing_curr_base_tmp
+		remove_variable = qing_curr_defl_tmp
+		# --- decay the event residual toward 0 (proportional, both sides) ---------------
+		if = {
+			limit = { has_variable = qing_currency_stress_residual }
+			change_variable = { name = qing_currency_stress_residual  multiply = 0.85 }
+		}
+		LOG_line = { sys = QING  msg = "currency stress recomputed: base+opium+residual -> level for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_DECLINE_recompute_currency_stress"  result = OK }
 }
 
 # Band application maps the SHARED band level (CURR_STRESS_classify: 0 calm /
@@ -1022,7 +1104,10 @@ QING_DECLINE_pulse = {
 	# the existing term (d) of QING_ministry_recompute_perf_revenue that stress folds straight
 	# into the Board of Revenue minister's Grand Council standing. (se_QING_OPIUM.txt)
 	QING_opium_assess_trade_balance = yes
-	QING_DECLINE_update_currency_stress = yes
+	# [meter-concretize #3] REPLACES QING_DECLINE_update_currency_stress (the deleted 1-bit drift wrapper).
+	# Runs AFTER the opium assessment so it reads this pulse's fresh qing_opium_stress_flow. Two-store
+	# derive: reserve-backing base + deflation + opium flow + decaying event residual.
+	QING_DECLINE_recompute_currency_stress = yes
 	# Civic identity drifts toward its self-strengthening-gated target FIRST, so
 	# the ethnic-tension drift that follows reads a fresh civic-relief value (§11
 	# L4 ext — a strong civic nation defuses the same ethnic geography).

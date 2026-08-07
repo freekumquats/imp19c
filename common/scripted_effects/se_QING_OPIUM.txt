@@ -3,12 +3,13 @@
 #
 # LAYER, DON'T DUPLICATE. This suite owns NO new currency-stress meter and NO new band
 # machinery. The mod already models the SYMPTOM — a `qing_currency_stress` 0..100 meter
-# (se_QING_DECLINE.txt, term A) that drifts off the live reserve ratio, bands onto the
-# country, and fires the decline/treaty events. #366 supplies the CAUSE: a quarterly
-# balance-of-trade assessment that computes a net silver flow (tea/silk/porcelain export
-# INFLOW minus an opium-import OUTFLOW) and nudges the EXISTING stress meter with it. The
-# existing QING_DECLINE_apply_currency_band then bands it for free; the existing
-# qing_treaty.1 Nanjing-moment (gated qing_currency_stress >= 40) fires off it unchanged.
+# (se_QING_DECLINE.txt, term A) that — since meter-concretize #3 (2026-08-06) — is a DERIVED
+# level: clamp(reserve-backing base + opium flow + event residual). #366 supplies the CAUSE for
+# the OPIUM-FLOW term: a quarterly balance-of-trade assessment that computes a net silver flow
+# (tea/silk/porcelain export INFLOW minus an opium-import OUTFLOW) and STORES it (signed) in
+# qing_opium_stress_flow, which QING_DECLINE_recompute_currency_stress adds to the reserve base
+# each pulse. The existing QING_DECLINE_apply_currency_band then bands the level for free; the
+# existing qing_treaty.1 Nanjing-moment (gated qing_currency_stress >= 40) fires off it unchanged.
 #
 # THE GRAND-COUNCIL FOLD IS ALREADY WIRED. QING_ministry_recompute_perf_revenue
 # (se_QING_MINISTRY.txt term d) subtracts qing_currency_stress/6 from the Board of Revenue
@@ -198,16 +199,18 @@ QING_opium_assess_trade_balance = {
 	set_variable = { name = qing_opium_net_flow_tmp  value = var:qing_opium_inflow_tmp }
 	change_variable = { name = qing_opium_net_flow_tmp  subtract = var:qing_opium_outflow_tmp }
 
-	# --- FEED THE EXISTING STRESS METER. A surplus bleeds stress down; a drain pushes it up.
-	# The nudge is net_flow/-5 (a healthy +20 surplus => -4 stress/quarter; a -20 drain => +4/quarter),
-	# a smooth signal that compounds with the reserve-ratio drift already in the decline pulse.
-	set_variable = { name = qing_opium_stressnudge_tmp  value = var:qing_opium_net_flow_tmp }
-	change_variable = { name = qing_opium_stressnudge_tmp  divide = 5 }
-	# invert: surplus (positive net) -> negative stress nudge.
-	change_variable = { name = qing_opium_stressnudge_tmp  multiply = -1 }
-	QING_DECLINE_nudge = { var = qing_currency_stress  amount = var:qing_opium_stressnudge_tmp }
-	remove_variable = qing_opium_stressnudge_tmp
-	LOG_line = { sys = QING  msg = "opium: trade balance assessed; net silver flow (inflow-outflow) fed to currency stress for" }
+	# --- FEED THE CURRENCY-STRESS METER as a CONCRETE FLOW TERM. A surplus bleeds stress down; a drain
+	# pushes it up. [meter-concretize #3 2026-08-06] STORE the flow (signed) in qing_opium_stress_flow
+	# instead of nudging the level directly — the two-store recompute (QING_DECLINE_recompute_currency_
+	# stress) ADDS this stored flow to the reserve-derived base each pulse. This keeps the concrete
+	# balance-of-trade computation (§3, preserved verbatim above) but makes it a STANDING term of the
+	# derived level, not an accumulator: recomputed from scratch each pulse from the real trade goods, so
+	# it can't integrate to the rails. flow = net/-5 (a +20 surplus => -4 stress; a -20 drain => +4).
+	set_variable = { name = qing_opium_stress_flow  value = var:qing_opium_net_flow_tmp }
+	change_variable = { name = qing_opium_stress_flow  divide = 5 }
+	# invert: surplus (positive net) -> negative stress contribution (eases the famine).
+	change_variable = { name = qing_opium_stress_flow  multiply = -1 }
+	LOG_line = { sys = QING  msg = "opium: trade balance assessed; net silver flow stored as currency-stress flow term for" }
 
 	remove_variable = qing_opium_inflow_tmp
 	remove_variable = qing_opium_outflow_tmp
@@ -324,7 +327,7 @@ QING_opium_crackdown_destroy = {
 # the court loses face. Scope: country (CHI).
 QING_opium_crackdown_release = {
 	add_legitimacy = -5
-	QING_opium_nudge = { var = qing_currency_stress  amount = 4 }   # the drain rolls on
+	QING_DECLINE_nudge_signed = { var = qing_currency_stress_residual  amount = 4 }   # the drain rolls on
 	LOG_line = { sys = QING  msg = "opium: seized stock RELEASED; the silver drain continues, court loses face for" }
 }
 
@@ -336,7 +339,7 @@ QING_opium_treaty_legalize = {
 	QING_opium_init = yes
 	QING_opium_set_posture = { posture = 2 }
 	add_treasury = 40                                        # the opium tariff (30 taels/chest, at scale)
-	QING_opium_nudge = { var = qing_currency_stress  amount = -6 }   # legal taxed trade eases the fisc
+	QING_DECLINE_nudge_signed = { var = qing_currency_stress_residual  amount = -6 }   # legal taxed trade eases the fisc
 	LOG_line = { sys = QING  msg = "opium: trade LEGALIZED by treaty (Tianjin); tariff revenue offsets the fisc, epidemic worsens for" }
 }
 

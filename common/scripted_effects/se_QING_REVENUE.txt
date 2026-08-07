@@ -119,10 +119,16 @@ QING_revenue_reserve_drift = {
 			change_variable = { name = silver_reserve_size  subtract = 150 }
 		}
 		# --- the silver crisis (銀荒) bleeds the reserve on top of the above --------
+		# [meter-concretize #3 2026-08-06] REGATED off the LEVEL onto the event RESIDUAL to break a
+		# feedback loop: the currency-stress LEVEL is now reserve-DERIVED (low reserve → high base → high
+		# level), so gating the reserve drain on the level would mean "low reserve drains the reserve
+		# further" — a runaway. The residual holds only DISCRETE crisis shocks (rebellion/canton/etc.),
+		# so gating on residual >= 15 fires this bleed during a genuine event-driven crisis, not merely
+		# because the reserve is already low (which the base captures on its own).
 		if = {
 			limit = {
-				has_variable = qing_currency_stress
-				var:qing_currency_stress >= 40
+				has_variable = qing_currency_stress_residual
+				var:qing_currency_stress_residual >= 15
 			}
 			change_variable = { name = silver_reserve_size  subtract = 100 }
 		}
@@ -143,20 +149,15 @@ QING_revenue_reserve_drift = {
 		# the no-restoring-drift rule), but the reserve as a whole may now rise above the peak via the
 		# data-driven market writers. Only the zero floor remains (a reserve can never go negative).
 		if = { limit = { var:silver_reserve_size < 0 }  set_variable = { name = silver_reserve_size  value = 0 } }
-		# --- [MO-ENH backfeed] a CRITICALLY DRAINED reserve worsens the silver crisis (bidirectional
-		# coupling). Currency stress already bleeds the reserve (above); the reverse is equally historical
-		# — an empty 戶部銀庫 (as in 1799, drained by the White Lotus war + the Heshen seizure) left the
-		# throne no silver to stabilise the copper-cash exchange, so 銀貴錢賤 worsened. A near-empty
-		# reserve (< 10000 千兩, ~1/8 of the zenith) adds a gentle quarterly push to currency stress; a
-		# healthy reserve does nothing. Additive + clamped by QING_DECLINE_nudge; no runaway (stress
-		# feeds reform pressure, not back into the reserve at the same magnitude).
-		if = {
-			limit = {
-				var:silver_reserve_size < 10000
-				has_variable = qing_currency_stress
-			}
-			QING_DECLINE_nudge = { var = qing_currency_stress  amount = 1 }
-		}
+		# --- [MO-ENH backfeed → meter-concretize #3 2026-08-06: REMOVED as a DOUBLE-COUNT] The old
+		# "near-empty reserve (< 10000 千兩) adds +1 currency stress" backfeed is DELETED. With the
+		# stress LEVEL now DERIVED from the reserve ratio (QING_DECLINE_recompute_currency_stress), a
+		# critically-drained 戶部銀庫 ALREADY raises the base directly (low CURRENCY_reserve_ratio_impact
+		# → high base) — the bidirectional coupling the backfeed modelled is now the base's own single
+		# channel. Re-adding it to the residual would double-count the same low-reserve signal (and, as a
+		# persistent add against the ×0.85 decay, settle at a spurious standing ~+6.7). The 1799-style
+		# empty-treasury crisis is captured by the base; discrete war/seizure shocks land in the residual
+		# via their own event nudges (rebellion/etc.). (design §7 M1)
 		# --- peak milestone (盈庫之盛): fire once when the treasury first nears its high.
 		# Gated on the shared court event slot (BT-28) + a one-shot flag, so it is a single
 		# memorable beat, never spam. 80000 (~98% of 81820) counts as "reached the peak".
@@ -269,12 +270,19 @@ QING_revenue_pulse = {
 			LOG_line = { sys = QING  msg = "revenue: office vacant -> salt gabelle oversight lapses (+corruption) for" }
 		}
 		# silver crisis: without a capable minister, currency stress worsens
+		# [meter-concretize #3 2026-08-06] this is the ONE INTENTIONAL standing flow into the residual: a
+		# vacant Board is an ONGOING mismanagement condition (not a discrete shock), so a persistent +1/pulse
+		# is semantically right. Against the ×0.85 residual decay it self-limits at ~+6.7 (bounded, and below
+		# the residual>=15 reserve-drain gate → cannot trigger the drain or run away). Distinct from the
+		# DELETED <10000-reserve backfeed (that was a double-count of the reserve signal the base now carries;
+		# this is a governance-vacancy penalty with no base equivalent). Gate reads the level (>=20): at a calm
+		# 1763 the level opens ~17 so this stays dormant until stress genuinely climbs.
 		if = {
 			limit = {
 				has_variable = qing_currency_stress
 				var:qing_currency_stress >= 20
 			}
-			QING_DECLINE_nudge = { var = qing_currency_stress  amount = 1 }
+			QING_DECLINE_nudge_signed = { var = qing_currency_stress_residual  amount = 1 }
 			LOG_line = { sys = QING  msg = "revenue: office vacant -> silver crisis unmanaged (+currency stress) for" }
 		}
 	}
