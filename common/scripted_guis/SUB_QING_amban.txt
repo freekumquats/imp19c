@@ -77,20 +77,74 @@ qing_amban_manage_post_button = {
 	}
 
 	effect = {
-		LOG_line = { sys = QING  msg = "amban: MANUAL post to by" }
-		add_political_influence = -25
-		# claim the post for the player: the auto-sweep will not touch it, and the
-		# auto turnover/gone-native/recall events are frozen for it.
-		scope:target = { set_variable = { name = qing_amban_manual  value = 1 } }
-		# [#34 CRASHFIX] dispatch the resident via the hidden qing_amban.5 trampoline, NOT by
-		# inlining QING_amban_post here. As of #34 QING_amban_post carries an ordered_character
-		# SORTING ITERATOR (the banner-graduate draw); a scripted_gui compile-inlines its button
-		# effect at LOAD, and inlining a sorting iterator ACCESS_VIOLATES at boot (the censorate
-		# #443 crash class). The trampoline runs the iterator inside the event, never inlined.
-		# Saved scopes propagate through trigger_event (cf. qing_amban.1), so qing_amban.5 reads
-		# scope:qing_amban_manual_target. ROOT = CHI is the overlord scope the event needs.
-		scope:target = { save_scope_as = qing_amban_manual_target }
-		trigger_event = { id = qing_amban.5  days = 0 }
+		# [#26 2026-08-07] The post button now OPENS A CHARACTER PICKER (like the Censorate's Commission an
+		# Inspector) instead of auto-drawing the ablest graduate. This effect only PREPARES the picker:
+		# it records the destination subject + builds the candidate list. The 25 PI charge + qing_amban_manual
+		# + the actual post are MOVED to the row-click handler (qing_amban_appoint_selected) — so closing the
+		# picker without choosing costs nothing (the is_valid PI>=25 gate on the button still blocks opening
+		# when unaffordable). The .gui button also fires gui.createwidget to open qing_amban_picker_window.
+		LOG_line = { sys = QING  msg = "amban: MANUAL post picker opened by" }
+		# remember which subject the picker will post to (a country-ref var on CHI the row-handler reads).
+		# [#26 review-fix] the row handler re-derives qing_amban_manual_target itself from this var, so no
+		# save_scope here — the button's execution ends when the picker opens, and a saved scope would not
+		# survive to the (later) row click anyway.
+		set_variable = { name = qing_amban_picker_subject  value = scope:target }
+		# build the eligible-candidate list the picker window walks.
+		QING_amban_refresh_candidates = yes
+	}
+}
+
+# ---- ROW-CLICK: appoint the PICKED candidate as amban to the stored subject ----
+# [#26 2026-08-07] Character-scope handler for a picker row. this = the chosen candidate; scope:player = CHI.
+# Reads qing_amban_picker_subject (set by the post button). Pays the 25 PI, claims the post
+# (qing_amban_manual), and dispatches the PICKED char via the qing_amban.6 trampoline (NOT inlined — the
+# #34 rule; and the wire runs inside the event). Mirrors qing_gov_office_appoint_selected.
+qing_amban_appoint_selected = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI  has_variable = qing_amban_picker_subject }
+		employer = scope:player
+	}
+	is_valid = {
+		is_adult = yes
+		is_alive = yes
+		# not already holding a court position (one man, one post) + still CHI-employed.
+		NOT = { QING_char_holds_court_position = yes }
+		custom_tooltip = {
+			text = qing_amban_needs_influence_25_tt
+			scope:player = { political_influence >= 25 }
+		}
+		# [#26 review-fix] the Lifan Yuan supervisor must still be in place — mirror the button's gate + the
+		# auto-sweep precondition, so a 理藩院 holder dying while the picker is open can't post an unsupervised
+		# amban (the race the button's is_valid alone didn't cover).
+		custom_tooltip = {
+			text = qing_amban_needs_lifanyuan_tt
+			scope:player = { has_variable = qing_office_lifanyuan_holder  var:qing_office_lifanyuan_holder = { is_alive = yes  employer = scope:player } }
+		}
+		# the stored destination must still be a valid, amban-less subject of CHI.
+		scope:player = {
+			var:qing_amban_picker_subject = {
+				is_subject_of = scope:player
+				NOT = { has_variable = qing_amban_here }
+			}
+		}
+	}
+	effect = {
+		LOG_line = { sys = QING  msg = "amban: player PICKED a resident to post" }
+		# save the CHOSEN character (this) for the trampoline.
+		save_scope_as = qing_amban_picked
+		scope:player = {
+			add_political_influence = -25
+			# claim the post (freeze the auto-sweep for this dependency).
+			var:qing_amban_picker_subject = { set_variable = { name = qing_amban_manual  value = 1 } }
+			# hand the subject to the trampoline via a saved scope (the picked char is saved above).
+			var:qing_amban_picker_subject = { save_scope_as = qing_amban_manual_target }
+			trigger_event = { id = qing_amban.6  days = 0 }
+			# clear the picker-subject marker so stray rows can't re-fire against a stale destination.
+			remove_variable = qing_amban_picker_subject
+		}
 	}
 }
 

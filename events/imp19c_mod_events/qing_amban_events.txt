@@ -314,3 +314,41 @@ qing_amban.5 = {
 		}
 	}
 }
+# ======================================================================
+# [#26 2026-08-07] qing_amban.6 — HIDDEN trampoline for the PICKER post (a PLAYER-CHOSEN amban).
+# The picker row-click (qing_amban_appoint_selected) saves the chosen character as scope:qing_amban_picked
+# and the subject as scope:qing_amban_manual_target, then fires this. Unlike qing_amban.5 (which calls
+# QING_amban_post -> DRAWS the ablest graduate), this PRESETS scope:qing_amban_new to the picked man and
+# calls QING_amban_wire directly (the wire does NOT draw - review-confirmed se_QING_AMBAN.txt:163). So the
+# player's pick is posted. Trampoline (not inlined in the scripted_gui) for consistency with .5. ROOT = CHI.
+# ======================================================================
+qing_amban.6 = {
+	type = country_event
+	hidden = yes
+	trigger = { tag = CHI }
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_amban.6 (picker post trampoline) [ROOT.GetTag]" }
+		if = {
+			limit = {
+				exists = scope:qing_amban_manual_target
+				exists = scope:qing_amban_picked
+				scope:qing_amban_picked = { is_alive = yes  employer = ROOT  NOT = { QING_char_holds_court_position = yes } }
+				NOT = { scope:qing_amban_manual_target = { has_variable = qing_amban_here } }
+			}
+			scope:qing_amban_picked = { save_scope_as = qing_amban_new }
+			QING_amban_wire = { subject = scope:qing_amban_manual_target }
+			LOG_line = { sys = QING  msg = "amban: PICKED resident posted by the player for" }
+		}
+		else = {
+			# [#26 review-fix] the post failed (picked man ineligible at fire / post filled in the race window).
+			# The row handler already charged 25 PI + flagged the subject manual — REFUND both so the player
+			# isn't out the influence with an empty, manual-flagged dependency.
+			add_political_influence = 25
+			if = {
+				limit = { exists = scope:qing_amban_manual_target  scope:qing_amban_manual_target = { has_variable = qing_amban_manual }  NOT = { scope:qing_amban_manual_target = { has_variable = qing_amban_here } } }
+				scope:qing_amban_manual_target = { remove_variable = qing_amban_manual }
+			}
+			LOG_fail = { sys = QING  fn = "qing_amban.6"  reason = "picked amban ineligible at fire, or post no longer vacant; PI refunded, no post" }
+		}
+	}
+}
