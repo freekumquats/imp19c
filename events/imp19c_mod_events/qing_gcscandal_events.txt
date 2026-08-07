@@ -1,0 +1,171 @@
+########################################################################
+# qing_gcscandal_events.txt — [#gcscandal / task #27] the CENSORATE TRIAL escalation of a senior
+# Grand Council minister's corruption scandal.
+#
+# This does NOT duplicate the existing scandal events — it EXTENDS them. qing_revenue.4 (Treasury
+# Audit, 戶部) and qing_works.4 (River-Works Embezzlement, 工部) already surface a corrupt seated
+# minister; each now offers a "Impanel a tribunal (審理)" option that escalates HERE — the multi-step
+# trial + capital-punishment path that those events lacked (the only genuinely novel #27 content per
+# the design review; confiscation/vacate/disgrace already exist on qing_office.1 / .4).
+#
+# FLOW: the source event saves the culprit as scope:gcscandal_minister + fires qing_gcscandal.1 (the
+# trial). The trial is a Censorate skill check (the Grand Censor's finesse+zeal vs the minister's
+# finesse — a powerful minister can beat the rap). CONVICT -> qing_gcscandal.2 (the Heshen fall:
+# confiscation windfall + DURABLE office vacancy via the no-backfill vacate + the emperor CHOOSES
+# mercy (dismissal) vs the full rigour (death/imprisonment)). ACQUIT -> qing_gcscandal.3 (whitewash:
+# corruption entrenches, the throne is seen unable to discipline the great offices).
+#
+# CHI-only, player-only. Namespace qing_gcscandal. se_LOG sys = QING. Culprit scope = the seated
+# minister (revenue/works holder). VACATE-BEFORE-KILL (the on_character_death backfill hook self-guards
+# once qing_office_held is stripped by the vacate — se_QING_COUNCIL nobackfill).
+########################################################################
+
+namespace = qing_gcscandal
+
+########################################################################
+# .1  THE TRIBUNAL SITS (審理) — the Censorate tries the accused minister.
+########################################################################
+qing_gcscandal.1 = {
+	type = country_event
+	title = "qing_gcscandal.1.t"
+	desc = "qing_gcscandal.1.desc"
+	picture = roman_trial
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:gcscandal_minister
+
+	trigger = { tag = CHI }
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_gcscandal.1 (senior-minister tribunal) fired for CHI" }
+		# skill roll: the Censorate's rigour vs the minister's guile. A one-shot marker on ROOT.
+		# The Grand Censor (都察院 holder) prosecutes; if the office is vacant the trial is weaker.
+		set_variable = { name = gcscandal_prosecution  value = 0 }
+		if = {
+			limit = { has_variable = qing_office_censor_holder  var:qing_office_censor_holder = { is_alive = yes  employer = ROOT } }
+			var:qing_office_censor_holder = { ROOT = { change_variable = { name = gcscandal_prosecution  add = prev.finesse } } }
+			var:qing_office_censor_holder = { ROOT = { change_variable = { name = gcscandal_prosecution  add = prev.zeal } } }
+		}
+		# the accused's finesse is his defence. [review-fix] is_alive (not just exists) — a dead scope
+		# still satisfies exists, and the minister has up to ~20 days (two stacked delays) to die naturally.
+		if = {
+			limit = { scope:gcscandal_minister = { is_alive = yes } }
+			scope:gcscandal_minister = { ROOT = { change_variable = { name = gcscandal_prosecution  subtract = prev.finesse } } }
+		}
+		# realm corruption tips the scales toward conviction (the evidence is everywhere).
+		if = { limit = { has_variable = qing_corruption_level  var:qing_corruption_level >= 60 }  change_variable = { name = gcscandal_prosecution  add = 4 } }
+	}
+
+	# --- PRESS THE CASE (窮治) — pursue conviction. Outcome on the prosecution score. ---
+	option = {
+		name = "qing_gcscandal.1.press"
+		custom_tooltip = "qing_gcscandal.1.press.tt"
+		# [review-fix] convict ONLY if the minister is still ALIVE (else the death hook already backfilled his
+		# office — there's no vacancy to seize and no one to sentence; a dead-minister 'conviction' would land
+		# the windfall with the mechanic silently defeated). Dead/absent OR score<0 → the case collapses (.3).
+		if = {
+			limit = { scope:gcscandal_minister = { is_alive = yes }  var:gcscandal_prosecution >= 0 }
+			trigger_event = { id = qing_gcscandal.2  days = { 3 10 } }   # convicted
+		}
+		else = {
+			trigger_event = { id = qing_gcscandal.3  days = { 3 10 } }   # acquitted / too powerful / died before trial
+		}
+		if = { limit = { has_variable = gcscandal_prosecution }  remove_variable = gcscandal_prosecution }
+	}
+
+	# --- DROP THE MATTER (不問) — spare the court the spectacle; corruption entrenches. ---
+	option = {
+		name = "qing_gcscandal.1.drop"
+		custom_tooltip = "qing_gcscandal.1.drop.tt"
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
+		add_legitimacy = -3
+		if = { limit = { has_variable = gcscandal_prosecution }  remove_variable = gcscandal_prosecution }
+		LOG_line = { sys = QING  msg = "gcscandal: the tribunal was dropped; corruption entrenches for CHI" }
+	}
+}
+
+########################################################################
+# .2  THE MINISTER FALLS (籍沒) — convicted. Confiscation + DURABLE office vacancy + the emperor's choice.
+########################################################################
+qing_gcscandal.2 = {
+	type = country_event
+	title = "qing_gcscandal.2.t"
+	desc = "qing_gcscandal.2.desc"
+	picture = looting_dishonor
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:gcscandal_minister
+
+	trigger = { tag = CHI }
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_gcscandal.2 (minister convicted) fired for CHI" }
+		# confiscation windfall — the Heshen ceiling (~150), scaled by realm corruption (more graft = more to seize).
+		add_treasury = 100
+		if = { limit = { has_variable = qing_corruption_level  var:qing_corruption_level >= 60 }  add_treasury = 50 }
+		add_stability = 2
+		# realm corruption drops — the great warning lands.
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -12 }
+	}
+
+	# --- MERCY: dismiss + confiscate, spare his life (retirement in disgrace). ---
+	option = {
+		name = "qing_gcscandal.2.mercy"
+		custom_tooltip = "qing_gcscandal.2.mercy.tt"
+		if = {
+			limit = { scope:gcscandal_minister = { is_alive = yes } }   # [review-fix] is_alive: a dead scope still passes exists
+			# VACATE FIRST (durable, no backfill) — floors the ministry perf until the player re-appoints;
+			# strips qing_office_held so no death-hook backfill even if he later dies of age.
+			scope:gcscandal_minister = { QING_office_vacate_dispatch_nobackfill = yes }
+			scope:gcscandal_minister = { QING_char_taint = yes }
+		}
+		LOG_line = { sys = QING  msg = "gcscandal: convicted minister dismissed in disgrace (mercy) for CHI" }
+	}
+
+	# --- THE FULL RIGOUR (賜死): dismiss, confiscate, and the silken cord (the Heshen sentence). ---
+	option = {
+		name = "qing_gcscandal.2.rigour"
+		custom_tooltip = "qing_gcscandal.2.rigour.tt"
+		add_tyranny = 3
+		if = {
+			limit = { scope:gcscandal_minister = { is_alive = yes } }   # [review-fix] is_alive (can't execute a dead man)
+			# VACATE BEFORE KILL — bare no-backfill vacate removes qing_office_held, so the on_character_death
+			# hook self-guards + does NOT spawn a replacement (the durable vacancy stands).
+			scope:gcscandal_minister = { QING_office_vacate_dispatch_nobackfill = yes }
+			scope:gcscandal_minister = { death = { death_reason = death_execution } }
+		}
+		LOG_line = { sys = QING  msg = "gcscandal: convicted minister given the silken cord (full rigour) for CHI" }
+	}
+}
+
+########################################################################
+# .3  THE CASE COLLAPSES (脫罪) — acquitted. The minister was too powerful; corruption entrenches.
+########################################################################
+qing_gcscandal.3 = {
+	type = country_event
+	title = "qing_gcscandal.3.t"
+	desc = "qing_gcscandal.3.desc"
+	picture = senate_debate
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:gcscandal_minister
+
+	trigger = { tag = CHI }
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_gcscandal.3 (minister acquitted) fired for CHI" }
+		# the graft is entrenched; the throne looks unable to discipline the great offices.
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 8 }
+		add_legitimacy = -5
+		add_stability = -1
+		# the vindicated minister is emboldened.
+		if = {
+			limit = { exists = scope:gcscandal_minister }
+			scope:gcscandal_minister = { add_loyalty = inspired_disloyalty_other_l }
+		}
+	}
+
+	option = {
+		name = "qing_gcscandal.3.a"
+	}
+}
