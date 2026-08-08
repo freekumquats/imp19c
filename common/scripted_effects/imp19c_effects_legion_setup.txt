@@ -228,6 +228,42 @@ SE_qing_stamp_garrison_supply = {
 	}
 }
 
+# [#33 2026-08-07] Grant CHI military access through the NESTED sub-subjects whose soil carries a
+# CHI-controlled frontier garrison. BT-15 raises those garrisons CHI-controlled (bare create_unit in
+# c:CHI with an absolute location), which is correct — but a CHI army standing on land owned by a
+# 2-HOP sub-subject (XNG/KML/KBD/MGA — subjects of ILI/ULS, not of CHI directly) has no basing right
+# there, so the engine flags it EXILED (combat-disabled until it marches home) — the boot-test bug.
+# CHI's DIRECT subjects (ILI/ULS/MKD/etc.) grant implicit basing, so 1-hop garrisons (Ili/Mukden/
+# Jilin/Uliastai) were never exiled; only the 2-hop ones were.
+# FIX (proven engine effect add_military_access, Invictus on_game_initialized + TI me_etruria): each
+# sub-subject that HOSTS a CHI garrison grants CHI access through its land. Walk the garrison-seat
+# provinces (qing_hist_garrison_prov, stamped at OOB raise) and, for any whose owner is NOT CHI and
+# NOT a direct CHI subject but IS a sub-subject one hop down (overlord is a CHI subject), have that
+# owner grant CHI access. Self-maintaining (keys off the garrison stamp, not a hardcoded tag list) and
+# idempotent (add_military_access is a set-relation; re-granting is a no-op). Called from BOTH OOB
+# branches after the supply stamp, each already fenced once by qing_armies_setup_done.
+SE_qing_grant_frontier_access = {
+	# Scope: c:CHI (the country_event scope SE_qing_armies runs in).
+	every_country = {
+		limit = {
+			# a sub-subject one hop below CHI (its overlord is a CHI subject), NOT a direct CHI subject
+			exists = overlord
+			overlord = { is_subject_of = ROOT }
+			NOT = { is_subject_of = ROOT }
+			# that actually hosts a CHI garrison seat on its own soil
+			any_owned_province = { has_variable = qing_hist_garrison_prov }
+		}
+		# [#33 review-fix CRITICAL] direction was INVERTED. `SCOPE = { add_military_access = TARGET }`
+		# means SCOPE gains passage through TARGET's land (proven: SE_occupation_of_france in this file,
+		# `c:GBR = { add_military_access = c:FRA }` = GBR marches on French soil; + Invictus galatian_invasion,
+		# me_arvernia). We need CHI to gain access to the HOSTING sub-subject's soil (where the garrison
+		# stands), so grant in ROOT(CHI)'s scope with the iterated sub-subject as target — NOT the reverse.
+		save_scope_as = qing_frontier_host
+		ROOT = { add_military_access = scope:qing_frontier_host }
+		LOG_line = { sys = QING  msg = "frontier access: CHI granted passage through a nested sub-subject hosting its garrison" }
+	}
+}
+
 SE_qing_armies = {
 	LOG_enter = { sys = QING  fn = "SE_qing_armies" }
 	if = {
@@ -315,6 +351,8 @@ SE_qing_armies = {
 			# [#garrison-supply] stamp the food-supply-immunity modifier on the garrisons just raised
 			# (see SE_qing_stamp_garrison_supply definition above for the full rationale).
 			SE_qing_stamp_garrison_supply = yes
+			# [#33] grant CHI access through nested sub-subjects hosting a garrison (un-exile them)
+			SE_qing_grant_frontier_access = yes
 		}
 		else = {
 
@@ -372,6 +410,8 @@ SE_qing_armies = {
 		# [#garrison-supply] stamp the food-supply-immunity modifier on the garrisons just raised (this
 		# alternate-era OOB branch raises its own garrison set — Ili etc. — so it needs the sweep too).
 		SE_qing_stamp_garrison_supply = yes
+		# [#33] grant CHI access through nested sub-subjects hosting a garrison (un-exile them)
+		SE_qing_grant_frontier_access = yes
 		}  # end 1815-OOB else [bookmark-1763 #304]
 	}
 	else = {
