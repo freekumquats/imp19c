@@ -14,10 +14,23 @@
 #
 # [#90-fix cosmetic] The tag WAS "[IMP19C][$sys$]". SQUARE BRACKETS inside a
 # debug_log / loc string are parsed by the engine as data-function ([GetX] )
-# syntax, so "[IMP19C][$sys$]" was mangled on output (e.g. "[IMP19C]QING$]")
-# and $sys$/$fn$/etc. never substituted. $arg$ substitution into debug_log DOES
-# work (proven: se_PURCHASE.txt "... $tradegood$ ...") — it was the brackets, not
-# the params. Delimiter is now bracket-free: "IMP19C <SYS>: <msg>".
+# syntax, so "[IMP19C][$sys$]" was mangled on output.
+#
+# [#54 2026-08-07 CORRECTION — the old claim here was FALSE] The old comment said
+# "$arg$ substitution into debug_log DOES work (proven: se_PURCHASE)". It does NOT.
+# Proven at byte level from the Aug-7 boot (od -c on debug.log): a $param$ inside a
+# debug_log string mangles — the engine EATS the single char immediately before the
+# param, inserts the value, and APPENDS a trailing literal $. So "IMP19C $sys$: $msg$"
+# rendered "IMP19CSUBJ$: <msg>$" (the space before $sys$ eaten, sys tag fused to
+# IMP19C, stray $). se_PURCHASE's "$tradegood$" mangles the same way; it was never
+# checked against output. This is unavoidable — the Invictus/TI oracles only ever
+# debug_log FULLY-LITERAL strings (they never interpolate). See design/LOGGING_TEMPLATE.md.
+#
+# MITIGATION (best achievable without a clean-interpolation primitive): put TWO spaces
+# before $sys$ so ONE survives the eat — the grep KEY renders clean ("IMP19C QING")
+# even though a stray $ trails the tag. The trailing $ is structural and harmless to
+# grep on the tag. Numeric VALUES still cannot be rendered at all (use band ladders,
+# per LOGGING_TEMPLATE.md). Grep the trace with the tag form, e.g.:  grep "IMP19C QING"
 #
 # All lines share the "IMP19C " prefix so the whole trace can be extracted:
 #     grep "IMP19C " debug.log > imp19c_trace.log
@@ -36,7 +49,10 @@
 LOG_line = {
 	# Function: write a single tagged diagnostic line to logs/debug.log
 	# Scope:    any
-	debug_log = "IMP19C $sys$: $msg$"
+	# [#54] TWO spaces before $sys$: the engine eats the one char before a $param$ (proven), so
+	# one space survives and the grep KEY renders "IMP19C QING" (not the fused "IMP19CQING"). A
+	# stray $ still trails each param — structural, harmless to a tag grep. See LOGGING_TEMPLATE.md.
+	debug_log = "IMP19C  $sys$: $msg$"
 }
 
 # ---- Call tracing -----------------------------------------------------
@@ -44,14 +60,14 @@ LOG_line = {
 LOG_enter = {
 	# Function: trace that a code path began executing
 	# Scope:    any
-	debug_log = "IMP19C $sys$: ENTER $fn$"
+	debug_log = "IMP19C  $sys$: ENTER $fn$"
 }
 
 # Mark exit, recording the outcome. $result$ = OK / FAIL / SKIP / <detail>.
 LOG_exit = {
 	# Function: trace that a code path finished, with its result
 	# Scope:    any
-	debug_log = "IMP19C $sys$: EXIT $fn$ result=$result$"
+	debug_log = "IMP19C  $sys$: EXIT $fn$ result=$result$"
 }
 
 # ---- Game-state capture ----------------------------------------------
@@ -61,7 +77,7 @@ LOG_exit = {
 LOG_state = {
 	# Function: header line + full scope-stack dump for game-state capture
 	# Scope:    any
-	debug_log = "IMP19C $sys$: STATE $note$ (scope dump follows)"
+	debug_log = "IMP19C  $sys$: STATE $note$ (scope dump follows)"
 	debug_log_scopes = yes
 }
 
@@ -83,7 +99,7 @@ LOG_fail = {
 LOG_ok = {
 	# Function: record that a precondition/branch passed as expected
 	# Scope:    any
-	debug_log = "IMP19C $sys$: OK $fn$ : $detail$"
+	debug_log = "IMP19C  $sys$: OK $fn$ : $detail$"
 }
 
 # ---- GUI-click observability probe -----------------------------------
