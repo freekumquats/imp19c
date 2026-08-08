@@ -80,6 +80,40 @@ FLAG for the #23 rebalancing, not an automatic "set it to 300M". Any M1 change =
 must be tuned jointly with #23 (M1 is the ratio numerator; ~6-7x-ing it shifts every inflation/deflation
 reading) and with units_to_the_lb (#72, now 8).
 
+## YAN HONGZHONG 燕红忠 — the CANONICAL published series (3rd pass, 2026-08-08) — best source
+
+Primary: **燕红忠《从货币流通量看清代前期的经济增长与波动》,《清史研究》2008(3): 24-43** (Yan Hongzhong,
+"Economic Growth and Fluctuation in the Early Qing from the Perspective of Monetary Circulation"). Covers
+1651-1860 (brackets 1763). Corroborated/reused by Xun Yan, LSE PhD thesis 2015 (etheses.lse.ac.uk/3307/),
+Appendix D-1-1 p.80, "Total money in circulation in China 1644-1860 (millions of silver taels & millions of
+copper cash strings)", redrawn directly from Yan (2008) p.33.
+
+Yan's TOTAL money stock (silver+copper, in 亿两 = 100M taels; FIXED silver:copper = 3:1; ~1000 wén/tael):
+- late-Ming base 2.0亿两 (copper = 5000万串 = ~50M strings); 1651-60 ~2.85亿两; 1700 trough 2.33亿两;
+  fastest-growth phase 1721-1780; **1781-90 PEAK 6.9亿两**; 1790-1800 4.61亿两; 1810-30 5.7亿两.
+- **1763 (interpolated across the 1700-trough → 1781-peak ramp): ~4.5-5.5亿两 ≈ 450-550 MILLION TAELS total M1.**
+  (Exact 1761-70 cell is image-only in his Tables 3-5 / Figure 1; interpolation flagged.)
+- Method: copper built from mint casting records (Burger's Qianlong data) + provincial share + 10%/decade
+  cash depreciation; silver via the 3:1 ratio + rice-purchasing-power. (Depreciation is why Yan's copper
+  leg is LOWER than the naive output×lifetime derivation above.)
+
+CONVERSION TO THE MOD'S CHUAN (Yan's own anchor: 1 tael ≈ 1 string ≈ 1000 wén):
+- **Copper-cash-only leg ~1763 ≈ (4.5-5.5亿两)/4 ≈ ~110-140 MILLION CHUAN of 制錢.**
+- **Total M1 (silver+copper) ≈ ~450-550 MILLION string-equivalents.**
+
+### VERDICT vs the mod's 46M-chuan seed (supersedes the earlier derived ~300M)
+Depends on what the mod's "chuan" M1 represents:
+- COPPER-CASH-ONLY → Yan ~110-140M chuan → seed is ~2.5-3x TOO LOW.
+- TOTAL M1 (silver+copper) → Yan ~450-550M → seed is ~10x TOO LOW.
+Yan's copper-only ~110-140M is ~half the digest's naive ~300M (he applies 10%/decade depreciation — better
+method; supersede the ~300M with Yan's ~125M copper / ~500M total). User's ~260M eyeball sits between.
+Either way the seed is too low; the apples-to-apples copper figure is **~110-140M chuan**.
+
+IMPLICATION FOR #23 unchanged: any M1 rebase is Sobisonator-caution + must be tuned JOINTLY with #23 (M1 is
+the ratio numerator) and units_to_the_lb (#72=8). Recommend: if the mod chuan = copper cash, rebase toward
+~120M; if total M1, toward ~500M. Decide which the engine intends before changing (the silver_standard
+backing + separate silver_reserve suggests chuan = the CIRCULATING copper-ish medium, i.e. the ~120M leg).
+
 ## GAPS — what to get next (needs direct in-text reading, ideally CJK-capable)
 1. **Accumulated copper-cash STOCK in wén/chuan c.1763** — THE missing number. Best sources, both with free
    full text:
@@ -94,3 +128,6 @@ reading) and with units_to_the_lb (#72, now 8).
 Xiaoyu Gao AHA 2026 (aha.confex.com/aha/2026/webprogram/Paper41338.html) + SSHA 2026 (ssha2026.ssha.org/abstracts/260775);
 ChinaKnowledge.de "Qing Period Money"; Wikipedia *Qing dynasty coinage* & *Economy of the Qing dynasty*;
 Wang Hongbin 王宏斌 2015; von Glahn & So 2017; Peng Xinwei 彭信威 1954/1994; Cao & Flynn 2020; Deng 2008; von Glahn 2013.
+**Yan Hongzhong 燕红忠《从货币流通量看清代前期的经济增长与波动》《清史研究》2008(3):24-43, esp. p.33 (the canonical series)** —
+also 燕红忠《货币供给量、货币结构与中国经济趋势：1650~1936》《金融研究》2011(7). Corroborated by Xun Yan, LSE PhD thesis 2015
+(etheses.lse.ac.uk/3307/), App. D-1-1 p.80 (redrawn from Yan 2008 p.33). Burger's Qianlong mint data underlies Yan's copper series.
