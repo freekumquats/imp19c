@@ -64,6 +64,15 @@ QING_canton_init = {
 	# [#426] the Canton revenue split (percent of the yield to the emperor's privy purse 內帑 vs the
 	# state treasury 戶部). Player-set via the Canton window toggle: 0 / 50 / 100. Default 50.
 	if = { limit = { NOT = { has_variable = qing_canton_purse_share } } set_variable = { name = qing_canton_purse_share  value = 50 } }
+	# [#66 2026-08-08] SEAT A HOPPO AT GAME START. The 粵海關監督 was a real, always-filled post; the
+	# prior model only created him when the player clicked Rotate, so a fresh game had a squeeze meter
+	# with no man behind it (the reported "I cannot find the Hoppo"). Appoint one now if none is seated,
+	# so the Canton window can show him, his corruption can drive the siphon (#69), and he can be
+	# impeached (#68) from turn one. Guarded so a re-run of init never double-seats.
+	if = {
+		limit = { NOT = { has_variable = qing_hoppo_holder } }
+		QING_canton_appoint_hoppo = yes
+	}
 	LOG_line = { sys = QING  msg = "canton: bookkeeping seeded for" }
 	LOG_exit = { sys = QING  fn = "QING_canton_init"  result = OK }
 }
@@ -117,6 +126,10 @@ QING_canton_pulse = {
 		}
 		# a capable, honest Hoppo delivers more of the trade's worth to the throne; a venal one
 		# lets his squeeze swallow it (high squeeze shaves the yield that actually reaches Peking).
+		# [#69 note] this reads LAST quarter's qing_hoppo_squeeze — the squeeze is re-derived from the
+		# Hoppo's corruption LATER in this pulse (deliberate one-quarter lag; corruption creeps only
+		# ±1/qtr so the steady-state error is negligible; a freshly-seated/impeached Hoppo simply
+		# over/under-shaves for one quarter, self-correcting next pulse — not worth reordering).
 		if = {
 			limit = { var:qing_hoppo_squeeze >= 60 }
 			change_variable = { name = qing_canton_yield_tmp  multiply = 0.7 }
@@ -192,24 +205,71 @@ QING_canton_pulse = {
 			set_variable = { name = qing_canton_last_silver_in  value = 0 }
 		}
 
-		# --- the Hoppo milks the trade: squeeze drifts UP while the port is open, faster if the
-		# post is vacant (no accountable holder) — feeding the empire's corruption meter.
+		# [#69 2026-08-08] THE HOPPO'S GRAFT MADE CONCRETE. The squeeze is no longer a free-floating
+		# meter; it is DERIVED from the seated Hoppo's own vanilla CORRUPTION, and his exactions are
+		# REAL character wealth he pockets (concrete-over-abstract rule). Backfill first so the post is
+		# never empty (the window + impeachment always have a subject).
+		# (a) BACKFILL a dead/missing Hoppo — appoint a fresh man (a new broom, low corruption).
 		if = {
-			limit = { NOT = { has_variable = qing_hoppo_holder } }
-			QING_DECLINE_nudge = { var = qing_hoppo_squeeze  amount = 3 }
+			limit = {
+				OR = {
+					NOT = { has_variable = qing_hoppo_holder }
+					var:qing_hoppo_holder = { is_alive = no }
+				}
+			}
+			if = { limit = { has_variable = qing_hoppo_holder }  remove_variable = qing_hoppo_holder }
+			QING_canton_appoint_hoppo = yes
+			LOG_line = { sys = QING  msg = "canton: the Hoppo's post fell vacant and was backfilled for" }
+		}
+		# (b) GRAFT CREEP — the seated Hoppo's own corruption climbs quarterly (the source of the
+		# squeeze), capped < 90 so a long-tenured man's number rises but never pegs. add_corruption is
+		# the proven vanilla char verb (se_QING_HOUSEHOLD.txt:223). The 粵海關章程 regulation bias now
+		# adjusts THIS creep (the source), not a separate meter: -1 board-audited slows it, +1 tax-farmed
+		# speeds it. Guarded on has_variable (unset until the law is enacted).
+		if = {
+			limit = { has_variable = qing_hoppo_holder  var:qing_hoppo_holder = { is_alive = yes } }
+			var:qing_hoppo_holder = {
+				if = {
+					limit = { corruption < 90 }
+					add_corruption = 1
+					# the 粵海關章程 regulation bias adjusts the creep. It is only ever 0 / -1 / +1 (the three
+					# law options), so apply it as explicit LITERAL branches — add_corruption takes a literal,
+					# NOT a variable amount (no add_<stat> = var: form is attested; proven negatives at
+					# se_QING_MECHANICS.txt:129). +1 tax-farmed speeds the graft; -1 board-audited slows it.
+					if = {
+						limit = { ROOT = { has_variable = qing_hoppo_regulation_bias  var:qing_hoppo_regulation_bias = 1 } }
+						add_corruption = 1
+					}
+					else_if = {
+						limit = { ROOT = { has_variable = qing_hoppo_regulation_bias  var:qing_hoppo_regulation_bias = -1 } }
+						add_corruption = -1
+					}
+				}
+			}
+			# (c) SIPHON — the Hoppo's "squeeze" was extracted FROM THE HONG MERCHANTS (over-charging on
+			# fees and measurement), NOT skimmed from the throne's official customs — so this does NOT
+			# reduce the yield or the emperor/state split (the throne's reduced take at high squeeze is
+			# ALREADY modelled by the ×0.7 yield-shave above). He pockets a slice scaled by his corruption
+			# as REAL personal wealth: siphon = yield × corruption / 200 (corruption 30 ≈ 15% of a quarter's
+			# customs-equivalent; 90 ≈ 45%). add_gold to him = his hoard, confiscated on impeachment (#68/#70).
+			# This touches only his CHARACTER wealth stat — NOT add_treasury, silver_reserve_size, or the
+			# money supply — so it cannot perturb the currency sim (#23-caution); the only treasury effect is
+			# the one-shot 抄家 confiscation when he is impeached.
+			var:qing_hoppo_holder = { save_scope_as = qing_hoppo_seated }
+			set_variable = { name = qing_hoppo_siphon_tmp  value = var:qing_canton_yield_tmp }
+			change_variable = { name = qing_hoppo_siphon_tmp  multiply = scope:qing_hoppo_seated.corruption }
+			change_variable = { name = qing_hoppo_siphon_tmp  divide = 200 }
+			if = { limit = { var:qing_hoppo_siphon_tmp < 0 }  set_variable = { name = qing_hoppo_siphon_tmp  value = 0 } }
+			scope:qing_hoppo_seated = { add_gold = { value = ROOT.var:qing_hoppo_siphon_tmp } }
+			# (d) the squeeze meter is now a DERIVED reflection of his corruption (0..100), for the
+			# existing consumers (the yield-shave, the corruption-level leak, the Cohong-crisis gate).
+			set_variable = { name = qing_hoppo_squeeze  value = scope:qing_hoppo_seated.corruption }
+			remove_variable = qing_hoppo_siphon_tmp
 		}
 		else = {
-			QING_DECLINE_nudge = { var = qing_hoppo_squeeze  amount = 1 }
-		}
-		# [#18 Batch 4c 2026-07-24] HOPPO REGULATION bias (粵海關章程). The qing_hoppo_regulation_law selector
-		# writes qing_hoppo_regulation_bias on enact (0 = customary farm default; -1 = board-audited oversight
-		# that slows the squeeze creep; +1 = tax-farmed for max revenue, the squeeze runs faster). Applied as
-		# an extra drift term on the SAME meter right after the base creep (bias-A accumulator). Guarded on
-		# has_variable (unset until enacted); QING_DECLINE_nudge accepts amount=var:X and clamps 0..100, and a
-		# negative amount subtracts — so a -1 bias eases the squeeze without underflowing the meter.
-		if = {
-			limit = { has_variable = qing_hoppo_regulation_bias }
-			QING_DECLINE_nudge = { var = qing_hoppo_squeeze  amount = var:qing_hoppo_regulation_bias }
+			# transiently vacant (before backfill, or the appoint pool was empty): the exactions run
+			# unchecked, the squeeze drifts up as under the old model.
+			QING_DECLINE_nudge = { var = qing_hoppo_squeeze  amount = 3 }
 		}
 		# a high squeeze leaks into the empire-wide corruption counter (guarded — it may be unset
 		# very early, though QING_DECLINE_init seeds it at game start).
@@ -255,19 +315,13 @@ QING_canton_pulse = {
 # [#389 review-fix] REPLACES the button-less QING_canton_appoint_hoppo, whose absence made
 # the squeeze a one-way ratchet with no player agency (the Cohong crisis was inevitable).
 # ======================================================================
-QING_canton_rotate_hoppo = {
-	LOG_enter = { sys = QING  fn = "QING_canton_rotate_hoppo" }
-	# relieve any prior Hoppo first (the post turns over on a 3-year cycle).
-	if = {
-		limit = { has_variable = qing_hoppo_holder }
-		if = {
-			limit = { var:qing_hoppo_holder = { is_alive = yes } }
-			var:qing_hoppo_holder = { if = { limit = { has_variable = qing_hoppo_marker }  remove_variable = qing_hoppo_marker } }
-		}
-		remove_variable = qing_hoppo_holder
-	}
-	# pick a capable adult courtier (highest finesse — the fiscal administrator's gift) as the
-	# new Hoppo. ordered_owned so the pick is deterministic; excludes the ruler + office-holders.
+# ---- [#66 2026-08-08] APPOINT A HOPPO (extracted). Picks the ablest-finesse free courtier and
+# seats him as the 粵海關監督, stamping qing_hoppo_holder (the country link) + qing_hoppo_marker
+# (on the man). No squeeze nudge here — the caller decides the appointment's effect on the graft
+# (rotate eases it; init/backfill just fills the seat). A fresh appointee carries his OWN current
+# corruption, so an honest new man runs the customs straight and a venal one does not — the #69
+# concrete model (squeeze is derived from his corruption in the pulse). Country scope (ROOT = CHI).
+QING_canton_appoint_hoppo = {
 	ordered_character = {
 		limit = {
 			employer = ROOT
@@ -284,6 +338,21 @@ QING_canton_rotate_hoppo = {
 		}
 		set_variable = { name = qing_hoppo_marker  value = 1 }
 	}
+}
+
+QING_canton_rotate_hoppo = {
+	LOG_enter = { sys = QING  fn = "QING_canton_rotate_hoppo" }
+	# relieve any prior Hoppo first (the post turns over on a 3-year cycle).
+	if = {
+		limit = { has_variable = qing_hoppo_holder }
+		if = {
+			limit = { var:qing_hoppo_holder = { is_alive = yes } }
+			var:qing_hoppo_holder = { if = { limit = { has_variable = qing_hoppo_marker }  remove_variable = qing_hoppo_marker } }
+		}
+		remove_variable = qing_hoppo_holder
+	}
+	# pick a capable adult courtier (highest finesse — the fiscal administrator's gift) as the new Hoppo.
+	QING_canton_appoint_hoppo = yes
 	# a fresh, accountable appointee steadies the squeeze (a new broom, and the bribes to win
 	# the post are paid — he has room to run it straight for a while).
 	QING_DECLINE_nudge = { var = qing_hoppo_squeeze  amount = -12 }
