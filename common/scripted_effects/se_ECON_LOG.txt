@@ -426,6 +426,126 @@ ECON_LOG_curx_trout = {
 	remove_variable = ECON_LOG_cx_mag
 }
 
+# ======================================================================
+# [#23 DENOMINATOR-DECOMPOSITION probe, 2026-08-08] The code-trace (a6e9aec55c) found the ratio
+# swing is DENOMINATOR-driven (private_cash_needed explodes), and its dominant term
+# essentials_buying_power = Σ prices ÷ wealth_value_1_unit_scaled_by_reserve_ratio, CAPPED at 32000 —
+# but NONE of those denominator internals were logged. These 6 emitters close that gap so the next
+# boot confirms (a) whether essentials is PINNED at the 32000 cap, (b) whether it's country_unit_price_silver
+# or the reserve-ratio loop that swings the divisor, and (c) whether #72's units_to_the_lb 14->8 moved
+# essentials off the cap. Literal-only band ladders (imp19c-log-string-macro-rule); sentinel-guarded; temp removed.
+# ======================================================================
+
+# --- essentials_buying_power (cost of living) — THE key denominator term. Cap = 32000; a value AT/near
+# 32000 = pinned at the cap (the swing nonlinearity). Fine bands right below the cap. ---
+ECON_LOG_curx_essentials = {
+	set_variable = { name = ECON_LOG_cx_mag  value = CURRENCY_essentials_buying_power }
+	if = { limit = { NOT = { has_variable = ECON_LOG_cx_mag } }        debug_log = "IMP19C CURX ess = UNSET" }
+	else_if = {
+		limit = { var:ECON_LOG_cx_mag > -999999999 }
+		if = { limit = { var:ECON_LOG_cx_mag >= 32000 }       debug_log = "IMP19C CURX ess = 32000 AT CAP (denominator pinned!)" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 24000 }  debug_log = "IMP19C CURX ess 24000-32000 (near cap)" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 12000 }  debug_log = "IMP19C CURX ess 12000-24000" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 4000 }   debug_log = "IMP19C CURX ess 4000-12000" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 1000 }   debug_log = "IMP19C CURX ess 1000-4000" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 100 }    debug_log = "IMP19C CURX ess 100-1000" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 0 }      debug_log = "IMP19C CURX ess 0-100" }
+		else = { debug_log = "IMP19C CURX ess < 0" }
+	}
+	else = { debug_log = "IMP19C CURX ess = EMPTY (Div0/unset operand)" }
+	remove_variable = ECON_LOG_cx_mag
+}
+
+# --- wealth_value_1_unit_scaled_by_reserve_ratio — the DIVISOR of essentials. As it -> 0, essentials -> cap.
+# Small-value bands matter most (that's the danger zone). Affected by #72 (units_to_the_lb 14->8 raises it). ---
+ECON_LOG_curx_wvu_scaled = {
+	set_variable = { name = ECON_LOG_cx_mag  value = CURRENCY_wealth_value_1_unit_scaled_by_reserve_ratio }
+	if = { limit = { NOT = { has_variable = ECON_LOG_cx_mag } }        debug_log = "IMP19C CURX wvuscaled = UNSET" }
+	else_if = {
+		limit = { var:ECON_LOG_cx_mag > -999999999 }
+		if = { limit = { var:ECON_LOG_cx_mag >= 1 }           debug_log = "IMP19C CURX wvuscaled >= 1" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 0.5 }    debug_log = "IMP19C CURX wvuscaled 0.5-1" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 0.1 }    debug_log = "IMP19C CURX wvuscaled 0.1-0.5" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 0.01 }   debug_log = "IMP19C CURX wvuscaled 0.01-0.1 (small -> essentials spikes)" }
+		else_if = { limit = { var:ECON_LOG_cx_mag > 0 }       debug_log = "IMP19C CURX wvuscaled 0-0.01 (near zero -> cap)" }
+		else = { debug_log = "IMP19C CURX wvuscaled <= 0 (essentials takes x32000 fallback)" }
+	}
+	else = { debug_log = "IMP19C CURX wvuscaled = EMPTY (Div0/unset operand)" }
+	remove_variable = ECON_LOG_cx_mag
+}
+
+# --- country_unit_price_silver — the silver price feeding wealth_value_1_unit (via ×16 ÷ units_to_the_lb).
+# Country var (has_variable guard: unset early). ---
+ECON_LOG_curx_agsilver = {
+	if = { limit = { NOT = { has_variable = country_unit_price_silver } } debug_log = "IMP19C CURX agsilver = UNSET (price not set this frame)" }
+	else = {
+		set_variable = { name = ECON_LOG_cx_mag  value = var:country_unit_price_silver }
+		if = {
+			limit = { var:ECON_LOG_cx_mag > -999999999 }
+			if = { limit = { var:ECON_LOG_cx_mag >= 1 }        debug_log = "IMP19C CURX agsilver >= 1" }
+			else_if = { limit = { var:ECON_LOG_cx_mag >= 0.5 } debug_log = "IMP19C CURX agsilver 0.5-1" }
+			else_if = { limit = { var:ECON_LOG_cx_mag >= 0.1 } debug_log = "IMP19C CURX agsilver 0.1-0.5" }
+			else_if = { limit = { var:ECON_LOG_cx_mag >= 0.01 } debug_log = "IMP19C CURX agsilver 0.01-0.1" }
+			else_if = { limit = { var:ECON_LOG_cx_mag > 0 }    debug_log = "IMP19C CURX agsilver 0-0.01 (low -> peg small -> essentials spikes)" }
+			else = { debug_log = "IMP19C CURX agsilver <= 0" }
+		}
+		else = { debug_log = "IMP19C CURX agsilver = EMPTY (set-but-empty)" }
+		remove_variable = ECON_LOG_cx_mag
+	}
+}
+
+# --- reserve_ratio_total — the reserve leg (÷3 -> reserve_ratio_impact -> scales wealth_value_1_unit).
+# The code-trace's SECOND feedback loop: this moves with silver_reserve_size each quarter. ---
+ECON_LOG_curx_rratio = {
+	set_variable = { name = ECON_LOG_cx_mag  value = CURRENCY_reserve_ratio_total }
+	if = { limit = { NOT = { has_variable = ECON_LOG_cx_mag } }        debug_log = "IMP19C CURX rratio = UNSET" }
+	else_if = {
+		limit = { var:ECON_LOG_cx_mag > -999999999 }
+		if = { limit = { var:ECON_LOG_cx_mag >= 2 }           debug_log = "IMP19C CURX rratio >= 2" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 1.5 }    debug_log = "IMP19C CURX rratio 1.5-2" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 1 }      debug_log = "IMP19C CURX rratio 1-1.5" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 0.5 }    debug_log = "IMP19C CURX rratio 0.5-1" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 0.1 }    debug_log = "IMP19C CURX rratio 0.1-0.5" }
+		else_if = { limit = { var:ECON_LOG_cx_mag > 0 }       debug_log = "IMP19C CURX rratio 0-0.1" }
+		else = { debug_log = "IMP19C CURX rratio = 0" }
+	}
+	else = { debug_log = "IMP19C CURX rratio = EMPTY (Div0/unset operand)" }
+	remove_variable = ECON_LOG_cx_mag
+}
+
+# --- silver_reserve_size — the reserve stock the buy/sell loop moves each quarter (drives rratio). Country var. ---
+ECON_LOG_curx_agreserve = {
+	if = { limit = { NOT = { has_variable = silver_reserve_size } }   debug_log = "IMP19C CURX agreserve = UNSET" }
+	else = {
+		set_variable = { name = ECON_LOG_cx_mag  value = var:silver_reserve_size }
+		if = {
+			limit = { var:ECON_LOG_cx_mag > -999999999 }
+			if = { limit = { var:ECON_LOG_cx_mag >= 62000 }       debug_log = "IMP19C CURX agreserve >= 62000 (>= seed)" }
+			else_if = { limit = { var:ECON_LOG_cx_mag >= 60000 }  debug_log = "IMP19C CURX agreserve 60000-62000" }
+			else_if = { limit = { var:ECON_LOG_cx_mag >= 55000 }  debug_log = "IMP19C CURX agreserve 55000-60000" }
+			else_if = { limit = { var:ECON_LOG_cx_mag >= 40000 }  debug_log = "IMP19C CURX agreserve 40000-55000" }
+			else_if = { limit = { var:ECON_LOG_cx_mag >= 0 }      debug_log = "IMP19C CURX agreserve 0-40000" }
+			else = { debug_log = "IMP19C CURX agreserve < 0" }
+		}
+		else = { debug_log = "IMP19C CURX agreserve = EMPTY (set-but-empty)" }
+		remove_variable = ECON_LOG_cx_mag
+	}
+}
+
+# --- DEMAND_country_silver — the silver-demand term; if it hits 0, market_penetration->0 doubles the
+# silver price (the demand-flip hypothesis the trace called UNLIKELY absent a player slider-zero — confirm). ---
+ECON_LOG_curx_agdemand = {
+	set_variable = { name = ECON_LOG_cx_mag  value = DEMAND_country_silver }
+	if = { limit = { NOT = { has_variable = ECON_LOG_cx_mag } }        debug_log = "IMP19C CURX agdemand = UNSET" }
+	else_if = {
+		limit = { var:ECON_LOG_cx_mag > -999999999 }
+		if = { limit = { var:ECON_LOG_cx_mag > 0 }            debug_log = "IMP19C CURX agdemand > 0 (computed-penetration branch)" }
+		else = { debug_log = "IMP19C CURX agdemand = 0 (penetration->0, silver price DOUBLES!)" }
+	}
+	else = { debug_log = "IMP19C CURX agdemand = EMPTY (Div0/unset operand)" }
+	remove_variable = ECON_LOG_cx_mag
+}
+
 # --- the full-chain dump, one call per quarter (CHI only). TWO literal-marker entry points
 # (PRE / POST) instead of a $phase$ param, so the marker string is always literal. -----------
 ECON_LOG_curx_dump_pre = {
@@ -457,6 +577,14 @@ ECON_LOG_curx_chain = {
 	ECON_LOG_curx_mag_circ = yes  # NUMERATOR: money supply
 	ECON_LOG_curx_mag_defl_needed = yes  # DENOMINATOR: private_cash_needed
 	ECON_LOG_curx_trout = yes     # DENOM INPUT + #53: trade money out of circulation
+	# [#23 denominator-decomposition 2026-08-08] the 6 internals of private_cash_needed the code-trace
+	# flagged as un-logged — to confirm whether essentials is pinned at the 32000 cap and which term swings it.
+	ECON_LOG_curx_essentials = yes   # cost of living (the key denominator term; watch for = 32000 AT CAP)
+	ECON_LOG_curx_wvu_scaled = yes   # its divisor (small -> essentials spikes); moved by #72 units_to_the_lb
+	ECON_LOG_curx_agsilver = yes     # country_unit_price_silver (feeds wealth_value_1_unit)
+	ECON_LOG_curx_rratio = yes       # reserve_ratio_total (the 2nd feedback loop)
+	ECON_LOG_curx_agreserve = yes    # silver_reserve_size (what the buy/sell loop moves each quarter)
+	ECON_LOG_curx_agdemand = yes     # DEMAND_country_silver (=0 -> silver price doubles; confirm unlikely)
 }
 
 # ======================================================================
