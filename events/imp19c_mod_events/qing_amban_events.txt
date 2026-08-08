@@ -348,6 +348,20 @@ qing_amban.6 = {
 	trigger = { tag = CHI }
 	immediate = {
 		LOG_line = { sys = QING  msg = "EVENT qing_amban.6 (picker post trampoline) [ROOT.GetTag]" }
+		# [#62 2026-08-08] REPLACE MODE: the picker was opened over an OCCUPIED seat, so recall the sitting
+		# incumbent FIRST (clears qing_amban_here) before the post guard below — otherwise the `NOT has
+		# qing_amban_here` limit would reject the replacement. Recall is iterator-free (safe to call here),
+		# and this is a runtime event anyway (not a compiled button). The player already paid 25 PI + 2
+		# tyranny at the row-click; recall here carries no extra charge (it is part of the paid replace).
+		if = {
+			limit = {
+				has_variable = qing_amban_pick_was_replace   # guard the read (unset in a plain-post flow — avoids read-before-set log noise)
+				var:qing_amban_pick_was_replace = 1
+				exists = scope:qing_amban_manual_target
+				scope:qing_amban_manual_target = { has_variable = qing_amban_here }
+			}
+			QING_amban_recall = { subject = scope:qing_amban_manual_target  reason = "manual-replace-picker" }
+		}
 		if = {
 			limit = {
 				exists = scope:qing_amban_manual_target
@@ -364,12 +378,18 @@ qing_amban.6 = {
 			# The row handler already charged 25 PI + flagged the subject manual — REFUND both so the player
 			# isn't out the influence with an empty, manual-flagged dependency.
 			add_political_influence = 25
+			# [#62] a failed REPLACE also over-charged 2 tyranny at the row-click — refund it (subtract).
+			# (The incumbent was already recalled above, so a failed replace degrades to a recall; that is
+			# acceptable, but the player should not eat the replace tyranny for a post that never landed.)
+			if = { limit = { has_variable = qing_amban_pick_was_replace  var:qing_amban_pick_was_replace = 1 }  add_tyranny = -2 }
 			if = {
 				limit = { exists = scope:qing_amban_manual_target  scope:qing_amban_manual_target = { has_variable = qing_amban_manual }  NOT = { scope:qing_amban_manual_target = { has_variable = qing_amban_here } } }
 				scope:qing_amban_manual_target = { remove_variable = qing_amban_manual }
 			}
 			LOG_fail = { sys = QING  fn = "qing_amban.6"  reason = "picked amban ineligible at fire, or post no longer vacant; PI refunded, no post" }
 		}
+		# [#62] clear the replace-mode flag so it never leaks into a later post/replace cycle.
+		if = { limit = { has_variable = qing_amban_pick_was_replace }  remove_variable = qing_amban_pick_was_replace }
 		# [#58/#59/#63 2026-08-08] refresh the Lifan Yuan panel lists after the picker post (success path
 		# shows the new resident + Replace; refund path clears qing_amban_manual). ROOT = CHI; idempotent.
 		QING_ministry_recompute_perf_lifanyuan = yes

@@ -98,6 +98,9 @@ qing_amban_manage_post_button = {
 		# save_scope here — the button's execution ends when the picker opens, and a saved scope would not
 		# survive to the (later) row click anyway.
 		set_variable = { name = qing_amban_picker_subject  value = scope:target }
+		# [#62] this is a POST (empty seat), not a replace — clear any stale replace-mode flag so the
+		# row handler posts directly without trying to recall a (non-existent) incumbent.
+		if = { limit = { has_variable = qing_amban_picker_is_replace }  remove_variable = qing_amban_picker_is_replace }
 		# build the eligible-candidate list the picker window walks.
 		QING_amban_refresh_candidates = yes
 	}
@@ -132,11 +135,14 @@ qing_amban_appoint_selected = {
 			text = qing_amban_needs_lifanyuan_tt
 			scope:player = { has_variable = qing_office_lifanyuan_holder  var:qing_office_lifanyuan_holder = { is_alive = yes  employer = scope:player } }
 		}
-		# the stored destination must still be a valid, amban-less subject of CHI.
+		# the stored destination must still be a valid subject of CHI. In POST mode it must be amban-less;
+		# in REPLACE mode (#62) it legitimately still holds the incumbent (whom the trampoline recalls
+		# before posting the pick), so the amban-less requirement is waived when qing_amban_picker_is_replace.
 		scope:player = {
-			var:qing_amban_picker_subject = {
-				is_subject_of = scope:player
-				NOT = { has_variable = qing_amban_here }
+			var:qing_amban_picker_subject = { is_subject_of = scope:player }
+			OR = {
+				has_variable = qing_amban_picker_is_replace
+				var:qing_amban_picker_subject = { NOT = { has_variable = qing_amban_here } }
 			}
 		}
 	}
@@ -146,13 +152,25 @@ qing_amban_appoint_selected = {
 		save_scope_as = qing_amban_picked
 		scope:player = {
 			add_political_influence = -25
+			# [#62] REPLACE costs a little tyranny too (2), matching the old one-click Replace + the
+			# Diplomacy Subjects-tab Replace (#50). A plain Post carries no tyranny. Guarded on the flag.
+			if = { limit = { has_variable = qing_amban_picker_is_replace }  add_tyranny = 2 }
 			# claim the post (freeze the auto-sweep for this dependency).
 			var:qing_amban_picker_subject = { set_variable = { name = qing_amban_manual  value = 1 } }
 			# hand the subject to the trampoline via a saved scope (the picked char is saved above).
 			var:qing_amban_picker_subject = { save_scope_as = qing_amban_manual_target }
+			# [#62] tell the trampoline whether to recall an incumbent first (replace) or post directly (post).
+			if = {
+				limit = { has_variable = qing_amban_picker_is_replace }
+				set_variable = { name = qing_amban_pick_was_replace  value = 1 }
+			}
+			else = {
+				if = { limit = { has_variable = qing_amban_pick_was_replace }  remove_variable = qing_amban_pick_was_replace }
+			}
 			trigger_event = { id = qing_amban.6  days = 0 }
-			# clear the picker-subject marker so stray rows can't re-fire against a stale destination.
+			# clear the picker markers so stray rows can't re-fire against a stale destination / mode.
 			remove_variable = qing_amban_picker_subject
+			if = { limit = { has_variable = qing_amban_picker_is_replace }  remove_variable = qing_amban_picker_is_replace }
 		}
 	}
 }
@@ -249,19 +267,18 @@ qing_amban_manage_replace_button = {  # [#34] is_shown culture test aligned to Q
 	}
 
 	effect = {
-		LOG_line = { sys = QING  msg = "amban: MANUAL replace at by" }
-		add_political_influence = -25
-		# [BT-19] replacing a sitting resident is a heavier intervention than recall — a little
-		# more tyranny (add_tyranny = 2 vs recall's 1). Country scope (se_QING_CENSORATE.txt:155).
-		add_tyranny = 2
-		scope:target = { set_variable = { name = qing_amban_manual  value = 1 } }
-		# recall the old man FIRST (clears qing_amban_here) — recall carries no sorting iterator,
-		# so it is safe to inline. Then dispatch the new resident via the qing_amban.5 trampoline
-		# ([#34 CRASHFIX] — QING_amban_post now inlines an ordered_character sorting iterator that
-		# access-violates a scripted_gui at boot; see the post-button note above).
-		QING_amban_recall = { subject = scope:target  reason = "manual-replace" }
-		scope:target = { save_scope_as = qing_amban_manual_target }
-		trigger_event = { id = qing_amban.5  days = 0 }
+		# [#62 2026-08-08] Replace now OPENS THE CANDIDATE PICKER (like Post), instead of auto-drawing
+		# the ablest graduate. This effect only PREPARES the picker: record the destination subject, set
+		# the REPLACE-MODE flag (so the row handler knows the seat is occupied and must recall the
+		# incumbent before posting), and build the candidate list. NO charge and NO recall happen here —
+		# so closing the picker without choosing costs nothing and strands no one (the incumbent stays).
+		# The 25 PI + 2 tyranny cost (matching the Diplomacy Replace, #50) is paid at the row-click
+		# (qing_amban_appoint_selected), and the recall-then-post runs in the qing_amban.6 trampoline.
+		# The .gui button also fires gui.createwidget to open qing_amban_picker_window.
+		LOG_line = { sys = QING  msg = "amban: MANUAL replace picker opened at by" }
+		set_variable = { name = qing_amban_picker_subject  value = scope:target }
+		set_variable = { name = qing_amban_picker_is_replace  value = 1 }
+		QING_amban_refresh_candidates = yes
 	}
 }
 
