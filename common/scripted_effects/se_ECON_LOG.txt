@@ -214,6 +214,195 @@ ECON_LOG_quarter = {
 	ECON_LOG_country_snapshot = yes
 	ECON_LOG_jobs_snapshot = yes
 	ECON_LOG_currency_snapshot = yes
+	# [#23 EXACT-VALUE forensic] the coarse band snapshot above cannot distinguish "modest
+	# inflation" from "any inflation", nor show WHICH input moves when the ratio flips. This
+	# emits EXACT scaled integers for the whole currency causal chain, render-free (digit
+	# decomposition + grep). CHI-only, self-gated. PRE = this (early) site = last quarter's
+	# state; a POST call at oa_wealth_changes:356 captures this quarter's fresh recompute.
+	ECON_LOG_curx_dump = { phase = PRE }
+}
+
+# ======================================================================
+# [#23 2026-08-07] EXACT-VALUE CURRENCY FORENSIC — the whole causal chain as EXACT numbers.
+#
+# WHY: numeric render into debug_log is IMPOSSIBLE in scripted-effect context (proven: the
+# [ROOT.MakeScope.GetVariable().GetValue] form emits "Could not find promote" and renders
+# NOTHING — see the removal notes throughout this file; the 1.6M-line Aug-7 trace contains
+# zero rendered svalue magnitudes). So #28's band snapshot could only bucket, not measure —
+# it cannot tell "modest inflation → severe deflation" (the reported truth) from noise, and
+# cannot show which upstream input changed. This probe recovers EXACT values render-free.
+#
+# METHOD (proven idioms only): for each chain value V, stage floor(V * SCALE) into a temp var,
+# then emit that integer as a run of marker lines via a capped `while` (count+limit+change_variable
+# is the proven idiom, se_CURRENCY.txt:1422). Read back EXACTLY:
+#     (per quarter, between two "CURX QUARTER-MARK" lines)
+#     grep -c "IMP19C CURX tick ratio"   debug.log   == floor(ratio   * 1000)
+#     grep -c "IMP19C CURX tick defl"    debug.log   == floor(deflation% * 1000)   (0..100 => 0..~100k? no: %*1000)
+# so ratio 0.087 -> 87 ticks; deflation 0.0993 -> 99 ticks; a MODEST inflation ratio 1.02 -> 1020 ticks.
+# The CAP (max count) bounds the loop so a huge value can't hang the boot; a value hitting the cap
+# logs a "CAPPED" line so we know to raise it. $param$ interpolation into debug_log is proven
+# (ECON_LOG_fx_classify_good uses $tradegood$); value = $SV$ macro param is proven (se_ECON_wealth,
+# se_QING_MINISTRY). Silent outside -debug_mode. CHI-only. Read-only (temp vars removed).
+#
+# CHAIN LOGGED (every operand from symptom back to primitives — so a boot can NEVER end in
+# "I still don't know which input moved"):
+#   OUTPUTS:   deflation%, inflation%              (the reported symptom, *1000)
+#   RATIO:     private_cash_ratio                  (the core signal, *1000)
+#   NUMERATOR: amt_circulated_scaled               (money supply, *100)
+#   DENOM:     private_cash_needed                 (*100)
+#     its inputs:  essentials_buying_power (*100), country_population (*1),
+#                  trade_wealth_outgoing (*100), wealth_generated (*100)
+#   RESERVE:   reserve_ratio_total (*1000), wealth_value_1_unit_scaled_by_reserve_ratio (*100)
+#   FEEDBACK:  inflation_cash_selloff_amt (*100), deflation_money_demand_amt (*1), minting_rate (*1)
+# ======================================================================
+
+# --- exact-integer emitter via DIGIT DECOMPOSITION (magnitude-independent). ---------------
+# Scope: country. Emits floor($val$ * $scale$) as one line PER DECIMAL DIGIT, most-significant
+# first, tagged with its position — so ANY magnitude costs ~7 lines, not O(value), and no cap
+# can truncate. Read back per quarter with, e.g.:
+#     grep "IMP19C CURX digit ratio " <quarter-window>
+#     -> lines like "...digit ratio p3 =7", "...p2 =0", "...p1 =2", "...p0 =0"  => 7020  (=ratio*1000)
+# Method: peel the highest power of ten <= value, emit its leading digit, subtract, repeat.
+# Bounded loop (fixed 9 positions => values up to 1e9-1). Sign emitted separately. Proven idioms:
+# while+count+limit (se_CURRENCY.txt:1422), round=floor at svalue top-level (ECON_LOG_curx_floor_sv,
+# ECON_svalues.txt — the ONLY legal spot for round in this codebase), $param$ value source
+# (se_ECON_wealth), $param$ into debug_log (ECON_LOG_fx_classify_good). Digit equality (var = N) is
+# safe because every digit is a clean integer 0..9 produced by the floor svalue.
+ECON_LOG_curx_emit = {
+	# Scope: country
+	# floor(val*scale): stage the raw product, then floor it via a proven top-level svalue
+	# (round=floor is legal ONLY at svalue top-level in this codebase — grep-confirmed it is
+	# never used inside set/change_variable — so do it there, NOT in a value sub-block).
+	set_variable = { name = ECON_LOG_curx_raw  value = $val$  multiply = $scale$ }
+	set_variable = { name = ECON_LOG_curx_v    value = ECON_LOG_curx_floor_sv }
+	# [review-fix CRITICAL] EMPTY guard — MUST mirror the band-snapshot sentinel (:118-164). A
+	# set-but-empty svalue (Div0 / empty operand — the EXACT failure #23 is chasing) stores an
+	# empty var whose digit ladder would silently emit nine "=9" lines = a bogus 999999999. Gate
+	# the whole decomposition behind the > -999999999 sentinel: an empty errors→false→EMPTY line.
+	if = {
+		limit = { var:ECON_LOG_curx_v > -999999999 }
+		if = {
+			limit = { var:ECON_LOG_curx_v < 0 }
+			debug_log = "IMP19C CURX sign $tag$ = NEGATIVE"
+			change_variable = { name = ECON_LOG_curx_v  multiply = -1 }
+		}
+		# FIXED start at 10^8 and peel down to 10^0 — always 9 digit lines (pos 8..0), leading zeros
+		# included (strip them when reading). This makes EVERY comparison RHS a LITERAL (pw >= 1),
+		# avoiding the illegal var/block-on-RHS form (memory: RHS-comparison-operator-rule). Values
+		# above 10^9-1 are out of range for all currency chain terms here (ratio*1000 <= ~3000,
+		# circ*100/need*100/pop <= ~1e6), so 9 places is ample.
+		set_variable = { name = ECON_LOG_curx_pw   value = 100000000 }
+		set_variable = { name = ECON_LOG_curx_pos  value = 8 }
+		# peel digits most-significant first: digit = floor(rem / pw); rem -= digit*pw; pw /= 10
+		set_variable = { name = ECON_LOG_curx_rem  value = var:ECON_LOG_curx_v }
+		while = {
+			count = 9
+			limit = { var:ECON_LOG_curx_pw >= 1 }
+			# digit = floor(rem / pw): rem/pw is exact-integer-valued here (both are integers, pw a
+			# power of ten) so the fixed-point quotient's fractional part is 0 for the leading digit
+			# ONLY when rem<pw*10; to be safe, floor via the proven svalue form.
+			set_variable = { name = ECON_LOG_curx_raw  value = var:ECON_LOG_curx_rem  divide = var:ECON_LOG_curx_pw }
+			set_variable = { name = ECON_LOG_curx_d    value = ECON_LOG_curx_floor_sv }
+			# [review-fix MEDIUM] clamp digit to 0..9. If PDX divide rounds-to-nearest (vs truncates),
+			# a rem in the top ~5e-6 of pw at pw>=1e6 could floor to 10 and drive rem negative,
+			# poisoning trailing digits. A hard 0..9 clamp makes the peel robust regardless of the
+			# engine's divide-rounding mode (min=0 floor, max=9 ceiling on the digit).
+			change_variable = { name = ECON_LOG_curx_d  min = 0  max = 9 }
+			# emit this digit at its position. One line per digit; grep + read the digit off the tail.
+			# (position lets us reassemble even if lines interleave with other tags.)
+			ECON_LOG_curx_digitline = { tag = $tag$ }
+			# rem -= d * pw
+			change_variable = {
+				name = ECON_LOG_curx_rem
+				subtract = { value = var:ECON_LOG_curx_d  multiply = var:ECON_LOG_curx_pw }
+			}
+			# pw /= 10 (pw is an exact power of ten, so integer division is exact — no round needed); pos--
+			change_variable = { name = ECON_LOG_curx_pw   divide = 10 }
+			change_variable = { name = ECON_LOG_curx_pos  subtract = 1 }
+		}
+	}
+	else = {
+		# empty/Div0 operand — flag it, exactly like the band snapshot's "= EMPTY". This is a
+		# FINDING for #23, not noise: it means this chain term went empty at the sampled moment.
+		debug_log = "IMP19C CURX $tag$ = EMPTY (set-but-empty / Div0 — this operand went empty)"
+	}
+	remove_variable = ECON_LOG_curx_raw
+	remove_variable = ECON_LOG_curx_v
+	remove_variable = ECON_LOG_curx_pw
+	remove_variable = ECON_LOG_curx_pos
+	remove_variable = ECON_LOG_curx_rem
+	remove_variable = ECON_LOG_curx_d
+}
+
+# --- emit ONE digit line. debug_log can't render a number, but the DIGIT (0..9) and POSITION
+# (0..8) are tiny, so we emit them as their own greppable tick counts on a sub-marker line —
+# actually simplest: emit `pos` p-ticks and `digit` d-ticks is O(100). Instead we exploit that
+# 0..9 is only ten cases: a fixed if-ladder prints the literal digit with NO render. Same for pos.
+ECON_LOG_curx_digitline = {
+	# Scope: country. Reads ECON_LOG_curx_pos (0..8) and ECON_LOG_curx_d (0..9).
+	# Build the position label.
+	if = { limit = { var:ECON_LOG_curx_pos = 0 } ECON_LOG_curx_dv = { tag = $tag$  pos = p0 } }
+	else_if = { limit = { var:ECON_LOG_curx_pos = 1 } ECON_LOG_curx_dv = { tag = $tag$  pos = p1 } }
+	else_if = { limit = { var:ECON_LOG_curx_pos = 2 } ECON_LOG_curx_dv = { tag = $tag$  pos = p2 } }
+	else_if = { limit = { var:ECON_LOG_curx_pos = 3 } ECON_LOG_curx_dv = { tag = $tag$  pos = p3 } }
+	else_if = { limit = { var:ECON_LOG_curx_pos = 4 } ECON_LOG_curx_dv = { tag = $tag$  pos = p4 } }
+	else_if = { limit = { var:ECON_LOG_curx_pos = 5 } ECON_LOG_curx_dv = { tag = $tag$  pos = p5 } }
+	else_if = { limit = { var:ECON_LOG_curx_pos = 6 } ECON_LOG_curx_dv = { tag = $tag$  pos = p6 } }
+	else_if = { limit = { var:ECON_LOG_curx_pos = 7 } ECON_LOG_curx_dv = { tag = $tag$  pos = p7 } }
+	else = { ECON_LOG_curx_dv = { tag = $tag$  pos = p8 } }
+}
+
+# --- emit the digit value 0..9 as a literal on the line (fixed ladder, no render). ---------
+ECON_LOG_curx_dv = {
+	# Scope: country. Reads ECON_LOG_curx_d.
+	if = { limit = { var:ECON_LOG_curx_d = 0 } debug_log = "IMP19C CURX digit $tag$ $pos$ =0" }
+	else_if = { limit = { var:ECON_LOG_curx_d = 1 } debug_log = "IMP19C CURX digit $tag$ $pos$ =1" }
+	else_if = { limit = { var:ECON_LOG_curx_d = 2 } debug_log = "IMP19C CURX digit $tag$ $pos$ =2" }
+	else_if = { limit = { var:ECON_LOG_curx_d = 3 } debug_log = "IMP19C CURX digit $tag$ $pos$ =3" }
+	else_if = { limit = { var:ECON_LOG_curx_d = 4 } debug_log = "IMP19C CURX digit $tag$ $pos$ =4" }
+	else_if = { limit = { var:ECON_LOG_curx_d = 5 } debug_log = "IMP19C CURX digit $tag$ $pos$ =5" }
+	else_if = { limit = { var:ECON_LOG_curx_d = 6 } debug_log = "IMP19C CURX digit $tag$ $pos$ =6" }
+	else_if = { limit = { var:ECON_LOG_curx_d = 7 } debug_log = "IMP19C CURX digit $tag$ $pos$ =7" }
+	else_if = { limit = { var:ECON_LOG_curx_d = 8 } debug_log = "IMP19C CURX digit $tag$ $pos$ =8" }
+	else = { debug_log = "IMP19C CURX digit $tag$ $pos$ =9" }
+}
+
+# --- the full-chain dump, one call per quarter (CHI only). ------------------------------
+ECON_LOG_curx_dump = {
+	# Scope: country
+	if = {
+		limit = { has_variable = official_currency  tag = CHI }
+		# quarter boundary marker — segment the log into per-quarter windows for grep -c.
+		# $phase$ distinguishes the two call sites: PRE = ECON_LOG_quarter (~oa_wealth_changes:209,
+		# LAST quarter's state, before this quarter's reserve buy/sell + circulation update) vs
+		# POST = the fresh site (~:356, THIS quarter's recomputed state). The PRE→POST delta across
+		# one recompute is exactly what reveals which input moved when the ratio flips.
+		# (No in-game date on log lines; the wall-clock timestamp is the segmentation key.)
+		debug_log = "IMP19C CURX QUARTER-MARK $phase$"
+		# OUTPUTS — the reported symptom, *1000 (so 0.0993 deflation -> 99, modest 0.02 infl -> 20)
+		ECON_LOG_curx_emit = { tag = defl   val = CURRENCY_amt_circulated_deflation  scale = 1000 }
+		ECON_LOG_curx_emit = { tag = infl   val = CURRENCY_amt_circulated_inflation   scale = 1000 }
+		# RATIO — core signal, *1000 (deflation floor ratio 0.01 -> 10; modest-infl 1.02 -> 1020)
+		ECON_LOG_curx_emit = { tag = ratio  val = CURRENCY_private_cash_ratio  scale = 1000 }
+		# NUMERATOR — money supply, *100
+		ECON_LOG_curx_emit = { tag = circ   val = CURRENCY_amt_circulated_scaled  scale = 100 }
+		# DENOMINATOR — *100 — and every one of its inputs, so we can see WHICH moved
+		ECON_LOG_curx_emit = { tag = need   val = CURRENCY_private_cash_needed  scale = 100 }
+		ECON_LOG_curx_emit = { tag = ess    val = CURRENCY_essentials_buying_power  scale = 100 }
+		ECON_LOG_curx_emit = { tag = pop    val = country_population  scale = 1 }
+		ECON_LOG_curx_emit = { tag = trout  val = CURRENCY_trade_wealth_outgoing_currency_value  scale = 100 }
+		ECON_LOG_curx_emit = { tag = wgen   val = CURRENCY_wealth_generated_country_as_currency_value  scale = 100 }
+		# RESERVE channel — the denominator's other driver (reserve ratio scales cost-of-living)
+		ECON_LOG_curx_emit = { tag = rratio val = CURRENCY_reserve_ratio_total  scale = 1000 }
+		ECON_LOG_curx_emit = { tag = wvunit val = CURRENCY_wealth_value_1_unit_scaled_by_reserve_ratio  scale = 100 }
+		# FEEDBACK amounts — the correction magnitudes (the damping-fix targets)
+		ECON_LOG_curx_emit = { tag = selloff val = CURRENCY_inflation_cash_selloff_amt  scale = 100 }
+		ECON_LOG_curx_emit = { tag = mdemand val = CURRENCY_deflation_money_demand_amt  scale = 1 }
+		if = {
+			limit = { has_variable = CURRENCY_minting_rate }
+			ECON_LOG_curx_emit = { tag = mint  val = var:CURRENCY_minting_rate  scale = 1 }
+		}
+	}
 }
 
 # ======================================================================

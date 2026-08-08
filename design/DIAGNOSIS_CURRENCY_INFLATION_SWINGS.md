@@ -44,6 +44,19 @@ Quarterly feedback correction (every 91 days, via `quarterly_trade_pulse` →
 
 Cadence is QUARTERLY; the ~1-year sawtooth = 4 quarters of over-correction.
 
+**[#23 magnitude correction, 2026-08-07]** Boot-test #23 ("snaps from modest inflation to severe
+deflation") is the SAME mechanism as this doc — confirmed after a #23-specific diagnosis was written
+and then REFUTED by adversarial review (see design/DIAGNOSIS_CURRENCY_ANNUAL_SNAP.md §0 for the full
+refutation of the read-ordering theory). The one salvageable finding: the `private_cash_needed`
+denominator swings **larger** than the "1–5%/quarter" estimated in point 3 above — the #28 boot trace
+shows it moving across bands 0-10 ↔ 25-50 (a ~5× quarter-to-quarter step), which drives `ratio` all the
+way to the 0.01 clamp and pins deflation at the −10% floor. WHY it's that large: besides the trade-wealth
+terms, `private_cash_needed`'s cost-of-living input `CURRENCY_essentials_buying_power` divides by
+`CURRENCY_wealth_value_1_unit_scaled_by_reserve_ratio` (CURRENCY_svalues.txt:690-694), which the reserve
+buy/sell feedback moves every quarter — so cost-of-living AND the trade terms both swing with this loop,
+compounding. This does not change the fix (still Option 1 below — damp the correction amounts); it means
+the damping must be strong enough to tame a denominator that can step several-fold, not just a few %.
+
 ## Provenance (why we don't just edit it)
 
 The oscillation mechanism is **100% upstream Sobisonator** (git authorship on the feedback
