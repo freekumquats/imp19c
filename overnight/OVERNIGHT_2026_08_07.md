@@ -478,3 +478,25 @@ category key controls placement). STATUS: built; in review (folded into #34's re
 - #32 red-bar downward fill — rotate_uv spike shipped (q0); needs a boot to confirm/revert.
 - #23 currency fix — exact-value probe shipped; fix waits for the real time series (do NOT
   edit shared upstream currency on the still-unproven diagnosis).
+
+### #36/#37/#38 — event outcome-percentage visibility (COMMITTED a674d7366)
+Full audit: 7 player-facing options across 4 files use `scope:X={random={chance=svalue set flag}}`
++ if/else, where the engine auto-previewed only ONE branch (the "59% chance of..." with no other
+side). Fix: wrap each roll+if/else in hidden_effect (proven, 218 oracle files) to suppress the
+one-sided preview; rewrite each custom_tooltip to state BOTH outcomes + the odds formula (amban
+25+2*cha+fin; garrison 30+2*mar+zeal; both 10-90). Options: integ.10.d, 12.d, 40.c, 41.d, 41.e,
+march.2.a; war.4.a left unwrapped (its random{50} only adds a 3rd officer, no hidden negative) with
+a clarified tooltip. The 6 random_list blocks already had per-branch custom_tooltips (checked).
+#41 (Force-the-Pace sum-to-99) folded in: that ±1% is ENGINE per-branch rounding, not fixable in
+script — the fixable class was the hidden branches, now done. Reviewed CLEAN.
+
+### #35 — Ganden Phodrang (Tibet) "Under Imperial Garrison" + amban wiring (COMMIT pending)
+Root cause: QING_fgar_scan (se_QING_FRONTIER.txt) flagged a subject as garrisoned only when its
+soil-owner `is_subject_type = autonomous_governorship`. TIB is a PROTECTORATE → the Lhasa garrison
+(p:3819) was invisible → no "Under imperial garrison". Fix (a): broaden the type OR to
+autonomous_governorship + semi_autonomous_governorship + protectorate. Fix (b): add the nested
+one-hop overlord branch (is_subject_of NON-recursive) so 2-hop governorship sub-subjects (Kobdo,
+KBD->ULS) register too. Hami/Aksu owners (KML feudatory / XNG client_state) deliberately NOT in the
+frontier-type set — that's #33's call. Confirmed TIB was ALREADY amban-eligible (tibetan ∈ bodish;
+se_QING_AMBAN seed names c:TIB) — only the garrison-scan half was broken. Protectorate fix reviewed
+CLEAN; nested branch is the proven legion-setup idiom. DONE.
