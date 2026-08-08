@@ -228,6 +228,92 @@ qing_censorate_impeach_selected = {
 	}
 }
 
+# ---- REHABILITATE THE DISGRACED — [#51 2026-08-07] the inverse of impeach: lift a HARD
+# disgrace (completely_disgraced_cmod, the #47 bar) from a chosen official, restoring his
+# eligibility for the amban corps + every GC office. ENABLE-GATE for the panel button (like
+# qing_censorate_impeach_venal): shown for CHI, enabled only when a Grand Inspector sits, the
+# player can afford the cost, and at least one hard-disgraced official exists. The button's
+# onclick refreshes the roster (hidden event, off the compiled chain) + opens the picker; a
+# row-click rehabilitates the CHOSEN man. Country scope.
+# ----------------------------------------------------------------------
+qing_censorate_rehabilitate = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = {
+		# a present Grand Inspector must be seated to petition for a rehabilitation...
+		custom_tooltip = {
+			text = qing_censorate_rehab_needs_inspector_tt
+			has_variable = qing_office_censor_holder
+			var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
+		}
+		# ...the throne can afford the political-influence cost...
+		custom_tooltip = {
+			text = qing_censorate_rehab_needs_influence_50_tt
+			political_influence >= 50
+		}
+		# ...and there must BE a hard-disgraced official to rehabilitate (no no-op affordance).
+		custom_tooltip = {
+			text = qing_censorate_rehab_needs_target_tt
+			any_character = {
+				employer = ROOT
+				is_alive = yes
+				has_character_modifier = completely_disgraced_cmod
+			}
+		}
+	}
+	effect = {
+		# ENABLE-GATE only; the .gui button's onclick fires the refresh + opens the picker window.
+		# Left empty so nothing is rehabilitated behind the player's back.
+	}
+}
+
+# [#51] REHAB-PICKER ROSTER refresh — the panel button's FIRST onclick. Fires the hidden
+# qing_censorate.8 runtime event, which builds the qing_censorate_disgraced list (routed off the
+# compiled button chain because it is a sorting iterator — the #443 crash class).
+qing_censorate_refresh_disgraced_btn = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI }
+	is_valid = { always = yes }
+	effect = {
+		trigger_event = { id = qing_censorate.8 }
+		LOG_line = { sys = QING  msg = "censorate: rehabilitate-picker roster refreshed from the panel for" }
+	}
+}
+
+# [#51] REHABILITATE A SELECTED OFFICIAL — row-click in the qing_censorate_rehab_window picker.
+# The chosen man comes via datacontext (GuiScope char + player). Removes completely_disgraced_cmod
+# (restoring eligibility), charges 50 political influence + 2 tyranny, and recomputes the meter.
+# Route the cost/mutation through the hidden character event qing_censorate.9 (a RUNTIME
+# trigger_event, never compile-inlined) — mirroring qing_censorate_impeach_selected, since the
+# recompute is iterator-heavy and the #443 class forbids inlining such a chain into a button.
+qing_censorate_rehabilitate_selected = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI }
+		employer = scope:player
+	}
+	is_valid = {
+		# a present Grand Inspector must still be seated + the player still able to afford it...
+		scope:player = {
+			has_variable = qing_office_censor_holder
+			var:qing_office_censor_holder = { is_alive = yes  employer = scope:player }
+			political_influence >= 50
+		}
+		# ...and the selected man must still be hard-disgraced (mirror the roster limit).
+		employer = scope:player
+		is_alive = yes
+		has_character_modifier = completely_disgraced_cmod
+	}
+	effect = {
+		trigger_event = { id = qing_censorate.9 }
+		LOG_line = { sys = QING  msg = "censorate: a disgraced official rehabilitated via the picker for" }
+	}
+}
+
 # ---- CLOSE ------------------------------------------------------------------
 qing_censorate_close_panel = {
 	scope = country

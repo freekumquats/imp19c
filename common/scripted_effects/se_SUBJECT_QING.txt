@@ -821,6 +821,17 @@ SUBJ_QING_resolve_integ_actors = {
 		}
 		scope:target.var:qing_amban_here = { save_scope_as = integ_amban }
 		set_variable = { name = integ_amban_present  value = 1 }
+		# [#49 2026-08-07] stash the resident's live negotiate odds ON the amban character, so the
+		# skill-check option tooltips (.10.d/.12.d/.40.c/.41.d) render REAL percentages that sum to 100
+		# via the PROVEN loc form [integ_amban.MakeScope.GetVariable('X').GetValue] (the granary-tooltip
+		# idiom, qing_integ.20.a.tt). Computed from the amban's OWN scope so charisma/finesse are his.
+		# (Rendering a ScriptValue on a bare saved scope via GuiScope.SetRoot is NOT proven in this
+		# codebase — a stored var read is, so we stash then read.) Recomputed each time the actors
+		# resolve, so the shown odds always match the roll (qing_amban_negotiate_chance_svalue).
+		scope:integ_amban = {
+			set_variable = { name = qing_amban_negotiate_chance_shown  value = qing_amban_negotiate_chance_svalue }
+			set_variable = { name = qing_amban_negotiate_fail_shown    value = qing_amban_negotiate_fail_svalue }
+		}
 		if = {
 			limit = { scope:integ_amban = { loyalty > 70 } }
 			set_variable = { name = integ_amban_band  value = 2 }
@@ -917,6 +928,36 @@ SUBJ_QING_resolve_integ_actors = {
 		remove_variable = integ_edge_delta
 		remove_variable = integ_edge_delta2
 	}
+	# [#49 2026-08-07; review-fix D] stash the .41.e clean/chaotic crush odds on ROOT (the country),
+	# for the tooltip to render real percentages. On ROOT — NOT the commander character — because the
+	# .41.e option shows on garrison EDGE alone (no commander guard) and clear_integ_actors leaves saved
+	# scopes to fall out of use, so a char-var read via a STALE integ_garrison_cmd from a prior subject
+	# would surface the wrong commander's odds on a present-but-leaderless garrison. These ROOT vars are
+	# cleared in clear_integ_actors, so they are always this-garrison-fresh. Set in BOTH branches so the
+	# single tooltip numeric clause is always truthful. Placed AFTER integ_garrison_edge is computed.
+	if = {
+		limit = { exists = scope:integ_garrison_cmd }
+		# COMMANDER present: his live skill-check odds. Evaluate the char-scope svalue INSIDE his scope
+		# (the proven read — the event's random{ chance = svalue } does the same inside this scope), then
+		# store the result up onto ROOT via the proven prev-in-ROOT idiom (se_QING_COUNCIL.txt:591).
+		# read the char-scope svalue off the SAVED commander scope directly (proven form:
+		# se_QING_AMBAN.txt:457 `value = scope:X.combined_stats_council_svalue`). Stays in ROOT scope;
+		# the svalue evaluates in the commander's scope via the saved-scope prefix. (Review Finding 2:
+		# avoids the novel prev.<svalue> form — scope:X.<svalue> has direct precedent.)
+		set_variable = { name = qing_garrison_clean_crush_shown   value = scope:integ_garrison_cmd.qing_garrison_clean_crush_chance_svalue }
+		set_variable = { name = qing_garrison_chaotic_crush_shown value = scope:integ_garrison_cmd.qing_garrison_chaotic_crush_chance_svalue }
+	}
+	else_if = {
+		# LEADERLESS, dominant edge (2): the execution crushes cleanly (qing_integ.41.e else_if), so 100/0.
+		limit = { var:integ_garrison_size >= 1  has_variable = integ_garrison_edge  var:integ_garrison_edge = 2 }
+		set_variable = { name = qing_garrison_clean_crush_shown   value = 100 }
+		set_variable = { name = qing_garrison_chaotic_crush_shown value = 0 }
+	}
+	else = {
+		# LEADERLESS, parity or no garrison: the execution wins chaotically, so 0/100.
+		set_variable = { name = qing_garrison_clean_crush_shown   value = 0 }
+		set_variable = { name = qing_garrison_chaotic_crush_shown value = 100 }
+	}
 	LOG_line = { sys = SUBJ  msg = "integ actors: garrison size / subject size / edge band computed for subject" }
 	LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_resolve_integ_actors"  result = OK }
 }
@@ -959,6 +1000,10 @@ SUBJ_QING_clear_integ_actors = {
 	if = { limit = { has_variable = integ_edge_delta }    remove_variable = integ_edge_delta }
 	if = { limit = { has_variable = integ_edge_delta2 }   remove_variable = integ_edge_delta2 }
 	if = { limit = { has_variable = integ_garrison_crush_clean } remove_variable = integ_garrison_crush_clean }
+	# [#49 2026-08-07; review-fix D] clear the .41.e crush-odds display vars so a present-but-leaderless
+	# garrison cannot surface a prior garrison's stale odds; re-set every resolve, cleared here between crises.
+	if = { limit = { has_variable = qing_garrison_clean_crush_shown }   remove_variable = qing_garrison_clean_crush_shown }
+	if = { limit = { has_variable = qing_garrison_chaotic_crush_shown } remove_variable = qing_garrison_chaotic_crush_shown }
 	# scope:integ_garrison_cmd is a saved scope, not a var — it simply falls out of use, like integ_amban.
 }
 
