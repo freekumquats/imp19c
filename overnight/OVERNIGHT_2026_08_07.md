@@ -434,3 +434,47 @@ culture/religion keys exist; no double-raise (inside the qing_armies_setup_done 
 intact (setup reader rejects BOM — my write stripped it, RESTORED before review; diff is pure +95 addition);
 1815 branch untouched. One non-defect note (loc keys mix _BANNER_GARRISON vs _GREEN_STANDARD by unit type —
 internally consistent). Committed + pushed to merge-overnight. Awaiting user boot-test.
+
+---
+
+## [T-boottest-followup] Boot-test bug backlog (2026-08-07, post-boot logs.zip Aug 7 16:24)
+
+User ran a boot test (7 screenshots + logs). Findings tasked #31-#46. Working them in order,
+no deferrals. Committed so far this block:
+
+- **fbaca4d07** — #23 exact-value currency probe (digit-decomposition, render-free) + #40
+  (Board→Ministry, 14 files) + #42 (RANDOM_LIST_EFFECT reword) + #44 closed (non-bug: BOM
+  warning is universal, my trigger file matches every sibling).
+- **44e8f942e** — #39 histogram per-quarter hover amounts (reviewed CLEAN) + #32 red-bar
+  rotate_uv=180 downward-fill BOOT SPIKE (q0 only; rotate_uv unproven on a progressbar so
+  applied to one column — next boot confirms or reverts).
+
+### #34 — Post-an-Amban button in the Lifan Yuan window (completes #26's deferred half)
+The #26 amban picker was wired ONLY into the Subjects/Diplomacy view; the Lifan Yuan window
+had no post entry (the "Phase 2 (not built)" I wrongly closed #26 on). DECISION: build a
+"Vacant Dependencies" section listing subjects that warrant a resident amban but have none,
+each with a "Post an Amban" button reusing the EXISTING picker pipeline (no new backend).
+- se_QING_MINISTRY.txt: new list qing_lifanyuan_vacant_subjects, built in the SAME warrant
+  loop (else-branch of the has-live-amban test) inside QING_ministry_recompute_perf_lifanyuan.
+- qing_lifanyuan.gui: new section (dynamicgridbox over the list); each row's button uses
+  scripted_gui qing_amban_manage_post_button with the row country as scope:target →
+  Execute (sets qing_amban_picker_subject + builds candidates) → createwidget
+  qing_amban_picker_window. Section hidden when no vacancies.
+- 3 loc keys (VACANT_TITLE / POST_AMBAN_BTN / POST_AMBAN_TT) + updated ROSTER_EMPTY note.
+Verified the picker is fully target-scope-driven (not diplo-view-dependent) so it works
+identically from here. STATUS: built; in adversarial review.
+
+### #43 — raw loc key "CANCEL_integrating_governorshipTITLE" + move under Subject Actions
+(A repeat-report — flagged before, not fixed.) ROOT: the engine auto-builds subject-relation
+loc keys CANCEL_<subject_type>* from the type name; the mod's custom transient type
+integrating_governorship (subject_types/00_default.txt:669) had NONE defined, so the UI showed
+the raw key. FIX: added the full CANCEL_integrating_governorship* set (mirroring
+autonomous_governorship), worded for HALTING the ongoing 改土歸流 integration.
+_CATEGORY = "Influence Actions" = the same dropdown group every other subject cancel action
+uses = the Subject-Actions dropdown (that IS the "move it under Subject Actions" fix — the
+category key controls placement). STATUS: built; in review (folded into #34's review).
+
+### Blocked-on-boot (instrumentation shipped, NOT punted):
+- #32 red-bar downward fill — rotate_uv spike shipped (q0); needs a boot to confirm/revert.
+- #23 currency fix — exact-value probe shipped; fix waits for the real time series (do NOT
+  edit shared upstream currency on the still-unproven diagnosis).

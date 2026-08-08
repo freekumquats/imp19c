@@ -48,16 +48,25 @@ qing_amban_manage_post_button = {
 		exists = scope:target
 		scope:target = {
 			is_subject_of = ROOT
-			any_owned_province = { count >= 1 }
-			exists = current_ruler
-			current_ruler = {
-				OR = {
-					has_culture_group = mongolic
-					has_culture_group = bodish
+			# [#34 2026-08-07] use the SHARED warrant trigger (the SAME predicate that builds the
+			# Lifan Yuan vacant-dependencies list + the amban post-sweep, #392) instead of an inline
+			# culture-only test. The old inline OR{mongolic,bodish} MISSED the Manchu-ruled
+			# autonomous-governorship posts ILI (伊犁將軍) / ULS (烏里雅蘇台將軍) that #392 widened the
+			# warrant/sweep to cover — so those dependencies listed in the vacant roster with a
+			# button whose is_shown returned false (a dead, button-less row). Aligning to the shared
+			# trigger makes button ↔ list ↔ sweep one predicate.
+			QING_amban_warrants_resident_trigger = yes
+			# no LIVE resident currently posted here. A dead/departed amban may leave the var SET but
+			# pointing at a non-employed char — treat that as vacant too, matching the vacant-list's
+			# else-branch. Guard the var-read so it only fires when the var exists (avoid reading an
+			# unset var: the first branch = truly-unset; the second = set-but-not-a-live-employee).
+			OR = {
+				NOT = { has_variable = qing_amban_here }
+				AND = {
+					has_variable = qing_amban_here
+					NOT = { var:qing_amban_here = { is_alive = yes  employer = scope:target } }
 				}
 			}
-			# no resident currently posted here
-			NOT = { has_variable = qing_amban_here }
 		}
 	}
 
@@ -202,7 +211,7 @@ qing_amban_manage_recall_button = {
 # One-click recall + post (posting over a live resident would strand the old man,
 # so the recall MUST run first). Shown when a resident is posted here; gated like
 # the post button (Lifan Yuan filled + influence). Claims the post.
-qing_amban_manage_replace_button = {
+qing_amban_manage_replace_button = {  # [#34] is_shown culture test aligned to QING_amban_warrants_resident_trigger below
 	scope = country
 	saved_scopes = { target }
 
@@ -212,14 +221,10 @@ qing_amban_manage_replace_button = {
 		scope:target = {
 			is_subject_of = ROOT
 			has_variable = qing_amban_here
-			any_owned_province = { count >= 1 }
-			exists = current_ruler
-			current_ruler = {
-				OR = {
-					has_culture_group = mongolic
-					has_culture_group = bodish
-				}
-			}
+			# [#34 2026-08-07] shared warrant trigger instead of the inline culture-only OR (same
+			# alignment as the post button above) so the replace action is offered on the Manchu-ruled
+			# autonomous-governorship posts ILI/ULS too, not just mongolic/bodish-ruled dependencies.
+			QING_amban_warrants_resident_trigger = yes
 		}
 	}
 
