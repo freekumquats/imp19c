@@ -47,6 +47,39 @@ Historically 1 chuan ≈ 1,000 wén ≈ ~1.25–1.4 tael (at ~800 wén/tael mark
 silver-pegged unit directly. Whether 46.14M silver-pegged-chuan corresponds to a defensible 1763 stock
 depends on the unpinned copper-stock figure AND how the mod's chuan maps to a tael. UNRESOLVED.
 
+## STOCK ESTIMATE (2nd research pass, 2026-08-08) — the missing number, DERIVED
+
+No single published "1763 stock = X strings" figure exists in any reachable source (Peng Xinwei's copy
+is access-restricted — only his 1900 table surfaced; Vogel's year-by-year Tables 10/18/21 are absent from
+the free abbreviated diss). So the honest deliverable is a DERIVED estimate:
+
+**~250-500 BILLION wén ≈ 250-500 MILLION strings (chuan), central point ~300 million chuan, mid-Qianlong.**
+
+Method: empire-wide annual output × multi-decade coin lifetime.
+- Annual output anchors: central mints (寶泉局+寶源局) ~4M strings/yr in the 1750s-60s (Vogel — this is the
+  "~3-4 billion coins/yr" flow, NOT stock). EMPIRE-WIDE (central + provincial) "always beyond 10 million
+  strings" late-18thc (Wang Yeh-chien 王業鍵, via Horesh 2020 p.318). Circulating stock uses the empire-wide flow.
+- Coin lifetime: durable bronze/brass, circulated decades, net of melt/loss/hoard/export. 30-70yr life on
+  ~10M strings/yr → 300-700B wén; conservative for mid-century (output below the late-18thc peak) → ~250-350B wén.
+- Cross-check: Kuroda 黒田明伸 — Chinese small copper minted "in the hundreds of billions" (qualitative match).
+
+TWO CORRECTIONS from this pass:
+1. The famous "260 billion coins" figure is SONG (von Glahn 2016, Econ History of China, Table 6.9), NOT Qing.
+   Do not use it for 1763.
+2. Good 制錢 vs private/debased 私錢: around 1763 the good-cash fraction was relatively HIGH — irreversible
+   debasement set in only c.1835+ (Vogel); private-mint share GREW after mid-century (Horesh p.258). No clean
+   1763 ratio available.
+
+### IMPLICATION FOR THE MOD SEED (reverses the earlier worry)
+Historical M1 ≈ ~300 MILLION chuan. Mod seeds **46.14 million chuan** (se_CURRENCY.txt:229-231).
+=> The seed is ~6-7x TOO LOW, not too high. (The original "14x too high" worry was based on mistaking
+annual output [3.2bn wén] for the stock — RETRACTED; the stock is ~100x the 3.2bn-wén annual-mint figure.)
+Mod China runs on ~1/7 of its real money supply. NOTE: a mod M1 is not obliged to equal historical M1
+(it is a game abstraction and interacts with private_cash_needed scale + the #23 ratio), so this is a
+FLAG for the #23 rebalancing, not an automatic "set it to 300M". Any M1 change = Sobisonator-caution +
+must be tuned jointly with #23 (M1 is the ratio numerator; ~6-7x-ing it shifts every inflation/deflation
+reading) and with units_to_the_lb (#72, now 8).
+
 ## GAPS — what to get next (needs direct in-text reading, ideally CJK-capable)
 1. **Accumulated copper-cash STOCK in wén/chuan c.1763** — THE missing number. Best sources, both with free
    full text:
