@@ -736,7 +736,7 @@ spike (KOK-re-home-while-existing → the real #112b builds the re-anchor path; 
 the producer chain (pulse → effect → _shown vars → loc) is verified complete. Braces all balanced; no EOL/BOM
 churn; 2 create_character blocks, both pulse-called (none at on_game_initialized).
 
-**Commit:** (below)
+**Review verdict:** code review PASS — no issues (cap ordering min(cap/5,250,pool) correct, RHS-literal clean, 250 proportionate, add/subtract conserved). **Commit:** b362425f0 + pushed.
 
 **Status:** SPIKE 1 + SPIKE 2 BOOT-SPIKE-SHIPPED — debug-gated, reviewed, committed + pushed. ACCEPTANCE IS
 BOOT-GATED (user's separate machine): arm via `effect QING_aqsaqal_spike_enable = yes`, advance a quarter,
@@ -880,3 +880,19 @@ no surviving effect reads a removed temp var; braces 196/196 + 146/146; no EOL/B
 **Commit:** `255d56a28` + pushed.
 
 **Status:** #16 DONE — reviewed CLEAN, committed + pushed.
+
+---
+
+## #17 — cap "Hard Times" open-granaries relief to a modest fixed quantity — IN PROGRESS
+
+**What it was:** flavor_eve.6 ("Hard Times") option .c ("Open the ever-normal granaries 常平倉") ships grain
+from the national pool (qing_granary_food) into a stricken province's state. The ship was
+`has_state_food_capacity / 5`, bounded ONLY by the whole pool — so on a modest pool one province's relief
+drained the ENTIRE 常平倉 reserve (the reported over-generosity).
+
+**What I did:** added one fixed cap of 250 (a few hundred) on qing_gran_ht_ship_tmp BEFORE the existing
+pool-bound, so final ship = min(capacity/5, 250, pool). The pool-bound still bites for a near-empty pool.
+250 is proportionate against the pool scale (capacity = granary_count × 200; seeds 150-600; pop-relief
+top-up 150). var-vs-literal (RHS-rule clean). No .c.tt tooltip exists, so no loc effect-text to correct.
+
+**Commit:** (below)
