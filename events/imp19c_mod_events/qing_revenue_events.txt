@@ -195,6 +195,14 @@ qing_revenue.3 = {
 		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
 		has_variable = qing_currency_stress
 		var:qing_currency_stress >= 30
+		# [#86 2026-08-08] a Silver Crisis (銀荒) requires the 戶部銀庫 to be GENUINELY DRAWN DOWN — not just
+		# an elevated abstract stress meter. The event was firing at a record-high reserve because
+		# qing_currency_stress can reach 30 on opium-drain flow alone while the vaults are still near their
+		# peak, which is not a crisis by any reasonable definition (the reported bug). Also require the real
+		# engine backing reserve to have fallen below 60% of its historical peak. Guarded on the var existing
+		# (seeded for CHI at boot); RHS is the dedicated cmpsvalue, not a var-ref (RHS-comparison rule).
+		has_variable = silver_reserve_size
+		var:silver_reserve_size < qing_silver_reserve_crisis_floor_cmpsvalue
 	}
 
 	immediate = {
@@ -215,13 +223,24 @@ qing_revenue.3 = {
 		# effective intervention: currency stress down
 		QING_DECLINE_nudge_signed = { var = qing_currency_stress_residual  amount = -10 }
 		add_country_modifier = { name = qing_silver_crisis_managed  duration = 1825 }
-		# but it costs political capital and treasury
+		# [#86 2026-08-08] ACTUALLY MOVE THE MONETARY SYSTEM. Previously this "decisive response" only
+		# nudged the abstract stress meter + docked the treasury; it never touched the real silver reserve
+		# the crisis is ABOUT. A decisive policy (tighter Canton controls, bullion purchase, a crackdown on
+		# the opium trade that is draining the vaults) REPLENISHES the engine backing reserve directly:
+		# +2000 千兩 (~2.4% of peak — meaningful against the drift's ±100-250/pulse, not game-breaking).
+		# Guarded on the var existing so a no-reserve edge never errors. This is the concrete face of
+		# "arrest the silver drain" the option name + tooltip promise.
+		if = {
+			limit = { has_variable = silver_reserve_size }
+			change_variable = { name = silver_reserve_size  add = 2000 }
+		}
+		# it costs the exchequer to mount (bullion purchase + enforcement)
 		add_treasury = -60
 		scope:revenue_minister = {
 			add_loyalty = loyalty_qing_congenial
 			QING_char_promote_standing = { pop = -8  prom = 8 }
 		}
-		LOG_line = { sys = QING  msg = "revenue: silver crisis managed (-currency stress, -treasury, minister's standing +/-) for [ROOT.GetTag]" }
+		LOG_line = { sys = QING  msg = "revenue: silver crisis managed (+silver reserve, -currency stress, -treasury, minister's standing +/-) for [ROOT.GetTag]" }
 	}
 
 	# OPTION B: half-measures (minister mediocre, modest effect)
@@ -235,8 +254,14 @@ qing_revenue.3 = {
 		}
 		# partial intervention: small currency stress reduction
 		QING_DECLINE_nudge_signed = { var = qing_currency_stress_residual  amount = -3 }
+		# [#86 2026-08-08] half-measures also touch the real reserve, but only modestly (+600 千兩) —
+		# enough to slow the bleed, not reverse it. Guarded on the var existing.
+		if = {
+			limit = { has_variable = silver_reserve_size }
+			change_variable = { name = silver_reserve_size  add = 600 }
+		}
 		add_treasury = -30
-		LOG_line = { sys = QING  msg = "revenue: silver crisis half-measures (-3 currency stress, -30 treasury) for [ROOT.GetTag]" }
+		LOG_line = { sys = QING  msg = "revenue: silver crisis half-measures (+silver reserve modest, -3 currency stress, -30 treasury) for [ROOT.GetTag]" }
 	}
 
 	# OPTION C: botched response (minister incapable or corrupt, stress worsens)
