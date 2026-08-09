@@ -944,6 +944,6 @@ braces balanced). 1 MEDIUM + 1 LOW, both FIXED:
   var-vs-literal) so the button disables at ~90%+ full. Retired the now-unused qing_granary_capacity_cmpsvalue
   I'd added (00_event_values.txt reverted to HEAD).
 
-**Commit:** (below)
+**Commit:** `571de1b69` + pushed.
 
-**Status:** #18 DONE — reviewed, MEDIUM+LOW folded, committing + pushing.
+**Status:** #18 DONE — reviewed, MEDIUM+LOW folded, committed + pushed.
