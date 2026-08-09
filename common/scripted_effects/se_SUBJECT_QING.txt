@@ -283,7 +283,24 @@ SUBJ_QING_advance_integration = {
 	LOG_enter = { sys = SUBJ  fn = "SUBJ_QING_advance_integration +$steps$" }
 
 	if = {
-		limit = { exists = scope:target }
+		# [#19 2026-08-09 BUGFIX] LADDER GATE. Only a subject that is actually ON the integration ladder may
+		# accrue integration progress. A can_be_integrated=no subject that sits OFF the ladder — a PROTECTORATE
+		# (Tibet, the 羈縻 loose-rein settlement), a tributary/feudatory, or a sub-subject (e.g. Kobdo under
+		# Uliastay) — must be brought ONTO the ladder FIRST (a protectorate via SUBJ_QING_incorporate_protectorate,
+		# the priced+coercive Zhao-Erfeng 改土歸流 act; a lesser subject via the promote ladder). Without this
+		# gate, any progress-driver (frontier/Xinjiang/caravan events, SUB_QING interactions — not all of which
+		# gated on the type) could fill an off-ladder subject's meter and the threshold SAFETY-NET below would
+		# DIRECTLY absorb it, bypassing both the engine handoff and the incorporate step (the reported bug:
+		# Tibet + Kobdo annexed off-ladder). Gating at the SINK closes the bypass for every caller at once.
+		# The autonomous_governorship (rung 4) and the transient integrating_governorship are the only
+		# ladder-legit types; everything else is refused here with a loud, greppable LOG_fail.
+		limit = {
+			exists = scope:target
+			OR = {
+				scope:target = { is_subject_type = autonomous_governorship }
+				scope:target = { is_subject_type = integrating_governorship }
+			}
+		}
 
 		scope:target = {
 			if = {
@@ -325,24 +342,29 @@ SUBJ_QING_advance_integration = {
 				this = { save_scope_as = target }
 				root = { trigger_event = { id = qing_integ.30  days = { 1 5 } } }
 			}
-			else_if = {
-				# SAFETY NET (unreachable in normal play): a subject at threshold that is NOT an
-				# autonomous_governorship. Every progress-driver (push button, frontier/Xinjiang/
-				# caravan events, reactions) gates on autonomous_governorship, so this branch should
-				# never fire. It CANNOT use the engine handoff (only a governorship is converted to
-				# integrating_governorship), so a direct absorb is the only way to avoid stranding
-				# such an edge subject at a full meter forever. Left as the pre-rework direct absorb.
+				else_if = {
+				# [#19 BUGFIX] SAFETY NET — now genuinely unreachable: the entry ladder-gate above admits
+				# only autonomous_governorship / integrating_governorship, and the integrating type at
+				# threshold is mid-engine-absorb (not a stuck meter). A subject at threshold that is NOT an
+				# autonomous_governorship therefore should never reach here. The old branch DIRECT-absorbed
+				# it (SUBJ_QING_absorb_subject), which was the very ladder-bypass the entry gate now closes —
+				# so absorbing here is REMOVED. Log loudly if it ever fires so a regression in the gate surfaces
+				# in debug.log instead of silently annexing an off-ladder subject.
 				limit = { var:SUBJ_integration_progress >= 5 }
-				root = { SUBJ_QING_absorb_subject = yes }
+				root = { LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_advance_integration"  reason = "CRITICAL: threshold reached on a non-autonomous_governorship subject — the ladder entry-gate should have blocked this; NOT absorbing (would bypass the incorporate step, the #19 bug)" } }
+				}
 			}
-		}
 
-		LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_advance_integration"  result = OK }
+			LOG_exit = { sys = SUBJ  fn = "SUBJ_QING_advance_integration"  result = OK }
+		}
+		else = {
+			# [#19 BUGFIX] refused: either scope:target is missing, OR it is an off-ladder can_be_integrated=no
+			# subject (protectorate / tributary / feudatory / sub-subject) that must be incorporated onto the
+			# ladder (autonomous_governorship) before it can accrue integration progress. A no-op is correct —
+			# the caller's push simply does nothing on such a subject, as intended.
+			LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_advance_integration"  reason = "target missing OR not on the integration ladder (needs incorporate to autonomous_governorship first) — progress refused" }
+		}
 	}
-	else = {
-		LOG_fail = { sys = SUBJ  fn = "SUBJ_QING_advance_integration"  reason = "scope:target does not exist" }
-	}
-}
 
 # Set back integration progress by $steps$ (scope: country / ROOT), clamped at 0.
 # Used by negative reaction events (unrest, scandal, riot) to punish a botched push.

@@ -947,3 +947,57 @@ braces balanced). 1 MEDIUM + 1 LOW, both FIXED:
 **Commit:** `571de1b69` + pushed.
 
 **Status:** #18 DONE — reviewed, MEDIUM+LOW folded, committed + pushed.
+
+---
+
+## #19 — BUG: Qing annexing can_be_integrated=no subjects (Tibet + Kobdo), bypassing the ladder — IN PROGRESS
+
+**Root cause (traced):** SUBJ_QING_advance_integration (se_SUBJECT_QING.txt:282) accrues
+SUBJ_integration_progress on scope:target WITHOUT gating the subject type at entry. At threshold (>=5)
+it has two branches: the autonomous_governorship path fires the player capstone qing_integ.30 (correct);
+but the `else_if` SAFETY-NET (:328-337) DIRECTLY calls SUBJ_QING_absorb_subject on ANY other subject at
+progress>=5 — including a can_be_integrated=no PROTECTORATE (Tibet) or a sub-subject (Kobdo). The comment
+claims it's "unreachable in normal play," but the many progress-drivers (frontier/Xinjiang/caravan events,
+SUB_QING interactions) do NOT all gate on autonomous_governorship, so an off-ladder subject can accrue
+progress and get silently absorbed — bypassing BOTH the engine handoff AND the required
+SUBJ_QING_incorporate_protectorate ladder-entry step. THIS is the reported bug.
+
+**Why it's a bug not a feature (bug-vs-missing-feature rule):** the ladder's OWN design (comments at :199-213,
+DESIGN_PROTECTORATES_GENERAL) says a protectorate sits OFF the ladder and MUST be incorporated
+(protectorate->autonomous_governorship, via SUBJ_QING_incorporate_protectorate, priced + coercive) BEFORE
+integration. The safety-net absorb skips that gate. The MARCH direct-absorb (QING_march_integrate_pulse,
+own qing_march_integ_progress var) is a SEPARATE, intentionally-ungated AI mechanic — NOT touched.
+
+**Fix (single-point, at the sink):** gate SUBJ_QING_advance_integration at ENTRY on the subject being on the
+ladder (is_subject_type = autonomous_governorship OR integrating_governorship). An off-ladder
+can_be_integrated=no subject (protectorate/tributary/feudatory/sub-subject) no longer accrues integration
+progress at all — it must be incorporated onto the ladder first (Tibet via the Zhao-Erfeng incorporate
+button; a tributary via the promote ladder). This closes the bypass regardless of WHICH caller targets the
+subject (robust vs. auditing every caller). The threshold safety-net else_if is kept but becomes genuinely
+unreachable (progress can't accrue off-ladder now); converted to a loud LOG_fail so any regression surfaces.
+
+**Rejected alt:** gate each of the ~10 progress-driver callers on autonomous_governorship. Rejected —
+fragile (a future caller reintroduces the bug) and duplicative; the sink gate is the single chokepoint.
+
+**Implementation:** single-point ladder gate at the SINK (SUBJ_QING_advance_integration entry limit): admit
+only `is_subject_type = autonomous_governorship OR integrating_governorship`; the threshold safety-net
+else_if that directly absorbed off-ladder subjects → replaced with a loud LOG_fail (absorb removed); outer
+else LOG_fail reason updated. Verified independently: the caravan caller's own [review-fix] comment
+(se_QING_CARAVAN.txt:396-401) documents this exact bug class (advancing a sub-subject → absorb-fallback
+ruptures the chain) and already targets c:ILI (autonomous_governorship); all progress-drivers target ILI or
+a generic subject — none intends to integrate a non-governorship, so the gate blocks only the buggy path.
+
+**Review verdict:** code review PASS — no critical/medium. Capstone flow intact (qing_integ.30 gates on
+autonomous_governorship + progress>=5; authorize flips type + clears progress via clear_integration_state, so
+no double-resolve / no LOG_fail spam); march AI absorb unaffected (calls SUBJ_QING_absorb_subject directly,
+not via this effect); no authorize→advance loop; braces 528/528 (the "518/516" a false alarm from a
+comment-stripper truncating the literal "#19" inside a LOG string). 1 LOW noted + ACCEPTED as NOT a
+regression: a harvest reaction event (qing_integ.20.a/.a2/.e) queued before the capstone resolves can
+re-create progress on an already-flipped integrating_governorship — benign (ambient pulse + capstone both
+gate on autonomous_governorship; engine deletes the subject on completion), and the PRE-FIX gate admitted
+integrating_governorship equally, so behavior there is unchanged. Not expanding scope for it. LF preserved
+(diff 37+/15-); no BOM.
+
+**Commit:** (below)
+
+**Status:** #19 DONE — reviewed CLEAN (2 review passes; first timed out, re-dispatched), committing + pushing.
