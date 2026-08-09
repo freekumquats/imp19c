@@ -794,6 +794,6 @@ Braces triggers 50/50, events 256/256; BOM preserved; **EOL: FlavorEvents.txt is
 flattened it to LF (whole-file churn); caught + re-converted to CRLF, final diff 7+/1−**; triggers file LF,
 pure-insert. All four party-bloc keys confirmed defined.
 
-**Commit:** (below)
+**Commit:** `f58c100d3` + pushed.
 
-**Status:** #13 DONE — reviewed, findings folded, committing + pushing.
+**Status:** #13 DONE — reviewed, findings folded, committed + pushed.
