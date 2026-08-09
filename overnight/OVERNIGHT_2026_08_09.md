@@ -797,3 +797,55 @@ pure-insert. All four party-bloc keys confirmed defined.
 **Commit:** `f58c100d3` + pushed.
 
 **Status:** #13 DONE — reviewed, findings folded, committed + pushed.
+
+---
+
+## #15 — fold redundant "Able Governance" amban event into the successful-negotiation branch — IN PROGRESS
+
+**What it was:** TWO events surface the same "an able amban restored order in a dependency" beat:
+- `qing_amban.3` ("Able Governance", 綏靖) — an AMBIENT reward event with real commend options (loyalty +
+  standing + a silver grant, or just note it). Dispatched at 20%/qtr from QING_amban_evaluate when an able
+  amban (affinity≥70) sits over a subject with province_unrest≥2.
+- `qing_integ.45` ("The Amban Restores Order", 綏靖之效) — a BARE ack (one no-effect option), fired from the
+  3 negotiation-SUCCESS branches (qing_integ.10.d popular-unrest, .12.d ethnic-strife, .40.c decree) after
+  they already applied the amban's +5 prominence, the province-ease, and the Lifan-Yuan credit.
+
+**Fold plan (design):** the negotiation-success branches should surface via the RICHER "Able Governance"
+event (giving the player the commend choice) instead of a bare ack. So:
+1. Repoint the 3 `trigger_event = qing_integ.45` → `qing_amban.3` (scopes integ_amban + target propagate
+   through trigger_event, same as .45 already relies on).
+2. Make `qing_amban.3` CONTEXT-AWARE in its immediate: if scope:integ_amban + scope:target exist
+   (negotiation path), adopt them as qing_amban_able/_able_subject and SKIP the ambient random_subject
+   re-pick + the province-suppress + the capable-opinion + the recently-suppressed var (all ALREADY applied
+   by the branch — avoids double-reward). Else run the ambient path unchanged.
+3. Relax qing_amban.3's own `trigger` (it's re-checked on trigger_event) to `tag = CHI` + OR{ ambient-
+   eligible-subject | exists scope:integ_amban } so the negotiation dispatch isn't silently suppressed by
+   the ambient affinity≥70 gate.
+4. Retire qing_integ.45 (event + loc keys) — its role is now qing_amban.3's.
+
+**Key decision:** KEEP the ambient dispatch (it covers amban-quells-unrest paths distinct from the player
+integration-crisis events; the task is "fold INTO the branch", not "delete the ambient event"). The
+redundancy removed is the TWO-events-for-one-beat (qing_integ.45 vs qing_amban.3), consolidated to one.
+Rejected alt: delete qing_amban.3 + fold its reward into the branch as a hidden_effect — loses the player
+commend CHOICE (the whole point of the reward beat) and the ambient coverage. Rejected.
+
+**Self-caught hazard (pre-review):** `exists = scope:integ_amban` as the path-B discriminator is UNSAFE —
+scope:integ_amban is saved on CHI (country-persistent) and LINGERS after a crisis ends, so an AMBIENT
+qing_amban.3 dispatch (from QING_amban_evaluate) would wrongly read a stale amban and take path B. FIXED:
+each negotiation branch sets a short-lived `qing_amban_negotiation_fold` var (days=30) alongside the scope;
+path B now gates on `has_variable = qing_amban_negotiation_fold AND exists = scope:integ_amban`, and the
+immediate consumes (remove_variable) the marker on adopt. Ambient dispatches (no fresh marker) fall to
+path A as before.
+
+**Review verdict:** code review PASS — no critical/medium. The pre-empted stale-scope fix validated as "the
+key improvement over the brief." 3 LOWs, all addressed: LOW-1 (marker not consumed on target-lost fallback →
+re-arms path B) FIXED two ways — added `exists = scope:target` to the trigger's marker branch (subject lost →
+path B fails cleanly) + defensive unconditional marker-clear in the ambient else; LOW-2 (option on
+possibly-dead amban) accepted — no regression, effects on a dead scope are no-ops, ambient path had identical
+exposure; LOW-3 (desc too unrest-specific for the decree-smoothing fold) FIXED — softened the shared desc to
+be branch-agnostic ("settling a disturbance, brokering a dispute, or easing a hard decree"). Braces
+134/251/267; qing_integ.45 fully retired (def + 3 loc keys gone, 3 fire-sites repointed); no EOL/BOM churn.
+
+**Commit:** (below)
+
+**Status:** #15 DONE — reviewed, all findings folded, committing + pushing.
