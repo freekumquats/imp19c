@@ -877,6 +877,6 @@ effect) does NOT occur: only 2 remaining textual hits, both my own removal-note 
 tracers confirmed intact; block boundary clean (ECON_LOG_quarter + production_snapshot neighbors untouched);
 no surviving effect reads a removed temp var; braces 196/196 + 146/146; no EOL/BOM churn.
 
-**Commit:** (below)
+**Commit:** `255d56a28` + pushed.
 
-**Status:** #16 DONE — reviewed CLEAN, committing + pushing.
+**Status:** #16 DONE — reviewed CLEAN, committed + pushed.
