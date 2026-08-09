@@ -849,3 +849,34 @@ be branch-agnostic ("settling a disturbance, brokering a dispute, or easing a ha
 **Commit:** `273ed896a` + pushed.
 
 **Status:** #15 DONE — reviewed, all findings folded, committed + pushed.
+
+---
+
+## #16 — strip the heavy #23 economy/currency diagnostic logging — DONE
+
+**What it was:** the #23 currency-oscillation investigation left a large forensic instrumentation layer that
+generated ~1.6M-line debug.logs. Now that #23 is SOLVED (broken sqrt fixed, 14c9ed899), strip it.
+
+**What I did:**
+- DELETED `common/scripted_effects/se_ECON_LOG_TZPROBE.txt` (3213-line generated world-trade-zone probe) +
+  its generator `tools/gen_econ_tzprobe.py` + the log analyzer `tools/curx_analyze.py`.
+- Removed the contiguous CURX forensic block from `se_ECON_LOG.txt` (~22 defs: ECON_LOG_curx_ratio →
+  ECON_LOG_curx_inflmult, incl. _dump_pre/_post, _chain, _tick_emit, _exact, all _curx_* metric emitters;
+  −596 lines).
+- Removed the two call sites: `ECON_LOG_curx_dump_pre` (in ECON_LOG_quarter) + `ECON_LOG_curx_dump_post`
+  (in oa_wealth_changes.txt), each replaced with a [#16] removal note.
+- Added a "tooling removed post-solve" footnote to audits/AUDIT_CURRENCY_23.md (its file references are now
+  historical).
+
+**Key decision:** KEPT the general econ tracers (country/jobs/currency/minting/production snapshots, phase
+markers, cottage/fx/flood probes) — those are routine, low-volume, and not #23-specific. Only the exhaustive
+per-trade-zone digit-decomposition currency forensic (the log-flood source) was removed.
+
+**Review verdict:** code review PASS — no blocking findings. The one blocker class (a live call to a removed
+effect) does NOT occur: only 2 remaining textual hits, both my own removal-note comments. All 12 general
+tracers confirmed intact; block boundary clean (ECON_LOG_quarter + production_snapshot neighbors untouched);
+no surviving effect reads a removed temp var; braces 196/196 + 146/146; no EOL/BOM churn.
+
+**Commit:** (below)
+
+**Status:** #16 DONE — reviewed CLEAN, committing + pushing.
