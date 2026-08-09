@@ -146,6 +146,15 @@ QING_works_pulse = {
 # a mediocre one (finesse < 9) incurs overruns (the corruption/graft layer), and
 # a VACANT office means the project fails entirely (no holder -> no build).
 # ======================================================================
+# [#115] Store the STANDARD-tier dike-repair cost into a country var so the dike-breach EVENT
+# tooltips (qing_works.1.a/.b, qing_works.5.a) can display the live figure with #114's proven
+# GetVariable loc form. Called from each event's immediate (runs before the window renders, so the
+# tooltip reads it). Same-tick country set-then-read is proven safe (se_QING_EXAM.txt:84-87). The
+# panel button uses the live ScriptValue datafunction instead (no immediate to stash a var).
+QING_DIKE_set_display_cost = {
+	set_variable = { name = qing_dike_cost_display  value = QING_dike_cost_standard_svalue }
+}
+
 QING_works_build_dike = {
 	LOG_enter = { sys = QING  fn = "QING_works_build_dike" }
 	# $cheap$ = yes/no flag: cheap route skips finesse check, always builds but
@@ -167,7 +176,42 @@ QING_works_build_dike = {
 				}
 			}
 			any_owned_province = { count >= 1  has_minor_river = yes  NOT = { has_building = qing_dike_building } }
+			# [#115] corvée manpower self-gate (mirrors the great_wall/grand_canal manpower>=10 self-gate,
+			# scaled to the dike's smaller -5 levy). Keeps the manpower levy ATOMIC with the build — the
+			# callers also gate manpower>=5, so this only ever backstops a direct verb call.
+			manpower >= 5
 		}
+		# [#115] CHARGE FIRST, then build. add_building_level applies immediately (the province reports
+		# has_building right after the call), and QING_dike_count / the cost svalues re-evaluate live on
+		# every reference — so charging AFTER the build would read count=N+1 and overcharge by the +40/dike
+		# step, breaking both the 4-dike→335/380 baseline and gate==charge. Reading the cost here (before
+		# the add_building_level below) evaluates it on the pre-build network of N, matching the caller gates.
+		# cost RISES with the dike network (河工 ballooning): expert tier if holder finesse>=9, else the
+		# standard/cheap tier. Both scale +40/dike off QING_dike_count; expert is always <= standard.
+		if = {
+			limit = {
+				has_variable = qing_office_works_holder
+				var:qing_office_works_holder = { is_alive = yes  finesse >= 9 }
+			}
+			add_treasury = { value = QING_dike_cost_expert_svalue  multiply = -1 }
+			LOG_line = { sys = QING  msg = "works: build dike (capable minister, expert-tier cost scaling with dike count, +5 corvee manpower) at for" }
+		}
+		else = {
+			add_treasury = { value = QING_dike_cost_standard_svalue  multiply = -1 }
+			# cheap route or mediocre holder -> graft
+			if = {
+				limit = { $cheap$ = yes }
+				QING_DECLINE_nudge = { var = qing_corruption_level  amount = 8 }
+				LOG_line = { sys = QING  msg = "works: build dike CHEAPLY (corruption +8, standard-tier cost scaling with dike count, +5 corvee manpower) at for" }
+			}
+			else = {
+				QING_DECLINE_nudge = { var = qing_corruption_level  amount = 4 }
+				LOG_line = { sys = QING  msg = "works: build dike (mediocre minister finesse<9, corruption +4, standard-tier cost scaling with dike count, +5 corvee manpower) at for" }
+			}
+		}
+		# [#115] corvée labour: the dike, like the great monuments, costs manpower as well as gold. Levied
+		# once inside the atomic build-if; the flat -5 is order-independent of the count-scaled treasury above.
+		add_manpower = -5
 		# pick the most populous RIVER province without a dike and build one. [#24 sweep] the has_minor_river
 		# guard mirrors qing_dike_building's own potential — add_building_level RESPECTS potential, so an
 		# unconstrained pop-pick could land on a riverless province and silently drop (paying the cost for nothing).
@@ -177,28 +221,6 @@ QING_works_build_dike = {
 			max = 1
 			add_building_level = qing_dike_building
 			save_scope_as = dike_province
-		}
-		# cost: if holder finesse >= 9 (expert), standard 70; else overrun +20
-		if = {
-			limit = {
-				has_variable = qing_office_works_holder
-				var:qing_office_works_holder = { is_alive = yes  finesse >= 9 }
-			}
-			add_treasury = -335
-			LOG_line = { sys = QING  msg = "works: built dike (capable minister, cost 335) at for" }
-		}
-		else = {
-			add_treasury = -380
-			# cheap route or mediocre holder -> graft
-			if = {
-				limit = { $cheap$ = yes }
-				QING_DECLINE_nudge = { var = qing_corruption_level  amount = 8 }
-				LOG_line = { sys = QING  msg = "works: built dike CHEAPLY (corruption +8, cost 380) at for" }
-			}
-			else = {
-				QING_DECLINE_nudge = { var = qing_corruption_level  amount = 4 }
-				LOG_line = { sys = QING  msg = "works: built dike (mediocre minister finesse<9, corruption +4, cost 380) at for" }
-			}
 		}
 	}
 	else = {

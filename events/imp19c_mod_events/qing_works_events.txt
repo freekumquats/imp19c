@@ -62,6 +62,8 @@ qing_works.1 = {
 			limit = { has_variable = qing_office_works_holder }
 			var:qing_office_works_holder = { save_scope_as = works_minister }
 		}
+		# [#115] stash the live standard-tier repair cost for the .a/.b tooltips
+		QING_DIKE_set_display_cost = yes
 	}
 
 	# --- Repair well: commission a proper dike (河堤) building ----------------
@@ -70,6 +72,9 @@ qing_works.1 = {
 		trigger = {
 			has_variable = qing_office_works_holder
 			var:qing_office_works_holder = { is_alive = yes  employer = ROOT }
+			# [#115] gate on the standard (higher) tier + corvée manpower, so gate >= whatever the verb charges
+			treasury >= QING_dike_cost_standard_svalue
+			manpower >= 5
 		}
 		custom_tooltip = "qing_works.1.a.tt"
 		# the capable-minister route: build a real dike (qing_dike_building)
@@ -83,6 +88,11 @@ qing_works.1 = {
 	# --- Cheap repair: cut corners (graft + recurring risk) ------------------
 	option = {
 		name = "qing_works.1.b"
+		trigger = {
+			# [#115] the cheap route still builds a real dike with corvée labour → same treasury+manpower floor
+			treasury >= QING_dike_cost_standard_svalue
+			manpower >= 5
+		}
 		custom_tooltip = "qing_works.1.b.tt"
 		# the graft-ridden shortcut: build a dike but at inflated cost + corruption
 		QING_works_build_dike = { cheap = yes }
@@ -95,9 +105,13 @@ qing_works.1 = {
 	option = {
 		name = "qing_works.1.c"
 		trigger = {
+			# [#115] the escape hatch: show whenever the realm can't afford a repair, so there is never a
+			# soft-lock. When .c hides (holder-var exists AND treasury>=STD AND manpower>=5), .b (which is
+			# holder-agnostic: only treasury>=STD + manpower>=5) is always available — so an option always shows.
 			OR = {
 				NOT = { has_variable = qing_office_works_holder }
-				treasury < 100
+				treasury < QING_dike_cost_standard_svalue
+				manpower < 5
 			}
 		}
 		custom_tooltip = "qing_works.1.c.tt"
@@ -335,12 +349,18 @@ qing_works.5 = {
 	immediate = {
 		LOG_line = { sys = QING  msg = "EVENT qing_works.5 (shoddy dike fails) [ROOT.GetTag]" }
 		remove_country_modifier = qing_works_dike_shoddy
+		# [#115] stash the live standard-tier repair cost for the .a tooltip
+		QING_DIKE_set_display_cost = yes
 	}
 
 	# --- Pay to repair properly this time -------------------------------------
 	option = {
 		name = "qing_works.5.a"
-		trigger = { treasury >= 400 }
+		# [#115] gate on the standard (higher) tier + corvée manpower; .b (accept damage) is ungated → no soft-lock
+		trigger = {
+			treasury >= QING_dike_cost_standard_svalue
+			manpower >= 5
+		}
 		custom_tooltip = "qing_works.5.a.tt"
 		QING_works_build_dike = { cheap = no }
 		add_country_modifier = { name = qing_works_dike_maintained  duration = 3650 }
