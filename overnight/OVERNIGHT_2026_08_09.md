@@ -634,7 +634,7 @@ vacant-post briefly retains last tenant's finesse — self-correcting) accepted 
 **Verification (self):** braces 196/196; no BOM; LF-only (0 CRLF); diffstat 50+/3−, EOL-churn check equal to
 plain; cliff gone; finesse mirror seeded (init) + set (pulse); no other file reads the new var.
 
-**Commit:** `[below]` + pushed.
+**Commit:** `cf652e39a` + pushed.
 
 **Status:** #111a DONE — reviewed CLEAN, committed + pushed. #111b (Hoppo events, trimmed per §9b overbuild
 notes) follows.
