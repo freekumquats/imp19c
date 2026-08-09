@@ -53,59 +53,50 @@ FUNC_sqrt = {
 	}
 }
 
-sqrt = { # Using Tobbzn's method
-	set_local_variable = { 
-		name = param 
-		value = $input$ 
+sqrt = { # Babylonian/Newton — [#23 2026-08-09] repaired: recurrence y=param/x (was x/param) + bounded
+	# iteration count for load-safety. See audits/AUDIT_CURRENCY_23.md §C.8/§D-FIX.
+	# The shipped "Tobbzn's method" had TWO defects that turned gbip=sqrt(base) into a discontinuity at
+	# base=1.0: (1) the loop recomputed y = x/param instead of the Babylonian invariant y = param/x, so for
+	# base>1 x decayed geometrically toward 0 (gbip lows ~0.003); (2) the signed guard condition = x-y > e
+	# skipped the loop entirely for base<1 (initial x-y = param-1 < 0), returning base un-rooted (gbip highs).
+	# Together they rail-slammed gbip ~0.003 <-> ~0.88 every quarter = the #23 inflation/deflation sawtooth.
+	# Fix: correct recurrence + drop the epsilon guard for a fixed count. Quadratic convergence reaches sqrt(N)
+	# in ~7 iters for any realistic N (gbip base ~0.7-1.3), and the body is idempotent once converged
+	# (x=y=sqrt(N) => x'=(x+x)/2=x), so count=12 CANNOT hang under any fixed-point resolution — unlike an
+	# epsilon guard, whose 0.001 tolerance could 2-cycle forever at 3-decimal precision. Sole caller:
+	# se_GLOBALTRADE_split.txt:2701 (gbip write, guarded `if base>0`, which excludes the only div/0 at y=N/x).
+	set_local_variable = {
+		name = param
+		value = $input$
 	}
-    set_local_variable = { 
-    	name = x 
-    	value = local_var:param 
+    set_local_variable = {
+    	name = x
+    	value = local_var:param
     }
-    set_local_variable = { 
-    	name = y 
-    	value = 1 
-    }
-    set_local_variable = { 
-    	name = e 
-    	value = 0.001 
-    }
-    set_local_variable = { 
-    	name = condition 
-    	value = { 
-    		value = local_var:x 
-    		subtract = local_var:y 
-    	} 
+    set_local_variable = {
+    	name = y
+    	value = 1
     }
     while = {
-        limit = { 
-        	local_var:condition > local_var:e 
-        }
-        set_local_variable = { 
-        	name = x 
+        count = 12
+        set_local_variable = {
+        	name = x
         	value = {
-        		value = local_var:x 
-        		add = local_var:y  
+        		value = local_var:x
+        		add = local_var:y
         		divide = 2
-        	} 
+        	}
         }
-        set_local_variable = { 
-        	name = y 
+        set_local_variable = {
+        	name = y
         	value = {
-        		value = local_var:x 
-        		divide = local_var:param 
-        	} 
-        }
-        set_local_variable = { 
-        	name = condition 
-        	value = { 
-        		value = local_var:x 
-        		subtract = local_var:y 
-        	} 
+        		value = local_var:param
+        		divide = local_var:x
+        	}
         }
     }
-    set_local_variable = { 
-    	name = result 
-    	value = local_var:x 
+    set_local_variable = {
+    	name = result
+    	value = local_var:x
     }
 }

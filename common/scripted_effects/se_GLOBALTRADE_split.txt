@@ -2689,11 +2689,12 @@ GT_split_get_global_import_unit_price_tradegood = {
 	# operator: it takes a named `input = <value>` arg and returns local_var:result. The old call passed a
 	# bare `global_var:...` with no input= key, so the compiler read `sqrt` as an unknown effect (error.log:
 	# "Compiling source for sqrt failed for unknown arguments: global_var:..., set_global_variable, name, value").
-	# [logfix #19] Only run sqrt when the base price is > 0. For a good with no global trade the summed
-	# base price is 0 (or the TZ price vars were unset), and Tobbzn's Newton-method sqrt then iterates on
-	# an empty/zero `condition`, throwing "Illegal use of operator >" at its while-limit (sqrt line 27),
-	# ~157 lines/session. sqrt(0)=0 and the global already holds 0, so skipping is value-exact; guarding
-	# HERE (call site) rather than inside the shared sqrt primitive keeps the blast radius to this caller.
+	# [logfix #19 / #23 2026-08-09] Only run sqrt when the base price is > 0. For a good with no global trade
+	# the summed base price is 0 (or the TZ price vars were unset). sqrt(0)=0 and the global already holds 0,
+	# so skipping is value-exact and avoids a pointless call. (Historically this also dodged an
+	# "Illegal use of operator >" flood from the old epsilon-guarded sqrt; the primitive is now a bounded
+	# 12-iteration Babylonian loop with no such guard — se_ECON_functional.txt:56 — but the >0 skip is still
+	# the correct, cheap thing to do here.) Guarding at the call site keeps the blast radius to this caller.
 	if = {
 		limit = {
 			global_var:global_base_import_price_$tradegood$ > 0
