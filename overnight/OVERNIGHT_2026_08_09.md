@@ -170,3 +170,71 @@ BOM); no EOL churn (numstat == ignore-cr numstat); all 5 loc-read vars set by co
 .1 flow; no identifier collisions.
 
 **Commit:** `3c0455f18`, pushed to merge-overnight. Acceptance is boot-gated (values render/charge in-game).
+
+---
+
+## #3 — #115 "Yellow River Dike Breach": repair cost scales with dike count + corvée manpower — DONE
+
+**What:** `qing_works.1` ("The Yellow River Dike Breach") charged a FLAT gold cost (335 expert / 380
+standard, #1-rescaled) and levied NO manpower. Make the treasury cost RISE with the size of the dike
+network the throne already maintains (the 河工 budget ballooned as the levee system grew — the actual
+Qing fiscal dynamic), and add a corvée MANPOWER cost, mirroring `QING_works_build_great_wall` (which
+levies both treasury AND manpower). Direct sibling of #114 — a concrete on-map building set already
+exists (`qing_dike_building`, 4 seeded), so scale off a single-source-of-truth count svalue.
+
+**What I did** (design → adversarial review → implement → applied-diff review → CRITICAL fix, both reviews grounded in source):
+- **script_values (QING_governance_svalues.txt):** new `QING_dike_count` (covered-province count of
+  the dike building, SSOT, mirrors `QING_academy_count`). Two cost tiers off it: `QING_dike_cost_expert_svalue`
+  (`×40 +175`, clamp 175–700) and `QING_dike_cost_standard_svalue` (`×40 +220`, clamp 220–760). At the
+  1763 start (4 dikes) → expert 335 / standard 380 (== the flat costs they superseded); +40/dike; expert
+  sits 45 below standard at EVERY count, so gating on standard is always ≥ the charge.
+- **se_QING_WORKS.txt (`QING_works_build_dike`):** added `manpower >= 5` self-gate + `add_manpower = -5`
+  (mirrors great_wall's `manpower >= 10` self-gate/levy, scaled to the smaller work); swapped the two flat
+  `add_treasury = -335/-380` to the count-scaled svalues via the proven `{ value = SVALUE multiply = -1 }`
+  negate idiom. New `QING_DIKE_set_display_cost` helper stashes the standard-tier cost into a country var
+  for the event tooltips.
+- **qing_works.1 / qing_works.5:** immediates call the display-cost helper; .a/.b (and .5.a) gate
+  `treasury >= QING_dike_cost_standard_svalue` + `manpower >= 5`; .c inverted (`treasury < STD` /
+  `manpower < 5`) so it shows on unaffordability — no soft-lock (the guarantee rests on the holder-agnostic .b).
+- **panel (QING_works_ministry_panel.txt):** dike button `is_valid` treasury→svalue + `manpower >= 5`
+  (shares the verb — gate==charge requires touching it, same rationale as #114's ministry buttons).
+- **loc:** event tooltips (.1.a.tt/.1.b.tt/.5.a.tt) show live cost via #114's PROVEN `GetVariable`
+  datafunction; the panel TT uses the live `GuiScope.SetRoot(Player.MakeScope).ScriptValue(...)` form
+  (the only one that works for a scripted_gui — no `immediate` to stash a var).
+
+**Key decisions + why:**
+- *Cost RISES with dike count* — historically correct: 河工 was the textbook Qing expense that ballooned
+  as the levee network grew (more dikes = more permanent maintenance + flood-fighting liability + graft).
+  Same "bigger system = bigger bill" shape as #114, independently justified.
+- *Two finesse tiers preserved* — the "a capable minister builds cheaper" mechanic is existing and sensible;
+  scale BOTH tiers with count (as #114 kept its pass-rate quality axis while scaling the count axis). The
+  task adds a count axis + manpower; it doesn't ask to flatten the finesse axis.
+- *Gate on the STANDARD (higher) tier at all 5 sites* — since expert ≤ standard at every count, this is
+  always ≥ the actual charge (never surprise debt). An expert minister in the `[expert, standard)` band is
+  routed to .c; acceptable (design-review L2, acknowledged).
+- *Loc form split (design-review M1 fix)* — the live `ScriptValue` datafunction has NO in-repo precedent in
+  an event-option tooltip (only scripted_gui/interface). Rather than bet an unproven form for cosmetic
+  uniformity, each site uses the form already proven for its context: `GetVariable` (events) + `ScriptValue`
+  (panel).
+
+**Reviews (design v2 + applied diff, both adversarial, grounded in real source):**
+- Design review — verdict "fundamentally sound"; 1 MEDIUM (M1, event-tooltip datafunction unproven → split
+  the loc forms), 3 LOW (L2 acknowledged band tradeoff; L3 pre-existing free-reward gap NOT worsened,
+  out of scope; L4 imprecise citation → fixed). Arithmetic, soft-lock De Morgan, gate==charge, RHS-comparison,
+  expert≤standard all verified sound.
+- Applied-diff review — 1 **CRITICAL** (off-by-one: `add_building_level` applies immediately, so the
+  treasury charge — read AFTER the build in v1 — re-evaluated `QING_dike_count` at N+1, overcharging by the
+  +40/dike step and breaking both the 335/380 baseline and gate==charge by up to 40 gold on the standard/
+  cheap/mediocre path) + 1 LOG (inaccurate `max_amount=1` comment). **Both fixed:** reordered the verb to
+  CHARGE BEFORE BUILD (treasury `if` → flat `add_manpower` → `add_building_level` LAST), so gate, display and
+  charge all read the pre-build count N; corrected the svalue comment (`qing_dike_building` has no `max_amount`;
+  the count works via `has_building` boolean + the NOT-has_building build guard). Everything else clean:
+  RHS-comparison, negate/manpower idioms, display-var set-before-read (both events set in immediate),
+  manpower levied once only on build, no soft-lock, no dangling flat costs, brace balance, no BOM/EOL churn.
+
+**Post-fix verification:** at N=4 → expert charge 335, standard charge 380, standard gate 380 (== charge),
+expert (335) ≤ gate (380) — baseline restored, gate==charge holds. Braces balanced (svalues 117/117,
+se 248/248, events 139/139, panel 73/73); BOM preserved (svalues/se/events none, loc/panel BOM); no EOL
+churn (numstat == ignore-cr numstat); no `#`/`$` in LOG strings; every var read has a matching set.
+
+**Commit:** `bceccff37`, pushed to merge-overnight. Acceptance is boot-gated (cost/manpower render + charge in-game).
