@@ -998,6 +998,6 @@ gate on autonomous_governorship; engine deletes the subject on completion), and 
 integrating_governorship equally, so behavior there is unchanged. Not expanding scope for it. LF preserved
 (diff 37+/15-); no BOM.
 
-**Commit:** (below)
+**Commit:** `ba3d18e22` + pushed.
 
-**Status:** #19 DONE — reviewed CLEAN (2 review passes; first timed out, re-dispatched), committing + pushing.
+**Status:** #19 DONE — reviewed CLEAN (2 review passes; first timed out, re-dispatched), committed + pushed.
