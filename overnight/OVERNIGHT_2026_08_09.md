@@ -895,4 +895,6 @@ pool-bound, so final ship = min(capacity/5, 250, pool). The pool-bound still bit
 250 is proportionate against the pool scale (capacity = granary_count × 200; seeds 150-600; pop-relief
 top-up 150). var-vs-literal (RHS-rule clean). No .c.tt tooltip exists, so no loc effect-text to correct.
 
-**Commit:** (below)
+**Review verdict:** code review PASS — no issues. **Commit:** `acd949f65` + pushed.
+
+**Status:** #17 DONE — reviewed CLEAN, committed + pushed.
