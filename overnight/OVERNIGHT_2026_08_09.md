@@ -169,4 +169,4 @@ BOM); no EOL churn (numstat == ignore-cr numstat); all 5 loc-read vars set by co
 `#`/`$` in LOG strings; old QING_exam_reach pre-image confirmed identical; no dangling 380/220 in the
 .1 flow; no identifier collisions.
 
-**Commit:** (below), pushed to merge-overnight. Acceptance is boot-gated (values render/charge in-game).
+**Commit:** `3c0455f18`, pushed to merge-overnight. Acceptance is boot-gated (values render/charge in-game).
