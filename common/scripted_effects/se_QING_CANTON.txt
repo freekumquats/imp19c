@@ -205,6 +205,33 @@ QING_canton_pulse = {
 			set_variable = { name = qing_canton_last_silver_in  value = 0 }
 		}
 
+		# [#76 2026-08-08 reopened] RECONCILE a double-booked Hoppo BEFORE anything reads him. The
+		# reported save already had Aligun/585 both commanding the Jingzhou garrison AND seated as Hoppo
+		# (the pre-fix draw slipped the is_general gate — see the appoint limit below). A living Hoppo who
+		# is ALSO a serving commander/officer/governor is relieved of the customs post here: strip his
+		# qing_hoppo_marker (which clears the second title — the offices custom-loc renders it off that
+		# marker, 00_offices.txt:178/238) and vacate qing_hoppo_holder. Clearing the holder makes block (a)
+		# below see an empty post THIS pulse and backfill a free courtier, so the customs house is never
+		# left headless. Mirrors the study-chief / sub-post double-book strip (#79). The command outranks
+		# the customs sinecure — a garrison general is not pulled off the wall to run a customs house.
+		if = {
+			limit = {
+				has_variable = qing_hoppo_holder
+				var:qing_hoppo_holder = { is_alive = yes }
+				var:qing_hoppo_holder = {
+					OR = {
+						is_general = yes
+						is_admiral = yes
+						is_governor = yes
+						has_variable = qing_officer_marker
+					}
+				}
+			}
+			var:qing_hoppo_holder = { if = { limit = { has_variable = qing_hoppo_marker }  remove_variable = qing_hoppo_marker } }
+			remove_variable = qing_hoppo_holder
+			LOG_line = { sys = QING  msg = "canton: relieved a double-booked Hoppo (also a serving commander/officer) for" }
+		}
+
 		# [#69 2026-08-08] THE HOPPO'S GRAFT MADE CONCRETE. The squeeze is no longer a free-floating
 		# meter; it is DERIVED from the seated Hoppo's own vanilla CORRUPTION, and his exactions are
 		# REAL character wealth he pockets (concrete-over-abstract rule). Backfill first so the post is
@@ -343,6 +370,14 @@ QING_canton_appoint_hoppo = {
 			is_general = no
 			is_admiral = no
 			is_governor = no
+			# [#76 2026-08-08 reopened] ALSO exclude a serving garrison/army FIELD OFFICER. The reported
+			# Aligun/585 case: he commands the Jingzhou banner garrison, attached via set_as_commander at
+			# setup — which stamps qing_officer_marker (imp19c_effects_legion_setup.txt:189) but does NOT
+			# reliably set is_general (the same BT-7 lesson QING_char_holds_court_position learned at
+			# qing_dynasty_triggers.txt:213). Without this line he passed is_general=no and was drawn as
+			# Hoppo while still commanding, showing BOTH titles. qing_officer_marker is the authoritative
+			# officer-corps flag; gating it here closes the draw for good.
+			NOT = { has_variable = qing_officer_marker }
 			NOT = { QING_char_hard_disgraced = yes }
 			NOT = { AND = { exists = ROOT.primary_heir  this = ROOT.primary_heir } }
 		}
