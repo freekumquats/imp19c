@@ -898,3 +898,52 @@ top-up 150). var-vs-literal (RHS-rule clean). No .c.tt tooltip exists, so no loc
 **Review verdict:** code review PASS — no issues. **Commit:** `acd949f65` + pushed.
 
 **Status:** #17 DONE — reviewed CLEAN, committed + pushed.
+
+---
+
+## #18 — rework Stock-Granary button to BUY grain at market price — IN PROGRESS
+
+**What it was (design-first; slice-5 §8f scoped fuller market-price BUY here):** the Revenue-ministry panel's
+"Stock a Granary" button called QING_revenue_stock_granary, which BUILT a qing_granary_building
+(add_building_level) — i.e. "stock" actually meant "construct". Its is_valid also gated on province_id=7229
+etc. — the KNOWN-WRONG ids (7229=Illyria, flagged at se_QING_REVENUE.txt:458), so the button likely never
+even enabled. #18: make it BUY grain at market price and add to the pooled reserve.
+
+**What I did:**
+- REWORKED QING_revenue_stock_granary into a market BUY (takes $spend$): grain_bought = spend /
+  global_price_grain (proven world price via TRADE_global_price_grain), added to qing_granary_food, then
+  QING_DECLINE_granary_rederive clamps to [0,capacity] + refreshes the 0..100 index. Div/0-guarded: the
+  divide runs only if global_price_grain exists AND > 0, else a 1:1 fallback (grain = spend) so the buy
+  still lands. Mirrors the proven QING_pop_relief_resettle buy-and-rederive shape (but market-priced, not
+  a fixed 150).
+- EXTRACTED the old BUILD logic to a new QING_revenue_build_granary (unchanged region-select add_building
+  pick) — still used for physical COVERAGE.
+- REPOINTED the 3 event callers (qing_revenue.2.a unrest-control, qing_revenue largesse, qing_integ.20.a2
+  gated on qing_granary_count<1) to QING_revenue_build_granary — all 3 want to establish/raise physical
+  granaries, NOT buy grain (esp. .20.a2, which fires when NO granary exists yet → must build the first).
+- Button is_valid reworked: filled Revenue office + finesse>=7, treasury>=310, >=1 standing granary
+  (qing_granary_count>=1), AND room in the pool (qing_granary_food < qing_granary_capacity, via the new
+  qing_granary_capacity_cmpsvalue operand). Fixed the wrong-province-id gate.
+- Added qing_granary_capacity_cmpsvalue (00_event_values.txt); updated the button tooltip to the
+  market-buy framing (buys more when grain is cheap, capped by storage).
+
+**Key decision:** the BUY tops out at capacity (rederive clamps), so cheap grain buying "more than fits" is
+harmless — it just fills the reserve. The button gates on room existing so a full reserve disables it (no
+dead treasury sink). count>=1 required because a zero-capacity pool would clamp any buy back to 0.
+
+**Review verdict:** code review PASS on mechanical correctness (div/0 safe, var/var divide + svalue-value
+legal per QING_DECLINE_granary_rederive precedent, caller split all correct, cmpsvalue/early-game safe,
+braces balanced). 1 MEDIUM + 1 LOW, both FIXED:
+- **MEDIUM (dead price global):** the draft read global_var:global_price_grain, which is DEFUNCT (writer
+  TRADE_update_global_base_price is dead code) — so the divide never ran and the "market buy" silently
+  degraded to a fixed 1:1 while the tooltip promised price-sensitivity. FIXED: switched to the LIVE
+  global_mean_price_grain svalue (PRICE_svalues.txt:3, populated by PRICE_update_TZ_prices, self-guards
+  has_global_variable). Now the buy genuinely scales with the world grain price.
+- **LOW (near-full waste):** button gated only on food<capacity, so a 310-buy near the cap was mostly
+  discarded by the rederive clamp. FIXED: gate on qing_granary_stock < 90 (the derived 0..100 fill index,
+  var-vs-literal) so the button disables at ~90%+ full. Retired the now-unused qing_granary_capacity_cmpsvalue
+  I'd added (00_event_values.txt reverted to HEAD).
+
+**Commit:** (below)
+
+**Status:** #18 DONE — reviewed, MEDIUM+LOW folded, committing + pushing.

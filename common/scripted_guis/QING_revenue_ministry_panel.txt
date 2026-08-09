@@ -63,9 +63,12 @@ qing_revenue_ministry_salt_reformed = {
 	}
 }
 
-# ---- STOCK A GRANARY (常平倉) — reuse the proven concrete build. Requires a filled
-# Revenue office with adequate finesse, treasury for the grain purchase, and a Yellow-River
-# province that can hold a granary (city-status). QING_revenue_stock_granary does the pick.
+# ---- STOCK THE EVER-NORMAL GRANARIES (常平倉糴糴) — [#18] the minister BUYS GRAIN at the market
+# price and adds it to the pooled reserve (qing_granary_food), rather than building a granary. Requires
+# a filled Revenue office with adequate finesse, treasury for the purchase, at least one granary already
+# standing (so there is a reserve to stock — capacity = granary_count × 200), and room left in the pool
+# (food below capacity). The BUILD lever (raising physical coverage) lives on the ministry pulse +
+# integration events (QING_revenue_build_granary); this button is the market-purchase counterpart.
 qing_revenue_ministry_stock_granary = {
 	scope = country
 	ai_is_valid = { always = no }
@@ -74,28 +77,22 @@ qing_revenue_ministry_stock_granary = {
 		has_variable = qing_office_revenue_holder
 		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT  finesse >= 7 }
 		treasury >= 310
-		# a suitable Yellow-River city province exists that does NOT yet hold a granary.
-		# [#355 review fix] the NOT-has_building guard (which every works-panel build sibling
-		# carries) disables the button once all target provinces are covered — without it the
-		# add_treasury=-310 ran on every click as a pure treasury sink for zero coverage gain,
-		# since QING_revenue_stock_granary could re-target an already-granaried province.
-		any_owned_province = {
-			OR = {
-				province_id = 7229    # 北京
-				province_id = 7230    # 天津
-				province_id = 7234    # 保定
-				province_id = 1       # 開封
-				province_id = 7235    # 濟南
-			}
-			has_city_status = yes
-			NOT = { has_building = qing_granary_building }
-		}
+		# at least one 常平倉 stands (a reserve to stock) AND the pool has MEANINGFUL room left.
+		# [#18 review-fix LOW] gate on the derived 0..100 fill index qing_granary_stock < 90 (not merely
+		# food < capacity) — a var-vs-LITERAL test that disables the button once the reserve is ~90%+ full,
+		# so a 310-silver buy near the cap isn't mostly discarded by the rederive clamp (the near-full-waste
+		# the reviewer flagged). qing_granary_stock = food/capacity×100 (QING_DECLINE_granary_rederive).
+		has_variable = qing_granary_count
+		var:qing_granary_count >= 1
+		has_variable = qing_granary_stock
+		var:qing_granary_stock < 90
 	}
 	effect = {
-		# grain costs coin; then stock the reserve (the concrete qing_granary_building).
+		# commit 310 silver; the minister buys grain at the LIVE world grain price (global_mean_price_grain)
+		# and stocks the pooled reserve. QING_revenue_stock_granary converts spend→grain and rederives + clamps.
 		add_treasury = -310
-		QING_revenue_stock_granary = yes
-		LOG_line = { sys = QING  msg = "revenue panel: minister commissioned a granary stocking for" }
+		QING_revenue_stock_granary = { spend = 310 }
+		LOG_line = { sys = QING  msg = "revenue panel: minister bought grain at market and stocked the ever-normal pool for" }
 	}
 }
 

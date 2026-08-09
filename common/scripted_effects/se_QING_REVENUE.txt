@@ -442,15 +442,53 @@ QING_revenue_assess_fitness = {
 }
 
 # ======================================================================
-# CONCRETE: stock a granary in a Yellow River province (常平倉).
-# Adds a qing_granary_building via add_building_level in a suitable province
-# (city-status, Yellow River core). Scope: country.
+# [#18 2026-08-09] STOCK THE EVER-NORMAL GRANARIES — BUY GRAIN AT MARKET PRICE (常平倉糴糴).
+# REWORKED: the button no longer BUILDS a granary building (that was QING_revenue_build_granary,
+# below, still used by the ministry pulse for coverage); it now does what "stock a granary" actually
+# means — the Minister of Revenue goes to market, BUYS grain with treasury silver at the prevailing
+# grain price, and adds it to the pooled ever-normal reserve (qing_granary_food, the #94/#95 real pool).
+# $spend$ = treasury silver to commit. grain_bought = spend / global_price_grain (the proven world
+# grain price, global_var:global_price_grain / TRADE_global_price_grain). The rederive tail clamps the
+# pool to [0, capacity] so a buy beyond storage is not wasted-but-uncapped — it simply tops out at cap
+# (and the caller's is_valid should gate on room existing). Scope: country (CHI). Div/0-guarded: if the
+# price is unset or <= 0, fall back to a fixed 1:1 conversion so the buy still lands (never divide by 0).
 # ======================================================================
 QING_revenue_stock_granary = {
 	LOG_enter = { sys = QING  fn = "QING_revenue_stock_granary" }
+	if = { limit = { NOT = { has_variable = qing_granary_food } }  set_variable = { name = qing_granary_food  value = 0 } }
+	# how much grain the committed silver buys at market. Read the LIVE world grain price via the proven
+	# global_mean_price_grain svalue (PRICE_svalues.txt:3 — it self-guards has_global_variable and returns 0
+	# if the price index is not yet warm). [#18 review-fix] the earlier draft read global_var:global_price_grain,
+	# which is DEFUNCT (its only writer TRADE_update_global_base_price is dead code) — so the divide never ran
+	# and the buy silently degraded to a fixed 1:1. global_mean_price_grain is the live layer PRICE_update_TZ_prices
+	# actually populates. Guard the price > 0 (unwarmed -> 1:1 fallback so the buy still lands, never Div/0).
+	set_variable = { name = qing_revenue_grainbuy_tmp  value = $spend$ }
+	set_variable = { name = qing_revenue_grainprice_tmp  value = global_mean_price_grain }
+	if = {
+		limit = { var:qing_revenue_grainprice_tmp > 0 }
+		change_variable = { name = qing_revenue_grainbuy_tmp  divide = var:qing_revenue_grainprice_tmp }
+	}
+	# else: leave grainbuy_tmp = spend (1:1 fallback when the market price is not warm/valid).
+	remove_variable = qing_revenue_grainprice_tmp
+	if = { limit = { var:qing_revenue_grainbuy_tmp < 0 }  set_variable = { name = qing_revenue_grainbuy_tmp  value = 0 } }
+	change_variable = { name = qing_granary_food  add = var:qing_revenue_grainbuy_tmp }
+	# clamp to [0, capacity] and refresh the derived 0..100 index immediately (do not wait on the sweep).
+	QING_DECLINE_granary_rederive = yes
+	remove_variable = qing_revenue_grainbuy_tmp
+	LOG_line = { sys = QING  msg = "revenue: bought grain at market and stocked the ever-normal pool for" }
+	LOG_exit = { sys = QING  fn = "QING_revenue_stock_granary"  result = OK }
+}
+
+# ======================================================================
+# CONCRETE: BUILD a granary in a Yellow River province (常平倉) — add the qing_granary_building.
+# [#18] EXTRACTED from the old QING_revenue_stock_granary (which now BUYS grain). The ministry pulse
+# still uses THIS to raise physical granary COVERAGE (which sets the pool capacity). Scope: country.
+# ======================================================================
+QING_revenue_build_granary = {
+	LOG_enter = { sys = QING  fn = "QING_revenue_build_granary" }
 	# Pick a suitable Yellow River province that does NOT yet hold a granary and add the building.
 	# [#355 review fix] the NOT-has_building guard stops the pick landing on an already-granaried
-	# province (a redundant level for the same 60-gold cost the caller paid); ordered by population
+	# province (a redundant level for the same cost the caller paid); ordered by population
 	# so the largest uncovered city is stocked first, matching the works-build siblings' idiom.
 	ordered_owned_province = {
 		limit = {
@@ -468,9 +506,9 @@ QING_revenue_stock_granary = {
 		max = 1
 		add_building_level = qing_granary_building
 		save_scope_as = granary_province
-		LOG_line = { sys = QING  msg = "revenue: stocked granary (building +1) at for" }
+		LOG_line = { sys = QING  msg = "revenue: built a granary (building +1) at for" }
 	}
-	LOG_exit = { sys = QING  fn = "QING_revenue_stock_granary"  result = OK }
+	LOG_exit = { sys = QING  fn = "QING_revenue_build_granary"  result = OK }
 }
 
 # ======================================================================
