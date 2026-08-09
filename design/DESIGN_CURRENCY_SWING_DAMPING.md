@@ -1,5 +1,54 @@
 # Design — Damp the CHI currency oscillation (#14 / #23 fix)
 
+**Status: REFUTED 2026-08-08 by adversarial review — DO NOT BUILD Option 1. The mechanism this
+doc pins the swing on is UNREACHABLE for CHI, and the proposed fix targets terms too small to
+matter. Kept for the record + the corrected diagnosis below. See §0.**
+
+## 0. REFUTATION (adversarial review, 2026-08-08) — read first
+
+Option 1 is SAFE (provably non-CHI no-op, correct wiring) but WRONG (aimed at the wrong terms). Two
+load-bearing errors:
+
+**C1 — the "~5× amplifier" is unreachable for CHI.** `CURRENCY_reserve_ratio_impact` (CURRENCY_svalues.txt:376-397)
+returns `ratio×(5−ratio)` ONLY inside an `if` requiring BOTH `has_variable = public_debt_administration`
+AND `reserve_ratio_total < 1`. CHI has NEITHER: PDA is hard-coded to GBR/FRA/SPA/RUS only
+(se_CURRENCY.txt:954-969), and CHI's reserve_ratio ≈ 1.4 (>1). CHI ALWAYS takes the `else` = `÷3`
+(gain 1/3 < 1, low-gain). The repo already recorded this (overnight_abstract_meters.md:332); this doc's
+§1/§4.0 amplifier claim CONTRADICTS an established finding. My re-trace added the amplifier without
+checking CHI can reach the branch — it can't.
+
+**C2 — the swing is DENOMINATOR-driven; the damping factor touches none of it.** The ratio =
+`circ×0.004 / private_cash_needed`. The numerator (circulation ~46M) barely moves — the two correction
+amounts are ~0.6% nudges (`deflation×3000` ≤ ~300 on ~46,140; reserve moves ~0.4%). The ratio craters
+1.5→<0.1 because `private_cash_needed` EXPLODES: `essentials_buying_power` (L673-701) = Σ~12
+`country_unit_price_*` ÷ `wealth_value_1_unit_scaled_by_reserve_ratio`, CAPPED at 32000, and
+`private_cash_needed`'s divisor floored at min=0.01 (L762). When `country_unit_price_silver` (→
+`wealth_value_1_unit`) dips on a trade pass, essentials slams the 32000 cap → `needed` blows up → ratio
+hits the deflation floor; next pass it snaps back. This is a **trade-price / cost-of-living CAP
+nonlinearity**, NOT the currency-correction feedback loop. Option 1's factor multiplies only
+`selloff_amt`/`money_demand_amt` — it does NOT touch `country_unit_price_*`, `essentials_buying_power`,
+the 32000 cap, or `wealth_value_1_unit`. Expected effect on the swing: **negligible.** No factor value
+(0.25/0.1/0.01) helps — don't ship-and-iterate; it would burn boots chasing the wrong term.
+
+**Also:** §4.0's mint-gate argument is faulty (balance is DERIVED from the amounts, so damping them
+shifts the gate identically — M1); "exactly four consumers" undercounts (the raw amounts are also read
+by inflation_tooltip/deflation_tooltip ×1000 — M2). And PDA IS reachable for CHI mid-game
+(se_QING_NAPOLEON.txt:268 unlocks the tech; establish_public_debt_administration decision) — if CHI ever
+gets PDA and circulation grows so reserve_ratio<1, it enters the REAL amplifier and the swing could
+worsen (L2).
+
+**NEXT (correct path):** re-diagnose with a boot-trace that DECOMPOSES `private_cash_needed` — is
+`essentials_buying_power` pinned at the 32000 cap? is `country_unit_price_silver` the swinging input? —
+and logs `selloff_amt`/`money_demand_amt` vs `amt_circulated_scaled` to confirm the correction terms are
+tiny. Let THAT data pick the fix site (essentials/wealth_value_1_unit/cap side, or trade-price
+stability), not the refuted amplifier theory. ALSO ties to #71: if M1 (46M) is ~14× too high vs the ~3.2M
+chuan the historical 3.2bn wén implies, the ratio scale itself is off and may interact with the cap.
+Extend the CURX probe to log essentials_buying_power (+ whether it's at cap) and country_unit_price_silver.
+
+The original (now-refuted) design follows unchanged below for the record.
+
+---
+
 **Status:** DESIGN, not built. For adversarial review BEFORE any code. 2026-08-07.
 **Diagnosis basis:** design/DIAGNOSIS_CURRENCY_INFLATION_SWINGS.md (#14, the real mechanism);
 design/DIAGNOSIS_CURRENCY_ANNUAL_SNAP.md (#23, my read-ordering theory REFUTED — #23 is a duplicate of
@@ -12,6 +61,24 @@ design/DIAGNOSIS_CURRENCY_ANNUAL_SNAP.md (#23, my read-ordering theory REFUTED �
 CHI currency oscillates quarter-to-quarter: modest inflation → snap to the −10% deflation floor → back.
 It is an **undamped full-gap feedback loop** in the upstream quarterly currency system, NOT user error,
 NOT the minting amount, NOT a read-ordering bug.
+
+**[PROBE-CONFIRMED 2026-08-08 boot 01:19]** The rewritten literal-band CURX probe (the digit-decomposition
+version was broken; this one works) captured the ratio time-series directly. It oscillates between the
+EXTREMES with almost no middle band:
+`ratio 1.20-1.50 → <0.01 (floor) → 1.20-1.50 → >=1.50 → <0.01 ×4 → >=1.50 ×2 → 0.01-0.10 (defl FLOOR ~-10%) ×4 → >=1.50 ×2 → <0.01 ×2 → >=1.50 ×2 …`
+i.e. STRONG INFLATION (≥1.5) ⇄ DEFLATION FLOOR (<0.1), quarter to quarter, essentially never resting in
+the healthy 0.75–1.05 band. Both `CURX defl 8-10pct` and `CURX infl ≥10pct(cap)` appear in the same run =
+both rails are being hit. This is the reported symptom, now MEASURED — the undamped-overshoot diagnosis
+below is no longer inference. (Also confirmed: the trade term `trout` is a small NEGATIVE inflow band here,
+so #53's display bug is NOT the swing driver — the swing is the reserve/cost-of-living loop below.)
+
+**Amplifier identified (this session's re-trace):** `CURRENCY_reserve_ratio_impact` (L376-388) returns
+`ratio × (5 − ratio)` when `reserve_ratio < 1` — a gain up to ~5× at small ratios — and it is the term that
+divides cost-of-living (`essentials_buying_power`, L694). So a modest quarterly reserve change is amplified
+into an EXTREME cost-of-living swing → extreme `private_cash_needed` swing → the ratio craters/spikes. This
+steep gain is why the correction overshoots to the opposite rail rather than converging. The damping factor
+(§4.1) throttles the correction feeding this amplifier; the amplifier itself is upstream/shared and is left
+intact (Sobisonator-caution), which is why the factor may need to be well below 0.25 (see §4.1 caveat).
 
 **The loop (all verified in source this session):**
 - `CURRENCY_private_cash_ratio` = `circ_scaled × 0.004 / private_cash_needed` (CURRENCY_svalues.txt:753).
