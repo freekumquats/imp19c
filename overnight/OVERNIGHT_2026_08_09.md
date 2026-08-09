@@ -472,3 +472,53 @@ computation byte-unchanged.
 
 **Status:** SLICE 4 DONE — built, reviewed CLEAN, committed `815c0cdcd` + pushed. Slices 5-6 (qing_granary_stock
 retirement — the risky 12-consumer migration; canal-condition by per-corridor coverage) follow.
+
+## Task #7 (#94/#95) — SLICE 5 of the concrete grain economy: abstract-granary LEVER concretization (design premise CORRECTED)
+
+**What it was scoped as:** "Retire `qing_granary_stock` — migrate its 12 consumers to read the real fraction
+`qing_granary_food/qing_granary_capacity`, then drop the derived var (pool A becomes the single truth)"
+(§8b re-sequence step 5, the "risky slice").
+
+**What I found (grounded byte-level + git — NOTE: `rg`'s rendered output CORRUPTS `qing_granary_stock`→`n`, a
+display artifact; only Python/git reads trusted):** the literal premise is **STALE**. `qing_granary_stock` is
+NOT an abstract counter like the now-retired `qing_grain_reserve`. Commit `51957efaf1` (2026-07-13) already
+converted it to a **derived real-food cache** — `qing_granary_food × 100 / capacity` (cap>0), held at baseline
+30 while cap==0 (se_QING_DECLINE.txt:2493-2497; block comment :2352 "KEPT: now DERIVED"). Pool A
+(`qing_granary_food`/`_capacity`) is ALREADY the single source of truth; the stock var is its 0..100 projection.
+- Retiring it is **infeasible** (boolean event `trigger={}` blocks — `qing_decline.11/.12` `>=20`, pop-pressure
+  `<=15` — cannot precompute a divide) and would scatter the granaryless cap==0→30 guard across ~9 readers,
+  replacing ONE central guarded derive with nine. That is de-refactoring, NOT concretization. NOT done (per the
+  bug-vs-missing-feature + concrete-over-abstract rules, this is a correct rejection of a stale premise, backed
+  by source, NOT an invented deferral).
+
+**The REAL defect (what the concretization program was actually after) + fix built WHOLE:** three player levers
+wrote the DERIVED CACHE, not the real pooled food, so the 180-day pool sweep silently reverted them — the
+player paid ¥360 to "stock granaries" but no real grain was stored:
+- invest (¥360, se_QING_MECHANICS.txt:94) `nudge qing_granary_stock +25` → now `+200` real `qing_granary_food`
+- release (:105) `nudge -20` → now `-150` real food (clamped ≥0 by the rederive)
+- relief (¥310, se_QING_POPULATION.txt:234) `nudge +20` → now `+150` real food
+Extracted the pool's clamp+derive tail into a shared, behaviour-identical helper `QING_DECLINE_granary_rederive`
+(recompute cap=count×200, clamp food [0,cap], derive stock if cap>0 else hold baseline-30, set capacity); the
+pool tail AND each lever now call it, so a lever's real-food change refreshes the cache IMMEDIATELY and survives
+the next sweep. All other lever effects (sect-pressure/pop-pressure nudges, stability, stocked/famine-relief
+modifiers, frontier valve) preserved unchanged; NO reader touched (they correctly still read the derived cache).
+
+**Key decisions + why:**
+- Granaryless honesty: rederive clamps stored food to [0, count×200] — you cannot stock a reserve you have not
+  built (cap==0 holds baseline 30). The invest button's fuller market-price BUY is **task #18's** explicit
+  domain (separately tracked), NOT a deferral of this slice; slice 5 only stops the phantom-cache write.
+- Lever magnitudes (200/150/150 real food) are boot-tunable knobs comparable to the old ±20-25 index points at
+  a typical 2-3-granary cap (400-600); the visible index swing now scales ~100/count (faithful to the real pool).
+
+**Review verdict:** applied-diff code-review CLEAN — no findings across all 8 checks: helper behaviour-identical
+to the extracted tail (cap recompute matches pool top :2381-2386; pool post-call code doesn't reference the
+removed cap_tmp — safe), RHS-comparison rule satisfied (`qing_granary_cap_tmp_cmpsvalue` exists at
+00_event_values.txt:1881; all else var-vs-literal), levers guard-init food before change + clamp negative to 0,
+all other effects preserved, country scope throughout, no recursion, no stale writer left, readers correctly
+untouched. Fixed the one nit found (helper comment cited :1876 for the cmpsvalue → corrected to :1881).
+
+**Verification (self):** braces balanced (DECLINE 1333/1333, MECHANICS 305/305, POPULATION 107/107); zero EOL
+churn (numstat == --ignore-cr-at-eol numstat); no BOM on any se_ file (correct); no new LOG strings.
+
+**Status:** SLICE 5 DONE — premise corrected against source, the genuine lever-concretization defect fixed whole,
+reviewed CLEAN, committed `[below]` + pushed. Slice 6 (canal-condition by per-corridor coverage) follows.

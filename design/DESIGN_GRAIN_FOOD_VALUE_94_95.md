@@ -546,6 +546,64 @@ this slice adds none — it merely *attributes* a share of the real-food tribute
 - The STRONG per-depot split-delivery rebalance (remove condition depot-bonus, add direct per-depot delivery)
   remains DEFERRED with user-flag per §4 — this slice is the weak/through-condition form the design locked.
 
+## 8f. SLICE 5 — IMPLEMENTATION SPEC (2026-08-09) — the abstract-granary lever concretization (design premise CORRECTED)
+
+§8b re-sequence step 5 ("qing_granary_stock retirement — the risky slice"). **The literal premise is STALE and
+NOT executed; the genuine concretization it was reaching for IS built whole.** Grounded byte-level + git (note:
+`rg`'s rendered output corrupts `qing_granary_stock` → `n`, a display artifact — only Python/git reads trusted).
+
+### Why "retire qing_granary_stock" is a stale no-op (source proof, NOT a deferral)
+- `qing_granary_stock` is NOT an abstract counter like the retired `qing_grain_reserve`. Commit `51957efaf1`
+  (2026-07-13) already converted it to a **derived real-food cache**: `qing_granary_food × 100 / capacity`
+  when cap>0, held at the DECLINE_init baseline 30 while cap==0 (se_QING_DECLINE.txt:2493-2497; the block
+  comment at :2352 states "KEPT: now DERIVED = qing_granary_food / cap * 100"). Pool A (`qing_granary_food` +
+  `qing_granary_capacity`) is ALREADY the single source of truth; `qing_granary_stock` is its 0..100 projection.
+- Deleting it and inlining `food/capacity` into the consumers is (a) **infeasible** in the boolean event
+  `trigger = {}` blocks that read it (`qing_decline.11/.12` option-triggers `>= 20`; `qing_pop_press` event
+  trigger `<= 15` — a trigger block has no precompute step for a divide), and (b) would force the granaryless
+  cap==0→30 guard to be re-implemented at every one of the ~9 read sites, replacing ONE central guarded derive
+  with nine scattered ones. That is de-refactoring, not concretization — it makes the code worse. NOT DONE.
+
+### The real defect (this IS the concretization program — "concrete over abstract")
+Three player levers write the DERIVED CACHE, not the underlying real food, so the 180-day pool sweep silently
+reverts them — the player pays but no real grain is stored/spent:
+- `QING_granary_invest` (¥360 button, se_QING_MECHANICS.txt:94) — `nudge qing_granary_stock +25`
+- `QING_granary_release` (famine-relief option, :105) — `nudge qing_granary_stock -20`
+- `QING_pop_relief_resettle` (¥310 lever, se_QING_POPULATION.txt:234) — `nudge qing_granary_stock +20`
+The only correct real-food lever today is `se_QING_REVENUE.txt:512-513` (`change_variable qing_granary_food add`).
+
+### Fix (whole, buildable now)
+1. **Extract the pool's clamp+derive tail (se_QING_DECLINE.txt:2490-2506) into a shared, self-contained helper
+   `QING_DECLINE_granary_rederive`** (recompute cap_tmp = count×200, clamp food [0,cap], derive stock if cap>0,
+   set capacity, remove cap_tmp). Behaviour-identical to the inline it replaces. Called at the pool tail AND by
+   each lever, so a lever's real-food change is reflected in the cache IMMEDIATELY (not lost until the next sweep).
+2. **Convert the three nudges to real-food changes** via the proven REVENUE idiom (guard-init `qing_granary_food`
+   then `change_variable add/subtract`), followed by `QING_DECLINE_granary_rederive = yes`:
+   - invest: `+200` real food (a solid ¥360 stocking; cf. REVENUE seeds +600 across ~3 granaries)
+   - release: `−150` real food (clamped ≥0 by the rederive)
+   - relief: `+150` real food
+   Magnitudes are boot-tunable knobs comparable to the old ±20-25 index points at a typical 2-3-granary cap
+   (400-600). All other lever effects (sect-pressure nudges, stability, the qing_granary_stocked/famine_relief
+   modifiers, the frontier pull) are PRESERVED unchanged — only the stock→food write is concretized.
+3. **Granaryless honesty:** if cap==0 (no granaries) the rederive clamps stored food to 0 — you cannot stock an
+   ever-normal reserve you have not built. The invest button's fuller market-price BUY rework is **task #18's**
+   explicit domain (a separately-tracked task, NOT a deferral of this slice); slice 5 only stops the phantom-cache
+   write. The stocked-modifier gate (`stock >= 40`) now reads the honestly-rederived value.
+
+### Files touched (slice 5)
+- `se_QING_DECLINE.txt` — new `QING_DECLINE_granary_rederive` helper; pool tail calls it (identical behaviour).
+- `se_QING_MECHANICS.txt` — invest + release: real-food change + rederive (was a stock nudge).
+- `se_QING_POPULATION.txt` — relief: real-food change + rederive.
+- Loc: invest tooltip reworded from "builds granary stock" to real grain bought into the ever-normal reserve.
+
+### Invariants (applied-diff review)
+- `qing_granary_stock` is NOT deleted (it is the derived cache every reader + GUI uses); no reader changes.
+- Helper is behaviour-identical to the pool tail it extracts (same clamp, same cap==0→baseline-30 hold, same
+  `qing_granary_cap_tmp_cmpsvalue` RHS which already exists at 00_event_values.txt:1876).
+- `add`/`subtract` on `qing_granary_food` are value-field ops (legal); no new comparison-RHS operands.
+- Levers guard-init `qing_granary_food` before changing (a lever may fire before the first pool sweep).
+- Braces balanced; se_ files no-BOM/LF; loc keeps BOM; no EOL churn.
+
 ## 9. Superseded (record)
 - v1: rescale qing_grain_reserve to bespoke 石 — REJECTED (invents a parallel scale).
 - v2 Plan 2: sibling 食-pool mirroring pool A's units but not its add_state_food mechanism — REJECTED by

@@ -2488,6 +2488,38 @@ QING_DECLINE_granary_pool = {
 	}
 
 	# --- clamp the pool [0, cap] and DERIVE the 0..100 stock ratio every consumer reads. ----------
+	# [#95 slice 5] extracted to the shared QING_DECLINE_granary_rederive helper (below) so the player
+	# levers (invest/release/relief) that now change the real qing_granary_food refresh the cache the same
+	# way. It recomputes cap_tmp = count×200 (identical to the top-of-effect compute), clamps food to
+	# [0,cap], derives qing_granary_stock (cap>0 only; else leaves the baseline 30 — the granaryless
+	# invariant), and persists qing_granary_capacity for the GUI. Behaviour-identical to the old inline tail.
+	QING_DECLINE_granary_rederive = yes
+	LOG_line = { sys = QING  msg = "granary: ever-normal pool moved real food; stock derived from pooled grain / capacity for" }
+	}   # [M2] close the ~180-day cadence gate opened at the top of the effect.
+	LOG_exit = { sys = QING  fn = "QING_DECLINE_granary_pool"  result = OK }
+}
+
+# ======================================================================
+# [#95 slice 5] QING_DECLINE_granary_rederive — Scope: COUNTRY (CHI). Recompute the derived
+# qing_granary_stock (0..100) + qing_granary_capacity from the REAL pooled food + granary count,
+# WITHOUT running the whole every_country_state fill/ship sweep. Behaviour-identical to the pool
+# effect's clamp+derive tail (:2490-2506) — extracted so the player levers (invest / release /
+# relief), which now change the real qing_granary_food, can refresh the cache IMMEDIATELY instead
+# of waiting on (and being reverted by) the 180-day pool sweep. cap = qing_granary_count × 200
+# (the building's local_food_capacity); while cap==0 the derive is skipped and qing_granary_stock
+# is LEFT at its DECLINE_init baseline (30) — an as-yet-granaryless realm is not false-flagged into
+# famine (the same invariant the pool guards). qing_granary_cap_tmp_cmpsvalue already exists
+# (00_event_values.txt:1881). ROOT = CHI.
+# ======================================================================
+QING_DECLINE_granary_rederive = {
+	set_variable = { name = qing_granary_cap_tmp  value = 0 }
+	if = {
+		limit = { has_variable = qing_granary_count }
+		set_variable = { name = qing_granary_cap_tmp  value = var:qing_granary_count }
+		change_variable = { name = qing_granary_cap_tmp  multiply = 200 }
+	}
+	if = { limit = { NOT = { has_variable = qing_granary_food } }  set_variable = { name = qing_granary_food  value = 0 } }
+	# clamp the pooled food to [0, cap] then derive the 0..100 ratio (cap>0 only; else leave baseline 30).
 	if = { limit = { var:qing_granary_food > qing_granary_cap_tmp_cmpsvalue }  set_variable = { name = qing_granary_food  value = var:qing_granary_cap_tmp } }
 	if = { limit = { var:qing_granary_food < 0 }  set_variable = { name = qing_granary_food  value = 0 } }
 	if = {
@@ -2496,17 +2528,8 @@ QING_DECLINE_granary_pool = {
 		change_variable = { name = qing_granary_stock  multiply = 100 }
 		change_variable = { name = qing_granary_stock  divide = var:qing_granary_cap_tmp }
 	}
-	# [review-fix] when cap==0 (no granaries built / count not yet tallied) DO NOT overwrite
-	# qing_granary_stock — leave it at the DECLINE_init baseline (30). Zeroing it here would
-	# false-flag an as-yet-granaryless realm straight into the famine / pop-pressure bands.
-	# [GUI display] persist the capacity so the Population panel can show ACTUAL food held vs
-	# capacity (qing_granary_food / qing_granary_capacity) instead of the 0..100 fill ratio.
-	# qing_granary_stock (the derived %) is UNTOUCHED — every mechanic consumer still reads it.
 	set_variable = { name = qing_granary_capacity  value = var:qing_granary_cap_tmp }
 	remove_variable = qing_granary_cap_tmp
-	LOG_line = { sys = QING  msg = "granary: ever-normal pool moved real food; stock derived from pooled grain / capacity for" }
-	}   # [M2] close the ~180-day cadence gate opened at the top of the effect.
-	LOG_exit = { sys = QING  fn = "QING_DECLINE_granary_pool"  result = OK }
 }
 
 # ======================================================================

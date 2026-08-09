@@ -91,7 +91,15 @@ QING_sell_offices = {
 QING_granary_invest = {
 	LOG_line = { sys = QING  msg = "invested in granaries for" }
 	add_treasury = -360
-	QING_DECLINE_nudge = { var = qing_granary_stock  amount = 25 }
+	# [#95 slice 5] buy REAL grain into the ever-normal pool (qing_granary_food), not the derived cache.
+	# The old `nudge qing_granary_stock +25` wrote the 0..100 fill index directly, which the 180-day pool
+	# sweep then OVERWROTE from real food — so the player paid ¥360 and no grain was actually stored. Add
+	# real food (proven idiom: se_QING_REVENUE.txt:512-513) and rederive the cache so the index + GUI + the
+	# stocked-modifier gate reflect it at once. The rederive clamps to [0, count×200] — you cannot stock a
+	# reserve you have not built (cap==0 leaves the baseline 30; the fuller market-price BUY is task #18).
+	if = { limit = { NOT = { has_variable = qing_granary_food } }  set_variable = { name = qing_granary_food  value = 0 } }
+	change_variable = { name = qing_granary_food  add = 200 }
+	QING_DECLINE_granary_rederive = yes
 	# Refresh the stocked bonus while reserves are healthy.
 	if = {
 		limit = { var:qing_granary_stock >= 40 }
@@ -102,7 +110,10 @@ QING_granary_invest = {
 QING_granary_release = {
 	# Spend granary stock for famine relief. Only meaningful if stock exists.
 	LOG_line = { sys = QING  msg = "released granary stores for" }
-	QING_DECLINE_nudge = { var = qing_granary_stock  amount = -20 }
+	# [#95 slice 5] draw down REAL pooled grain (clamped ≥0 by the rederive), not the derived cache.
+	if = { limit = { NOT = { has_variable = qing_granary_food } }  set_variable = { name = qing_granary_food  value = 0 } }
+	change_variable = { name = qing_granary_food  subtract = 150 }
+	QING_DECLINE_granary_rederive = yes
 	QING_DECLINE_nudge = { var = qing_sect_pressure  amount = -10 }
 	add_country_modifier = { name = qing_granary_famine_relief  duration = 730 }
 	if = {
