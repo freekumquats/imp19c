@@ -217,6 +217,12 @@ QING_canton_pulse = {
 					var:qing_hoppo_holder = { is_alive = no }
 				}
 			}
+			# [#76] This backfill fires ONLY for a dead/missing Hoppo (the outer limit: no holder, or holder
+			# is_alive=no). An ALIVE ex-Hoppo never reaches here — the only paths that vacate a living Hoppo
+			# (censorate impeach, rotate) both strip qing_hoppo_marker off the man before removing the holder
+			# var, so QING_char_holds_court_position never reads a stale post on a live former Hoppo. A DEAD
+			# ex-Hoppo keeps the marker on his corpse, but a dead char renders no card and is never re-picked,
+			# so it is inert (same as the study-chief death case). Nothing to strip here.
 			if = { limit = { has_variable = qing_hoppo_holder }  remove_variable = qing_hoppo_holder }
 			QING_canton_appoint_hoppo = yes
 			LOG_line = { sys = QING  msg = "canton: the Hoppo's post fell vacant and was backfilled for" }
@@ -328,7 +334,17 @@ QING_canton_appoint_hoppo = {
 			is_adult = yes
 			is_alive = yes
 			is_ruler = no
-			NOT = { has_variable = qing_office_held }
+			# [#76 2026-08-08] one-man-one-post: exclude anyone already holding ANY court/sub-post
+			# (QING_char_holds_court_position now includes the Hoppo marker) AND serving commanders/
+			# governors/heir — the SAME exclusions the GC pickers use. The reported bug was the Hoppo
+			# (Aligun) being drawn while he was the Jingzhou garrison commander; is_general/is_admiral
+			# close that. QING_char_hard_disgraced keeps a disgraced man out too.
+			NOT = { QING_char_holds_court_position = yes }
+			is_general = no
+			is_admiral = no
+			is_governor = no
+			NOT = { QING_char_hard_disgraced = yes }
+			NOT = { AND = { exists = ROOT.primary_heir  this = ROOT.primary_heir } }
 		}
 		order_by = finesse
 		max = 1
@@ -336,6 +352,9 @@ QING_canton_appoint_hoppo = {
 		ROOT = {
 			set_variable = { name = qing_hoppo_holder  value = scope:qing_hoppo_pick }
 		}
+		# qing_hoppo_marker doubles as the per-char post marker: it feeds QING_char_holds_court_position
+		# (mutual exclusion both ways) and the character-card title (offices custom-loc), like the other
+		# sub-post markers (#76).
 		set_variable = { name = qing_hoppo_marker  value = 1 }
 	}
 }
