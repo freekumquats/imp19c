@@ -61,6 +61,10 @@ QING_canton_init = {
 	if = { limit = { NOT = { has_variable = qing_canton_last_silver_in } }  set_variable = { name = qing_canton_last_silver_in  value = 0 } }   # [2026-08-06] Canton→reserve specie inflow last qtr, 千兩 (panel-safe first read)
 	# the Hoppo's post ran on squeeze even at the zenith — seed a moderate baseline.
 	if = { limit = { NOT = { has_variable = qing_hoppo_squeeze } }      set_variable = { name = qing_hoppo_squeeze  value = 30 } }
+	# [#111a] seed the lagged FINESSE mirror to a NEUTRAL 7 (= no finesse lift) so the continuous
+	# Hoppo-effectiveness factor still applies its squeeze shave on the very first pulse — before the
+	# reconcile/graft block first mirrors the seated Hoppo's real finesse. Re-derived every pulse thereafter.
+	if = { limit = { NOT = { has_variable = qing_hoppo_finesse } }      set_variable = { name = qing_hoppo_finesse  value = 7 } }
 	# [#426] the Canton revenue split (percent of the yield to the emperor's privy purse 內帑 vs the
 	# state treasury 戶部). Player-set via the Canton window toggle: 0 / 50 / 100. Default 50.
 	if = { limit = { NOT = { has_variable = qing_canton_purse_share } } set_variable = { name = qing_canton_purse_share  value = 50 } }
@@ -130,9 +134,43 @@ QING_canton_pulse = {
 		# Hoppo's corruption LATER in this pulse (deliberate one-quarter lag; corruption creeps only
 		# ±1/qtr so the steady-state error is negligible; a freshly-seated/impeached Hoppo simply
 		# over/under-shaves for one quarter, self-correcting next pulse — not worth reordering).
+		# [#111a] CONTINUOUS HOPPO-EFFECTIVENESS FACTOR (replaces the old squeeze>=60 -> x0.7 CLIFF).
+		# The factor grades the yield on the seated Hoppo's fiscal competence AND his graft, both read from
+		# LAGGED meters (mirrored later this pulse from his real char stats): qing_hoppo_finesse and
+		# qing_hoppo_squeeze (=corruption). The deliberate one-quarter lag is unchanged from the old cliff
+		# (stats creep only ~1/qtr so the steady-state error is negligible; the yield chain runs BEFORE the
+		# holder is reconciled, so a live read here would risk a dead/double-booked holder). Both meters are
+		# guarded on has_variable: before the first reconcile (or while transiently vacant) the factor is a
+		# clean x1 no-op.
+		#   factor = 1 + (finesse - 7) x 0.03  -  squeeze x 0.004 , clamped [0.5, 1.3].
+		# At the ~30-wan-tael zenith baseline: a master Hoppo (finesse 12, corruption ~10) ~= 1 +0.15 -0.04
+		# = 1.11; a venal dolt (finesse 4, corruption 80) ~= 1 -0.09 -0.32 = 0.59 (near the 0.5 floor). The
+		# old cliff's x0.7 at squeeze 60 now lands ~= 1 -0.24 = 0.76 at neutral finesse -- a smoother, graded
+		# version of the same shave. The [0.5,1.3] band bounds the max uplift so it cannot perturb the
+		# currency model (the silver inflow below inherits this factor via qing_canton_yield_tmp, bounded too).
 		if = {
-			limit = { var:qing_hoppo_squeeze >= 60 }
-			change_variable = { name = qing_canton_yield_tmp  multiply = 0.7 }
+			limit = { has_variable = qing_hoppo_finesse }
+			set_variable = { name = qing_canton_hoppo_factor  value = 1 }
+			# finesse lift: (finesse - 7) x 0.03
+			set_variable = { name = qing_canton_hoppo_fin_tmp  value = var:qing_hoppo_finesse }
+			change_variable = { name = qing_canton_hoppo_fin_tmp  subtract = 7 }
+			change_variable = { name = qing_canton_hoppo_fin_tmp  multiply = 0.03 }
+			change_variable = { name = qing_canton_hoppo_factor  add = var:qing_canton_hoppo_fin_tmp }
+			remove_variable = qing_canton_hoppo_fin_tmp
+			# corruption/squeeze shave: squeeze x 0.004 (graded; replaces the x0.7 cliff). Guarded -- squeeze
+			# is seeded at game start, but belt-and-suspenders for a pre-first-reconcile pulse.
+			if = {
+				limit = { has_variable = qing_hoppo_squeeze }
+				set_variable = { name = qing_canton_hoppo_sq_tmp  value = var:qing_hoppo_squeeze }
+				change_variable = { name = qing_canton_hoppo_sq_tmp  multiply = 0.004 }
+				change_variable = { name = qing_canton_hoppo_factor  subtract = var:qing_canton_hoppo_sq_tmp }
+				remove_variable = qing_canton_hoppo_sq_tmp
+			}
+			# clamp the factor to the sane band [0.5, 1.3] (var-vs-literal, bare-legal).
+			if = { limit = { var:qing_canton_hoppo_factor > 1.3 }  set_variable = { name = qing_canton_hoppo_factor  value = 1.3 } }
+			if = { limit = { var:qing_canton_hoppo_factor < 0.5 }  set_variable = { name = qing_canton_hoppo_factor  value = 0.5 } }
+			change_variable = { name = qing_canton_yield_tmp  multiply = var:qing_canton_hoppo_factor }
+			remove_variable = qing_canton_hoppo_factor
 		}
 		# [#30/#31 Batch 4g 2026-07-25] CANTON TARIFF bias (關稅則例). The qing_canton_tariff_law selector
 		# sets the ad-valorem rate the customs house levies on the real Canton trade (the yield above IS the
@@ -297,11 +335,20 @@ QING_canton_pulse = {
 			# (d) the squeeze meter is now a DERIVED reflection of his corruption (0..100), for the
 			# existing consumers (the yield-shave, the corruption-level leak, the Cohong-crisis gate).
 			set_variable = { name = qing_hoppo_squeeze  value = scope:qing_hoppo_seated.corruption }
+			# [#111a] LAGGED FINESSE mirror — the seated Hoppo's fiscal competence, cached alongside the
+			# squeeze(=corruption) mirror so the CONTINUOUS yield-grading factor (QING_canton_pulse yield
+			# chain) can read it WITHOUT a live char read at the yield site. The yield is computed + banked
+			# EARLIER in this pulse (before this reconcile/graft block), so reading var:qing_hoppo_holder.finesse
+			# there would risk a dead/double-booked/absent holder — the same one-quarter-lag design the squeeze
+			# already uses (see the yield-chain note). save_scope_as → scope:X.finesse is the proven read
+			# (se_QING_CANAL.txt:118-120 warns the bare var:X.finesse form reads 0 silently).
+			set_variable = { name = qing_hoppo_finesse  value = scope:qing_hoppo_seated.finesse }
 			remove_variable = qing_hoppo_siphon_tmp
 		}
 		else = {
 			# transiently vacant (before backfill, or the appoint pool was empty): the exactions run
-			# unchecked, the squeeze drifts up as under the old model.
+			# unchecked, the squeeze drifts up as under the old model. The lagged finesse holds its last
+			# value (no seated man to re-read); the grading factor guards on has_variable.
 			QING_DECLINE_nudge = { var = qing_hoppo_squeeze  amount = 3 }
 		}
 		# a high squeeze leaks into the empire-wide corruption counter (guarded — it may be unset

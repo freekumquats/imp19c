@@ -585,3 +585,56 @@ ministry/decline/gui consumers show empty diffstat (untouched).
 is boot-gated on the user's machine (the slice-3 LOG_state dump tunes the delivery/draw fractions; the new
 condition target renders on the Works panel via the existing qing_depot_count/qing_dike_count rows + the
 depot-share row now on the corridor basis).
+
+---
+
+## #8 (#111/#112) — Frontier-customs superintendents [design-first, MULTI-SLICE]
+
+Design doc `design/DESIGN_FRONTIER_CUSTOMS_SUPERINTENDENTS_111_112.md` was already written + adversarially
+reviewed (§9b) with a locked build order: #111a (grade Canton yield on Hoppo stats) → #111b (Hoppo events,
+trimmed) → SPIKE 1 (create_character move_country to a non-subject foreign power) + SPIKE 2 (two-sided contest
+svalue) → #112a (caravan superintendent) → #112b (aqsaqal foreigner char) → #112c (contest events). The design
+ITSELF mandates separate reviewed commits per slice — building slices in order, NOT a deferral.
+
+### Slice #111a — grade Canton yield/skim on the Hoppo's stats (replace the cliff) — DONE
+
+**What:** Canton customs yield was graded only by a single CLIFF — `qing_hoppo_squeeze >= 60 → yield ×0.7`
+(se_QING_CANTON.txt) — reading corruption but ignoring the Hoppo's fiscal competence entirely. Replace the
+cliff with a CONTINUOUS Hoppo-effectiveness factor on finesse AND corruption.
+
+**What I did:**
+- `factor = 1 + (finesse − 7)×0.03 − squeeze×0.004`, clamped [0.5, 1.3], multiplied into the yield BEFORE
+  the purse split and the silver-inflow computation (so both inherit the bounded swing).
+- **Reads LAGGED meters, not live char stats** — the §9b ORDERING HAZARD: the yield chain runs BEFORE the
+  Hoppo is reconciled/backfilled later in the same pulse, so a live `save_scope_as` on qing_hoppo_holder at
+  the yield site would risk a dead/double-booked/absent holder. Added a lagged `qing_hoppo_finesse` mirror
+  (set in the graft block from `scope:qing_hoppo_seated.finesse` — the proven read idiom, alongside the
+  existing squeeze=corruption mirror) + seeded it neutral (7) in QING_canton_init so the first pulse is a
+  clean run before the first reconcile.
+- Guarded on has_variable; before the first reconcile the neutral seed makes the factor a clean shave-only run.
+
+**Key decisions + why:**
+- *Coefficients (0.03 finesse-step, 0.004 shave, [0.5,1.3] band)* — tuned to the ~30萬兩/qtr zenith baseline:
+  a master Hoppo ≈ 1.11, a venal dolt ≈ 0.59, and the old ×0.7-at-squeeze-60 cliff maps to ≈0.76 at neutral
+  finesse (a smoother, graded version of the same shave). The [0.5,1.3] clamp bounds the max uplift so it
+  cannot perturb the currency model (§9 Q1) — no feedback path from silver_reserve_size back into the factor.
+- *KEEP qing_hoppo_squeeze* (still written in the graft block) — its 3 OTHER consumers (corruption-leak,
+  Cohong-crisis gate :358/:369, qing_canton.1 trigger) are untouched; removing the cliff orphans nothing.
+- *Charisma→Cohong term (§9 Q2): DEFERRED to #111b* — it belongs with the event work (the Cohong-crisis gate
+  is event-side), not the yield-grading slice. This is the design's own slice boundary, not a carve-off.
+
+**Review (applied-diff, code-review agent, grounded):** CLEAN, no findings. Verified: ordering hazard honored
+(no live read at the yield site; lagged meters only); finesse mirror uses scope:X.finesse not the bare form;
+guarded reads + neutral seed; no var-vs-var comparison (clamps are var-vs-literal); cliff removal orphans
+nothing (squeeze still written, 3 consumers survive); factor multiplies BEFORE purse split + silver inflow so
+the swing is bounded, no #23 feedback loop; braces 196/196; scratch vars all removed; no LOG/macro violations.
+Two INFO notes (silver ceiling rises ~30% vs old shave-only model — intentional per §9b bounded-market-writer;
+vacant-post briefly retains last tenant's finesse — self-correcting) accepted as designed.
+
+**Verification (self):** braces 196/196; no BOM; LF-only (0 CRLF); diffstat 50+/3−, EOL-churn check equal to
+plain; cliff gone; finesse mirror seeded (init) + set (pulse); no other file reads the new var.
+
+**Commit:** `[below]` + pushed.
+
+**Status:** #111a DONE — reviewed CLEAN, committed + pushed. #111b (Hoppo events, trimmed per §9b overbuild
+notes) follows.
