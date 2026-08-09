@@ -526,14 +526,62 @@ qing_report_open_milsupply = {
 		LOG_line = { sys = QING  msg = "military-supply ledger opened by" }
 		clear_variable_list = qing_milsupply_report_states
 		every_governorships = {
+			# [#83 2026-08-08] COTTAGE INDUSTRY output too. The per-state figures below read only the
+			# BUILDING emitters (arsenal/depot/machine_works/textile_mill/navy_yard); but the realm also
+			# produces military goods through COTTAGE INDUSTRY (household gunpowder/clothing/naval stores),
+			# which is tracked at GOVERNORSHIP scope (COTTAGEIND_produced_*). At a 1763 start with cottage
+			# output but few arsenals, every state read MILITARY_state_prod_total = 0, so the ledger showed
+			# the "no producer" empty note DESPITE the topbar total reporting real production (the reported
+			# 22.95/qtr bug). Read this governorship's cottage output once here, and fold it into the FIRST
+			# qualifying state row so it is counted EXACTLY ONCE per governorship (adding it to every state
+			# would over-count against the footer country total). The carrier state need not itself hold a
+			# building — a governorship producing ONLY via cottage still surfaces one row.
+			set_variable = { name = qing_milsup_gov_cottage_mun    value = 0 }
+			set_variable = { name = qing_milsup_gov_cottage_cloth  value = 0 }
+			set_variable = { name = qing_milsup_gov_cottage_naval  value = 0 }
+			if = { limit = { has_variable = COTTAGEIND_produced_early_munitions } change_variable = { name = qing_milsup_gov_cottage_mun   add = var:COTTAGEIND_produced_early_munitions } }
+			if = { limit = { has_variable = COTTAGEIND_produced_clothing }        change_variable = { name = qing_milsup_gov_cottage_cloth add = var:COTTAGEIND_produced_clothing } }
+			if = { limit = { has_variable = COTTAGEIND_produced_naval_supplies }  change_variable = { name = qing_milsup_gov_cottage_naval add = var:COTTAGEIND_produced_naval_supplies } }
+			set_variable = { name = qing_milsup_gov_cottage_placed  value = 0 }   # 0 = cottage share not yet attributed to a state
+			save_scope_as = this_gov
 			every_governorship_state = {
 				save_scope_as = this_state
+				# this state's cottage share = the whole-governorship cottage output, but ONLY for the first
+				# state we place it on (placed flag flips to 1); every other state gets 0 cottage.
+				set_variable = { name = qing_milsup_state_cottage_mun    value = 0 }
+				set_variable = { name = qing_milsup_state_cottage_cloth  value = 0 }
+				set_variable = { name = qing_milsup_state_cottage_naval  value = 0 }
 				if = {
-					# only list states with non-zero production capacity (keeps the list to real producers).
-					limit = { MILITARY_state_prod_total > 0 }
+					limit = {
+						scope:this_gov = { var:qing_milsup_gov_cottage_placed = 0 }
+						OR = {
+							scope:this_gov = { var:qing_milsup_gov_cottage_mun > 0 }
+							scope:this_gov = { var:qing_milsup_gov_cottage_cloth > 0 }
+							scope:this_gov = { var:qing_milsup_gov_cottage_naval > 0 }
+						}
+					}
+					set_variable = { name = qing_milsup_state_cottage_mun    value = scope:this_gov.var:qing_milsup_gov_cottage_mun }
+					set_variable = { name = qing_milsup_state_cottage_cloth  value = scope:this_gov.var:qing_milsup_gov_cottage_cloth }
+					set_variable = { name = qing_milsup_state_cottage_naval  value = scope:this_gov.var:qing_milsup_gov_cottage_naval }
+					scope:this_gov = { set_variable = { name = qing_milsup_gov_cottage_placed  value = 1 } }
+				}
+				if = {
+					# list a state that produces via BUILDINGS or that carries this governorship's cottage share.
+					limit = {
+						OR = {
+							MILITARY_state_prod_total > 0
+							var:qing_milsup_state_cottage_mun > 0
+							var:qing_milsup_state_cottage_cloth > 0
+							var:qing_milsup_state_cottage_naval > 0
+						}
+					}
+					# per-good row = building output + this state's attributed cottage share.
 					set_variable = { name = qing_milsup_rep_munitions  value = MILITARY_state_prod_munitions }
+					change_variable = { name = qing_milsup_rep_munitions  add = var:qing_milsup_state_cottage_mun }
 					set_variable = { name = qing_milsup_rep_clothing   value = MILITARY_state_prod_clothing }
+					change_variable = { name = qing_milsup_rep_clothing   add = var:qing_milsup_state_cottage_cloth }
 					set_variable = { name = qing_milsup_rep_naval      value = MILITARY_state_prod_naval_supplies }
+					change_variable = { name = qing_milsup_rep_naval      add = var:qing_milsup_state_cottage_naval }
 					root = {
 						add_to_variable_list = {
 							name = qing_milsupply_report_states
