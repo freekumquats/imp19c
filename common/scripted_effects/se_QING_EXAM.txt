@@ -201,41 +201,76 @@ QING_exam_mint_scholar = {
 }
 
 # ======================================================================
+# [#114 2026-08-09] QING_keju_compute_convene — Scope: COUNTRY (CHI). Store the convene-time
+# DISPLAY vars the "Examinations Convene" prompt (qing_keju.1) shows the player: the live academy
+# HALL count, the "test-takers" gathered across that network, the two option COSTS, and the expected
+# graduate count. Called from qing_keju.1's IMMEDIATE, which runs BEFORE the event window renders —
+# so these vars exist for both the option-preview tooltips and the desc loc. Same-tick country
+# set-then-read is proven safe (this file, QING_exam_compute_pass_rate reads back qing_exam_pass_drag
+# the same tick). The gate + charge themselves read the svalues LIVE (not these vars), so a stale var
+# can never desync the money; these vars are for the TEXT only.
+#
+# The gate/charge svalues (QING_keju_cost_full_svalue / _modest_svalue) and the cohort-size thresholds
+# (>=16 / >=28) are calibrated in the #114 design doc. The expected-graduate ladder here MUST stay in
+# lockstep with the cohort-mint ladder in QING_exam_graduate_cohort (the coupled pair).
+# ======================================================================
+QING_keju_compute_convene = {
+	LOG_enter = { sys = QING  fn = "QING_keju_compute_convene" }
+	QING_exam_init = yes
+	set_variable = { name = qing_keju_hall_count   value = QING_academy_count }
+	# "test-takers": the candidates gathering across the hall network — a narrative figure
+	# (hall count × 500 ≈ the licentiates/graduates of the whole ladder), the readable face
+	# of the same academy count that drives cost + graduates. ~9,500 at the 1763 baseline.
+	set_variable = { name = qing_keju_candidates   value = QING_academy_count }
+	change_variable = { name = qing_keju_candidates  multiply = 500 }
+	set_variable = { name = qing_keju_cost_full     value = QING_keju_cost_full_svalue }
+	set_variable = { name = qing_keju_cost_modest   value = QING_keju_cost_modest_svalue }
+	# refresh the pass-rate here so the cohort at .2 (and any GUI reader) sees a current value at
+	# convene time (cheap; idempotent). The .1 desc itself shows halls/candidates/cost/expected only.
+	QING_exam_compute_pass_rate = yes
+	# expected graduates = 1 lead + hall-band extras (mirrors QING_exam_graduate_cohort's >=16/>=28).
+	set_variable = { name = qing_keju_expected_grads  value = 1 }
+	if = { limit = { var:qing_keju_hall_count >= 16 }  change_variable = { name = qing_keju_expected_grads  add = 1 } }
+	if = { limit = { var:qing_keju_hall_count >= 28 }  change_variable = { name = qing_keju_expected_grads  add = 1 } }
+	LOG_line = { sys = QING  msg = "exam: convene figures computed (halls/candidates/cost/expected) for" }
+	LOG_exit = { sys = QING  fn = "QING_keju_compute_convene"  result = OK }
+}
+
+# ======================================================================
 # QING_exam_graduate_cohort — mint the cycle's graduate cohort. Scope: COUNTRY (CHI).
-# Called from the palace examination (qing_keju.2). The cohort SIZE scales with the
-# ladder's health (a vigorous ladder yields more jinshi; a clogged one, fewer), and
-# the degree mix follows suit (a healthy ladder promotes a top jinshi; a poor one
-# yields only lower juren). Bounded (at most 3 minted per cycle) so the pool cannot
-# balloon — the retirement tick + office draws keep it in a steady band.
+# Called from the palace examination (qing_keju.2). [#114 2026-08-09] The two axes are now
+# separated cleanly: degree QUALITY tracks the PASS-RATE (ladder health net of corruption/捐納
+# drag — a vigorous ladder leads with a jinshi, a clogged one with a juren), while graduate COUNT
+# tracks the concrete ACADEMY HALL network (a wider system physically seats and passes more men).
+# This is the #114 model — halls = quantity, integrity = quality — so corruption now debases the
+# DEGREES awarded rather than shrinking the cohort. Bounded (at most 3 minted per cycle: 1 lead +
+# 2 hall-band extras) so the pool cannot balloon past today's healthy-band ceiling — the age-55
+# retirement tick + office draws keep it in a steady band. Self-computes the hall count, so a caller
+# outside the convene path (e.g. a grace exam) still mints correctly.
 # ======================================================================
 QING_exam_graduate_cohort = {
 	LOG_enter = { sys = QING  fn = "QING_exam_graduate_cohort" }
 	QING_exam_init = yes
-	# [#321 deferred] the cohort now scales off the PASS-RATE metric (ladder health net of
-	# corruption/捐納 drag), recomputed by the triennial scheduler before the cycle convenes —
-	# a truer measure of the intake than the raw ladder alone. Refresh it here too so a cohort
-	# minted outside the triennial path (e.g. a grace exam) still reads a current value.
+	# [#321 deferred] pass-rate metric (ladder health net of corruption/捐納 drag), recomputed by the
+	# triennial scheduler before the cycle convenes — refreshed here too so a cohort minted outside
+	# the triennial path (e.g. a grace exam) still reads a current value.
 	QING_exam_compute_pass_rate = yes
-	# a vigorous intake (pass-rate >=60): a full cohort — a top jinshi + two juren.
+	# [#114] self-contained hall count — the COUNT axis, independent of any convene-time var.
+	set_variable = { name = qing_keju_hall_count  value = QING_academy_count }
+	# LEAD graduate — QUALITY by the pass-rate band (jinshi if the ladder passes merit, else juren).
 	if = {
-		limit = { var:qing_exam_pass_rate >= 60 }
-		QING_exam_mint_scholar = { degree = jinshi }
-		QING_exam_mint_scholar = { degree = juren }
-		QING_exam_mint_scholar = { degree = juren }
-		LOG_line = { sys = QING  msg = "exam: a vigorous cohort graduated (1 jinshi + 2 juren) for" }
-	}
-	# a middling intake (30..59): a jinshi + a juren.
-	else_if = {
 		limit = { var:qing_exam_pass_rate >= 30 }
 		QING_exam_mint_scholar = { degree = jinshi }
-		QING_exam_mint_scholar = { degree = juren }
-		LOG_line = { sys = QING  msg = "exam: a modest cohort graduated (1 jinshi + 1 juren) for" }
 	}
-	# a choked intake (<30): only a single juren scrapes through.
 	else = {
 		QING_exam_mint_scholar = { degree = juren }
-		LOG_line = { sys = QING  msg = "exam: a thin cohort graduated (1 juren, low pass-rate) for" }
 	}
+	# EXTRA graduates — COUNT scales directly with the academy network (literal-RHS thresholds).
+	# 19 halls → +1 (baseline total 2, matching the historic middling cohort); ≥28 → +2 (total 3,
+	# the healthy-band ceiling); <16 → +0 (a thin/war-shrunk network yields the lone laureate).
+	if = { limit = { var:qing_keju_hall_count >= 16 }  QING_exam_mint_scholar = { degree = juren } }
+	if = { limit = { var:qing_keju_hall_count >= 28 }  QING_exam_mint_scholar = { degree = juren } }
+	LOG_line = { sys = QING  msg = "exam: a graduate cohort was seated (lead by pass-rate, size by hall count) for" }
 	LOG_exit = { sys = QING  fn = "QING_exam_graduate_cohort"  result = OK }
 }
 

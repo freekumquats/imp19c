@@ -112,3 +112,61 @@ identical to HEAD; EOL 487/487 ignore-cr match (no churn); no BOM flips; no non-
 
 **Commit:** `4067120d9`, pushed to merge-overnight. Acceptance is boot-gated on the user's
 machine (values render/charge correctly in-game); nothing here is boot-unverifiable.
+
+---
+
+## #2 — #114 "Examinations Convene": cost + test-takers + graduates scale with exam-hall count — DONE
+
+**What:** `qing_keju.1` ("The Examinations Convene") charged a FLAT gold cost (380/220) and its
+palace follow-up `qing_keju.2` minted a graduate cohort sized purely by pass-rate BAND. Neither
+cost, nor any "test-taker" figure, nor graduate COUNT tracked the player's actual exam system — the
+academy network (書院/shuyuan + the two named great academies) that already backs `QING_exam_reach`.
+Make all three scale with that concrete hall count.
+
+**What I did** (design → adversarial review → implement → review, both reviews grounded in source):
+- **script_values (QING_governance_svalues.txt):** new `QING_academy_count` = the raw covered-province
+  academy count, now the SINGLE source of truth for the building set. Rewrote `QING_exam_reach` to
+  `value = QING_academy_count multiply=3 min=0 max=100` (behaviorally identical to the old inline loop
+  — confirmed against `git show HEAD:`). New `QING_keju_cost_full_svalue` (×20, clamp 100–700) and
+  `QING_keju_cost_modest_svalue` (×12, clamp 60–420), centred on the #1-rescale baseline (19 halls →
+  380 / 228).
+- **se_QING_EXAM.txt:** new `QING_keju_compute_convene` stores the convene-time DISPLAY vars
+  (hall count, candidates = halls×500, both costs, expected graduates). Restructured
+  `QING_exam_graduate_cohort` to split the two axes: degree QUALITY by pass-rate (jinshi lead if
+  ≥30, else juren), graduate COUNT by hall thresholds (+1 juren at ≥16, +1 at ≥28). Bounded at 3.
+- **qing_keju.1:** immediate calls `QING_keju_compute_convene`; options .a/.b gate+charge via the
+  new svalues (`treasury >= SVALUE` / `add_treasury = { value = SVALUE multiply = -1 }`) instead of
+  flat 380/220. Gate == charge by construction (same svalue).
+- **loc (qing_office_events_l_english.yml):** .1.desc appends a live line (halls / candidates /
+  "about N graduates expected"); .a.tt / .b.tt interpolate the live cost — all via the proven
+  `[Player.MakeScope.GetVariable('X').GetValue|0]` datafunction.
+
+**Key decisions + why:**
+- *Halls = quantity, integrity = quality* — decoupling COUNT (hall network) from QUALITY (pass-rate)
+  means corruption/捐納 now debases the DEGREES awarded, not the cohort SIZE. A deliberate model
+  shift (a large academy network physically seats more candidates regardless of graft) and the point
+  of the task; logged loudly in the design as a behavioral change from "corruption chokes intake."
+- *Thresholds >=16/>=28, NOT >=8/>=16* — the design-review MEDIUM caught that the CURRENT baseline
+  cohort is **2** graduates (not 3): at 19 halls `QING_exam_reach = 57` is the pass-rate ceiling
+  before corruption drag, so the ≥60 healthy 3-cohort never fires at the 1763 start. Recalibrated so
+  19 halls → 2 (unchanged), ≥28 → 3 (= today's healthy-band max, so the pool can't balloon), <16 → 1.
+- *Costs superseded #1's flat 380/220 for these two options* — the task explicitly wants a dynamic
+  cost; the svalue is centred on #1's baseline so the start is unchanged. Edited BY OPTION (the
+  unrelated `qing_keju.4.b` also uses 220 and stays untouched).
+
+**Reviews (design v1 + applied diff, both adversarial, grounded in real source):**
+- Design v1 review — no blocking issues; 1 MEDIUM (baseline-cohort calibration was misread as 3,
+  actually 2) + optionals, all fixed in design v2 (thresholds recalibrated, single-source-of-truth
+  simplification adopted, corruption-decouple stated honestly, citations tightened).
+- Applied-diff review — VERDICT CLEAN, no critical/medium. All 8 engine rules verified holding
+  (RHS-comparison, exam_reach behavioral identity, gate==charge, same-tick country set-then-read,
+  cohort self-computes hall count, datafunction form, brace/BOM/EOL, forecast==mint ladder). Fixed
+  the one LOW (stale "the display cites" comment). One boot-watch flagged: named-svalue operand in
+  `add_treasury = { value = SVALUE multiply = -1 }` is standard Jomini but eyeball the charge in-game.
+
+**Verification:** braces balanced (111/111, 273/273, 124/124); BOM preserved (svalues none, others
+BOM); no EOL churn (numstat == ignore-cr numstat); all 5 loc-read vars set by compute_convene; no
+`#`/`$` in LOG strings; old QING_exam_reach pre-image confirmed identical; no dangling 380/220 in the
+.1 flow; no identifier collisions.
+
+**Commit:** (below), pushed to merge-overnight. Acceptance is boot-gated (values render/charge in-game).
