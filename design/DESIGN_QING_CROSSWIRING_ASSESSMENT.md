@@ -420,7 +420,7 @@ verification log records which were checked.
 1. **Students-abroad → Self-Strengthening** (`se_QING_STUDENTS.txt:131`) — `QING_students_graduate` → `QING_selfstr_advance={amount=6}` + lifts `qing_bureau_capacity`; returnees feed SHARED `qing_selfstr_progress`.
 2. **Tech-transfer → Self-Strengthening** (`se_QING_TECHTRANSFER.txt:64`) — `QING_techtransfer_bargain` fires `QING_selfstr_found_jiangnan/_fuzhou`. Accelerates, not parallel.
 3. **Early Industrialization → Self-Strengthening** (`se_QING_EARLYINDUS.txt:20`) — reuses SAME counter + verbs, zero duplication.
-4. **Canal/Works → Banner Decay** (`se_QING_CANAL.txt:256`) — low `qing_grain_reserve`(<40) accelerates `qing_banner_decay`.
+4. **Canal/Works → Banner Decay** (`se_QING_CANAL.txt` quarterly tick) — a low capital reserve accelerates `qing_banner_decay`. [#94 slice 3 update] the gate now reads the REAL capital-state fill % `qing_capital_grain_pct`(<40) (has_state_food/_capacity), NOT the retired abstract `qing_grain_reserve`.
 5. **Self-Strengthening → Civic Identity** — `qing_selfstr_progress` sets ceiling for civic/modernarmy drift targets.
 **MISSED:** (1) Canton revenue not explicitly funding Self-Strengthening treasury needs — add trace "Canton customs funded this". (2) Treasure-fleet haul not cross-wired to modernization — let wealth grant bonus selfstr progress on industrial purchases. (3) Canal condition not feeding trade routes — wire `qing_canal_condition` into TRADE_svalues as Jiangnan→North multiplier.
 

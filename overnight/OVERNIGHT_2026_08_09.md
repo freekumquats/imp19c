@@ -341,3 +341,97 @@ as their own reviewed commits per the design's re-sequence. NOTE: per NO-DEFERRA
 design ITSELF mandates separate reviewed commits ("Sequenced as separate reviewed commits… the per-step
 IMPLEMENTATION design is written + re-reviewed before each commit"); the task is a multi-slice build and I
 am building the slices in order, not carving off the hard part.
+
+---
+
+## Task #7 (#94/#95) — SLICE 3 of the concrete grain economy: canal→capital-state REAL FOOD + famine-gate rewire + payload re-point + retire `qing_grain_reserve`
+
+**What it was:** §8b re-sequence step 3 — the substantive slice. Replace the abstract 0..100
+`qing_grain_reserve` counter with REAL engine food on the Beijing/Zhili capital state (the 京倉 capacity
+anchor from slice 2 is what that food fills): the Grand Canal delivers tribute grain via `add_state_food`,
+the capital + banner garrisons + frontier armies draw it down, famine gates read the real fill %, the
+famine-dilemma payloads act on real food, and `qing_grain_reserve` is retired.
+
+**What I did:**
+- **Design-first (§8d spec):** wrote the full per-slice implementation spec grounded in verified primitives
+  (`capital_scope.state` effect scope proven se_DIPLOMACY.txt:1049; `add_state_food` block form + `multiply=-1`
+  proven pool A :2431/:2451 + apotheosis :88; cross-scope `ROOT.var:` read into set_variable proven pool A
+  :2413; `_cmpsvalue` for var-vs-var comparisons; GUI has no country→capital→state→food chain so the capital
+  food/cap is mirrored into CHI vars like the #93 pool bar).
+- **Adversarial review of the spec BEFORE coding (subagent):** returned 2 HIGH + 3 MED + 3 LOW. Both HIGH
+  were CONFIRMED against source and forced a redesign (see Key decisions).
+- **Implemented after the redesign:** rewrote `QING_canal_run_grain_balance` (delivery/draw now FRACTIONS of
+  the measured `has_state_food_capacity`, applied to `capital_scope.state`, result mirrored to
+  `qing_capital_food`/`_cap`/`_pct`); added shared helper `QING_canal_rederive_capital_pct`; deleted the
+  `qing_grain_reserve` init seed; rewired both famine gates (`<40`/`<20` on `qing_capital_grain_pct` with
+  `has_variable`+`cap>0` guards); re-pointed `QING_canal_relief_redirect` (−10% of cap, clamped to food) and
+  `QING_canal_relief_hoard` (+5% of cap, clamped to headroom) to real food using the full precompute-operand
+  idiom; re-pointed the GUI reserve bar + value; reworded `QING_WORKS_MINISTRY_GRAIN_TT`; re-pointed the
+  canal.1 LOG; updated the module header comment + the crosswiring-assessment doc reference.
+
+**Key decisions + why:**
+- **HIGH-1 (CONFIRMED, redesign):** the spec's first draft anchored `FOOD_SCALE=4` on the 京倉's 400
+  `local_food_capacity`, assuming the capital STATE's `has_state_food_capacity ≈ 400`. FALSE:
+  `province_base_values` grants every province `local_food_capacity = 100` (00_hardcoded.txt:141) and the
+  Beijing capital state is **7 provinces** (areas.txt:12969), so its capacity is ~700+400+farms ≈ **1100+**.
+  A fixed ×4 band on ~1100 is <2%/qtr — the reserve would sit pinned near-full and the famine gates would
+  never fire. **FIX:** make delivery + draw PERCENTAGES of the measured capacity (auto-scaling, no false
+  anchor); the fill-ratio pct is already capacity-relative.
+- **HIGH-2 (CONFIRMED, redesign):** a small fixed delivery clamped to near-zero headroom (a near-full state)
+  is discarded every tick → canal condition has no grip on the reserve. **FIX:** make the DRAW a large,
+  ALWAYS-APPLIED structural drain (0.06 of cap/qtr, −0.01 per 常平倉 to floor 0.04) — the 漕運 grain sink the
+  north cannot self-supply. It re-opens headroom every tick, so the headroom-clamped delivery (0.08 × cond ×
+  quota) is never permanently discarded; canal condition sets the equilibrium fill level (sound canal 8% >
+  6% draw → fills; silted 2% < 6% → drains toward famine). Monotone grip = design intent.
+- **Plan-1 preserved, Plan-2 NOT adopted:** the reviewer's fix (a) was "track the reserve as a private
+  sub-quantity" — that is the REJECTED Plan 2 (§9). User LOCKED Plan 1 (real state food, gates read
+  has_state_food). I took fix (b): keep the real-food observable, fix the calibration to be capacity-relative.
+- **FOOD fractions (0.08 delivery / 0.06 draw) are boot-tuned, NOT deferred:** the mechanic is fully built +
+  wired + self-scaling; the two literals are documented knobs a boot confirms (exactly the §3 "boot-test
+  knob" / Q6 the design designates). Slice ships INSTRUMENTED — a `LOG_state` each tick dumps
+  food/cap/pct/delivery/draw (LOG_line has no value field; `$`/`#` banned in msg) — so the first boot reveals
+  whether Zhili's vanilla food regime is surplus or deficit and confirms/retunes in one literal. This is the
+  design's own acceptance gate, not a punt.
+- **MED-1 (illusory guard, corrected honestly):** `cap>0` does NOT detect a moved capital (a state always has
+  cap=100×provinces>0). Relabelled as divide-by-zero + first-tick safety only; for CHI the capital is Beijing
+  and never moves, so the fixed-Zhili 京倉 and the live delivery target never decouple. No per-tick
+  has_building scan added (unwarranted for a case that can't arise for the only tag running this code).
+- **MED-2:** added `has_variable = qing_capital_food_cap` to both famine gates for parity with the pct-derive.
+- **MED-3:** the two payloads implement the FULL precompute-operand/`_cmpsvalue`/block-form idiom (not prose
+  shorthand), and share the `QING_canal_rederive_capital_pct` helper so GUI+gate reflect the choice at once.
+- **LOW-1:** retirement list corrected 13→14 sites (the :58 init guard, deleted with its block).
+- **LOW-2:** DESIGN_QING_CROSSWIRING_ASSESSMENT.md:423 updated (banner-decay coupling now reads real pct).
+- **LOW-3:** final food computed ARITHMETICALLY (initial+delivered−drawn) not by re-reading has_state_food
+  after add_state_food (that re-read reflection is UNVERIFIED; pool A never re-reads).
+
+**Review verdict:** applied-diff code-review returned 1 CRITICAL + 1 LOW, both fixed before commit:
+- **CRITICAL-1 (FIXED):** two `_cmpsvalue` RHS operands used at se_QING_CANAL.txt:209/215/390/435
+  (`qing_cap_room_tmp_cmpsvalue`, `qing_cap_food_tmp_cmpsvalue`) were never minted in
+  `00_event_values.txt` — an undefined named svalue on a comparison RHS evaluates to 0, which INVERTS
+  both clamps (delivery would always overwrite to full headroom → fill to cap every tick regardless of
+  canal condition; draw would always overwrite to full food). This is the mod's #1 error class (the very
+  rule the `_cmpsvalue` block enforces). Fix: minted both as same-scope passthroughs
+  (`{ value = var:qing_cap_room_tmp }` / `{ value = var:qing_cap_food_tmp }`) at 00_event_values.txt:1861-1862,
+  identical idiom to the adjacent `qing_gran_*` set. Both temps are set in-scope immediately before each compare.
+- **LOW-1 (FIXED):** `LOG_state` emits a full ROOT scope-stack dump EVERY quarter forever = permanent heavy
+  debug spam. Fix: gated behind a `qing_canal_log_ticks` counter (0→8) so the dump fires only for the first
+  8 ticks (~2 game-years — enough to watch the reserve equilibrate and tune the two fractions), then goes
+  silent for the campaign. Counter only increments (no drift), self-terminating.
+- Reviewer CONFIRMED clean (once CRITICAL fixed): all other comparison RHS bare-literal or defined-svalue,
+  no `ROOT.var:`/`scope:` on any RHS; add_state_food block form + `multiply=-1` for negatives (all 4 calls);
+  scope integrity (save_scope_as precedes every read, ROOT write-back before remove_variable); value-field
+  var reads legal; equilibrium sign logic correct (delivery + / draw −, dfrac 0.08 > drawfrac 0.06 → fills
+  to ~0.94 cap, headroom-clamp binds, no forced surplus / runaway pop); divide-by-zero + first-tick guarded;
+  retirement complete (zero live qing_grain_reserve refs); braces 215/215; no BOM on se_/gui/event.
+
+**Verification (self, post-fix):** braces balanced (222/222 se_QING_CANAL after the log-gate `if` blocks; the
+minted svalues added exactly 2 open + 2 close to 00_event_values.txt — its 611/610 count is a PRE-EXISTING
+1-off at HEAD 609/608, a stray brace in a comment, not introduced here); repo-wide `qing_grain_reserve` grep = ZERO
+live code refs (only 3 explanatory comments); tick order confirmed (init/update/balance :311-313 run BEFORE
+the gates :329); zero EOL churn on all 6 files (numstat == --ignore-cr-at-eol numstat); BOM per file
+(se_QING_CANAL/gui/event = none as before, loc yml = BOM). `multiply = ROOT.var:` / `value = ROOT.var:` are
+value-field reads (legal; se_AI.txt:1317, pool A :2413), not comparison RHS.
+
+**Status:** SLICE 3 DONE — built, reviewed (1 CRITICAL + 1 LOW both fixed), committed + pushed. Slices 4-6
+(#95 depot 食-share display; qing_granary_stock retirement — the risky 12-consumer migration; canal-condition
+by per-corridor coverage) follow as their own reviewed commits per the re-sequence.

@@ -279,6 +279,235 @@ bypasses `allow` but respects `potential` — all satisfied at P8363). Same macr
 - Seed is idempotent (NOT has_building) + guarded (exists + owner) — a re-mapped capital cannot mis-seed.
 - No consumer reads this building yet (delivery is slice 3) — the slice is inert beyond capacity + flavour.
 
+## 8d. SLICE 3 — IMPLEMENTATION SPEC (2026-08-09) — canal→capital-state REAL FOOD + famine-gate rewire + payload re-point + retire `qing_grain_reserve`
+
+§8b re-sequence step 3. This is the substantive slice: it replaces the abstract 0..100 `qing_grain_reserve`
+counter with REAL engine food on the capital state (the 京倉 capacity anchor placed in slice 2 is what that
+food fills), rewires the famine gates to the real signal, re-points the famine-dilemma payloads, and retires
+`qing_grain_reserve` cleanly. CHI-only; no-BOM/LF file (se_QING_CANAL header 232323 = no BOM).
+
+### Verified primitives driving the shape
+- **`capital_scope.state = { … }` is a PROVEN effect scope** (se_DIPLOMACY.txt:1049 `scope:play_target_country.capital_scope.state = {…}`). = 順天府/Zhili for CHI.
+- **`add_state_food = { value = <var> }`** and negative via **`{ value = <var>  multiply = -1 }`** — proven block forms (pool A se_QING_DECLINE.txt:2431/:2451; apotheosis se_IDEOLOGY_APOTHEOSIS.txt:88 with value/multiply/min/max). Bare `= var:X` is UNATTESTED — never used.
+- **`has_state_food` / `has_state_food_capacity`** read into a `set_variable` (state scope) — proven (pool A :2407-2408; governor_policies:154, 00_governor_policies:140).
+- **Cross-scope read** `set_variable = { value = ROOT.var:X }` inside a state scope — proven (pool A :2413). **Cross-scope write** `ROOT = { set_variable/change_variable … value = scope:S.var:Y }` — proven (pool A :2432); requires the state be `save_scope_as` first.
+- **Comparison RHS:** var-vs-var MUST use the `_cmpsvalue` suffix (pool A :2409, :2427); var-vs-literal (`< 40`, `> 0`) is legal bare. [[imp19c-rhs-comparison-operator-rule]].
+- **GUI** reads Player COUNTRY vars only (no attested country→capital→state→food datafunction chain in the Works panel); so the capital food/cap is MIRRORED into country vars each tick, exactly as the #93 pool bar mirrors `qing_granary_food`/`qing_granary_capacity`.
+
+### CALIBRATION — capacity-RELATIVE fractions, not a fixed FOOD_SCALE (rev after adversarial review 2026-08-09)
+**Adversarial-review HIGH-1 + HIGH-2 (CONFIRMED against source) forced this redesign.** The prior draft
+anchored a `FOOD_SCALE = 4` on the 京倉's 400 `local_food_capacity`, assuming the capital STATE's
+`has_state_food_capacity ≈ 400`. FALSE: `province_base_values` grants EVERY province `local_food_capacity = 100`
+(common/modifiers/00_hardcoded.txt:141), and the Beijing capital state is **7 provinces** (map_data/areas.txt:12969
+— 2640/3250/3500/3783/4109/4401/8363), so its capacity is **~700 (base) + 400 (京倉) + farm buildings ≈ 1100+**,
+NOT 400. A fixed ×4 band (4-20 food/qtr) on a ~1100 capacity is <2%/qtr — the reserve would sit pinned near-full
+on vanilla production and the `<40`/`<20` gates would never fire (HIGH-1); and a small fixed delivery clamped to
+near-zero headroom would be discarded every tick, severing the canal→reserve coupling (HIGH-2).
+
+**Fix (keeps LOCKED Plan 1 — real state food, gates read the real signal; does NOT adopt the rejected Plan-2
+private pool):** make delivery and draw **percentages of the measured `has_state_food_capacity`**, so they
+auto-scale to the true capacity (whatever the boot reveals) with NO hardcoded anchor, AND make the draw a
+**large, always-applied structural drain** — the capital + banner garrisons + frontier armies, the grain sink
+the 漕運 tribute historically EXISTED to feed (the north could not feed itself; that is the whole mechanic).
+Because the draw is applied every tick it continuously RE-OPENS headroom, so the headroom-clamped delivery is
+never permanently discarded — the canal condition sets the equilibrium fill level (HIGH-2 resolved):
+- **draw fraction** = `0.06` of capacity/qtr, minus `0.01` per provincial 常平倉 (`qing_granary_count`, cap 2)
+  → floor `0.04` (preserves the existing granary-shaves-the-draw coupling, se_QING_CANAL.txt:180-186, as a %).
+- **delivery fraction** = `(qing_canal_condition / 100) × 0.08` × `jiangnan_quota` (0.5..1.0), `+0.01` flat if
+  the sea route is open. So at full condition delivery ≈ 8% > draw 6% → the reserve fills; at condition 50
+  delivery ≈ 4% < draw 6% → net −2%/qtr slow drain; at condition 25 delivery ≈ 2% → −4%/qtr toward famine.
+  Canal condition thus has a MONOTONE grip on the equilibrium, which is the design intent.
+- **Why these two literals:** 0.08 delivery > 0.06 draw keeps a sound canal net-positive (fills to near cap);
+  the ~2pt gap makes a silted canal drain at a visible-but-not-whiplash rate (a multi-year decline into famine,
+  matching the historical 19th-c. arc). Rejected: equal frac (no fill headroom ever, permanent knife-edge);
+  >0.15 (a single quarter swings >15% of cap — whiplash before vanilla settles).
+- **These magnitudes are boot-tuned.** Whether they dominate or are dominated by Zhili's VANILLA net food
+  production is genuinely unknown without a boot (Q: is the 1763 capital state a vanilla food surplus or
+  deficit region?). The slice ships INSTRUMENTED — a LOG_line each tick dumping `food / cap / pct / deliver_amt
+  / draw_amt` — so the FIRST boot reveals the regime and confirms/retunes the two fractions. **This is NOT a
+  deferral:** the mechanic is fully built, wired, and self-scaling; the two fractions are documented literals a
+  boot confirms, exactly the "boot-test knob" §3 + Q6 already designate. If the boot shows vanilla swamps a 6%
+  draw, the follow-up is a one-literal bump (draw 0.06→higher) on a shipped correct mechanic, not new design.
+
+### Runaway-pop guard (§8b MEDIUM / Q6) — headroom clamp + always-on draw
+`positive_state_food_growth` (00_hardcoded.txt:1193) fires on food SURPLUS. The delivery leg CLAMPS to
+remaining headroom (`cap − food`) before applying (the SAME clamp pool A uses on its skim leg,
+se_QING_DECLINE.txt:2425-2429), so delivery can never push food PAST capacity. Combined with the always-applied
+draw, near-full the net each tick is `min(delivery, headroom) − draw < 0`, so the reserve sits JUST BELOW cap
+rather than pegged at surplus — the always-on draw is itself the anti-runaway mechanism (the capital is a net
+consumer, so it cannot balloon). Consumption/redirect drains clamp to available food (never below 0).
+
+### Capital-move (§8b MUST-FIX #2) — honest statement (review MED-1: the old cap>0 rationale was illusory)
+Adversarial-review MED-1 (CONFIRMED): a `cap > 0` guard does NOT detect a moved capital — a state with no 京倉
+still has capacity `100 × provinces > 0` (00_hardcoded.txt:141). So `cap > 0` is purely **divide-by-zero
+safety** on the pct-derive, NOT moved-capital protection. Honest position: **for CHI the capital is Beijing and
+does not move**, so the fixed-Zhili 京倉 and the live `capital_scope.state` delivery target never decouple in
+practice. No building-presence gate is added (a per-tick `has_building` scan for a case that cannot arise for
+the only tag that runs this CHI-gated code is unwarranted). The `cap > 0` guard stays, correctly labelled as
+divide-safety only.
+
+### Country vars introduced (all on CHI)
+| var | meaning | written by | read by |
+|---|---|---|---|
+| `qing_capital_food` | capital state's stored food (post-tick mirror, arithmetic) | `QING_canal_run_grain_balance` | GUI value, gate |
+| `qing_capital_food_cap` | capital state's food capacity (mirror) | ″ | GUI value, gate guard |
+| `qing_capital_grain_pct` | `food/cap*100` (0..100), guarded cap>0 | ″ | famine gates `<40`/`<20`, GUI bar fill |
+
+`qing_grain_delivery` / `qing_grain_draw` are re-purposed as the intermediate FRACTION vars (0..~0.08 / 0.04..0.06),
+removed at end of the effect; the state scope multiplies each by the measured capacity to get the food amount.
+
+### QING_canal_run_grain_balance — rewrite (se_QING_CANAL.txt:150-195)
+REPLACE the whole body. Compute the two FRACTIONS in country scope (re-using the existing condition/quota/
+sea-route/granary-count inputs, now as %-of-capacity terms), then apply inside the capital state scope:
+```
+QING_canal_run_grain_balance = {
+	# --- DELIVERY FRACTION (0..~0.08 of capacity/qtr): canal condition × 8%, scaled by the Jiangnan quota. ---
+	set_variable = { name = qing_grain_delivery  value = var:qing_canal_condition }
+	change_variable = { name = qing_grain_delivery  divide = 100 }          # condition -> 0..1
+	change_variable = { name = qing_grain_delivery  multiply = 0.08 }       # -> 0..0.08 at full condition
+	QING_canal_compute_jiangnan_quota = yes
+	change_variable = { name = qing_grain_delivery  multiply = var:qing_canal_jiangnan_quota }   # ×0.5..1.0
+	if = { limit = { has_variable = qing_sea_route_open }  change_variable = { name = qing_grain_delivery  add = 0.01 } }   # flat +1% floor
+	# --- DRAW FRACTION (0.04..0.06 of capacity/qtr): the metropolitan+garrison+frontier grain sink. ---
+	set_variable = { name = qing_grain_draw  value = 0.06 }
+	if = {
+		limit = { has_variable = qing_granary_count  var:qing_granary_count > 0 }
+		set_variable = { name = qing_grain_draw_relief  value = var:qing_granary_count }
+		if = { limit = { var:qing_grain_draw_relief > 2 } set_variable = { name = qing_grain_draw_relief  value = 2 } }
+		change_variable = { name = qing_grain_draw_relief  multiply = 0.01 }
+		change_variable = { name = qing_grain_draw  subtract = var:qing_grain_draw_relief }
+		remove_variable = qing_grain_draw_relief
+	}
+	# --- APPLY to the capital state's REAL food; mirror the result back to CHI for the gate + GUI. ---
+	if = {
+		limit = { exists = capital_scope  exists = capital_scope.state }
+		capital_scope.state = {
+			save_scope_as = qing_cap_state
+			set_variable = { name = qing_cap_food_tmp  value = has_state_food }
+			set_variable = { name = qing_cap_cap_tmp   value = has_state_food_capacity }
+			# DELIVERY amount = cap × delivery-fraction, clamped to headroom (cap − food) — runaway-pop guard.
+			set_variable = { name = qing_cap_deliver_tmp  value = has_state_food_capacity }
+			change_variable = { name = qing_cap_deliver_tmp  multiply = ROOT.var:qing_grain_delivery }
+			set_variable = { name = qing_cap_room_tmp  value = has_state_food_capacity }
+			change_variable = { name = qing_cap_room_tmp  subtract = var:qing_cap_food_tmp }
+			if = { limit = { var:qing_cap_deliver_tmp > qing_cap_room_tmp_cmpsvalue }  set_variable = { name = qing_cap_deliver_tmp  value = var:qing_cap_room_tmp } }
+			if = { limit = { var:qing_cap_deliver_tmp < 0 }  set_variable = { name = qing_cap_deliver_tmp  value = 0 } }   # headroom can be negative if food>cap; no negative delivery
+			if = { limit = { var:qing_cap_deliver_tmp > 0 }  add_state_food = { value = var:qing_cap_deliver_tmp } }
+			# DRAW amount = cap × draw-fraction, clamped to available food so it never drives below 0.
+			set_variable = { name = qing_cap_draw_tmp  value = has_state_food_capacity }
+			change_variable = { name = qing_cap_draw_tmp  multiply = ROOT.var:qing_grain_draw }
+			if = { limit = { var:qing_cap_draw_tmp > qing_cap_food_tmp_cmpsvalue }  set_variable = { name = qing_cap_draw_tmp  value = var:qing_cap_food_tmp } }
+			if = { limit = { var:qing_cap_draw_tmp > 0 }  add_state_food = { value = var:qing_cap_draw_tmp  multiply = -1 } }
+			# MIRROR post-tick food + cap back to CHI. Compute final food ARITHMETICALLY (initial + delivered −
+			# drawn) rather than RE-READING has_state_food after the add_state_food calls — whether an
+			# add_state_food write is reflected in a same-block has_state_food read is UNVERIFIED (pool A never
+			# re-reads); both operands are the already-clamped actual amounts, so the arithmetic is exact.
+			set_variable = { name = qing_cap_foodfinal_tmp  value = var:qing_cap_food_tmp }
+			change_variable = { name = qing_cap_foodfinal_tmp  add = var:qing_cap_deliver_tmp }
+			change_variable = { name = qing_cap_foodfinal_tmp  subtract = var:qing_cap_draw_tmp }
+			ROOT = {
+				set_variable = { name = qing_capital_food      value = scope:qing_cap_state.var:qing_cap_foodfinal_tmp }
+				set_variable = { name = qing_capital_food_cap  value = scope:qing_cap_state.var:qing_cap_cap_tmp }
+			}
+		remove_variable = qing_cap_food_tmp
+		remove_variable = qing_cap_cap_tmp
+		remove_variable = qing_cap_room_tmp
+		remove_variable = qing_cap_deliver_tmp
+		remove_variable = qing_cap_draw_tmp
+		remove_variable = qing_cap_foodfinal_tmp
+	}
+	# DERIVE the 0..100 pct for the gates + GUI bar. cap>0 is DIVIDE-BY-ZERO safety only (review MED-1: a
+	# state ALWAYS has cap = 100×provinces > 0, so this is NOT moved-capital detection). has_variable guards
+	# the first-ever tick before the mirror ran.
+	if = {
+		limit = { has_variable = qing_capital_food_cap  var:qing_capital_food_cap > 0 }
+		set_variable = { name = qing_capital_grain_pct  value = var:qing_capital_food }
+		change_variable = { name = qing_capital_grain_pct  multiply = 100 }
+		change_variable = { name = qing_capital_grain_pct  divide = var:qing_capital_food_cap }
+	}
+	# [slice-3 INSTRUMENTATION — the boot-tuning acceptance gate for the two calibration fractions]
+	# RESOLVED (source check): LOG_line has NO value field — it is `debug_log = "IMP19C $sys$: $msg$"`
+	# (se_LOG.txt:49-56), and a $/# in $msg$ is forbidden (log-string-macro-rule). The PROVEN way to dump
+	# numeric var values is LOG_state (se_LOG.txt:77-82), which writes a header line + `debug_log_scopes = yes`
+	# (the full ROOT scope-stack dump). All five vars are on ROOT (CHI) at this point, so one LOG_state emits
+	# food/cap/pct/delivery/draw for the boot to read. Placed BEFORE the two removes so delivery/draw are dumped.
+	LOG_state = { sys = QING  note = "canal grain balance (capital food/cap/pct + delivery/draw frac in scope dump)" }
+	remove_variable = qing_grain_delivery
+	remove_variable = qing_grain_draw
+}
+```
+
+### QING_canal_init — retire the reserve seed (se_QING_CANAL.txt:57-60)
+DELETE the `qing_grain_reserve` init block (:57-60). KEEP the `qing_canal_condition` init (:53-56). No
+replacement seed needed: the capital state opens with the 京倉 capacity (slice 2) + whatever vanilla food it
+starts with; the first tick mirrors it into `qing_capital_food(_cap)`.
+
+### QING_canal_quarterly_tick — famine gates (se_QING_CANAL.txt:257-300)
+- `:259` `var:qing_grain_reserve < 40` → **`has_variable = qing_capital_food_cap  var:qing_capital_food_cap > 0  var:qing_capital_grain_pct < 40`** (guard + rewire). Keeps the `NOT high_qing_era` suppression. (review MED-2: add the `has_variable` guard for parity with the pct-derive — first-tick safety.)
+- `:269` `var:qing_grain_reserve < 20` → **`has_variable = qing_capital_food_cap  var:qing_capital_food_cap > 0  var:qing_capital_grain_pct < 20`** + the existing `is_ai = no` + cooldown. Preserves player-only + throttle.
+- The qing_canal.2 sea-route gate (:288, `qing_canal_condition < 45`) is UNTOUCHED (condition, not reserve).
+
+### Payload re-point (se_QING_CANAL.txt:307, :324) — FULL idiom, not prose (review MED-3)
+Both replace the `QING_DECLINE_nudge` on the retired var with real-food math on the capital state, using the
+EXACT balance-block idiom (save_scope_as → precompute operands into state vars → `_cmpsvalue` clamp →
+block-form `add_state_food` → re-mirror + re-derive pct under cap>0). Magnitudes are now %-of-capacity (not
+the old fixed ±10/+4), for consistency with the fraction-based balance:
+- `QING_canal_relief_redirect` (:307, was −10 nudge): DRAIN the capital reserve to feed the provinces —
+  ```
+  if = { limit = { exists = capital_scope  exists = capital_scope.state }
+      capital_scope.state = {
+          save_scope_as = qing_cap_state
+          set_variable = { name = qing_cap_food_tmp  value = has_state_food }
+          set_variable = { name = qing_cap_cap_tmp   value = has_state_food_capacity }
+          set_variable = { name = qing_cap_draw_tmp  value = has_state_food_capacity }
+          change_variable = { name = qing_cap_draw_tmp  multiply = 0.10 }             # relief shipment = 10% of cap
+          if = { limit = { var:qing_cap_draw_tmp > qing_cap_food_tmp_cmpsvalue }  set_variable = { name = qing_cap_draw_tmp  value = var:qing_cap_food_tmp } }
+          if = { limit = { var:qing_cap_draw_tmp > 0 }  add_state_food = { value = var:qing_cap_draw_tmp  multiply = -1 } }
+          set_variable = { name = qing_cap_foodfinal_tmp  value = var:qing_cap_food_tmp }
+          change_variable = { name = qing_cap_foodfinal_tmp  subtract = var:qing_cap_draw_tmp }
+          ROOT = { set_variable = { name = qing_capital_food  value = scope:qing_cap_state.var:qing_cap_foodfinal_tmp }
+                   set_variable = { name = qing_capital_food_cap  value = scope:qing_cap_state.var:qing_cap_cap_tmp } }
+          remove_variable = qing_cap_food_tmp  remove_variable = qing_cap_cap_tmp
+          remove_variable = qing_cap_draw_tmp  remove_variable = qing_cap_foodfinal_tmp
+      }
+      QING_canal_rederive_capital_pct = yes    # shared pct-derive helper (see below)
+  }
+  ```
+  KEEP the existing `add_stability = 1` / `sect_pressure −5` / `current_ruler add_popularity 5` lines.
+- `QING_canal_relief_hoard` (:324, was +4 nudge): FIRM the capital reserve — same skeleton but a delivery of
+  `+0.05 × cap` clamped to headroom (`cap − food`, guarded ≥0), `add_state_food = { value = amt }` (positive),
+  `foodfinal = food + amt`. KEEP the `sect_pressure +8` / `reform_pressure +4` / `add_stability −1` lines.
+- **Extract the pct-derive into a shared helper `QING_canal_rederive_capital_pct`** (the guarded
+  `food×100/cap` block) so the balance tick AND both payloads re-derive identically without duplication.
+
+### GUI (gui/qing_works_ministry.gui:234, :240) + loc
+- `:234` value textbox → `[Player.MakeScope.GetVariable('qing_capital_food').GetValue|0] / [Player.MakeScope.GetVariable('qing_capital_food_cap').GetValue|0]` (real food / capacity, matching the #93 pool bar's `_VALUE` shape). Widen the textbox 60→90 like the pool row.
+- `:240` progressbar value → `[FixedPointToFloat( Player.MakeScope.GetVariable('qing_capital_grain_pct').GetValue )]` (the derived %).
+- `QING_WORKS_MINISTRY_GRAIN_TT` (loc :32) reworded: real capital-state food vs its metropolitan capacity (京倉/通倉), filled by the canal, drawn by the capital + banners — drop the "(0–100)" phrasing.
+
+### canal.1 LOG (events/…/qing_canal_events.txt:41)
+Re-point `GetVariable('qing_grain_reserve')` → `GetVariable('qing_capital_grain_pct')` (the surviving signal).
+
+### Retirement completeness (all 14 `qing_grain_reserve` sites — review LOW-1 corrected 13→14)
+WRITERS se_QING_CANAL.txt:59 (init seed) + :58 (its `has_variable` guard) — the whole :57-60 block DELETED;
+:188/:189/:191/:192 (balance — replaced by the fraction rewrite). PAYLOADS :307/:324 (re-pointed to real food).
+READERS :259/:269 (gates — rewired to `qing_capital_grain_pct`), gui:234/:240 (re-pointed to
+`qing_capital_food`/`_cap`/`_pct`), qing_canal_events.txt:41 (LOG re-pointed). Plus the header comment :20
+(update to describe real food). After this slice a repo-wide grep for `qing_grain_reserve` returns ZERO (design
+doc/overnight excluded — and DESIGN_QING_CROSSWIRING_ASSESSMENT.md:423, review LOW-2, gets a one-line update so
+it doesn't misdescribe the now-real-food banner-decay coupling). `qing_granary_stock` is a SEPARATE var (pool A)
+and is OUT of scope here (slice 5).
+
+### Invariants (applied-diff review)
+- Braces balanced; se_QING_CANAL.txt stays no-BOM/LF; GUI/loc keep their BOM; no EOL churn (numstat == --ignore-cr-at-eol numstat).
+- Every var-vs-var comparison uses `_cmpsvalue`; every var-vs-literal is bare. No `ROOT.var:` on a comparison RHS (cross-scope pool reads go into a state var first, then compare via `_cmpsvalue`).
+- `add_state_food` only in the proven block form; negatives via `multiply = -1`.
+- Delivery = %-of-capacity, clamped to headroom (no forced surplus → no runaway pop; the always-on draw is the anti-runaway mechanism); draw/redirect clamped to available food (no sub-zero).
+- Calibration is capacity-RELATIVE (no false fixed anchor); the two fractions (delivery 0.08, draw 0.06) are boot-tuned via the LOG_state dump — mechanic ships fully wired.
+- Famine gates + pct-derive guarded on `has_variable + cap > 0` (divide-safety + first-tick safety; NOT moved-capital detection — labelled honestly per MED-1).
+- Zero `qing_grain_reserve` references remain (grep-verified) before commit.
+- `LOG_state` (not a `value=` LOG_line) carries the numeric instrumentation (se_LOG.txt:77-82); no `$`/`#` in any msg string.
+
 ## 9. Superseded (record)
 - v1: rescale qing_grain_reserve to bespoke 石 — REJECTED (invents a parallel scale).
 - v2 Plan 2: sibling 食-pool mirroring pool A's units but not its add_state_food mechanism — REJECTED by
