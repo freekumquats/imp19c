@@ -682,8 +682,8 @@ trimmed per the §9b overbuild notes.
 dying in the 5–20d schedule delay can't render a dead portrait / no-op options). Braces se 216/216,
 events 75/75; BOM correct; no EOL churn.
 
-**Commit:** (below)
+**Commit:** `2f0879cb5` + pushed.
 
-**Status:** #111b DONE — reviewed (design + code), all findings resolved, committing + pushing. Next in the
+**Status:** #111b DONE — reviewed (design + code), all findings resolved, committed + pushed. Next in the
 build order: SPIKE 1 (create_character + move_country to non-subject foreign c:KOK) + SPIKE 2 (two-sided
 contest svalue as summed percentages), then #112a (caravan superintendent).
