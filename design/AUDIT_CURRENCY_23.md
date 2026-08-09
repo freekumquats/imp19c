@@ -5,10 +5,67 @@
 re-proposed, and (c) the single open question. No fix is designed until a cause is proven AND
 survives adversarial scrutiny. This is deep shared/upstream currency code; spillover cost is high.
 
+## ACCEPTANCE CRITERIA (user, 2026-08-09) — the fix must produce PLAUSIBLE results, not just stop oscillating
+The bug is NOT "fixed" merely when the period-2 oscillation stops. The corrected system must settle to
+steady-state values that are HISTORICALLY PLAUSIBLE — cost of living AMONG them, but not limited to it.
+Concretely, post-fix a `-debug_mode` boot must show:
+- `CURRENCY_essentials_buying_power` (the Economy-tab "cost of living") settling to a stable value whose
+  tael-equivalent is in the right ballpark vs the historical Qing peasant subsistence budget. YARDSTICK
+  (landed — research/QING_COST_OF_LIVING_1763.md): bare-bones subsistence ≈ **~5 taels/adult/yr**
+  (Allen et al. 2011, Beijing 182.6 g silver ÷ 37 = 4.9 tael) / **~15–22 taels/family/yr** (Beijing ~15.5
+  vs Yangzi-Delta 22.59, a sourced regional spread); rice ≈ **1.0–1.5 taels/shih** (Wang Yeh-chien 1972);
+  silver ≈ **700–1,000 wén/tael**. Compare the DERIVATION (Σ12 prices ÷ silver-backed peg, capped 32000)
+  to that: numerator = a basket price, denominator = the currency peg; a steady-state cost of living orders
+  of magnitude off ~5 tael/adult (a peasant "spending" hundreds of taels/yr, or a fraction of a tael) means
+  the trade-price/peg SCALE is mis-calibrated — part of what #23 must correct, not just the oscillation.
+- inflation/deflation % resting near 0 in a well-run economy (not pinned at a ±rail);
+- private_cash_ratio near 1 (not 1.5 ⇄ 0.01);
+- the other currency-chain outputs (ratio, need, circ, silver price) plausible and stable.
+So the fix's design + its adversarial review must include a PLAUSIBILITY pass: re-measure the steady state
+after the fix and check each output against history/sanity. The measured pre-fix numbers (§A) are readings
+off the BROKEN oscillator (two rails of the bug) — they are BOUNDS, not the game's cost of living, and must
+not be treated as a settled value (per the standing "don't conclude off the bug's rail" caution). A clean
+steady-state reading only exists post-fix. Ties to #75 (inflation tuning) and #57 (deflation semantics).
+
 Log source: `~/Downloads/logs.zip`, **Aug 8 22:11** (today), `-debug_mode` (2.26M IMP19C lines),
 CURX forensic dump present (231,864 lines; 17 quarterly PRE/POST snapshots). Newer than any code.
 
 ---
+
+## INPUTS-ARE-PLAUSIBLE COROLLARY (user, 2026-08-09) — the fault is in the MACHINERY, not the seeds
+Logical constraint that narrows the diagnosis: the silver reserve is plausible, and M1 is plausible — so
+if the machinery (the transformation from those inputs to the currency outputs) is CORRECT, it must produce
+plausible outputs. It doesn't → the fault is in the MACHINERY, not the input seeds.
+- CORROBORATED by the measured facts (§A): `circ` (≈M1) is FLAT + plausible across the flip; `silver_reserve_size`
+  is FLAT ~62k + plausible. Both load-bearing inputs are steady and sane, yet essentials/ratio/need swing ~100×.
+  So the oscillator is DOWNSTREAM in the transformation (trade-price → peg → cost-of-living), exactly where the
+  traces localized it — NOT in the seeds.
+- CONSEQUENCE for the fix: do NOT re-tune the seeds (the M1 46M/125M, the reserve size) — they are plausible.
+  The correction belongs in the calculation chain.
+- CONSEQUENCE for acceptance: "plausible cost of living" is not a separate goal bolted on — it is the TEST that
+  the machinery is right. Correct machinery on plausible inputs ⇒ plausible outputs by construction. If the
+  fixed machinery still yields an implausible cost of living from plausible M1 + reserve, it is NOT fixed.
+- AND IF IT IS NOT PLAUSIBLE, IT MUST BE FIXED (user, 2026-08-09). Implausible output from plausible inputs is
+  itself the defect — the scope of #23 is not merely "stop the period-2 oscillation" but "the machinery yields
+  plausible outputs." A fix that damps the swing but leaves the cost of living (or any chain output) implausible
+  is INCOMPLETE and does not close #23. This may mean correcting the transformation's SCALE/formula (the
+  trade-price→peg→cost-of-living chain), not just its stability. Keep pursuing until the outputs are plausible.
+
+## FRAMING (user, 2026-08-09) — the MODEL is sound; the bug is in the precise COMPUTATION
+The existing currency machinery is conceptually sound AS AN ECONOMIC REPRESENTATION (money supply vs
+silver-backed peg → cost-of-living → money-need → inflation/deflation is a reasonable model). The defect is
+a BUG IN THE PRECISE COMPUTATIONS — a specific arithmetic/operand/order-of-operations error in the chain,
+NOT a flaw in the conceptual design. So the fix is SURGICAL, not a redesign:
+- Do NOT rework the economic representation or invent a new model — the concept stays.
+- Do NOT re-tune the plausible seeds (M1, reserve — see corollary above).
+- FIND the exact computation that turns flat, plausible inputs into a ~100× oscillating output: a mis-scaled
+  divide/multiply, a unit mismatch, a sign/clamp error, a stale/wrong operand, an order-of-operations flaw in
+  the trade-price → gbip → peg → essentials_buying_power → private_cash_needed chain. The period-2 signature +
+  flat inputs point to a computation whose own output feeds back into its next input with a bad coefficient.
+- This is consistent with everything measured: plausible flat inputs, sound concept, one transformation
+  misbehaving. The producer-TZ probe is meant to expose WHICH computation (per-TZ local_price = order/stockpile,
+  the sqrt, the /(0.5+pen), etc.) carries the fault. The fix corrects THAT computation so the sound model
+  yields plausible, stable outputs.
 
 ## A. MEASURED FACTS (from the CURX ordered time series — not inferred)
 
