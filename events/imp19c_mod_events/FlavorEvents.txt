@@ -236,9 +236,53 @@ flavor_eve.6 = {
 				duration = 1825
 			}
 		}
+		# [#101 2026-08-08] SIGN FIX: sending aid must COST the treasury, not fill it. Was
+		# `add = root.INCOME_national_total_quarterly` (a POSITIVE credit — the reported "gives
+		# money instead of costing it" bug). Relief now DEBITS the treasury: a quarter of the
+		# nation's quarterly income (~one month's take) is a proportionate one-province relief
+		# sum, negated via multiply = -1 (the proven cost idiom, cf. shortage.1.a).
 		add_treasury = {
-			add = root.INCOME_national_total_quarterly
+			value = root.INCOME_national_total_quarterly
+			divide = 4
+			multiply = -1
 		}
+	}
+	# [#101 2026-08-08] OPEN THE EVER-NORMAL GRANARIES (常平倉) — the historical Qing answer to a
+	# grain shortage: ship real stored grain to the stricken locale instead of buying relief on the
+	# market. CHI-only, shown only when the national pool holds grain. Ships food into the province's
+	# STATE (add_state_food), drains the pool by the same amount, stamps qing_grain_relief — no
+	# treasury cost, but spends down a finite reserve. Mirrors the proven shortage.1.c granary ship
+	# (se_QING_DECLINE.txt ship-leg idiom): save the State scope, size = 1/5 capacity bounded by pool.
+	option = {
+		name = flavor_eve.6.c
+		trigger = {
+			tag = CHI
+			exists = scope:randomized_country_province
+			has_variable = qing_granary_food
+			var:qing_granary_food > 0
+		}
+		scope:randomized_country_province.state = {
+			save_scope_as = qing_hardtimes_state
+			set_variable = { name = qing_gran_ht_ship_tmp  value = has_state_food_capacity }
+			change_variable = { name = qing_gran_ht_ship_tmp  divide = 5 }
+			if = {
+				limit = { var:qing_gran_ht_ship_tmp > { value = ROOT.var:qing_granary_food } }
+				set_variable = { name = qing_gran_ht_ship_tmp  value = ROOT.var:qing_granary_food }
+			}
+			if = {
+				limit = { var:qing_gran_ht_ship_tmp > 0 }
+				add_state_food = { value = var:qing_gran_ht_ship_tmp }
+				ROOT = { change_variable = { name = qing_granary_food  subtract = scope:qing_hardtimes_state.var:qing_gran_ht_ship_tmp } }
+			}
+			remove_variable = qing_gran_ht_ship_tmp
+		}
+		scope:randomized_country_province = {
+			if = {
+				limit = { NOT = { has_province_modifier = qing_grain_relief } }
+				add_province_modifier = { name = qing_grain_relief  duration = 365 }
+			}
+		}
+		add_political_influence = -10
 	}
 	option = {
 		name = flavor_eve.6.b 
