@@ -238,3 +238,48 @@ se 248/248, events 139/139, panel 73/73); BOM preserved (svalues/se/events none,
 churn (numstat == ignore-cr numstat); no `#`/`$` in LOG strings; every var read has a matching set.
 
 **Commit:** `bceccff37`, pushed to merge-overnight. Acceptance is boot-gated (cost/manpower render + charge in-game).
+
+---
+
+## #4 + #5 — exam-degree trait icons: gold border + white→parchment background — DONE
+
+**What:** The 10 exam-degree trait icons (6 civil: 秀 shengyuan / 舉 juren / 貢 gongshi / 進 jinshi /
+翰 hanlin / 譯 fanyi_jinshi; 4 military 武: wu_shengyuan / wu_juren / wu_jinshi / wu_zhuangyuan) are
+54×54 uncompressed BGRA8 circular calligraphy discs. #4: add a gold border rim to ALL 10. #5: change
+the CIVIL set's white background to parchment. Combined into one task — same 10 files, one regeneration.
+
+**What I did:** wrote a COMMITTED, reusable, idempotent post-processor `tools/style_degree_icons.py`
+(the original calligraphy render was an uncommitted one-off — no named generator existed; per the
+icon-generator-canonical rule I made this a proper committed tool, not another one-off). It reads each
+DDS via `dds_icon.read_dds_bgra8`, applies two numpy passes, writes back via `write_dds_bgra8`:
+- **#4 gold rim:** a ~3px annulus at the disc's outer edge (radius from centre, gated on `alpha>8` so it
+  follows the round antialiased boundary and never paints the transparent corners), with a radial
+  gold→light-gold gradient. Applied to all 10.
+- **#5 parchment:** recolor light + low-saturation (white) pixels to warm parchment RGB(228,208,165),
+  scaled by source brightness to keep any vignette. Applied to the CIVIL set only.
+
+**Key decision — parchment by FILE, not per-pixel; military green PRESERVED:**
+- The military 武 set has a deliberate GREEN background (its martial distinguisher). #5 says
+  "white→parchment"; the green is not white, so it stays. First cut used a per-pixel saturation gate
+  to spare green — but the military's pale-green fill (227,238,235) is too near-white and got recolored
+  too (a numeric check caught this: green fill → parchment, erasing the marker). Fixed by gating
+  parchment by the CIVIL/MILITARY file lists (robust, unambiguous) rather than a fragile colour detector.
+- *Rejected alt:* recolor military green→parchment-green for uniformity — dropped; the gold border
+  already unifies the two sets (parchment+gold = civil, green+gold = martial), and erasing the green
+  would lose the at-a-glance civil-vs-military read.
+
+**Reviews:** code-review on the generator script (image-correctness + idempotency, not gameplay) —
+verdict SOUND, no critical/medium. 2 LOW, both comment-accuracy: (1) the idempotency reason cited
+brightness when SATURATION is the actual guard (parchment lum≈209 passes the lum>165 gate; it's spared
+only by sat≈0.276 ≥ 0.14) → corrected the docstring + added a `_saturation(PARCHMENT) >= 0.14` self-check
+assert so a future threshold change can't silently break idempotency; (2) a "blend eases over the ink
+edge" comment overstated the algorithm (it's a hard assignment; dark glyph cores survive via the luma
+gate) → reworded. Both fixed.
+
+**Verification:** rendered before/after contact sheets and eyeballed (civil=parchment+gold, military=
+green+gold, calligraphy + circle shape intact); dims 54×54 + BGRA8 format preserved on all 10; alpha
+(circle shape) untouched; idempotent — re-run produces byte-identical DDS (md5-confirmed, twice); git
+status shows exactly the 10 icons + the new script, no strays.
+
+**Commit:** `8abfed049`, pushed to merge-overnight. Acceptance is boot-gated (icons render correctly on
+the trait cards in-game).
