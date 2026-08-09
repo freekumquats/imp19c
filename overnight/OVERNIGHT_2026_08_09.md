@@ -432,6 +432,6 @@ the gates :329); zero EOL churn on all 6 files (numstat == --ignore-cr-at-eol nu
 (se_QING_CANAL/gui/event = none as before, loc yml = BOM). `multiply = ROOT.var:` / `value = ROOT.var:` are
 value-field reads (legal; se_AI.txt:1317, pool A :2413), not comparison RHS.
 
-**Status:** SLICE 3 DONE — built, reviewed (1 CRITICAL + 1 LOW both fixed), committed + pushed. Slices 4-6
+**Status:** SLICE 3 DONE — built, reviewed (1 CRITICAL + 1 LOW both fixed), committed `2797ca830` + pushed. Slices 4-6
 (#95 depot 食-share display; qing_granary_stock retirement — the risky 12-consumer migration; canal-condition
 by per-corridor coverage) follow as their own reviewed commits per the re-sequence.
