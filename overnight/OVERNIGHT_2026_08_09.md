@@ -846,6 +846,6 @@ exposure; LOW-3 (desc too unrest-specific for the decree-smoothing fold) FIXED �
 be branch-agnostic ("settling a disturbance, brokering a dispute, or easing a hard decree"). Braces
 134/251/267; qing_integ.45 fully retired (def + 3 loc keys gone, 3 fire-sites repointed); no EOL/BOM churn.
 
-**Commit:** (below)
+**Commit:** `273ed896a` + pushed.
 
-**Status:** #15 DONE — reviewed, all findings folded, committing + pushing.
+**Status:** #15 DONE — reviewed, all findings folded, committed + pushed.
