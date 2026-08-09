@@ -1,0 +1,200 @@
+########################################################################
+# se_QING_AQSAQAL_SPIKE.txt — [#112 SPIKE 1] BOOT SPIKE, NOT the shipping feature.
+#
+# PURPOSE: prove the ONE unproven capability #112b rests on before building the real
+# aqsaqal — a created character MOVED to an INDEPENDENT NON-SUBJECT foreign power (c:KOK),
+# resident on Qing soil, that (a) persists, (b) renders on a CHI panel via .GetCharacter,
+# and (c) tears down cleanly if KOK is annexed/removed (on-map-object-lifecycle-symmetry).
+#
+# WHY A SPIKE (imp19c-overnight Rule 1, hard-block #1): the beg corps prove create_character
+# + move_country to c:XNG — but XNG is a CHI SUBJECT pinned to no province; KOK is an
+# INDEPENDENT foreign khanate. The oracle precedent (Invictus create_mercenary.txt:93,
+# move_country = c:MER to an independent tag) de-risks the MOVE itself, but the imp19c
+# specifics — foreign-allegiance persistence, panel render, and teardown — are boot-only.
+#
+# SELF-CONTAINED + INERT ON A NORMAL BOOT: every effect here is gated behind the debug flag
+# qing_aqsaqal_spike_on (set only by the debug console / a dev toggle — see the on_action
+# hook, which is itself wrapped in `if = { limit = { has_global_variable = ... } }`). On a
+# normal boot NONE of this runs, so it cannot break the working baseline. All state uses a
+# distinct qing_aqsaqal_spike_* namespace that the shipping #112b will NOT reuse.
+#
+#   ROOT / this = CHI when called from the boot hook.
+#   State (spike-only):
+#     GLOBAL qing_aqsaqal_spike_on     debug gate (set to run the spike)
+#     CHI    qing_aqsaqal_spike_holder the created foreign char (the link we render from)
+#     char   qing_aqsaqal_spike_marker membership + death/teardown key
+#
+# Sources for the real feature (NOT the spike): Fletcher, Cambridge History of China v.10
+#   (the aqsaqal 阿奇木伯克 Kokandi consul at Kashgar after 1759/1832).
+########################################################################
+
+# ======================================================================
+# QING_aqsaqal_spike_enable / _disable — the DEV TOGGLE. Run from the debug console as
+#   effect QING_aqsaqal_spike_enable = yes
+# (any scope) to arm the spike; the next quarterly Qing pulse then mints + probes the
+# aqsaqal. _disable clears the gate (the already-minted char persists — use it only to stop
+# re-probing). These are the ONLY way the spike ever runs; without the enable it is dead code.
+# ======================================================================
+QING_aqsaqal_spike_enable = {
+	set_global_variable = { name = qing_aqsaqal_spike_on  value = 1 }
+	LOG_line = { sys = QING  msg = "AQSAQAL SPIKE armed — next Qing pulse will mint + probe the Kokandi resident for" }
+}
+QING_aqsaqal_spike_disable = {
+	if = { limit = { has_global_variable = qing_aqsaqal_spike_on }  remove_global_variable = qing_aqsaqal_spike_on }
+	LOG_line = { sys = QING  msg = "AQSAQAL SPIKE disarmed for" }
+}
+
+# ======================================================================
+# QING_aqsaqal_spike_run — mint the probe aqsaqal into c:KOK and log every step so the
+# boot's debug.log proves each capability. Scope: COUNTRY (CHI). Idempotent (guards on the
+# holder var so a re-run never double-mints).
+# ======================================================================
+QING_aqsaqal_spike_run = {
+	LOG_enter = { sys = QING  fn = "QING_aqsaqal_spike_run" }
+	# (0) PRECONDITION — KOK must exist (it does at the 1763 start: own_control_core in
+	# setup/main/00_default.txt; but a later boot from a save where KOK was annexed would not
+	# have it). If absent, log and bail — proving the exists-guard the real feature needs.
+	if = {
+		limit = { NOT = { exists = c:KOK } }
+		LOG_fail = { sys = QING  fn = "QING_aqsaqal_spike_run"  reason = "c:KOK does not exist at this start — cannot mint a Kokandi resident; the real feature must guard on exists=c:KOK" }
+	}
+	else_if = {
+		limit = { NOT = { has_variable = qing_aqsaqal_spike_holder } }
+		# (1) CREATE the character (no modifiers inside create_character — the #90 boot-crash
+		# gotcha; mirror the beg/amban mint). Uzbek Sunni = KOK's primary_culture/religion.
+		create_character = {
+			age = { 40 55 }
+			culture = uzbek
+			religion = sunni
+			add_finesse = { 4 7 }
+			add_martial = { 2 5 }
+			add_charisma = { 4 7 }
+			add_zeal = { 3 6 }
+			save_scope_as = qing_aqsaqal_spike_new
+		}
+		# (2) MOVE him to the INDEPENDENT foreign power c:KOK (the capability under test).
+		# set_as_minor_character first (he is not a ruler/heir of KOK), then move_country —
+		# the proven order from QING_amban_wire (:151 then :183) and the beg mint (:117-118).
+		scope:qing_aqsaqal_spike_new = {
+			set_as_minor_character = THIS
+			move_country = c:KOK
+			set_variable = { name = qing_aqsaqal_spike_marker  value = 1 }
+		}
+		# (3) STORE the link on CHI so the panel can render him via .GetCharacter (test b).
+		set_variable = { name = qing_aqsaqal_spike_holder  value = scope:qing_aqsaqal_spike_new }
+		# (4) PROVE the employer landed on KOK, not CHI (the whole point — a FOREIGN resident).
+		if = {
+			limit = { scope:qing_aqsaqal_spike_new = { employer = c:KOK } }
+			LOG_line = { sys = QING  msg = "AQSAQAL SPIKE ok: created a Kokandi resident and his employer is c:KOK for" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_aqsaqal_spike_run"  reason = "move_country did NOT land the resident on c:KOK — the foreign-allegiance move failed; the real feature cannot rely on it" }
+		}
+	}
+	else = {
+		LOG_line = { sys = QING  msg = "AQSAQAL SPIKE: holder already minted (idempotent re-run) for" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_aqsaqal_spike_run"  result = OK }
+}
+
+# ======================================================================
+# QING_aqsaqal_spike_persist_check — re-read the holder on a later pulse to prove test (a):
+# the foreign-allegiance character PERSISTS across ticks and still points at a live man on
+# KOK. Scope: COUNTRY (CHI). Call from a quarterly pulse under the same debug gate.
+# ======================================================================
+QING_aqsaqal_spike_persist_check = {
+	if = {
+		limit = { has_variable = qing_aqsaqal_spike_holder }
+		if = {
+			limit = { var:qing_aqsaqal_spike_holder = { is_alive = yes  employer = c:KOK } }
+			LOG_line = { sys = QING  msg = "AQSAQAL SPIKE persist ok: the Kokandi resident is alive and still on c:KOK for" }
+		}
+		else_if = {
+			limit = { var:qing_aqsaqal_spike_holder = { is_alive = yes } }
+			LOG_fail = { sys = QING  fn = "QING_aqsaqal_spike_persist_check"  reason = "the resident is alive but his employer is no longer c:KOK — allegiance drifted; the real feature needs a re-anchor path" }
+		}
+		else = {
+			LOG_line = { sys = QING  msg = "AQSAQAL SPIKE persist: the resident died — teardown should have fired (see the death cleanup) for" }
+		}
+	}
+}
+
+# ======================================================================
+# QING_aqsaqal_spike_teardown — test (c): remove the probe cleanly. Two call sites prove the
+# real feature's lifecycle-symmetry: (1) on the resident's own death (an on_character_death
+# hook, mirroring QING_xj_remove_on_death), and (2) if c:KOK is annexed/removed (an
+# on_diplomatic_annex / on_military_annex hook), so no dangling character reference survives.
+# Called in the DYING CHARACTER'S scope for the death path; in CHI scope for the KOK-removed
+# path. Self-guards on the marker/holder so either path is safe to fire once.
+# ======================================================================
+QING_aqsaqal_spike_teardown = {
+	# DEATH PATH: ROOT here is the dying character. If he was the spike aqsaqal, drop the CHI link.
+	if = {
+		limit = {
+			has_variable = qing_aqsaqal_spike_marker
+			exists = c:CHI
+		}
+		c:CHI = {
+			if = {
+				limit = { has_variable = qing_aqsaqal_spike_holder }
+				remove_variable = qing_aqsaqal_spike_holder
+				LOG_line = { sys = QING  msg = "AQSAQAL SPIKE teardown: the Kokandi resident died, CHI link cleared for" }
+			}
+		}
+	}
+}
+
+# ======================================================================
+# [#112 SPIKE 2] QING_super_contest_spike — prove the TWO-SIDED contest svalue renders as summed
+# percentages BEFORE #112c scales it to real events. Needs the spike aqsaqal (SPIKE 1) already
+# minted; mints a throwaway probe superintendent (a CHI courtier stand-in), saves BOTH as the
+# scopes the contest svalue reads (scope:qing_super, scope:qing_aqsaqal), computes the win-prob +
+# its complement, stashes them ON CHI as _shown vars, and LOGs both so debug.log proves they sum
+# to 100. Scope: COUNTRY (CHI). Debug-gated by the caller. Idempotent-ish (re-minting the probe
+# super each run is fine — it is a throwaway; guarded so it doesn't stack a marker).
+# ======================================================================
+QING_super_contest_spike = {
+	if = {
+		limit = { has_variable = qing_aqsaqal_spike_holder }
+		# the aqsaqal side = the SPIKE 1 resident.
+		var:qing_aqsaqal_spike_holder = { save_scope_as = qing_aqsaqal }
+		# the superintendent side = a throwaway probe courtier (created once, reused after).
+		if = {
+			limit = { NOT = { has_variable = qing_super_spike_holder } }
+			create_character = {
+				age = { 40 55 }
+				culture = manchu
+				religion = vajrayana
+				add_finesse = { 4 8 }
+				add_charisma = { 4 8 }
+				add_zeal = { 2 4 }
+				save_scope_as = qing_super_spike_new
+			}
+			scope:qing_super_spike_new = { set_as_minor_character = THIS }
+			set_variable = { name = qing_super_spike_holder  value = scope:qing_super_spike_new }
+		}
+		var:qing_super_spike_holder = { save_scope_as = qing_super }
+		# compute the two-sided odds in CHI scope (both saved scopes live) and stash for the render.
+		set_variable = { name = qing_super_contest_shown       value = qing_super_contest_chance_svalue }
+		set_variable = { name = qing_super_contest_fail_shown  value = qing_super_contest_fail_svalue }
+		LOG_line = { sys = QING  msg = "SUPER CONTEST SPIKE: superintendent win-prob stashed (with its complement) for" }
+	}
+}
+
+# ======================================================================
+# QING_aqsaqal_spike_teardown_kok_lost — the KOK-removed path (CHI scope). If the holder link
+# stands but KOK no longer exists, the resident is orphaned (his employer country is gone).
+# Clear the CHI link so the panel + any downstream read never dereferences a dangling char.
+# (The engine reassigns an annexed country's characters; this proves WE detect it and don't
+# keep a stale pointer — the real feature will re-home or retire him here.)
+# ======================================================================
+QING_aqsaqal_spike_teardown_kok_lost = {
+	if = {
+		limit = {
+			has_variable = qing_aqsaqal_spike_holder
+			NOT = { exists = c:KOK }
+		}
+		remove_variable = qing_aqsaqal_spike_holder
+		LOG_line = { sys = QING  msg = "AQSAQAL SPIKE teardown: c:KOK is gone, orphaned-resident link cleared for" }
+	}
+}

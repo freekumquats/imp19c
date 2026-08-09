@@ -687,3 +687,58 @@ events 75/75; BOM correct; no EOL churn.
 **Status:** #111b DONE — reviewed (design + code), all findings resolved, committed + pushed. Next in the
 build order: SPIKE 1 (create_character + move_country to non-subject foreign c:KOK) + SPIKE 2 (two-sided
 contest svalue as summed percentages), then #112a (caravan superintendent).
+
+---
+
+## Task #8 (#111/#112) — SPIKE 1 + SPIKE 2 (the two §9b-mandated boot spikes)
+
+**What it was:** the §9b adversarial design review mandated two boot spikes before #112b/#112c, because
+they rest on NET-NEW capabilities the design wrongly treated as reuse:
+- **SPIKE 1** — create_character + move_country to an INDEPENDENT NON-SUBJECT foreign power (c:KOK). The beg
+  corps only prove move_country to c:XNG (a CHI SUBJECT); a foreign khanate is unprecedented in-repo.
+- **SPIKE 2** — a TWO-SIDED contest svalue (superintendent stats vs aqsaqal stats -> win-prob) rendered as
+  competing percentages summing to 100. The amban svalue is a ONE-SIDED solo roll; the two-sided form is new.
+
+**Oracle grounding (per the oracle-consultation rule):** the move_country-to-independent headline risk is
+de-risked by Invictus `move_country = c:MER` (create_mercenary.txt:93 — a created char moved to an independent
+tag). script_values CAN read `scope:X.attr` for saved scopes (00_event_values.txt:1807-1810 reads
+scope:target.martial/finesse/zeal/charisma), so the two-sided contest is composable. KOK confirmed to EXIST at
+the 1763 start (own_control_core in setup/main/00_default.txt; primary_culture=uzbek, religion=sunni).
+
+**What I did — SPIKE 1 (se_QING_AQSAQAL_SPIKE.txt, no-BOM/LF):**
+- enable/disable console toggle (set_global_variable qing_aqsaqal_spike_on) — the ONLY way it ever runs;
+- QING_aqsaqal_spike_run: create the aqsaqal (uzbek/sunni, no modifiers inside — #90 gotcha), set_as_minor +
+  move_country = c:KOK, store link on CHI, LOG-assert employer=c:KOK (test b: foreign allegiance landed);
+- persist_check (test a: alive + still on KOK across pulses);
+- TWO teardown paths (test c): on_character_death (marker-guarded) + kok_lost (NOT exists=c:KOK);
+- a debug card on the Caravan panel rendering the c:KOK char via .GetCharacter (icon_oratory, GetCharisma);
+- CRITICAL: minting runs in the QUARTERLY PULSE (se_QING_GOVERNANCE.txt, debug-gated), NOT at
+  on_game_initialized — create_character at construction is the mod's known no-log boot-crash class.
+
+**What I did — SPIKE 2 (QING_governance_svalues.txt + the spike file + caravan loc/card):**
+- qing_super_contest_chance_svalue = 50 + 2×(super finesse+charisma) − 2×(aqsaqal finesse+zeal), clamped
+  10..90; qing_super_contest_fail_svalue = 100 − chance (same CHI scope -> sums to 100);
+- QING_super_contest_spike: saves the SPIKE-1 aqsaqal + a throwaway probe superintendent as scope:qing_aqsaqal
+  / scope:qing_super, computes + stashes both _shown vars, LOGs them;
+- a debug tooltip (QING_AQSAQAL_SPIKE_CONTEST) rendering "Superintendent X% vs aqsaqal Y% (sums to 100)".
+
+**Key decisions + why:**
+- BOTH spikes gated behind ONE global flag, inert on a normal boot (Rule-1 hard-block #1: build the spike, do
+  not just describe it; but it must not touch the working baseline). Distinct qing_*_spike_* namespace the real
+  #112 will NOT reuse.
+- Committed together: SPIKE 2 reuses SPIKE 1's minted aqsaqal, so they're interdependent.
+
+**Review verdict:** code review PASS (inert on normal boot, no crash class, all 10 checks pass). 1 MEDIUM
+FIXED (disable-then-death dangling holder — ungated the death teardown, which already self-guards on the
+marker, so cleanup is arm-independent and test (c) is valid regardless of arm state). 2 LOW accepted for a
+spike (KOK-re-home-while-existing → the real #112b builds the re-anchor path; LOG "…for" trailing preposition
+= existing codebase idiom, zero impact). Reviewer's "SPIKE 2 half-wired" note was a dispatch-timing artifact —
+the producer chain (pulse → effect → _shown vars → loc) is verified complete. Braces all balanced; no EOL/BOM
+churn; 2 create_character blocks, both pulse-called (none at on_game_initialized).
+
+**Commit:** (below)
+
+**Status:** SPIKE 1 + SPIKE 2 BOOT-SPIKE-SHIPPED — debug-gated, reviewed, committed + pushed. ACCEPTANCE IS
+BOOT-GATED (user's separate machine): arm via `effect QING_aqsaqal_spike_enable = yes`, advance a quarter,
+open the Caravan panel, and check debug.log for "AQSAQAL SPIKE ok" (employer=c:KOK), "persist ok", the card
+render, and "SUPER CONTEST SPIKE" percentages summing to 100. #112a/#112b/#112c build on the proven result.
