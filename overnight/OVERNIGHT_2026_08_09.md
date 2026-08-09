@@ -638,3 +638,52 @@ plain; cliff gone; finesse mirror seeded (init) + set (pulse); no other file rea
 
 **Status:** #111a DONE — reviewed CLEAN, committed + pushed. #111b (Hoppo events, trimmed per §9b overbuild
 notes) follows.
+
+---
+
+## Task #8 (#111/#112) — slice #111b: update + expand the Hoppo (粵海關監督) events
+
+**What it was:** per the locked build order, slice 2 of the frontier-customs work — surface #111a's
+graded-yield model in the Hoppo events and EXPAND the single Cohong-crisis event with new stat-driven beats,
+trimmed per the §9b overbuild notes.
+
+**What I did:**
+- Wrote a #111b IMPLEMENTATION design (§9c) + dispatched an adversarial DESIGN review BEFORE code.
+- Design review found 1 HIGH + 2 MED + 1 LOW; folded ALL:
+  - **R1 (HIGH):** `.2.b` transfer-cut must `save_scope_as` the holder then read `scope:X.wealth` —
+    `var:X.wealth` in a value block reads 0 silently (the CANAL trap). Fixed in the spec + code.
+  - **R2 (MED):** venal (.2) and commend (.3) were NOT band-disjoint (a rich-but-honest-looking Hoppo hit
+    both) — added `wealth < 150` to the commend gate. Now disjoint on wealth, not just slot-guarded.
+  - **R3 (MED):** the passive random rotation had NO distinct outcome (identical to the manual
+    QING_canton_rotate_hoppo button) + churn risk on a well-run Hoppo → **CUT ENTIRELY** (§9b's "else cut").
+  - **R4 (LOW):** §F checklist had the impeach order backwards (save must precede marker-strip) — corrected.
+  - **R5:** dropped redundant `is_ai = no` on the new gates (whole caller is already CHI/player).
+- Built:
+  - `se_QING_CANTON.txt`: replaced the single Cohong gate in QING_canton_pulse with THREE mutually-exclusive
+    `if/else_if/else_if` gates — commend (.3, finesse≥9 & squeeze<35 & wealth<150) → venal (.2, wealth≥150 &
+    squeeze<65) → Cohong (.1, squeeze≥65). Bands disjoint; shared qing_gc_event_slot_used guard is the
+    backstop. Cooldowns: commend 7y, venal 5y, Cohong 3y (existing).
+  - `qing_canton_events.txt`: added qing_canton.2 (venal exposure — impeach-抄家 / transfer-調任-for-a-cut /
+    look-away-留中不發) reusing the proven .1.b impeach sequence + the R1 saved-scope wealth read; qing_canton.3
+    (commendation — 嘉獎 plaque+bonus / 內遷 promote-and-lose-him). Portraits via the proven
+    `var:qing_hoppo_holder` idiom.
+  - loc: full text for .2/.3; fixed a stale `220萬兩`→`30萬兩` in .1.a.tt (caught while grounding — the
+    number never matched the −30 customs draw); added a graded-yield clause to .1.desc.
+
+**Key decisions + why:**
+- **Smuggling/supercargo beat CUT** (§9b permitted only if it earned a distinct mechanical outcome — it
+  didn't; its two-sided contest belongs to #112c's net-new svalue). Conserves the shared GC slot.
+- **Venal gate keys on total `wealth`** (code-review LOW-1, ACCEPTED): no separate graft-only stat exists
+  (the siphon is add_gold into his one wealth pool), so total wealth is the only concrete lever — the
+  concrete-over-abstract choice; a synthetic graft ledger wasn't worth it.
+
+**Review verdict:** design review 1 HIGH/2 MED/1 LOW → all folded. Code review **PASS — no critical/medium**;
+2 LOW: LOW-1 accepted (above), **LOW-2 FIXED** (added `is_alive = yes` to the .2/.3 triggers so a Hoppo
+dying in the 5–20d schedule delay can't render a dead portrait / no-op options). Braces se 216/216,
+events 75/75; BOM correct; no EOL churn.
+
+**Commit:** (below)
+
+**Status:** #111b DONE — reviewed (design + code), all findings resolved, committing + pushing. Next in the
+build order: SPIKE 1 (create_character + move_country to non-subject foreign c:KOK) + SPIKE 2 (two-sided
+contest svalue as summed percentages), then #112a (caravan superintendent).
