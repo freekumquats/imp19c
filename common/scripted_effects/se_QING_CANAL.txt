@@ -224,6 +224,9 @@ QING_canal_run_grain_balance = {
 			ROOT = {
 				set_variable = { name = qing_capital_food      value = scope:qing_cap_state.var:qing_cap_foodfinal_tmp }
 				set_variable = { name = qing_capital_food_cap  value = scope:qing_cap_state.var:qing_cap_cap_tmp }
+				# [#95 slice 4] the actual real-food tribute delivered this quarter (the headroom-clamped delivery)
+				# — mirrored for the Works panel's depot-share row. DISPLAY only; adds no new mechanic term.
+				set_variable = { name = qing_canal_grain_shipped  value = scope:qing_cap_state.var:qing_cap_deliver_tmp }
 			}
 			remove_variable = qing_cap_food_tmp
 			remove_variable = qing_cap_cap_tmp
@@ -233,6 +236,33 @@ QING_canal_run_grain_balance = {
 			remove_variable = qing_cap_foodfinal_tmp
 		}
 		QING_canal_rederive_capital_pct = yes
+	}
+	# [#95 slice 4] DEPOT 食-SHARE (display only, NO double-count). Depots feed delivery ONLY through
+	# qing_canal_condition (each 漕運倉 lifts the condition target +8, cap +24 — QING_canal_update_condition
+	# :84-91); this attributes the depots' share of the real food ALREADY shipped this quarter, it adds no new
+	# delivery term. depot_grain = shipped × min(depot×8,24)/condition, clamped to [0, shipped]. Guarded on
+	# condition>0 (divide-safety) and depot_count>0; defaults 0. divide/multiply by var: are value-field reads
+	# (legal, cf. :172); the clamp compares var-vs-literal (bare legal).
+	set_variable = { name = qing_canal_depot_grain  value = 0 }
+	if = {
+		limit = {
+			has_variable = qing_canal_grain_shipped  var:qing_canal_grain_shipped > 0
+			has_variable = qing_depot_count  var:qing_depot_count > 0
+			var:qing_canal_condition > 0
+		}
+		# depot condition-points = min(depot_count × 8, 24) — the exact contribution the condition compute credits.
+		set_variable = { name = qing_canal_depotpts_tmp  value = var:qing_depot_count }
+		change_variable = { name = qing_canal_depotpts_tmp  multiply = 8 }
+		if = { limit = { var:qing_canal_depotpts_tmp > 24 }  set_variable = { name = qing_canal_depotpts_tmp  value = 24 } }
+		# share = depot-points / condition (clamp ≤ 1.0: corruption can drop condition below the depot points).
+		set_variable = { name = qing_canal_depotshare_tmp  value = var:qing_canal_depotpts_tmp }
+		change_variable = { name = qing_canal_depotshare_tmp  divide = var:qing_canal_condition }
+		if = { limit = { var:qing_canal_depotshare_tmp > 1.0 }  set_variable = { name = qing_canal_depotshare_tmp  value = 1.0 } }
+		# depot_grain = shipped × share.
+		set_variable = { name = qing_canal_depot_grain  value = var:qing_canal_grain_shipped }
+		change_variable = { name = qing_canal_depot_grain  multiply = var:qing_canal_depotshare_tmp }
+		remove_variable = qing_canal_depotpts_tmp
+		remove_variable = qing_canal_depotshare_tmp
 	}
 	# [slice-3 INSTRUMENTATION — the boot-tuning acceptance gate for the two calibration fractions]
 	# LOG_line has NO value field (se_LOG.txt:49-56 = debug_log "IMP19C $sys$: $msg$"), and $/# in a msg is

@@ -508,6 +508,44 @@ and is OUT of scope here (slice 5).
 - Zero `qing_grain_reserve` references remain (grep-verified) before commit.
 - `LOG_state` (not a `value=` LOG_line) carries the numeric instrumentation (se_LOG.txt:77-82); no `$`/`#` in any msg string.
 
+## 8e. SLICE 4 — IMPLEMENTATION SPEC (2026-08-09) — #95 depots' 食-share DISPLAY on the Works panel
+
+§8b re-sequence step 4, rides on slice 3's real-food delivery. **DISPLAY ONLY — no new mechanic number.**
+The design's iron constraint (§4 + §8b CONFIRMED "no-double-count"): depots feed delivery ONLY through
+`qing_canal_condition` (each 漕運倉 lifts the condition target +8, cap +24 at 3 depots —
+`QING_canal_update_condition` se_QING_CANAL.txt:84-91). There is NO additive `delivery += depot×D` term and
+this slice adds none — it merely *attributes* a share of the real-food tribute already delivered in slice 3.
+
+### Derivation (honest attribution, weak-sense "exact")
+- **`qing_canal_grain_shipped`** (ROOT/CHI) = the actual food delivered to the capital state this quarter =
+  the headroom-clamped `qing_cap_deliver_tmp` (mirrored inside the existing `ROOT = { … }` block in
+  `QING_canal_run_grain_balance`, alongside the food/cap mirror, BEFORE its `remove_variable`). A useful
+  real-food number in its own right (this quarter's 漕糧 tribute).
+- **`qing_canal_depot_grain`** (ROOT/CHI) = the portion of that tribute attributable to the depots =
+  `shipped × (depot condition-points ÷ total condition)`, where depot condition-points = `min(depot_count×8, 24)`
+  (the exact contribution `QING_canal_update_condition` credits them). Computed in ROOT scope AFTER the
+  `capital_scope.state` block. Guards: only when `condition > 0` and `depot_count > 0` (else 0); the share
+  fraction is clamped to `≤ 1.0` (corruption can drift condition below the depot points, which would
+  otherwise attribute >100% — clamp keeps depot_grain ≤ shipped). All comparisons are var-vs-literal (bare
+  legal); `divide = var:qing_canal_condition` / `multiply = var:…share…` are value-field var reads (legal,
+  cf. :172). No new `_cmpsvalue` operand needed.
+
+### Files touched (slice 4)
+- `se_QING_CANAL.txt` — mirror `qing_canal_grain_shipped` in the ROOT block; add the depot-share compute block
+  after the `capital_scope.state` if. Two new ROOT vars; two scratch temps (`_depotpts_tmp`, `_depotshare_tmp`)
+  removed in-block.
+- `gui/qing_works_ministry.gui` — one display row under the Capital Grain Reserve bar: label +
+  `[…qing_canal_depot_grain…|0] / […qing_canal_grain_shipped…|0]` (depot food out of total tribute shipped).
+- `localization/english/qing_works_ministry_l_english.yml` (BOM) — `QING_WORKS_MINISTRY_DEPOT_GRAIN_LABEL` + `_TT`.
+
+### Invariants (applied-diff review)
+- NO additive delivery term (grep the delivery block: unchanged); depot_grain is purely derived from
+  already-shipped grain. Double-count impossible.
+- Divide-by-zero guarded (`condition > 0`); depot_grain defaults 0 (no depots / never-ran); share clamped ≤ 1.0.
+- Braces balanced; se_QING_CANAL no-BOM/LF, loc keeps BOM; no EOL churn.
+- The STRONG per-depot split-delivery rebalance (remove condition depot-bonus, add direct per-depot delivery)
+  remains DEFERRED with user-flag per §4 — this slice is the weak/through-condition form the design locked.
+
 ## 9. Superseded (record)
 - v1: rescale qing_grain_reserve to bespoke 石 — REJECTED (invents a parallel scale).
 - v2 Plan 2: sibling 食-pool mirroring pool A's units but not its add_state_food mechanism — REJECTED by

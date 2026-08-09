@@ -435,3 +435,40 @@ value-field reads (legal; se_AI.txt:1317, pool A :2413), not comparison RHS.
 **Status:** SLICE 3 DONE — built, reviewed (1 CRITICAL + 1 LOW both fixed), committed `2797ca830` + pushed. Slices 4-6
 (#95 depot 食-share display; qing_granary_stock retirement — the risky 12-consumer migration; canal-condition
 by per-corridor coverage) follow as their own reviewed commits per the re-sequence.
+
+## Task #7 (#94/#95) — SLICE 4 of the concrete grain economy: #95 canal-depot 食-share DISPLAY on the Works panel
+
+**What:** Surface the 漕運倉 depots' contribution to the grain lifeline on the Ministry of Works panel — the
+#95 half of the task. Design §8e (written + implemented this run).
+
+**Key decisions + why:**
+- **DISPLAY ONLY, no new mechanic term (no double-count).** The design's iron constraint (§4, CONFIRMED by
+  the §8b adversarial review): depots feed grain delivery SOLELY through `qing_canal_condition` (each 漕運倉
+  lifts the condition target +8, cap +24 at 3 — `QING_canal_update_condition` :84-91). Adding a direct
+  `delivery += depot×D` term would double-count the condition lift. So slice 4 *attributes* a share of the
+  real food ALREADY shipped in slice 3, adding nothing to the balance.
+- **Two mirrored ROOT/CHI vars:** `qing_canal_grain_shipped` = the headroom-clamped `qing_cap_deliver_tmp`
+  (this quarter's actual 漕糧 tribute, mirrored inside the existing ROOT block); `qing_canal_depot_grain` =
+  `shipped × min(depot×8,24)/condition`, clamped to [0, shipped] (the depots' linear share of the working
+  canal). Computed in ROOT scope after the capital_scope.state block; guarded on condition>0 (divide-safety)
+  and depot_count>0; defaults 0 (depotless / never-ran shows 0/shipped).
+- **Weak/through-condition form** per the locked design; the STRONG per-depot split-delivery rebalance
+  (remove the condition depot-bonus, add a direct per-depot term) stays DEFERRED with a user-flag (§4) — that
+  is a design-locked scope boundary, NOT an invented deferral.
+- **GUI:** value row (no bar — it is a per-quarter flow, not a 0-100 fill), matching the hydraulic-count rows;
+  shows `depot_grain / grain_shipped`. **Loc:** `QING_WORKS_MINISTRY_DEPOT_GRAIN_LABEL` + `_TT`.
+
+**Review verdict:** applied-diff code-review returned CLEAN — no findings across all 9 checks: no double-count
+(delivery block unchanged; depot_grain consumed only by the GUI), every new comparison var-vs-literal (no
+`_cmpsvalue` needed), value-field var reads legal (cf. :172), divide-by-zero guarded (condition>0), scope +
+temp hygiene correct (qing_cap_deliver_tmp still in scope at the mirror; two scratch temps removed in-block;
+the two display vars intentionally persistent), first-tick/depotless defaults 0, GUI+loc wired to the sibling
+idiom. One non-defect design note (share uses live-vs-target condition — sound linear attribution, clamp ≤1.0
+covers the corruption case) acknowledged as intentional.
+
+**Verification (self):** braces balanced (se_QING_CANAL 238/238, gui 156/156); zero EOL churn (numstat ==
+--ignore-cr-at-eol numstat on all 3 code files); BOM per file (se_/gui = none, loc yml = BOM); delivery
+computation byte-unchanged.
+
+**Status:** SLICE 4 DONE — built, reviewed CLEAN, committed `815c0cdcd` + pushed. Slices 5-6 (qing_granary_stock
+retirement — the risky 12-consumer migration; canal-condition by per-corridor coverage) follow.
