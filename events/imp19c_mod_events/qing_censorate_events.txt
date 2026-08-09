@@ -460,10 +460,10 @@ qing_censorate.9 = {
 				}
 				employer = scope:player
 				is_alive = yes
-				has_character_modifier = completely_disgraced_cmod
+				has_trait = completely_disgraced   # [#84] was has_character_modifier = completely_disgraced_cmod
 			}
 			# lift the eligibility bar — he may again be picked as amban / for any GC office (#47).
-			remove_character_modifier = completely_disgraced_cmod
+			QING_char_lift_disgrace = yes   # [#84] was remove_character_modifier = completely_disgraced_cmod
 			scope:player = {
 				# cost: 50 political influence (add_political_influence = -N, anoint_heir_button.txt:98
 				# idiom) + 2 tyranny (add_tyranny, se_QING_CENSORATE.txt:229 idiom) — rehabilitating a
@@ -476,6 +476,38 @@ qing_censorate.9 = {
 		}
 		else = {
 			LOG_fail = { sys = QING  fn = "qing_censorate.9"  reason = "selected man no longer a valid rehabilitation target (or cost unaffordable) for" }
+		}
+	}
+}
+
+# ======================================================================
+# [#84 2026-08-08] LESSER-TAINT EXPIRY. The `disgraced` trait (輕貶 "Scandalously Tainted") replaced
+# the old timed disgraced_cmod modifier, but traits have no engine timer. The authoritative clock is
+# the TIMED VARIABLE qing_taint_expiry (set 1825d by QING_char_apply_taint, auto-lapsing); this hidden
+# event, scheduled at +1826d, removes the trait ONLY once that var has actually lapsed. If the man was
+# RE-TAINTED in the interim the var was refreshed and is still set, so a stale early copy of this event
+# no-ops and RE-SCHEDULES itself for the remaining life of the refreshed clock — so the LAST taint's
+# clock always governs and the trait never lapses early. A hard-disgraced or already-clean man no-ops.
+# The man scope is the tainted courtier (trigger_event fired inside his scope).
+# ======================================================================
+qing_censorate.10 = {
+	type = character_event
+	hidden = yes
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_censorate.10 (lesser-taint expiry check) [ROOT.GetTag]" }
+		if = {
+			# the refreshed clock is still running — do nothing now, re-check when THIS copy's remaining
+			# window elapses (re-arm a day past the var's own lapse to avoid a same-day race).
+			limit = { has_variable = qing_taint_expiry }
+			trigger_event = { id = qing_censorate.10  days = 30 }
+		}
+		else_if = {
+			limit = {
+				has_trait = disgraced
+				NOT = { has_trait = completely_disgraced }
+			}
+			remove_trait = disgraced
+			LOG_line = { sys = QING  msg = "censorate: lesser taint (disgraced) lapsed after 5 years for" }
 		}
 	}
 }

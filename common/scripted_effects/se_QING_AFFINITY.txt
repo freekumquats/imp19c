@@ -387,6 +387,52 @@ QING_char_cleanse = {
 	LOG_exit = { sys = QING  fn = "QING_char_cleanse"  result = OK }
 }
 
+# ======================================================================
+# [#84 2026-08-08] DISGRACE-AS-TRAIT wrappers. The disgrace status is now a card TRAIT (disgraced /
+# completely_disgraced) instead of a character modifier. add_trait does NOT auto-strip its opposites
+# (proven by the exam-degree ladder, which strips manually), so these wrappers keep the two disgrace
+# traits mutually exclusive and centralise the (formerly per-site) add/lift logic. Scope: CHARACTER.
+# ----------------------------------------------------------------------
+# LESSER TAINT (輕貶) — a botched-but-survivable failure. Deprioritizes (svalue -100) but does not bar.
+# Auto-expires after 5 years. The engine has no trait timer, so the authoritative clock is a TIMED
+# VARIABLE (qing_taint_expiry, 1825d, auto-lapsing) that RE-TAINTING refreshes; a hidden qing_censorate.10
+# removes the trait only once that var has actually lapsed (re-arming itself while it is still set). This
+# makes the LAST taint's clock govern — a bare per-add scheduled removal would let an earlier copy strip
+# the trait prematurely on re-taint.
+QING_char_apply_taint = {
+	if = { limit = { has_trait = completely_disgraced }  remove_trait = completely_disgraced }
+	if = { limit = { NOT = { has_trait = disgraced } }  add_trait = disgraced }
+	# 5-year auto-expiry (1825 days). The engine has no trait timer, so a hidden qing_censorate.10 is
+	# scheduled to remove the trait — BUT a bare +1825d event is wrong under RE-TAINTING: a man tainted
+	# again before the first clock runs out would have TWO .10s pending, and the earlier one would strip
+	# the trait ~prematurely. So the authoritative clock is a TIMED VARIABLE (qing_taint_expiry, 1825d,
+	# auto-lapsing): re-tainting REFRESHES it, and .10 only removes the trait once the var has actually
+	# lapsed (NOT has_variable). A stale early .10 then finds the var still set and no-ops. We still fire
+	# the .10 at +1825 as the CHECK trigger; on refresh the newer .10 (or a later pulse) does the removal.
+	set_variable = { name = qing_taint_expiry  value = 1  days = 1825 }
+	trigger_event = { id = qing_censorate.10  days = 1826 }
+	LOG_line = { sys = QING  msg = "char mutate: lesser taint applied (disgraced trait, 5y expiry) for" }
+}
+# HARD DISGRACE (身敗名裂) — corruption sacking / upheld impeachment. The universal eligibility bar.
+# PERMANENT until the Censorate's Rehabilitate lifts it (no auto-expiry — deliberate design change
+# from the old 10y-timed modifier; clearing it is an act of imperial grace, not mere lapse).
+QING_char_apply_hard_disgrace = {
+	if = { limit = { has_trait = disgraced }  remove_trait = disgraced }
+	# escalating from taint to hard disgrace: drop the lesser-taint clock (its trait is gone now).
+	if = { limit = { has_variable = qing_taint_expiry }  remove_variable = qing_taint_expiry }
+	if = { limit = { NOT = { has_trait = completely_disgraced } }  add_trait = completely_disgraced }
+	LOG_line = { sys = QING  msg = "char mutate: HARD disgrace applied (completely_disgraced trait) for" }
+}
+# LIFT — clear whichever disgrace trait the man carries (the Rehabilitate action + the taint expiry).
+QING_char_lift_disgrace = {
+	if = { limit = { has_trait = completely_disgraced }  remove_trait = completely_disgraced }
+	if = { limit = { has_trait = disgraced }  remove_trait = disgraced }
+	# clear the lesser-taint clock too, so a lifted man leaves no dangling expiry var (a pending
+	# qing_censorate.10 then simply finds no trait to remove — a clean no-op).
+	if = { limit = { has_variable = qing_taint_expiry }  remove_variable = qing_taint_expiry }
+	LOG_line = { sys = QING  msg = "char mutate: disgrace lifted (eligibility restored) for" }
+}
+
 # --- Move the numeric corruption stat alone (no trait change). $amount$ signed.
 # For gradual venality creep or an audit's partial clean-up.
 QING_char_corruption = {
