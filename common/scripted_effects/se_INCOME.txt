@@ -567,10 +567,14 @@ INCOME_mitigate_deficit = {
 					}
 				}
 				# Sell silver first if the currency relies on gold
+				# [#87 logfix 2026-08-08] price>0 guard: if silver is unpriced this tick the divide below
+				# would be a Div/0 that voids the set and leaves silver_needed_for_deficit unset; the added
+				# limit clause drops through to INCOME_sell_largest_reserve (hardened) instead.
 				if = {
 					limit = {
 						var:official_currency.var:backing_type = flag:gold_standard
 						var:silver_reserve_size > 0
+						global_var:global_base_import_price_silver > 0
 					}
 					# Calculate the needed amount of gold
 					set_local_variable = {
@@ -591,6 +595,7 @@ INCOME_mitigate_deficit = {
 					limit = {
 						var:official_currency.var:backing_type = flag:silver_standard
 						var:gold_reserve_size > 0
+						global_var:global_base_import_price_gold > 0
 					}
 					set_local_variable = {
 						name = gold_needed_for_deficit
@@ -648,9 +653,20 @@ INCOME_sell_largest_reserve = {
 				}
 			}
 		}
+		# [#87 logfix 2026-08-08] GUARD the divide against a zero metal price. When the economy has not
+		# yet priced a metal this tick (global_base_import_price_$metal$ == 0 — seen in the same boot as a
+		# flood of Div/0 in CONSUME_all_stockpiles / CURRENCY / trade-split), `divide = <that price>` is a
+		# division by zero, so the set_local_variable is VOIDED and never assigns. The subsequent
+		# `amount = local_var:$metal$_needed_for_deficit` then read an UNSET local (97 "Failed to fetch
+		# variable for 'silver_needed_for_deficit'" + the paired "unset scope" / bad-comparison lines,
+		# all traced here via INCOME_mitigate_deficit -> INCOME_sell_largest_reserve -> INCOME_sell_reserves).
+		# Only sell a metal when its price is > 0; if neither is priced this tick, sell nothing — the
+		# deficit is carried and mitigated on the next pass (same fallthrough logic as the no-reserve #19
+		# guard above). CHI hit only the silver branch (gold had 0 such errors) because it takes the else.
 		if = {
 			limit = {
 				local_var:gold_reserve_value_greater_than_silver > 0
+				global_var:global_base_import_price_gold > 0
 			}
 			set_local_variable = {
 				name = gold_needed_for_deficit
@@ -665,7 +681,10 @@ INCOME_sell_largest_reserve = {
 				amount = local_var:gold_needed_for_deficit
 			}
 		}
-		else = {
+		else_if = {
+			limit = {
+				global_var:global_base_import_price_silver > 0
+			}
 			set_local_variable = {
 				name = silver_needed_for_deficit
 				value = {
@@ -679,6 +698,7 @@ INCOME_sell_largest_reserve = {
 				amount = local_var:silver_needed_for_deficit
 			}
 		}
+		# else: neither metal priced this tick — sell nothing, carry the deficit to the next pass.
 	}
 }
 
