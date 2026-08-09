@@ -15,8 +15,11 @@
 # of 石, which have no arithmetic precedent in this codebase and risk overflow):
 #   • qing_canal_condition   0..100  the physical state of the canal + dike system.
 #       Drifts DOWN with neglect (a vacant Works office, high corruption) and UP with
-#       the canal-depot buildings the Works minister raises — so the existing #121
-#       buildings now have a SYSTEMIC payoff, not just a flat modifier.
+#       PER-CORRIDOR coverage — [slice 6] each of the 4 canal-corridor stretches
+#       (Zhejiang→Jiangsu→Shandong→Zhili) that holds a 漕運倉 depot and each of the 2
+#       Yellow-River crossing regions (Henan+Shandong) that holds a 河堤 dike shores the
+#       serial artery, so a GAP in one stretch silts the line regardless of over-building
+#       elsewhere — the #121 buildings have a SYSTEMIC, position-aware payoff.
 #   • [#94 slice 3] the Capital Grain Reserve is now the capital STATE's REAL engine food (has_state_food
 #       vs has_state_food_capacity — the 京倉 building supplies the metropolitan capacity). Each quarter the
 #       canal DELIVERS real food (add_state_food, a % of capacity scaled by condition × Jiangnan quota) and
@@ -66,37 +69,51 @@ QING_canal_init = {
 
 # ======================================================================
 # QING_canal_update_condition — Scope: COUNTRY (CHI). Recompute the canal-system
-# condition from CONCRETE inputs: each canal-depot building (漕運倉, placed by the
-# Works minister) and each dike (河堤) shores the system UP; a vacant Works office and
-# high corruption drag it DOWN. Drifts one step toward the derived target per tick so
-# the meter moves smoothly (the proven target-drift idiom, cf. QING_GOV_update_exam_ladder).
+# condition from CONCRETE, POSITION-AWARE inputs: [slice 6] each canal-corridor stretch
+# (漕運倉 depot) and each Yellow-River crossing region (河堤 dike) that is COVERED shores
+# the serial artery UP; a vacant Works office and high corruption drag it DOWN. Drifts one
+# step toward the derived target per tick so the meter moves smoothly (the proven
+# target-drift idiom, cf. QING_GOV_update_exam_ladder).
 # ======================================================================
 QING_canal_update_condition = {
 	# derive the target from the works in place + the neglect factors.
 	set_variable = { name = qing_canal_cond_target  value = 40 }   # a bare, unmaintained baseline
-	# [#335] CONCRETE BUILDING COUNTS drive the target, not binary presence. The per-type tallies
-	# qing_depot_count (漕運倉) and qing_dike_count (河堤) are computed each gov pulse by
-	# QING_ministry_recompute_perf_works's owned-province sweep (which runs BEFORE this canal tick
-	# in the same pulse, so they are fresh). Each depot lifts the canal target +8 (cap +24 at 3),
-	# each dike +6 (cap +18 at 3) — so raising a SECOND/THIRD depot has a real, diminishing payoff
-	# rather than the old flat +25 for merely owning one. Guarded on the tally existing (the sweep
-	# always sets it, but belt-and-suspenders for an out-of-order call).
-	if = {
-		limit = { has_variable = qing_depot_count  var:qing_depot_count > 0 }
-		set_variable = { name = qing_canal_cond_scratch  value = var:qing_depot_count }
-		change_variable = { name = qing_canal_cond_scratch  multiply = 8 }
-		if = { limit = { var:qing_canal_cond_scratch > 24 } set_variable = { name = qing_canal_cond_scratch  value = 24 } }
-		change_variable = { name = qing_canal_cond_target  add = var:qing_canal_cond_scratch }
-		remove_variable = qing_canal_cond_scratch
-	}
-	if = {
-		limit = { has_variable = qing_dike_count  var:qing_dike_count > 0 }
-		set_variable = { name = qing_canal_cond_scratch  value = var:qing_dike_count }
-		change_variable = { name = qing_canal_cond_scratch  multiply = 6 }
-		if = { limit = { var:qing_canal_cond_scratch > 18 } set_variable = { name = qing_canal_cond_scratch  value = 18 } }
-		change_variable = { name = qing_canal_cond_target  add = var:qing_canal_cond_scratch }
-		remove_variable = qing_canal_cond_scratch
-	}
+	# [#94/#95 slice 6] PER-CORRIDOR COVERAGE drives the target — not the empire-wide building SUM. The
+	# Grand Canal is a SERIAL artery: grain that reaches Yangzhou still has to cross a silted Shandong
+	# stretch to reach Beijing, so a gap in ANY stretch silts the whole line regardless of over-building
+	# elsewhere. The old flat qing_depot_count×8 scored 3 depots stacked in one corridor identically to 1
+	# in each of 3 stretches, and the +24 cap was unreachable (only 2 depots are seeded, both count into
+	# qing_depot_count). Replace it by tallying COVERED corridor stretches: each of the 4 canal-corridor
+	# regions the tribute barges transit (Zhejiang→Jiangsu→Shandong→Zhili, S→N) that holds a depot is
+	# worth a fixed +6 (0..24 — SAME +24 ceiling as before, but now needs SPREAD, not stacking). Uses the
+	# proven any_owned_province{ is_in_region has_building } idiom (qing_settle_frontier_missions.txt:277;
+	# is_in_region already used for the Jiangnan quota below, :319-330). PERSIST qing_canal_depot_corridors
+	# (set fresh each tick, never removed): the slice-4 depot 食-share display in QING_canal_run_grain_balance
+	# — which runs LATER this tick — re-points onto it (design §8g CRITICAL). qing_depot_count/qing_dike_count
+	# remain tallied empire-wide by the Works sweep for their OTHER consumers (GUI, flood MTTH) — untouched.
+	set_variable = { name = qing_canal_depot_corridors  value = 0 }
+	if = { limit = { any_owned_province = { is_in_region = Zhejiang  has_building = qing_canal_depot_building } }  change_variable = { name = qing_canal_depot_corridors  add = 1 } }
+	if = { limit = { any_owned_province = { is_in_region = Jiangsu   has_building = qing_canal_depot_building } }  change_variable = { name = qing_canal_depot_corridors  add = 1 } }
+	if = { limit = { any_owned_province = { is_in_region = Shandong  has_building = qing_canal_depot_building } }  change_variable = { name = qing_canal_depot_corridors  add = 1 } }
+	if = { limit = { any_owned_province = { is_in_region = Zhili     has_building = qing_canal_depot_building } }  change_variable = { name = qing_canal_depot_corridors  add = 1 } }
+	set_variable = { name = qing_canal_cond_scratch  value = var:qing_canal_depot_corridors }
+	change_variable = { name = qing_canal_cond_scratch  multiply = 6 }   # 0..24 (4 corridors × 6)
+	change_variable = { name = qing_canal_cond_target  add = var:qing_canal_cond_scratch }
+	remove_variable = qing_canal_cond_scratch
+	# YELLOW-RIVER DIKE COVERAGE by crossing REGION: the two regions where the Yellow River threatens the
+	# canal (Henan + Shandong). Each covered region is worth +9 (0..18 — SAME +18 ceiling as the old
+	# count=3 cap). Position-aware: a region breached and lost (Taiping-era Henan) drops the river
+	# protection concretely. Haining/Zhejiang is a 海塘 SEAWALL (modelled with qing_dike_building) — NOT
+	# river-crossing protection, so counting REGIONS deliberately excludes it (design §8g). qing_canal_dike_regions
+	# has no cross-effect consumer, so it is removed at the tail.
+	set_variable = { name = qing_canal_dike_regions  value = 0 }
+	if = { limit = { any_owned_province = { is_in_region = Henan     has_building = qing_dike_building } }  change_variable = { name = qing_canal_dike_regions  add = 1 } }
+	if = { limit = { any_owned_province = { is_in_region = Shandong  has_building = qing_dike_building } }  change_variable = { name = qing_canal_dike_regions  add = 1 } }
+	set_variable = { name = qing_canal_cond_scratch  value = var:qing_canal_dike_regions }
+	change_variable = { name = qing_canal_cond_scratch  multiply = 9 }   # 0..18 (2 crossing regions × 9)
+	change_variable = { name = qing_canal_cond_target  add = var:qing_canal_cond_scratch }
+	remove_variable = qing_canal_cond_scratch
+	remove_variable = qing_canal_dike_regions
 	# [#335] a staffed Works office keeps the 河工 works in hand, and a CAPABLE minister keeps them
 	# in BETTER hand: +10 for a filled office, plus the minister's finesse deviation from 7 (±,
 	# ~±5) so a master hydraulic administrator (a 靳輔/高斌 figure) shores the canal further and a
@@ -237,23 +254,26 @@ QING_canal_run_grain_balance = {
 		}
 		QING_canal_rederive_capital_pct = yes
 	}
-	# [#95 slice 4] DEPOT 食-SHARE (display only, NO double-count). Depots feed delivery ONLY through
-	# qing_canal_condition (each 漕運倉 lifts the condition target +8, cap +24 — QING_canal_update_condition
-	# :84-91); this attributes the depots' share of the real food ALREADY shipped this quarter, it adds no new
-	# delivery term. depot_grain = shipped × min(depot×8,24)/condition, clamped to [0, shipped]. Guarded on
-	# condition>0 (divide-safety) and depot_count>0; defaults 0. divide/multiply by var: are value-field reads
-	# (legal, cf. :172); the clamp compares var-vs-literal (bare legal).
+	# [#95 slice 4; slice-6 re-point] DEPOT 食-SHARE (display only, NO double-count). Depots feed delivery
+	# ONLY through qing_canal_condition (each covered corridor lifts the condition target +6, cap +24 —
+	# QING_canal_update_condition slice-6 block); this attributes the depots' share of the real food ALREADY
+	# shipped this quarter, it adds no new delivery term. depot_grain = shipped × depot-points/condition,
+	# clamped to [0, shipped]. [slice 6] depot-points is now the PER-CORRIDOR credit qing_canal_depot_corridors×6
+	# (cap 24), NOT the old empire-wide qing_depot_count×8 — otherwise 3 depots stacked in one corridor (real
+	# condition credit 6) would over-attribute the share up to 4x. Reads the PERSISTED qing_canal_depot_corridors
+	# set earlier this tick in update_condition (design §8g). Guarded on condition>0 (divide-safety) and the
+	# corridor var existing; defaults 0. divide/multiply by var: are value-field reads (legal, cf. :172); the
+	# clamp compares var-vs-literal (bare legal).
 	set_variable = { name = qing_canal_depot_grain  value = 0 }
 	if = {
 		limit = {
 			has_variable = qing_canal_grain_shipped  var:qing_canal_grain_shipped > 0
-			has_variable = qing_depot_count  var:qing_depot_count > 0
+			has_variable = qing_canal_depot_corridors  var:qing_canal_depot_corridors > 0
 			var:qing_canal_condition > 0
 		}
-		# depot condition-points = min(depot_count × 8, 24) — the exact contribution the condition compute credits.
-		set_variable = { name = qing_canal_depotpts_tmp  value = var:qing_depot_count }
-		change_variable = { name = qing_canal_depotpts_tmp  multiply = 8 }
-		if = { limit = { var:qing_canal_depotpts_tmp > 24 }  set_variable = { name = qing_canal_depotpts_tmp  value = 24 } }
+		# depot condition-points = corridors × 6 (0..24) — the exact contribution the slice-6 condition compute credits.
+		set_variable = { name = qing_canal_depotpts_tmp  value = var:qing_canal_depot_corridors }
+		change_variable = { name = qing_canal_depotpts_tmp  multiply = 6 }
 		# share = depot-points / condition (clamp ≤ 1.0: corruption can drop condition below the depot points).
 		set_variable = { name = qing_canal_depotshare_tmp  value = var:qing_canal_depotpts_tmp }
 		change_variable = { name = qing_canal_depotshare_tmp  divide = var:qing_canal_condition }

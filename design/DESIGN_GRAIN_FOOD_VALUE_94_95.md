@@ -604,6 +604,138 @@ The only correct real-food lever today is `se_QING_REVENUE.txt:512-513` (`change
 - Levers guard-init `qing_granary_food` before changing (a lever may fire before the first pool sweep).
 - Braces balanced; se_ files no-BOM/LF; loc keeps BOM; no EOL churn.
 
+## 8g. SLICE 6 — IMPLEMENTATION SPEC (2026-08-09) — canal condition DERIVED from per-corridor coverage
+
+§8b re-sequence step 6 — the FINAL slice of Task #7 (#94/#95). §5(ii): replace the empire-wide
+depot/dike *sum* feeding the condition target with PER-CORRIDOR coverage, so a gap in one stretch
+silts that segment regardless of over-building elsewhere. This is the "bigger rework, its own reviewed
+slice" §5(ii) named.
+
+### The defect it fixes
+`QING_canal_update_condition` (se_QING_CANAL.txt:84-99) derives the condition target from the
+EMPIRE-WIDE tallies `qing_depot_count` / `qing_dike_count`: `+8 per depot (cap +24 at 3)`, `+6 per dike
+(cap +18 at 3)`. Two flaws:
+1. **Position-blind.** Three depots all in Jiangsu score identically to one depot in each of three
+   different stretches — yet the canal is a SERIAL artery: grain that reaches Yangzhou still has to
+   cross a silted Shandong stretch to reach Beijing. A gap anywhere throttles the whole line.
+2. **The cap is unreachable by design.** Only TWO depots are seeded at 1763 (Yangzhou/Jiangsu +
+   Tianjin/Zhili) and the depot building is seed-only (`potential = always no`; only the Works panel's
+   build route adds more, into the single highest-pop province). So `qing_depot_count` is pinned at 2
+   for most games → +16, never the +24 cap. The "diminishing 2nd/3rd depot" story (:81) is inert.
+
+### The geography (VERIFIED — area→region join, this session)
+Grand Canal corridor, south→north (the serial stretches grain transits):
+| Region   | 1763 depot seed            | Yellow-River dike seed        |
+|----------|----------------------------|-------------------------------|
+| Zhejiang | — (Haining is a 海塘 seawall)| Haining seawall (NOT R. dike) |
+| Jiangsu  | **Yangzhou 揚州** (P3208)   | —                             |
+| Shandong | —                          | **Jinan 濟南** (P6485)         |
+| Zhili    | **Tianjin 天津** (P3783)    | —                             |
+| Henan    | (off the canal; feeds R.)  | **Kaifeng+Zhengzhou** (P4931/8622) |
+
+- Canal-corridor coverage = the 4 stretches **Zhejiang, Jiangsu, Shandong, Zhili** — the provinces the
+  tribute barges actually transit between the Yangtze delta and Beijing. (Anhui is a grain-QUOTA source,
+  handled by `QING_canal_compute_jiangnan_quota`; it is NOT on the trunk canal, so it is NOT a corridor
+  stretch here.)
+- Yellow-River dike coverage = the crossing regions **Henan + Shandong** (where the river threatens the
+  canal). Haining/Zhejiang is a coastal 海塘 seawall, so a Zhejiang dike does NOT count as river-crossing
+  protection — the position-awareness the slice is *for*.
+
+### The new derivation (replaces se_QING_CANAL.txt:84-99, term (canal depots) + term (dikes))
+Two helper effects tally COVERED stretches, not raw buildings; each covered stretch is worth a fixed
+band. All O(owned) `any_owned_province` short-circuit tests (proven idiom + scope:
+qing_settle_frontier_missions.txt:277 `any_owned_province = { is_in_region = X NOT = has_building = Y }`;
+`is_in_region` province-scope proven se_QING_CANAL.txt:214 / 00_tradezone_triggers.txt:388).
+
+**Depot corridor coverage → target contribution (replaces the flat +8×count/cap+24):**
+```
+qing_canal_depot_corridors = 0
+for each of { Zhejiang Jiangsu Shandong Zhili }:
+    if any_owned_province in that region has_building qing_canal_depot_building:  += 1   # 0..4
+target += qing_canal_depot_corridors × 6      # 0..24 — SAME +24 ceiling, but now needs SPREAD, not stacking
+```
+At 1763: Jiangsu ✔ + Zhili ✔ = 2 corridors → +12 (vs the old +16 for count=2). The player raising a
+depot in the empty **Shandong** stretch now lifts the target where it matters; a 4th in already-covered
+Jiangsu does nothing — exactly the position story §5(ii) asks for. Ceiling +24 preserved so the
+Works-perf fold (term d) and the drift band are undisturbed at full coverage.
+
+**Yellow-River dike coverage → target contribution (replaces the flat +6×count/cap+18):**
+```
+qing_canal_dike_regions = 0
+for each of { Henan Shandong }:
+    if any_owned_province in that region has_building qing_dike_building:  += 1           # 0..2
+target += qing_canal_dike_regions × 9          # 0..18 — SAME +18 ceiling across the 2 crossing regions
+```
+At 1763: Henan ✔ + Shandong ✔ = 2 → +18 (the old count=3 cap). NOTE (design-review LOW): FOUR
+`qing_dike_building` seeds actually exist — Kaifeng+Zhengzhou (Henan), Jinan (Shandong), AND Haining
+(Zhejiang, se_QING_BUILDINGS.txt:332), so empire-wide `qing_dike_count` = 4 at start, not 3. The Haining
+seed is a 海塘 SEAWALL modelled with the dike building; slice-6 condition correctly counts REGIONS (Henan +
+Shandong), so it excludes Haining/Zhejiang from river-crossing protection — full protection at the 1763
+zenith across the two crossing regions. A region breached and lost (Taiping-era Henan) drops the river
+protection concretely. SEMANTIC-SPLIT note: the flood MTTH (se_QING_DECLINE.txt:2315) still reads the
+empire-wide `qing_dike_count` (which includes the Haining seawall), so a Zhejiang seawall raises flood
+protection there but not canal condition — pre-existing, #115's domain, deliberately NOT reconciled here.
+
+### What is PRESERVED (unchanged — verified against every consumer)
+- **`qing_depot_count` / `qing_dike_count` STILL tallied** empire-wide by the Works sweep
+  (se_QING_MINISTRY.txt:639-640) — they have OTHER consumers this slice must NOT disturb:
+  the Works panel GUI (`qing_works_ministry.gui:325/331`, the raw building counts shown) and the
+  Yellow-River flood MTTH (`se_QING_DECLINE.txt:2315-2318`, `qing_dike_count >= 3 / = 2 / = 0`). Slice 6
+  only changes how *condition* reads geography; it does not retire the counts. (A later, out-of-scope
+  polish could make the flood MTTH per-region too — explicitly NOT this slice; the flood model is #115's
+  domain and already shipped.)
+- **The qing_canal.2 gate (`condition < 45`)** and the **Works-perf fold** (se_QING_MINISTRY.txt:697,
+  `condition − 60 /4`) read `qing_canal_condition` unchanged — they see the same 0..100 meter, now driven
+  by a position-aware target. No gate rewire.
+- **Slice-4 depot 食-share DISPLAY** (se_QING_CANAL.txt:246-266) reads `min(qing_depot_count×8, 24)` to
+  attribute the depots' share of shipped grain. THIS IS A SEAM: the display's "depot condition-points"
+  term (`depot×8 cap 24`) was written to mirror the OLD condition credit. Slice 6 changes the credit to
+  `corridors×6 cap 24`. **FIX (in-scope, not a deferral):** re-point the display's depot-points term to
+  the new basis `qing_canal_depot_corridors × 6` (same 0..24 range) so the attribution stays honest and
+  no-double-count holds (depots still feed delivery ONLY through condition). The share denominator
+  (condition) is unchanged.
+
+### Files touched (slice 6)
+| File | Change |
+|---|---|
+| `se_QING_CANAL.txt` | replace the two flat count→target blocks (:84-99) with two per-corridor coverage tallies + fixed band; re-point the slice-4 display depot-points term to `corridors×6`; update the header comment |
+| (no new operands) | all new vars are LHS or value-field reads; the drift compare still uses the existing `qing_canal_cond_target_cmpsvalue` (:1860) — unchanged |
+
+### Invariants / traps checked
+- **RHS-comparison rule:** the only var-vs-var comparison in the effect is the drift step
+  (`var:qing_canal_condition < qing_canal_cond_target_cmpsvalue`, :135/139) — UNCHANGED, operand exists at
+  00_event_values.txt:1860. The new `any_owned_province = { is_in_region = X has_building = Y }` are
+  TRIGGERS (limit blocks), not comparisons; the `+= band` uses `change_variable add = <literal>`
+  (value-field, legal). No new `_cmpsvalue` needed.
+- **`is_in_region` scope:** province-scope trigger, used INSIDE `any_owned_province` (province scope) —
+  correct (proven se_QING_CANAL.txt:214, :319-330 already do exactly this for the Jiangnan quota).
+- **Ceilings preserved:** depot band ceiling +24 (4×6), dike band ceiling +18 (2×9) — identical to the
+  old caps, so the target's full-coverage maximum and thus the Works-perf fold + drift band are
+  unchanged at the healthy end. Only the PATH to the ceiling changes (spread, not stack).
+- **Scratch var hygiene — CORRECTED (design-review CRITICAL, 2026-08-09):** `qing_canal_depot_corridors`
+  MUST **PERSIST**, NOT be removed. The re-pointed slice-4 display (in `QING_canal_run_grain_balance`) reads
+  it, and that effect runs AFTER `QING_canal_update_condition` in the same tick (`QING_canal_quarterly_tick`
+  :353→:354). Removing it in update_condition would leave the display's `has_variable` guard false → the
+  depot 食-share row reads 0 forever (silent failure). It is re-`set_variable`'d fresh at the top of
+  update_condition every pulse, so it never goes stale — persisting is safe and correct. `qing_canal_dike_regions`
+  has no cross-effect consumer, so it is added to the target then `remove_variable`'d at the tail (safe).
+- **1763 zenith sanity:** depot 2 corridors (+12) + dike 2 regions (+18) + baseline 40 + filled office +
+  minister finesse − corruption drift = a high-but-not-maxed condition, consistent with the current
+  seed=80 and the "canal sound at the zenith" contract. The drift meter eases there over the first years.
+- Braces balanced; se_QING_CANAL.txt stays no-BOM/LF; no loc/GUI change (the GUI still shows the raw
+  `qing_depot_count`/`qing_dike_count`, which remain accurate empire-wide tallies).
+
+### Rejected alternatives (logged per no-deferral rule)
+- **Per-PROVINCE serial-bottleneck model** (multiply stretch conditions so the worst stretch dominates):
+  truer to a serial artery, but needs per-stretch condition state + a product idiom with no precedent, and
+  risks a zero-stretch zeroing the whole line (too punishing vs the current additive band). REJECTED as
+  over-engineering for a 0..100 abstraction; the additive per-corridor band already delivers the
+  position-awareness §5(ii) asks for.
+- **Retire `qing_depot_count`/`qing_dike_count` entirely**, driving GUI + flood MTTH off the corridor
+  tallies too: expands blast radius into #115's shipped flood model for no gain to THIS slice's goal.
+  REJECTED — keep the empire-wide counts for their existing consumers; scope slice 6 to the condition
+  derivation only.
+
 ## 9. Superseded (record)
 - v1: rescale qing_grain_reserve to bespoke 石 — REJECTED (invents a parallel scale).
 - v2 Plan 2: sibling 食-pool mirroring pool A's units but not its add_state_food mechanism — REJECTED by

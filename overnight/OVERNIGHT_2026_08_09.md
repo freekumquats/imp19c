@@ -522,3 +522,66 @@ churn (numstat == --ignore-cr-at-eol numstat); no BOM on any se_ file (correct);
 
 **Status:** SLICE 5 DONE — premise corrected against source, the genuine lever-concretization defect fixed whole,
 reviewed CLEAN, committed `b0481906f` + pushed. Slice 6 (canal-condition by per-corridor coverage) follows.
+
+### Slice 6 — canal condition DERIVED from PER-CORRIDOR coverage (§8g) — the FINAL slice of #94/#95
+
+**What:** `QING_canal_update_condition` derived the Grand Canal condition target from the EMPIRE-WIDE building
+sums `qing_depot_count×8 (cap 24)` + `qing_dike_count×6 (cap 18)`. Two flaws: (1) POSITION-BLIND — 3 depots
+stacked in Jiangsu scored the same as 1 in each of 3 stretches, yet the canal is a SERIAL artery (grain that
+reaches Yangzhou still crosses a silted Shandong stretch to reach Beijing); (2) the +24 cap was UNREACHABLE —
+only 2 depots are seeded and the depot is seed-only, so the count pins at 2 and the "diminishing 2nd/3rd depot"
+story was inert.
+
+**What I did:** replaced both flat count→target blocks with PER-CORRIDOR coverage tallies:
+- **Depot corridor coverage:** the 4 canal-corridor regions the tribute barges transit S→N — Zhejiang,
+  Jiangsu, Shandong, Zhili — each holding a `qing_canal_depot_building` → +6 (0..24, SAME ceiling, now needs
+  SPREAD not stacking). 1763: Jiangsu ✔ + Zhili ✔ = +12. Raising a depot in the empty Shandong stretch now
+  lifts the target where it matters; a 4th in already-covered Jiangsu does nothing.
+- **Yellow-River dike coverage:** the 2 crossing regions Henan + Shandong, each holding a `qing_dike_building`
+  → +9 (0..18, SAME ceiling). 1763: both ✔ = +18. Excludes the Haining/Zhejiang 海塘 SEAWALL (not
+  river-crossing protection) — the exact position-awareness the slice is for.
+- Uses the proven `any_owned_province = { is_in_region = X has_building = Y }` idiom
+  (qing_settle_frontier_missions.txt:277; is_in_region already used for the Jiangnan quota in this file).
+- **Re-pointed the slice-4 depot 食-share DISPLAY** off `qing_depot_count×8` onto the new `corridors×6` basis
+  (mandatory — 3 stacked depots would else over-attribute the share 4×).
+
+**Geography (VERIFIED area→region join this session):** depots Yangzhou→Jiangsu, Tianjin→Zhili; dikes
+Kaifeng+Zhengzhou→Henan, Jinan→Shandong, Haining→Zhejiang (seawall). Regions spelled exactly per regions.txt.
+
+**Key decisions + why:**
+- *PRESERVE `qing_depot_count`/`qing_dike_count` empire-wide* — they have OTHER consumers this slice must not
+  disturb: the Works GUI (:325/331) and the Yellow-River flood MTTH (se_QING_DECLINE.txt:2315-2318). Only the
+  condition DERIVATION changed. (Per-region flood MTTH is #115's domain — explicitly out of scope, logged.)
+- *Additive per-corridor band, NOT a serial-bottleneck product* — a product model is truer to a serial artery
+  but needs per-stretch state + an unprecedented product idiom and over-punishes a single gap; the additive
+  band already delivers the position-awareness §5(ii) asks for. Rejected-alt logged in §8g.
+- *Ceilings preserved (4×6=24, 2×9=18)* so the Works-perf fold (se_QING_MINISTRY.txt:697) + drift band are
+  undisturbed at full coverage — only the PATH to the ceiling changes.
+
+**Design review (adversarial, on the §8g spec BEFORE code):** found 1 CRITICAL + 3 LOW. CRITICAL: I planned to
+`remove_variable qing_canal_depot_corridors` at the tail of update_condition, but the re-pointed slice-4 display
+reads it from `QING_canal_run_grain_balance`, which runs LATER in the same tick (:353→:354) → the depot-share
+row would read 0 forever (silent failure). FIX: PERSIST `qing_canal_depot_corridors` (set fresh each tick,
+never removed); only `qing_canal_dike_regions` (no cross-effect consumer) is removed at tail. LOW: "three seed
+dikes" was off-by-one (four `qing_dike_building` seeds exist incl. the Haining seawall) — corrected the spec's
+seed-state model + noted the flood-MTTH semantic split. All folded into §8g before implementing.
+
+**Applied-diff review (code-review agent, grounded):** CLEAN, no findings. Verified: persistence fix correctly
+applied (set fresh :94, never removed; display guard reads has_variable); tick order correct; braces 252/252;
+no illegal var-on-comparison-RHS (new triggers are is_in_region/has_building literals, drift compare unchanged
+using the existing cmpsvalue); is_in_region province-scope correct; region names exact-match regions.txt;
+ceilings 24/18 correct (natural max, clamp removed safely); dike_regions removal safe; display share arithmetic
+correct, no leftover ×8 basis in executable code; empire-wide tallies + their consumers untouched; no LOG/macro
+violations; no stale-math comments left as current-behavior text.
+
+**Verification (self):** braces 252/252; no BOM; LF-only (0 CRLF); diffstat 60+/40− with EOL-churn check equal
+to plain (no churn); `qing_canal_depot_corridors` persisted (0 removals), `qing_canal_dike_regions` removed;
+ministry/decline/gui consumers show empty diffstat (untouched).
+
+**Commit:** `[below]` + pushed.
+
+**Status:** SLICE 6 DONE — canal condition is now position-aware per-corridor coverage, reviewed CLEAN (design
++ applied diff), committed + pushed. **TASK #7 (#94/#95) COMPLETE** — all 6 slices delivered whole; acceptance
+is boot-gated on the user's machine (the slice-3 LOG_state dump tunes the delivery/draw fractions; the new
+condition target renders on the Works panel via the existing qing_depot_count/qing_dike_count rows + the
+depot-share row now on the corridor basis).
