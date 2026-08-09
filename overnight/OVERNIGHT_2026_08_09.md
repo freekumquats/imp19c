@@ -521,4 +521,4 @@ untouched. Fixed the one nit found (helper comment cited :1876 for the cmpsvalue
 churn (numstat == --ignore-cr-at-eol numstat); no BOM on any se_ file (correct); no new LOG strings.
 
 **Status:** SLICE 5 DONE — premise corrected against source, the genuine lever-concretization defect fixed whole,
-reviewed CLEAN, committed `[below]` + pushed. Slice 6 (canal-condition by per-corridor coverage) follows.
+reviewed CLEAN, committed `b0481906f` + pushed. Slice 6 (canal-condition by per-corridor coverage) follows.
