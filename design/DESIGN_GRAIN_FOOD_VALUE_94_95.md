@@ -211,6 +211,74 @@ three gaps below and start with a NARROWER first slice than §7 step 2 proposed.
    granaryless-default invariant (block-fix above).
 6. Canal-condition by per-corridor coverage.
 
+## 8c. SLICE 2 — IMPLEMENTATION SPEC (2026-08-09) — 京倉 building + init-effect seeding + capacity anchor ONLY
+
+Smallest reviewable slice (§8b re-sequence step 2). NO delivery, NO consumption, NO gate rewire — just
+put the concrete capital-granary building on the map at 1763 start with a real `local_food_capacity`
+anchor, so a later slice has a capacity to fill. Verified facts driving the shape:
+
+- **`add_building_level` RESPECTS `potential`** ([[imp19c-add-building-level-respects-potential]] + the
+  #190 in-repo correction, se_QING_BUILDINGS.txt:105). So the building's `potential` MUST be satisfiable
+  at the seed site. Seed site = **Beijing P8363** — CHI-owned, city, **region Zhili** (verified:
+  areas.txt Beijing area ∈ regions.txt Zhili block:652). Gate = `is_in_region = Zhili` + jurchen/chinese
+  culture (the proven region+culture seeding idiom; province_id in a building potential is UNATTESTED —
+  avoid). This restricts the metropolitan granary to the capital corridor, which is the design intent.
+- **Amenities/pop-growth coupling (§8b MEDIUM / Q6) does NOT bite in this slice.** The hardcoded
+  `positive_state_food_growth` (00_hardcoded.txt:1193, `local_population_growth = 0.02`) fires on a food
+  SURPLUS, not on capacity. This slice adds capacity but NO food-in and — deliberately — NO
+  `local_monthly_food_modifier` (which would raise production → create surplus). So it cannot trigger
+  runaway Beijing pop. That is precisely why §8b isolated capacity-only as the safe first boot.
+- **Capital-move (§8b MUST-FIX #2) does NOT bite in this slice.** No delivery is pointed at
+  `capital_scope.state` yet, so the fixed-Zhili building and a (hypothetical) moved capital cannot
+  decouple. That reconciliation lands in slice 3 when delivery is wired.
+
+### Files touched (slice 2)
+| File | Change |
+|---|---|
+| `common/buildings/qing_granary_buildings.txt` | + new `qing_capital_granary_building` (京倉/通倉) — capacity anchor |
+| `common/scripted_effects/se_QING_BUILDINGS.txt` | + 1 `QING_seed_works_building` seed line at P8363 |
+| `localization/english/qing_works_l_english.yml` | + name + `_desc` (sits with the canal depot, its economy) |
+| `localization/english/imp19c_tooltips_l_english.yml` | + `tooltip_qing_capital_granary_building` results tooltip |
+
+### Building schema (exact)
+```
+qing_capital_granary_building = {
+    local_food_capacity = 400              # metropolitan anchor = 2× the provincial 常平倉 (200).
+    local_monthly_state_loyalty = 0.03     # a fed, provisioned capital is a quiet one (non-food key).
+    local_population_happiness  = 0.03     # ditto. NO local_monthly_food_modifier — see §8c (no surplus).
+    cost = 80
+    time = 200
+    potential = {
+        is_in_region = Zhili
+        OR = { owner = { OR = { country_culture_group = jurchen  country_culture_group = chinese_group } } }
+    }
+    allow = { sufficient_job_slots = yes }
+    modification_display = { 0 = local_food_capacity  1 = local_monthly_state_loyalty  2 = local_population_happiness }
+}
+```
+`local_food_capacity = 400` is a **vanilla-food-scale balance knob** (§1.3) and the calibration lever the
+slice-3 delivery is tuned against — revisit it there, not here. The two flavour keys are non-food (they
+cannot make surplus), keeping the slice genuinely capacity-only w.r.t. the food economy.
+
+### Seed line (exact) — added to `SE_qing_starting_buildings`, adjacent to the canal-depot works block
+```
+QING_seed_works_building = { P = 8363  B = qing_capital_granary_building  NAME = "Beijing 北京 metropolitan granary 京倉/通倉" }
+```
+`QING_seed_works_building` guard = exists + `owner = c:CHI` + `NOT has_building` (ownership-only, idempotent,
+bypasses `allow` but respects `potential` — all satisfied at P8363). Same macro the 5 hydraulic works use.
+
+### Localization (BOM + LF; both files have BOM)
+- `qing_works_l_english.yml`: `qing_capital_granary_building:0 "京倉 Metropolitan Granary"` + `_desc`.
+- `imp19c_tooltips_l_english.yml`: `tooltip_qing_capital_granary_building:0 "#T Results:#! …"` mirroring the
+  granary tooltip shape (colour codes `#G …#!`), so the build-menu hover shows no raw key.
+
+### Invariants (applied-diff review)
+- Braces balanced; BOM per file (buildings/loc BOM; se_ none — 232323 header); no EOL churn.
+- `potential` satisfiable at P8363 (region Zhili + CHI culture=jurchen) → seed lands, does not silently drop.
+- NO `local_monthly_food_modifier` on the building (would break the capacity-only isolation).
+- Seed is idempotent (NOT has_building) + guarded (exists + owner) — a re-mapped capital cannot mis-seed.
+- No consumer reads this building yet (delivery is slice 3) — the slice is inert beyond capacity + flavour.
+
 ## 9. Superseded (record)
 - v1: rescale qing_grain_reserve to bespoke 石 — REJECTED (invents a parallel scale).
 - v2 Plan 2: sibling 食-pool mirroring pool A's units but not its add_state_food mechanism — REJECTED by

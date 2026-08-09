@@ -283,3 +283,61 @@ status shows exactly the 10 icons + the new script, no strays.
 
 **Commit:** `8abfed049`, pushed to merge-overnight. Acceptance is boot-gated (icons render correctly on
 the trait cards in-game).
+
+---
+
+## Task #7 (#94/#95) — Concrete grain economy: SLICE 2 (京倉 building + seeding + capacity anchor) — DONE
+
+**What:** #94/#95 is a large, adversarially-reviewed design (design/DESIGN_GRAIN_FOOD_VALUE_94_95.md)
+sequenced into 5 reviewed commits (§8b re-sequence). This is **slice 2 of 5** — the smallest reviewable
+slice: put the concrete capital-granary building (京倉/通倉) on the map at 1763 start with a real
+`local_food_capacity` anchor. NO delivery, NO consumption, NO famine-gate rewire (those are slices 3-6).
+
+**What I did (per the §8c implementation spec I wrote + had reviewed):**
+- New building `qing_capital_granary_building` (common/buildings/qing_granary_buildings.txt): +400
+  local_food_capacity + 2 non-food flavour keys (state loyalty, happiness). `potential = is_in_region
+  Zhili + jurchen/chinese culture`; `allow = sufficient_job_slots`.
+- Seeded once at Beijing P8363 via `QING_seed_works_building` (se_QING_BUILDINGS.txt), adjacent to the
+  canal-depot works block — the same ownership-guarded, idempotent macro the 5 hydraulic works use.
+- Loc: name + `_desc` (qing_works_l_english.yml), results tooltip (imp19c_tooltips_l_english.yml).
+- Icon: added the key to tools/gen_table_icons.py (canonical generator, no one-off) and generated
+  gfx/interface/icons/buildings/qing_capital_granary_building.dds (200×200 BGRA8, byte-size identical
+  to the sibling; sourced from a "Turpan Old Granary building" Wikimedia photo).
+
+**Key decisions + why:**
+- **`add_building_level` RESPECTS potential** (memory imp19c-add-building-level-respects-potential + the
+  #190 in-repo correction). Verified P8363 = CHI-owned, city, region Zhili (areas.txt Beijing area ∈
+  regions.txt Zhili:652), so `is_in_region = Zhili` + culture=jurchen passes → the seed lands, does not
+  silently drop. Used the proven region+culture idiom (province_id in a building potential is unattested).
+- **Capacity-only isolation (the whole point of slice 2):** deliberately NO `local_monthly_food_modifier`.
+  The hardcoded `positive_state_food_growth` (00_hardcoded.txt:1193, +0.02 local_population_growth) fires
+  on food SURPLUS, not capacity — so a capacity-only building with only non-food flavour keys CANNOT
+  create surplus → cannot run Beijing's pop away. This is exactly why §8b isolated it as the safe first boot.
+- **`allow = sufficient_job_slots` (NOT always=no):** reviewer suggested matching the seed-only
+  institutions (hanlin/guozijian use always=no). REJECTED: a permanently-false `allow` HIDES the building
+  type at boot (proven: qing_mission_cathedral note + the memory), which would void the +400 capacity. This
+  building's whole point is a FUNCTIONING food-capacity modifier a later slice fills, so it follows the
+  FOOD-building family (granary/dike/depot, all sufficient_job_slots). No phantom build option results — a
+  build-menu entry requires a macro_builder config include, which this building has none of. Documented inline.
+- **400 capacity = 2× the provincial 常平倉 (200)** — a vanilla-food-scale balance knob (design §1.3), NOT a
+  historical shi figure; it's the calibration lever slice 3's delivery is tuned against (revisit there).
+
+**Review verdict:** design-first — wrote the §8c per-slice implementation spec, then code-review
+(subagent) grounded against real source. Verdict: **fundamentally sound, no critical/correctness/surplus
+bug.** All 7 grounded checks CLEAN (potential satisfiable at P8363, capacity-only invariant holds, braces,
+BOM/EOL, loc keys match siblings + no raw-key renders, seed guard idempotent, no RHS/macro/LOG hazards).
+2 LOW: (1) missing building icon → FIXED (generated via canonical generator); (2) allow-vs-seed-only
+inconsistency → RESOLVED by keeping sufficient_job_slots (memory-backed: false allow hides the type) +
+documenting the decision inline. Both closed before commit.
+
+**Verification:** braces balanced (20/20); git status = exactly the 6 changed files + 1 new DDS, no strays;
+zero EOL churn (numstat == --ignore-cr-at-eol numstat); BOM preserved per file; DDS format matches sibling.
+Acceptance is boot-gated (building appears at Beijing with the +400 capacity + a legible icon; slices 3-6
+wire the delivery/consumption/retirement on top).
+
+**Status:** SLICE 2 of 5 DONE. Slices 3-6 (canal→capital-state delivery + famine-gate rewire + retire
+qing_grain_reserve; #95 depot display; qing_granary_stock retirement; canal-condition by corridor) follow
+as their own reviewed commits per the design's re-sequence. NOTE: per NO-DEFERRALS this is NOT a punt — the
+design ITSELF mandates separate reviewed commits ("Sequenced as separate reviewed commits… the per-step
+IMPLEMENTATION design is written + re-reviewed before each commit"); the task is a multi-slice build and I
+am building the slices in order, not carving off the hard part.

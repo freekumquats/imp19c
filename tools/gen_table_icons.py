@@ -151,6 +151,7 @@ BUILDINGS = {
  "qing_shuyuan_building":        ("S","Chinese academy shuyuan hall"),
  "qing_yamen_building":          ("S","Chinese yamen government office building"),
  "qing_granary_building":        ("S","Chinese granary storehouse"),
+ "qing_capital_granary_building":("S",["granary building China","traditional Chinese storehouse","Chinese warehouse historic"]),
  "qing_customs_house_building":  ("S","Chinese maritime customs house building"),
  "qing_silk_filature_building":  ("S","silk reeling filature"),
  "qing_porcelain_kiln_building": ("S","Jingdezhen porcelain kiln"),
