@@ -742,3 +742,58 @@ churn; 2 create_character blocks, both pulse-called (none at on_game_initialized
 BOOT-GATED (user's separate machine): arm via `effect QING_aqsaqal_spike_enable = yes`, advance a quarter,
 open the Caravan panel, and check debug.log for "AQSAQAL SPIKE ok" (employer=c:KOK), "persist ok", the card
 render, and "SUPER CONTEST SPIKE" percentages summing to 100. #112a/#112b/#112c build on the proven result.
+
+---
+
+## AUTHORSHIP BUG (recurred) — all 23 wrong-email commits rewritten + root cause closed
+
+**What happened:** the repo-local `git config user.email` was silently set to `chombasew@gmail.com` —
+which is **Sobisonator's** email, NOT freekumquats. Every commit I made this session (23, from f5ef9daac
+through the SPIKE commit) was stamped `freekumquats <chombasew@gmail.com>`, so GitHub attributed them all to
+Sobisonator. This is the SAME bug as 2026-08-08.
+
+**Root cause:** I ran `git commit` trusting the repo config was correct. It wasn't. The authorship-rule memory
+told me to "just run plain git commit" on that assumption — the assumption was the hole.
+
+**Fix (user explicitly authorized the force-push):**
+- Reset `git config user.email` → `freekumquats@users.noreply.github.com`, name → freekumquats.
+- `git filter-branch --env-filter` over `f5ef9daac^..HEAD` rewriting author+committer email
+  chombasew@gmail.com → freekumquats@users.noreply.github.com (23 commits). Genuine upstream Sobisonator
+  commits (below 14c9ed899) untouched. Backup tag merge-overnight-prefix-backup.
+- Verified 0 bad-email commits remain ahead of master (all 1154 now freekumquats@users.noreply.github.com),
+  content byte-identical. `git push --force-with-lease origin merge-overnight` — new tip 20ba5c60b.
+- **HARDENED the memory rule** (imp19c-commit-authorship-rule): it now MANDATES verifying
+  `git config user.email` == freekumquats@users.noreply.github.com BEFORE every commit — trust nothing, the
+  config is not reliably correct. Updated rule body + description + MEMORY.md index.
+
+---
+
+## #13 — gate the "Voting Fraud" event (flavor_eve.3) to elections-held only — DONE
+
+**What it was:** flavor_eve.3 (公 ballot-stuffing / vote-buying) had an EMPTY trigger
+(`# TODO: Has local democracy`), so it fired for EVERY country — absolute monarchies, tribes, the 1763 Qing
+— polities with no ballot to rig. It's dispatched from the quarterly flavor_events_pulse random_events pool
+(oa_wealth_changes.txt), which respects each event's trigger.
+
+**What I did:** added a purpose-named scripted_trigger `holds_contested_elections_trigger`
+(00_imp19c_republic_triggers.txt) = `is_republic = yes` AND at least one competitive party bloc
+(conservative/liberal/radical/reactionary — any). Wired it into flavor_eve.3's trigger.
+
+**Key decisions (from the code review's 3 findings):**
+- **Finding 1 (MED, FIXED):** first draft AND-gated `country_has_standard_parties_trigger` (ALL THREE of
+  conservative+reactionary+liberal) — over-gated, excluding a legit two-party republic. Broadened to ANY one
+  of the four blocs.
+- **Finding 2 (LOW, KEPT + comment reconciled):** `is_republic=yes` also matches personalist/fascist
+  "republics" (all type=republic). A rigged SHAM ballot is exactly where vote-fraud belongs, so these are IN
+  by design; adjusted the comment to say so rather than exclude them.
+- **Finding 3 (LOW, FIXED):** dropped the explicit `government = constitutional_parliament/charter_parliament`
+  OR branches — both are type=republic, so is_republic already subsumes them (verified in 00_albert.txt).
+
+**Review verdict:** code review PASS (mechanical checks all clean); 3 findings all resolved above.
+Braces triggers 50/50, events 256/256; BOM preserved; **EOL: FlavorEvents.txt is CRLF — a Python write
+flattened it to LF (whole-file churn); caught + re-converted to CRLF, final diff 7+/1−**; triggers file LF,
+pure-insert. All four party-bloc keys confirmed defined.
+
+**Commit:** (below)
+
+**Status:** #13 DONE — reviewed, findings folded, committing + pushing.
