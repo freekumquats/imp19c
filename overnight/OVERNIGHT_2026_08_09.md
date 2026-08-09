@@ -578,7 +578,7 @@ violations; no stale-math comments left as current-behavior text.
 to plain (no churn); `qing_canal_depot_corridors` persisted (0 removals), `qing_canal_dike_regions` removed;
 ministry/decline/gui consumers show empty diffstat (untouched).
 
-**Commit:** `[below]` + pushed.
+**Commit:** `ebe449a29` + pushed.
 
 **Status:** SLICE 6 DONE — canal condition is now position-aware per-corridor coverage, reviewed CLEAN (design
 + applied diff), committed + pushed. **TASK #7 (#94/#95) COMPLETE** — all 6 slices delivered whole; acceptance
