@@ -101,14 +101,24 @@ QING_personnel_evaluate_governors = {
 							# (office filled, able minister, high-affinity governor). It was previously
 							# queued ONLY from CASE B (office VACANT), so its own trigger could never pass
 							# at fire time and the event was dead. Low per-quarter chance.
-							random = {
-								chance = 8
-								ROOT = {
-									trigger_event = {
-										id = qing_personnel.3
-										days = { 30 90 }
+							# [#55 2026-08-10] gate on the shared court slot + Personnel department cooldown. This roll sits
+							# INSIDE the per-governor loop and was previously UN-slotted, so several qing_personnel.3 could
+							# queue in ONE pulse (multi-fire) AND it escaped the department hold. The ROOT slot check makes it
+							# fire at most once per pulse (once one governor claims the slot, later iterations skip), and the
+							# dept-cd makes it respect a Personnel stand-down. Claims BOTH on the fire path.
+							if = {
+								limit = { ROOT = { NOT = { has_variable = qing_gc_event_slot_used }  NOT = { has_variable = qing_dept_cd_personnel } } }
+								random = {
+									chance = 8
+									ROOT = {
+										set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [#55] claim the shared court slot
+										set_variable = { name = qing_dept_cd_personnel  days = 270 }  # [#55] hold the Personnel department ~3 quarters
+										trigger_event = {
+											id = qing_personnel.3
+											days = { 30 90 }
+										}
+										LOG_line = { sys = QING  msg = "personnel: promotion event queued (talented governor under able minister) for" }
 									}
-									LOG_line = { sys = QING  msg = "personnel: promotion event queued (talented governor under able minister) for" }
 								}
 							}
 						}
@@ -153,6 +163,13 @@ QING_personnel_evaluate_governors = {
 						if = {
 							limit = {
 								ROOT = { NOT = { has_variable = qing_gc_event_slot_used } }
+								# [#55 2026-08-10] DEPARTMENT stand-down: after ANY Personnel event fires, the whole 吏部
+								# department stands down ~3 quarters so the shared court slot rotates to OTHER departments
+								# (the reported "several Clashes in a row, nothing else fires"). Personnel is evaluated FIRST
+								# in QING_GOV_pulse and had only a per-GOVERNOR cd, so it re-won the slot most quarters. Proven
+								# Revenue/Works dept-cooldown pattern (qing_revenue_event_cooldown 270d) generalized. ROOT
+								# (country) var — distinct from the per-governor qing_personnel_clashed_recently on the governor.
+								ROOT = { NOT = { has_variable = qing_dept_cd_personnel } }
 								NOT = { has_variable = qing_personnel_clashed_recently }
 							}
 							random = {
@@ -165,6 +182,7 @@ QING_personnel_evaluate_governors = {
 								ROOT = { set_variable = { name = qing_personnel_clash_target  value = scope:the_governor } }
 								ROOT = {
 									set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [BT-57] claim court slot after the chance succeeds (mirrors frontier/works rolls)
+									set_variable = { name = qing_dept_cd_personnel  days = 270 }  # [#55] department stands down ~3 quarters — yields the shared slot to other departments
 									trigger_event = {
 										id = qing_personnel.2
 										days = { 30 90 }
