@@ -10,6 +10,9 @@ Per user directive: any magnitude, tuning constant, or best-guess design call ma
 - (#63) qing_monetary_bias VALUES — GUESS: standard_minting 0 / limited_minting −4 / currency_recall −8 / more_minting +4 / issue_bonds +8 (on a 0..100 stress meter where opium flow + reserve terms dominate). Verify: the "monetary-policy bias applied" LOG line + qing_currency_stress series shows a visible-but-not-swamping shift per stance.
 - (#63) mint-CEILING magnitude — GUESS: sound-money ceiling = CURRENCY_minting_rate_cap × factor, factor = 1 + bias×0.0375 (limited −4 → ×0.85 / 15% tighter; recall −8 → ×0.70 / 30% tighter). PROPORTIONAL (a fraction of the cap, not a flat subtraction) so it scales with the cap + can NEVER zero minting regardless of the cap's magnitude (the #63-review MED). Verify: CURRENCY_minting_rate trimmed under a sound-money stance but nonzero.
 
+- (#65) farmstead + reward magnitudes — GUESS: new_world_farmstead_building local_population_capacity_modifier 0.05 + local_lower_strata_output 0.1 + local_monthly_food 0.05; qing_newworld_agriculture modifier global_population_capacity_modifier 0.03 + global_population_growth 0.03; mission gate = ≥3 farmsteads. All best-guess (stack modestly on the automatic qing_nwcrop_abundance=8). Verify: pop logs show a boom, not a runaway.
+- (#65) DESIGN DEVIATION (called out): the design said put the mission beat in qing_colonization_missions.txt, but that tree is FLEET/era-gated (the Pacific Enterprise) — wrong home for a 1763 domestic agrarian beat. Placed it instead in qing_settle_frontier_missions.txt (定牧墾邊, the domestic frontier-settlement tree, requires qing_settle_policy) — thematically correct + not fleet-gated. Flagged for the reviewer.
+
 ## Design/review inventory taken at session start (pending build tasks)
 | Task | Design doc | Adv. review | Disposition |
 |---|---|---|---|
