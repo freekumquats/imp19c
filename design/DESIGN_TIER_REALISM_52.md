@@ -92,3 +92,25 @@ The review found the design's two load-bearing justifications wrong on the facts
 3. **If a cross-good tier spread IS still wanted globally, the lever is DEMAND (safe, global, powerful), not building output (CHI-only, too weak)** — with a MODEST discretionary bump respecting the user's "not a necessity" preference.
 4. **First DIAGNOSE the stockpile trajectory** on the #51 logs (accumulating unbounded vs flow-equilibrium) — that determines whether ANY supply lever can move the steady state.
 => #52 goes back to DIAGNOSIS: confirm raw-silk-vs-silk_cloth + the stockpile trajectory on the logs, and get the user's call on export-premium (#50-ish) vs global-demand-bump vs "it's actually correct for CHI, close it." Do NOT implement the building-output plan.
+
+---
+
+## DIAGNOSIS RESULTS + USER DIRECTION (2026-08-10)
+
+**Diagnostics run on the Aug-9 22:42 #51 logs (the "diagnose first" step):**
+- **Q2 — tea stockpile does NOT accumulate unbounded (reviewer's H2b hypothesis REFUTED).** Tea CHI stockpile sits FLAT at the 1000-10000 band all 21 quarters — a stable flow-equilibrium, not a runaway climb. So the low price is an EQUILIBRIUM demand/stockpile ratio (big stable stockpile, modest demand), NOT accumulation. A supply lever COULD move the steady state, but the mechanism is equilibrium-pricing.
+- **Q1 — the log's "silk" is RAW SILK, not silk_cloth (reviewer's M2 caveat CONFIRMED).** The tzprobe generator reads the good keyed `silk` (tools/gen_econ_tzprobe.py:47), which in this engine is the RAW trade good — an intermediate that is CORRECTLY cheap. silk_cloth (the manufactured consumer luxury) is NOT what the log measured. => the "silk in the grain band" signal is EXPECTED (cheap raw intermediate), NOT a luxury mispricing. Only TEA (a consumer good) is a genuine signal.
+
+**USER DIRECTION (2026-08-10): EXPORT-PREMIUM is the DEFAULT PATH, research to confirm/disprove.**
+The faithful mechanism (per the review + RESEARCH_TRADE_GOOD_PRICES_1763.md): tea/silk were CHEAP IN CHINA, DEAR as an EXPORT / in Europe — dearness was DISTRIBUTIONAL (voyage risk, Cape-route margin, European retail), NOT productive/domestic. So #52 defaults to modelling an EXPORT PREMIUM (China-domestic price stays low = correct; the good becomes dear when exported / in European tradezones), NOT trimming Chinese production (which would wrongly raise the China-domestic price). This is #50 penetration/tradezone territory and likely needs the conditionally-authorized #50 cap-lift.
+- Research task dispatched to CONFIRM or DISPROVE the export-premium framing: was the China-domestic price of tea/silk genuinely low (making the mod's current CHI-cheap correct), and was the dearness genuinely export/distributional (not a domestic luxury premium)? If research CONFIRMS → build the export premium (merge with #50). If research DISPROVES (e.g. there WAS a domestic luxury premium for fine tea/silk within China) → reconsider a domestic lever.
+- REVISED SCOPE: raw silk is OUT (correctly cheap intermediate); silk_cloth + tea are the consumer luxuries; the mechanism is EXPORT-side, not domestic-production-side.
+
+## SILK_CLOTH PRICE BEHAVIOR — NOT MEASURED (probe gap found, user Q 2026-08-10)
+Asked how silk_cloth (the actual consumer luxury) priced: it was NEVER MEASURED this boot. The #51 TZP probe's GOODS list is silver/gold/grain/salt/tea/silk — the "silk" is RAW silk (intermediate, correctly cheap), NOT silk_cloth. silk_cloth appears 33k× in debug.log but ONLY as a boot-time FORENSIC var-type classification ("stockpilesilk_cloth = REAL"), NOT runtime price/stockpile/demand values. So there is ZERO runtime price-behavior data for silk_cloth (or porcelain) in this boot.
+
+What the CODE says about silk_cloth structure (not behavior):
+- It IS a consumer luxury (full wealth/price-responsive demand model, like refined_sugar/DEMAND_refined_sugar) — so it SHOULD carry a real luxury price, unlike raw silk.
+- It's a MANUFACTURED/script-only good (cottage + factory, from raw silk) → its price folds in the RAW-SILK input cost, which is cheap → the finished luxury likely INHERITS a low base (the review's M2 concern).
+
+CONSEQUENCE: the #51 diagnostic measured the WRONG good for #52. To actually diagnose consumer-luxury tier pricing, the econ probe must track silk_cloth + porcelain (the consumer luxuries), NOT raw silk. => PRE-REQUISITE for #52: extend gen_econ_tzprobe.py GOODS to add silk_cloth + porcelain (+ tea already there), reboot, and read THEIR price/stockpile/demand before choosing any #52 lever. Without this the export-premium-vs-domestic question can't be answered on real data for the finished luxuries. (Coordinates with #35: this is exactly the kind of temporary probe-extension that stays until #52 is verified, then strips with the rest.)
