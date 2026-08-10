@@ -1,9 +1,5 @@
 # AUDIT — #23 currency period-2 oscillation (LIVE working doc)
 
-
-> **[#16 2026-08-09] Tooling removed post-solve.** The forensic instrumentation this audit references — `tools/curx_analyze.py`, `tools/gen_econ_tzprobe.py`, `common/scripted_effects/se_ECON_LOG_TZPROBE.txt`, and the `ECON_LOG_curx_*` chain in `se_ECON_LOG.txt` — was STRIPPED once #23 landed (14c9ed899). Those file references below are historical; the code no longer exists. Regenerate from git history (this commit's parent) if the probe is ever needed again.
-
-
 **Purpose:** stop the circling. This doc records (a) what the LOGS MEASURE (fact, not theory),
 (b) the GRAVEYARD of theories already disproven — with WHAT disproved each, so none is ever
 re-proposed, and (c) the single open question. No fix is designed until a cause is proven AND
