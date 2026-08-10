@@ -160,3 +160,17 @@ REVISED #59 BUILD ORDER (increments, each design→review→verify):
 2. Tier C — backing_type SWITCH capability (spike the runtime set first; then the decision/event trigger surface + revaluation consequence). [the new user-requested feature; orthogonal to the pull]
 3. Tier B — the gold↔silver market pull (Gresham soft-band), gated on the multi-country observation boot, now including a mid-run backing-switch in the test.
 Order 1→2→3 is by risk/independence; 2 and 3 could swap, but 1 (valuation floor) stays first.
+
+## TIER C TRIGGER SURFACE = a DECISION (user, 2026-08-10)
+The backing-switch is a player DECISION (not a passive event / not AI-only drift).
+
+FRAMEWORK GROUNDING (verified): this engine has NO common/decisions/ folder. In Imperator + this mod, a "decision" is implemented as EITHER (a) a common/missions/ mission-task decision, OR (b) the mod's DOMINANT idiom — a scripted_gui BUTTON (is_shown / is_valid / effect triple on a panel), exactly like the PROVEN qing_revenue_ministry_reform_salt salt-reform button (QING_revenue_ministry_panel.txt:101). Use (b): a scripted_gui button, mirroring the salt-reform lever the #44 review confirmed as the shipped pattern. It belongs on an economy/currency panel (the economy_view, or a currency sub-panel).
+
+TIER C DECISION SPEC (design; build after the runtime-switch boot-spike proves the capability):
+- **Surface:** a scripted_gui button "Adopt the Gold Standard" / "Return to Silver" / "Adopt Bimetallism" (3 targets, whichever the country is NOT currently on), on the economy/currency panel. Mirror qing_revenue_ministry_reform_salt's is_shown/is_valid/effect shape verbatim.
+- **is_valid gate (the WHEN):** date/tech-appropriate (a gold standard shouldn't be adoptable in 1763 before it spread — gate on a date/tech threshold; Britain ~1816, general spread mid-19thc), + an economic-precondition (adequate reserves of the target metal — you can't credibly go gold-standard with no gold), + a cooldown so it's not flip-flopped. Uniform for ALL countries (no CHI special-case — additive/global-uniform rule).
+- **effect (the WHAT):** set the backing var to the new standard (the runtime-switch mechanism, boot-spiked first), + the CONSEQUENCE: a revaluation cost — switching to gold while holding mostly silver reserves forces selling/revaluing silver at the market ratio (the Gresham cost, where Tier C meets the Tier B ratio); a stability/PI hit representing the disruption; a cooldown stamp. Historically the costly, deliberate act it was.
+- **AI:** an AI-use branch (ai_will_do / a mission or on-action AI trigger) so AI countries also switch when historically apt (Britain adopts gold, etc.) — else only the player ever switches and the world stays frozen on 1763 standards. Keep the AI trigger uniform.
+- **loc + tooltip:** name each target standard, state the reserve/stability cost, per the text-wrap + no-macro-in-LOG rules.
+
+DEPENDENCY: Tier C decision is built AFTER the runtime-backing-switch BOOT-SPIKE (prove set-backing-at-runtime is safe + consistent — does override_existing clobber circulated amounts/adopters, or is a guarded direct var-set + recompute cleaner). The decision is the trigger surface; the spike proves the underlying set works. Design → adversarial review → spike → implement → verify (incl. an AI country actually switching in the boot).
