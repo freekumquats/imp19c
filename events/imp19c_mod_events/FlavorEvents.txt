@@ -375,7 +375,16 @@ flavor_eve.7 = {
 	left_portrait = root.current_ruler
 	right_portrait = scope:friendly_neighbor.current_ruler
 	
-	trigger = {						
+	# [#43 2026-08-09] was an EMPTY trigger (fired any country/era) + random_country that could pick
+	# ROOT itself. Mirror the #21/#22 Foreign Friends (flavor_eve.18) fix: require a real reachable
+	# non-allied neighbour to exist.
+	trigger = {
+		any_neighbour_country = {
+			has_land = yes
+			is_subject = no
+			NOT = { alliance_with = root }
+			in_diplomatic_range = root
+		}
 	}
 	
 	immediate = {
@@ -385,6 +394,7 @@ flavor_eve.7 = {
 				is_subject = no
 				NOT = { alliance_with = root }
 				in_diplomatic_range = root
+				NOT = { this = root }   # [#43] never pick ourselves (a self-gift is nonsensical)
 			}
 			save_scope_as = friendly_neighbor
 		}
@@ -392,17 +402,72 @@ flavor_eve.7 = {
 	
 	fire_only_once = yes
 	
+	# OPTION A: accept the gift graciously. [#43] The desc promises warming relations, but the old
+	# option only added treasury. Make the improved relations REAL (bilateral opinion), and — for the
+	# Qing with a seated Zongli Yamen (總理衙門) director — route the exchange through a REAL envoy from
+	# the diplomat corps (mirrors the #22 flavor_eve.18 Yamen tie-in): draw the ablest diplomat, credit
+	# him, and apply the stronger envoy-brokered warmth. Non-Yamen (or non-CHI) falls back to the
+	# generic ruler-to-ruler warmth.
 	option = {
 		name = flavor_eve.7.a 
 		ai_chance = { factor = 75 }
 		add_treasury = 15
+		if = {
+			# YAMEN-HANDLED (Qing, director seated): a real diplomat brokers the exchange.
+			limit = {
+				tag = CHI
+				exists = scope:friendly_neighbor
+				has_variable = qing_office_zongli_holder
+				var:qing_office_zongli_holder = { is_alive = yes  employer = ROOT }
+				has_variable = qing_zongli_diplomat_count
+				var:qing_zongli_diplomat_count > 0
+			}
+			# the ablest Zongli diplomat handles it (the corps' governing skill), and is rewarded.
+			ordered_in_list = {
+				variable = qing_zongli_diplomats
+				order_by = combined_stats_council_svalue
+				check_range_bounds = no
+				max = 1
+				save_scope_as = qing_ff_envoy
+			}
+			# [#43 review HIGH-1] GUARD the envoy scope with exists (as qing_legation.3 does around the
+			# identical call): qing_zongli_diplomat_count is bumped by the refill-sweep mint on a SEPARATE
+			# path from the qing_zongli_diplomats LIST and only resyncs at pulse step 0, so count>0 does NOT
+			# guarantee the list is non-empty this instant — ordered_in_list could save nothing, leaving
+			# qing_ff_envoy unset (error) or STALE from a prior qing_legation.3 fire (promotes a wrong/dead
+			# char). The exists-guard makes the reward fire only when a real envoy was actually drawn.
+			if = {
+				limit = { exists = scope:qing_ff_envoy }
+				scope:qing_ff_envoy = { QING_char_promote_standing = { pop = 2  prom = 1 } }
+			}
+			# the director's own standing rises a touch for the corps' success.
+			var:qing_office_zongli_holder = { QING_char_promote_standing = { pop = 1  prom = 1 } }
+			# stronger, envoy-brokered bilateral warmth (the Yamen premium over the routine exchange).
+			scope:friendly_neighbor = { add_opinion = { modifier = qing_zongli_envoy_opinion  target = ROOT } }
+			add_opinion = { modifier = qing_zongli_envoy_opinion  target = scope:friendly_neighbor }
+		}
+		else = {
+			# generic (non-Yamen / non-CHI): the Court receives the gift directly — real bilateral warmth.
+			if = {
+				limit = { exists = scope:friendly_neighbor }
+				scope:friendly_neighbor = { add_opinion = { modifier = foreign_friends_opinion  target = ROOT } }
+				add_opinion = { modifier = foreign_friends_opinion  target = scope:friendly_neighbor }
+			}
+		}
 	}
+	# OPTION B: reciprocate with a counter-gift of our own (spend treasury) — a PERSONAL bond between
+	# the sovereigns AND the same real bilateral warming (the desc's "improved relations" applies here too).
 	option = {
 		name = flavor_eve.7.b 
 		ai_chance = { factor = 25 }
 		add_treasury = -15
-		current_ruler = {
-			add_friend = scope:friendly_neighbor.current_ruler
+		if = {
+			limit = { exists = scope:friendly_neighbor }
+			current_ruler = {
+				add_friend = scope:friendly_neighbor.current_ruler
+			}
+			scope:friendly_neighbor = { add_opinion = { modifier = foreign_friends_opinion  target = ROOT } }
+			add_opinion = { modifier = foreign_friends_opinion  target = scope:friendly_neighbor }
 		}
 	}
 }
