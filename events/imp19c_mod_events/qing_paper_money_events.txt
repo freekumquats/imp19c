@@ -1,0 +1,111 @@
+########################################################################
+# qing_paper_money_events.txt — [#67] THE PAPER-MONEY CRISIS REGIME (寶鈔 / 官票).
+#
+# The Xianfeng-era fiat experiment: under acute fiscal stress the throne may print notes against the
+# silver reserve (the paper_currency option in monetary_policy_setting), at the risk of a depreciation
+# doom-loop and eventual forced abolition. Grounded in RESEARCH_QING_PAPER_MONEY_67.md:
+#   - 1763 = NO government paper (the ~200yr gap 1661 Shunzhi-withdrawal → 1853 Xianfeng-reintroduction;
+#     Jiaqing rejected it in 1814). So the regime is UNAVAILABLE until a crisis unlock.
+#   - 1853-61 Baochao/Guanpiao collapse to ~3-5% of face in ~8yr, forced abolition by 1868.
+#
+#   .1  紙鈔之議 — THE PAPER-MONEY PROPOSAL (crisis unlock): fires when the Qing is in acute fiscal stress
+#       (high currency-stress + depleted reserve) in the late window (≥1850). Sets qing_paper_money_unlocked,
+#       which the paper_currency law option's `allow` gate reads → the option becomes enactable. Once-only.
+#   .2  鈔法大壞 — THE NOTES COLLAPSE (terminal abolition): fires when qing_paper_depreciation has sat at the
+#       top for a sustained period. The notes are worthless; the regime is torn down (regime flag cleared →
+#       the mint allowance goes to 0; the law reverts by the player being pushed off it), with a legitimacy/
+#       stability scar + a re-lock cooldown before the regime can be unlocked again.
+#
+# NOTE (proven-code): this engine has NO proven `add_law` effect to force a law option from script (grep:
+# add_law appears only in design docs, never in code). So abolition does NOT force-revert the law option —
+# it clears qing_paper_regime_active (which zeroes CURRENCY_qing_paper_mint_allowance, so paper minting stops
+# regardless of the displayed law) + re-locks the unlock; the player then re-picks a specie stance manually
+# (the greyed-out state + the loc explain it). This is the honest, proven mechanism.
+#
+#   ROOT / this = the Qing (CHI). Offered player-only (is_ai = no). Court-slot + cooldown throttled (#41 class).
+#   Namespace = qing_paper. sys = QING. NO BOM (event convention).
+########################################################################
+
+namespace = qing_paper
+
+########################################################################
+# .1  紙鈔之議 — THE PAPER-MONEY PROPOSAL (crisis unlock)
+########################################################################
+qing_paper.1 = {
+	type = country_event
+	title = "qing_paper.1.t"
+	desc = "qing_paper.1.desc"
+	picture = trade_port
+	is_triggered_only = yes   # fired by the QING_DECLINE_pulse dispatcher (mirrors qing_frontier.1); the
+	                          # full crisis gate + the shared-court-slot claim live in the dispatcher, so the
+	                          # engine has a real firing path (the missing-dispatcher CRITICAL from #67 review).
+
+	left_portrait = root.current_ruler
+
+	# Lightweight delay-window re-guard only (the substantive gate is in the dispatcher). The dispatcher fires
+	# this with a 5-20 day delay; re-confirm the regime hasn't been unlocked and no re-lock landed in that window.
+	trigger = {
+		tag = CHI
+		NOT = { has_variable = qing_paper_money_unlocked }
+		NOT = { has_variable = qing_paper_relock }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_paper.1 (paper-money proposal, crisis unlock) fired for CHI" }
+	}
+
+	# --- SANCTION THE NOTES (行鈔) — unlock the paper_currency law option. ---
+	option = {
+		name = "qing_paper.1.sanction"
+		custom_tooltip = "qing_paper.1.sanction.tt"
+		set_variable = { name = qing_paper_money_unlocked  value = 1 }
+	}
+
+	# --- HOLD TO SPECIE (守銀) — refuse; the option stays locked. The stress must be met another way. ---
+	option = {
+		name = "qing_paper.1.refuse"
+		custom_tooltip = "qing_paper.1.refuse.tt"
+		add_legitimacy = 2   # the throne is seen to hold the line on sound money
+	}
+}
+
+########################################################################
+# .2  鈔法大壞 — THE NOTES COLLAPSE (terminal abolition)
+# Offered by QING_DECLINE_pulse when qing_paper_depreciation has sat at the top (>90) for a sustained
+# count of pulses (the qing_paper_collapse_count reaches its threshold — see se_QING_DECLINE). The notes
+# are worthless; the regime is dismantled.
+########################################################################
+qing_paper.2 = {
+	type = country_event
+	title = "qing_paper.2.t"
+	desc = "qing_paper.2.desc"
+	picture = revolt
+
+	left_portrait = root.current_ruler
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_paper_regime_active
+		has_variable = qing_paper_depreciation
+		var:qing_paper_depreciation >= 90
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_paper.2 (paper notes collapse, forced abolition) fired for CHI" }
+		# tear the regime down: clear the active flag (zeroes CURRENCY_qing_paper_mint_allowance → no more paper
+		# minting) + re-lock the unlock behind a cooldown; the depreciation meter then decays over time (scarring).
+		if = { limit = { has_variable = qing_paper_regime_active }  remove_variable = qing_paper_regime_active }
+		if = { limit = { has_variable = qing_paper_money_unlocked } remove_variable = qing_paper_money_unlocked }
+		set_variable = { name = qing_paper_relock  days = 3650 }   # ~10yr before the crisis can re-unlock it
+		# the scar of a currency collapse (the 1861-68 abolition): legitimacy + stability hit.
+		add_legitimacy = -10
+		add_stability = -10
+	}
+
+	# --- ABOLISH THE NOTES (廢鈔) — the only option; the state eats the collapse + returns to specie. ---
+	option = {
+		name = "qing_paper.2.abolish"
+		custom_tooltip = "qing_paper.2.abolish.tt"
+		current_ruler = { add_popularity = -15 }
+	}
+}

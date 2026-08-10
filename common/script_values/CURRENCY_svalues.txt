@@ -825,6 +825,36 @@ CURRENCY_reserve_change_currency_value_for_minting = {
 	}
 }
 
+# [#67] PAPER-MONEY mint allowance — the finite headroom the paper regime adds to the minting cap.
+# Scope: Country. 0 unless CHI + the paper regime is active (so it's inert for ROW + CHI-off-regime).
+# = paper_pct(0.35) × silver_reserve_size, SHRUNK by depreciation ((100-dep)/100), hard-capped.
+# References the RESERVE (a stable quantity minting doesn't inflate) → no compounding loop (#67 review-2 MED-2b).
+# As qing_paper_depreciation climbs 0→100 the allowance falls to 0 (the doom-loop: over-print → depreciate →
+# less headroom). Guards read-before-set (unset silver_reserve_size / depreciation → 0 / full, behaviour-safe).
+CURRENCY_qing_paper_mint_allowance = {
+	# PURE svalue arithmetic (no set_variable — that's an effect, illegal in a script_value). The nested
+	# `multiply = { value=... }` block is the proven svalue form (used throughout DEMAND_svalues).
+	value = 0
+	if = {
+		limit = {
+			tag = CHI
+			has_variable = qing_paper_regime_active
+			has_variable = silver_reserve_size
+		}
+		value = var:silver_reserve_size
+		multiply = 0.35   # paper_pct — up to 35% of the silver reserve
+		# × (100 − depreciation)/100 : 1.0 fresh regime → 0.0 fully depreciated. dep unset → factor 1 (full).
+		multiply = {
+			value = 100
+			if = { limit = { has_variable = qing_paper_depreciation }  subtract = var:qing_paper_depreciation }
+			divide = 100
+			min = 0
+		}
+		max = 20000   # absolute hard cap — bounded regardless of reserve size (never a 99999-style uncap)
+		min = 0
+	}
+}
+
 CURRENCY_minting_rate_cap = {
 	# Scope: Country
 	# Function: Defines the maximum of new currency that can be minted every month
@@ -840,6 +870,14 @@ CURRENCY_minting_rate_cap = {
 		add = CURRENCY_amt_circulated_scaled_1percent
 		add = CURRENCY_trade_wealth_income
 		add = CURRENCY_minting_from_sister_countries
+		# [#67] PAPER-MONEY regime headroom. CHI + regime-gated → 0 for ROW and for CHI off-regime (byte-identical
+		# to today everywhere else; shared-svalue R2 caution respected). Added to the BOUNDED branch (NOT the 99999
+		# else — paper_money_allowed stays false, so #23/#60 hold). Referenced to the SILVER RESERVE, not
+		# circulation, so minting does NOT inflate the term (no monthly-compounding loop — #67 review-2 MED-2b).
+		# The allowance SHRINKS as paper depreciates (the doom-loop). Finite by construction + the svalue's own
+		# hard cap. This genuinely raises the cap the mint slider reads (EE_scripted_guis gates on < cap), so it is
+		# real usable headroom — unlike the v1 down-only ceiling that minted nothing.
+		add = CURRENCY_qing_paper_mint_allowance
 		round = floor
 	}
 

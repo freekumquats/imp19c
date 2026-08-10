@@ -115,6 +115,10 @@ QING_DECLINE_init = {
 	# meter (the base is derived from the reserve ratio in QING_DECLINE_recompute_currency_stress; this
 	# holds the discrete event nudges and decays toward 0). Seeded 0; may go negative.
 	if = { limit = { NOT = { has_variable = qing_currency_stress_residual } } set_variable = { name = qing_currency_stress_residual  value = 0 } }
+		# [#67] paper-money depreciation meter (0..100). Seeded 0; rises with paper over-issue while the regime is
+		# active, decays slowly otherwise (trust rebuilds; scarring on re-entry). Drives the mint-allowance shrink
+		# (CURRENCY_qing_paper_mint_allowance) + a bounded stress term. Only meaningful post-1853 crisis unlock.
+		if = { limit = { NOT = { has_variable = qing_paper_depreciation } }  set_variable = { name = qing_paper_depreciation  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_reform_pressure } }   set_variable = { name = qing_reform_pressure  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_granary_stock } }     set_variable = { name = qing_granary_stock  value = 30 } }
 	# [#369] Population pressure (人口壓力 / 人地矛盾) — the standing Malthusian meter. Starts LOW
@@ -212,6 +216,17 @@ QING_DECLINE_recompute_currency_stress = {
 		if = {
 			limit = { has_variable = qing_monetary_bias }
 			change_variable = { name = qing_currency_stress  add = var:qing_monetary_bias }
+		}
+		# [#67] PAPER-MONEY DEPRECIATION → stress. A BOUNDED contribution (≤ +15, NOT the raw 0..100 meter — the
+		# review MED: a big term would peg the shared meter + swamp the opium/reserve signals). = depreciation×0.15,
+		# so a fully-collapsed paper regime (dep 100) adds +15 on top of the +8 bias. The PRIMARY depreciation
+		# feedback is the allowance-shrink (CURRENCY_qing_paper_mint_allowance), not this — this only colours stress.
+		if = {
+			limit = { has_variable = qing_paper_depreciation }
+			set_variable = { name = qing_paper_stress_tmp  value = var:qing_paper_depreciation }
+			change_variable = { name = qing_paper_stress_tmp  multiply = 0.15 }
+			change_variable = { name = qing_currency_stress  add = var:qing_paper_stress_tmp }
+			remove_variable = qing_paper_stress_tmp
 		}
 		if = {
 			limit = { has_variable = qing_currency_stress_residual }
@@ -1136,6 +1151,54 @@ QING_DECLINE_pulse = {
 	# the existing term (d) of QING_ministry_recompute_perf_revenue that stress folds straight
 	# into the Board of Revenue minister's Grand Council standing. (se_QING_OPIUM.txt)
 	QING_opium_assess_trade_balance = yes
+	# [#67] PAPER-MONEY DEPRECIATION doom-loop — update the meter BEFORE the stress recompute (so this pulse's
+	# stress + next month's mint allowance read the fresh value). While the paper regime is active, depreciation
+	# rises with real OVER-ISSUE (how much of the paper headroom the player actually minted); when the regime is
+	# off, it decays slowly (trust rebuilds; scarring on re-entry). All arithmetic clamped 0..100.
+	if = {
+		limit = { has_variable = qing_paper_regime_active }
+		# over_issue = minted rate ABOVE the non-paper baseline cap = the portion of the paper allowance used.
+		# = CURRENCY_minting_rate − (CURRENCY_minting_rate_cap − paper_allowance), clamped >= 0. RHS-safe (temps).
+		set_variable = { name = qing_paper_over_tmp  value = CURRENCY_minting_rate_cap }
+		change_variable = { name = qing_paper_over_tmp  subtract = CURRENCY_qing_paper_mint_allowance }   # = baseline (non-paper) cap
+		set_variable = { name = qing_paper_used_tmp  value = var:CURRENCY_minting_rate }
+		change_variable = { name = qing_paper_used_tmp  subtract = var:qing_paper_over_tmp }              # minted above baseline = paper used
+		if = {
+			limit = { var:qing_paper_used_tmp > 0 }
+			# rise scaled by how hard the allowance is leaned on (relative to the reserve → a ratio); accelerates
+			# as depreciation is already high (non-linear confidence cliff): rise = used/reserve × (1 + dep/50) × k.
+			set_variable = { name = qing_paper_rise_tmp  value = var:qing_paper_used_tmp }
+			if = { limit = { has_variable = silver_reserve_size  var:silver_reserve_size > 0 }  change_variable = { name = qing_paper_rise_tmp  divide = var:silver_reserve_size } }
+			change_variable = { name = qing_paper_rise_tmp  multiply = 40 }   # k — base rise per full-reserve over-issue (best-guess; tune on boot)
+			# non-linear: multiply by (1 + dep/50) so a deep depreciation rises faster (the cliff).
+			set_variable = { name = qing_paper_accel_tmp  value = var:qing_paper_depreciation }
+			change_variable = { name = qing_paper_accel_tmp  divide = 50 }
+			change_variable = { name = qing_paper_accel_tmp  add = 1 }
+			change_variable = { name = qing_paper_rise_tmp  multiply = var:qing_paper_accel_tmp }
+			change_variable = { name = qing_paper_depreciation  add = var:qing_paper_rise_tmp }
+			remove_variable = qing_paper_rise_tmp
+			remove_variable = qing_paper_accel_tmp
+		}
+		else = {
+			# regime active but restrained (minting at/below baseline) — depreciation eases modestly.
+			if = { limit = { var:qing_paper_depreciation > 0 }  change_variable = { name = qing_paper_depreciation  subtract = 2 } }
+		}
+		remove_variable = qing_paper_over_tmp
+		remove_variable = qing_paper_used_tmp
+	}
+	else = {
+		# regime OFF — trust rebuilds slowly toward 0 (scarring: re-entry starts pre-depreciated).
+		if = { limit = { has_variable = qing_paper_depreciation  var:qing_paper_depreciation > 0 }  change_variable = { name = qing_paper_depreciation  subtract = 3 } }
+	}
+	if = { limit = { has_variable = qing_paper_depreciation  var:qing_paper_depreciation < 0 }   set_variable = { name = qing_paper_depreciation  value = 0 } }
+	if = { limit = { has_variable = qing_paper_depreciation  var:qing_paper_depreciation > 100 } set_variable = { name = qing_paper_depreciation  value = 100 } }
+	# [#67] LOG the paper-money meter each pulse the regime is active OR the meter is still scarring down — so the
+	# boot surfaces the doom-loop (STATIC label, no macro/# in string; -debug_mode via LOG_line). Guarded so a
+	# non-paper realm (the 1763 baseline + every non-crisis game) stays silent — no flood.
+	if = {
+		limit = { OR = { has_variable = qing_paper_regime_active  AND = { has_variable = qing_paper_depreciation  var:qing_paper_depreciation > 0 } } }
+		LOG_line = { sys = QING  msg = "paper-money regime: depreciation meter + mint allowance recomputed for" }
+	}
 	# [meter-concretize #3] REPLACES QING_DECLINE_update_currency_stress (the deleted 1-bit drift wrapper).
 	# Runs AFTER the opium assessment so it reads this pulse's fresh qing_opium_stress_flow. Two-store
 	# derive: reserve-backing base + deflation + opium flow + decaying event residual.
@@ -1177,6 +1240,54 @@ QING_DECLINE_pulse = {
 		limit = { has_variable = qing_monetary_bias }
 		LOG_line = { sys = QING  msg = "monetary-policy bias applied (stress + mint-ceiling) for" }
 	}
+		# [#67] PAPER-MONEY terminal-abolition trigger. Only when the regime is active + depreciation has sat at
+		# the top (>=90) for a SUSTAINED count of pulses (qing_paper_collapse_count, ~4 quarters) — not knee-jerk
+		# on the first pulse it touches 90. When the count reaches the threshold, offer qing_paper.2 (the collapse
+		# event tears the regime down). Court-slot guarded (#41 class). is_ai=no (player regime). Counter resets
+		# whenever depreciation drops back below 90 or the regime is off.
+		if = {
+			limit = { has_variable = qing_paper_regime_active  has_variable = qing_paper_depreciation  var:qing_paper_depreciation >= 90 }
+			if = { limit = { NOT = { has_variable = qing_paper_collapse_count } }  set_variable = { name = qing_paper_collapse_count  value = 0 } }
+			change_variable = { name = qing_paper_collapse_count  add = 1 }
+			if = {
+				limit = {
+					var:qing_paper_collapse_count >= 4
+					is_ai = no
+					NOT = { has_variable = qing_gc_event_slot_used }
+				}
+				set_variable = { name = qing_gc_event_slot_used  value = 1 }
+				remove_variable = qing_paper_collapse_count
+				trigger_event = { id = qing_paper.2  days = { 5 20 } }
+			}
+		}
+		else = {
+			if = { limit = { has_variable = qing_paper_collapse_count }  remove_variable = qing_paper_collapse_count }
+		}
+		if = {
+			limit = { has_variable = qing_paper_regime_active }
+			LOG_line = { sys = QING  msg = "paper-money regime active: depreciation meter + mint allowance pulsed for" }
+		}
+		# [#67] PAPER-MONEY crisis-UNLOCK dispatcher — the firing path for qing_paper.1 (the sole setter of
+		# qing_paper_money_unlocked, the paper_currency law option's allow-gate). Without this, the whole regime
+		# is unreachable dead code (the #67-review CRITICAL). Mirrors the qing_frontier.1 pattern: the FULL crisis
+		# gate + the shared-court-slot claim live HERE (the event itself is is_triggered_only with only a light
+		# delay-window re-guard), so trigger_event has a real caller. Fires ONCE (qing_paper_money_unlocked absent),
+		# late-window (>=1850, no paper at the High-Qing zenith — research), on acute currency stress + not during a
+		# post-abolition re-lock, player-only (is_ai=no), and only when the shared quarterly slot is free (#41 class).
+		if = {
+			limit = {
+				is_ai = no
+				NOT = { has_variable = qing_paper_money_unlocked }
+				NOT = { has_variable = qing_paper_relock }
+				current_date >= 1850.1.1
+				has_variable = qing_currency_stress
+				var:qing_currency_stress >= 70
+				NOT = { has_variable = qing_gc_event_slot_used }
+			}
+			set_variable = { name = qing_gc_event_slot_used  value = 1 }   # claim the shared court slot (frontier/works pattern)
+			trigger_event = { id = qing_paper.1  days = { 5 20 } }
+			LOG_line = { sys = QING  msg = "paper-money proposal: fiscal crisis has forced the question, qing_paper.1 queued for" }
+		}
 	# Civic identity drifts toward its self-strengthening-gated target FIRST, so
 	# the ethnic-tension drift that follows reads a fresh civic-relief value (§11
 	# L4 ext — a strong civic nation defuses the same ethnic geography).
