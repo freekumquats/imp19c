@@ -90,6 +90,22 @@ QING_revenue_reserve_drift = {
 		# guard on the engine reserve existing (always true for CHI — seeded per-tag in
 		# CURRENCY_setup_all_reserves — but explicit so a mis-scope no-ops rather than erroring).
 		limit = { has_variable = silver_reserve_size }
+		# [#42 2026-08-09] TRUE QUARTER-OVER-QUARTER RESERVE DELTA for the 戶部 panel's "(change)" line.
+		# The reported bug: the reserve rises while the panel's change indicator shows NEGATIVE — because
+		# the mod's inflows (this drift, the Canton feed, market trade) write silver_reserve_size DIRECTLY
+		# but never touch silver_reserve_actual_change, the engine per-tick delta the VANILLA panel line
+		# reads (that line then reflects only market flow, ~always negative for CHI). Rather than fight the
+		# engine var (which it overwrites each tick), publish a MOD-OWN delta: snapshot the reserve at this
+		# fixed point each quarter and diff against last quarter's snapshot — this captures ALL movement
+		# (this drift + Canton + market + sell-reserve) by construction, at a consistent point. Computed at
+		# the START of the drift, BEFORE this quarter's accumulation/drain below, so prev holds last
+		# quarter's snapshot and the diff is the full preceding-quarter movement. Published as
+		# qing_silver_reserve_change_last for the panel (gui/qing_revenue_ministry.gui).
+		if = { limit = { NOT = { has_variable = qing_silver_reserve_prev } }  set_variable = { name = qing_silver_reserve_prev  value = var:silver_reserve_size } }
+		set_variable = { name = qing_silver_reserve_change_last  value = var:silver_reserve_size }
+		change_variable = { name = qing_silver_reserve_change_last  subtract = var:qing_silver_reserve_prev }
+		set_variable = { name = qing_silver_reserve_prev  value = var:silver_reserve_size }
+		LOG_line = { sys = QING  msg = "revenue: silver-reserve quarter-over-quarter change snapshot taken for" }  # [#42] on-boot verification of the true (change) delta
 		# --- accumulation vs drain -------------------------------------------------
 		if = {
 			# High Qing era + a seated minister: strong accumulation toward the peak
