@@ -87,7 +87,13 @@ All three that returned = **PROCEED-WITH-CORRECTIONS**, folded into their design
 
 - **#112b/c (rev-112bc):** BLOCKERS — (C1) seat the aqsaqal in the shared `QING_caravan_grant_aqsaqal` effect (3 grant paths), NOT in qing_caravan.1. (C2) the REVOKE path dangles the character — seat+teardown must be PAIRED. (H1) teardown "reuse verbatim" was hand-waved — must rewire the death + KOK-lost hooks to a new shipping marker (spike retirement deletes the old ones). (H2) the contest svalue can't be "one branch-parameterized family" — needs 3 chance + 3 fail svalues. (H3) court-slot + `qing_dept_cd_caravan` throttle is MANDATORY (#41 flood class), not "if needed". (M1) the svalues ALREADY ship — don't "lift"/duplicate. Build gate: C1/C2 before #112b, H2/H3 before #112c code.
 
-**rev-65 (#65 pop-boom) still running** — fold when it returns. NOTHING built until every design clears its gate (user directive).
+- **#65 (rev-65): PROCEED-WITH-CORRECTIONS — but the design was materially over-scoped on two WRONG premises, now corrected.** (C1) DROP the peanut/chili BOM hookup: it's buildable but the industrial-BOM demand path is DISABLED (se_DEMAND.txt:6-9, debug-gated, #133) → inert in the agrarian-boom era. (C2) #66's "peanut/chili luxury-only, no food path" was STALE — they already feed fulfilled_food_need (DEMAND_food_svalues.txt:101-102); the only gap is dynamic-basket membership (a #62 decision, not a building). (C3) Layer B's "fold a term into the boom driver" is IMPOSSIBLE — the boom is a flat event-applied modifier, no continuous driver; the honest lever is a small local modifier ON the building → Layers A+B COLLAPSE into one object, drop the CHI reader. (C7) MINIMAL SLICE: one generic "new world farmstead" (generic file, NO culture exclusion — C5) + one mission-task beat in the existing tree; the qing_migration.20-23 chain is already the boom narrative (don't rebuild). Fixed the wrong events path. Corrected the #66 research digest + memory to match (peanut/chili have a partial food role; BOM is a dead end).
+
+## ALL FOUR REVIEWS RETURNED + FOLDED
+Every pending design has now cleared the adversarial-review gate (all PROCEED-WITH-CORRECTIONS, corrections folded). NOTHING built (user directive). Design+review-complete + buildable (each with its build gate documented): #44, #59, #63, #64, #65 (minimal slice), #112b/c. #62 unblocks once #64 lands. Ready-to-build order when the user green-lights building: cheapest-certain first — #62 (after #64), #64, then #44/#59/#63/#65/#112b-c.
+
+## Research digest corrections (post-review)
+- RESEARCH_TRADE_GOOD_DIFFERENTIATION_66.md + memory imp19c-trade-good-differentiation-66: corrected the "peanut/chili luxury-only, no food path" claim (stale) → they have a partial food role; BOM-hookup is a dead end (dormant subsystem).
 
 ## Ready-to-build once the review backlog clears (design+review complete)
 - #44 salt monopoly (DESIGN_SALT_MONOPOLY_44 §77 corrections + revised minimal slice).

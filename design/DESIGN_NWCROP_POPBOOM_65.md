@@ -64,8 +64,35 @@ The Qing-specific effect (user ruling 2): a CHI-scoped pulse/reader that counts 
 - Events/mission beat fire + read correctly; court-slot throttled; loc present; no macro-in-LOG.
 
 ## Traps / rules
-- Generic building + CHI reader (the proven pattern; user rulings). No Qing-specific building.
-- No new trade good; hook existing BOM recipe (perf, #66). No new full-map every_province sweep.
-- se_/events no-BOM/LF; common/buildings + gui/loc BOM — verify per file. Brace balance. RHS var-vs-literal. No macro/# in LOG.
+- Generic building (user ruling). No Qing-specific building. See §CORRECTIONS for the collapsed A/B + dropped BOM.
+- No new trade good. No new full-map every_province sweep / no new on_action.
+- common/buildings BOM/UTF-8; loc BOM; missions no-BOM/LF — verify per file. Brace balance. RHS var-vs-literal. No macro/# in LOG.
 - Reuse existing boom/mission machinery; don't parallel-build.
 - #64 + #62 land first. Design-note-first → adversarial review → implement → verify boot.
+
+---
+
+## ADVERSARIAL DESIGN-REVIEW CORRECTIONS (rev-65, 2026-08-10) — PROCEED-WITH-CORRECTIONS (large; design was over-scoped on two wrong premises)
+The boom spine is nearly COMPLETE already; #65's real deliverable is ONE generic building + ONE mission beat. Two load-bearing assumptions were wrong. These corrections SUPERSEDE Layers A/B/C above.
+
+**C1 [CRITICAL] — DROP the peanut/chili BOM hookup.** It IS buildable (processed_foods INDUSTRY_svalues.txt:3021 / pharmaceuticals :2441 have full recipe families; adding an ingredient = proven 4-svalue + 2-line shape) — but the whole industrial-BOM demand path is HALF-WIRED and OFF: `DEMAND_set_demand_from_industry_all` is DISABLED (se_DEMAND.txt:6-9; only food+luxury demand is live), and the `INDUSTRY_factories_assigned_*` gates are set only by the DEBUG path (memory imp19c-manufactured-goods-risk / #133). So a peanut→processed_foods hookup delivers ZERO demand in the era #65 cares about (the 1763 agrarian boom), and requires industrial-era factories that don't exist then. => do NOT use BOM as the differentiation answer. peanut/chili stay flat luxuries riding the diffusion sweep (which they already do). If they must be individually differentiated, that's a #62 food-BASKET decision, NOT a #65 building (see C2).
+
+**C2 [HIGH] — #66's "peanut/chili have NO food path" is STALE; they already have a food role.** DEMAND_food_svalues.txt:101-102 already ADDS GOODS_governorship_peanut_produced + _chili_produced to DEMAND_fulfilled_food_need_governorship (the "quarter-food" tier, divide=2 :108); both are in the capacity sweep (se_QING_COLON.txt:296-297) + diffusion snapshot (:418-419) identically to the other three. The ONLY gap vs maize/potato/sweet_potato is membership in the DYNAMIC food basket / DEMAND_num_food_goods (#279 divisor) — a narrow #62 demand-svalue decision, NOT a #65 building. Re-verify + correct the #66 digest's "luxury-only" claim.
+
+**C3 [HIGH] — Layer B's "fold a term into the boom driver" is architecturally IMPOSSIBLE; collapse A+B into the building.** There is NO continuous boom driver to fold into — the boom is a FLAT event-applied permanent country modifier (qing_migr_crop_boom/_golden/_overpopulation, qing_migration_modifiers.txt:38-57, added once by qing_migration.20 a/b at qing_frontier_migration_events.txt:179,205, swapped by .22/.23; global_population_growth is a fixed 0.10/0.25). To "scale the boom with building count" you'd invent a new graduated per-pulse modifier band (over-scope, R4 runaway) OR — the honest cheap answer — put a small local_population_growth/capacity ON THE BUILDING and let it read naturally. That's the SAME lever as Layer A's farmstead → **Layers A and B collapse into one object; drop the CHI reader entirely** (it implies a mechanism that doesn't exist).
+
+**C4 [MED] — R3 capacity double-count: state the number, don't defer.** qing_nwcrop_abundance already stamps local_population_capacity=8 on every crop province, idempotent + self-correcting (se_QING_COLON.txt:286-323; modifier qing_migration_modifiers.txt:70-72). "Building replaces the modifier" is NOT viable (the sweep re-adds it next call, :313-315). => the farmstead adds a SMALL explicitly-bounded EXTRA capacity/output (a few points, same tier as the 6-10 band at modifier :69), accepted as a deliberate stack, tuned on pop logs. Design must NAME the number at impl, not defer.
+
+**C5 [MED] — generic-building file landmine.** The proven generic shape (row_manufactory/row_plantation, row_production_buildings.txt:28,80) with a `trade_goods=X` OR-gate in `potential` is confirmed buildable — BUT those two are Qing-EXCLUDED via `potential { owner NOT chinese_group/jurchen }` (:47-51). If the farmstead is authored in that file or copies that gate it becomes Qing-excluded (inverts user ruling 1). => author it in a GENERIC file (e.g. 00_infrastructure / a new generic file), NOT row_production_buildings.txt, and NOT qing_*_buildings.txt (culture-gated the opposite way). OMIT the culture exclusion.
+
+**C6 [MED] — perf: no reader, cheap counter idiom if any.** Per C3 the building-count reader shouldn't exist. If a CHI counter is still wanted for the mission task, use `any_owned_province = { has_building=X count>=N }` (proven se_QING_SELFSTR.txt:141) inside the EXISTING qing_mechanics pulse (00_monthly_country.txt:67, quarterly, court-slot throttled :80-81) — NO new on_action, NO new every_province pass.
+
+**C7 [HIGH] — over-scope: buildings+BOM+reader+events+mission ≈ 4× the ask. RECOMMENDED MINIMAL SLICE:**
+1. **ONE generic "new world farmstead"** building in a generic file, `potential` OR-gated on the 5 crops, NO culture exclusion, giving a SMALL bounded local capacity + minor food/lower-strata output (C4 number stated; C5 file stated). Its local capacity IS the crop→pop coupling made player-driven. Layers A+B collapse here — no separate reader.
+2. **ONE mission-task beat** in the EXISTING qing_colonization_missions.txt (task shape :88-119): "spread New World agriculture," allow-gated on the cheap building-count idiom (C6), completion grants a modest one-shot capacity/growth country modifier. Reuse the tree; build no new tree.
+3. **DROP the peanut/chili BOM hookup** (C1). Route peanut/chili individual differentiation to #62 (food-basket membership, C2) if the user insists.
+4. **Events: the qing_migration.20-23 chain IS already the boom narrative** — do NOT rebuild it. At most ONE optional beat, court-slot throttled (qing_gc_event_slot_used, 00_monthly_country.txt:80).
+
+**PROCESS FIX:** the Files section cites `events/imp19c_mod_events/qing_migration_events.txt` — that file does NOT exist; the boom chain is `qing_frontier_migration_events.txt`. Correct the path (and per the minimal slice, the events edit is at-most-one-beat / likely none).
+
+**CONFIRMED SOUND:** no new trade good needed; the generic-building shape + OR-gate is proven; #64 + #62 land first (the farmstead potential reads crop provinces).
