@@ -1228,7 +1228,7 @@ Div/0) = shared-upstream benign warm-up noise, hard-block, documented not chased
 boot + check error.log — the as_capital flood (37 lines), the "Duplicated event ID" flood, and the 3
 "Unknown event picture" lines should all be gone; verify no new flag:scope: line on a separatism/settler release.
 
-**Commit:** (below)
+**Commit:** `acfc8a6c0` + pushed.
 
 **Status:** #23 DONE (3 of 4 defects fixed; defect 3 is a documented non-bug hard-block). Reviewed, findings
 folded, committing + pushing.
