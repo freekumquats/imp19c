@@ -44,17 +44,23 @@ ZONES = [
 #                    regional same-good gap (#50: is yellow_sea/upper_yangtzi tea cheaper than European tea?).
 # The CHI-PAID section below additionally logs what the QING actually pays + its per-good penetration, so
 # the regional divergence that reaches the PLAYER (not just the world price) is measurable.
-# [#52 2026-08-10] Extended to the FULL staple-vs-luxury tier so ONE boot answers #52 (cross-good tier
-# realism: are luxuries ~10-20x staples?) + firms up #50's regional gap on more goods. The tier now spans:
-#   STAPLES (low band): grain, salt, fish     LUXURIES (should sit ~10-20x higher): tea, silk, porcelain, gems, opium
-#   METALS: silver, gold (the #46 sell-reserve pair; also the exact-tick gbip inputs below).
-# NOTE silk_cloth is DELIBERATELY OMITTED — it is a manufactured/script-only good (GOODS_national_production_
-# silk_cloth exists, but it has NO tradezone local_price/stockpile global), so the tzprobe (which reads the
-# tradezone price/stockpile globals) cannot observe it; it would emit UNSET forever. The probe measures RAW
-# silk; silk_cloth's price folds in the raw-silk input, so raw silk is the right observable proxy for #52.
-# Adding 4 goods only adds cheap 1-line BAND rows (GLOBAL + per-zone + CHIPAID + REGIONGAP); the bounded
+# [#52 2026-08-10] The staple-vs-luxury tier for the #52 cross-good tier question, plus firms up #50's
+# regional gap. Spans: STAPLES (grain/salt/fish) | true CONSUMER LUXURIES (tea/coffee/sugar/spices/tobacco/
+# porcelain/gems + silk_cloth) | opium (own model) | METALS (silver/gold — the #46 sell-reserve pair + the
+# exact-tick gbip inputs below).
+# silk_cloth NOTE (supersedes the earlier "deliberately omitted" note — REVISED #52): silk_cloth is the
+# FINISHED silk consumer luxury (distinct from raw `silk`, an intermediate that is CORRECTLY cheap). It is a
+# manufactured/script-only good that lives in the luxury_2 trade pass, so GT_set_tradegood_price DOES set a
+# tradezone local_price for it — hence it IS probe-observable (the old note assumed no TZ global; that was
+# wrong for luxury_2 goods). VERIFY on read: its stockpile may be 0 at the 1763 start (no factories yet), in
+# which case the no-divide branch still yields a price; if its TZ local_price global reads UNSET, that is
+# itself the answer (manufactured goods aren't TZ-priced and the tier question for them lives in the raw-input
+# fold, not the TZ layer). Deliberately NOT added (#52 review L5): chocolate (DEAD — remapped→coffee at boot,
+# would band UNSET forever) and alcohol (NO trade-good def block, unloaded).
+# Adding goods only adds cheap 1-line BAND rows (GLOBAL + per-zone + CHIPAID + REGIONGAP); the bounded
 # EXACT-TICK section is metals-only, so log volume stays safe.
-GOODS = ["silver", "gold", "grain", "salt", "fish", "tea", "silk", "porcelain", "gems", "opium"]
+GOODS = ["silver", "gold", "grain", "salt", "fish", "tea", "silk", "silk_cloth",
+         "porcelain", "gems", "opium", "coffee", "sugar", "spices", "tobacco"]
 
 # China-adjacent vs European TZs — the pair the regional-divergence question (#50) turns on. Logged as an
 # explicit BANDSET tag so the read-back can eyeball the same-good gap without hunting all 22 zones.
