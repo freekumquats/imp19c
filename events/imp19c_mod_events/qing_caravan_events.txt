@@ -300,3 +300,160 @@ qing_caravan.3 = {
 		}
 	}
 }
+
+########################################################################
+# .4  A DISPUTE AT KASHGAR (交涉阿奇木)  — [#112c / #12]
+# The recurring day-to-day friction between the seated Caravan Superintendent (參贊大臣) and the seated
+# Kokandi aqsaqal (阿奇木伯克): a border/customs dispute the two must resolve. EVERY option is a contest of
+# their RELATIVE attributes (SPIKE 2's two-sided odds, extended to three lenses — rev-112bc H2):
+#   • NEGOTIATE (folded rendering) — super(finesse+charisma) vs aqsaqal(finesse+zeal); the diplomatic path.
+#   • COERCE — super.martial vs aqsaqal.martial; threaten the escort, he invokes Kokandi raiders.
+#   • COLLUDE — a venal super + a bribable aqsaqal split the skim; weights corruption, the aqsaqal's zeal resists.
+# Each is a skill-check roll (the proven hidden_effect{ scope = { random{ chance = <svalue> } } } idiom,
+# qing_integ.10.d) whose odds are RENDERED as summed percentages via the stash-and-read _shown vars
+# (qing_amban_negotiate_chance_shown precedent). #12: each beat READS both chars' stats into the odds AND
+# WRITES an outcome back to char state (aqsaqal loyalty/opinion, super corruption/prominence) — genuine
+# bidirectional coupling, not two portraits + odds. Offered by QING_caravan_pulse under the MANDATORY
+# court-slot + qing_dept_cd_caravan throttle (rev-112bc H3). Both chars guarded seated+alive before the
+# scopes are saved (rev-112bc M3). CHI-player-only.
+########################################################################
+qing_caravan.4 = {
+	type = country_event
+	title = "qing_caravan.4.t"
+	desc = "qing_caravan.4.desc"
+	picture = steppe_cavalry
+
+	# the two contestants, side by side: the Qing superintendent (left) + the foreign Kokandi consul (right).
+	# Bare `var:X` char-var portrait form (proven, qing_canton_events.txt:137 right_portrait = var:qing_hoppo_holder).
+	left_portrait = var:qing_caravan_super_holder
+	right_portrait = var:qing_caravan_aqsaqal_holder
+
+	trigger = {
+		tag = CHI
+		# the concession must still stand (belt-and-braces with the pulse gate — matches the event intent).
+		has_variable = qing_caravan_aqsaqal_granted
+		# both offices seated + alive (M3) — the pulse already gated this, re-check belt-and-braces.
+		has_variable = qing_caravan_aqsaqal_holder
+		var:qing_caravan_aqsaqal_holder = { is_alive = yes }
+		has_variable = qing_caravan_super_holder
+		var:qing_caravan_super_holder = { is_alive = yes }
+	}
+
+	immediate = {
+		# save BOTH contestants as the scopes the contest svalues read (proven CHI-scope save_scope_as, NOT
+		# the var:X.finesse-reads-0 trap). Guarded above; save here so the svalues + the _shown stash resolve.
+		var:qing_caravan_super_holder = { save_scope_as = qing_super }
+		var:qing_caravan_aqsaqal_holder = { save_scope_as = qing_aqsaqal }
+		# stash all three lenses' odds (+ complements) ON CHI so the option tooltips render REAL percentages
+		# that sum to 100 via [ROOT.MakeScope.GetVariable('X').GetValue] (the amban-negotiate render idiom).
+		set_variable = { name = qing_super_negotiate_shown   value = qing_super_contest_chance_svalue }
+		set_variable = { name = qing_super_negotiate_fail_shown  value = qing_super_contest_fail_svalue }
+		set_variable = { name = qing_super_coerce_shown      value = qing_super_coerce_chance_svalue }
+		set_variable = { name = qing_super_coerce_fail_shown     value = qing_super_coerce_fail_svalue }
+		set_variable = { name = qing_super_collude_shown     value = qing_super_collude_chance_svalue }
+		set_variable = { name = qing_super_collude_fail_shown    value = qing_super_collude_fail_svalue }
+		LOG_line = { sys = QING  msg = "EVENT qing_caravan.4 (aqsaqal friction contest) fired for CHI" }
+	}
+
+	# --- NEGOTIATE (折衝) — settle it by diplomacy. super(finesse+charisma) vs aqsaqal(finesse+zeal). ---
+	# WIN: the dispute resolves in the throne's favour — prosperity up, the aqsaqal's opinion of CHI warms
+	# (WRITE-BACK), the superintendent's standing rises. LOSE: the consul out-talks him — a little prosperity
+	# lost, the superintendent discredited (prominence down, WRITE-BACK).
+	option = {
+		name = "qing_caravan.4.negotiate"
+		custom_tooltip = "qing_caravan.4.negotiate.tt"
+		hidden_effect = {
+			set_variable = { name = qing_caravan_contest_ok  value = 0 }
+			random = {
+				chance = qing_super_contest_chance_svalue
+				set_variable = { name = qing_caravan_contest_ok  value = 1 }
+			}
+			if = {
+				limit = { var:qing_caravan_contest_ok = 1 }
+				QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = 6 }
+				# WRITE-BACK: the consul respects a fair settlement — Kokand warms; the super is commended.
+				if = { limit = { exists = c:KOK }  c:KOK = { add_opinion = { modifier = qing_gp_relation_opinion  target = ROOT } } }
+				if = { limit = { var:qing_caravan_super_holder = { is_alive = yes } }  var:qing_caravan_super_holder = { add_popularity = 8 } }
+				LOG_line = { sys = QING  msg = "caravan: the superintendent out-negotiates the aqsaqal (skill check passed) for" }
+			}
+			else = {
+				QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = -4 }
+				# WRITE-BACK: the consul gets the better of him — the superintendent loses face.
+				if = { limit = { var:qing_caravan_super_holder = { is_alive = yes } }  var:qing_caravan_super_holder = { add_popularity = -6 } }
+				LOG_line = { sys = QING  msg = "caravan: the aqsaqal out-talks the superintendent (skill check failed) for" }
+			}
+			remove_variable = qing_caravan_contest_ok
+		}
+	}
+
+	# --- COERCE (威嚇) — threaten the escort/force. super.martial vs aqsaqal.martial (he invokes raiders). ---
+	# WIN: the consul backs down — the grip firms, but Kokand resents the strong-arm (WRITE-BACK: emboldened).
+	# LOSE: the aqsaqal calls the bluff and stirs the frontier — a khoja scare, the superintendent shamed.
+	option = {
+		name = "qing_caravan.4.coerce"
+		custom_tooltip = "qing_caravan.4.coerce.tt"
+		hidden_effect = {
+			set_variable = { name = qing_caravan_contest_ok  value = 0 }
+			random = {
+				chance = qing_super_coerce_chance_svalue
+				set_variable = { name = qing_caravan_contest_ok  value = 1 }
+			}
+			if = {
+				limit = { var:qing_caravan_contest_ok = 1 }
+				QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = 3 }
+				# WRITE-BACK: coercion works but rankles — Kokand's grievance hardens even in defeat.
+				if = { limit = { exists = c:KOK }  c:KOK = { add_opinion = { modifier = qing_xj_kokand_emboldened  target = ROOT } } }
+				if = { limit = { var:qing_caravan_super_holder = { is_alive = yes } }  var:qing_caravan_super_holder = { add_popularity = 5 } }
+				LOG_line = { sys = QING  msg = "caravan: the superintendent faces down the aqsaqal (coercion succeeded) for" }
+			}
+			else = {
+				# the bluff is called: a khoja scare (only if the oasis isn't already normalised — #367 gate).
+				if = {
+					limit = { NOT = { has_variable = qing_xj_fully_integrated } }
+					set_variable = { name = qing_xj_khoja_pending  value = 1 }
+				}
+				if = { limit = { var:qing_caravan_super_holder = { is_alive = yes } }  var:qing_caravan_super_holder = { add_popularity = -8 } }
+				LOG_line = { sys = QING  msg = "caravan: the aqsaqal calls the superintendent's bluff and stirs the frontier (coercion failed) for" }
+			}
+			remove_variable = qing_caravan_contest_ok
+		}
+	}
+
+	# --- COLLUDE (通同) — split the customs skim with the consul. weights corruption; the aqsaqal's zeal resists. ---
+	# WIN: the two pocket the difference — both gain personal wealth (WRITE-BACK: super corruption up), but the
+	# throne's take suffers a touch. LOSE: the pious consul refuses and denounces the offer — the superintendent
+	# exposed (corruption up AND prominence down), Kokand affronted.
+	option = {
+		name = "qing_caravan.4.collude"
+		custom_tooltip = "qing_caravan.4.collude.tt"
+		hidden_effect = {
+			set_variable = { name = qing_caravan_contest_ok  value = 0 }
+			random = {
+				chance = qing_super_collude_chance_svalue
+				set_variable = { name = qing_caravan_contest_ok  value = 1 }
+			}
+			if = {
+				limit = { var:qing_caravan_contest_ok = 1 }
+				# WRITE-BACK: the skim succeeds — both men pocket silver; the super grows more venal; prosperity
+				# dips a touch (the throne's take is shaved). add_gold touches only CHAR wealth (not treasury/
+				# silver reserve) — cannot perturb the currency sim (the #112a siphon precedent).
+				if = {
+					limit = { var:qing_caravan_super_holder = { is_alive = yes } }
+					var:qing_caravan_super_holder = { add_gold = 4  if = { limit = { corruption < 90 }  add_corruption = 3 } }
+				}
+				QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = -2 }
+				LOG_line = { sys = QING  msg = "caravan: the superintendent and the aqsaqal quietly split the skim (collusion succeeded) for" }
+			}
+			else = {
+				# the pious consul refuses + denounces: the super is exposed, Kokand affronted.
+				if = {
+					limit = { var:qing_caravan_super_holder = { is_alive = yes } }
+					var:qing_caravan_super_holder = { add_popularity = -10  if = { limit = { corruption < 90 }  add_corruption = 2 } }
+				}
+				if = { limit = { exists = c:KOK }  c:KOK = { add_opinion = { modifier = qing_xj_kokand_emboldened  target = ROOT } } }
+				LOG_line = { sys = QING  msg = "caravan: the aqsaqal refuses the bribe and denounces the superintendent (collusion failed) for" }
+			}
+			remove_variable = qing_caravan_contest_ok
+		}
+	}
+}
