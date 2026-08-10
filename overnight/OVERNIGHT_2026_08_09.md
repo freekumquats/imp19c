@@ -1025,4 +1025,6 @@ tail remove_variable is safe on the burlingame double-call path; exists guards c
 same file uses bare `'` at line 24) → risked a literal backslash rendering; switched all 5 to bare `'`.
 Braces 47/47 + 71/71; no EOL/BOM churn.
 
-**Commit:** (below)
+**Commit:** `4d2e8a087` + pushed.
+
+**Status:** #20 DONE — reviewed, MEDIUM folded, committed + pushed.
