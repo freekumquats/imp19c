@@ -199,3 +199,29 @@ THE MECHANICAL HALF (the one gap a law doesn't cover on its own):
 - AI: the law-adoption AI (ai_will_do on the law option, or the AI law weighting) drives historical AI switches (Britain→gold). Uniform.
 
 BUILD ORDER unchanged in spirit (TierA valuation floor → TierC standard-law + reconciler → TierB ratio pull), but Tier C is now a LAW GROUP + a pulse reconciler, not a decision. Still needs the runtime-backing-switch BOOT-SPIKE first (the reconciler's set-backing call is the net-new capability). The gold:silver ratio (Tier B) interacts at the revaluation step (switching under a diverging ratio = the Gresham cost).
+
+## TIER C FINALIZED — law group "Monetary Standard", options Gold / Silver / Bimetallic (user, 2026-08-10)
+Locked: NEW law group named MONETARY STANDARD with exactly three options — GOLD, SILVER, BIMETALLIC.
+
+DECLARATION (grounded in the monetary_policy_setting template — a law group is self-contained in common/laws/, NO separate registration; new file common/laws/00_monetary_standard.txt):
+```
+monetary_standard = {
+    # NO `potential = { has_law = ... }` gate at the GROUP level — every country is always on SOME
+    # standard (unlike monetary_policy_setting, which is a sub-setting gated on legislative_monetary_policy).
+    # Availability of each OPTION is gated per-option below (date/tech/reserves), not the group.
+    gold_standard = {
+        potential = { <date/tech: gold standard not adoptable before it spread, ~1816+; or a tech/invention gate> }
+        allow = { <adequate gold reserves; cooldown var not set> }
+        modifier = { <gold-standard passive economic character — stability/commerce profile> }
+        ai_will_do = { <weight so gold-standard powers (Britain) adopt historically> }
+    }
+    silver_standard = { modifier = { <silver default; the Qing 1763 start standard> } }   # the game-start default for CHI + most tags
+    bimetallic_standard = { potential = {…} allow = {…} modifier = {…} ai_will_do = {…} }   # GBR/France/US start here
+}
+```
+- The three option KEYS should not collide with the existing backing flag values (silver_standard/gold_standard/bimetallic_standard are the currency-var FLAGS); if the law-option key namespace clashes with the flags, suffix the law options (gold_standard_law etc.) — CHECK at implement time.
+- Starting law per country must MATCH its seeded backing_type (CHI=silver, GBR=bimetallic, …) so the reconciler sees no mismatch at game start (no spurious turn-1 switch). Seed the law in setup to agree with CURRENCY_create_starting_currencies.
+- The RECONCILER (from the prior section) sets the currency backing var to match whichever of the 3 options is active, applying the revaluation/Gresham cost only on an ACTUAL change (mismatch), never at the matched steady state.
+- MODIFIERS per option are where each standard's ongoing character lives (the "flexible" part the user wanted): gold vs silver vs bimetallic each tune stability/commerce/etc. differently — design these against the historical profile (gold = sound-money stability, bimetallic = flexible but Gresham-exposed, silver = the Qing baseline).
+
+Everything else (Tier A floor first, boot-spike the runtime backing set, additive+global-uniform, multi-country verify incl. a mid-run switch, Gresham cost at the switch) stands.
