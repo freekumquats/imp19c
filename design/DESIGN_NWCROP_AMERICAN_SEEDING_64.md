@@ -1,14 +1,16 @@
 # DESIGN — Seed New World crops into their real 1763 American ranges (#64)
 
-**Status:** implementation design, 2026-08-10. Grounded in research/RESEARCH_NWCROP_GEOGRAPHY_64.md (crop-geo agent, region keys verified vs common/province_setup.csv). Design-note-first → adversarial review → implement → verify boot. Do NOT implement until reviewed. freekumquats / merge-overnight.
+**Status:** implementation design, 2026-08-10, **REVISED post-review (rev-64 corrections folded into the body; round-2 review pending).** Grounded in research/RESEARCH_NWCROP_GEOGRAPHY_64.md. Design-note-first → adversarial review → implement → verify boot. Do NOT implement until a CLEAN review passes. freekumquats / merge-overnight.
 
-## The defect (user, verified)
-The 5 New World crops are seeded almost entirely in CHINA — their 18th-c. diffusion frontier — and barely in the AMERICAS, their actual origin. This is backwards from the real 1763 distribution (memory: 1763 seeding corrections; DESIGN_NWCROP_DEMAND_RECLASSIFY_62 H3 re-opened). Verified current state (grep province_setup.csv col4=TRADEGOOD):
+**Round-1 review (rev-64) verdict: PROCEED-WITH-CORRECTIONS.** Corrections integrated into the body below (the source-of-truth blocker is resolved, counts re-baselined from the engine .txt, numeric floors committed). Round-1 findings preserved verbatim at the bottom as an audit trail.
+
+## The defect (user, verified — counts re-baselined from the ENGINE source setup/provinces/*.txt)
+The 5 New World crops are seeded almost entirely in CHINA — their 18th-c. diffusion frontier — and barely in the AMERICAS, their actual origin. This is backwards from the real 1763 distribution (memory: 1763 seeding corrections; DESIGN_NWCROP_DEMAND_RECLASSIFY_62 H3 re-opened). **The engine reads `setup/provinces/*.txt`, NOT `common/province_setup.csv`** (the CSV is generator input only, diverges from the .txt, and must not be used as the baseline — see §Source of truth). True current state from the .txt:
 - maize: 6 provinces, ALL China (Hunan/Jiangxi) — ZERO Americas.
-- peanut: 5, ALL China (Guangdong/Fujian) — ZERO Americas.
-- chili: 6, ALL China (Hunan) — ZERO Americas.
-- sweet_potato: 6 (4 China + 2 Costa de Peru) — roughly right.
-- potato: 5, ALL Americas but WRONG sub-region (New Mexico ×2, Atacama ×2, Potosí ×1).
+- peanut: **3**, ALL China (Guangdong) — ZERO Americas.
+- chili: **3**, ALL China (Hunan) — ZERO Americas.
+- sweet_potato: 6 (4 China Fujian/Guangdong + 2 Costa de Peru) — roughly right.
+- potato: 5, ALL Americas but WRONG sub-region (New Mexico ×2, Peru ×3).
 
 This is an ECONOMIC-CORRECTNESS task (get the map right), NOT a pop-boom (that's #65). It also unblocks #62 (the per-crop food-vs-luxury demand decision can only be made on correct geography).
 
@@ -25,14 +27,13 @@ Convert selected American provinces' TRADEGOOD to the appropriate NW crop. Prefe
 - **CHILI**: ADD real American range: Eastern/Pacific Mexico, Central America (core), Costa/Atacama de Peru, Antilles, Brazil. KEEP Hunan modest (do NOT expand). A garden/kitchen crop, not a plantation export (validates #62's keep-chili-luxury-only).
 - **SWEET_POTATO**: KEEP Fujian/Guangdong + 2 Costa de Peru (correct). ADD minor: Antilles, Central America/Eastern Mexico lowlands, Brazil. Minor rounding-out only.
 
-Exact province IDs to convert are chosen at impl from the target-area grain/livestock pool (a concrete list, built + logged, not silently sampled — no-silent-cap rule). Target rough share: China maize/peanut/chili drop to a MINORITY of each crop's provinces; the Americas hold the majority.
+**Numeric per-crop American FLOORS (committed — supply is abundant, so under-seeding is the real risk):** maize ≥12–15 American (vs 6 China → China becomes the minority); peanut ≥6 American (vs 3 China); chili ≥6 American (vs 3 China); sweet_potato +3–4 minor American; potato: move the 2 New Mexico → Andes, net Andean ≥4. Impl tunes WITHIN these floors and builds + logs the concrete province-ID list (no-silent-cap rule governs HOW it's logged; the floors govern HOW MANY). China maize/peanut/chili become a minority of each crop's provinces; the Americas hold the majority.
 
-## THE LOAD-BEARING MECHANICS QUESTION (BLOCKER — resolve before impl)
-**Where is the source of truth for a province's trade good?** Two candidates, and they must not be edited in the wrong place:
-- `common/province_setup.csv` (col4 = TRADEGOOD) — where ALL the current crop seeding lives (verified: maize/potato/etc. rows are here). The American target provinces (New Mexico, Peru areas) appear in the CSV.
-- `setup/provinces/*.txt` (`trade_goods="..."` per province) — used by MANY provinces (Tannu Tuva, Angola, Sichuan-Kham, …). **Standing memory (imp19c-rifles-logistics-blocker): "edit setup/provinces/*.txt not csv"** — the CSV was found NOT to be the live source for at least some provinces.
-- **MUST VERIFY at impl:** for each American target province, which file the engine actually reads (does a setup/provinces/*.txt entry exist and OVERRIDE the CSV? are the American provinces CSV-only?). Editing the CSV for a province whose good is set in setup/*.txt = a no-op (the #281 rifles trap). The impl must (a) locate each target province's real trade-good definition, (b) edit THAT, (c) confirm on boot the good actually changed. Grep both sources per province before editing.
-- **BOM/EOL:** the setup/ reader REJECTS BOM (memory: setup-reader-rejects-bom) — CSV + setup/provinces/*.txt must stay BOM-free. Do NOT add a BOM. Preserve existing EOL.
+## Source of truth — RESOLVED: edit `setup/provinces/*.txt`, NOT the CSV
+`common/province_setup.csv` is **NOT read by the engine** — it is only input to the modding scripts (buildings_generator.py / old_to_new_setup_*.py), and it DIVERGES from the live .txt (e.g. Wuyishan 3317 = `tea` in `00_Fujian.txt:131` but `peanut` in the CSV). Recorded decision: `overnight/OVERNIGHT_DECISIONS2.md:207-218` ("CRITICAL SOURCE DECISION, 2026-07-08"); confirmed by rg (no engine loader for province_setup). **Directive: edit `setup/provinces/00_<Region>.txt` only** (optionally sync the CSV for generator hygiene, never as the live edit). There is NO #281 rifles trap here — that trap only bites if you edit the CSV.
+- Concrete live-good locations (verified): New Mexico 548/856 = `00_American_Southwest.txt:45,91` (potato, to reassign); Peru potato = `00_Peru.txt` (Moquegua 1587, Azángaro 2080) + `00_Lower_Peru.txt` (Uyuni 2128); Mexico targets = `00_Eastern_Mexico.txt`/`00_Pacific_Mexico.txt`/`00_Northern_Mexico.txt`/`00_Central_America.txt`; also `00_Antilles.txt`, `00_Appalachia.txt`, `00_Argentina.txt`, the 5 Brazil files; current maize seed = `00_Hunan.txt:27`.
+- **Each conversion SUBTRACTS a grain/livestock producer as well as adding a NW-crop one — accepted** (rev-64 C-M1): grain→maize is food-basket-neutral (no famine risk), and the convert-only-generic rule (R2) keeps differentiated goods intact; the grain/livestock loss to building-eligibility/pop-composition is low-consequence and deliberate.
+- **BOM/EOL:** the setup/ reader REJECTS BOM (memory: setup-reader-rejects-bom) — setup/provinces/*.txt must stay BOM-free. Preserve existing EOL. No churn.
 
 ## Downstream coupling to check (must-hold, verify at impl + boot)
 - **#279 dynamic food basket**: `DEMAND_num_food_goods` = 6 + 1 per NW crop actually PRODUCED (se_DEMAND.txt). Adding American maize/peanut producers CHANGES how many food goods exist per governorship → the famine-metric divisor (memory #62 M2 dilution). Verify the count logic stays consistent across the new producer set.
@@ -40,12 +41,13 @@ Exact province IDs to convert are chosen at impl from the target-area grain/live
 - **#62 demand fix**: this is #62's prerequisite. After #64, revisit #62's per-crop food-vs-luxury lever on the CORRECTED geography (maize/peanut now have American subsistence producers → their demand path can be decided per-region, not off the all-China artifact).
 - **GOODS_national_production / area trade sums**: the caravan oasis-trade + Canton customs read GOODS_national_production_<good> for specific goods (tea/silk/silver/salt/etc.) — NONE of the 5 NW crops are in those lists, so re-seeding them does NOT perturb caravan/Canton revenue. Confirm (grep) no revenue svalue reads maize/potato/etc.
 
-## Files (anticipated — confirm source-of-truth first)
-- `common/province_setup.csv` AND/OR `setup/provinces/*.txt` (the American area files) — per the blocker above, edit whichever is the live source per province. NO trade_goods/00_imp19c.txt. NO demand svalues (that's #62). NO buildings (that's #65).
-- Possibly loc if any province name/flavour references the old good (unlikely — trade goods aren't province-named).
+## Files (confirmed post-review)
+- `setup/provinces/00_<Region>.txt` (the American area files listed above + `00_Hunan.txt`/`00_Fujian.txt` etc. only if trimming a China entry) — the LIVE source. NOT the CSV. NO trade_goods/00_imp19c.txt. NO demand svalues (that's #62). NO buildings (that's #65).
+- Optionally re-sync `common/province_setup.csv` for generator hygiene (never as the live edit).
+- Loc: unlikely (trade goods aren't province-named).
 
 ## RISK
-- **R1 [HIGH] — wrong-file edit = silent no-op** (the #281 rifles trap). Resolve the source-of-truth blocker per province BEFORE editing; boot-verify the good actually changed.
+- **R1 [RESOLVED] — edit setup/provinces/*.txt (the engine source), NOT the CSV.** The wrong-file no-op (#281 trap) only occurs if you edit the CSV. Boot-verify the good actually changed regardless.
 - **R2 [MED] — don't destroy differentiated goods.** Convert only generic grain/livestock/fur provinces; leave sugar/silver/copper/coal/cloth (the differentiated American goods) intact.
 - **R3 [MED] — famine-metric divisor** (#279 / #62 M2): more producing NW-crop goods dilutes the famine metric in producing regions. Acceptable but must be flagged + verified, not silently shipped.
 - **R4 [MED, CORRECTED] — the capacity lift is GLOBAL by design; American producers WILL gain it (intended).** Do NOT owner-gate `QING_COLON_apply_nwcrop_capacity` (that contradicts its explicit design, se_QING_COLON.txt:283-285). Instead VERIFY the resulting American capacity increase doesn't cause a runaway foreign pop explosion on boot. The narrative boom events + diffuse loop are already ROOT=CHI (Qing-only) — unaffected.

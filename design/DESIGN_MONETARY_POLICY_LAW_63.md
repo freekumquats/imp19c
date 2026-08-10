@@ -1,6 +1,8 @@
 # DESIGN — Wire the Monetary Policy laws to the real currency system (#63)
 
-**Status:** implementation design, 2026-08-10. Design-note-first → adversarial review → implement → verify boot. Do NOT implement until reviewed. freekumquats / merge-overnight.
+**Status:** implementation design, 2026-08-10, **REVISED post-review (rev-63 corrections folded into the body; round-2 review pending).** Design-note-first → adversarial review → implement → verify boot. Do NOT implement until a CLEAN review passes. freekumquats / merge-overnight.
+
+**Round-1 review (rev-63) verdict: PROCEED-WITH-CORRECTIONS.** All corrections are now integrated into the body below (the old contradictory text is replaced, not appended-over). The round-1 findings are preserved verbatim at the bottom as an audit trail. Round-2 review must confirm the revised body holds.
 
 ## The complaint (task #63)
 The Monetary Policy law group is "outdated and doesn't connect properly with minting/conversion/etc features." Verified: the two law groups' options carry ONLY flat vanilla `modifier = {}` blocks (commerce/tax/stability/corruption nudges) and are **read by nothing in live script** — `rg` for every option key (`currency_recall|limited_minting|more_minting|issue_bonds|executive_monetary_policy|delegated_monetary_policy|legislative_monetary_policy`) across `common/` (excluding laws/loc) returns ONLY design docs. The laws are cosmetic; the real currency machinery (mint rate, mint-rate cap, backing value, the Qing `qing_currency_stress` meter, the #23 sqrt/gbip chain, #59 Tier B) runs entirely independently of the player's stated monetary stance. Choosing "sound money / recall" vs "loose minting" changes a commerce modifier but does NOT change how much the country actually mints or how its currency is backed.
@@ -33,9 +35,9 @@ The stance group is the "how much / how disciplined" lever. Wire each option to 
 - `more_minting` → bias **+** (loose).
 - `issue_bonds` → bias **+/2** (deficit finance, looser — but does NOT flip `paper_money_allowed`; see RISK R1).
 
-**Two concrete reads of `qing_monetary_bias` (both guarded, both additive):**
-1. **Into the Qing stress recompute** (se_QING_DECLINE.txt:201-211): add `qing_monetary_bias` as one more `change_variable = { name = qing_currency_stress add = var:qing_monetary_bias }` term, INSIDE the existing clamp, alongside the opium_flow + residual terms it already sums. A debasement stance raises monetary stress (historically faithful — over-minting debases); sound money lowers it. This is the exact additive-into-existing-recompute pattern already proven in that block.
-2. **Into the mint-rate cap** (the discipline lever): a sound-money stance should TIGHTEN what the player can mint, a loose stance LOOSEN it. Do NOT edit the vanilla `CURRENCY_minting_rate_cap` svalue (it's shared by every country + feeds #23/#60). Instead, apply the bias where the Qing mint is exercised: a small guarded adjustment to `CURRENCY_minting_rate` clamp behaviour for CHI only, OR a Qing-scoped modifier. **LEANING: option (a) below** — see "concrete lever choice."
+**Two concrete reads of `qing_monetary_bias` (both guarded, CHI-only):**
+1. **Into the Qing stress recompute LEVEL** (se_QING_DECLINE.txt:201-211): add `qing_monetary_bias` as one more DIRECT additive term — `change_variable = { name = qing_currency_stress add = var:qing_monetary_bias }` — INSIDE the existing clamp, alongside the opium_flow term it already sums, where the level is rebuilt from `qing_curr_base_tmp` each pulse. A debasement stance raises monetary stress (historically faithful — over-minting debases); sound money lowers it. **CRITICAL (rev-63 #5): route it into the direct LEVEL term, NOT through `QING_DECLINE_nudge_signed` / `qing_currency_stress_residual`**, which DECAYS at 0.85 (:216-217) — a standing law bias must not decay. Because the level is rebuilt each pulse from base, a re-read standing term does NOT ratchet (R3 holds only on this direct-level path).
+2. **Into the Qing mint rate — a CHI-only guarded CEILING (sound-money can only TIGHTEN):** `CURRENCY_mint_currency` already hard-clamps `CURRENCY_minting_rate` DOWN to the shared `CURRENCY_minting_rate_cap` every mint (se_CURRENCY.txt:1384-1392), and that cap is the shared svalue R2 forbids editing. So the ONLY safe, CHI-scoped lever is to clamp `var:CURRENCY_minting_rate` DOWN by a sound-money bias in the Qing monthly pulse (a tighter ceiling than the shared cap). **This is asymmetric by construction: `currency_recall`/`limited_minting` (bias −) TIGHTEN the mint ceiling; `more_minting`/`issue_bonds` (bias +) CANNOT raise mint volume above the shared cap** (that would require editing the forbidden svalue). Loose stances therefore act ONLY via read #1 (stress bias +) and their existing cosmetic modifiers — they do NOT increase mint volume. See "concrete lever choice."
 
 ### Layer 2 — `monetary_policy_law` (who controls the mint) → the bias's MAGNITUDE / integrity
 The control group is the "how competent / how corrupt is minting" lever. Rather than a second independent bias var, make it a MULTIPLIER on how faithfully the stance is executed + a graft term:
@@ -46,48 +48,48 @@ The control group is the "how competent / how corrupt is minting" lever. Rather 
 **DECISION (logged, overnight Rule 1):** do NOT build a second `qing_monetary_control_factor` var multiplying the bias. It adds a var + a read for a second-order effect the existing option modifiers already express. Layer 2 stays as its shipped cosmetic modifiers; its ONLY new mechanical role is UNLOCKING the stance group (Layer 3). Rejected alternative: a control→bias multiplier — cut as over-build (a var paying its cost for a subtle interaction the modifiers already cover). Recorded loudly, not deferred.
 
 ### Layer 3 — UNLOCK the stance group for the Qing (the deepest fix)
-Today `monetary_policy_setting.potential = { has_law = legislative_monetary_policy }` → a monarchy can NEVER pick a minting stance, so for the Qing the entire stance group (the actual minting lever) is dead. Options:
-- **(a) Broaden the potential** to `OR = { has_law = legislative_monetary_policy  has_law = executive_monetary_policy  has_law = delegated_monetary_policy }` — i.e. any monetary_policy_law lets you set a stance. Simplest; makes the stance group reachable for the Qing under its default (executive) monetary law. **LEANING (a).**
-- (b) A Qing-specific parallel stance law group (兌換條例 / mint-regulation) — more work, duplicates the vanilla group. Reject unless (a) has a gate problem.
+Today `monetary_policy_setting.potential = { has_law = legislative_monetary_policy }` (republic-only, via `legislative`'s `allow = is_republic`) → a monarchy can NEVER pick a minting stance, so for the Qing the entire stance group (the actual minting lever) is dead.
+- **FIX (rev-63 #4): scope the potential to the target, do NOT broaden to all monetary laws.** `potential = { OR = { has_law = legislative_monetary_policy  tag = CHI } }`. Broadening to `OR={legislative/executive/delegated}` would expose the stance group + its commerce/tax/stability modifiers to EVERY non-tribal monarchy AI (executive is the default first option; is_tribal=no) — scope creep vs the China-fine/ROW-abstraction rule + needless AI-eval churn. The `tag = CHI` branch gives the Qing the stance group and moves nobody else; republics keep it unchanged.
+- **VERIFIED not inert:** the Qing holds NO explicit monetary_policy_law in `setup/` → it default-holds `executive_monetary_policy` (first option, is_tribal=no satisfied). The `tag = CHI` branch does not depend on which monetary law it holds, so the stance group is reachable regardless. Both groups are already GUI-registered (government_view.gui:2048 law / :2124 setting) so a reachable monarchy stance group renders.
+- Rejected: a Qing-specific parallel stance law group (兌換條例) — duplicates the vanilla group for no gain now that the `tag=CHI` potential branch reaches it.
 
-**Verify:** which monetary_policy_law the Qing holds at 1763 start (setup) — if none is set, Layer 3 must also ensure the Qing has a default `monetary_policy_law` (executive) so the broadened potential is satisfied. Ground this in the setup before implementing.
+## Concrete lever choice — how the bias actually moves minting (rev-63 #2: RESOLVED)
+**There is NO CHI-only mint call site.** CHI mints through the SHARED `monthly_currency_pulse` (`on_action/economy/oa_wealth_changes.txt:111-133` → `CURRENCY_mint_currency` se_CURRENCY.txt:1381), tag-agnostic — the same path as every country with `official_currency`. So read #2 is NOT "where CHI mints"; it is:
+- **A CHI-only, `has_variable = qing_monetary_bias`-guarded CEILING clamp of `var:CURRENCY_minting_rate` placed in the Qing monthly pulse** (the same pulse that calls the qing_currency_stress recompute). `CURRENCY_minting_rate` is a standing player var, so clamping it CHI-side persists regardless of on_action ordering vs the shared mint pulse.
+- Implement as a CEILING, not an unconditional set (rev-63 #10): `if = { limit = { var:CURRENCY_minting_rate > <bias_ceiling> } set_variable = { name = CURRENCY_minting_rate value = <bias_ceiling> } }`. An unconditional set would fight the player's mint slider (EE_scripted_guis.txt:440-541) every month. Consider reflecting the lowered ceiling in the slider max to avoid a tug-of-war.
+- Rejected: editing `CURRENCY_minting_rate_cap` svalue (shared, monthly, feeds #23/#60 globally — R2 forbids it).
 
-## Concrete lever choice — how the bias actually moves minting (the load-bearing decision)
-Two candidate concrete hooks for the mint-discipline half of Layer 1's read #2:
-- **(a) Qing-scoped guarded term in the mint pulse:** where CHI mints (find CHI's `CURRENCY_mint_currency` / minting call in the Qing monthly currency pulse), clamp `CURRENCY_minting_rate` DOWN by the sound-money bias (a sound stance caps the player's mint slider lower) / allow UP by the loose bias, CHI-only, guarded on `has_variable = qing_monetary_bias`. Does NOT touch the shared svalue. **LEANING (a)** — narrowest blast radius, CHI-only, additive, reversible (clear the var = today's behaviour).
-- (b) Edit `CURRENCY_minting_rate_cap` svalue with a CHI-only guarded branch — rejected: the svalue is monthly, shared, and feeds #23/#60; a mistake there is global. (a) keeps the change on the Qing side of the fence (the [[currency sqrt]]/#60 caution: don't touch shared currency-core svalues).
-
-**BLOCKER to resolve before impl:** confirm WHERE the Qing actually mints each month (the CHI call site of `CURRENCY_mint_currency` or `CURRENCY_alter_amt_circulated`) so lever (a) has a real, CHI-only insertion point. If the Qing minting is done by the same shared monthly pulse as everyone else (no CHI-only site), then read #2 must instead be a CHI-only guarded pre-step in that pulse. Ground this in se_CURRENCY.txt / the monthly currency on_action before writing.
-
-## Files (anticipated — confirm at impl)
-- `common/laws/00_administrative_laws.txt` — Layer 3 potential broaden (+ confirm Qing default monetary_policy_law).
-- `common/laws/00_monetary_policy_setting.txt` — Layer 1: each stance option ADDS an `effect = { … set_variable qing_monetary_bias … }` (laws CAN carry an `on_enact`/effect? — VERIFY: vanilla law options take `modifier`; do they take an effect block, or must the bias be set via an `on_change`/on_action hook? This is a capability check — see traps). If law options cannot carry effects, the bias is set from an **on_action** that fires on law change (find the proven monetary/law-change on_action; DESIGN_LAW_EXPANSION PART E references guarded law-bias reads — confirm HOW those laws set their bias var: on_action vs option effect).
-- `common/scripted_effects/se_QING_DECLINE.txt` — Layer 1 read #1: one guarded additive term into the qing_currency_stress recompute (:201-211).
-- the CHI mint site (se_CURRENCY.txt or a Qing currency pulse se_) — Layer 1 read #2 lever (a), CHI-only guarded.
-- `localization/english/laws_l_english.yml` — update option descs to state the REAL effect (mint discipline / stress), not just the cosmetic modifier.
-- NO trade_goods, NO province/country blocks (no #219 flood risk — this is law + svalue + guarded var work).
+## Files (confirmed post-review)
+- `common/laws/00_monetary_policy_setting.txt` — Layer 3: `potential = { OR = { has_law = legislative_monetary_policy  tag = CHI } }`. Layer 1: each stance option gets `on_enact = { set_variable = { name = qing_monetary_bias value = N } }` (rev-63 #1: `on_enact` on law options is PROVEN — 00_qing_statutes_laws.txt uses it ~15× with set_variable; it fires only on active enactment, not default-hold, which preserves byte-identity. NO law-change on_action needed, NO boot-spike). **BOM + CRLF** (rev-63 #9 — do NOT convert to LF).
+- `common/laws/00_administrative_laws.txt` — no mechanical change needed (Qing default-holds executive; the CHI potential branch doesn't depend on it). **BOM + CRLF.** (Touch only if loc/desc updates land here.)
+- `common/scripted_effects/se_QING_DECLINE.txt` — Layer 1 read #1: one guarded DIRECT additive term into the qing_currency_stress LEVEL (:201-211), NOT the residual. **no-BOM/LF** (confirmed).
+- the Qing monthly currency pulse (the se_ that calls QING_DECLINE recompute; confirm exact file at impl) — Layer 1 read #2: the CHI-only guarded `CURRENCY_minting_rate` ceiling clamp. Verify that file's BOM/EOL before editing.
+- `localization/english/laws_l_english.yml` — option descs state the REAL effect (mint discipline / stress). State the asymmetry: loose stances raise stress but do NOT raise mint volume.
+- NO trade_goods, NO province/country blocks (no #219 flood risk). NO edit to CURRENCY_minting_rate_cap or any shared currency svalue.
 
 ## RISK
 - **R1 [HIGH] — do NOT let any stance flip `paper_money_allowed`.** That uncaps `CURRENCY_minting_rate_cap` (→ 99999) → runaway M1 → directly destabilizes #23/#60. `issue_bonds` is the tempting candidate; keep it a bias (+) only, NOT a paper-money unlock. The paper-money transition is a separate, later, deliberately-gated mechanic — out of #63.
 - **R2 [HIGH] — currency-core caution ([[currency sqrt root cause]], #60).** #63 must NOT edit shared currency svalues (`CURRENCY_minting_rate_cap`, backing_value, the gbip/sqrt chain). Only: set a Qing bias var, add ONE guarded additive term to the Qing stress recompute, and clamp the Qing mint rate CHI-only. Everything downstream (#23/#59) consumes those existing channels unchanged.
 - **R3 [MED] — no-restoring-drift ratchet ([[no-restoring-drift ratchet rule]]).** The stress bias is a STANDING additive term (not a one-shot nudge), band-gated by the existing clamp — so it does not ratchet. Confirm the bias is re-read each pulse (a standing term), not accumulated.
-- **R4 [MED] — magnitude.** The bias must be tuned so a debasement stance visibly raises monetary stress / loosens the mint WITHOUT swamping the opium_flow + reserve-ratio terms that dominate qing_currency_stress today. Small integer bias (e.g. ±5..±10 on a 0..100 meter). Verify on the #23/#51 econ logs (stress series is logged) — measure, don't guess.
-- **R5 [MED] — capability: can a law option carry an effect?** If not, the bias-set must be an on_action on law change. This is the single unproven construct in #63; if unproven after checking the oracles/vanilla, it becomes a small BOOT SPIKE (per overnight Rule 1 hard-block #1), NOT a hand-wave.
+- **R4 [MED] — magnitude.** The bias must be tuned so a debasement stance visibly raises monetary stress WITHOUT swamping the opium_flow + reserve-ratio terms that dominate qing_currency_stress today. Small integer bias (e.g. ±5..±10 on a 0..100 meter). Verify on the #23/#51 econ logs (stress series is logged) — measure, don't guess.
+- **R5 [RESOLVED — capability confirmed, no spike].** Law options DO carry `on_enact = { set_variable }` (rev-63 #1: proven ~15× in 00_qing_statutes_laws.txt; fires only on active enactment, not default-hold). The prior "boot-spike if unproven" contingency is DROPPED — the construct is settled.
+- **R6 [MED/LOW] — no neutral stance / one-way bias.** The setting group's first option is `currency_recall` (bias −); there is NO neutral (0) stance, and `on_enact` only SETS (never clears) → once any stance is enacted `qing_monetary_bias` is set and never returns to 0. Accepted (expected for a law — the player switches stances, doesn't "un-enact"). Byte-identity at game start still holds: on_enact doesn't fire on default-hold, so the var stays unset + all reads are has_variable-guarded. With the `tag=CHI` potential (Layer 3) a dangling non-CHI bias is impossible; belt-and-suspenders, the `on_enact` may also `tag=CHI`-guard the set.
 
 ## Verify (boot)
-- The Qing (a monarchy) can now REACH the `monetary_policy_setting` stance group (Layer 3).
-- Enacting `currency_recall`/`limited_minting` sets `qing_monetary_bias` negative → qing_currency_stress trends DOWN + the Qing mint rate cap tightens (mint slider ceiling lower); `more_minting`/`issue_bonds` → bias positive → stress up + looser mint. Confirm on the econ logs (stress series + minting_rate already logged in se_ECON_LOG).
+- The Qing (a monarchy) can now REACH the `monetary_policy_setting` stance group (Layer 3, via the `tag=CHI` potential branch); no OTHER monarchy AI gains it.
+- Enacting `currency_recall`/`limited_minting` sets `qing_monetary_bias` negative → qing_currency_stress trends DOWN + the Qing mint-rate CEILING tightens (mint slider ceiling lower). `more_minting`/`issue_bonds` → bias positive → stress UP; mint volume is UNCHANGED (loose stances cannot exceed the shared cap — asymmetric by design). Confirm on the econ logs (stress series + minting_rate already logged in se_ECON_LOG).
 - Default (no stance enacted / var unset): byte-identical to today (guarded reads).
 - `paper_money_allowed` UNCHANGED by every stance (R1). M1 (#60) not destabilized. #23 sqrt/gbip stable.
-- Loc: each option desc states its real mint/stress effect.
+- Loc: each option desc states its real effect + the asymmetry (loose = more stress, not more mint).
 
 ## Traps / rules
 - Guarded reads (P7): every `qing_monetary_bias` read behind `has_variable`. No-op default byte-identical.
-- No shared currency-core svalue edits (R2). CHI-only for the mint clamp.
-- No macro `$param$`/`#` in LOG strings. RHS var-vs-literal only (bias reads are `add = var:qing_monetary_bias` — effect context, legal; any TRIGGER on the bias must be var-vs-literal).
-- BOM/EOL: common/laws + loc = BOM; se_QING_DECLINE.txt — check its convention before editing (se_ files are usually no-BOM/LF, but VERIFY this specific file). No EOL churn.
-- Reconcile with DESIGN_LAW_EXPANSION item 23 ("Monetary Response" / qing_monetary_bias) — #63 IS that wiring; if item 23 is later built, it must reuse #63's qing_monetary_bias var, not a parallel one. Cross-ref locked here.
-- Capability check (R5) before writing the bias-set path.
+- No shared currency-core svalue edits (R2). CHI-only for the mint ceiling clamp; implement as a CEILING not an unconditional set (R6/rev-63 #10 — don't fight the slider).
+- read #1 into the direct stress LEVEL, NEVER the decaying residual / QING_DECLINE_nudge_signed (rev-63 #5).
+- No macro `$param$`/`#` in LOG strings. RHS var-vs-literal only.
+- BOM/EOL: both law files = BOM + **CRLF** (do NOT convert to LF, rev-63 #9); se_QING_DECLINE.txt = no-BOM/LF; the mint-pulse se_ — verify before editing. No EOL churn.
+- Reconcile with DESIGN_LAW_EXPANSION item 23 ("Monetary Response" / qing_monetary_bias) — #63 IS that wiring; item 23 (if later built) reuses #63's qing_monetary_bias var, not a parallel one.
+- NO #59 collision (bimetallic touches the world gold:silver bullion market/reserve valuation, not qing_currency_stress/minting/M1 — different vars).
 - Design-note-first → adversarial review → implement → verify boot.
 
 ---
