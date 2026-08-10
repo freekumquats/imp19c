@@ -152,20 +152,40 @@ qing_personnel.2 = {
 	immediate = {
 		LOG_line = { sys = QING  msg = "EVENT qing_personnel.2 (minister-governor clash) [ROOT.GetTag]" }
 		var:qing_office_personnel_holder = { save_scope_as = personnel_minister }
-		# pick a governor who is likely to clash (low loyalty or high prominence)
-		random_character = {
+		# [#34-D2 2026-08-09] Prefer the governor the pulse ACTUALLY flagged (qing_personnel_clash_target,
+		# set by se_QING_PERSONNEL on the fire path) so the event targets the man who clashed — not a fresh
+		# random draw that kept re-landing on the same high-prominence governor (Liu Tongxun 562). Guard on
+		# him still being a live governor employed by ROOT (a death/handoff between queue and fire could vacate him).
+		if = {
 			limit = {
-				employer = ROOT
-				is_governor = yes
-				is_alive = yes
-				OR = {
-					loyalty < 50
-					prominence >= 50
-				}
+				has_variable = qing_personnel_clash_target
+				var:qing_personnel_clash_target = { is_alive = yes  is_governor = yes  employer = ROOT }
 			}
-			save_scope_as = clashing_governor
+			var:qing_personnel_clash_target = { save_scope_as = clashing_governor }
 		}
-		# if no such governor, pick any governor
+		# fallback: pick a likely-to-clash governor (low loyalty or high prominence) who has NOT clashed
+		# recently ([#34-D1/D2] exclude qing_personnel_clashed_recently so the fallback also rotates targets).
+		if = {
+			limit = { NOT = { exists = scope:clashing_governor } }
+			random_character = {
+				limit = {
+					employer = ROOT
+					is_governor = yes
+					is_alive = yes
+					NOT = { has_variable = qing_personnel_clashed_recently }
+					OR = {
+						loyalty < 50
+						prominence >= 50
+					}
+				}
+				save_scope_as = clashing_governor
+			}
+		}
+		# last resort: ANY governor (NO cooldown exclusion here). The event trigger only guarantees a
+		# governor exists, not a non-cooldown one — so if the flagged target died AND every other governor
+		# is on cooldown, this UNCONDITIONAL pick guarantees scope:clashing_governor is set, else the
+		# options + right_portrait = scope:clashing_governor would dereference an unset scope (error). D2
+		# rotation is already served by the two branches above; this only prevents an empty scope.
 		if = {
 			limit = { NOT = { exists = scope:clashing_governor } }
 			random_character = {
@@ -177,6 +197,8 @@ qing_personnel.2 = {
 				save_scope_as = clashing_governor
 			}
 		}
+		# [#34] clear the hand-off var so a later un-targeted fire can't reuse a stale target.
+		if = { limit = { has_variable = qing_personnel_clash_target }  remove_variable = qing_personnel_clash_target }
 	}
 	
 	# OPTION A: recall the governor (appease the minister, lose the governor's service)

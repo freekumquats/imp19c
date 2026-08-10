@@ -70,9 +70,17 @@ QING_personnel_evaluate_governors = {
 					QING_pair_friction = { a = scope:the_minister  b = scope:the_governor }
 				}
 				
-				# LOW FRICTION (<40): they cooperate — minister cultivates the governor
+				# LOW FRICTION (<55): they cooperate — minister cultivates the governor
+				# [#34-D3 2026-08-09] Threshold raised 40 -> 55. QING_pair_friction (se_QING_AFFINITY.txt:464)
+				# is base 20 + 25 for a culture divide, so a Manchu minister vs ANY Han governor scores >=45
+				# on the 滿漢 fault line ALONE — which cleared the old >=40 clash gate for EVERY Han governor
+				# every quarter (the reported "always clashes"). At 55 a bare culture divide (45) no longer
+				# auto-clashes; a clash now needs ADDITIONAL friction (a zeal gulf, a standing rivalry, high
+				# corruption, or two proud men) on top — i.e. a genuinely bad pairing, not just Manchu-vs-Han.
+				# Raised HERE in the Personnel consumer, NOT in the shared QING_pair_friction (War/Council read
+				# the same score and must keep their own thresholds). Cultivation branch keeps the < gate.
 				if = {
-					limit = { ROOT = { var:qing_pair_friction < 40 } }
+					limit = { ROOT = { var:qing_pair_friction < 55 } }
 					# capable minister (finesse>=9) + congenial governor = effective cultivation
 					if = {
 						limit = { scope:the_minister = { finesse >= 9 } }
@@ -116,7 +124,7 @@ QING_personnel_evaluate_governors = {
 						}
 					}
 				}
-				# HIGH FRICTION (>=40): they clash — risk of recall or drift
+				# HIGH FRICTION (>=55): they clash — risk of recall or drift ([#34-D3] raised from >=40)
 				else = {
 					# check if the governor is loyal to the throne regardless
 					QING_char_affinity = yes
@@ -136,10 +144,25 @@ QING_personnel_evaluate_governors = {
 						# slot being free (checked EACH governor iteration, so once one governor claims it no
 						# further governor fires this pulse) and CLAIM it on the fire path only (after the chance
 						# succeeds) — the BT-28 court-slot pattern. Slot cleared at pulse top (00_monthly_country.txt).
+						# [#34-D1 2026-08-09] PER-GOVERNOR COOLDOWN. The old dispatch had ONLY the shared court
+						# slot + a 10% roll, so the SAME governor could be re-picked to clash quarter after quarter
+						# (the reported "same Clash event, always Liu Tongxun 562"). Gate this governor's roll on
+						# him NOT having clashed recently, and stamp a ~2-year timed marker ON HIM on the fire path
+						# so a fired clash steps that governor aside and the pool rotates to others. (Timed var =
+						# self-expiring, no cleanup needed — the proven cooldown idiom.)
 						if = {
-							limit = { ROOT = { NOT = { has_variable = qing_gc_event_slot_used } } }
+							limit = {
+								ROOT = { NOT = { has_variable = qing_gc_event_slot_used } }
+								NOT = { has_variable = qing_personnel_clashed_recently }
+							}
 							random = {
 								chance = 10
+								set_variable = { name = qing_personnel_clashed_recently  value = 1  days = 730 }  # [#34-D1] this governor won't be re-rolled for ~2 years
+								# [#34-D2 2026-08-09] Save THIS governor as the clash target so qing_personnel.2 targets
+								# the man who actually clashed, instead of re-drawing a fresh random_character (which kept
+								# landing on the same high-prominence governor, Liu Tongxun 562). The event reads this
+								# saved scope first and only random-picks as a fallback. Days-delayed fire, so store on ROOT.
+								ROOT = { set_variable = { name = qing_personnel_clash_target  value = scope:the_governor } }
 								ROOT = {
 									set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [BT-57] claim court slot after the chance succeeds (mirrors frontier/works rolls)
 									trigger_event = {
