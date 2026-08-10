@@ -1264,3 +1264,41 @@ EOL/BOM flips.
 
 **Status:** #112a DONE — design re-architected after review, code reviewed SHIP-READY, committing + pushing.
 Next: #112b (aqsaqal foreign char, on SPIKE 1) → #112c (contest, on SPIKE 2) → #12 (caravan event coupling).
+
+---
+
+## Boot-test session (user actively testing, 2026-08-09 afternoon)
+
+User boot-tested the current tree (logs.zip Aug 9 20:06, ran ~19:15–20:04 in -debug_mode over several quarters) and reported bugs live. Per user order ("mark it as a task and take notes, I'm testing"), bugs were QUEUED as tasks #31–#48, tree untouched, until the user cleared me to fix ("start there and fix it since Hard Times was reported as a bug anyway", "fix all issues").
+
+**Full log triage (imp19c-logs skill):** error.log = 120,014 lines. The SINGLE worst source, by far: `flavor_eve.6.c` (Hard Times granary option) — ~50,000 lines (~40% of the whole log) from `qing_gran_ht_ship_tmp` read-before-set (FlavorEvents.txt:293/295/299). Root cause: the option computed the ship amount with set_variable+var: reads INSIDE the option effect, and because the event had an EMPTY trigger it fired for the whole world and its options were AI-predict/tooltip-evaluated, where set_variable does not commit → the var reads failed en masse. Sibling shortage.1.c uses the same set-then-read shape but does NOT flood — because it is properly gated. Confirmed the flood = empty-trigger + AI predict pass, not the code shape. Other error classes were upstream econ read-before-set noise (shipping_*, *_stockpile, DEBT, debug_demand) per [[econ-log-noise-not-bugs]]; debug.log had only the benign QING_seed_starting_treasury non-CHI guard log.
+
+### Tasks queued from the boot test (#31–#48)
+Reported bugs: #32 Marriage picks Empress Consort; #33 Able Governance still ambient; #34 Personnel Clash recurs+same target; #36 flavor_eve.1 empty trigger (anachronistic); #37 Hard Times no food gate (fired on Xingiang/Henan, maxed 4120); #38 Hard Times option shows no ship figure; #39 Hard Times drains whole reserve; #40 amban pool never grows (fanyi_jinshi only from on_becoming_adult); #41 frontier turf-war bypasses shared court slot (variety complaint) + folds the #19-review LOW-1 frontier LOG_fail; #42 silver reserve rises while (change) shows negative (inflows bypass silver_reserve_actual_change); #43 Foreign Gifts (flavor_eve.7) tie to Zongli Yamen + real relations; #44 Salt Gabelle → concrete salt yards + act on yard provinces; #45 RESEARCH salt inspector/official (agent dispatched, EN+CN sources); #46 silver>gold oddity (transient market swing, base values equal 0.2 — leave base, investigate); #47 the log-flood; #48 Translation Laureate +2 charisma.
+Process: #35 elevated — restore #23 currency verification tooling for ONE verify boot then re-strip (user: "not heavy logs all the time, just long enough to verify"); memory [[verify-before-strip-logs-rule]] written after user: "making changes deep in the inner workings of the economy and then stripping logs to monitor said changes is insane".
+
+### #48 — Translation Laureate +2 charisma — DONE
+fanyi_jinshi trait (common/traits/00_imp19c.txt) given `charisma = 2` (parallel #10; amban rank svalue weights charisma x2). **Commit:** `9292c5098` + pushed.
+
+### #37/#38/#39/#47 — Hard Times (flavor_eve.6) unified rewrite — IN REVIEW
+One coherent rewrite folding all four: (#37) real state-food gate on trigger + immediate picker (has_state_food < 1/5 capacity, mirroring shortage.1); (#47) PRECOMPUTE the ship amount ONCE in `immediate` into qing_hardtimes_ship_preview on the saved state scope, so the option only READS it — kills the predict-pass flood; (#39) 400-shih cap + reserve FLOOR of 400 (ship = min(cap/5, 400, pool-400), gated on pool>400) so relief can never empty the reserve; (#38) option loc displays the precomputed figure. Braces 48/48 block, 282/282 file; CRLF+BOM preserved; diff 65+/32-. Code-review dispatched.
+
+---
+
+## Boot-test fixes committed (user cleared "fix all issues" / "keep fixing bugs", 2026-08-09 evening)
+
+Full log triage of logs.zip (Aug 9 20:06) done first (see above). Fixes below all code-reviewed + committed + pushed to merge-overnight, authored freekumquats.
+
+- **#48** (9292c5098) — Translation Laureate (fanyi_jinshi 繙譯進士) +2 charisma. Trait edit, parallel #10.
+- **#45** (7b479ccb9) — salt-administration research digest committed (research/RESEARCH_QING_SALT_ADMINISTRATION.md). DONE.
+- **#37/#38/#39/#47** (44870b65b) — Hard Times (flavor_eve.6) UNIFIED rewrite. The #47 log-flood (~50k lines, ~40% of error.log) was the priority: flavor_eve.6.c computed the ship amount with set_variable+var:read INSIDE the option, and the EMPTY trigger let it fire worldwide + AI-predict-evaluate where set_variable doesn't commit → mass fetch-fail. Fix: real state-food gate (#37) + precompute-in-immediate/read-only-in-option (#47) + 400 cap & 400 reserve floor (#39) + ship amount shown in the label (#38) + review LOW fixes (gate payload on ship>0, clean up preview var). Reviewed clean.
+- **#32** (995c3573e) — 'A Marriage Across the Divide' (qing_char.10) never picks the Empress Consort: added is_female=no + is_married=no to both the any_character check and the random_character limit in se_QING_DECLINE.txt.
+- **#33** (2b9e14219) — removed the standalone ambient 'Able Governance' (qing_amban.3) else_if in se_QING_AMBAN.txt; #15 had left it. Event still dispatched from the 3 negotiation/capstone success paths. Reviewed SOUND.
+- **#36** (956ee42cd) — gated 'Anonymous Articles In The Paper' (flavor_eve.1) on invention=tech_newspapers (empty trigger → anachronistic pre-press).
+- **#35** (c9da3fc16) — RESTORED the #23 currency verification tooling (revert of #16 255d56a28): se_ECON_LOG_TZPROBE, curx_analyze.py, gen_econ_tzprobe.py, the CURX chain + 2 call sites. Per user: temporary — verify #23 (+ characterize #46 gold/silver) on ONE -debug_mode boot, then re-strip. Memory [[verify-before-strip-logs-rule]] written. Task stays in_progress until the verify boot + re-strip.
+- **#31** (f0db372a8) — auto-arm the #112 aqsaqal/contest boot spikes at game start (set qing_aqsaqal_spike_on in the CHI on_game_initialized block); drops the "Unknown command" console step. User: all games are debug/test-only, so arming for every CHI game (incl. the visible Caravan debug card = spike test-b) is intended. Remove with #112b.
+
+Research agents dispatched (background): salt admin (#45, DONE); 1763 trade-good prices, China-anchored + Chinese sources (#49); mod script-market regional-price mapping (#50).
+Trade-good pricing investigation (#49): FLOOD-SAFE verdict — the `gold = N` base value is independent of the #219 flood (lead=0.4/saltpetre=0.25 already vary with no country{} block + no trade requests firing); may differentiate values, editing ONLY `gold = N`. #50 explores regional divergence in the script market. #44 grew into a full Salt Monopoly window (Revenue panel) + 兩淮鹽政 Salt Commissioner office + output-based revenue rework.
+
+Still OPEN: #34 (Personnel Clash D1/D2/D3 — in progress), #40 (amban pool), #41 (frontier slot + LOG_fail), #42 (silver reserve change), #43 (Foreign Gifts), #44 (Salt Monopoly window — design-note-first), #46 (gold/silver, blocked on #35 verify), #49/#50 (trade pricing).
