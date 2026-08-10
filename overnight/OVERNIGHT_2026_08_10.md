@@ -4,6 +4,11 @@ Branch: merge-overnight. Author: freekumquats. Rule this session (user, explicit
 passed diagnosis → adversarial review → design → adversarial review.** Several pending tasks were missing
 designs; dispatch reviews + write those designs BEFORE building anything. Log every decision here (Rule 2).
 
+## ⚠️ ASSUMPTIONS & GUESSES (scrutinize on the boot — every best-guess value/call lives here)
+Per user directive: any magnitude, tuning constant, or best-guess design call made WITHOUT boot data is called out here explicitly so it can be checked/tuned on the verify boot. Each carries the log line that will confirm it.
+- (#64) crop-seeding province PICKS + per-crop FLOORS (maize ≥12-15 etc.) — GUESS: chose specific American grain/livestock provinces + target counts by terrain/region judgement, not a sourced per-province list. Verify: crop distribution on the map + no economy destabilized (tzprobe).
+- (none yet for #63 — will append as I set the bias magnitudes below.)
+
 ## Design/review inventory taken at session start (pending build tasks)
 | Task | Design doc | Adv. review | Disposition |
 |---|---|---|---|
@@ -109,7 +114,8 @@ Autonomous plan (user directive: work per imp19c-overnight, full loop): round-2 
 
 ## IMPLEMENTATION PHASE (all four designs review-clean; building in ID order)
 - **#64 — DONE ✅ (committed a3865a251).** Converted 38 American provinces' `trade_goods=` from generic grain/livestock (+ 2 misplaced New Mexico potato → maize) to the 5 NW crops across 13 setup/provinces/*.txt files. American totals: maize 18, peanut 6, chili 8, sweet_potato 3-new, potato 6 Andean — all floors met, China now minority for maize/peanut/chili, potato Andean-only. rev64impl = CLEAN (scope/floors/picks/integrity/downstream all verified). Full loop: design→review×2→impl→review→commit. Unblocks #62.
-- **#62 — final resolution reviewed (rev62 = PROCEED-WITH-CORRECTIONS, 1 MED folded) → IMPLEMENTED, post-impl review running (rev62impl).** rev62 confirmed the core fix correct + potato food-only SAFE (no luxury floor — Andean producers consume locally, no industry consumer, near-zero 1763 China potato demand is historically right). MED folded: the 3 rewritten Totals mirror DEMAND_grain EXACTLY (`value = DEMAND_food_<crop>` + `min=0`) — dropped the luxury seed + else=base_total + wealth-elasticity block AND the final `multiply=DEMAND_elasticity_impact` (a wealth-downturn malus food goods must not carry); used the BOUNDED svalue not the raw var (rev62 LOW). IMPL: DEMAND_luxury_svalues.txt (3 Total rewrites, LF+BOM) + se_DEMAND.txt (−6 luxury call-list lines, CRLF+BOM preserved, numstat 0/6 no churn); peanut/chili untouched; #279 count block untouched; braces balanced. Pending rev62impl → commit.
+- **#62 — DONE ✅ (committed 8a35b6789).** Production-gated food-only rewrite of maize/potato/sweet_potato Totals + 6-line luxury call-list cleanup; peanut/chili untouched. Full loop: design→rev62(MED folded)→impl→rev62impl(HIGH: off-region phantom demand → gate fix)→re-review CLEAN→commit. On-region bounded food demand, off-region →0 (#279 invariant restored). Verify-on-boot via tzprobe demand bands.
+- **#62 — (superseded log below) final resolution reviewed (rev62 = PROCEED-WITH-CORRECTIONS, 1 MED folded) → IMPLEMENTED, post-impl review running (rev62impl).** rev62 confirmed the core fix correct + potato food-only SAFE (no luxury floor — Andean producers consume locally, no industry consumer, near-zero 1763 China potato demand is historically right). MED folded: the 3 rewritten Totals mirror DEMAND_grain EXACTLY (`value = DEMAND_food_<crop>` + `min=0`) — dropped the luxury seed + else=base_total + wealth-elasticity block AND the final `multiply=DEMAND_elasticity_impact` (a wealth-downturn malus food goods must not carry); used the BOUNDED svalue not the raw var (rev62 LOW). IMPL: DEMAND_luxury_svalues.txt (3 Total rewrites, LF+BOM) + se_DEMAND.txt (−6 luxury call-list lines, CRLF+BOM preserved, numstat 0/6 no churn); peanut/chili untouched; #279 count block untouched; braces balanced. Pending rev62impl → commit.
 
 ## Ready-to-build once the review backlog clears (design+review complete)
 - #44 salt monopoly (DESIGN_SALT_MONOPOLY_44 §77 corrections + revised minimal slice).
