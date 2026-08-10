@@ -1054,4 +1054,6 @@ add_friend unchanged, modifier valid + non-duplicate, genericity resolved (the r
 "Qing-named modifier" concern since I'd already switched to the tag-neutral one). Braces 270/270; CRLF+BOM
 preserved; no churn.
 
-**Commit:** (below)
+**Commit:** `d849c0ded` + pushed.
+
+**Status:** #21 DONE — reviewed, findings folded, committed + pushed.
