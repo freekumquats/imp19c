@@ -33,7 +33,7 @@ Convert selected American provinces' TRADEGOOD to the appropriate NW crop. Prefe
 `common/province_setup.csv` is **NOT read by the engine** — it is only input to the modding scripts (buildings_generator.py / old_to_new_setup_*.py), and it DIVERGES from the live .txt (e.g. Wuyishan 3317 = `tea` in `00_Fujian.txt:131` but `peanut` in the CSV). Recorded decision: `overnight/OVERNIGHT_DECISIONS2.md:207-218` ("CRITICAL SOURCE DECISION, 2026-07-08"); confirmed by rg (no engine loader for province_setup). **Directive: edit `setup/provinces/00_<Region>.txt` only** (optionally sync the CSV for generator hygiene, never as the live edit). There is NO #281 rifles trap here — that trap only bites if you edit the CSV.
 - Concrete live-good locations (verified): New Mexico 548/856 = `00_American_Southwest.txt:45,91` (potato, to reassign); Peru potato = `00_Peru.txt` (Moquegua 1587, Azángaro 2080) + `00_Lower_Peru.txt` (Uyuni 2128); Mexico targets = `00_Eastern_Mexico.txt`/`00_Pacific_Mexico.txt`/`00_Northern_Mexico.txt`/`00_Central_America.txt`; also `00_Antilles.txt`, `00_Appalachia.txt`, `00_Argentina.txt`, the 5 Brazil files; current maize seed = `00_Hunan.txt:27`.
 - **Each conversion SUBTRACTS a grain/livestock producer as well as adding a NW-crop one — accepted** (rev-64 C-M1): grain→maize is food-basket-neutral (no famine risk), and the convert-only-generic rule (R2) keeps differentiated goods intact; the grain/livestock loss to building-eligibility/pop-composition is low-consequence and deliberate.
-- **BOM/EOL:** the setup/ reader REJECTS BOM (memory: setup-reader-rejects-bom) — setup/provinces/*.txt must stay BOM-free. Preserve existing EOL. No churn.
+- **BOM/EOL (rev64b-round2 MED — the directive was INVERTED; corrected):** the `setup/provinces/*.txt` history files DO carry a UTF-8 BOM (verified `ef bb bf` on 00_Hunan/00_Peru/00_American_Southwest/00_Eastern_Mexico) and boot fine — the "setup-reader-rejects-bom" memory applies to a DIFFERENT setup reader (country/main setup), NOT these province-history files. Directive: **PRESERVE the existing BOM AND EOL — do not add, strip, or convert either.** A BOM-stripping edit path would churn every edited file (the file-editing-path rule's exact hazard).
 
 ## Downstream coupling to check (must-hold, verify at impl + boot)
 - **#279 dynamic food basket**: `DEMAND_num_food_goods` = 6 + 1 per NW crop actually PRODUCED (se_DEMAND.txt). Adding American maize/peanut producers CHANGES how many food goods exist per governorship → the famine-metric divisor (memory #62 M2 dilution). Verify the count logic stays consistent across the new producer set.
@@ -59,7 +59,7 @@ Convert selected American provinces' TRADEGOOD to the appropriate NW crop. Prefe
 - #62 can now proceed on corrected geography.
 
 ## Traps / rules
-- Source-of-truth = setup/provinces/*.txt (see §CORRECTIONS C1 — resolved, NOT open). No BOM in setup (setup reader rejects BOM). No EOL churn.
+- Source-of-truth = setup/provinces/*.txt (see §CORRECTIONS C1 — resolved, NOT open). PRESERVE the existing UTF-8 BOM + EOL on these history files (they HAVE a BOM and boot fine — do not add/strip/convert; the "setup-reader-rejects-bom" memory is a DIFFERENT reader). No churn.
 - Concrete province-ID list built + logged (no silent sampling); numeric per-crop American floors (C-H1).
 - This is content seeding, NOT plumbing — no #219 flood risk (not editing good defs or country/province modifier blocks).
 - Design-note-first → adversarial review → implement → verify boot.
