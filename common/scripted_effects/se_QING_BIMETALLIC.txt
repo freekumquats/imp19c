@@ -11,24 +11,32 @@
 # GT_split_get_global_import_unit_price_all (the gbip sqrt-sum, the next call) — so gbip reads the nudged price the
 # SAME quarter. (A post-PASS write was INERT: next quarter's line-37 overwrites local_price from scratch —
 # order/stockpile×0.6 — before line-38 reads it, and gold/silver never read their prior local_price.) This is
-# therefore SAME-TICK proportional control (no 1-quarter delay); kept stable by LOW gain + WIDE deadband + a
+# therefore SAME-TICK proportional control (no 1-quarter delay); kept stable by LOW gain + deadband + a
 # per-pulse clamp. It writes ONLY local_price (the gbip INPUT), never gbip (the output); it calls NO GT_split
 # recompute (no re-entrancy).
 #
-# CALIBRATION GATE (review LOW, load-bearing): R is NOT the coinage 1:15 — r = gbip_gold/gbip_silver is a ratio
-# of sqrt-aggregated import-price INDICES (~O(1)-O(few)), not a per-ounce price, so it does not sit near 15.
-# Until R is calibrated to the REAL observed r, an active pull would saturate one-directionally. So the actual
-# nudge is gated behind the global flag qing_bimet_enabled (DEFAULT OFF): the mechanism ships now (hook +
-# band-logging + pull), the first boot runs OBSERVE-ONLY (logs r/gbip/backing_value bands), the real r is read,
-# R/deadband/gain are set to it, and the flag is flipped on. NOT a deferral — the whole mechanism is here; only
-# the parity centre awaits the one number a boot must supply.
+# SELF-CALIBRATING PARITY CENTRE R (replaces the old observe-only + guessed-R=3 gate): R is NOT the coinage
+# 1:15 — r = gbip_gold/gbip_silver is a ratio of sqrt-aggregated import-price INDICES (~O(1)-O(few)), not a
+# per-ounce price, so its real value is unknown until a boot produces it. Rather than guess R (which would
+# saturate the pull one-directionally) and gate the whole thing OFF pending a hand-calibration boot, we ANCHOR
+# R to the FIRST observed r at runtime: the natural game-start ratio IS the bimetallic equilibrium, and
+# arbitrage resists DRIFT away from that equilibrium. So on the first warm pulse we seed qing_bimet_R = r (and
+# never overwrite it), then pull toward it every pulse thereafter. This makes the pull LIVE from turn one, no
+# guessed constant and no second calibration boot — one boot measures the anchor, the convergence, AND (via the
+# curx pass) whether gbip_silver stayed flat so #23 is undisturbed.
+#
+# STABILITY: the pull can only mean-REVERT (moves r toward R and stops in the deadband) — it cannot run away or
+# re-amplify like the #23 sqrt bug. Kept gentle by LOW gain (k=0.02) + deadband (±0.1×R around R) + a hard
+# per-pulse clamp (±0.05 on each local_price). It writes ONLY local_price (the gbip INPUT), never gbip (the
+# output), and calls NO GT_split recompute (no re-entrancy). Worst case of a mis-anchor is a small bounded
+# nudge, visible on the same boot's curx gbip_silver row.
 #
 # H1 div/0 GUARD: gbip is legitimately 0 in the cold-start/no-trade window (the sqrt at
 # se_GLOBALTRADE_split.txt:2698 is skipped) → the WHOLE effect is gated on BOTH gbip globals > 0.
 #
-# [#59 ASSUMPTION — best-guess, boot-tune once r is observed]: R (parity centre) = 3 (placeholder near a
-# plausible index ratio, NOT the coinage 15 — the observe boot replaces it); DEADBAND half-width = 0.5;
-# gain k = 0.02; per-pulse local_price clamp = ±0.05.
+# [#59 CONSTANTS — best-guess, watch on the boot]: DEADBAND half-width = 0.1 (as a fraction of R — wide
+# band so only real drift pulls); gain k = 0.02; per-pulse local_price clamp = ±0.05. R itself is NO LONGER a
+# guess — it self-anchors to the observed start r.
 #
 # TEMPORARY-INSTRUMENTED: band-classified per-pulse diagnostic (r, gbip, multi-regime backing_value) via
 # debug_log — strips with #35 after boot-verify. STATIC labels only. Called from GT_split_do_global_trade_split
@@ -36,8 +44,9 @@
 ########################################################################
 
 # ======================================================================
-# QING_BIMET_pull — run IN-PASS for type=6 only, after local_price is set + before the gbip sum. Logs r/gbip/
-# backing_value bands every pulse; applies the pull ONLY if qing_bimet_enabled is set (calibration gate).
+# QING_BIMET_pull — run IN-PASS for type=6 only, after local_price is set + before the gbip sum. On the first
+# warm pulse it anchors R to the observed r; every pulse it logs r/gbip/backing_value bands AND applies the
+# mean-reversion pull LIVE (no enable-flag, no guessed R — the self-anchor removed the old observe-only gate).
 # ======================================================================
 QING_BIMET_pull = {
 	# H1 GUARD: both gbip globals warm + positive, else skip (no r) — structural div/0 kill.
@@ -53,16 +62,35 @@ QING_BIMET_pull = {
 		change_global_variable = { name = qing_bimet_r  add = global_var:global_base_import_price_gold }
 		change_global_variable = { name = qing_bimet_r  divide = global_var:global_base_import_price_silver }
 
-		QING_BIMET_log_bands = yes   # ALWAYS log (observe-only + active alike) so the boot reveals the real r
+		QING_BIMET_log_bands = yes   # log r/gbip/backing every pulse so the boot shows the anchor + convergence
 
-		# ACTIVE PULL — only when calibration-enabled (the flag is set once R is tuned to the observed r).
+		# SELF-ANCHOR R to the FIRST warm r (the game-start equilibrium); never overwrite it thereafter.
 		if = {
-			limit = { has_global_variable = qing_bimet_enabled }
-			# d = R − r (R placeholder 3; recalibrate to observed r). Pull only when |d| exceeds the deadband (0.5).
-			set_global_variable = { name = qing_bimet_dev  value = 3 }
+			limit = { NOT = { has_global_variable = qing_bimet_R } }
+			set_global_variable = { name = qing_bimet_R  value = global_var:qing_bimet_r }
+			debug_log = "IMP19C BIMET R anchored to the first observed r (parity centre set for"
+		}
+
+		# ACTIVE PULL — LIVE every pulse now that R self-anchors (no enable-flag gate, no guessed R).
+		if = {
+			limit = { has_global_variable = qing_bimet_R }
+			# d = R − r. deadband half-width = 0.1 × R (±10% of the anchor — wide enough to ignore ordinary
+			# quarter-to-quarter float, narrow enough that a REAL drift actually trips the pull. A 0.5×R band
+			# would need r to move ±50% before firing, leaving the mechanism inert within normal float — #59
+			# review LOW-1; tightened to 0.1×R so it activates on genuine drift).
+			set_global_variable = { name = qing_bimet_band  value = global_var:qing_bimet_R }
+			change_global_variable = { name = qing_bimet_band  multiply = 0.1 }
+			set_global_variable = { name = qing_bimet_dev  value = global_var:qing_bimet_R }
 			change_global_variable = { name = qing_bimet_dev  subtract = global_var:qing_bimet_r }
+			# "outside the ±band" test, RHS-comparison-safe (no var on a comparison RHS): stage
+			# (dev − band) and (dev + band), then test each against the LITERAL 0. dev−band > 0 ⇒ above
+			# the upper edge; dev+band < 0 ⇒ below the lower edge.
+			set_global_variable = { name = qing_bimet_dev_hi  value = global_var:qing_bimet_dev }
+			change_global_variable = { name = qing_bimet_dev_hi  subtract = global_var:qing_bimet_band }
+			set_global_variable = { name = qing_bimet_dev_lo  value = global_var:qing_bimet_dev }
+			change_global_variable = { name = qing_bimet_dev_lo  add = global_var:qing_bimet_band }
 			if = {
-				limit = { OR = { global_var:qing_bimet_dev > 0.5  global_var:qing_bimet_dev < -0.5 } }
+				limit = { OR = { global_var:qing_bimet_dev_hi > 0  global_var:qing_bimet_dev_lo < 0 } }
 				# gold delta = clamp( k×d , ±0.05 ); silver delta = −gold delta. r<R (d>0) → gold too cheap → raise gold.
 				set_global_variable = { name = qing_bimet_mag  value = global_var:qing_bimet_dev }
 				change_global_variable = { name = qing_bimet_mag  multiply = 0.02 }
@@ -96,10 +124,14 @@ QING_BIMET_pull = {
 				remove_global_variable = qing_bimet_mag_ag
 				remove_global_variable = qing_bimet_mag
 			}
-			else = { debug_log = "IMP19C BIMET gated (r inside the deadband, no pull)" }
+			else = { debug_log = "IMP19C BIMET within the deadband, no pull this pulse for" }
 			remove_global_variable = qing_bimet_dev
+			remove_global_variable = qing_bimet_dev_hi
+			remove_global_variable = qing_bimet_dev_lo
+			remove_global_variable = qing_bimet_band
 		}
-		else = { debug_log = "IMP19C BIMET observe-only (calibration flag off, logging r only)" }
+		# (the R-anchor block above sets qing_bimet_R on the first warm pulse, so this pull block always runs
+		# from turn one — there is no observe-only / disabled path anymore.)
 		remove_global_variable = qing_bimet_r
 	}
 	else = { debug_log = "IMP19C BIMET skipped (a gbip metal global unwarmed/non-positive, cold start)" }

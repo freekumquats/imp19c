@@ -446,11 +446,12 @@ the court's reform posture. Risk: moderate (signed-clamp footgun — the #1 impl
 added at the cohesion nudge; cohesion feeds `qing_banner_decay` bands. Modifiers express Manchu-grandee
 prestige vs. autocratic centralization. Risk: low.
 
-**23. Currency Stress / Monetary Response** — [ACCUMULATOR] `qing_currency_stress`
-(`se_CURRENCY_STRESS.txt` engine drift + discrete nudges). **Pairs with vanilla `currency_law`.** Law sets
+**23. Currency Stress / Monetary Response** — ✅ BUILT as #63 (this catalogue entry is now IMPLEMENTED, not
+pending). [ACCUMULATOR] `qing_currency_stress` (`se_QING_DECLINE.txt` recompute + discrete nudges). Law sets
 `qing_monetary_bias` ∈ {hard-specie −/ stabilization 0 / debasement +} added as a standing stress nudge.
-Modifiers: hard-specie = +stability/−commerce; debasement = +tax/−stability. Risk: low. *(This is the Qing
-analogue; see PART D for the vanilla monetary stubs.)*
+Modifiers: hard-specie = +stability/−commerce; debasement = +tax/−stability. Risk: low. This entry described
+the mechanic #63 delivered; it is retained only as the origin note. There is NO separate follow-up task — #63
+IS this. (The `qing_monetary_bias` var it names is #63's live var, not a parallel one to be created later.)
 
 ### B3. BIAS-B — recomputed targets (one guarded term in the formula, before the clamp)
 
