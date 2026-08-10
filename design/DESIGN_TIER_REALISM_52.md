@@ -153,3 +153,10 @@ REVISED OPTIONS for #52's category question:
 (a) leave categories, tune supply/demand only [minimal];
 (b) reclassify the 4 New World FOOD crops (maize/potato/sweet_potato/peanut) 2→1 to fix our own incidental tobacco-clone [corrects a fork shortcut; globally-scoped but defensible; verify cross-country];
 Recommend (b) is now viable (was wrongly framed as too-risky). Still gate on the export-premium research + the full-tier probe before finalizing.
+
+## DECOUPLING — the reclassification is NOT gated on the luxury probe/research (user, 2026-08-10)
+I wrongly wrote the New-World-food-crop reclassification (maize/potato/sweet_potato/peanut, category 2→1) as "gated on the export-premium research + full-tier probe." That conflates two INDEPENDENT things:
+- **The reclassification** is a STANDALONE CORRECTNESS FIX: we accidentally cloned tobacco's category=2 onto four subsistence food crops (f45c9ce7b, a #64 parse-crash unblock). maize/potato/sweet_potato/peanut are bulk subsistence calories in Qing China → they belong in category 1 (staples) with grain. This is justified on its OWN terms and needs NOTHING from the luxury investigation.
+- **The export-premium research + full-tier probe** gate the LUXURY-PRICING question (are tea/silk/porcelain dear enough; export-vs-domestic). Different question, different goods.
+=> The reclassification has its OWN (and only) gate: a CROSS-COUNTRY verification that moving the 4 crops 2→1 doesn't break another country's demand (category is global — every country's demand system reads it). That is the correct + sufficient gate. It does NOT wait on the tea/silk export research or the luxury-tier probe.
+=> Split #52 into two independent workstreams: (1) NEW-WORLD-CROP RECLASSIFICATION — a self-contained correctness fix (maize/potato/sweet_potato/peanut 2→1; chili TBD), gated only on its own cross-country verify boot; can proceed independently. (2) LUXURY TIER PRICING (tea/silk_cloth/porcelain export-premium) — gated on the export-premium research + full-tier probe. These are NOT sequenced; (1) can ship first.
