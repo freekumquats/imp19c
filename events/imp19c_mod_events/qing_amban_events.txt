@@ -7,8 +7,11 @@
 #                  crisis; player chooses to recall or back the resident)
 #   qing_amban.2 — an amban goes native (or is co-opted by the local elite; player
 #                  recalls him or lets him stay, accepting the drift)
-#   qing_amban.3 — an able resident suppresses unrest in the dependency (reward)
 #   qing_amban.4 — death or replacement of a long-serving resident (turnover)
+# [#58 2026-08-10] qing_amban.3 ("Able Governance") DELETED — its able-resident reward is now
+#   applied INLINE in the three integration negotiation-success arms (qing_integ.10.d/.12.d
+#   unrest/strife = lesser bump; qing_integ.40.c decree/revolt = full commend), scaled by the
+#   crisis's significance, on the specific event the player already saw rather than a generic follow-up.
 #
 # CHI player-only; fired from QING_amban_evaluate or as follow-ons. Namespace qing_amban.
 ########################################################################
@@ -42,7 +45,7 @@ qing_amban.1 = {
 		name = "qing_amban.1.a"
 		custom_tooltip = "qing_amban.1.a.tt"
 		# RECALL: back the Lifan holder. Resident is recalled, dependency stabilizes.
-		QING_amban_recall = { subject = scope:qing_amban_crisis_subject  reason = "holder-clash" }
+		QING_amban_recall = { subject = scope:qing_amban_crisis_subject }
 		# [#58 review-fix 2026-08-08] refresh the Lifan Yuan panel lists now — this option is dispatched
 		# with a delay, so it runs AFTER its pulse's post-evaluate recompute; without this the recalled
 		# seat shows a stale "?" until the next quarter. Safe inline (event option, never compile-inlined).
@@ -132,7 +135,7 @@ qing_amban.2 = {
 		name = "qing_amban.2.a"
 		custom_tooltip = "qing_amban.2.a.tt"
 		# RECALL: replace him. Dependency stabilizes briefly, but turnover cost.
-		QING_amban_recall = { subject = scope:qing_amban_native_subject  reason = "gone-native" }
+		QING_amban_recall = { subject = scope:qing_amban_native_subject }
 		# [#58 review-fix 2026-08-08] refresh the Lifan Yuan panel lists now — this option is dispatched
 		# with a delay, so it runs AFTER its pulse's post-evaluate recompute; without this the recalled
 		# seat shows a stale "?" until the next quarter. Safe inline (event option, never compile-inlined).
@@ -154,118 +157,6 @@ qing_amban.2 = {
 			QING_char_affinity = yes
 			change_variable = { name = qing_char_affinity  subtract = 10 }
 		}
-	}
-}
-
-# ======================================================================
-# qing_amban.3 — ABLE RESIDENT: a capable amban suppresses unrest in the dependency
-# or mediates a local dispute, keeping the march stable. Reward event. Player
-# commends him (loyalty, standing, small gold grant) or simply notes it.
-# ======================================================================
-qing_amban.3 = {
-	type = country_event
-	title = "qing_amban.3.t"
-	desc = "qing_amban.3.desc"
-	picture = senate
-	left_portrait = scope:qing_amban_able
-	# [#15 2026-08-09] fires on EITHER path:
-	#  (A) AMBIENT — an able amban (affinity >= 70) sits over a subject with province_unrest, dispatched from
-	#      QING_amban_evaluate; OR
-	#  (B) NEGOTIATION — a resident amban has just talked down a rising in an integration crisis (qing_integ
-	#      .10.d / .12.d / .40.c), which folds its "restore order" surfacing INTO this richer reward event
-	#      (replacing the retired bare-ack qing_integ.45). On path B the branch has ALREADY applied the
-	#      amban's prominence + the province-ease + the Lifan credit, and hands us scope:integ_amban +
-	#      scope:target (they propagate through trigger_event). So the trigger admits both: the ambient
-	#      subject-scan OR an existing scope:integ_amban.
-	trigger = {
-		tag = CHI
-		OR = {
-			# PATH B: a FRESH negotiation fold (marker set alongside scope:integ_amban days=30 by the
-			# calling branch). NOT `exists = scope:integ_amban` — that saved scope is country-persistent and
-			# lingers after a crisis, so an ambient dispatch would wrongly read a stale amban. The short-lived
-			# marker + a live scope:integ_amban together prove this is a genuine, current fold.
-			AND = {
-				has_variable = qing_amban_negotiation_fold
-				exists = scope:integ_amban
-				exists = scope:target   # [#15 review-fix LOW-1] require the subject too, so a subject lost in the delay drops path B cleanly (trigger fails) rather than passing the trigger then falling to the ambient else with the marker left armed
-			}
-			any_subject = {
-				OR = {
-					any_owned_province = { count >= 1  province_unrest >= 2 }
-					has_variable = qing_amban_unrest_suppressed_recently
-				}
-				has_variable = qing_amban_here
-				var:qing_amban_here = {
-					is_alive = yes
-					employer = prev
-					has_variable = qing_char_affinity
-					var:qing_char_affinity >= 70
-				}
-			}
-		}
-	}
-	immediate = {
-		LOG_line = { sys = QING  msg = "EVENT qing_amban.3 (able resident reward) [ROOT.GetTag]" }
-		# [#15] PATH B (negotiation fold): adopt the branch's actors as our reward subject/resident and
-		# SKIP the ambient re-pick + province-suppress + capable-opinion + suppressed-var — the calling
-		# branch already applied the province-ease, prominence, and Lifan credit, so re-applying here
-		# would double-reward. Only the COMMEND CHOICE (the options below) is new on this path.
-		if = {
-			limit = { has_variable = qing_amban_negotiation_fold  exists = scope:integ_amban  exists = scope:target }
-			scope:target = { save_scope_as = qing_amban_able_subject }
-			scope:integ_amban = { save_scope_as = qing_amban_able }
-			remove_variable = qing_amban_negotiation_fold   # consume the one-shot fold marker
-		}
-		# PATH A (ambient): scan for an eligible able-amban subject, quell a province, credit the throne.
-		else = {
-			# [#15 review-fix LOW-1] defensively consume a stray fold marker on the ambient path too (e.g. a
-			# subject lost in the delay routed us here) so it can never linger and re-arm path B next dispatch.
-			if = { limit = { has_variable = qing_amban_negotiation_fold }  remove_variable = qing_amban_negotiation_fold }
-			random_subject = {
-				limit = {
-					OR = {
-						any_owned_province = { count >= 1  province_unrest >= 2 }
-						has_variable = qing_amban_unrest_suppressed_recently
-					}
-					has_variable = qing_amban_here
-					var:qing_amban_here = {
-						is_alive = yes
-						employer = prev
-						has_variable = qing_char_affinity
-						var:qing_char_affinity >= 70
-					}
-				}
-				save_scope_as = qing_amban_able_subject
-				var:qing_amban_here = { save_scope_as = qing_amban_able }
-				# suppress a province's unrest if any
-				random_owned_province = {
-					limit = { province_unrest >= 2 }
-					# [deferred-fix #2] no add_province_unrest effect exists (unrest is only a
-					# modifier key, never a direct add_*). Stamp the proven calming province modifier
-					# (local_unrest -2, reused from qing_justice_appeal_vindicated) to quell it.
-					add_province_modifier = { name = qing_justice_appeal_vindicated  duration = 730 }
-				}
-				add_opinion = { modifier = qing_amban_capable_opinion  target = ROOT }
-				set_variable = { name = qing_amban_unrest_suppressed_recently  value = 1  days = 730 }
-			}
-		}
-	}
-	option = {
-		name = "qing_amban.3.a"
-		custom_tooltip = "qing_amban.3.a.tt"
-		# COMMEND: reward the resident. He gains loyalty, standing, a small gold grant.
-		scope:qing_amban_able = {
-			add_loyalty = loyalty_qing_congenial
-			QING_char_promote_standing = { pop = 4  prom = 3 }
-			add_gold = 15
-		}
-		add_treasury = -155
-	}
-	option = {
-		name = "qing_amban.3.b"
-		custom_tooltip = "qing_amban.3.b.tt"
-		# NOTE IT: no reward, but no cost either.
-		scope:qing_amban_able = { QING_char_promote_standing = { pop = 2  prom = 1 } }
 	}
 }
 
@@ -317,7 +208,7 @@ qing_amban.4 = {
 		name = "qing_amban.4.a"
 		custom_tooltip = "qing_amban.4.a.tt"
 		# REPLACE: recall the old resident, post a new one. Cost in gold (appointment).
-		QING_amban_recall = { subject = scope:qing_amban_old_subject  reason = "turnover" }
+		QING_amban_recall = { subject = scope:qing_amban_old_subject }
 		QING_amban_post = { subject = scope:qing_amban_old_subject }
 		add_treasury = -200
 		# [#58 review-fix 2026-08-08] refresh the Lifan Yuan panel lists AFTER the repost so the new
@@ -329,7 +220,7 @@ qing_amban.4 = {
 		name = "qing_amban.4.b"
 		custom_tooltip = "qing_amban.4.b.tt"
 		# LEAVE VACANT: recall without replacement. Dependency drifts.
-		QING_amban_recall = { subject = scope:qing_amban_old_subject  reason = "turnover-vacant" }
+		QING_amban_recall = { subject = scope:qing_amban_old_subject }
 		# [#58 review-fix 2026-08-08] refresh the Lifan Yuan panel lists now — this option is dispatched
 		# with a delay, so it runs AFTER its pulse's post-evaluate recompute; without this the recalled
 		# seat shows a stale "?" until the next quarter. Safe inline (event option, never compile-inlined).
@@ -394,7 +285,7 @@ qing_amban.6 = {
 				exists = scope:qing_amban_manual_target
 				scope:qing_amban_manual_target = { has_variable = qing_amban_here }
 			}
-			QING_amban_recall = { subject = scope:qing_amban_manual_target  reason = "manual-replace-picker" }
+			QING_amban_recall = { subject = scope:qing_amban_manual_target }
 		}
 		if = {
 			limit = {
@@ -420,7 +311,7 @@ qing_amban.6 = {
 				limit = { exists = scope:qing_amban_manual_target  scope:qing_amban_manual_target = { has_variable = qing_amban_manual }  NOT = { scope:qing_amban_manual_target = { has_variable = qing_amban_here } } }
 				scope:qing_amban_manual_target = { remove_variable = qing_amban_manual }
 			}
-			LOG_fail = { sys = QING  fn = "qing_amban.6"  reason = "picked amban ineligible at fire, or post no longer vacant; PI refunded, no post" }
+			LOG_fail = { sys = QING  fn = "qing_amban.6" }
 		}
 		# [#62] clear the replace-mode flag so it never leaks into a later post/replace cycle.
 		if = { limit = { has_variable = qing_amban_pick_was_replace }  remove_variable = qing_amban_pick_was_replace }
