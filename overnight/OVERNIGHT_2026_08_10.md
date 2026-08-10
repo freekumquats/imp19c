@@ -95,6 +95,15 @@ Every pending design has now cleared the adversarial-review gate (all PROCEED-WI
 ## Research digest corrections (post-review)
 - RESEARCH_TRADE_GOOD_DIFFERENTIATION_66.md + memory imp19c-trade-good-differentiation-66: corrected the "peanut/chili luxury-only, no food path" claim (stale) → they have a partial food role; BOM-hookup is a dead end (dormant subsystem).
 
+## ROUND-2 REVIEW CYCLE (user directive: "nothing gets built until a clean review passes", applies to ALL tasks)
+The round-1 corrections were folded INTO each design body (not left as a contradictory appended block), committed (8e4c9180c), and re-dispatched for round-2 confirmation reviews:
+- rev63b (#63), rev64b (#64), rev65b (#65), rev112b2 (#112b/c) — each confirms the integrated body is internally consistent + buildable (CLEAN) or returns remaining findings.
+Autonomous plan (user directive: work per imp19c-overnight, full loop): round-2 CLEAN → task is build-ready; more corrections → fold + round-3 until clean. THEN implement in ID order, each task its own impl → adversarial review → fix → re-review until CLEAN → commit+push as freekumquats. #62 unblocks after #64 lands. #50 (cap decision) + #52 (probe data) remain the two genuine holds.
+
+### Round-2 verdicts (as they land)
+- **#65 (rev65b): CLEAN ✅** — the minimal-slice rewrite holds on every load-bearing point (BOM dropped/dormant confirmed; no continuous boom driver confirmed; generic-file + OMIT-culture-gate confirmed; farmstead capacity stacks on the automatic =8; mission idiom + tree file both exist; peanut/chili food-role confirmed; events path correct). No corrections. Design+review-COMPLETE. Build order: AFTER #64 + #62.
+- **#63 (rev63b): PROCEED-WITH-CORRECTIONS (1 MED, 1 LOW) → folded, needs round-3.** MED: adding `tag=CHI` to the setting-group potential makes the Qing auto-default-hold the FIRST option (`currency_recall`), whose `modifier` applies at boot → silent −0.05 commerce/+0.03 stability, NOT byte-identical. FIX folded: prepend a neutral `standard_minting` first option (`modifier={}`, on_enact sets bias 0) — inert auto-default AND the "return to neutral" stance R6 wanted (two birds). LOW: read#2 lives in QING_DECLINE_pulse which is QUARTERLY/human-CHI, not monthly — reworded (correctness holds, ≤1 quarter slider slack). Core mechanism confirmed sound (on_enact proven, level-not-residual, mint asymmetry, Layer 3 scope, BOM+CRLF). Round-3 confirm dispatched.
+
 ## Ready-to-build once the review backlog clears (design+review complete)
 - #44 salt monopoly (DESIGN_SALT_MONOPOLY_44 §77 corrections + revised minimal slice).
 - #59 bimetallic (DESIGN_BIMETALLIC_59 locked Tier-A-first build order).
