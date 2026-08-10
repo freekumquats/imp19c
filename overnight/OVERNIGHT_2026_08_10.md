@@ -7,7 +7,8 @@ designs; dispatch reviews + write those designs BEFORE building anything. Log ev
 ## ⚠️ ASSUMPTIONS & GUESSES (scrutinize on the boot — every best-guess value/call lives here)
 Per user directive: any magnitude, tuning constant, or best-guess design call made WITHOUT boot data is called out here explicitly so it can be checked/tuned on the verify boot. Each carries the log line that will confirm it.
 - (#64) crop-seeding province PICKS + per-crop FLOORS (maize ≥12-15 etc.) — GUESS: chose specific American grain/livestock provinces + target counts by terrain/region judgement, not a sourced per-province list. Verify: crop distribution on the map + no economy destabilized (tzprobe).
-- (none yet for #63 — will append as I set the bias magnitudes below.)
+- (#63) qing_monetary_bias VALUES — GUESS: standard_minting 0 / limited_minting −4 / currency_recall −8 / more_minting +4 / issue_bonds +8 (on a 0..100 stress meter where opium flow + reserve terms dominate). Verify: the "monetary-policy bias applied" LOG line + qing_currency_stress series shows a visible-but-not-swamping shift per stance.
+- (#63) mint-CEILING magnitude — GUESS: sound-money ceiling = CURRENCY_minting_rate_cap × factor, factor = 1 + bias×0.0375 (limited −4 → ×0.85 / 15% tighter; recall −8 → ×0.70 / 30% tighter). PROPORTIONAL (a fraction of the cap, not a flat subtraction) so it scales with the cap + can NEVER zero minting regardless of the cap's magnitude (the #63-review MED). Verify: CURRENCY_minting_rate trimmed under a sound-money stance but nonzero.
 
 ## Design/review inventory taken at session start (pending build tasks)
 | Task | Design doc | Adv. review | Disposition |

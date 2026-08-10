@@ -197,11 +197,21 @@ QING_DECLINE_recompute_currency_stress = {
 		set_variable = { name = qing_curr_defl_tmp  value = CURRENCY_amt_circulated_deflation }
 		change_variable = { name = qing_curr_defl_tmp  multiply = 100 }
 		change_variable = { name = qing_curr_base_tmp  add = var:qing_curr_defl_tmp }
-		# --- level = base + opium flow + residual, clamped 0..100 -----------------------
+		# --- level = base + opium flow + residual + monetary-policy bias, clamped 0..100 -----------------------
 		set_variable = { name = qing_currency_stress  value = var:qing_curr_base_tmp }
 		if = {
 			limit = { has_variable = qing_opium_stress_flow }
 			change_variable = { name = qing_currency_stress  add = var:qing_opium_stress_flow }
+		}
+		# [#63] MONETARY-POLICY LAW BIAS — the player's monetary_policy_setting stance threads in here as one
+		# more DIRECT additive term into the LEVEL (rebuilt from qing_curr_base_tmp each pulse → no ratchet;
+		# NOT the decaying residual). A debasement stance (more_minting/issue_bonds, bias +) raises monetary
+		# stress; sound money (currency_recall/limited_minting, bias −) lowers it; the neutral standard_minting
+		# sets it 0. Guarded on has_variable so a realm that never enacted a stance is byte-identical to today.
+		# qing_monetary_bias is set ONLY by the law option on_enact (00_monetary_policy_setting.txt).
+		if = {
+			limit = { has_variable = qing_monetary_bias }
+			change_variable = { name = qing_currency_stress  add = var:qing_monetary_bias }
 		}
 		if = {
 			limit = { has_variable = qing_currency_stress_residual }
@@ -1130,6 +1140,43 @@ QING_DECLINE_pulse = {
 	# Runs AFTER the opium assessment so it reads this pulse's fresh qing_opium_stress_flow. Two-store
 	# derive: reserve-backing base + deflation + opium flow + decaying event residual.
 	QING_DECLINE_recompute_currency_stress = yes
+	# [#63] MONETARY-POLICY MINT CEILING — a sound-money stance (currency_recall/limited_minting, qing_monetary_bias
+	# < 0) caps how much the Qing may mint, TIGHTER than the shared CURRENCY_minting_rate_cap. Implemented CHI-side
+	# as a guarded CEILING on the standing player var CURRENCY_minting_rate (NOT a touch of the shared svalue — R2):
+	# if the player's set rate exceeds the sound-money ceiling, pull it down to the ceiling. Asymmetric BY DESIGN:
+	# a loose stance (bias >= 0) sets NO ceiling here (loose minting cannot exceed the shared cap without editing the
+	# forbidden svalue — loose acts only via the stress-bias term above + the law's cosmetic modifiers). Runs in
+	# QING_DECLINE_pulse (quarterly, tag=CHI, is_ai=no), so the clamp re-applies each quarter; CURRENCY_minting_rate
+	# persists between. Guarded on has_variable so a realm with no stance enacted is byte-identical.
+	# [#63] ceiling = CURRENCY_minting_rate_cap × sound-money FACTOR (PROPORTIONAL, not a flat subtraction — so it
+	# scales with whatever the cap evaluates to and can NEVER drive minting to 0 regardless of the cap's magnitude;
+	# a flat −bias*1000 offset risked zeroing the mint if the cap were small, rev64/#63-review MED). Factor per bias:
+	# [#63 ASSUMPTION — best-guess, boot-tune] limited_minting (bias −4) → ×0.85 (15% tighter than the market cap);
+	# currency_recall (bias −8) → ×0.70 (30% tighter). Derived as factor = 1 + bias×0.0375 (bias<0 → 0.85 / 0.70).
+	if = {
+		limit = { has_variable = qing_monetary_bias  var:qing_monetary_bias < 0  has_variable = CURRENCY_minting_rate }
+		set_variable = { name = qing_mint_factor_tmp  value = var:qing_monetary_bias }
+		change_variable = { name = qing_mint_factor_tmp  multiply = 0.0375 }   # bias<0 -> negative
+		change_variable = { name = qing_mint_factor_tmp  add = 1 }             # -4 -> 0.85, -8 -> 0.70
+		set_variable = { name = qing_mint_ceiling_tmp  value = CURRENCY_minting_rate_cap }
+		change_variable = { name = qing_mint_ceiling_tmp  multiply = var:qing_mint_factor_tmp }   # proportional, always >= 0
+		# RHS-comparison rule: no var on a comparison RHS — compute (rate − ceiling) into a temp, test vs literal 0.
+		set_variable = { name = qing_mint_over_tmp  value = var:CURRENCY_minting_rate }
+		change_variable = { name = qing_mint_over_tmp  subtract = var:qing_mint_ceiling_tmp }
+		if = {
+			limit = { var:qing_mint_over_tmp > 0 }
+			set_variable = { name = CURRENCY_minting_rate  value = var:qing_mint_ceiling_tmp }
+		}
+		remove_variable = qing_mint_over_tmp
+		remove_variable = qing_mint_factor_tmp
+		remove_variable = qing_mint_ceiling_tmp
+	}
+	# [#63] LOG the monetary-policy state each pulse so the boot captures the stance's effect (STATIC label,
+	# no macro/# in string; -debug_mode via the LOG_line path). Emits the bias + resulting stress + mint rate.
+	if = {
+		limit = { has_variable = qing_monetary_bias }
+		LOG_line = { sys = QING  msg = "monetary-policy bias applied (stress + mint-ceiling) for" }
+	}
 	# Civic identity drifts toward its self-strengthening-gated target FIRST, so
 	# the ethnic-tension drift that follows reads a fresh civic-relief value (§11
 	# L4 ext — a strong civic nation defuses the same ethnic geography).
