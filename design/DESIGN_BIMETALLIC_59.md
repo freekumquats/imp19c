@@ -38,7 +38,7 @@ The user ruled the **M1/circulation bimetallic rework (#60) OUT OF SCOPE** ("wou
 **TIER B (LARGER, needs explicit green-light): active bimetallic market coupling.**
 - Add substitution: when the traded gold:silver ratio diverges from the peg, nudge demand/supply toward the cheaper metal so the ratio mean-reverts. This DOES touch the market floats + trade income for all countries → world-economy-scale → the #60 veto zone. Only if the user explicitly wants it.
 
-**RECOMMENDATION: implement TIER A (fold into / alongside METAL_RESERVE_PRICING), leave TIER B parked behind the green-light.** Tier A satisfies the historical-ratio concern at reserve-valuation level (the visible "silver > gold looks off" surface) without destabilizing the currency model the #23 sqrt fix stabilized or the M1 model #60 left as an accepted limitation.
+**~~RECOMMENDATION: implement TIER A~~ — SUPERSEDED (see USER DECISION below).** The initial recommendation was Tier-A-only; the user chose TIER B (Gresham soft-band) after the risk/reward verdict showed #59 is lower-risk/higher-reward. Tier A is NOT discarded — it becomes the SAFE FLOOR + the band's centre, built FIRST, with the market nudge added as a separate gated increment (see the TIER B MECHANIC SPEC + build-order below). The sections below (CLASSIFICATION → RISK/REWARD verdict) are the CURRENT design; the two-tier framing here is retained only as the derivation.
 
 ## Interaction constraints (must not break)
 - **#23 currency chain**: the sqrt-stabilized gbip loop must stay flat — a valuation-only ratio anchor doesn't touch gbip, but confirm.
