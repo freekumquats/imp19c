@@ -1260,7 +1260,7 @@ court-position mutual exclusion holds). 4 LOW accepted (all faithful-mirror beha
 tightened the one imprecise "×1" comment). Braces se 368/368, triggers 49/49, panel 87/87, gui 120/120; no
 EOL/BOM flips.
 
-**Commit:** (below)
+**Commit:** `12f75a853` + pushed.
 
 **Status:** #112a DONE — design re-architected after review, code reviewed SHIP-READY, committing + pushing.
 Next: #112b (aqsaqal foreign char, on SPIKE 1) → #112c (contest, on SPIKE 2) → #12 (caravan event coupling).
