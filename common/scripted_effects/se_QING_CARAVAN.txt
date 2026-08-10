@@ -317,6 +317,24 @@ QING_caravan_pulse = {
 		set_variable = { name = qing_caravan_super_finesse  value = scope:qing_caravan_super_seated.finesse }
 	}
 
+	# [#112b] AQSAQAL lifecycle maintenance (only while the concession stands). Symmetric to the superintendent
+	# block above but simpler — the aqsaqal is a FOREIGN counterparty, not a Qing appointee, so no double-book/
+	# graft/siphon; just keep the CHI link honest.
+	# (i) KOK-lost teardown (UNGATED — rev-112bc H1c; was the spike's debug-gated path): if KOK vanished, drop the
+	# orphaned link so the panel + the #112c contest never dereference a dead employer.
+	QING_caravan_aqsaqal_teardown_kok_lost = yes
+	# (ii) BACKFILL — the concession still stands but the aqsaqal died (his death-teardown cleared the holder):
+	# Kokand sends a successor consul. Re-seat via the self-guarded mint (KOK-exists + no-holder guards inside).
+	if = {
+		limit = {
+			has_variable = qing_caravan_aqsaqal_granted
+			NOT = { has_variable = qing_caravan_aqsaqal_holder }
+			exists = c:KOK
+		}
+		QING_caravan_aqsaqal_seat = yes
+		LOG_line = { sys = QING  msg = "caravan: the aqsaqal's post fell vacant and Kokand sent a successor consul for" }
+	}
+
 	# [meter-concretize #10B] the prosperity→control ±1 COUPLE is DELETED. control is now a pure derive of
 	# concrete grip objects; prosperity is itself a derive of oasis trade (#10A). Coupling control to
 	# prosperity would re-create a meter↔meter loop (and prosperity's oasis-trade term is downstream of the
@@ -534,7 +552,93 @@ QING_caravan_grant_aqsaqal = {
 	else = {
 		LOG_fail = { sys = QING  fn = "QING_caravan_grant_aqsaqal"  reason = "aqsaqal concession already in force" }
 	}
+	# [#112b] Seat the real Kokandi aqsaqal (阿奇木伯克) at the SINGLE choke point (rev-112bc C1): EVERY grant
+	# path (qing_caravan.1.grant, .2.negotiate, the panel lever, the trade-concession law on_enact) routes
+	# through this effect, so minting here — and NOT in an event option — guarantees no path sets the flag
+	# without a counterparty. QING_caravan_aqsaqal_seat self-guards (flag in force + KOK exists + no holder),
+	# so it mints exactly one whether the flag was just set above OR was already in force (re-grant / old save).
+	QING_caravan_aqsaqal_seat = yes
 	LOG_exit = { sys = QING  fn = "QING_caravan_grant_aqsaqal"  result = OK }
+}
+
+# ======================================================================
+# [#112b] QING_caravan_aqsaqal_seat — mint the real aqsaqal: a FOREIGNER resident at Kashgar on INDEPENDENT
+# c:KOK allegiance (SPIKE 1 proved create_character + move_country to a non-subject foreign tag persists +
+# renders). Country scope (ROOT = CHI). Self-guarded so it is idempotent + safe to call from the grant
+# choke-point AND the pulse backfill: mints exactly one, only when the concession is in force, KOK exists,
+# and no aqsaqal is seated. NO modifiers inside create_character (#90 gotcha) — a runtime effect anyway, so
+# #90-safe by placement (lever/pulse, never on_game_initialized). Stores the CHI link var + the char marker.
+# ======================================================================
+QING_caravan_aqsaqal_seat = {
+	if = {
+		limit = {
+			has_variable = qing_caravan_aqsaqal_granted
+			NOT = { has_variable = qing_caravan_aqsaqal_holder }
+			exists = c:KOK
+		}
+		# Uzbek Sunni = KOK's primary culture/religion (mirrors the SPIKE 1 mint). A middle-aged consul with a
+		# bargaining (finesse) + personal-sway (charisma) bent, some steel (martial) + Islamic firmness (zeal) —
+		# the four stats the #112c relative-attribute contests weigh.
+		create_character = {
+			age = { 40 55 }
+			culture = uzbek
+			religion = sunni
+			add_finesse = { 4 7 }
+			add_martial = { 2 5 }
+			add_charisma = { 4 7 }
+			add_zeal = { 3 6 }
+			save_scope_as = qing_caravan_aqsaqal_new
+		}
+		# set_as_minor_character THEN move_country (the proven order — QING_amban_wire / the beg mint / SPIKE 1).
+		scope:qing_caravan_aqsaqal_new = {
+			set_as_minor_character = THIS
+			move_country = c:KOK
+			set_variable = { name = qing_caravan_aqsaqal_marker  value = 1 }
+		}
+		set_variable = { name = qing_caravan_aqsaqal_holder  value = scope:qing_caravan_aqsaqal_new }
+		LOG_line = { sys = QING  msg = "caravan: a Kokandi aqsaqal (阿奇木伯克) takes up residence at Kashgar for" }
+	}
+}
+
+# ======================================================================
+# [#112b] QING_caravan_aqsaqal_teardown — DEATH PATH (rev-112bc C2/H1). ROOT = the dying character; if he was
+# the aqsaqal, clear the CHI link so no dangling reference survives (the pulse backfill re-seats a successor
+# while the concession still stands). Self-guards on the marker → a pure no-op for every non-aqsaqal death.
+# Called from on_character_death (marker-guarded, arm-independent — the spike's own review-fix shape). This is
+# the SHIPPING teardown keyed to qing_caravan_aqsaqal_marker; the spike's teardown (spike marker) rides out
+# with the retired spike.
+# ======================================================================
+QING_caravan_aqsaqal_teardown = {
+	if = {
+		limit = {
+			has_variable = qing_caravan_aqsaqal_marker
+			exists = c:CHI
+		}
+		c:CHI = {
+			if = {
+				limit = { has_variable = qing_caravan_aqsaqal_holder }
+				remove_variable = qing_caravan_aqsaqal_holder
+				LOG_line = { sys = QING  msg = "caravan: the Kokandi aqsaqal died, CHI link cleared for" }
+			}
+		}
+	}
+}
+
+# ======================================================================
+# [#112b] QING_caravan_aqsaqal_teardown_kok_lost — the KOK-REMOVED path (rev-112bc H1c), CHI scope. If the
+# holder link stands but KOK no longer exists (annexed/removed), the resident is orphaned (his employer
+# country is gone). Clear the link so the panel + the #112c contest reads never dereference a dangling char.
+# Called UNGATED from QING_caravan_pulse (was the spike's debug-gated path — now shipping).
+# ======================================================================
+QING_caravan_aqsaqal_teardown_kok_lost = {
+	if = {
+		limit = {
+			has_variable = qing_caravan_aqsaqal_holder
+			NOT = { exists = c:KOK }
+		}
+		remove_variable = qing_caravan_aqsaqal_holder
+		LOG_line = { sys = QING  msg = "caravan: c:KOK is gone, orphaned-aqsaqal link cleared for" }
+	}
 }
 
 # ======================================================================
@@ -549,6 +653,23 @@ QING_caravan_revoke_aqsaqal = {
 	if = {
 		limit = { has_variable = qing_caravan_aqsaqal_granted }
 		remove_variable = qing_caravan_aqsaqal_granted
+		# [#112b] rev-112bc C2: the concession is gone → the aqsaqal loses his Kashgar standing. DETACH him in
+		# lockstep with the flag: strip his post marker + drop the CHI tracking link, so flag↔holder stay in
+		# strict lockstep (no dangling VAR reference; a later re-grant self-guards on NOT-holder and mints one
+		# fresh consul, not a double). He is NOT killed — he simply reverts to an ordinary c:KOK courtier (the
+		# consul is "sent home", handled by the engine's own lifespan), matching the beg-corps detach-not-kill
+		# convention (se_QING_XINJIANG.txt) rather than an unproven kill_character. Guarded on the holder existing.
+		if = {
+			limit = { has_variable = qing_caravan_aqsaqal_holder }
+			if = {
+				limit = { var:qing_caravan_aqsaqal_holder = { is_alive = yes } }
+				var:qing_caravan_aqsaqal_holder = {
+					if = { limit = { has_variable = qing_caravan_aqsaqal_marker }  remove_variable = qing_caravan_aqsaqal_marker }
+				}
+			}
+			remove_variable = qing_caravan_aqsaqal_holder
+			LOG_line = { sys = QING  msg = "caravan: the aqsaqal concession is revoked, the Kokandi consul reverts to Kokand for" }
+		}
 		# the throne recovers its dignity and its revenue.
 		add_legitimacy = 3
 		# but Kokand is affronted — the grievance returns and the frontier grip frays.
