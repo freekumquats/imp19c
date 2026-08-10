@@ -18,6 +18,15 @@ Given the market prices the two metals independently, should there be:
 1. **A ratio ANCHOR** — gold and silver prices tethered to a ~1:15 band, so they can't drift arbitrarily apart? AND/OR
 2. **SUBSTITUTION** — when the ratio diverges (e.g. silver becomes very dear relative to gold), agents/economy shift toward the cheaper metal, pulling the ratio back?
 
+## HISTORY DIGEST LANDED (research/RESEARCH_BIMETALLIC_MONETARY.md, 2026-08-10) — reshapes the mechanic
+The mandated history-first research returned. Key findings + how they change this design:
+- **Regime at 1763 AND 1815:** bimetallism (fixed statutory MINT ratio) + silver-standard China are the NORM; the gold standard is the exception (only Britain, informally pre-1816). France 15.5:1, US 15:1, both bimetallic through both bookmarks. So the two metals were monetarily RELATED everywhere — the mod's fully-independent float has NO historical analogue anywhere in the period.
+- **Ratio:** China ~1:8-10 (17th c.) → converged to ~1:14-15 by 1750-63 (matching the Western peg), driven by the Canton/Manila silver inflow + gold-out arbitrage. The ~1:15 anchor is the converged, stable pre-1873 reality for BOTH bookmarks.
+- **Mechanism = Gresham's Law arbitrage** against a fixed ratio (confirmed the operative force in every historical bimetallic breakdown; Friedman/Flandreau vs Redish/Kindleberger debate its robustness but all agree the mechanism is arbitrage vs a fixed legal ratio). So the right mechanic is a SOFT BAND with mean-reversion, NOT a hard peg and NOT independence.
+- *** THE CRUCIAL CORRECTION (Kuroda, Socio-Economic History 57:2 1991): *** China's REAL functioning "bimetallism" was **SILVER vs COPPER CASH**, and it FLOATED (Qing set NO fixed silver:copper ratio — unlike the West's fixed mint ratios). **GOLD was a COMMODITY / trade-arbitrage good in China, NOT a monetary reserve metal.** => the gold:silver mechanic must be scoped as an EXTERNAL / TRADE-VALUATION relationship (how bullion reserves are valued against the world ~1:15 ratio), NOT as China's domestic money system. China's domestic money question (silver:copper, floating) is SEPARATE and already partly modelled (backing_type = silver_standard, se_CURRENCY.txt) — do NOT conflate them. Modelling gold as a Qing reserve/monetary metal on par with silver would be historically WRONG.
+
+CONSEQUENCE for the Tier decision below: Tier A (a ~1:15 VALUATION anchor for reserves) is historically correct AS AN EXTERNAL TRADE-VALUATION relationship. The research's "soft ratio-band + mean-reversion" is the fuller Tier-B-ish mechanic — historically the most faithful (Gresham arbitrage) but it's the world-economy-scale coupling the user gated. And for CHI specifically, gold is barely a monetary metal at all, so the CHI-facing benefit of ANY gold:silver mechanic is small — the CHI money story is silver-vs-copper, out of #59's scope.
+
 ## Scope decision (the load-bearing call) — RECOMMEND the SMALL version
 The user ruled the **M1/circulation bimetallic rework (#60) OUT OF SCOPE** ("would significantly alter the world economy"). #59 must stay on the RIGHT side of that line. Two tiers:
 
