@@ -114,3 +114,15 @@ What the CODE says about silk_cloth structure (not behavior):
 - It's a MANUFACTURED/script-only good (cottage + factory, from raw silk) → its price folds in the RAW-SILK input cost, which is cheap → the finished luxury likely INHERITS a low base (the review's M2 concern).
 
 CONSEQUENCE: the #51 diagnostic measured the WRONG good for #52. To actually diagnose consumer-luxury tier pricing, the econ probe must track silk_cloth + porcelain (the consumer luxuries), NOT raw silk. => PRE-REQUISITE for #52: extend gen_econ_tzprobe.py GOODS to add silk_cloth + porcelain (+ tea already there), reboot, and read THEIR price/stockpile/demand before choosing any #52 lever. Without this the export-premium-vs-domestic question can't be answered on real data for the finished luxuries. (Coordinates with #35: this is exactly the kind of temporary probe-extension that stays until #52 is verified, then strips with the rest.)
+
+## PROBE SCOPE CORRECTED — track the WHOLE luxury tier, not a hand-picked few (user, 2026-08-10)
+Scoping the probe extension to silk_cloth+porcelain repeats the "measured the wrong good" mistake in miniature: #52 is about the TIER (the luxury class vs staples), so the diagnostic must cover the whole tier or it risks another cherry-picked miss.
+
+FULL luxury roster (every DEMAND_luxury_<good>, common/script_values/DEMAND_luxury_svalues.txt):
+alcohol, chili, chocolate, clothing, coffee, furniture, gems, luxury_clothing, luxury_furniture, maize, opium, peanut, porcelain, potato, spices, sugar, sweet_potato, tea, tobacco (+ silk_cloth, the finished-silk luxury).
+
+TWO refinements so "track everything" doesn't become noisy overkill:
+1. NOT all of these are 1763 LUXURIES. maize/potato/sweet_potato/peanut/chili are NEW WORLD CROPS becoming STAPLES/subsistence in Qing China (the #384 diffusion mechanic), NOT dear luxuries. The #52 TIER comparison is TRUE luxuries (tea, silk_cloth, porcelain, coffee, chocolate, spices, gems, luxury_clothing, luxury_furniture, alcohol, tobacco, sugar) vs STAPLES (grain, fish, + the New World food crops). Track the New World crops too (completeness), but classify them staple-side in the tier read.
+2. PROBE COST: each good ≈180 generated log-block lines; the full tier + staples is a big log-volume bump. Acceptable for a TEMPORARY diagnostic boot (strips with #35), but do it deliberately — this is a measure-then-strip probe, not a permanent log.
+
+REVISED #52 PREREQUISITE: extend gen_econ_tzprobe.py GOODS to the full luxury tier (all DEMAND_luxury_* goods + silk_cloth) PLUS the staple baseline (grain/fish already partly there), reboot, and read the whole tier's price/stockpile/demand — so #52 measures luxuries-as-a-CLASS vs staples, and the export-premium-vs-domestic question is answered on the complete tier, not tea alone. Classify New-World-crops staple-side. Then choose the lever.
