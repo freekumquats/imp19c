@@ -178,3 +178,24 @@ TIER C DECISION SPEC (design; build after the runtime-switch boot-spike proves t
 - **loc + tooltip:** the decision title/desc + the standard loc, stating the reserve/stability cost (decision effect_desc auto-renders the effect; add narrative desc), per the text-wrap + no-macro-in-LOG rules.
 
 DEPENDENCY: Tier C decision is built AFTER the runtime-backing-switch BOOT-SPIKE (prove set-backing-at-runtime is safe + consistent — does override_existing clobber circulated amounts/adopters, or is a guarded direct var-set + recompute cleaner). The decision is the trigger surface; the spike proves the underlying set works. Design → adversarial review → spike → implement → verify (incl. an AI country actually switching in the boot).
+
+
+## TIER C SURFACE = a LAW, not a decision (user, 2026-08-10) — SUPERSEDES the decision plan
+User: "instead of many decisions for Adopt [one standard], Laws are more flexible" + "isn't there already a Law section for Monetary Policy?" BOTH correct.
+
+VERIFIED: common/laws/00_monetary_policy_setting.txt ALREADY defines a `monetary_policy_setting` law group (options: currency_recall / limited_minting / more_minting / issue_bonds, each with a `modifier = {}`; potential gated on has_law = legislative_monetary_policy). So a Monetary Policy law section exists.
+
+WHY A LAW BEATS DECISIONS for the backing-switch (structural):
+- MUTUAL EXCLUSIVITY FOR FREE: a law group is a single slot with mutually-exclusive options → silver/gold/bimetallic as 3 options in ONE group means you're on exactly one standard, no cross-guarding (the decisions plan needed "not already on X" potentials to avoid re-adopting the current standard).
+- NATIVE PASSIVE MODIFIERS: each option's `modifier = {}` carries that standard's ongoing economic character (gold = stability/commerce profile; silver = Qing default; bimetallic = mixed) — exactly how the existing monetary options work.
+- IDIOMATIC SWITCH: change_law is THE "change my policy" action, shows in the Laws tab, AI-usable via the law-adoption AI. More flexible + less bespoke than 3 decisions + a scripted button.
+
+=> TIER C IS NOW: a NEW law group (e.g. `monetary_standard_setting`) alongside monetary_policy_setting, with options silver_standard_law / gold_standard_law / bimetallic_standard_law, each carrying its passive modifier. NOT decisions, NOT a scripted_gui button. Supersedes the entire "country_decisions" Tier C plan above.
+
+THE MECHANICAL HALF (the one gap a law doesn't cover on its own):
+- A law MODIFIER cannot set the currency `backing_type` var. And there is NO on_law_change on_action in this engine (CONFIRMED: qing_mechanics_on_actions.txt:369 comment states "There is no on_law_change on_action"). So a change_law does NOT automatically fire an effect.
+- SOLUTION: a POLL-BASED RECONCILER on an existing pulse (the monthly/quarterly Qing pulse or a currency pulse): check "does official_currency's backing var match the country's current monetary_standard law?" → if MISMATCH, apply the runtime backing-switch (the boot-spiked set-backing mechanism) + the revaluation/stability cost (the Gresham cost) + stamp a cooldown. This makes the law the PLAYER-FACING switch and the reconciler the MECHANICAL enactment — clean, additive, uniform (every country's pulse reconciles the same way).
+- GATING (allow / potential on the law options): date/tech (no gold_standard_law before it spread ~1816+), adequate target-metal reserves, cooldown — same conditions as the decision plan, now expressed as law option `potential`/`allow`.
+- AI: the law-adoption AI (ai_will_do on the law option, or the AI law weighting) drives historical AI switches (Britain→gold). Uniform.
+
+BUILD ORDER unchanged in spirit (TierA valuation floor → TierC standard-law + reconciler → TierB ratio pull), but Tier C is now a LAW GROUP + a pulse reconciler, not a decision. Still needs the runtime-backing-switch BOOT-SPIKE first (the reconciler's set-backing call is the net-new capability). The gold:silver ratio (Tier B) interacts at the revaluation step (switching under a diverging ratio = the Gresham cost).
