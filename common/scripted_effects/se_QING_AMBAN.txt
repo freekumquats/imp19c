@@ -296,6 +296,12 @@ QING_amban_recall = {
 			# recall: move back to CHI (he rejoins the court pool)
 			move_country = ROOT
 			save_scope_as = qing_amban_recalled
+			# [#40 2026-08-09] Stamp a ~2y recall cooldown so a just-recalled amban is RANKED LAST in the
+			# picker (qing_amban_rank_svalue docks him), not instantly re-appointed — the direct fix for the
+			# reported "sacked amban immediately re-picked". He stays ELIGIBLE (a last-resort if the bench is
+			# empty, which the #40 backfill prevents anyway), mirroring the #47 lesser-taint "ranked last, not
+			# barred" pattern + the qing_amban_clash_cd timed-marker idiom. Auto-expires after 730 days.
+			set_variable = { name = qing_amban_recalled_recently  days = 730 }
 		}
 		LOG_line = { sys = QING  msg = "amban: recalled from ($reason$) for" }
 	}
@@ -738,4 +744,34 @@ QING_amban_seed_gamestart = {
 		}
 	}
 	LOG_exit = { sys = QING  fn = "QING_amban_seed_gamestart"  result = OK }
+}
+
+# ======================================================================
+# [#40 2026-08-09] QING_amban_seed_spare_laureates — BOOT BACKFILL of the amban bench.
+# The amban PICKER (QING_amban_refresh_candidates) draws free, unposted court laureates
+# (employer=CHI, fanyi_jinshi, holding no post). At 1763 start the ONLY producers of a free
+# court laureate are (a) the six posted historical residents seeded above (all EXCLUDED while
+# posted) and (b) the on_becoming_adult keju intake — which cannot reach the pre-existing ADULT
+# generation, so it mints nobody at start. Result: the bench is EMPTY, and a recalled amban is the
+# sole eligible pick → instantly re-appointed (the reported bug). This mints a handful of SPARE
+# laureates so the picker always has real alternatives from turn 1. Idempotent one-shot (global
+# flag). Called from the DEFERRED day-32 event qing_force_setup.12 (NOT construction) next to
+# QING_exam_seed_hanlin_pool — the proven #90-safe create_character+add_trait placement. Country
+# scope (ROOT = CHI). Count 6: matches the ~6 posted seats so the bench is never starved even if
+# every seat turns over at once; Part B (the triennial cohort) refills it thereafter.
+# ======================================================================
+QING_amban_seed_spare_laureates = {
+	if = {
+		limit = { NOT = { has_variable = qing_amban_spares_seeded } }
+		LOG_enter = { sys = QING  fn = "QING_amban_seed_spare_laureates" }
+		QING_exam_mint_banner_laureate = yes
+		QING_exam_mint_banner_laureate = yes
+		QING_exam_mint_banner_laureate = yes
+		QING_exam_mint_banner_laureate = yes
+		QING_exam_mint_banner_laureate = yes
+		QING_exam_mint_banner_laureate = yes
+		set_variable = { name = qing_amban_spares_seeded  value = 1 }
+		LOG_line = { sys = QING  msg = "amban: seeded the spare banner-laureate bench for" }
+		LOG_exit = { sys = QING  fn = "QING_amban_seed_spare_laureates"  result = OK }
+	}
 }
