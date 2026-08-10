@@ -1147,4 +1147,6 @@ inside the court-slot block; add_opinion direction correct; order_by/opinions/pr
 3 LOW accepted (cooldown-on-stale-no-op by design + auto-clears; desc envoy-name has no fallback but the
 invariant makes it unreachable; |Y vs #G cosmetic). Braces 77/1339/49; no EOL/BOM churn.
 
-**Commit:** (below)
+**Commit:** `3aecf2209` + pushed.
+
+**Status:** #22 DONE — design re-architected after review, code reviewed SHIP-READY, committed + pushed.
