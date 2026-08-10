@@ -104,3 +104,8 @@ Model gold↔silver as a soft-pegged pair that arbitrage pulls toward the era ra
 - Multiple countries' economies stable on the logs (not just CHI) — the global rule.
 - #42/#54 reserve display correct; #60 M1 untouched.
 IF any fail (esp. gbip destabilizes): shrink the correction fraction, widen the deadband, or fall back to Tier A (valuation-anchor-only) — which is always the safe floor.
+
+## RISK/REWARD verdict (user, 2026-08-10) — why #59 is worth building and #60 is not
+- **#60 = HIGH risk, LOW reward.** High risk: semantics-mutating + per-country fork of global machinery (the worst corner of the taxonomy above). Low reward: it only corrects a MODEST M1 drain the user already accepted as a tolerable in-game-abstraction cost. Not worth it → stays closed.
+- **#59 = LOWER risk, HIGHER reward.** Lower risk: additive + globally-uniform (dialable, revertible; Tier-A floor). Higher reward: fixes a mechanic with NO historical analogue anywhere in the period (independent metal floats), and the fix applies GLOBALLY across every country — a broad correctness gain for one bounded uniform coupling.
+=> The effort ordering is settled: BUILD #59 (through the safe Tier-A-first path + adversarial review + multi-country verify boot), LEAVE #60 closed. The bigger-sounding task (#59, "the bimetallic economy") is the SAFER, more rewarding one; the smaller-sounding one (#60, an M1 tweak) is the dangerous, low-payoff one — intuition inverted, per the risk/reward + additive/uniform axes.
