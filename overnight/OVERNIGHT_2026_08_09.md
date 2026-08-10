@@ -1314,3 +1314,24 @@ Cleared the queued boot-test bugs the user asked for ("do these"), each code-rev
 - **#43** — "Foreign Gifts" (flavor_eve.7) reworked to mirror #22: real any_neighbour trigger + no self-pick + bilateral opinion on both options + Zongli-Yamen diplomat tie-in (draw ablest diplomat, credit him, stronger envoy warmth) with generic fallback. In review.
 
 TRADE-ECONOMY PROGRAM (design + logs first, per user process): committed design/DESIGN_TRADE_ECONOMY_PROGRAM.md + DESIGN_REGIONAL_TRADE_PRICES_50.md (both adversarially reviewed — the #50 review caught that the same-good regional gap is hard-capped ~1.9-3x by the penetration cap, and the geographic hook ALREADY exists via per-TZ shipping penetration). #51 (df: econ logs extended to gold/salt/tea/silk + CHI-paid + regional-gap; review caught a stale-generated-file dangling-ref + wrong DEMAND read, both fixed) committed 9801343b2. Research digests committed (salt admin #45; 1763 trade prices, revised salt markup 30-50x→7-14x). Open builds gated on the verify boot: #44 (salt monopoly window + Commissioner + output×market×markup revenue), #46 (metal sell-price — measure-then-judge, blocked on #35 boot), #49 (base-value inert — likely close as no-op), #50/#52 (regional divergence + tier realism), #40 (amban pool), + #51 goods/countries widening.
+
+---
+
+## POST-BOOT-TEST SESSION (Aug 9 22:42 logs — 21 quarters, curx_analyze full pass)
+
+**ECONOMY LOG VERDICTS (all from the #51-extended debug.log, full one-pass read):**
+- **#46 silver>gold — CONFIRMED WAI, closed.** CHI PAIDPRICE silver=1-10 band ALL 21q (dearest good); gold reaches 1-10 in only 13/21. Demand-driven silver-standard behavior exactly as the user predicted. No bug.
+- **#56 deflation dips — CHARACTERIZED, closed.** gbip flat ~0.97 (1.00/0.82/1.09/0.89/...), defl=0 most quarters, isolated 2-4% dips (q6-q7). Matches "~3%, down from ~10%." #23 sqrt fix holds.
+- **#49 base-value flat table — no-op, closed.** Emergent CHI paidprice already spans ~3 orders of magnitude (grain 0.01 → silver 1-10) from supply/demand alone. No need to touch the flat base_value table → no #219 vanilla-trade-request flood risk. Tier realism lives in seeding (#52).
+- **#52 tier realism — CONFIRMED INVERTED (real, pending pipeline).** tea/silk price at 0.01-0.1, SAME band as grain (cheapest staple). Root: CHI tea demand=10-100 (lowest of 6 goods). Fix in supply/demand seeding. Tagged full pipeline (diagnosis→adv review→design→adv review→impl→adv review).
+- **#50 regional divergence — REFINED (pending pipeline).** Already LARGE in raw TZ prices (0.01-0.1 atlantic → 100-1000 india/baltic) but VOLATILE (stock-starved zones spike then collapse). Fix = smooth thin markets, not add spread. Tagged pipeline.
+- **#59 bimetallic — LOG INPUT captured (pending pipeline, needs user green-light).** Silver+gold are two independent floats, no ratio peg/substitution. Same world-economy-scale concern as #60.
+- **#60 M1 decline — CLOSED, accepted limitation.** Trade debits copper-M1 but credits the silver RESERVE, not circulation; correct fix (bimetallic M1) is out of scope (world-economy-altering). User: "a modest M1 drain is acceptable as the cost of in-game abstractions."
+- **#26 SPIKE 1 — PASSED on logs.** "AQSAQAL SPIKE ok: created a Kokandi resident and his employer is c:KOK" + "persist ok". create_character+move_country to non-subject foreign c:KOK works + persists. De-risks #29/#30/#12.
+
+**FIXES SHIPPED:**
+- **#54** (bc6e7f3dc) — vanilla economy-view silver (change) reads qing_silver_reserve_change_last for CHI (the true quarter delta, same as the #42 戶部 panel); ROW unchanged. Reviewed PASS.
+- **#53** (6744cd7a6) — currency icon @gold! moved BEFORE the number in the auto-generated add_treasury/add_monthly_income effect tooltips (¥310 not 310 ¥) + flipped the rest of the gold keys for consistency + fixed a pre-existing '@gold !' token-breaking typo. Reviewed PASS.
+- **#40** (amban pool) — 4 parts implemented (mint helper + boot backfill via qing_force_setup.12 + triennial cohort feed + recall rank-penalty). In adversarial review.
+
+**#35** (re-strip econ tooling) — HELD per user: happens LAST, only after everything is verified working; tooling stays live to keep answering economy questions across boots.
