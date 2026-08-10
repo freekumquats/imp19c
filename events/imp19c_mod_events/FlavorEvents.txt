@@ -230,21 +230,70 @@ flavor_eve.6 = {
 	goto_location = scope:randomized_country_province
 	left_portrait = root.current_ruler
 	
+	# [#37 2026-08-09 BUGFIX] Fire ONLY where a province's STATE is genuinely short of stored food.
+	# The old trigger was `num_of_provinces > 1` with an EMPTY picker limit (a leftover TODO), so
+	# "Hard Times" fired on a well-fed province (reported: Xingiang, whose Henan state held a maxed
+	# 4120). Gate on the engine's own State food pool, the same signal shortage.1 uses (has_state_food
+	# below 1/5 of capacity = "running low", a warning ahead of shortage.1's has_state_food<1 famine).
 	trigger = {
-		num_of_provinces > 1						
+		num_of_provinces > 1
+		any_owned_province = {
+			is_capital = no
+			state = {
+				has_state_food_capacity > 0
+				has_state_food < { value = has_state_food_capacity  divide = 5 }
+			}
+		}
 	}
 	
 	immediate = {
 		random_owned_province = {
+			# [#37] pick a NON-capital province whose STATE is actually short of stored food (mirrors the trigger).
 			limit = {
 				is_capital = no
-				# TODO: Replace this trigger with shortages, or low amenities
-				# Shortages should cause loss of amenities
+				state = {
+					has_state_food_capacity > 0
+					has_state_food < { value = has_state_food_capacity  divide = 5 }
+				}
 			}
 			save_scope_as = randomized_country_province
 		}
+		# [#38/#39/#47 2026-08-09] PRECOMPUTE the granary-relief ship amount ONCE, here in immediate — so
+		# option .c only READS it and never sets-then-reads a var in the AI predict / tooltip pass (the #47
+		# flood: flavor_eve.6.c produced ~50k error.log lines because set_variable does not commit during
+		# effect prediction, so the following var: reads failed en masse). CHI-only, and only when the
+		# national ever-normal pool holds grain ABOVE the reserve floor (#39 — a relief may never empty it).
+		if = {
+			limit = {
+				tag = CHI
+				exists = scope:randomized_country_province
+				has_variable = qing_granary_food
+				var:qing_granary_food > 400
+			}
+			scope:randomized_country_province.state = {
+				save_scope_as = qing_hardtimes_state
+				# target = 1/5 of the stricken state's food capacity...
+				set_variable = { name = qing_hardtimes_ship_preview  value = has_state_food_capacity }
+				change_variable = { name = qing_hardtimes_ship_preview  divide = 5 }
+				# ...capped at a modest 400-shih local dole (#39; supersedes #17's 250 per the user's "~400")...
+				if = { limit = { var:qing_hardtimes_ship_preview > 400 }  set_variable = { name = qing_hardtimes_ship_preview  value = 400 } }
+				# ...and bounded so the national reserve is NEVER drawn below its 400 floor (#39): ship at most (pool - 400).
+				set_variable = { name = qing_ht_avail_tmp  value = ROOT.var:qing_granary_food }
+				change_variable = { name = qing_ht_avail_tmp  subtract = 400 }
+				if = {
+					limit = { var:qing_hardtimes_ship_preview > { value = var:qing_ht_avail_tmp } }
+					set_variable = { name = qing_hardtimes_ship_preview  value = var:qing_ht_avail_tmp }
+				}
+				if = { limit = { var:qing_hardtimes_ship_preview < 0 }  set_variable = { name = qing_hardtimes_ship_preview  value = 0 } }
+				remove_variable = qing_ht_avail_tmp
+			}
+		}
 	}
 	
+	# [#37 decision 2026-08-09] KEPT fire_only_once = yes (matches the sibling flavour events flavor_eve.1/.7/.8);
+	# with the real state-shortage gate above the event no longer fires spuriously, so a one-shot beat is fine.
+	# (A repeatable-with-cooldown form was considered and rejected here to avoid introducing an unthrottled
+	# recurring economic event on this pass.)
 	fire_only_once = yes
 	
 	option = {
@@ -267,48 +316,36 @@ flavor_eve.6 = {
 			multiply = -1
 		}
 	}
-	# [#101 2026-08-08] OPEN THE EVER-NORMAL GRANARIES (常平倉) — the historical Qing answer to a
-	# grain shortage: ship real stored grain to the stricken locale instead of buying relief on the
-	# market. CHI-only, shown only when the national pool holds grain. Ships food into the province's
-	# STATE (add_state_food), drains the pool by the same amount, stamps qing_grain_relief — no
-	# treasury cost, but spends down a finite reserve. Mirrors the proven shortage.1.c granary ship
-	# (se_QING_DECLINE.txt ship-leg idiom): save the State scope, size = 1/5 capacity bounded by pool.
+	# [#101 2026-08-08] OPEN THE EVER-NORMAL GRANARIES (常平倉) — the historical Qing answer to a grain
+	# shortage: ship real stored grain to the stricken locale instead of buying relief on the market.
+	# CHI-only, shown only when the national pool holds grain ABOVE the floor. The ship amount was
+	# PRECOMPUTED in immediate (qing_hardtimes_ship_preview on the saved state scope) — this option only
+	# READS it (add_state_food into the state, drain the pool by the same amount), so no set-then-read
+	# flood (#47) and the option loc can display the figure up front (#38).
 	option = {
 		name = flavor_eve.6.c
 		trigger = {
 			tag = CHI
-			exists = scope:randomized_country_province
+			exists = scope:qing_hardtimes_state
 			has_variable = qing_granary_food
-			var:qing_granary_food > 0
+			var:qing_granary_food > 400
 		}
-		scope:randomized_country_province.state = {
-			save_scope_as = qing_hardtimes_state
-			set_variable = { name = qing_gran_ht_ship_tmp  value = has_state_food_capacity }
-			change_variable = { name = qing_gran_ht_ship_tmp  divide = 5 }
-			# [#17 2026-08-09] CAP the relief at a modest fixed quantity (250, a few hundred) so a "Hard
-			# Times" opening is a proportionate local dole — NOT the whole ever-normal reserve. The old
-			# ship was state_capacity/5 bounded only by the pool, so on a modest pool one province's relief
-			# drained the entire 常平倉 (the reported over-generosity). The pool-bound below still applies,
-			# so a near-empty pool ships only what remains; this cap only bites when capacity/5 is large.
-			if = { limit = { var:qing_gran_ht_ship_tmp > 250 }  set_variable = { name = qing_gran_ht_ship_tmp  value = 250 } }
-			if = {
-				limit = { var:qing_gran_ht_ship_tmp > { value = ROOT.var:qing_granary_food } }
-				set_variable = { name = qing_gran_ht_ship_tmp  value = ROOT.var:qing_granary_food }
+		# [review LOW-2] gate the ENTIRE relief payload (ship + drain + relief modifier + influence cost)
+		# on a real ship amount, so a tiny-capacity state that rounds to 0 doesn't cost influence / stamp
+		# relief for no grain. [review LOW-1] clean up the preview var after use (symmetry with qing_ht_avail_tmp).
+		if = {
+			limit = { scope:qing_hardtimes_state.var:qing_hardtimes_ship_preview > 0 }
+			scope:qing_hardtimes_state = { add_state_food = { value = var:qing_hardtimes_ship_preview } }
+			change_variable = { name = qing_granary_food  subtract = scope:qing_hardtimes_state.var:qing_hardtimes_ship_preview }
+			scope:randomized_country_province = {
+				if = {
+					limit = { NOT = { has_province_modifier = qing_grain_relief } }
+					add_province_modifier = { name = qing_grain_relief  duration = 365 }
+				}
 			}
-			if = {
-				limit = { var:qing_gran_ht_ship_tmp > 0 }
-				add_state_food = { value = var:qing_gran_ht_ship_tmp }
-				ROOT = { change_variable = { name = qing_granary_food  subtract = scope:qing_hardtimes_state.var:qing_gran_ht_ship_tmp } }
-			}
-			remove_variable = qing_gran_ht_ship_tmp
+			add_political_influence = -10
 		}
-		scope:randomized_country_province = {
-			if = {
-				limit = { NOT = { has_province_modifier = qing_grain_relief } }
-				add_province_modifier = { name = qing_grain_relief  duration = 365 }
-			}
-		}
-		add_political_influence = -10
+		scope:qing_hardtimes_state = { if = { limit = { has_variable = qing_hardtimes_ship_preview }  remove_variable = qing_hardtimes_ship_preview } }
 	}
 	option = {
 		name = flavor_eve.6.b 
