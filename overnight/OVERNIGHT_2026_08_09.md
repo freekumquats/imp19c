@@ -1150,3 +1150,85 @@ invariant makes it unreachable; |Y vs #G cosmetic). Braces 77/1339/49; no EOL/BO
 **Commit:** `3aecf2209` + pushed.
 
 **Status:** #22 DONE — design re-architected after review, code reviewed SHIP-READY, committed + pushed.
+
+---
+
+## #23 — fix log-flood defects from the Aug 9 boot — IN PROGRESS
+
+Full triage of logs.zip (Aug 9 04:22, the boot the defects were reported from; error.log 619k lines).
+The 4 named defects, pinned to source:
+
+**DEFECT 4 — missing event pictures (FIXED).** 3 undefined picture keys referenced by 7 events:
+harbour (qing_americas.2/.4, qing_nanyang.5, spa_america.5), battlefield (fra_revolution.13,
+gbr_empire.11), conversation (spa_america.2). Added all 3 to common/event_pictures/00_event_pictures.txt,
+each aliased to a PROVEN texture already used by a working def (trade_port / naval_battle / senate_debate
+paths — those render with no error). Themes Trade/War/Diplomacy (pre-existing valid).
+
+**DEFECT 2 — "Duplicated event ID" flood (FIXED — and it was a real functional bug, not just noise).**
+The scripted_effect QING_piaohao_found_at was MISPLACED in events/imp19c_mod_events/qing_piaohao_events.txt.
+error.log proved the consequence was worse than a parse warning: `Unknown effect QING_piaohao_found_at at
+qing_piaohao_events.txt line 63/66/67/68/69` — because a scripted_effect in an events/ file is NOT
+registered in the effect database, ALL 5 calls in qing_piaohao.1 were Unknown-effect NO-OPS (the 票號 draft
+banks were never built!). FIX: moved the definition to a new common/scripted_effects/se_QING_PIAOHAO.txt;
+the 5 call sites stay in the event and now resolve (scripted_effects are global). Fixes the flood AND
+restores the piaohao draft-bank seeding. Byte-identical effect body.
+
+**DEFECT 3 — currency Div/0 (CURRENCY_svalues.txt:1126/1149) — NOT A BUG, documented not chased.** The
+Div/0 is at CURRENCY_private_cash_ratio, which ALREADY guards its own divisor (divide = { value =
+CURRENCY_private_cash_needed  min = 0.01 }). The warnings fire during early warm-up when
+CURRENCY_amt_circulated_scaled/_needed are momentarily none → the ratio sub-eval hits a transient 0-divisor.
+This is the SHARED UPSTREAM Sobisonator currency layer (sobisonator-upstream-caution) + the known
+read-before-set econ-log-noise class (econ-log-noise-not-bugs). Per the standing rules, editing the shared
+currency formula on this (benign, self-guarded, early-warm-up) diagnosis is a hard-block: NOT touched.
+Documented as noise, not a defect. (The oscillation itself was the real #23-currency bug, already fixed
+by the sqrt correction, 14c9ed899.)
+
+**DEFECT 1 — send_settlers religion / as_capital (SHARED-LOGIC, handling next as its own focused fix).**
+error.log shows BOTH culture (LAND_release_from_list:44) AND religion (:54) fail with `Value 'as_capital'
+is invalid` — from send_settlers.txt:320 AND DIPLOMACY_resolve_liberate/_colonise AND AI_make_peace. Root
+cause is the shared se_LAND.txt as_capital handler (:726/:737): the v2 `set_variable = flag:$macro$` then
+`var:X = flag:as_capital` comparison DOESN'T match (flag-in-var identity — the exact thing the code's own
+comment admits is unreliable), so the else feeds the literal `as_capital` to set_primary_culture/
+set_country_religion → invalid. ~9 callers pass `as_capital` bare. Fix = mirror the PROVEN working sentinel
+(`$as_subject_type$ = flag:dynamic`, se_LAND:759) — direct macro-vs-flag test, no var indirection. Shared
+primitive + 9 call sites → its own focused fix + review (next).
+
+**DEFECT 1 FIX (as_capital):** replaced the broken var-indirection in LAND_release_from_list (se_LAND.txt
+:726-746) with a DIRECT macro-as-flag comparison `flag:$primary_culture$ = flag:as_capital` /
+`flag:$country_religion$ = flag:as_capital` — the proven direct form (imp19c_formable_triggers.txt:69
+`flag:$tag$ = flag:GER`; 00_trade_scripted_triggers.txt:50). Removed the two unreliable set_variable scratch
+vars. Bare `as_capital` → matches → uses the capital province's own culture/faith; a real culture/religion
+scope arg → never equals flag:as_capital → the else passes it through unchanged. Fixes ALL 9 as_capital
+callers (send_settlers / DIPLOMACY_resolve_liberate/_colonise / AI_make_peace / se_QING_MARCH / USA_SECTION
+/ SEPARATISM / QING_PROTECTORATE / AI) at the shared primitive. LF+BOM preserved; braces 260/260.
+
+**DEFECT 2 review-fix:** dropped `$P$` from the two LOG strings in se_QING_PIAOHAO.txt (log-string-macro
+rule — a $param$ in a LOG string voids the invocation; harmless while the effect was unregistered, a live
+risk now that it IS registered). $P$ retained in the effect BODY (p:$P$), which is correct.
+
+**Reviews:** defects 2+4 code-reviewed PASS (pictures validly defined + proven textures; piaohao move
+resolves the 5 calls — and it was a REAL functional bug: the calls were Unknown-effect no-ops, so draft
+banks never built). Defect 1 (as_capital) code review in flight.
+
+**Status:** #23 defects 1/2/4 FIXED; defect 3 (currency Div/0) documented as shared-upstream benign
+warm-up noise (hard-block, not chased). Committing once the defect-1 review lands.
+
+**DEFECT 1 review verdict:** code review — the fix is CORRECT for the reported bug; all 7 bare-as_capital
+callers fixed (incl. the send_settlers religion line, the named defect) + removes the old var-path's 4669-line
+"Invalid left side during comparison 'var'" flood. 1 MEDIUM = a BOOT-ACCEPTANCE item (the 3 scope-path
+callers now expand to flag:scope:... which is logically correct — else fires, scope passed through — but the
+flag: coercion of a scope path is unproven; worst case a SMALLER new log line on secession/settler paths;
+flagged for the boot check, NOT carved off). 2 LOW polish: fixed the comment line-ref (69->83); noted the
+name/adjective block still uses the old var-idiom (out of scope, follow-up). In-file proof the direct form is
+right: se_LAND.txt:209 already uses `flag:$variable$ = flag:proletariat_wealth`.
+
+**#23 COMMIT SCOPE:** defects 1 (as_capital, se_LAND) + 2 (piaohao effect misplacement -> se_QING_PIAOHAO.txt,
+also restored the never-built draft banks) + 4 (3 missing event pictures) FIXED + reviewed. Defect 3 (currency
+Div/0) = shared-upstream benign warm-up noise, hard-block, documented not chased. BOOT-ACCEPTANCE: re-run the
+boot + check error.log — the as_capital flood (37 lines), the "Duplicated event ID" flood, and the 3
+"Unknown event picture" lines should all be gone; verify no new flag:scope: line on a separatism/settler release.
+
+**Commit:** (below)
+
+**Status:** #23 DONE (3 of 4 defects fixed; defect 3 is a documented non-bug hard-block). Reviewed, findings
+folded, committing + pushing.

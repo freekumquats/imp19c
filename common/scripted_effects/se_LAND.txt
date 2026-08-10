@@ -723,21 +723,29 @@ LAND_release_from_list = {
             # "scope:..." that simply never matches -> the else fires and uses the RAW $arg$ scope
             # correctly. REQUIRES sentinel callers pass a BARE `as_capital` (not flag:as_capital),
             # else flag:flag:as_capital is double-wrapped and never matches. Callers updated to suit.
-            set_variable = { name = LAND_release_culture_is_as_capital  value = flag:$primary_culture$ }
+            # [#23 2026-08-09 log-flood fix] The v2 var-indirection (set_variable value=flag:$primary_culture$
+            # then var:X = flag:as_capital) DID NOT MATCH — flag-in-var identity is unreliable (the code's own
+            # comment above admits it), so the else fed the literal text "as_capital" into set_primary_culture /
+            # set_country_religion, erroring "Value 'as_capital' is invalid" for EVERY as_capital caller
+            # (send_settlers, DIPLOMACY_resolve_liberate/_colonise, AI_make_peace — a 37-line boot flood). Fix:
+            # compare the passed macro DIRECTLY as a flag against flag:as_capital — the PROVEN direct form
+            # (imp19c_formable_triggers.txt:83 `flag:$tag$ = flag:GER`; 00_trade_scripted_triggers.txt:50), no
+            # var round-trip. Sentinel callers pass BARE `as_capital` -> flag:as_capital = flag:as_capital
+            # matches -> uses the capital province's own culture/faith; a real culture/religion arg -> flag
+            # named e.g. "flag:manchu" never equals flag:as_capital -> the else uses the raw arg correctly.
             if = {
             	limit = {
-            		var:LAND_release_culture_is_as_capital = flag:as_capital
+            		flag:$primary_culture$ = flag:as_capital
             	}
             	set_primary_culture = scope:new_capital_scope.dominant_province_culture # TODO: Add conditions
             }
             else = {
             	set_primary_culture = $primary_culture$
             }
-            # Set religion — same flag:$macro$ idiom.
-            set_variable = { name = LAND_release_religion_is_as_capital  value = flag:$country_religion$ }
+            # Set religion — same direct flag:$macro$ = flag:as_capital comparison.
             if = {
             	limit = {
-            		var:LAND_release_religion_is_as_capital = flag:as_capital
+            		flag:$country_religion$ = flag:as_capital
             	}
             	set_country_religion = scope:new_capital_scope.dominant_province_religion # TODO: Add conditions
             }
