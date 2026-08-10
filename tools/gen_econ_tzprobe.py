@@ -59,8 +59,10 @@ ZONES = [
 # would band UNSET forever) and alcohol (NO trade-good def block, unloaded).
 # Adding goods only adds cheap 1-line BAND rows (GLOBAL + per-zone + CHIPAID + REGIONGAP); the bounded
 # EXACT-TICK section is metals-only, so log volume stays safe.
+# [#68] chili added so the new cottage-pharmaceutical MEDICINAL demand term on DEMAND_chili is boot-observable
+# (a script_value cannot debug_log; the chili demand band on this probe IS the diagnostic for #68's tuning).
 GOODS = ["silver", "gold", "grain", "salt", "fish", "tea", "silk", "silk_cloth",
-         "porcelain", "gems", "opium", "coffee", "sugar", "spices", "tobacco"]
+         "porcelain", "gems", "opium", "coffee", "sugar", "spices", "tobacco", "chili"]
 
 # China-adjacent vs European TZs — the pair the regional-divergence question (#50) turns on. Logged as an
 # explicit BANDSET tag so the read-back can eyeball the same-good gap without hunting all 22 zones.
