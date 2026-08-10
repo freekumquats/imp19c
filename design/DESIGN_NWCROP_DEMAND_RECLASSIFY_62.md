@@ -101,3 +101,21 @@ REFINED FIX (per-crop, resolves the H3 blocker):
 - **potato: do NOT go food-only.** Since it's grown ONLY in the Americas and consumed (in this model) as a cheap import elsewhere, removing its luxury/universal demand would strand it. OPTIONS for potato: (a) LEAVE potato in the luxury basket (accept it stays a minor universal-demand good — least-risk, potato is genuinely a minor import for Qing anyway); or (b) give it a food path AND keep a small universal/import demand floor so non-Andean consumers still buy it. LEAN (a): leave potato as-is — it is NOT double-counted the way maize/potato... wait: potato IS in BOTH baskets per the double-count table, but it has NO Chinese production, so its FOOD-block entry only fires in the Andean producers; its LUXURY-block entry is what gives the rest of the world (incl. China) any potato demand. So removing potato from luxury would zero Chinese potato demand. => KEEP potato in the luxury basket (do not remove it); only maize/peanut/sweet_potato get the food-only treatment. Revisit if a domestic-potato mechanic is ever wanted.
 
 NET: the fix is NOT uniform across the 4 crops. maize + peanut + sweet_potato → food-side (China-grown subsistence). potato → LEAVE in luxury (Americas-only production; food-only would kill Qing demand). chili → leave. This is the H3-informed correction; the "remove all 4 from luxury" plan would have made potato a dead good in China.
+
+---
+
+## H3 RE-OPENED — the crop GEOGRAPHY itself is broken (user, 2026-08-10)
+RETRACTION: my "H3 resolved, potato is Americas-only → leave in luxury" verdict was reasoning off BROKEN seed data. Checked BOTH province sources (common/province_setup.csv + setup/provinces/*.txt) — the counts are the same tiny numbers, and they are AHISTORICAL:
+- maize: 6 provinces total worldwide, ALL in China (Hunan/Jiangxi) — ZERO in the Americas. (In 1763 maize was THE staple grain of the entire Western Hemisphere.)
+- chili: 6, ALL Hunan. peanut: 5, ALL China (Guangdong/Fujian). sweet_potato: 4 China + 2 Peru. potato: 5, all Americas.
+- American regions (American Southwest, Appalachia, Antilles, Argentina) grow livestock/grain/wood/tobacco/sugar — essentially NO maize/peanut/chili despite being the crops' homeland.
+=> The mod seeds the New World crops almost entirely in CHINA (their novel 18thc diffusion frontier) and barely in the AMERICAS (their actual origin). This is BACKWARDS from the real 1763 distribution.
+
+CONSEQUENCE — the demand fix (#62) must NOT be built on this broken geography:
+- My per-crop food-only/leave-in-luxury verdicts were derived from where the crops are CURRENTLY (wrongly) grown. They are unreliable until the geography is fixed.
+- Specifically the "potato is Americas-only, leave it in luxury" logic is an ARTIFACT of the broken seeding (potato happens to be the ONE crop seeded in the Americas), not a real design conclusion.
+
+SPLIT INTO TWO TASKS:
+1. #62 (this task) — the DEMAND double-count (maize/potato/sweet_potato in both food+luxury baskets). Still a real, separate bug in the demand svalues. But its per-crop food-only-vs-luxury decision should be REVISITED after the geography is fixed (or made robust to either geography). HOLD #62's final lever choice until the seeding task lands.
+2. NEW TASK — seed the New World crops into their real 1763 AMERICAN ranges (maize across Mesoamerica/N.America/Andes fringe, peanut+chili across the Americas, potato Andean-core, etc.), correcting the backwards distribution. This is a map/setup content task (province_setup.csv + setup/provinces/*.txt), separate from the demand plumbing.
+#62's demand fix depends on #new (get the geography right first, THEN decide each crop's food-vs-luxury demand on correct producer distribution).
