@@ -365,3 +365,87 @@ confirmed. Two LOW observations:
   `gui/qing_caravan.gui` (caravan panel).
 - `se_QING_XINJIANG.txt` (beg-corps character template); `se_QING_AMBAN.txt` (appoint/negotiate pattern,
   qing_amban_negotiate_chance_svalue); `se_QING_MINISTRY.txt:199-204` (stat-deviation svalue idiom).
+
+## 9d. #112a IMPLEMENTATION DESIGN (2026-08-09) — the caravan superintendent (喀什噶爾參贊大臣)
+
+Scope: a NEW se_QING_CARAVAN_SUPER.txt (or a block appended to se_QING_CARAVAN.txt) + the caravan pulse hook
++ QING_char_holds_court_position marker + gui/qing_caravan.gui card + loc. Mirrors the Hoppo model
+(#69/#111a) WHOLESALE — this is the caravan twin of the 粵海關監督. NO unproven capability (a Qing court char,
+employer=CHI — the proven appoint/reconcile/siphon idiom; NOT the aqsaqal foreigner, which is #112b + SPIKE 1).
+
+**Confirmed (review §9b): NEW office, not the ILI amban** — the amban posts a resident to a SUBJECT
+(employer=subject); the 參贊大臣 is a CHI court appointee superintending the trade (employer=CHI). Different role.
+
+**State (on CHI), mirroring the Hoppo:**
+- `qing_caravan_super_holder` — the seated char (country link). `qing_caravan_super_marker` — on the man
+  (per-char post marker; ADD to QING_char_holds_court_position, beside qing_hoppo_marker).
+- `qing_caravan_super_finesse` — lagged finesse mirror (for the yield grade; set at reconcile).
+- `qing_caravan_super_squeeze` — DERIVED from his corruption (the graft meter), like qing_hoppo_squeeze.
+
+**A. APPOINT (QING_caravan_super_appoint):** clone QING_canton_appoint_hoppo — ordered_character employer=ROOT,
+adult/alive/not-ruler/not-general/admiral/governor, NOT QING_char_holds_court_position, NOT hard_disgraced,
+not heir; order_by finesse; max=1; save + set qing_caravan_super_holder + qing_caravan_super_marker.
+
+**B. INIT + SEAT (in QING_caravan_init):** seed qing_caravan_super_squeeze baseline (30) + finesse mirror (7)
+if unset; if NOT has qing_caravan_super_holder → appoint one (the post is always filled, like the Hoppo #66).
+
+**C. GRADE THE CARAVAN YIELD (in QING_caravan_pulse, at the income calc ~:38-52):** apply the SAME continuous
+factor #111a uses on Canton: factor = 1 + (super_finesse−7)×0.03 − super_squeeze×0.004, clamped [0.5,1.3],
+multiplied into qing_caravan_income_tmp BEFORE it's banked/published. Reads the LAGGED mirrors (set later in
+the pulse's reconcile block) — the same one-quarter-lag design as the Hoppo (avoids a live read at the yield
+site before reconcile). Guarded on has_variable so pre-first-reconcile is a clean ×1.
+
+**D. RECONCILE + GRAFT (new block at the pulse tail, mirroring se_QING_CANTON:273-347):** backfill a
+dead/missing holder; graft creep (add_corruption +1/qtr capped <90); SIPHON = income × corruption / 200 as
+REAL add_gold to him (confiscable on impeach — touches only his char wealth, NOT treasury/silver, so it
+can't perturb #23 currency); set qing_caravan_super_squeeze = his corruption; set qing_caravan_super_finesse
+= his finesse (lagged mirror for C).
+
+**E. ROTATE lever (QING_caravan_super_rotate):** clone QING_canton_rotate_hoppo — relieve + re-appoint, ease
+the squeeze; a high-finesse man eases more. (Panel button — the player's proactive lever.)
+
+**F. PANEL CARD (gui/qing_caravan.gui):** a summit office-card, the proven
+`datacontext="[Player.MakeScope.Var('qing_caravan_super_holder').GetCharacter]"` clone (qing_guard.gui:103),
+visible via a scripted_gui qing_caravan_super_seated (has_variable holder). Shows his name + finesse (the
+governing skill). Place near the top of the caravan panel, above the aqsaqal debug card.
+
+**G. IMPEACH:** reuse the proven censorate path (as the Hoppo does in qing_canton.1.b) — a venal superintendent
+event is #112c's territory; for #112a the graft is made concrete (siphon) and the ROTATE lever + a future
+event handle it. Do NOT build a bespoke impeach here (the censorate uphold + marker-strip is the shared path).
+
+**Traps checklist:** no macro/# in LOG strings; RHS var-vs-literal only; save_scope_as→scope:X.finesse for
+char reads (NOT var:X.finesse — reads 0); lagged mirror at reconcile not live read at yield; factor clamp
+[0.5,1.3] bounds the currency-perturbation risk (same as #111a); marker added to court-position for 1:1;
+se_QING_* file no-BOM/LF, gui/loc keep their conventions. Each of A–G reviewed before commit.
+
+### 9d-R. #112a DESIGN CORRECTIONS after adversarial review (2026-08-09) — re-grounded to current line numbers
+
+Real se_QING_CARAVAN.txt layout: income built :201-224 (throughput × rate-factor :207-215 × Kokand /2
+:216-224), banked add_treasury :227, published qing_caravan_income_last :234, **income_tmp REMOVED :235**,
+pulse continues (KOK opinion :249-259, event offers) and ENDS :313. QING_caravan_init :70-85 uses a SINGLE
+`NOT has_variable qing_caravan_initialized` guard wrapping all seeds.
+
+- **C-1 (CRITICAL) — siphon must read qing_caravan_income_last, NOT income_tmp.** income_tmp is removed at
+  :235; a Hoppo-style tail reconcile would read a dead var → siphon permanently 0. FIX: the new reconcile/
+  graft/siphon block is inserted AFTER :235 (before the KOK-opinion block ~:249) and the siphon computes
+  `siphon = qing_caravan_income_last × corruption / DIV`. income_last is the fully-processed (graded,
+  post-Kokand) take — a coherent siphon base, and it persists (never removed).
+- **M-1 — add the double-book relief block** (mirror se_QING_CANTON:255-271) at the top of the reconcile:
+  if the seated holder is now is_general/is_admiral/is_governor/has qing_officer_marker → strip
+  qing_caravan_super_marker + remove holder (next backfill re-seats). Same 1:1 hazard as the Hoppo.
+- **M-2 — init seeds OUTSIDE the qing_caravan_initialized block.** Place the super-var seeds
+  (qing_caravan_super_squeeze=30, _finesse=7) + the init appoint each behind their OWN
+  `if NOT has_variable` guard, OUTSIDE the single-guard initialized block, so existing saves backfill them
+  (matching QING_canton_init:58-79). Otherwise the seat is empty on existing saves until pulse 1.
+- **M-3 — re-scale the siphon divisor to caravan magnitudes.** Caravan income ~2-4/qtr (vs Canton ~30), so
+  /200 yields a cosmetic ~1-2 gold hoard. Use `/20` (corruption 30 on income 4 ≈ 0.6/qtr; corruption 90 on
+  income 6 ≈ 2.7/qtr — a hoard that actually accrues). NOTE for #112c: any venal-superintendent wealth gate
+  must be scaled to this (NOT the Hoppo's wealth>=150; use a caravan-appropriate threshold or a tenure gate).
+- **L-1 — grade order:** insert the superintendent factor immediately after the rate-factor block (~:215),
+  BEFORE the Kokand /2 haircut, so the two throne-side multipliers sit together and Kokand cuts the graded base.
+- **L-2 — currency-safety rationale corrected:** caravan income is add_treasury ONLY (no silver, file
+  header :42) — grading it CANNOT perturb the #23 currency model (unlike Canton, which feeds
+  silver_reserve_size). The [0.5,1.3] clamp is treasury-swing sanity, not currency-coupling. Siphon (add_gold
+  to char) is currency-safe (matches Hoppo).
+- **FILE PLACEMENT:** APPEND to se_QING_CARAVAN.txt (the pulse grade + reconcile MUST live there; appoint/
+  rotate/init keep the coupled logic in one file, as the Hoppo does). No separate se_QING_CARAVAN_SUPER.txt.

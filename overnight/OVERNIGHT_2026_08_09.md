@@ -1232,3 +1232,35 @@ boot + check error.log — the as_capital flood (37 lines), the "Duplicated even
 
 **Status:** #23 DONE (3 of 4 defects fixed; defect 3 is a documented non-bug hard-block). Reviewed, findings
 folded, committing + pushing.
+
+---
+
+## #112a — caravan superintendent (喀什噶爾參贊大臣) — DONE
+
+**What:** the Kashgar twin of the Canton Hoppo — a real Qing court char whose stats grade the caravan customs
+yield, with the same appoint/reconcile/graft/siphon/rotate scaffolding.
+
+**Built (all in se_QING_CARAVAN.txt + supporting files):**
+- qing_caravan_super_holder (+marker on the man); appoint (QING_caravan_super_appoint, ordered_character by
+  finesse, full 1:1 exclusions) + rotate (QING_caravan_super_rotate) levers.
+- INIT SEAT with per-var guards OUTSIDE the initialized block (M-2) so existing saves backfill + seat one.
+- CONTINUOUS GRADE FACTOR in QING_caravan_pulse (after rate-factor, before Kokand /2): 1 + (finesse−7)×0.03
+  − squeeze×0.004, clamped [0.5,1.3], reading LAGGED mirrors set in the reconcile block (one-quarter lag).
+- RECONCILE block (after income banked/published): double-book relief + backfill + graft creep + SIPHON
+  (income_last × corruption / 20 → add_gold, caravan-scaled per M-3) + squeeze/finesse mirrors.
+- qing_caravan_super_marker added to QING_char_holds_court_position (1:1).
+- Panel office-card (.GetCharacter, icon_civic + GetFinesse) + rotate button + loc.
+
+**Design + code reviewed.** Design review found 1 CRITICAL (C-1: siphon would read the removed income_tmp)
++ 3 MEDIUM (M-1 missing double-book relief, M-2 init seed placement, M-3 siphon divisor scale) + 2 LOW —
+ALL folded into §9d-R before build. Code review of the built result SHIP-READY — faithful Hoppo mirror, no
+critical/medium, all 10 checks pass (siphon reads income_last /20 guarded; mirror ordering correct; appoint
+exclusions complete; reconcile all 5 parts; init seeds outside the initialized block; no empty-if; 1:1
+court-position mutual exclusion holds). 4 LOW accepted (all faithful-mirror behaviors matching the Hoppo;
+tightened the one imprecise "×1" comment). Braces se 368/368, triggers 49/49, panel 87/87, gui 120/120; no
+EOL/BOM flips.
+
+**Commit:** (below)
+
+**Status:** #112a DONE — design re-architected after review, code reviewed SHIP-READY, committing + pushing.
+Next: #112b (aqsaqal foreign char, on SPIKE 1) → #112c (contest, on SPIKE 2) → #12 (caravan event coupling).

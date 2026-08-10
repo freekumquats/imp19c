@@ -81,6 +81,14 @@ QING_caravan_init = {
 		# (nothing folds this into a game-start dispatcher, so init must recompute itself — #336 lesson).
 		QING_caravan_recompute_target = yes
 	}
+	# [#112a] Seed the superintendent (參贊大臣) state with PER-VAR guards OUTSIDE the initialized block above,
+	# so an already-initialized save still backfills these newly-added vars + seats a superintendent (matching
+	# QING_canton_init's per-var pattern; the single qing_caravan_initialized guard would skip them otherwise).
+	if = { limit = { NOT = { has_variable = qing_caravan_super_squeeze } }  set_variable = { name = qing_caravan_super_squeeze  value = 30 } }
+	if = { limit = { NOT = { has_variable = qing_caravan_super_finesse } }  set_variable = { name = qing_caravan_super_finesse  value = 7 } }
+	# the 參贊大臣 was a real, always-filled post — seat one now if none is seated (a PICK, not a create: safe
+	# at init, no #90 boot-crash risk), so the panel shows him + his stats grade the yield from turn one.
+	if = { limit = { NOT = { has_variable = qing_caravan_super_holder } }  QING_caravan_super_appoint = yes }
 	LOG_exit = { sys = QING  fn = "QING_caravan_init"  result = OK }
 }
 
@@ -213,6 +221,36 @@ QING_caravan_pulse = {
 		change_variable = { name = qing_caravan_income_tmp  multiply = 0.5 }
 	}
 	# moderate rate (1): factor 1 — leave income_tmp as the throughput-scaled base.
+	# [#112a] CONTINUOUS SUPERINTENDENT-EFFECTIVENESS FACTOR — the 喀什噶爾參贊大臣 grades the take the way the
+	# Hoppo grades Canton (#111a): a capable, honest superintendent delivers more of the road's worth to the
+	# throne; a venal one lets his squeeze swallow it. Reads the LAGGED mirrors (qing_caravan_super_finesse /
+	# _squeeze), set later this pulse in the reconcile block — the same one-quarter lag as the Hoppo (the yield
+	# is computed BEFORE the holder is reconciled, so a live read here would risk a dead/absent holder). Both
+	# guarded on has_variable (clean x1 only if ABSENT; init seeds them 7/30, so the squeeze shave applies
+	# from pulse one — the intended Hoppo behavior, se_QING_CANTON:64-66).
+	#   factor = 1 + (finesse - 7) x 0.03 - squeeze x 0.004 , clamped [0.5, 1.3].
+	# Applied to the throughput-scaled base BEFORE the Kokand haircut below. NOTE: caravan income is add_treasury
+	# ONLY (no silver, unlike Canton), so this cannot perturb the #23 currency model; the clamp is treasury sanity.
+	if = {
+		limit = { has_variable = qing_caravan_super_finesse }
+		set_variable = { name = qing_caravan_super_factor  value = 1 }
+		set_variable = { name = qing_caravan_super_fin_tmp  value = var:qing_caravan_super_finesse }
+		change_variable = { name = qing_caravan_super_fin_tmp  subtract = 7 }
+		change_variable = { name = qing_caravan_super_fin_tmp  multiply = 0.03 }
+		change_variable = { name = qing_caravan_super_factor  add = var:qing_caravan_super_fin_tmp }
+		remove_variable = qing_caravan_super_fin_tmp
+		if = {
+			limit = { has_variable = qing_caravan_super_squeeze }
+			set_variable = { name = qing_caravan_super_sq_tmp  value = var:qing_caravan_super_squeeze }
+			change_variable = { name = qing_caravan_super_sq_tmp  multiply = 0.004 }
+			change_variable = { name = qing_caravan_super_factor  subtract = var:qing_caravan_super_sq_tmp }
+			remove_variable = qing_caravan_super_sq_tmp
+		}
+		if = { limit = { var:qing_caravan_super_factor > 1.3 }  set_variable = { name = qing_caravan_super_factor  value = 1.3 } }
+		if = { limit = { var:qing_caravan_super_factor < 0.5 }  set_variable = { name = qing_caravan_super_factor  value = 0.5 } }
+		change_variable = { name = qing_caravan_income_tmp  multiply = var:qing_caravan_super_factor }
+		remove_variable = qing_caravan_super_factor
+	}
 	if = {
 		# [#13 2026-08-07] once a beaten Kokand is SETTLED (terms dictated OR route absorbed), conquest supersedes
 		# the treaty — the throne collects FULL customs even if an aqsaqal was historically granted (a treasury
@@ -233,6 +271,51 @@ QING_caravan_pulse = {
 	# even at 0 so a dead route reads 0, not a stale prior value.
 	set_variable = { name = qing_caravan_income_last  value = var:qing_caravan_income_tmp }
 	remove_variable = qing_caravan_income_tmp
+
+	# [#112a] RECONCILE THE SUPERINTENDENT (參贊大臣). Mirrors the Hoppo (#69, se_QING_CANTON:255-347). Runs
+	# AFTER the income is banked + published (income_last persists; income_tmp is already removed above). (a)
+	# relieve a double-booked holder; (b) backfill a dead/missing one; (c) graft creep; (d) SIPHON from the
+	# road's take as REAL char wealth; (e) mirror squeeze(=corruption) + finesse for next pulse's yield grade.
+	# (a) double-book relief — a superintendent who later took a command/governorship loses the post.
+	if = {
+		limit = {
+			has_variable = qing_caravan_super_holder
+			var:qing_caravan_super_holder = { is_alive = yes }
+			var:qing_caravan_super_holder = { OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_officer_marker } }
+		}
+		var:qing_caravan_super_holder = { if = { limit = { has_variable = qing_caravan_super_marker }  remove_variable = qing_caravan_super_marker } }
+		remove_variable = qing_caravan_super_holder
+		LOG_line = { sys = QING  msg = "caravan: relieved a double-booked superintendent (also a serving commander/officer) for" }
+	}
+	# (b) backfill a dead/missing superintendent — appoint a fresh man (a new broom, low corruption).
+	if = {
+		limit = { OR = { NOT = { has_variable = qing_caravan_super_holder }  var:qing_caravan_super_holder = { is_alive = no } } }
+		if = { limit = { has_variable = qing_caravan_super_holder }  remove_variable = qing_caravan_super_holder }
+		QING_caravan_super_appoint = yes
+		LOG_line = { sys = QING  msg = "caravan: the superintendent's post fell vacant and was backfilled for" }
+	}
+	if = {
+		limit = { has_variable = qing_caravan_super_holder  var:qing_caravan_super_holder = { is_alive = yes } }
+		# (c) graft creep — his corruption climbs quarterly (the source of the squeeze), capped < 90.
+		var:qing_caravan_super_holder = { if = { limit = { corruption < 90 }  add_corruption = 1 } }
+		# (d) SIPHON — he pockets a slice scaled by his corruption as REAL personal wealth, extracted FROM THE
+		# CARAVAN MERCHANTS (over-charging), NOT the throne's take — so it does NOT reduce the banked income
+		# (the throne's reduced take at high squeeze is already the yield-shave above). siphon = income_last ×
+		# corruption / 20 (caravan-scaled — /200 would be cosmetic at the road's smaller volume, #112a review
+		# M-3). Touches only his char wealth (add_gold), NOT treasury/silver — cannot perturb the currency sim.
+		var:qing_caravan_super_holder = { save_scope_as = qing_caravan_super_seated }
+		if = {
+			limit = { has_variable = qing_caravan_income_last  var:qing_caravan_income_last > 0 }
+			set_variable = { name = qing_caravan_super_siphon_tmp  value = var:qing_caravan_income_last }
+			change_variable = { name = qing_caravan_super_siphon_tmp  multiply = scope:qing_caravan_super_seated.corruption }
+			change_variable = { name = qing_caravan_super_siphon_tmp  divide = 20 }
+			if = { limit = { var:qing_caravan_super_siphon_tmp > 0 }  scope:qing_caravan_super_seated = { add_gold = { value = ROOT.var:qing_caravan_super_siphon_tmp } } }
+			remove_variable = qing_caravan_super_siphon_tmp
+		}
+		# (e) mirror the squeeze (= his corruption) + the lagged finesse for next pulse's yield grade.
+		set_variable = { name = qing_caravan_super_squeeze  value = scope:qing_caravan_super_seated.corruption }
+		set_variable = { name = qing_caravan_super_finesse  value = scope:qing_caravan_super_seated.finesse }
+	}
 
 	# [meter-concretize #10B] the prosperity→control ±1 COUPLE is DELETED. control is now a pure derive of
 	# concrete grip objects; prosperity is itself a derive of oasis trade (#10A). Coupling control to
@@ -617,3 +700,61 @@ QING_caravan_absorb_route = {
 	LOG_line = { sys = QING  msg = "caravan: the Kokand route ABSORBED into the state monopoly (heavy customs) for" }
 	LOG_exit = { sys = QING  fn = "QING_caravan_absorb_route"  result = OK }
 }
+
+# ======================================================================
+# [#112a] APPOINT THE CARAVAN SUPERINTENDENT (喀什噶爾參贊大臣). Picks the ablest-finesse free courtier and
+# seats him, stamping qing_caravan_super_holder (country link) + qing_caravan_super_marker (on the man).
+# The Kashgar twin of QING_canton_appoint_hoppo — same exclusions (one man, one post; no serving commander/
+# governor/officer/heir/disgraced). A fresh appointee carries his OWN corruption, so an honest new man runs
+# the customs straight. No squeeze nudge here — the caller decides (rotate eases it; init/backfill just fill
+# the seat). Country scope (ROOT = CHI).
+# ======================================================================
+QING_caravan_super_appoint = {
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_adult = yes
+			is_alive = yes
+			is_ruler = no
+			NOT = { QING_char_holds_court_position = yes }
+			is_general = no
+			is_admiral = no
+			is_governor = no
+			NOT = { has_variable = qing_officer_marker }
+			NOT = { QING_char_hard_disgraced = yes }
+			NOT = { AND = { exists = ROOT.primary_heir  this = ROOT.primary_heir } }
+		}
+		order_by = finesse
+		max = 1
+		save_scope_as = qing_caravan_super_pick
+		ROOT = { set_variable = { name = qing_caravan_super_holder  value = scope:qing_caravan_super_pick } }
+		set_variable = { name = qing_caravan_super_marker  value = 1 }
+	}
+}
+
+# ======================================================================
+# [#112a] ROTATE THE CARAVAN SUPERINTENDENT — the player's proactive lever on the squeeze (mirrors
+# QING_canton_rotate_hoppo). Relieve any prior holder, seat a fresh accountable man; a new broom eases the
+# squeeze, a high-finesse man eases it more. Country scope (ROOT = CHI). Called from the Caravan-panel button.
+# ======================================================================
+QING_caravan_super_rotate = {
+	LOG_enter = { sys = QING  fn = "QING_caravan_super_rotate" }
+	if = {
+		limit = { has_variable = qing_caravan_super_holder }
+		if = {
+			limit = { var:qing_caravan_super_holder = { is_alive = yes } }
+			var:qing_caravan_super_holder = { if = { limit = { has_variable = qing_caravan_super_marker }  remove_variable = qing_caravan_super_marker } }
+		}
+		remove_variable = qing_caravan_super_holder
+	}
+	QING_caravan_super_appoint = yes
+	# a fresh, accountable appointee steadies the squeeze (a new broom); squeeze is seeded in init so it exists.
+	QING_DECLINE_nudge = { var = qing_caravan_super_squeeze  amount = -12 }
+	if = {
+		limit = { has_variable = qing_caravan_super_holder  var:qing_caravan_super_holder = { finesse >= 7 } }
+		QING_DECLINE_nudge = { var = qing_caravan_super_squeeze  amount = -6 }
+	}
+	LOG_line = { sys = QING  msg = "caravan: a fresh superintendent (參贊大臣) is sent to Kashgar for" }
+	LOG_exit = { sys = QING  fn = "QING_caravan_super_rotate"  result = OK }
+}
+
