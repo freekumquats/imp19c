@@ -131,3 +131,46 @@ So the #50 decision tree is now:
 3. **Alternative that sidesteps the cap entirely:** the CROSS-GOOD tier spread (#52) is uncapped and delivers a dear-tea/cheap-grain feel without touching the penetration math — often the better lever if the goal is "prices feel varied" rather than "the SAME good costs 5× more in London than Canton."
 
 RECOMMENDATION: attempt the low-risk path (1) first; only lift the cap (2) if the user, seeing the measured ≤1.9-3× gap on a boot, judges it too small — and then treat the cap-lift as its own carefully-reviewed sub-change, not folded into a broader #50 pass.
+
+---
+
+## USER DECISION (2026-08-10): LIFT THE CAP + IMPLEMENT + LOG. Concrete build spec.
+
+The user directed path (2): lift the penetration cap to widen the regional same-good gap, implement it, and log the result. This is the single riskiest trade change in the batch (penetration feeds EVERY country's price divisor). Build spec, grounded in source:
+
+### The "divide by 22" mismatch — RESOLVED (do this first, per the design's own instruction)
+The comment at se_GLOBALTRADE_split.txt:~1994 says "Divide by 22, the number of tradezones" but the constant is `multiply = 0.4545` (= 1/2.2). VERIFIED which is correct by tracing the sum: each of the 22 per-TZ terms = `<TZ>_percentage_of_global_stockpile × TZ_penetration` (se_GLOBALTRADE_split.txt:1811+); the stockpile PERCENTAGES across the 22 TZs sum to ~1 (they are shares of the global stockpile), and TZ_penetration ∈ [0,1], so the raw Σ is a stockpile-weighted AVERAGE of TZ_penetration, already bounded ~[0,1] — NOT ~22. => dividing by 22 would wrongly crush penetration ~10×; the `×0.4545` (÷2.2) is the DELIBERATE constant and the **"Divide by 22" COMMENT is the mislabel**. FIX: correct the comment to "× 0.4545 (≈ 1/2.2): a headroom shrink so penetration rarely saturates the [0,1] cap; NOT 1/22 — the per-TZ terms are stockpile-share-weighted, summing to ~1" — do NOT change the constant (changing it IS the lever, below, done deliberately).
+
+### The cap-lift lever (widens the ≤~1.9× ceiling)
+The inter-country same-good gap ceiling = (0.5 + pen_max) / 0.5. Today pen_max ≈ 0.4545 (the shrink) → ceiling ≈ 1.9×. Two knobs, lift the SHRINK (least-bad):
+- **Raise the 0.4545 shrink toward 1.0** (se_GLOBALTRADE_split.txt:~1996): at 0.4545 → ceiling 1.9×; at ~0.9 → divisor ∈ [0.5,1.4] → ceiling ~2.8×; at 1.0 (no shrink, rely on the [0,1] cap) → ceiling 3.0×. This is the cleanest lever — it just lets penetration use more of its existing [0,1] range; the [0,1] cap still bounds it, so no unbounded runaway. [#50 ASSUMPTION best-guess: set the shrink to **0.9** — a perceptible ~2.8× Canton-vs-London ceiling without removing the cap entirely; boot-tune.]
+- Do NOT raise the [0,1] `>1` cap itself (line ~2000) — that removes the structural bound and is the genuinely dangerous knob; keep penetration ∈ [0,1].
+
+### CAUTION — global blast radius (the load-bearing risk)
+Penetration feeds `country_unit_price = world_price ÷ (0.5 + penetration)` for EVERY country (se_GLOBALTRADE_split.txt:2035/2735), which feeds trade income + the price blend the #23 sqrt stabilizes. Raising the shrink lowers the ABSOLUTE price every high-penetration country pays (bigger divisor) — a GLOBAL deflationary nudge on high-access goods, not just the CHI-vs-ROW gap. So:
+- The inter-country RATIO is safe (world price cancels — no #23 risk in the gap itself), BUT the per-country ABSOLUTE price moves → the gbip blend + downstream currency/reserve could shift. MUST verify #23 stability + multiple countries' prices on the boot (the global-not-just-CHI rule).
+- LOG the effect: emit country_unit_price for a China good (silk/tea) for CHI vs GBR vs a low-access country, before/after, so the widened gap + the absolute-price shift are both measurable. The extended #52/#50 tzprobe already logs CHIPAID (CHI paid price + penetration per good) + REGIONGAP; ADD a GBR/low-access comparator if the tzprobe doesn't already cover non-CHI paid price (it's CHI-only — so #50 needs a small non-CHI paid-price + penetration emit, like #59's regime roster).
+
+### Files
+- se_GLOBALTRADE_split.txt: the 0.4545 → 0.9 shrink constant (the lever) + the comment fix. CRLF+BOM — preserve.
+- a non-CHI paid-price/penetration log emit (new small effect or extend the tzprobe) for the GBR/low-access comparator.
+- NO new blend machinery, NO #23 sqrt edit, NO trade_goods base edit.
+
+### Verify (boot)
+- CHI pays perceptibly less than GBR for a China good (silk/tea) — gap widened toward ~2.8× (was ~1.9×).
+- #23 currency chain STABLE across CHI + GBR + a bimetallic power (no oscillation, no runaway); the absolute-price shift is modest, no country destabilized.
+- The 0.4545→0.9 magnitude is best-guess (OVERNIGHT ASSUMPTIONS) — tune on the logged before/after.
+## CAP-LIFT SPEC REVIEW (2026-08-10) — PROCEED-WITH-CORRECTIONS (folded)
+The make-or-break (÷2.2 deliberate, "divide by 22" comment is the mislabel) CONFIRMED correct: the 22 <TZ>_percentage_of_global_stockpile values sum to exactly 1 (each = TZ_stock/global_stock, se_GLOBALTRADE_split.txt:1466-1477; global = Σ TZ :1439-1461), so the penetration sum is a convex combination ∈[0,1] — ÷22 would wrongly crush it ~10×; create_lookup.py:154 sweeps penetration over [0,1], corroborating. Gap-ceiling math confirmed (0.4545→1.9×, 0.7→2.4×, 0.9→2.8×). No direct #23-sqrt risk (penetration is downstream of gbip/sqrt — the shrink changes nothing the sqrt sees). THREE corrections, folded:
+
+**C1 [must fix — blast radius incomplete] — the shrink feeds a SECOND consumer: order_size_modifier.** Line 2035 is NOT the price divisor — it's `order_size_modifier_$tradegood$ = penetration × global_stockpile` (the access-QUANTITY cap), which multiplies trade volume at wealth_owed :2465-2472. So raising the shrink does TWO things: (1) lowers country_unit_price (bigger 0.5+pen divisor — deflationary), AND (2) raises order_size_modifier → high-access countries ORDER MORE (capped at 1, :2067-2075, so bounded). Net trade-wealth = price↓ × quantity↑. => the VERIFY must watch TRADE INCOME / country WEALTH across CHI+GBR+bimetallic, not just unit prices. (The full consumer set of country_global_market_penetration: price divisor :2736, order_size_modifier :2035, the >1 cap :2009, read-only logging — no GUI/event consumer, so runtime blast = those two functional paths.)
+
+**C2 [must fix — the comparator log is a generated-file trap] — route the GBR/low-access emit through the GENERATOR.** se_ECON_LOG_TZPROBE.txt is `# GENERATED — DO NOT HAND-EDIT`, and its chipaid probe (country_unit_price + penetration) is CHI-only (tag=CHI guards se_ECON_LOG.txt:551/569). To log a GBR/low-access comparator, EDIT tools/gen_econ_tzprobe.py + regenerate (add a small non-CHI paid-price/penetration emit), OR add the emit in a hand-editable se_ file — NOT a hand-edit of the generated .txt.
+
+**C3 [magnitude] — start at shrink 0.7, NOT 0.9.** 0.7 → ~21% max price drop + ceiling 2.4× (clearly perceptible) at ~2/3 the price shock of 0.9 (~32% drop). Honors the user's "great caution" flag + the newly-surfaced compound (price+volume) blast radius. Tune toward 0.9 only after the boot confirms currency/wealth stability on the logged before/after. [#50 ASSUMPTION revised: shrink = 0.7 first pass.]
+
+REVISED FILES: se_GLOBALTRADE_split.txt (0.4545→0.7 constant :1997 + comment fix :1993, CRLF+BOM preserve); tools/gen_econ_tzprobe.py + regenerated se_ECON_LOG_TZPROBE.txt (GBR/low-access paid-price + penetration comparator — C2). Verify watches price AND trade-wealth across regimes (C1). This spec is now review-clean; implement.
+
+## IMPL-REVIEW (2026-08-10) — CLEAN, with one #23 watch-note carried to the verify boot
+Impl reviewed CLEAN: constant isolated + correct (only the one 0.4545→0.7; comment fixed), gap math right (2.4× non-CU, 3× CU unchanged), blast radius bounded (both consumers — price divisor + order_size_modifier — saturate; penetration caps at 1), comparator probe well-formed (exists-guarded GBR/USA scope-hop, silk/tea, literal labels), integrity preserved.
+**WATCH-NOTE for the verify boot (LOW, carried):** penetration does NOT feed the sqrt WITHIN a tick, but it DOES re-enter ACROSS quarters — penetration → order_size_modifier → order_size → next-quarter total_order_size → next-quarter local_price → next-quarter gbip=sqrt(...). So 0.4545→0.7 raises the (bounded, saturating — modifier caps at 1, sqrt compresses) gain of the cross-quarter order→price feedback loop the #23 sqrt sits inside, by up to ~1.54× where the modifier isn't saturated. Not a structural re-opening, but the #23 boot check MUST specifically confirm the SILVER oscillation stays damped (the tzprobe's silver GLOBAL-gbip bands + exact ticks cover it — the new GBR/USA comparator is silk/tea only and won't reveal a silver sawtooth). If silver oscillation returns → lower the shrink back toward 0.4545.

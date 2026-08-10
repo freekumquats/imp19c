@@ -197,6 +197,23 @@ ECON_LOG_tzprobe_chipaid = {
         # svalue band block (var:DEMAND_country_<good> would always read UNSET, silently logging nothing).
         out.append(band_block_svalue(good, "CHI", "demand",
                               f"DEMAND_country_{good}"))
+
+    # [#50] NON-CHI COMPARATOR — the paid-price + penetration a European (GBR, high-access) and a
+    # bimetallic (USA) power pay for the flagship China goods (silk, tea), so the WIDENED regional
+    # same-good gap (#50 cap-lift 0.4545→0.7) is measurable AGAINST CHI, not just CHI-in-isolation.
+    # country-local vars → hop into the country scope + read there (has_variable guard). Existence-guarded.
+    # Only silk+tea (the goods the gap is about) + only 2 comparators → tiny log volume.
+    for tag in ("GBR", "USA"):
+        out.append(f'\t\tif = {{ limit = {{ exists = c:{tag} }}  c:{tag} = {{\n')
+        for good in ("silk", "tea"):
+            out.append(f'\t\t\tdebug_log = "IMP19C TZP COMPARE {tag} {good} paidprice"\n')
+            out.append(band_block(good, tag, "paidprice",
+                                  f"var:country_unit_price_{good}",
+                                  f"has_variable = country_unit_price_{good}"))
+            out.append(band_block(good, tag, "penetration",
+                                  f"var:country_global_market_penetration_{good}",
+                                  f"has_variable = country_global_market_penetration_{good}"))
+        out.append("\t\t} }\n")
     out.append("}\n\n")
 
     # ==== REGIONAL GAP: China-adjacent TZ local_price vs European TZ local_price, per good ====

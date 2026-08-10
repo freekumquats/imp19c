@@ -18,6 +18,8 @@ Per user directive: any magnitude, tuning constant, or best-guess design call ma
 
 - (#59) Tier B — REWORKED after impl-review (the post-pass lever was INERT — local_price overwritten before gbip read it; moved IN-PASS between price-set and gbip-sum, type=6 only, so gbip reads the nudge SAME quarter). Constants GUESS: R placeholder=3 (NOT coinage 15 — r is a sqrt-aggregate index, must calibrate to observed); deadband=0.5; k=0.02; clamp ±0.05. CALIBRATION-GATED: the actual pull is behind qing_bimet_enabled (DEFAULT OFF) — first boot runs OBSERVE-ONLY, band-logging r/gbip/CHI+GBR+FRA+USA backing_value; read the real r → set R/deadband → flip the flag. Ships whole now; only the parity centre awaits the one boot datum. HARD gate on enable: gbip flat, #46 survives, no non-CHI break; revert-to-float on failure.
 
+- (#50) penetration shrink — GUESS: raised the shrink 0.4545 → **0.7** (widens the inter-country same-good gap ceiling ~1.9× → ~2.4×; Canton silk cheaper than London silk). Started at 0.7 not 0.9 per the "great caution" flag + the compound blast radius (it lowers absolute price AND raises order_size_modifier). Verify: CHI pays perceptibly less than GBR/USA for silk/tea (TZP COMPARE log); #23 currency + trade-wealth STABLE across CHI/GBR/bimetallic; tune toward 0.9 only if the gap's still too small AND stability holds. The "divide by 22" comment was a MISLABEL (constant is deliberately ÷2.2) — corrected the comment, the constant IS the lever.
+
 ## Design/review inventory taken at session start (pending build tasks)
 | Task | Design doc | Adv. review | Disposition |
 |---|---|---|---|
