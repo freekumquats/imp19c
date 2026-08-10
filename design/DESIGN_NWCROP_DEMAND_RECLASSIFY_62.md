@@ -134,7 +134,17 @@ SPLIT INTO TWO TASKS:
 4. **peanut** — LEAVE luxury-only (REVISED from the old "build a food path"). Peanut is NOT in the food call-list or count block today, and has NO DEMAND_food_peanut svalue. Building a full food path (new svalue + fold-in + call + count-increment) is the biggest single piece of work in #62 — and on the corrected geography it is NOT warranted: peanut in 1763 was a minor oilseed/garden crop (research RESEARCH_NWCROP_GEOGRAPHY_64: "minor/garden crop everywhere… NOT a dominant staple"), i.e. genuinely closer to a discretionary good than a bulk calorie staple. It is NOT double-counted (luxury-only already). So: leave peanut exactly as-is. (Its deeper differentiation is the #65/#66 question, not #62.)
 5. **chili** — LEAVE luxury-only (unchanged). Condiment/spice, never a bulk food; not double-counted. Correct as-is.
 
-**NET #62 fix (final, minimal — rev62 MED folded):** the double-count is maize/potato/sweet_potato (the 3 crops in BOTH baskets). Fix = for EACH of the three, rewrite its DEMAND_<crop> Total svalue to MIRROR DEMAND_grain EXACTLY (DEMAND_food_svalues_new.txt:117-126): `value = DEMAND_food_<crop>` + `min = 0` — nothing else. This means:
+**CORRECTION (rev62impl HIGH, 2026-08-10): the food read MUST be PRODUCTION-GATED, not unconditional.** An unconditional `value = DEMAND_food_<crop>` is WRONG: DEMAND_set_demand_from_food_all sets the DEMAND_food_<crop> VAR only where produced and REMOVES it otherwise (se_DEMAND.txt:99/104/109), so off-region the DEMAND_food_<crop> SVALUE hits its `else = DEMAND_food_base` (DEMAND_food_svalues_new.txt:43-44) = NONZERO (pop×0.3/6) → every non-producing governorship worldwide would demand the crop = universal phantom single-count (breaks the #279 invariant, opposite of #62's intent). This differs from DEMAND_grain because grain's food var is set UNCONDITIONALLY (never hits its else); the 3 crops' vars are CONDITIONAL. So the rev62 "use the bounded svalue not raw var" LOW was INVERTED for this case — the correct form gates the svalue read on the production var:
+```
+DEMAND_<crop> = {   # Total
+    if = { limit = { has_variable = DEMAND_food_<crop> }  value = DEMAND_food_<crop> }   # on-region: bounded food demand
+    else = { value = 0 }                                                                  # off-region: no demand (#279 gate)
+    min = 0
+}
+```
+This keeps the 110/90 tick-bounding on-region AND delivers "~0 off-region" (the design's VERIFY criterion).
+
+**NET #62 fix (final, minimal — rev62 MED + rev62impl HIGH folded):** the double-count is maize/potato/sweet_potato (the 3 crops in BOTH baskets). Fix = for EACH of the three, rewrite its DEMAND_<crop> Total svalue to the PRODUCTION-GATED food form above (has_variable DEMAND_food_<crop> → value=svalue, else 0, min=0). This means:
   - DROP the luxury seed (`if has_variable DEMAND_luxury_<crop> value=var else value=DEMAND_luxury_base_total`) — the C1/C2 real fix (call-list edit alone leaves the else=base_total fallback, so demand would NOT drop).
   - DROP the luxury wealth-elasticity `multiply` block.
   - **DROP the final `multiply = DEMAND_elasticity_impact` (rev62 MED)** — genuine food Totals do NOT apply it; DEMAND_elasticity_impact (DEMAND_svalues.txt:11-14) is documented "Food tradegoods are not affected by this" and is a 0.1-1.0 wealth-downturn malus. Keeping it would inflict a downturn malus on subsistence staples — OPPOSITE of the reclassification intent + diverges from the DEMAND_grain pattern being mirrored.
