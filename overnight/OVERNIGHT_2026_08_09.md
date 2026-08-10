@@ -1001,3 +1001,28 @@ integrating_governorship equally, so behavior there is unchanged. Not expanding 
 **Commit:** `ba3d18e22` + pushed.
 
 **Status:** #19 DONE — reviewed CLEAN (2 review passes; first timed out, re-dispatched), committed + pushed.
+
+---
+
+## #20 — legation events raise bilateral opinion too (not only GP tension) — DONE
+
+**What it was:** QING_legation_open + QING_legation_burlingame_mission routed through
+QING_legation_ease_tension, which ONLY nudged the GP-tension meter (and a japan-accord meter); america had
+no effect at all. The host power's actual OPINION of the Qing was untouched — a resident legation should
+also warm bilateral relations.
+
+**What I did:** added a durable opinion modifier qing_legation_resident (value 15, yearly_decay 3 — stronger
++ slower than the one-off embassy's qing_gp_relation_opinion 10/2, fitting a PERMANENT legation). In
+QING_legation_ease_tension, after the existing tension easing, map the passed $power$ → its country tag and
+`c:TAG = { add_opinion = { modifier = qing_legation_resident  target = ROOT } }` (host's opinion of CHI),
+existence-guarded per power (britain/france/russia/america/japan; japan = JPN or TKG, matching the option
+gate). America now gains bilateral opinion where before it got nothing. Updated all 5 option tooltips.
+
+**Review verdict:** code review PASS — mechanic correct (opinion direction verified vs se_QING_EMBASSY.txt:184
+precedent; japan else_if double-branch fires at most one; scratch-var qing_ease_pw re-set each call so the
+tail remove_variable is safe on the burlingame double-call path; exists guards clean; 15/3 sane vs peers).
+1 MEDIUM FIXED: the 5 tooltips used a non-standard `\'` apostrophe escape (only `\'` in the whole loc tree;
+same file uses bare `'` at line 24) → risked a literal backslash rendering; switched all 5 to bare `'`.
+Braces 47/47 + 71/71; no EOL/BOM churn.
+
+**Commit:** (below)
