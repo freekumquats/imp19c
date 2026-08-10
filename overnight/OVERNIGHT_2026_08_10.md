@@ -78,8 +78,16 @@ Map-seeding design off the corrected geography. KEY: the source-of-truth blocker
 ### WROTE + dispatched review — DESIGN_NWCROP_POPBOOM_65.md (#65)  [rev-65 running]
 Flesh out the boom per the user's two rulings: buildings are GENERIC (Europe ate NW crops too), the Qing difference is a CHI reader keying off them (proven pattern). Three layers: (A) generic NW-crop farmstead + a peanut→oil / chili→processed-foods BOM hookup to make the two flat crops earn their keep (#66 gap); (B) CHI building-count boom reader extending the existing qing_migr_crop_boom; (C) events + a mission beat. Make-or-break flagged for the reviewer: is the peanut/chili BOM hookup buildable against an EXISTING manufactured good (no new trade good — #66 perf)? Depends on #64 + #62 landing first.
 
-## Reviews in flight (4)
-rev-112bc (#112b/c), rev-63 (#63), rev-64 (#64), rev-65 (#65). Fold each verdict into its design as a corrections block BEFORE any code. NOTHING is being built until each design clears its gate (user directive this session).
+## Reviews returned + folded (3 of 4; rev-65 still running)
+All three that returned = **PROCEED-WITH-CORRECTIONS**, folded into their designs as corrections blocks. Key catches:
+
+- **#63 (rev-63):** (1) capability RESOLVED — law options DO carry `on_enact = { set_variable }` (proven 15× in 00_qing_statutes_laws.txt) → DROP the R5 boot-spike. (2) NO CHI-only mint site — CHI mints via the shared monthly_currency_pulse → lever (a) reframed as a CHI-only guarded rate-CEILING in the Qing pulse. (3) the mint lever can only TIGHTEN, not loosen (hard-clamp to the forbidden shared cap) — loose stances act only via stress-bias + cosmetic modifiers. (4) Layer 3 must scope to `OR={legislative  tag=CHI}` (broadening exposes every non-tribal monarchy AI). (5) read #1 = direct term into the stress LEVEL, never the decaying residual. (9) law files are BOM+**CRLF** (design missed CRLF). #59 collision NONE confirmed.
+
+- **#64 (rev-64):** (C1) the source-of-truth blocker is ALREADY RESOLVED — edit `setup/provinces/*.txt`, NOT the CSV (CSV is not engine-read; decision at OVERNIGHT_DECISIONS2.md:207-218). (C2) current-state counts were STALE (from the CSV) and wrong — re-baselined from .txt: peanut=3 (not 5), chili=3 (not 6); qualitative defect (0 Americas) holds. (C-H1) commit to numeric per-crop American floors (maize ≥12-15, peanut ≥6, chili ≥6, potato Andean ≥4). R4 global-capacity + #62 ordering CONFIRMED sound (runaway worry over-stated; American provinces gain only the ceiling, not the ROOT=CHI growth push).
+
+- **#112b/c (rev-112bc):** BLOCKERS — (C1) seat the aqsaqal in the shared `QING_caravan_grant_aqsaqal` effect (3 grant paths), NOT in qing_caravan.1. (C2) the REVOKE path dangles the character — seat+teardown must be PAIRED. (H1) teardown "reuse verbatim" was hand-waved — must rewire the death + KOK-lost hooks to a new shipping marker (spike retirement deletes the old ones). (H2) the contest svalue can't be "one branch-parameterized family" — needs 3 chance + 3 fail svalues. (H3) court-slot + `qing_dept_cd_caravan` throttle is MANDATORY (#41 flood class), not "if needed". (M1) the svalues ALREADY ship — don't "lift"/duplicate. Build gate: C1/C2 before #112b, H2/H3 before #112c code.
+
+**rev-65 (#65 pop-boom) still running** — fold when it returns. NOTHING built until every design clears its gate (user directive).
 
 ## Ready-to-build once the review backlog clears (design+review complete)
 - #44 salt monopoly (DESIGN_SALT_MONOPOLY_44 §77 corrections + revised minimal slice).

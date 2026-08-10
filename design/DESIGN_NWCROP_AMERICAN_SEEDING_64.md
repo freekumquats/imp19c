@@ -57,7 +57,30 @@ Exact province IDs to convert are chosen at impl from the target-area grain/live
 - #62 can now proceed on corrected geography.
 
 ## Traps / rules
-- Source-of-truth per province (R1) — the single make-or-break. No BOM in CSV/setup (setup reader rejects BOM). No EOL churn.
-- Concrete province-ID list built + logged (no silent sampling).
+- Source-of-truth = setup/provinces/*.txt (see §CORRECTIONS C1 — resolved, NOT open). No BOM in setup (setup reader rejects BOM). No EOL churn.
+- Concrete province-ID list built + logged (no silent sampling); numeric per-crop American floors (C-H1).
 - This is content seeding, NOT plumbing — no #219 flood risk (not editing good defs or country/province modifier blocks).
 - Design-note-first → adversarial review → implement → verify boot.
+
+---
+
+## ADVERSARIAL DESIGN-REVIEW CORRECTIONS (rev-64, 2026-08-10) — PROCEED-WITH-CORRECTIONS
+Verdict: seeding plan + the two hardest calls (R4 global-capacity, #62 ordering) are SOUND. Two corrections are mandatory before impl; they supersede the conflicting text above.
+
+**C1 [CRITICAL] — the source-of-truth blocker is ALREADY RESOLVED; edit `setup/provinces/*.txt`, NOT the CSV.** `common/province_setup.csv` is NOT read by the engine — it is only input to the modding scripts (buildings_generator.py / old_to_new_setup_*.py). Recorded decision: `overnight/OVERNIGHT_DECISIONS2.md:207-218` ("CRITICAL SOURCE DECISION, 2026-07-08"); confirmed by rg (no engine loader for province_setup, only doc/script refs). => the "LOAD-BEARING MECHANICS QUESTION" section + R1's "grep both / verify per province" language is STRUCK. Flat directive to impl: **edit `setup/provinces/00_<Region>.txt` only** (sync the CSV optionally for generator hygiene, never as the live edit). There is NO #281 rifles trap here — that trap only bites if you edit the CSV. Concrete live-good locations (verified): New Mexico 548/856 = `00_American_Southwest.txt:45,91` (potato); Peru potato = `00_Peru.txt` (Moquegua 1587, Azángaro 2080) + `00_Lower_Peru.txt` (Uyuni 2128); Mexico targets = `00_Eastern_Mexico.txt`/`00_Pacific_Mexico.txt`/`00_Northern_Mexico.txt`/`00_Central_America.txt`; also `00_Antilles.txt`, `00_Appalachia.txt`, `00_Argentina.txt`, the 5 Brazil files; current maize seed = `00_Hunan.txt:27`.
+
+**C2 [CRITICAL] — the current-state counts above (and in the research doc) are STALE (from the CSV) and materially wrong.** The CSV diverges from the authoritative .txt (e.g. Wuyishan 3317 = `tea` in `00_Fujian.txt:131` but `peanut` in the CSV). Re-baselined from the engine .txt:
+| crop | (stale CSV) | ACTUAL engine .txt | Americas |
+|---|---|---|---|
+| maize | 6 | 6 (Hunan/Jiangxi) | 0 |
+| peanut | 5 | **3** (all Guangdong) | 0 |
+| chili | 6 | **3** (all Hunan) | 0 |
+| sweet_potato | 6 | 6 (4 Fujian/Guangdong + 2 Peru) | 2 |
+| potato | 5 | 5 (New Mexico ×2 + Peru ×3) | 5 |
+The qualitative defect (maize/peanut/chili = ZERO Americas) HOLDS — the task is real — but peanut/chili China baselines are already HALF what this design assumed, so any "China → minority" math off the CSV is wrong. => impl re-baselines current-state + all share targets from `setup/provinces/*.txt`.
+
+**C-H1 [HIGH] — commit to numeric per-crop American FLOORS (don't leave "chosen at impl" vague).** Supply is abundant (under-seeding is the real risk, not the pool). Floors so majority-American is guaranteed: **maize ≥12–15 American** (vs 6 China); **peanut ≥6 American**; **chili ≥6 American**; **sweet_potato +3–4 minor American**; **potato: move the 2 New Mexico → Andes, net Andean ≥4**. Impl tunes within these; the no-silent-cap rule governs HOW the list is logged, these floors govern HOW MANY.
+
+**C-M1 [MED] — state that each conversion SUBTRACTS a grain/livestock producer, accepted.** grain→maize is food-basket-neutral (no famine risk), but grain/livestock also feed building eligibility + pop composition; the convert-only-generic rule (R2) mitigates. Low consequence — say explicitly the removal is accepted.
+
+**CONFIRMED SOUND (keep as written):** R4 global-capacity (if anything the runaway worry is OVER-stated — American provinces gain only the capacity CEILING, not the ROOT=CHI growth PUSH; verify-on-boot is cheap insurance, do NOT owner-gate); #62 ordering (#64 first, then #62 re-derives on corrected geography — no broken intermediate, no #62 edit needed first); L2 revenue coupling NONE; L4 content-only, no #219 risk; L3 setup files BOM-free.
