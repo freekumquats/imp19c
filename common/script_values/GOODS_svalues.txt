@@ -3095,6 +3095,46 @@ GOODS_governorship_clothing_infra_output_compute = {
 	}
 }
 
+# [#69] The concrete steel works (漢陽鐵廠) joins the goods sim as assigned steel factories. Unlike the
+# 3 MG-hook buildings above (clothing/munitions/naval_supplies, which are PRODUCE-only), steel was the
+# ONE fully-disconnected building — GOODS_governorship_steel_produced_mechanised carries no infra_output —
+# and it is #69's literal example ("blast furnace actually consumes iron -> produces steel"). Joined via
+# the factory-count svalue (INDUSTRY_steel_factories) so a steel works BOTH produces steel AND consumes
+# its iron+coal bill of materials, single-point + automatically consistent. Cached-wrapper idiom (mirrors
+# the clothing/munitions/naval_supplies infra caches) so the province walk runs once/quarter, not 3x.
+INDUSTRY_building_factories_steel = {
+	# Scope: Governorship. Reads the once-per-quarter cache if present, else recomputes inline (never
+	# zero on a cache miss — the perf #71 degrade-to-correctness idiom).
+	if = {
+		limit = { has_variable = steel_works_infra_cached }
+		value = var:steel_works_infra_cached
+	}
+	else = {
+		value = INDUSTRY_building_factories_steel_compute
+	}
+}
+
+INDUSTRY_building_factories_steel_compute = {
+	# Scope: Governorship. Count the steel works across the governorship's provinces (two-level walk —
+	# from governorship scope provinces are reached via every_governorship_state -> every_state_province,
+	# matching the clothing hook above). num_of_<building> is the proven province-scope count form.
+	# Gated on tech_manufactories (the works' own allow-block invention) so the term is 0 until it can be
+	# built (a 1763 game has none -> byte-identical). Per-building weight 1 (1 works = 1 assigned factory;
+	# best-guess, boot-tunable). qing_steel_works_building is culture-gated jurchen/chinese_group, so only
+	# the Qing get building-fed steel (intended, China-granularity rule); ROW keeps assigned-factory steel.
+	value = 0
+	if = {
+		limit = {
+			owner = { invention = tech_manufactories }
+		}
+		every_governorship_state = {
+			every_state_province = {
+				add = num_of_qing_steel_works_building
+			}
+		}
+	}
+}
+
 GOODS_governorship_clothing_produced = {
 	# [#133 I2] SUMMED total (cottage + mechanised) for CONSUMERS — see early_munitions note.
 	value = 0
