@@ -1272,14 +1272,30 @@ CURRENCY_gold_reserve_actual_change_with_cashout = {
 }
 
 CURRENCY_silver_reserve_actual_change_with_cashout = {
-	if = { limit = { has_variable = silver_reserve_actual_change }  value = var:silver_reserve_actual_change }   # [U4 followup fix 2026-07-24] guard read-before-set (unset == 0)
+	# [#54 2026-08-09] CHI override. The vanilla per-tick delta silver_reserve_actual_change captures ONLY
+	# the engine's own reserve moves; the mod's DIRECT-to-reserve inflows (Canton skim, Ministry-of-Revenue
+	# drift) write silver_reserve_size WITHOUT touching that delta, so the vanilla economy-view "(change)"
+	# reads negative while the reserve visibly rises (the reported bug). qing_silver_reserve_change_last
+	# (se_QING_REVENUE.txt) is the TRUE quarter-over-quarter snapshot-diff of silver_reserve_size — it
+	# captures every writer, vanilla + mod — and is the SAME number the 戶部銀庫 panel already shows
+	# correctly (#42, user-confirmed working). Reuse it here so the vanilla view agrees. It is a diff of
+	# silver_reserve_size, so the loc's ×100 scaling matches the reserve-total's ×100 (consistent units).
+	# ONLY CHI sets this var + has the mod inflows; every other country falls through to the UNCHANGED
+	# vanilla path below (its inputs are 0/absent, so the vanilla number stays correct for them).
 	if = {
-		limit = {
-			NOT = { has_variable = reserves_frozen }
-			var:silver_reserve_size > CURRENCY_gold_reserve_size
+		limit = { has_variable = qing_silver_reserve_change_last }
+		value = var:qing_silver_reserve_change_last
+	}
+	else = {
+		if = { limit = { has_variable = silver_reserve_actual_change }  value = var:silver_reserve_actual_change }   # [U4 followup fix 2026-07-24] guard read-before-set (unset == 0)
+		if = {
+			limit = {
+				NOT = { has_variable = reserves_frozen }
+				var:silver_reserve_size > CURRENCY_gold_reserve_size
+			}
+			subtract = 	CURRENCY_inflation_precious_metal_reserve_bought
+			add = CURRENCY_deflation_money_bought_precious_metal_sold
 		}
-		subtract = 	CURRENCY_inflation_precious_metal_reserve_bought
-		add = CURRENCY_deflation_money_bought_precious_metal_sold
 	}
 }
 
