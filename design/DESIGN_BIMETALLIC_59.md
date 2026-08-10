@@ -55,6 +55,52 @@ The user ruled the **M1/circulation bimetallic rework (#60) OUT OF SCOPE** ("wou
 - Sell-Reserves / reserve valuation shows gold ≈ 15× silver per unit weight (the historical ratio), stable across quarters (not the noisy market float).
 - #23 gbip flat; #42/#54 reserve-change display still correct; #46 silver-standard character intact; no ROW destabilization.
 
-## OPEN for the user (before ANY #59 implementation)
-- Confirm TIER A (valuation-ratio anchor, small) vs TIER B (active market coupling, world-economy-scale). Default recommendation: TIER A.
-- Confirm #59 Tier A should be MERGED with the METAL_RESERVE_PRICING work (they're the same svalue) rather than a separate change.
+## WHY #59 IS SAFE TO BUILD WHILE #60 STAYS CLOSED — the ADDITIVE distinction (user, 2026-08-10)
+"Modifying the existing cash vs reserves (i.e. what was previously proposed for Qing copper and silver circulation, #60) is far more dangerous because it is not purely additive."
+- **#59 (gold↔silver reserve coupling) is ADDITIVE.** It ADDS a relationship between two quantities that already exist as independent floats. No existing quantity's SEMANTICS change; the pull is layered ON TOP. Reversible, boundable, and Tier A (valuation-anchor-only) is a clean always-safe floor.
+- **#60 (the copper-M1 ↔ silver-reserve rework) is NOT additive.** It would have REDEFINED what the existing cash/reserve buckets MEAN and REROUTED flows between them (silver into circulation). Mutating the meaning of a live, load-bearing quantity is categorically more dangerous than adding a new coupling beside it — which is why #60 was correctly ruled out.
+- **DESIGN CONSTRAINT this imposes on Tier B:** the #59 mechanic must be strictly ADDITIVE — it may add a new pull/anchor svalue + a bounded per-pulse nudge, but it must NOT change the semantics of, or reroute flows between, silver_reserve_size / the cash/M1 buckets / backing_type. The nudge acts on the two metals' MARKET prices/demand (new coupling), never on what the existing reserve or circulation quantities represent. If a proposed implementation step would mutate an existing bucket's meaning (as #60 would have), it is out of scope — fall back to the additive-only path or Tier A.
+- **GLOBAL SCOPE raises the stakes on additive-only (user, 2026-08-10):** gold/silver reserves are a GLOBAL construct — every country has them, so this coupling applies GLOBALLY, not just to CHI. That is precisely WHY additive-only is doubly essential here: an additive pull's worst case is "mistuned," which is dialable-down or cleanly revertible everywhere at once; a semantics-mutating change (like #60) applied to EVERY country's reserves would be near-impossible to unwind and could break economies country-by-country in ways no single verify boot catches. So: (a) additive-only is non-negotiable given the global reach; (b) the verify boot MUST sample MULTIPLE countries (gold-standard Britain, bimetallic France, silver-standard CHI), not just CHI — a mechanic that stabilizes CHI but breaks a gold-standard power is a fail; (c) prefer building the safe Tier-A floor (valuation anchor, zero market pull) FIRST and adding the market nudge as a separate gated increment, so the global market-coupling risk is isolated and independently revertible.
+
+## THE FULL RISK TAXONOMY (why #59 is buildable and #60 is not) — two axes, user 2026-08-10
+The two tasks differ on BOTH axes, and #60 is the worst corner of both:
+| | #59 gold↔silver | #60 copper↔silver / M1 |
+|---|---|---|
+| Additive vs semantics-mutating | ADDITIVE (adds a coupling beside existing floats) | SEMANTICS-MUTATING (redefines/reroutes existing buckets) |
+| Global-uniform vs per-country fork | GLOBAL-UNIFORM (one coupling, every country has metal reserves, same rule for all) | PER-COUNTRY FORK of a global system (copper-vs-silver circulation is CHINA-SPECIFIC → reach into the SHARED global cash/reserve machinery and carve out CHI-only behaviour) |
+| Worst case | mistuned pull → dial down / revert everywhere | mutated a load-bearing global system AND forked it per-country → near-unwindable, breaks economies country-by-country |
+=> #59 is additive-and-uniform (buildable, boundable, revertible). #60 is the worst combination — "changing global systems specifically for Qing" — mutating shared global machinery to special-case one country. That combination, not scale alone, is why #60 is out and #59 is in. The #59 build must STAY in the safe corner: additive + globally-uniform. Any step that special-cases the coupling for CHI (a per-country fork) is a red flag pushing toward the #60 danger zone — reject it; keep the mechanic uniform across all countries.
+
+## CLASSIFICATION (user, 2026-08-10): MISSING FEATURE, not a bug ([[bug-vs-missing-feature-rule]]).
+"Coupling gold and silver reserves is a missing feature." So the independent gold/silver float is NOT Sobisonator doing something wrong (a bug to fix) — it is a feature that was never built (design + ADD). #59 is correctly feature-addition work: design → review → implement → verify, adding the coupling that never existed. This is not a regression to revert or a defect to patch; it's net-new mechanic, which is why it goes through the full design pipeline + gets the world-economy-scale caution, rather than the bug-fix path.
+
+## USER DECISION (2026-08-10): TIER B — the Gresham soft-band. GREEN-LIT (mechanic), still gated on impl review + verify boot.
+The user chose the historically-faithful Tier B (arbitrage mean-reversion toward the ~1:15 ratio), accepting the world-economy scale. This is the green-light for the MECHANIC; implementation still runs adversarial review → verify boot (high risk, touches every country's metal prices). Tier A is SUBSUMED (the valuation anchor is the band's centre).
+
+## TIER B MECHANIC SPEC (the locked design)
+Model gold↔silver as a soft-pegged pair that arbitrage pulls toward the era ratio, per the research (Gresham vs a fixed ratio; Friedman/Flandreau arbitrage-absorber):
+1. **Anchor ratio R = 15** (gold:silver by weight; the pre-1873 converged value, correct for BOTH bookmarks). A single global constant (bullion is fungible worldwide — METAL_RESERVE_PRICING §II.3 option a; a per-country ratio risks backing circularity, rejected).
+2. **Realized market ratio** = the two metals' current traded prices (gold_price / silver_price) — the mod already computes these independently. Let `r = gold_price / silver_price`.
+3. **Mean-reversion pull (the arbitrage)**: each pulse, nudge the two metal prices TOWARD r = R by a small fraction (a partial correction, NOT a snap — arbitrage takes time + is frictional). When gold is under-valued vs silver (r < 15, the CHI silver-standard case: silver dear), the pull raises gold demand / lowers silver's relative price a touch, and vice-versa — exactly Gresham arbitrage (the cheap metal gets bought/shipped toward parity). Implement as a bounded per-pulse adjustment to the demand or price of each metal proportional to (R − r), clamped so one pulse can't overshoot (mirror the #23 damping discipline — no undamped feedback; the no-restoring-drift-ratchet rule: band-gate so it only pulls when |r − R| exceeds a deadband, else it ratchets on noise).
+4. **BAND, not peg**: supply/demand can still push r away from 15 within a band (a big silver inflow CAN make silver dearer transiently — historically true); the pull only fights SUSTAINED divergence, so the silver-standard character (#46, silver dear in China) is PRESERVED as a within-band lean, not erased.
+5. **CHI caveat honoured**: gold is not a Qing monetary metal (research/Kuroda), so the CHI-facing effect is deliberately small — this mechanic is the WORLD bullion market pulling the two metals together; it does NOT touch China's domestic silver:copper money (backing_type=silver_standard, se_CURRENCY.txt) or M1 (#60). The band centre also feeds reserve VALUATION (the old Tier A benefit, now the band's anchor).
+
+## Interaction constraints (must not break) — CRITICAL for Tier B
+- **#23 currency chain**: Tier B DOES touch the metal market prices that feed the gbip blend → the sqrt loop. This is the top risk. The per-pulse pull MUST be damped + deadbanded like the #23 fix (no undamped feedback, no ratchet-on-noise); the verify boot MUST confirm gbip stays flat with the band active. If the pull perturbs the sqrt loop, shrink the correction fraction / widen the deadband.
+- **#42/#54 reserve display**: reserve valuation now reads the band anchor; confirm the change-indicator still reads right.
+- **#46 silver-standard (WAI)**: PRESERVE — silver dear in China is a within-band lean, not erased. The band must be wide enough that the silver-standard character survives; only absurd sustained divergence is corrected.
+- **#60 (accepted limitation)**: do NOT reopen M1/circulation. Tier B touches metal MARKET prices + reserve valuation, NOT M1.
+- **GLOBAL (the user's hard rule)**: this changes every country's metal prices. The verify boot MUST check multiple countries on the #51 logs (gold/silver series already logged), not just CHI. A mechanic that stabilizes CHI but breaks a gold-standard Britain is a fail.
+
+## Files (TIER B)
+- common/script_values/CURRENCY_svalues.txt — the ratio constant R, the realized-ratio svalue (gold_price/silver_price), the reserve-valuation anchor (subsumes Tier A's intrinsic_price).
+- common/scripted_effects/se_CURRENCY.txt (or the currency pulse) — the per-pulse bounded mean-reversion nudge to the two metals' demand/price, deadbanded + damped. THE core mechanic + the highest-risk code.
+- NO M1/circulation changes. NO province/country blocks. NO domestic silver:copper touch.
+
+## Verify (TIER B) — the boot must confirm ALL of these
+- The realized gold:silver ratio trends toward ~15 over quarters (not a snap; a gradual pull), visible in the #51 gold/silver price series.
+- Silver stays dear-ish in China (within-band lean preserved, #46 intact) — the pull did NOT erase the silver standard.
+- #23 gbip FLAT with the band active (the pull is damped, no oscillation reintroduced) — the load-bearing check.
+- Multiple countries' economies stable on the logs (not just CHI) — the global rule.
+- #42/#54 reserve display correct; #60 M1 untouched.
+IF any fail (esp. gbip destabilizes): shrink the correction fraction, widen the deadband, or fall back to Tier A (valuation-anchor-only) — which is always the safe floor.
