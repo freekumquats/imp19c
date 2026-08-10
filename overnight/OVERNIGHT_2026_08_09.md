@@ -1028,3 +1028,30 @@ Braces 47/47 + 71/71; no EOL/BOM churn.
 **Commit:** `4d2e8a087` + pushed.
 
 **Status:** #20 DONE — reviewed, MEDIUM folded, committed + pushed.
+
+---
+
+## #21 — BUG: "Foreign Friends" (flavor_eve.18) improved relations but changed no opinion — DONE
+
+**What it was:** flavor_eve.18's desc says "relations between us and [neighbor] have improved", but option .a
+only added stability and .b only added a personal ruler friendship (add_friend). Neither changed COUNTRY
+opinion — the improved relations were fiction.
+
+**What I did:** both options now add MUTUAL bilateral opinion with the neighbour, guarded on
+exists=scope:friendly_neighbor: `scope:friendly_neighbor = { add_opinion = { modifier = X target = ROOT } }`
+(their opinion of us) + `add_opinion = { modifier = X target = scope:friendly_neighbor }` (ours of them). .b
+keeps its add_friend too (now inside the guard — a strictly-safer no-op if the scope were ever unset).
+
+**Key decision (from review):** flavor_eve.18 is a GENERIC any-country event (no tag=CHI), so it must NOT use
+the Qing-named qing_gp_relation_opinion ("Improved Relations with the Qing" — wrong for a non-Qing player).
+Added a tag-neutral `foreign_friends_opinion` (value 10, decay 2, loc "Improved Relations") + used it.
+Also added `NOT = { this = root }` to the random_country pick so the event can never select the player
+itself (a self-target would make the mutual opinion nonsensical) — flavor_eve.18 only (not the sibling
+flavor_eve.7, whose identical pre-existing quirk is out of scope).
+
+**Review verdict:** code review PASS — opinion direction/mutuality correct, guard a net safety improvement,
+add_friend unchanged, modifier valid + non-duplicate, genericity resolved (the review pre-empted its own
+"Qing-named modifier" concern since I'd already switched to the tag-neutral one). Braces 270/270; CRLF+BOM
+preserved; no churn.
+
+**Commit:** (below)
