@@ -71,3 +71,42 @@ The 鹽課 proper → **treasury/money** (as now; it's ordinary 戶部 fiscal in
 - Ministry of Revenue panel shows a "Salt Monopoly" button; clicking opens the window.
 - Window shows the 兩淮鹽政 commissioner (portrait/name/finesse/corruption), the quarterly 鹽課, salt-yard count, squeeze, reform state; the "Reform the Salt Gabelle" button is there and works.
 - debug.log / econ logs: salt revenue is now output-driven and lands near ~12-15% of state income (up from "way below"); the character factor + squeeze move it; the modest reserve feed appears under a corrupt commissioner without destabilizing the currency chain.
+
+---
+
+## ADVERSARIAL DESIGN-REVIEW CORRECTIONS (2026-08-10) — apply BEFORE implementing
+
+The review found two design premises factually wrong about the current codebase + the highest-risk decision should be cut. All verified against source (window idiom + reform button re-confirmed directly). Corrections SUPERSEDE the conflicting text above:
+
+**C1 [CRITICAL] — CUT the silver-reserve skim (design §C). Salt is MONEY-ONLY.**
+silver_reserve_size is the currency-backing reserve — already a crowded, delicately-tuned channel (3 engine writers + mod drift + Canton feed; feeds currency power at se_CURRENCY.txt:1913; IS the parked #60 bimetallic machinery). The Canton Hoppo — the design's own cited precedent — DELIBERATELY keeps its skim OFF the reserve: se_QING_CANTON.txt:325-328 "touches only his CHARACTER wealth stat — NOT add_treasury, silver_reserve_size, or the money supply — so it cannot perturb the currency sim (#23-caution)." A squeeze-gated reserve skim would also pollute the #42/#54 change display (qing_silver_reserve_change_last snapshots ALL reserve movement). => 鹽課 → treasury only; commissioner skim → add_gold to the CHARACTER, confiscated on impeachment/retirement (mirror se_QING_CANTON.txt:329-334). Zero reserve touch. Also removes the 萬兩/千兩 units-conversion trap from scope. §C is DELETED.
+
+**H1 [HIGH] — seat the commissioner the way the Hoppo ACTUALLY is: ordered_character promotion at day-0, NOT create_character at day-32.**
+The design's §A/Files/Traps claim create_character from the deferred day-32 qing_force_setup.12. WRONG about the precedent: the Hoppo seats at day-0 on_game_initialized (qing_mechanics_on_actions.txt:242 → QING_canton_init → inline seat se_QING_CANTON.txt:76-79), and QING_canton_appoint_hoppo (se_QING_CANTON.txt:448-486) PROMOTES AN EXISTING COURTIER via ordered_character { limit={employer=ROOT...} order_by=finesse max=1 } — it never mints. => seat via ordered_character promotion at day-0; drop create_character, drop the day-32 deferral, drop the #90/#61 anxiety (artifacts of a mis-modeled seat). The whole "mirror the Hoppo #90-safe deferred seat" scaffolding is removed.
+
+**H2 [HIGH] — the reform button ALREADY EXISTS; do not extract/move logic (design §E false premise).**
+qing_revenue_ministry_reform_salt (QING_revenue_ministry_panel.txt:101-129) is ALREADY a player-clickable Revenue-panel button firing qing_revenue.1, with a double-apply guard (is_valid on NOT-reformed + qing_revenue_event_cooldown 270d, the [#355] money-printer fix). => do NOT extract qing_revenue.1's options into a shared effect (§E unnecessary). To put the button in the new window: re-point the EXISTING qing_revenue_ministry_reform_salt scripted_gui to the window layout, keeping its is_valid guard VERBATIM (or leave it on the Revenue panel and just open the window off a separate button). No double-apply to engineer.
+
+**M1 [MEDIUM] — use the existing GOODS_national_production_salt, no province loop (design §B over-built).**
+GOODS_national_production_salt exists (GOODS_svalues.txt, parallel to the confirmed GOODS_national_production_tea/saltpetre) = sums GOODS_governorship_salt_produced (num_goods_produced × mining_productivity, which ALREADY responds to salt-yard buildings' base_resources → satisfies "function of the actual salt buildings" automatically). => rewrite QING_revenue_salt_income to mirror QING_canton_pulse: read the national salt aggregate into a scratch var × clamped market-soft factor × gabelle markup × character factor. No every_owned_province loop, no new base svalue.
+
+**M2 [MEDIUM] — market-soft factor: mirror the Canton factor block verbatim (RHS-safe).**
+Build the factor in a scratch var with change_variable; clamp with `if = { limit = { var:X > 1.3 } set_variable ... }` (var-vs-LITERAL, bare-legal); then multiply = var:X (se_QING_CANTON.txt:151-173). Read the live salt price via global_mean_price_salt (PRICE_svalues.txt:468 — CONFIRMED, has_global_variable warm-guard); guard >0 with a 1.0-neutral fallback when unwarmed (else the soft factor silently → 0/errors). ±30%-around-1.0 is the right bound for a mispriced sim price (matches Canton's [0.5,1.3]).
+
+**M3 [MEDIUM] — LOG salt income AS A RATIO of total income, or the 12-15% target is un-verifiable.**
+Salt PRICE being logged ≠ salt INCOME logged. QING_revenue_salt_income emits one LOG_line but no income/total ratio. Add an explicit LOG of the salt figure + a total-quarterly-income denominator. The 12-15% target is an IN-ENGINE ratio (mod treasury units), NOT back-solved from historical taels.
+
+**#4 WINDOW IDIOM — CORRECTED STRING (design asserted the wrong form).**
+The proven idiom is `onclick = "[ExecuteConsoleCommand('gui.createwidget gui/imp19c_windows.gui <window>')]"` (CONFIRMED qing_lifanyuan.gui:285, qing_guard.gui:266) — NOT `n gui/imp19c_windows.gui`. Close with `GUI.ClearWidgets <window>`. The picker windows DO live in gui/imp19c_windows.gui (qing_amban_picker_window:176, qing_office_picker_window:37). Put qing_salt_monopoly_window there and open it with gui.createwidget.
+
+**L1 [LOW] — CUT the Tao Zhu abolition endpoint from #44 entirely (§E).** 1832, 69y post-bookmark = scope creep. The retire path #44 needs is just vacant-office backfill (below), which the Hoppo already models. Do NOT stub an abolition hook (a half-wired var IS the dangling-variable the symmetry rule warns against). Separate future ticket.
+
+**L2 [LOW] — carry the Hoppo's FULL reconcile apparatus (design omits it).** ordered_character seat MUST include the Hoppo's exclusions (is_general/is_admiral/is_governor + qing_officer_marker, se_QING_CANTON.txt:455-473, the #76 double-book fix) + relieve-if-double-booked (255-271) + backfill-if-dead/missing (278-294). This IS the #44 lifecycle-symmetry (raise → must handle vacancy), no more needed.
+
+**L4 [LOW] — hedge the IHD loc text.** Research flags the 內務府 link for the salt censor is a personnel pipeline, NOT a documented formal jurisdiction like the Hoppo (RESEARCH Q1:123-133, could-not-verify #3). Loc: "often staffed by IHD bondservants," not "an IHD post."
+
+## REVISED MINIMAL SLICE (what #44 actually builds)
+1. **Revenue calc** (the actual complaint): rewrite QING_revenue_salt_income = GOODS_national_production_salt × clamped ±30% market-soft (global_mean_price_salt, guarded) × tuned gabelle-markup × character-factor; mirror the Canton factor block for RHS-safety; add income+ratio logging. Satisfies user asks #4/#5/#6.
+2. **Commissioner**: ordered_character promotion at day-0 on_game_initialized, marker + holder var, FULL Hoppo exclusions + backfill; grade qing_salt_yield_factor on finesse − qing_salt_squeeze; skim = add_gold to the CHARACTER (confiscated on impeach/retire), NOT the reserve.
+3. **Window**: new qing_salt_monopoly_window in gui/imp19c_windows.gui, opened from the Revenue panel via gui.createwidget; render commissioner via .GetCharacter; re-point the EXISTING reform button into it keeping its guard verbatim.
+OUT of #44: silver-reserve skim (C1), Tao Zhu abolition (L1), any effect-extraction refactor (H2).
