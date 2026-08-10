@@ -1,0 +1,180 @@
+########################################################################
+# se_QING_BIMETALLIC.txt — [#59] Tier B: the Gresham gold:silver soft-band price pull.
+#
+# A functioning bimetallic world arbitrages the gold:silver market ratio r back toward a parity ratio R.
+# The mod's two metals currently float INDEPENDENTLY (no coupling), which has no historical analogue. Tier B
+# adds a small, damped, deadbanded mean-reversion pull of r toward R.
+#
+# LEVER (corrected after the impl-review — see design "IMPLEMENTATION-REVIEW CORRECTION"): a change to each
+# trade zone's local_price_gold / local_price_silver, applied IN-PASS inside GT_split_do_global_trade_split
+# BETWEEN GT_set_tradegood_price_all_TZs (which SETS local_price fresh) and
+# GT_split_get_global_import_unit_price_all (the gbip sqrt-sum, the next call) — so gbip reads the nudged price the
+# SAME quarter. (A post-PASS write was INERT: next quarter's line-37 overwrites local_price from scratch —
+# order/stockpile×0.6 — before line-38 reads it, and gold/silver never read their prior local_price.) This is
+# therefore SAME-TICK proportional control (no 1-quarter delay); kept stable by LOW gain + WIDE deadband + a
+# per-pulse clamp. It writes ONLY local_price (the gbip INPUT), never gbip (the output); it calls NO GT_split
+# recompute (no re-entrancy).
+#
+# CALIBRATION GATE (review LOW, load-bearing): R is NOT the coinage 1:15 — r = gbip_gold/gbip_silver is a ratio
+# of sqrt-aggregated import-price INDICES (~O(1)-O(few)), not a per-ounce price, so it does not sit near 15.
+# Until R is calibrated to the REAL observed r, an active pull would saturate one-directionally. So the actual
+# nudge is gated behind the global flag qing_bimet_enabled (DEFAULT OFF): the mechanism ships now (hook +
+# band-logging + pull), the first boot runs OBSERVE-ONLY (logs r/gbip/backing_value bands), the real r is read,
+# R/deadband/gain are set to it, and the flag is flipped on. NOT a deferral — the whole mechanism is here; only
+# the parity centre awaits the one number a boot must supply.
+#
+# H1 div/0 GUARD: gbip is legitimately 0 in the cold-start/no-trade window (the sqrt at
+# se_GLOBALTRADE_split.txt:2698 is skipped) → the WHOLE effect is gated on BOTH gbip globals > 0.
+#
+# [#59 ASSUMPTION — best-guess, boot-tune once r is observed]: R (parity centre) = 3 (placeholder near a
+# plausible index ratio, NOT the coinage 15 — the observe boot replaces it); DEADBAND half-width = 0.5;
+# gain k = 0.02; per-pulse local_price clamp = ±0.05.
+#
+# TEMPORARY-INSTRUMENTED: band-classified per-pulse diagnostic (r, gbip, multi-regime backing_value) via
+# debug_log — strips with #35 after boot-verify. STATIC labels only. Called from GT_split_do_global_trade_split
+# for type=6, so ROOT = the random country running the split; the pull is applied to the global TZ objects.
+########################################################################
+
+# ======================================================================
+# QING_BIMET_pull — run IN-PASS for type=6 only, after local_price is set + before the gbip sum. Logs r/gbip/
+# backing_value bands every pulse; applies the pull ONLY if qing_bimet_enabled is set (calibration gate).
+# ======================================================================
+QING_BIMET_pull = {
+	# H1 GUARD: both gbip globals warm + positive, else skip (no r) — structural div/0 kill.
+	if = {
+		limit = {
+			has_global_variable = global_base_import_price_gold
+			has_global_variable = global_base_import_price_silver
+			global_var:global_base_import_price_gold > 0
+			global_var:global_base_import_price_silver > 0
+		}
+		# stage r = gbip_gold / gbip_silver (proven two-step: seed 0, add gold, divide silver).
+		set_global_variable = { name = qing_bimet_r  value = 0 }
+		change_global_variable = { name = qing_bimet_r  add = global_var:global_base_import_price_gold }
+		change_global_variable = { name = qing_bimet_r  divide = global_var:global_base_import_price_silver }
+
+		QING_BIMET_log_bands = yes   # ALWAYS log (observe-only + active alike) so the boot reveals the real r
+
+		# ACTIVE PULL — only when calibration-enabled (the flag is set once R is tuned to the observed r).
+		if = {
+			limit = { has_global_variable = qing_bimet_enabled }
+			# d = R − r (R placeholder 3; recalibrate to observed r). Pull only when |d| exceeds the deadband (0.5).
+			set_global_variable = { name = qing_bimet_dev  value = 3 }
+			change_global_variable = { name = qing_bimet_dev  subtract = global_var:qing_bimet_r }
+			if = {
+				limit = { OR = { global_var:qing_bimet_dev > 0.5  global_var:qing_bimet_dev < -0.5 } }
+				# gold delta = clamp( k×d , ±0.05 ); silver delta = −gold delta. r<R (d>0) → gold too cheap → raise gold.
+				set_global_variable = { name = qing_bimet_mag  value = global_var:qing_bimet_dev }
+				change_global_variable = { name = qing_bimet_mag  multiply = 0.02 }
+				if = { limit = { global_var:qing_bimet_mag > 0.05 }  set_global_variable = { name = qing_bimet_mag  value = 0.05 } }
+				if = { limit = { global_var:qing_bimet_mag < -0.05 }  set_global_variable = { name = qing_bimet_mag  value = -0.05 } }
+				set_global_variable = { name = qing_bimet_mag_ag  value = global_var:qing_bimet_mag }
+				change_global_variable = { name = qing_bimet_mag_ag  multiply = -1 }
+				QING_BIMET_apply_tz = { tz = india }
+				QING_BIMET_apply_tz = { tz = east_north_america }
+				QING_BIMET_apply_tz = { tz = west_north_america }
+				QING_BIMET_apply_tz = { tz = caribbean }
+				QING_BIMET_apply_tz = { tz = west_south_america }
+				QING_BIMET_apply_tz = { tz = east_south_america }
+				QING_BIMET_apply_tz = { tz = south_east_asia }
+				QING_BIMET_apply_tz = { tz = indo_china }
+				QING_BIMET_apply_tz = { tz = yellow_sea }
+				QING_BIMET_apply_tz = { tz = southern_africa }
+				QING_BIMET_apply_tz = { tz = west_africa }
+				QING_BIMET_apply_tz = { tz = east_africa }
+				QING_BIMET_apply_tz = { tz = middle_east }
+				QING_BIMET_apply_tz = { tz = western_steppe }
+				QING_BIMET_apply_tz = { tz = eastern_steppe }
+				QING_BIMET_apply_tz = { tz = upper_yangtzi }
+				QING_BIMET_apply_tz = { tz = atlantic_seaboard }
+				QING_BIMET_apply_tz = { tz = central_europe }
+				QING_BIMET_apply_tz = { tz = west_mediterranean }
+				QING_BIMET_apply_tz = { tz = baltic }
+				QING_BIMET_apply_tz = { tz = east_europe }
+				QING_BIMET_apply_tz = { tz = east_mediterranean }
+				debug_log = "IMP19C BIMET pull APPLIED (r outside deadband, nudging gold/silver toward parity)"
+				remove_global_variable = qing_bimet_mag_ag
+				remove_global_variable = qing_bimet_mag
+			}
+			else = { debug_log = "IMP19C BIMET gated (r inside the deadband, no pull)" }
+			remove_global_variable = qing_bimet_dev
+		}
+		else = { debug_log = "IMP19C BIMET observe-only (calibration flag off, logging r only)" }
+		remove_global_variable = qing_bimet_r
+	}
+	else = { debug_log = "IMP19C BIMET skipped (a gbip metal global unwarmed/non-positive, cold start)" }
+}
+
+# ======================================================================
+# QING_BIMET_apply_tz — apply the staged gold/silver deltas to one TZ's local_price vars. Existence-guarded.
+# $tz$ = zone key. Reads global_var:qing_bimet_mag (gold) + qing_bimet_mag_ag (silver).
+# ======================================================================
+QING_BIMET_apply_tz = {
+	if = {
+		limit = { has_global_variable = global_$tz$_tradezone }
+		global_var:global_$tz$_tradezone = {
+			if = {
+				limit = { has_variable = local_price_gold }
+				change_variable = { name = local_price_gold  add = global_var:qing_bimet_mag }
+				if = { limit = { var:local_price_gold < 0 }  set_variable = { name = local_price_gold  value = 0 } }
+			}
+			if = {
+				limit = { has_variable = local_price_silver }
+				change_variable = { name = local_price_silver  add = global_var:qing_bimet_mag_ag }
+				if = { limit = { var:local_price_silver < 0 }  set_variable = { name = local_price_silver  value = 0 } }
+			}
+		}
+	}
+}
+
+# ======================================================================
+# QING_BIMET_log_bands — BAND-CLASSIFIED diagnostic (LOG_line can't render a number; use the proven band idiom
+# — CURR_STRESS_apply_generic_band). Emits r + gbip_gold/silver + the multi-regime backing_value each as an
+# order-of-magnitude bucket, so the observe boot reveals the REAL r (to calibrate R) + the H3 opposite-direction
+# backing_value check (CHI-silver vs GBR-gold vs FRA/USA-bimetallic). NOT under the CHI-only tzprobe gate.
+# Reads qing_bimet_r (already staged by the caller). -debug_mode via debug_log; STATIC labels.
+# ======================================================================
+QING_BIMET_log_bands = {
+	# r bands (the value that calibrates R)
+	if = { limit = { global_var:qing_bimet_r < 0.5 }   debug_log = "IMP19C BIMET r band 0-0.5" }
+	else_if = { limit = { global_var:qing_bimet_r < 1 }   debug_log = "IMP19C BIMET r band 0.5-1" }
+	else_if = { limit = { global_var:qing_bimet_r < 2 }   debug_log = "IMP19C BIMET r band 1-2" }
+	else_if = { limit = { global_var:qing_bimet_r < 3 }   debug_log = "IMP19C BIMET r band 2-3" }
+	else_if = { limit = { global_var:qing_bimet_r < 5 }   debug_log = "IMP19C BIMET r band 3-5" }
+	else_if = { limit = { global_var:qing_bimet_r < 10 }  debug_log = "IMP19C BIMET r band 5-10" }
+	else_if = { limit = { global_var:qing_bimet_r < 20 }  debug_log = "IMP19C BIMET r band 10-20" }
+	else = { debug_log = "IMP19C BIMET r band >=20" }
+	# gbip gold + silver raw bands (staged into a scratch to band-classify)
+	QING_BIMET_log_gbip = { metal = gold }
+	QING_BIMET_log_gbip = { metal = silver }
+	# multi-regime backing_value bands (H3 opposite-direction check)
+	QING_BIMET_log_backing = { tag = CHI  label = "CHI silver" }
+	QING_BIMET_log_backing = { tag = GBR  label = "GBR gold" }
+	QING_BIMET_log_backing = { tag = FRA  label = "FRA bimet" }
+	QING_BIMET_log_backing = { tag = USA  label = "USA bimet" }
+}
+
+# band-classify one gbip metal global. $metal$ = gold|silver.
+QING_BIMET_log_gbip = {
+	set_global_variable = { name = qing_bimet_gbip_tmp  value = 0 }
+	change_global_variable = { name = qing_bimet_gbip_tmp  add = global_var:global_base_import_price_$metal$ }
+	if = { limit = { global_var:qing_bimet_gbip_tmp < 1 }    debug_log = "IMP19C BIMET gbip $metal$ band 0-1" }
+	else_if = { limit = { global_var:qing_bimet_gbip_tmp < 5 }    debug_log = "IMP19C BIMET gbip $metal$ band 1-5" }
+	else_if = { limit = { global_var:qing_bimet_gbip_tmp < 20 }   debug_log = "IMP19C BIMET gbip $metal$ band 5-20" }
+	else_if = { limit = { global_var:qing_bimet_gbip_tmp < 100 }  debug_log = "IMP19C BIMET gbip $metal$ band 20-100" }
+	else = { debug_log = "IMP19C BIMET gbip $metal$ band >=100" }
+	remove_global_variable = qing_bimet_gbip_tmp
+}
+
+# band-classify one regime's backing_value. $tag$ = country tag; $label$ = static prose (no macro in the debug string).
+QING_BIMET_log_backing = {
+	if = {
+		limit = { exists = c:$tag$  c:$tag$ = { has_variable = backing_value } }
+		c:$tag$ = {
+			if = { limit = { var:backing_value < 0.5 }   debug_log = "IMP19C BIMET backing $label$ band 0-0.5" }
+			else_if = { limit = { var:backing_value < 1 }   debug_log = "IMP19C BIMET backing $label$ band 0.5-1" }
+			else_if = { limit = { var:backing_value < 2 }   debug_log = "IMP19C BIMET backing $label$ band 1-2" }
+			else = { debug_log = "IMP19C BIMET backing $label$ band >=2" }
+		}
+	}
+}

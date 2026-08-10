@@ -16,6 +16,8 @@ Per user directive: any magnitude, tuning constant, or best-guess design call ma
 - (#44) salt revenue constants — GUESS: gabelle markup ×3.0; market-soft band [0.7,1.3] (raw salt price ×2 pivot); character factor band [0.5,1.3]; siphon = income×corruption/20; squeeze baseline 30 / finesse mirror 7. All best-guess to land salt near the ~12-15%-of-state-income target. Verify: the "salt: the 鹽課 pays its output-driven quarterly take" LOG vs total income (the ratio); commissioner factor moves it; siphon accrues to the man not the treasury/reserve.
 - (#44) NOTE (pre-existing bug spotted, NOT fixed here to keep diff scoped): se_QING_REVENUE.txt:430 has a macro `$task$` inside a LOG_line string ("revenue fitness ($task$) = for") — a log-string-macro-rule violation that predates #44. Flag for a separate cleanup.
 
+- (#59) Tier B — REWORKED after impl-review (the post-pass lever was INERT — local_price overwritten before gbip read it; moved IN-PASS between price-set and gbip-sum, type=6 only, so gbip reads the nudge SAME quarter). Constants GUESS: R placeholder=3 (NOT coinage 15 — r is a sqrt-aggregate index, must calibrate to observed); deadband=0.5; k=0.02; clamp ±0.05. CALIBRATION-GATED: the actual pull is behind qing_bimet_enabled (DEFAULT OFF) — first boot runs OBSERVE-ONLY, band-logging r/gbip/CHI+GBR+FRA+USA backing_value; read the real r → set R/deadband → flip the flag. Ships whole now; only the parity centre awaits the one boot datum. HARD gate on enable: gbip flat, #46 survives, no non-CHI break; revert-to-float on failure.
+
 ## Design/review inventory taken at session start (pending build tasks)
 | Task | Design doc | Adv. review | Disposition |
 |---|---|---|---|
