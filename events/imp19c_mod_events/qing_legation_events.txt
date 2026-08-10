@@ -7,6 +7,8 @@
 #
 # .1  the legation hub (choose a capital; the Guo Songtao backlash rides along)
 # .2  the Burlingame grand embassy (a one-off; opens several relations at once)
+# .3  [#22] Foreign Friends via the Yamen — a repeatable beat once the 總理衙門 stands: a real
+#     diplomat from the corps wins the goodwill of a foreign power; his skill sizes the reward
 #
 # Sources: se_QING_LEGATIONS.txt header.
 ########################################################################
@@ -132,5 +134,110 @@ qing_legation.2 = {
 		name = "qing_legation.2.b"
 		custom_tooltip = "qing_legation.2.b.tt"
 		QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 3 }
+	}
+}
+
+# ======================================================================
+# .3  [#22] FOREIGN FRIENDS (協和萬邦) — the repeatable Zongli-Yamen version of the generic
+# flavor_eve.18. Once the 總理衙門 stands (its director seat exists) and the diplomat corps
+# holds at least one man, the court hears that one of its ministers abroad has won the goodwill
+# of a foreign power. Unlike the generic once-only flavor_eve.18, THIS names the real envoy
+# (drawn from qing_zongli_diplomats) and the power, scales the reward by the envoy's charisma
+# (the Yamen's governing skill), and rewards both the envoy and the director — tying the corps
+# to concrete outcomes. Fired from the Qing court-slot random_list (se_QING_DECLINE.txt),
+# cooldown-throttled. ROOT = CHI. scope:qing_ff_envoy = the drawn diplomat; scope:qing_ff_power
+# = the foreign power; scope:qing_ff_portrait = the right-portrait char (always valid).
+# ======================================================================
+qing_legation.3 = {
+	type = country_event
+	title = "qing_legation.3.t"
+	desc = "qing_legation.3.desc"
+	picture = council_country
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:qing_ff_portrait
+
+	# re-check in the event's own trigger (the roll's gate can go stale over the days delay).
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_zongli_holder
+		has_variable = qing_zongli_diplomat_count
+		var:qing_zongli_diplomat_count > 0
+		any_country = {
+			has_land = yes
+			is_subject = no
+			NOT = { alliance_with = root }
+			NOT = { this = root }
+			in_diplomatic_range = root
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_legation.3 (Foreign Friends via the Yamen) [ROOT.GetTag]" }
+		# the ablest diplomat in the Yamen corps carries the day.
+		ordered_in_list = {
+			variable = qing_zongli_diplomats
+			order_by = combined_stats_council_svalue
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_ff_envoy
+		}
+		# a foreign power in reach whose goodwill he has won.
+		random_country = {
+			limit = {
+				has_land = yes
+				is_subject = no
+				NOT = { alliance_with = root }
+				NOT = { this = root }
+				in_diplomatic_range = root
+			}
+			save_scope_as = qing_ff_power
+		}
+		# right portrait = the envoy if drawn, else the foreign ruler (always a valid char scalar —
+		# conditional portraits are unproven, so resolve to one saved scope here).
+		if = {
+			limit = { exists = scope:qing_ff_envoy }
+			scope:qing_ff_envoy = { save_scope_as = qing_ff_portrait }
+		}
+		else = {
+			scope:qing_ff_power = { current_ruler = { save_scope_as = qing_ff_portrait } }
+		}
+	}
+
+	# --- Commend the envoy — his skilled diplomacy is rewarded --------------------------------
+	option = {
+		name = "qing_legation.3.a"
+		custom_tooltip = "qing_legation.3.a.tt"
+		if = {
+			limit = { exists = scope:qing_ff_power }
+			# a capable envoy (charisma-heavy — the Yamen's governing skill) wins a STRONGER opinion.
+			if = {
+				limit = { exists = scope:qing_ff_envoy  scope:qing_ff_envoy = { charisma >= 8 } }
+				scope:qing_ff_power = { add_opinion = { modifier = qing_zongli_envoy_opinion  target = ROOT } }
+			}
+			else = {
+				scope:qing_ff_power = { add_opinion = { modifier = foreign_friends_opinion  target = ROOT } }
+			}
+		}
+		# reward the envoy's standing + a modest lift for the Yamen director who runs the corps.
+		if = {
+			limit = { exists = scope:qing_ff_envoy }
+			scope:qing_ff_envoy = { QING_char_promote_standing = { pop = 3  prom = 3 } }
+		}
+		if = {
+			limit = { has_variable = qing_office_zongli_holder  var:qing_office_zongli_holder = { is_alive = yes } }
+			var:qing_office_zongli_holder = { QING_char_promote_standing = { pop = 2  prom = 1 } }
+		}
+		add_legitimacy = 3
+	}
+
+	# --- Note it — the court is pleased but sends no special favour -----------------------------
+	option = {
+		name = "qing_legation.3.b"
+		custom_tooltip = "qing_legation.3.b.tt"
+		if = {
+			limit = { exists = scope:qing_ff_power }
+			scope:qing_ff_power = { add_opinion = { modifier = foreign_friends_opinion  target = ROOT } }
+		}
 	}
 }

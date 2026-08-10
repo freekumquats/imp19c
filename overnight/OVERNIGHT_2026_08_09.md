@@ -1057,3 +1057,94 @@ preserved; no churn.
 **Commit:** `d849c0ded` + pushed.
 
 **Status:** #21 DONE — reviewed, findings folded, committed + pushed.
+
+---
+
+## #22 — FOLLOWUP: flesh out "Foreign Friends" + tie to Zongli Yamen + real diplomats (design-first) — IN PROGRESS
+
+**What it is:** #21 made flavor_eve.18 actually move opinion. #22 is the deeper follow-up: for the QING
+specifically, route the improved-relations beat through the 總理衙門 (Zongli Yamen) and a REAL diplomat
+character from its corps — so "our diplomats working tirelessly abroad" names an actual man, and the effect
+scales with his skill + the institution existing. Keep the generic path intact for every other country.
+
+**Current state (verified):**
+- flavor_eve.18 is a GENERIC country_event (no tag=CHI), fired from the quarterly flavour random_events pool;
+  scope:friendly_neighbor = a diplo-range non-subject non-ally country. #21 gave both options mutual
+  foreign_friends_opinion + the .b add_friend.
+- The Zongli Yamen exists as a Grand-Council office: qing_office_zongli_holder (the director,
+  總理衙門大臣), qing_office_zongli_active; a DIPLOMAT CORPS qing_zongli_diplomats (variable_list on CHI) +
+  qing_zongli_diplomat_count, rebuilt each ministry pulse from courtiers flagged qing_zongli_diplomat
+  (se_QING_MINISTRY.txt:501-538). Drawn via the proven ordered_in_list{ variable=... order_by=
+  combined_stats_council_svalue } idiom.
+
+**Design (Solution: a Qing-specialised branch layered on the generic event, NOT a separate event):**
+1. In flavor_eve.18's IMMEDIATE, after saving scope:friendly_neighbor, if ROOT is CHI AND the Zongli Yamen
+   is founded (has_variable qing_zongli_yamen_founded OR qing_office_zongli_active) AND the corps is
+   non-empty (qing_zongli_diplomat_count > 0): draw the ablest diplomat
+   (ordered_in_list{ variable=qing_zongli_diplomats order_by=combined_stats_council_svalue max=1 }) → save
+   scope:qing_ff_envoy, set a flag qing_ff_via_yamen. Else leave the generic path.
+2. desc: a triggered_desc that, when qing_ff_via_yamen, names the envoy + the Yamen ("Our minister
+   [envoy.GetName], sent abroad by the 總理衙門, has won the goodwill of [neighbor]"), else the existing
+   generic text. right_portrait = the envoy on the Qing path (currently scope:friendly_neighbor.current_ruler
+   — keep that as a triggered/fallback).
+3. Options on the Qing path scale opinion by the envoy: a capable envoy (higher combined-stats) delivers a
+   STRONGER opinion bump + a small legitimacy/prestige gain to the DIRECTOR and the envoy; a modest one the
+   base bump. Reuse foreign_friends_opinion for the base, add a stronger qing_zongli_envoy_opinion for the
+   capable case. The envoy gains standing (QING_char_promote_standing) — a concrete reward tying the corps
+   to outcomes. Generic (non-Qing) options unchanged from #21.
+4. Cleanup: remove qing_ff_via_yamen + the saved scope at option resolution (one-shot per fire;
+   fire_only_once=yes already bounds it, but clear the flag so a re-fire in a resumed save is clean).
+
+**Key decisions / rejected alts:**
+- LAYER on flavor_eve.18, do NOT split a Qing-only event — the generic event already fires for CHI; a
+  triggered_desc + a CHI/Yamen-gated immediate branch is the minimal, non-duplicating way (mirrors how
+  qing_integ.10 uses first_valid triggered_desc for actor-aware text). Rejected a separate qing_legation.N
+  event (would need its own dispatch + double-fire risk against the generic one).
+- Gate on the Yamen FOUNDED + corps non-empty, so pre-Yamen Qing (1763 start, before the 1861 Yamen) uses
+  the plain generic path — no anachronistic "minister sent abroad" before the institution exists.
+- fire_only_once on a generic event is a known limitation (fires once per game for the player regardless of
+  path); NOT changing that here (out of scope; #22 is about the Qing texture, not the cadence).
+
+**[#22 DESIGN REVISED after adversarial review — 2 CRITICALs + fixes]:**
+- **CRITICAL 1 (dead code):** layering on flavor_eve.18 (fire_only_once) fails — CHI's single fire is spent
+  DECADES before the Yamen exists (~1861), so the Qing branch would never run. RE-ARCHITECTED: a SEPARATE
+  REPEATABLE event `qing_legation.3` fired from the Qing court-slot random_list in se_QING_DECLINE.txt (the
+  same pulse that already dispatches qing_legation.2 Burlingame at :1340). flavor_eve.18 stays the generic
+  #21 event, UNTOUCHED.
+- **CRITICAL 2 (gate never true):** qing_zongli_yamen_founded / qing_office_zongli_active are country
+  MODIFIERS, not variables — has_variable is false forever. CORRECTED gate: `has_variable =
+  qing_office_zongli_holder` (a REAL var, proven by the Burlingame gate at :1342) — the Yamen is founded iff
+  its director seat exists. Plus `has_variable = qing_zongli_diplomat_count  var:qing_zongli_diplomat_count > 0`
+  (count guarded first per the panel idiom).
+- **HIGH (conditional portrait unproven):** DON'T switch right_portrait by condition (zero precedent).
+  Instead always save scope:qing_ff_portrait in the immediate (= the drawn envoy) and use it as a bare
+  scalar right_portrait — proven (qing_office.9 right_portrait = scope:feud_b, a list-drawn saved scope).
+- MEDIUM: triggered_desc pinned to the proven base-string + first_valid + always=yes wrapper; envoy named
+  via BARE [qing_ff_envoy.GetName] (loc-scope rule); capable/modest read via
+  scope:qing_ff_envoy = { charisma >= N } (charisma = the Yamen's governing skill, thematic + proven).
+- New modifier qing_zongli_envoy_opinion (stronger than foreign_friends_opinion, CHI-appropriate).
+
+**REVISED build:** NEW event qing_legation.3 (repeatable, Yamen-gated, ~5y cooldown, court-slot throttled):
+draws the ablest diplomat + a diplo-range non-ally neighbour, names both; option (a) commend the envoy
+(strong opinion bump scaled by his charisma + envoy/director standing) / (b) a modest acknowledgement (base
+opinion). Own loc file section; own cooldown var qing_ff_cooldown. This is what #22 "tie the corps to
+outcomes" actually needs — it fires repeatedly once the Yamen exists.
+
+**BUILT (re-architected):** NEW repeatable event qing_legation.3 (events/…/qing_legation_events.txt) fired
+from the Qing court-slot random_list (se_QING_DECLINE.txt QING_frontier_flavour_roll, weight 6, gated on
+has_variable qing_office_zongli_holder + qing_zongli_diplomat_count>0 + NOT qing_ff_cooldown; 5y cooldown,
+30% court roll + shared slot). Draws the ablest diplomat (ordered_in_list qing_zongli_diplomats order_by
+combined_stats_council_svalue) + a reachable foreign power; saves scope:qing_ff_portrait for a proven
+bare-scalar right_portrait. Option (a) commend — opinion scaled by envoy charisma (qing_zongli_envoy_opinion
+20/3 if charisma>=8 else foreign_friends_opinion 10/2) + envoy & director standing + 3 legitimacy; (b) note
+it — base opinion. New modifier qing_zongli_envoy_opinion + loc; event loc with bare [qing_ff_envoy.GetName]/
+[qing_ff_power.GetName]. flavor_eve.18 (generic #21) left UNTOUCHED.
+
+**Review verdict:** design review found 2 CRITICALs (dead-code layering + modifier-vs-variable gate) → fully
+re-architected. Code review of the built result SHIP-READY — no critical/medium; all 9 checks pass (scope
+save guaranteed by count>0⟺non-empty-list invariant; portrait always saved; cooldown set before dispatch,
+inside the court-slot block; add_opinion direction correct; order_by/opinions/promote-standing all proven).
+3 LOW accepted (cooldown-on-stale-no-op by design + auto-clears; desc envoy-name has no fallback but the
+invariant makes it unreachable; |Y vs #G cosmetic). Braces 77/1339/49; no EOL/BOM churn.
+
+**Commit:** (below)
