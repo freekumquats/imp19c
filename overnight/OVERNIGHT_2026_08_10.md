@@ -13,6 +13,9 @@ Per user directive: any magnitude, tuning constant, or best-guess design call ma
 - (#65) farmstead + reward magnitudes — GUESS: new_world_farmstead_building local_population_capacity_modifier 0.05 + local_lower_strata_output 0.1 + local_monthly_food 0.05; qing_newworld_agriculture modifier global_population_capacity_modifier 0.03 + global_population_growth 0.03; mission gate = ≥3 farmsteads. All best-guess (stack modestly on the automatic qing_nwcrop_abundance=8). Verify: pop logs show a boom, not a runaway.
 - (#65) DESIGN DEVIATION (called out): the design said put the mission beat in qing_colonization_missions.txt, but that tree is FLEET/era-gated (the Pacific Enterprise) — wrong home for a 1763 domestic agrarian beat. Placed it instead in qing_settle_frontier_missions.txt (定牧墾邊, the domestic frontier-settlement tree, requires qing_settle_policy) — thematically correct + not fleet-gated. Flagged for the reviewer.
 
+- (#44) salt revenue constants — GUESS: gabelle markup ×3.0; market-soft band [0.7,1.3] (raw salt price ×2 pivot); character factor band [0.5,1.3]; siphon = income×corruption/20; squeeze baseline 30 / finesse mirror 7. All best-guess to land salt near the ~12-15%-of-state-income target. Verify: the "salt: the 鹽課 pays its output-driven quarterly take" LOG vs total income (the ratio); commissioner factor moves it; siphon accrues to the man not the treasury/reserve.
+- (#44) NOTE (pre-existing bug spotted, NOT fixed here to keep diff scoped): se_QING_REVENUE.txt:430 has a macro `$task$` inside a LOG_line string ("revenue fitness ($task$) = for") — a log-string-macro-rule violation that predates #44. Flag for a separate cleanup.
+
 ## Design/review inventory taken at session start (pending build tasks)
 | Task | Design doc | Adv. review | Disposition |
 |---|---|---|---|

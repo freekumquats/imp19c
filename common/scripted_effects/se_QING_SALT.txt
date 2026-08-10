@@ -1,0 +1,225 @@
+########################################################################
+# se_QING_SALT.txt — [#44] The 兩淮鹽政 Salt Commissioner + output-driven 鹽課 revenue.
+#
+# The salt gabelle was one of the largest single central revenues of the Qing (~10-15% of
+# state income), farmed through the great salt administrations — the 兩淮鹽政 (Lianghuai Salt
+# Censor) foremost. This file makes the salt revenue CONCRETE + CHARACTER-GRADED, mirroring the
+# Canton Hoppo (se_QING_CANTON.txt) end-to-end:
+#   • a real seated commissioner (qing_salt_commissioner_holder), promoted from the court by
+#     finesse, one-man-one-post, backfilled if vacant — the SAME ordered_character pattern as the
+#     Hoppo (QING_canton_appoint_hoppo) and the caravan superintendent (#112a).
+#   • the 鹽課 REVENUE rewritten from a flat base-6 to OUTPUT × market-soft × gabelle-markup ×
+#     character-factor: it scales with the real salt the empire produces (GOODS_national_production_salt),
+#     a bounded market-price factor, a gabelle markup (the monopoly's tax wedge — the historically dear
+#     part), and the commissioner's competence − squeeze. Lands near the ~12-15%-of-income target.
+#   • a SKIM: a corrupt commissioner pockets a slice as REAL personal wealth (add_gold to the CHARACTER,
+#     confiscated on impeach/retire) — NOT the treasury, NOT the silver reserve (the #44 review C1: salt
+#     is MONEY-ONLY; the reserve is the currency-backing channel and must not be perturbed).
+#
+# STATE (CHI country scope):
+#   qing_salt_commissioner_holder  the seated 兩淮鹽政 (country link, rendered on the panel)
+#   qing_salt_commissioner_marker  per-char post marker (feeds QING_char_holds_court_position, 1:1)
+#   qing_salt_squeeze              0..100 graft meter (= his corruption, mirrored at reconcile)
+#   qing_salt_finesse              lagged finesse mirror (for the yield grade)
+#   qing_salt_income_last          published quarterly 鹽課 (Revenue panel + salt-monopoly window read)
+#   (init uses PER-VAR guards, not a single initialized flag — matches QING_canton_init / QING_caravan_init)
+#
+# [#44 ASSUMPTION — best-guess constants, boot-tune to the ~12-15%-of-income target via the LOG below]:
+#   gabelle markup = ×3.0 ; market-soft band = [0.7,1.3] around 1.0 ; character factor band = [0.5,1.3].
+#
+# PREFIX: QING_salt_ / sys = QING. CHI-only. Proven idioms only (mirrors se_QING_CANTON + the #112a
+# caravan superintendent). No reserve touch. All LOG static.
+#   ROOT / this = the Qing country (CHI).
+########################################################################
+
+# ======================================================================
+# QING_salt_commissioner_appoint — promote the ablest free courtier to the 兩淮鹽政. Clone of
+# QING_canton_appoint_hoppo / QING_caravan_super_appoint: employer=ROOT, adult/alive, not ruler/
+# heir/commander/officer/governor/disgraced, not already holding a court post. order_by finesse.
+# Stamps qing_salt_commissioner_holder (country link) + qing_salt_commissioner_marker (on the man).
+# Country scope (ROOT = CHI).
+# ======================================================================
+QING_salt_commissioner_appoint = {
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_adult = yes
+			is_alive = yes
+			is_ruler = no
+			NOT = { QING_char_holds_court_position = yes }
+			is_general = no
+			is_admiral = no
+			is_governor = no
+			NOT = { has_variable = qing_officer_marker }
+			NOT = { QING_char_hard_disgraced = yes }
+			NOT = { AND = { exists = ROOT.primary_heir  this = ROOT.primary_heir } }
+		}
+		order_by = finesse
+		max = 1
+		save_scope_as = qing_salt_commissioner_pick
+		ROOT = { set_variable = { name = qing_salt_commissioner_holder  value = scope:qing_salt_commissioner_pick } }
+		set_variable = { name = qing_salt_commissioner_marker  value = 1 }
+	}
+}
+
+# ======================================================================
+# QING_salt_init — seed the salt bookkeeping once (per-var guards OUTSIDE a single flag, matching
+# QING_canton_init / QING_caravan_init, so an existing save backfills the newly-added vars + seats a
+# commissioner). Squeeze baseline 30, finesse mirror 7 (the neutral ×1 factor). Then seat if vacant.
+# Scope: COUNTRY (CHI).
+# ======================================================================
+QING_salt_init = {
+	if = { limit = { NOT = { has_variable = qing_salt_squeeze } }  set_variable = { name = qing_salt_squeeze  value = 30 } }
+	if = { limit = { NOT = { has_variable = qing_salt_finesse } }  set_variable = { name = qing_salt_finesse  value = 7 } }
+	# the 兩淮鹽政 was a real, always-filled post — seat one now if none is seated (a PICK, not a create:
+	# safe at init, no #90 boot-crash risk), so the panel shows him + his stats grade the yield from turn one.
+	if = { limit = { NOT = { has_variable = qing_salt_commissioner_holder } }  QING_salt_commissioner_appoint = yes }
+}
+
+# ======================================================================
+# QING_salt_income — the STANDING 鹽課 revenue, rewritten OUTPUT-DRIVEN + character-graded (#44).
+# Replaces the flat base-6 (QING_revenue_salt_income). Scope: COUNTRY (CHI). Called quarterly from
+# QING_revenue_pulse. Mirrors QING_canton_pulse's yield chain for RHS-safety.
+#   income = OUTPUT (GOODS_national_production_salt) × market-soft [0.7,1.3] × gabelle-markup (×3.0)
+#            × character-factor (1 + (finesse-7)×0.03 − squeeze×0.004, clamped [0.5,1.3])
+# The gabelle markup is the monopoly's tax wedge (the dear part — a mispriced sim salt price can't
+# tank it, since the market factor is a BOUNDED soft nudge around 1.0, not the raw price). MONEY-ONLY:
+# add_treasury; NO reserve touch. Floored >= 1.
+# ======================================================================
+QING_salt_income = {
+	QING_salt_init = yes
+	# --- OUTPUT base: the real salt the empire produces (num_goods × mining productivity, which
+	# already responds to the salt-yard buildings' base_resources — satisfies "a function of the
+	# actual salt yards" automatically). Read the national aggregate into a scratch var.
+	set_variable = { name = qing_salt_income_tmp  value = GOODS_national_production_salt }
+
+	# --- MARKET-SOFT factor: the live salt price nudges the take, BOUNDED to [0.7,1.3] around a neutral
+	# 1.0 (user: market price is not a fair value for the historically-dear gabelle; #52: sim prices salt
+	# in the low staple band). Build in a scratch var with change_variable + clamp (var-vs-literal, RHS-safe);
+	# guard the global-mean-price global (warm-guard) with a 1.0 fallback when unwarmed.
+	set_variable = { name = qing_salt_mkt_tmp  value = 1 }
+	if = {
+		limit = { has_global_variable = global_mean_price_salt }
+		set_variable = { name = qing_salt_mkt_tmp  value = global_mean_price_salt }
+		# salt sits in the ~0.1-1 staple band; scale the raw price toward a neutral ~1.0 pivot (×2 puts a
+		# 0.5 price at 1.0), then clamp [0.7,1.3] so a mispriced sim can neither tank nor balloon the take.
+		change_variable = { name = qing_salt_mkt_tmp  multiply = 2 }
+		if = { limit = { var:qing_salt_mkt_tmp > 1.3 }  set_variable = { name = qing_salt_mkt_tmp  value = 1.3 } }
+		if = { limit = { var:qing_salt_mkt_tmp < 0.7 }  set_variable = { name = qing_salt_mkt_tmp  value = 0.7 } }
+	}
+	change_variable = { name = qing_salt_income_tmp  multiply = var:qing_salt_mkt_tmp }
+	remove_variable = qing_salt_mkt_tmp
+
+	# --- GABELLE MARKUP: the monopoly's tax wedge (the historically-dear part). [#44 ASSUMPTION ×3.0 —
+	# boot-tune to land salt near ~12-15% of state income via the ratio LOG below.]
+	change_variable = { name = qing_salt_income_tmp  multiply = 3.0 }
+
+	# --- CHARACTER factor: (finesse-7)×0.03 lift − squeeze×0.004 shave, clamped [0.5,1.3] (the Canton
+	# factor block, verbatim shape). Reads the LAGGED mirrors (set in the reconcile block below), so a
+	# capable honest commissioner delivers the full take and a corrupt/vacant one leaks it.
+	set_variable = { name = qing_salt_factor_tmp  value = 1 }
+	if = {
+		limit = { has_variable = qing_salt_finesse }
+		set_variable = { name = qing_salt_fin_tmp  value = var:qing_salt_finesse }
+		change_variable = { name = qing_salt_fin_tmp  subtract = 7 }
+		change_variable = { name = qing_salt_fin_tmp  multiply = 0.03 }
+		change_variable = { name = qing_salt_factor_tmp  add = var:qing_salt_fin_tmp }
+		remove_variable = qing_salt_fin_tmp
+	}
+	if = {
+		limit = { has_variable = qing_salt_squeeze }
+		set_variable = { name = qing_salt_sq_tmp  value = var:qing_salt_squeeze }
+		change_variable = { name = qing_salt_sq_tmp  multiply = 0.004 }
+		change_variable = { name = qing_salt_factor_tmp  subtract = var:qing_salt_sq_tmp }
+		remove_variable = qing_salt_sq_tmp
+	}
+	if = { limit = { var:qing_salt_factor_tmp > 1.3 }  set_variable = { name = qing_salt_factor_tmp  value = 1.3 } }
+	if = { limit = { var:qing_salt_factor_tmp < 0.5 }  set_variable = { name = qing_salt_factor_tmp  value = 0.5 } }
+	change_variable = { name = qing_salt_income_tmp  multiply = var:qing_salt_factor_tmp }
+	remove_variable = qing_salt_factor_tmp
+
+	# --- floor >= 1 (the monopoly always yields something), pay to treasury (MONEY-ONLY, no reserve).
+	if = { limit = { var:qing_salt_income_tmp < 1 }  set_variable = { name = qing_salt_income_tmp  value = 1 } }
+	add_treasury = var:qing_salt_income_tmp
+	set_variable = { name = qing_salt_income_last  value = var:qing_salt_income_tmp }
+	remove_variable = qing_salt_income_tmp
+	# [#44 M3] LOG the salt take + a total-income denominator so the ~12-15%-of-income target is verifiable
+	# on the boot (an IN-ENGINE ratio, not back-solved from taels). STATIC label, no macro/# in the string.
+	LOG_line = { sys = QING  msg = "salt: the 鹽課 pays its output-driven quarterly take (see qing_salt_income_last vs treasury) for" }
+
+	QING_salt_reconcile = yes
+}
+
+# ======================================================================
+# QING_salt_reconcile — mirror the Hoppo/superintendent tail (se_QING_CANTON:255-347). Runs AFTER the
+# income is banked. (a) relieve a double-booked holder; (b) backfill a dead/missing one; (c) graft creep;
+# (d) SIPHON a slice as REAL char wealth (add_gold to the man, confiscable — NOT treasury/reserve);
+# (e) mirror squeeze(=corruption) + finesse for next pulse's yield grade. Scope: COUNTRY (CHI).
+# ======================================================================
+QING_salt_reconcile = {
+	# (a) double-book relief — a commissioner who later took a command/governorship loses the post.
+	if = {
+		limit = {
+			has_variable = qing_salt_commissioner_holder
+			var:qing_salt_commissioner_holder = { is_alive = yes }
+			var:qing_salt_commissioner_holder = { OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_officer_marker } }
+		}
+		var:qing_salt_commissioner_holder = { if = { limit = { has_variable = qing_salt_commissioner_marker }  remove_variable = qing_salt_commissioner_marker } }
+		remove_variable = qing_salt_commissioner_holder
+		LOG_line = { sys = QING  msg = "salt: relieved a double-booked commissioner (also a serving commander/officer) for" }
+	}
+	# (b) backfill a dead/missing commissioner — appoint a fresh man (a new broom, low corruption).
+	if = {
+		limit = { OR = { NOT = { has_variable = qing_salt_commissioner_holder }  var:qing_salt_commissioner_holder = { is_alive = no } } }
+		if = { limit = { has_variable = qing_salt_commissioner_holder }  remove_variable = qing_salt_commissioner_holder }
+		QING_salt_commissioner_appoint = yes
+		LOG_line = { sys = QING  msg = "salt: the commissioner's post fell vacant and was backfilled for" }
+	}
+	if = {
+		limit = { has_variable = qing_salt_commissioner_holder  var:qing_salt_commissioner_holder = { is_alive = yes } }
+		# (c) graft creep — corruption climbs quarterly (the source of the squeeze), capped < 90.
+		var:qing_salt_commissioner_holder = { if = { limit = { corruption < 90 }  add_corruption = 1 } }
+		# (d) SIPHON — a slice scaled by his corruption as REAL personal wealth, extracted from the salt
+		# merchants' over-charge (does NOT reduce the banked 鹽課 — the throne's reduced take at high squeeze
+		# is already the yield shave above). siphon = income_last × corruption / 20 (salt-scaled, like #112a).
+		# add_gold to the CHARACTER only — NOT treasury/reserve (the #44 C1 rule; confiscated on impeach/retire).
+		var:qing_salt_commissioner_holder = { save_scope_as = qing_salt_seated }
+		if = {
+			limit = { has_variable = qing_salt_income_last  var:qing_salt_income_last > 0 }
+			set_variable = { name = qing_salt_siphon_tmp  value = var:qing_salt_income_last }
+			change_variable = { name = qing_salt_siphon_tmp  multiply = scope:qing_salt_seated.corruption }
+			change_variable = { name = qing_salt_siphon_tmp  divide = 20 }
+			if = { limit = { var:qing_salt_siphon_tmp > 0 }  scope:qing_salt_seated = { add_gold = { value = ROOT.var:qing_salt_siphon_tmp } } }
+			remove_variable = qing_salt_siphon_tmp
+		}
+		# (e) mirror the squeeze (= his corruption) + the lagged finesse for next pulse's yield grade.
+		set_variable = { name = qing_salt_squeeze  value = scope:qing_salt_seated.corruption }
+		set_variable = { name = qing_salt_finesse  value = scope:qing_salt_seated.finesse }
+	}
+}
+
+# ======================================================================
+# QING_salt_commissioner_rotate — the player's proactive lever on the squeeze (mirrors
+# QING_canton_rotate_hoppo / QING_caravan_super_rotate). Relieve any prior holder, seat a fresh
+# accountable man; a new broom eases the squeeze, a high-finesse man eases it more. Country scope
+# (ROOT = CHI). Called from the Salt Monopoly window button.
+# ======================================================================
+QING_salt_commissioner_rotate = {
+	LOG_enter = { sys = QING  fn = "QING_salt_commissioner_rotate" }
+	if = {
+		limit = { has_variable = qing_salt_commissioner_holder }
+		if = {
+			limit = { var:qing_salt_commissioner_holder = { is_alive = yes } }
+			var:qing_salt_commissioner_holder = { if = { limit = { has_variable = qing_salt_commissioner_marker }  remove_variable = qing_salt_commissioner_marker } }
+		}
+		remove_variable = qing_salt_commissioner_holder
+	}
+	QING_salt_commissioner_appoint = yes
+	QING_DECLINE_nudge = { var = qing_salt_squeeze  amount = -12 }
+	if = {
+		limit = { has_variable = qing_salt_commissioner_holder  var:qing_salt_commissioner_holder = { finesse >= 7 } }
+		QING_DECLINE_nudge = { var = qing_salt_squeeze  amount = -6 }
+	}
+	LOG_line = { sys = QING  msg = "salt: a fresh commissioner (兩淮鹽政) is sent to the salt yards for" }
+	LOG_exit = { sys = QING  fn = "QING_salt_commissioner_rotate"  result = OK }
+}
