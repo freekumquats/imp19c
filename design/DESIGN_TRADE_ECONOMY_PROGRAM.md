@@ -22,12 +22,12 @@ Started from a boot observation (#46: silver sometimes sells for more than gold 
 - **#49 (base-value table):** flat 0.2 is INERT for the mod economy — differentiating is a no-op unless the vanilla engine reads it (boot probe). Likely CLOSE as no-op; route price realism through #44/#50/#52.
 - **#50 (regional divergence):** the geographic mechanism ALREADY EXISTS (per-TZ shipping-driven penetration) and carries no #23 risk — but is hard-capped at ~1.9-3×. DECISION for the user: is ≤~2-3× Canton-vs-London enough (already ~satisfied) or is a bigger divergence wanted (penetration cannot deliver it — would need lifting the cap / 0.4545 shrink)? History says the real gap was larger, so the cap is itself a candidate design limitation to lift.
 - **#52 (cross-good tier realism):** luxuries should price ~10-20× staples (research); currently flat. Uncapped, lives in supply/demand seeding — the more impactful, more achievable lever than same-good regional arbitrage.
-- **#44 (salt revenue):** salt gabelle income too low (flat ~27/quarter constant). REWORK: revenue = **output × market price × gabelle mark-up**. The mark-up BRIDGES commodity price → taxed retail value (historically ~30-50× cost, a POLICY artifact of the Lianghuai monopoly, NOT intrinsic value — so NOT a base/market-value edit). Graded by the 兩淮鹽政 Salt Commissioner. See #44 for the full window/office build.
+- **#44 (salt revenue):** salt gabelle income too low (flat ~27/quarter constant). REWORK: revenue = **output × market price × gabelle mark-up**. The mark-up BRIDGES commodity price → taxed retail value (historically ~7-14× cost for the 1763 window per 清史稿·食貨志·鹽法, revised down from an earlier weak-sourced 30-50× — a POLICY artifact of the Lianghuai monopoly, NOT intrinsic value, so NOT a base/market-value edit). Graded by the 兩淮鹽政 Salt Commissioner. See #44 for the full window/office build.
 
 ## Historical anchors (research/RESEARCH_TRADE_GOOD_PRICES_1763.md, [[trade-good-prices-1763-research]])
 - Gold ≈ 14-15× silver by 1763 (China 1:10 arbitrage was OVER by the bookmark; gold > silver at every Qing point). Silver-above-gold is ahistorical.
 - Luxury ≈ 10-20× staple (tea ~12-18× grain; silk a further multiple above cotton).
-- Salt gabelle ~30-50× retail-over-cost markup (WEAK source, order-of-magnitude).
+- Salt gabelle ~7-14× retail-over-cost markup for the 1763 window (清史稿·食貨志·鹽法 direct + 1740 Hankou salt-price case; revised down from an earlier weak-sourced 30-50× which may describe a later Qing period).
 - Metals (iron/copper/tin/lead) UNRESOLVED — research gap; do not touch metal values.
 
 ## PROCESS the user established (governs the whole program)
