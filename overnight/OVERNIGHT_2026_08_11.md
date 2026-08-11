@@ -229,3 +229,21 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
 - CODE REVIEW cr92: dispatched (verdict pending at log time). Brace balance equal on both script files; event
   file BOM-free (0x23...); loc quotes balanced (2/line); small diffstat, no EOL churn.
 - STATUS: DONE (pending cr92 clean).
+
+## #123 — qing_caravan.4 contest options: 7127x 'qing_caravan_contest_ok' unset-var flood (NEW, found in Aug-10 23:17 boot)
+- DIAGNOSIS (imp19c-logs full triage of the NEWEST error.log, 123330 lines): the single biggest source in the
+  boot. Ranked classes: 33119 "Script system error", 9892 "Event target link 'var' returned an unset scope",
+  8817 "Invalid left side during comparison 'var'", 7127 "Failed to fetch variable 'qing_caravan_contest_ok'".
+  All three top classes trace to events/imp19c_mod_events/qing_caravan_events.txt lines 372/402/436 — the three
+  qing_caravan.4 (A Dispute at Kashgar) contest options. Each did `random { chance=svalue  set_variable
+  qing_caravan_contest_ok=1 }` then read the var in `if = { limit = { has_variable ... } }` + the nudge. The
+  option's auto-generated EFFECT-TOOLTIP re-runs the hidden_effect in a preview pass (each is preceded in the log
+  by "Data error in loc key 'qing_caravan.4.<opt>.tt'"), where the set inside random{} does not commit -> the var
+  is unset -> ~48 errors/sec while the event window is open. NOT previously a tracked task.
+- FIX: hoist `set_variable = qing_caravan_contest_ok = 0` to the TOP of each hidden_effect (BEFORE random{}), and
+  change the guard from `has_variable` to `var:... = 1`. Now every read hits a defined 0/1 in the same eval pass,
+  so no unset-fetch can fire. Semantics identical (init 0 -> win sets 1 -> test =1 -> win arm; else lose arm).
+  This is the same init-before-read idiom as the earlier read-before-set flood fixes (#47 etc). Considered a
+  random_list rewrite (no var at all) but REJECTED: svalue-named weight keys are unproven in this codebase/oracles
+  (only integer-literal weights attested) — proven-code rule. brace balance 160/160; literal-RHS comparison legal.
+- STATUS: DONE (boot will confirm the flood is gone via the absent error class + the unchanged skill-check LOG_lines).
