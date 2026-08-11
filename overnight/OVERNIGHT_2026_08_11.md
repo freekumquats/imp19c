@@ -193,3 +193,18 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
   key exists (verified name/desc/tooltip_ pre-existing + the macro-title added); template names match the
   tooltipwidget refs + instantiations exactly; brace balance equal on all 4 .gui files; loc names of the two granary
   buildings differ so the name-match doesn't collide; small diffstat, no EOL churn. STATUS: DONE.
+
+## #103 — surface the Arsenal's munitions tech-gate in a tooltip
+- DIAGNOSIS: arsenal munitions production is gated `owner = { invention = tech_firearms }` (GOODS_svalues.txt
+  GOODS_governorship_munitions_infra_output_compute:2771) — the SAME invention as the arsenal's build allow
+  (00_military_buildings.txt:15). The machine_works munitions term is gated `tech_weapon_manufacturing` (:2794),
+  again matching its own build allow (qing_industry_buildings.txt). Both tooltips ALREADY mentioned the invention
+  (tooltip_arsenal_building "Requires Firearms" since e2ec51f3f; tooltip_qing_machine_works_building "Requires
+  Weapon Manufacturing"), but the requirement read as a build gate buried mid-paragraph, NOT clearly tied to the
+  "+N munitions" production line — which is why a boot tester still filed the task.
+- FIX (loc-only, 2 tooltip lines, imp19c_tooltips_l_english.yml): rewrote both munitions lines to attach the tech
+  gate DIRECTLY to the munitions output, in red, stating that before the invention the building produces no
+  munitions (arsenal) / that the works produces from the moment it is raised (its build + production gate coincide).
+  No mechanics change — the gates were already correct; this only makes them legible. Quotes balanced (2/line),
+  BOM intact, 2-line diffstat. Small loc change -> straight to commit per the overnight skill.
+- STATUS: DONE.
