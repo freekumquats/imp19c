@@ -915,3 +915,51 @@ common/scripted_effects/se_GLOBALTRADE_split.txt, tagged PER-ZONE (already regio
   path) — confirm a regional payment term composes correctly with that (raw vs manufactured ordering).
 NEXT: this scan feeds a DESIGN doc (design/DESIGN_REGIONAL_PRICE_INDEX.md) → adversarial review → the §F.2
 three-part burden of proof, before any implementation. Cautious pattern, delicate upstream code.
+
+## §H (2026-08-11) — §F.2(c) PROOF for Candidate A (the payment-site regional price) — traced, not asserted
+The regional-price task (#112) picks up §G. §F.2(c) requires proving a lever change does NOT bleed into the
+currency peg / orders / #219. For Candidate A (make wealth_owed at :2468 read the paying zone's local_price
+instead of owner.country_unit_price), traced this session:
+
+### H.1 — the currency peg reads country_unit_price DIRECTLY, never wealth_owed/local_price
+CURRENCY_essentials_buying_power (CURRENCY_svalues.txt:673-701) = Σ of twelve `var:country_unit_price_<good>`
+(grain, livestock, fish, vegetables, temperate_fruit, processed_foods, clothing, furniture, pharmaceuticals,
+alcohol, luxury_clothing, luxury_furniture) ÷ CURRENCY_wealth_value_1_unit_scaled_by_reserve_ratio, cap 32000.
+It feeds CURRENCY_private_cash_needed (:719) → the CURRENCY_private_cash_ratio → inflation. The peg's ONLY
+price input is country_unit_price. It does NOT read wealth_owed, the payment pools, or local_price.
+=> CONCLUSION: Candidate A leaves country_unit_price (:2734) UNTOUCHED, so the peg is disjoint from the payment
+path BY CONSTRUCTION. No bleed possible. This is the structural reason #50 broke the peg (it scaled a peg
+INPUT, penetration→country_unit_price) and Candidate A does not (it changes only what buyers PAY, downstream).
+
+### H.2 — TWO DISTINCT CONCEPTS #50 wrongly conflated (the core insight)
+(1) country_unit_price = the NATIONAL cost-of-living / currency anchor. CORRECTLY per-country — a currency's
+    buying power is one national number. Must stay per-country; this is the peg input.
+(2) what a PROVINCE actually pays for an import = SHOULD be regional (Canton silk ≠ London silk).
+#50 tried to make (2) regional by scaling penetration, but penetration only moves (1) — so it dragged the peg
+and never made provinces pay regional prices. Candidate A separates them: keep (1), regionalize (2).
+
+### H.3 — the payment pool's ONLY consumer is seller income distribution (no feedback to peg/orders)
+global_payment_pool_$good$ is read in exactly ONE place: GT_split_get_governorship_income_due_tradegood
+(se_GLOBALTRADE_split.txt:3559-3585) — income_due = (governorship for_sale share of global_stockpile) ×
+global_payment_pool. This is the closed buyer→seller loop: buyers' wealth_owed sums INTO the pool (:2495-2499),
+the pool is redistributed to PRODUCING governorships as income. It does NOT feed country_unit_price,
+essentials_buying_power, order_size_modifier (:2026, reads DEMAND+penetration only — confirmed §G.2), or the
+penetration term. => §F.2(c) SATISFIED for Candidate A.
+
+### H.4 — the ONE real magnitude effect (not a bleed — a total-income shift, to be MEASURED not assumed)
+Because buyers would pay regional local_price instead of the national country_unit_price average, the TOTAL
+payment pool size changes (Σ regional prices ≠ Σ national-average price × quantities). That changes total trade
+INCOME (redistributed to sellers), and its DISTRIBUTION across a buyer's provinces. This is the legitimate
+economic consequence of regional prices, NOT a defect — but its magnitude must be measured on a boot (the #52
+tzprobe kept from #50 already logs zone local_price vs gbip, so the ratio is observable). DESIGN must: (a) log
+the pre/post total-pool delta, (b) confirm it doesn't swing trade income so hard it destabilizes treasuries.
+This is the §F.2 "measure, don't assume" residual — a boot-tunable, not a blocker.
+
+### H.5 — VERDICT: Candidate A clears §F.2 (a)+(b)+(c). Proceed to design.
+(a) WHAT: wealth_owed_for_$good$ (:2468) multiply by the paying governorship's zone local_price
+    (global_var:global_$tradezone$_tradezone.var:local_price_$good$; the dispatcher :2319 already knows
+    $tradezone$) instead of owner.var:country_unit_price_$good$.
+(b) WHY regional: local_price is set PER-ZONE from that zone's own order/stockpile ratio (:5901) — genuinely
+    geographic; survives conquest correctly (a province's price follows its ZONE, not its owner's nationality).
+(c) NO bleed: proven H.1+H.3 — peg reads country_unit_price (untouched); pool feeds only seller income.
+Residual: H.4 total-income magnitude (measure on boot). Design doc = design/DESIGN_REGIONAL_PRICE_INDEX.md next.
