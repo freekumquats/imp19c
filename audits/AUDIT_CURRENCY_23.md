@@ -766,3 +766,80 @@ and would NOT move the plateau. NEXT (when resumed): trace the peg→ratio scale
 
 **STATUS §E: REFUTED (theory #10 → graveyard). Plateau cause re-scoped to peg/ratio SCALE calibration (§E.6),
 not empty-stockpile supply. No fix attempted; #110 remains open on the §E.6 calibration lead.**
+
+### E.7 (2026-08-11) — §E.6 "wealth_value_1_unit is ~2× too strong" PREMISE RETRACTED by user ("your premise is all fucked")
+I derived "wealth_value_1_unit (silver×16/8) runs 2× too strong → need should be ~0.37 not ~0.18" from log
+bands + back-of-envelope arithmetic and presented it as diagnosis. It is NOT verified.
+TWO fabrications in that reasoning, both retracted:
+  1. I invented a TARGET. There is NO intended/design ratio value and NO intended ~3% inflation. The "~3%"
+     is ONLY a past-boot OBSERVATION (task #56, an older run) — a measured fact from one boot, NOT a target
+     anyone set. I turned an observation into a calibration goal ("land the intended ~3% → ratio ~1.3") to
+     justify a fix. There is no "intended anything" to calibrate toward. Delete that framing.
+  2. I asserted the "2×" from assumed values of essentials_buying_power, country_population, the /4000/2000
+     scaling — none read from the log; all assumed.
+Same failure mode (plausible arithmetic + a fabricated target, asserted as a proven cause) as the four earlier
+refuted theories. RETRACTED. Do NOT edit any peg/ratio constant (×16, units_to_the_lb, /(0.5+pen), ×0.004,
+(ratio−1)/10) on this basis, and do NOT treat any inflation number as a "target."
+#110 = OPEN, NO verified cause, NO defined target. IF revisited: (a) establish from the user/design what the
+economy is even SUPPOSED to do (is high inflation wrong at all? what behaviour is desired?) BEFORE calling
+anything a defect, then (b) add a targeted debug line (wealth_value_1_unit + essentials_buying_power +
+private_cash_needed + country_population per quarter), boot, read ACTUAL values. No arithmetic-from-bands.
+
+### E.8 (2026-08-11) — silver-zone "flap" observation: NOT a proven bug; stood down
+Observed in the banded TZP data (both instrumented boots): several zones (yellow_sea, baltic, east_europe,
+east_mediterranean, indo_china, eastern_steppe) show silver STOCK oscillating 0↔(10-100/100-1000) on a
+~1-quarter period, price tracking inversely. I flagged this as a possible causeless numerical instability.
+STOOD DOWN as a bug claim: (1) both prior deep audits AND Sobisonator judge the economy broadly SOUND —
+a high bar a banded-log pattern does not clear; (2) per §E.5, an empty zone contributes ZERO to gbip
+(stockpile>0-guarded share = 0), so this flapping is likely economically INERT — it does not reach the
+currency peg; (3) I have not traced a mechanism, only read bands. Recorded as an UNPROVEN OBSERVATION for a
+future targeted look IF ever warranted, NOT a defect. No fix. Do not treat as confirmed.
+
+### F. TWO-BOOT DIFF (2026-08-11) — CAUSE ISOLATED TO MY #50 penetration change (NOT upstream)
+Method: ran curx_analyze on BOTH instrumented boots, matched POST quarters term-by-term.
+- EARLY = Aug 9 22:42 (`logs 7.36.46 PM.zip`): code = #23-fix + #111a only.
+- LATE  = Aug 10 23:18 (`logs.zip`): code = + all overnight econ commits (#62/#44/#59/#50/#52/#67/#68/#69/#71cap).
+FINDING — exactly ONE term shifted systematically between the boots:
+  pen (market_penetration): EARLY 0.07–0.12  →  LATE 0.12–0.20  (uniform ~1.5–1.7× lift, EVERY matched quarter).
+  ess falls / ratio rises in lockstep in LATE; agsilver bounces in BOTH (not the mover).
+That ~1.54× is PRECISELY my #50 commit 2c52ed96a: penetration shrink 0.4545 → 0.7 (0.7/0.4545 = 1.54). It is
+MY code, this run — not upstream (the /(0.5+pen) peg + the shrink line predate me, but the 0.4545→0.7 EDIT is mine).
+MECHANISM: penetration feeds country_unit_price_silver = gbip/(0.5+pen) (GT_split_get_country_import_unit_price
+_tradegood). Raising pen ~1.5× changes the peg divisor → shifts wealth_value/ess → raises private_cash_ratio →
+higher inflation. #50 raised a term that feeds TWO systems (the intended regional-price-gap widening AND the
+currency peg); I reasoned only about the first. The #50 commit's OWN warning ("confirm silver stays damped")
+is exactly what the diff shows FAILED.
+VERDICT: cause = #50 (mine), UNINTENDED currency side-effect of an intended gap-widening change. Upstream is
+sound (both prior audits + Sobisonator concur); the divergence is entirely in my overnight edit.
+NEXT: adversarial-review this diagnosis (is #50 the sole systematic mover, or do #52/#59 co-contribute to the
+ratio climb?), THEN design the fix (revert 0.4545, or decouple the gap-widening from the peg), THEN review it.
+
+### F.1 (2026-08-11) — USER: #50 was INTENTIONAL and fixed a real problem → fix = DECOUPLE, do NOT revert
+The 0.4545→0.7 penetration lift is a legitimate, wanted change (widens the inter-country same-good price gap:
+Canton silk vs London silk — the #50 regional-divergence goal). Reverting to 0.4545 is OFF THE TABLE; it would
+undo a real improvement. The DEFECT is that penetration feeds TWO consumers and #50 moved both:
+  (a) INTENDED: the regional price-gap ceiling (0.5+pen_max)/0.5 — keep the widened value here.
+  (b) UNINTENDED: the currency peg country_unit_price_silver = gbip/(0.5+pen) — this got dragged along and
+      shifted the inflation ratio (§F).
+FIX DIRECTION (locked): DECOUPLE (b) from (a). Options for the design to weigh (post-review): the peg's
+country_unit_price could read a penetration term pinned to the pre-#50 shrink (0.4545) or a separately-tuned
+constant, while the regional-gap path keeps 0.7; OR damp the peg's sensitivity to pen; OR compute the peg from
+a pen value that excludes the #50 widening. The regional-gap widening MUST survive; only its bleed into the
+currency peg is corrected. NOT a revert.
+
+### F.2 (2026-08-11) — the fix's BURDEN OF PROOF (user), before any lever change
+"Penetration is the wrong lever" is PLAUSIBLE, NOT proven. Reverting #50 remains a legitimate option. The
+design phase (after the review's mechanism map) must NOT just name an alternative lever — whichever lever the
+fix proposes, the design must establish ALL THREE at the source level, or the lever is only a "candidate,
+needs its own design+proof":
+  (a) WHAT exactly the lever is (the precise var/term, where set + read);
+  (b) WHY it produces the desired REGIONAL per-trade-zone divergence (Canton silk ≠ London silk), shown in the
+      code path — not asserted;
+  (c) WHY it has NO unintended side effects — enumerate the lever's OWN consumer graph (every svalue/effect
+      that reads it) and show the regional change does NOT bleed into the currency peg / order sizes / trade
+      income / shortages / #219 trade-AI. i.e. prove we are NOT relocating the penetration→peg bleed to a new
+      term.
+Decision rule: switch levers ONLY if the new lever is PROVEN regional AND PROVEN side-effect-clean. If an
+alternative can't clear that bar in-analysis, prefer the option whose side-effect surface is already KNOWN
+(revert to 0.4545 = known-good pre-#50 state; or decouple with a bounded, enumerated peg term) over an
+unproven alternative. Rank options by PROVEN-clean side-effect surface, not by elegance.
