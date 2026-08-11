@@ -300,3 +300,26 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
 - FIX: renamed the SECOND .22 -> .31 (a free id). Did NOT renumber .23+ (avoids an 8-event cascade; since
   dispatch is by-id-nowhere, ordering is irrelevant). All ids now unique; braces 168/168; BOM-free.
 - STATUS: DONE.
+
+## #108 (part 1/2) — DEBT_events / INCOME_mitigate_deficit bimetallic unset-var flood
+- DIAGNOSIS (full call-chain from newest error.log): 121x silver_needed_for_deficit + 121x
+  gold_reserve_value_greater_than_silver + paired "unset scope 'local_var'" / "invalid comparison" — chain =
+  DEBT_events.1 -> INCOME_mitigate_deficit -> INCOME_sell_largest_reserve line 54 -> INCOME_sell_reserves line 8.
+  ROOT CAUSE (distinct from the earlier #19/#87 set-site guards, which were correct but insufficient): the four
+  callers set `local_var:<metal>_needed_for_deficit` then passed `amount = local_var:<that>` into the
+  INCOME_sell_reserves MACRO. A local_var does NOT cross into a called effect's scope, so the macro's
+  `value = $amount$` (which expands to `value = local_var:<metal>_needed_for_deficit`) read an UNSET local in
+  its own scope -> the flood. (DEBT_events.txt is 24 lines on disk; the log's "line 113" is the call-site chain,
+  not the file.)
+- FIX: at all 4 call sites (INCOME_mitigate_deficit gold/silver branches + INCOME_sell_largest_reserve
+  gold/silver branches) changed set_local_variable -> set_variable (COUNTRY var — those DO propagate into called
+  effects, proven throughout the mod), passed `amount = var:<metal>_needed_for_deficit`, and remove_variable
+  after the call to avoid leaking the scratch var. 0 stale local_var:*_needed_for_deficit reads remain; braces
+  210/210; BOM intact.
+- REMAINING (part 2/2, NOT done here): the oa_wealth_changes floods (617x 'trade_center' unset @ :485, EDU_t2_
+  educated_governorship, etc.) are a SEPARATE trade-tick read-before-set root cause in the hot quarterly path —
+  left for its own consolidated diagnosis with #107 (they share the food-stockpile / trade-var lifecycle). #108
+  the DEBT/INCOME half is the cleanly-rooted one and is fixed; the task stays in_progress for part 2.
+- CODE REVIEW cr108a: dispatched (pending). Self-review: cross-macro local→country-var is the documented Jomini
+  behaviour; the remove_variable cleanup keeps it tidy; no semantics change beyond the var scope.
+- STATUS: part 1 DONE + committed; part 2 (oa_wealth_changes/trade_center) pending — task remains in_progress.
