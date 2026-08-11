@@ -734,5 +734,35 @@ for a silver-standard economy.
 - NEXT: prove the ~0-stockpile root (production vs demand vs seed) from code+log, THEN adversarial-review this
   §E diagnosis before proposing any fix. This is the LEADING diagnosis, NOT yet reviewed.
 
-**STATUS §E: high-inflation-plateau root = empty-silver-stockpile price spike (UPSTREAM price formula), LEADING
-diagnosis pending (a) proof of why silver stock is ~0 and (b) its own adversarial review. #110 = this.**
+**STATUS §E: LEADING diagnosis, pending (a) proof of ~0-stockpile root + (b) adversarial review. #110 = this.**
+
+### E.5 ADVERSARIAL REVIEW of §E (2026-08-11) — VERDICT: **REFUTED**. Empty-stockpile spike is weighted OUT of gbip.
+The §E step-1→step-2 link is broken. Source-decisive (se_GLOBALTRADE_split.txt):
+- **Share is stockpile>0-guarded (L1467-1480):** `zone_percentage_of_global_stockpile = zone_stockpile ÷ global_stock`
+  ONLY `if zone_stockpile > 0`. A stockpile=0 zone has share = **exactly 0**.
+- **gbip build (L2516-2701):** each zone contributes `local_price_TZ × percentage_of_global_stockpile_TZ`. Empty
+  zone → (spiked price) × 0 = **0 contribution**. For a stocked zone the stock CANCELS:
+  `(order/stock × 0.6) × (stock/global_stock) = 0.6·order/global_stock`. So NO per-zone price spike — empty or
+  thin — can enter gbip; gbip depends only on Σorder and global_stock (two aggregates). This is the SAME
+  correction the audit already recorded in §C.3/§C.7; §E re-proposed a buried theory (a regression).
+- China's empty silver zones (share 0) are irrelevant to the GLOBAL sum; the real silver producers
+  (central_europe, west_south_america, atlantic_seaboard, west_mediterranean) hold stock and dominate global_stock
+  (§C.6). Denominator does NOT collapse.
+- `agsilver 1.6!CAPPED` is the emitter top-banding `country_unit_price_silver ≥ 1` — NOT a spike. gbip ~1.3,
+  /(0.5+pen~0.1) ≈ 2.1: the formula's INTRINSIC level, not a stockpile artifact.
+
+WHAT §E GOT RIGHT (kept): the DOWNSTREAM direction — higher country_unit_price_silver ×16 → bigger ess divisor
+→ lower ess → lower need → higher private_cash_ratio → higher inflation. And that country_unit_price_silver ≈1.6+
+in every post-fix boot. The ARITHMETIC is sound; the SUPPLY-SIDE cause (empty stockpiles) is wrong.
+
+### E.6 REAL LEADING CANDIDATE (post-refutation) — SCALE/CALIBRATION of the peg→ratio mapping, NOT a supply artifact
+Given circ flat (~125) and ess a STEADY plateau (~13-20, not "collapsing" — §E overstated that), the ~2.7 ratio
+(→ ~17% infl) is the level the calibrated chain settles to on plausible flat inputs:
+`gbip (~1.3) → ÷(0.5+pen) → ×16 → ÷3 reserve-ratio` peg vs `amt_circulated×0.004`, then `inflation=(ratio−1)/10`.
+i.e. a MIS-CALIBRATED peg/ratio SCALE (the acceptance-criteria concern at the top of this audit), not the
+`stockpile>0` guard. A fix touching GT_set_tradegood_price's guard would edit a value that never reaches the peg
+and would NOT move the plateau. NEXT (when resumed): trace the peg→ratio scale constants (×16, ÷3, ×0.004,
+/(0.5+pen), the (ratio−1)/10 map) against the ~3% target; that is the calibration lever. This is the #110 lead now.
+
+**STATUS §E: REFUTED (theory #10 → graveyard). Plateau cause re-scoped to peg/ratio SCALE calibration (§E.6),
+not empty-stockpile supply. No fix attempted; #110 remains open on the §E.6 calibration lead.**
