@@ -177,6 +177,10 @@ BUILDINGS = {
  "military_depot_building":      ("S","military supply depot warehouse"),
  "row_manufactory_building":     ("S","19th century factory manufactory"),
  "row_plantation_building":      ("S","colonial plantation"),
+ # [#87] New World Farmstead (#65 building): a homestead working a New World food crop
+ # (maize/sweet_potato/potato/peanut/chili). Reference art = a maize/corn harvest / homestead
+ # scene; list-valued fallbacks in case the first hit is a scan/map.
+ "new_world_farmstead_building": ("S",["New World maize agriculture","cornfield harvest painting","American homestead farm 19th century","potato field harvest painting"]),
 
  # --- buildings-research batch (37 new keys, commit 1ea45ce52). Queries are the
  # --- concrete historical subjects that produced the committed art; list-valued
