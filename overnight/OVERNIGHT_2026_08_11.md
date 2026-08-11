@@ -536,3 +536,25 @@ Available for a deeper pass if wanted.
 
 STATUS: #99 DONE (audit delivered). Its one actionable output is a root-cause trace that makes #98 concrete;
 recorded on #98. Docs-cleanup nit (DESIGN_PROTECTORS_GENERAL_EVENTS.md stale "awaiting greenlight") noted.
+
+## FRONTIER-OFFICE ROTATE CLUSTER (#80-#85) — COMPLETE
+Full design-first loop (DESIGN_FRONTIER_OFFICE_ROTATE_80_85.md, dr8085 SOUND-WITH-CORRECTIONS → v2 folded all 5):
+- #81 (d2c013c5a): corruption-tied squeeze easing — shared QING_frontier_office_ease_squeeze helper replaces
+  the flat -12/-6; wired into all 3 auto-rotates (incl. the Canton event callers, dual-path). cr81 CLEAN.
+- #83/#85 (e2fb228cb): caravan squeeze surfaced in the panel (mirrors salt); #85's "rename var n" was a NO-OP
+  (the 'n' was an rg -rn grep artifact, no such var). cr83 CLEAN.
+- #80/#82/#84 (d8f01744d): candidate-LIST picker for salt/caravan/hoppo (shared window modelled on the amban
+  picker, corruption column so the player picks a clean man). cr8084 caught + I fixed 1 CRITICAL (seat helper
+  stamped the holder via ROOT = the clicked char on the picker path, silently discarding the pick; ROOT->employer
+  = CHI on both paths, the QING_office_appoint idiom). Re-review CLEAN. All 3 offices wired, no salt-only spike.
+- #77/#79: verified ALREADY CLOSED (per-appoint pool-drop); marked complete.
+
+## #97 — DIAGNOSIS (Silver & Opium "Appoint an Imperial Commissioner" -> office template). NOT YET BUILT.
+Current state (se_QING_OPIUM.txt:302 QING_opium_appoint_commissioner): "Appoint an Imperial Commissioner" only
+sets a FLAG (qing_lin_zexu_appointed = 1) + a legitimacy bump. There is NO real character — unlike the
+Hoppo/Caravan/Salt offices, which seat a drawn courtier (holder var + per-char marker + panel card + the new
+candidate picker). #97 asks to make it follow that template. This is a design-first build (new office actor
+欽差大臣 / historically Lin Zexu, holder var + marker, opium-panel office card, wire into the frontier picker
+just built, + the interdiction effect keying off the seated man's zeal/finesse rather than a bare flag). Scoped
++ diagnosed; needs design -> adv-review -> impl -> code-review like #80-85. The frontier-picker infrastructure
+(se_QING_FRONTIER_PICKER.txt) directly enables it — a 4th office branch on qing_frontier_picker_office.
