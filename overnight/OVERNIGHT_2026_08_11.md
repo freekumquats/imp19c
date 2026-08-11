@@ -266,3 +266,26 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
 - CODE REVIEW cr106: dispatched (verdict pending). Brace balance equal on both files; BOM intact (common/);
   small additive diffstat (+36/-0), no EOL churn.
 - STATUS: DONE (boot will confirm the shipping_<zone> class is gone from error.log).
+
+## #109 — DEBUG harness noise (debug_demand.txt + timetest_quarterly_tick.txt)
+- DIAGNOSIS (imp19c-logs, newest boot): the task premise ("confirm -debug_mode-only and strip/gate") is WRONG.
+  Both files are LIVE production infrastructure, NOT debug-gated: debug_demand.1/.2 fire from oa_wealth_changes
+  (quarterly wealth on_action) and drive real food/luxury demand; timetest_quarterly_tick.1-30 is the ENTIRE
+  quarterly economic tick (send-to-reserves, produce goods, pay wages, collect taxes, currency power, mil
+  supplies, diplomacy power). They must NOT be stripped. The log noise is two real defects each:
+  1. title/desc = "TEST" on every hidden event -> "Unrecognized loc key TEST" per fire (hidden events never
+     display title/desc, so this is pure noise). debug_demand: 3 events; timetest: 31.
+  2. debug_demand.1: `set_variable = first_time_food_demand_updated` was INSIDE the inner `limit = {}` (a
+     trigger block) -> "Unknown trigger type: set_global_variable near line 36" every boot AND the first-time
+     flag never actually got set (swallowed as a bad trigger). Mirrors the CORRECT placement in .2. REAL bug.
+  3. timetest: the engine warns the file "should be in utf8-bom encoding" — it was plain ASCII (no BOM).
+- FIX:
+  - debug_demand.txt: dropped title/desc/picture from the 3 hidden events (-> hidden-only); moved .1's
+    set_global_variable OUT of the limit{} to fix the parse error + restore the flag. Preserved original
+    BOM+CRLF encoding (no EOL churn after restoring).
+  - timetest_quarterly_tick.txt: dropped title/desc/picture from all 31 hidden events; ADDED the utf8 BOM the
+    engine asked for. LF endings preserved; only content change is the TEST strips + BOM.
+- SEPARATE BUG FOUND + FILED (#124, NOT folded here — it's a behavior change in upstream trade code, out of this
+  loc-noise task's scope): timetest_quarterly_tick.22 is DEFINED TWICE (lines 442 + 462); the second overrides
+  the first, so DIPLOMACY_get_power_in_play_TZ (first .22) never runs. Needs a renumber, reviewed on its own.
+- STATUS: DONE (loc-noise + parse-error + BOM). #124 left for its own diagnosis->review pass.
