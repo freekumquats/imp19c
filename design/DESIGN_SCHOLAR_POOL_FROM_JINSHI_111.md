@@ -1,120 +1,154 @@
-# DESIGN #111 — populate the Hanlin scholar pool from real jinshi holders, not create_character spawns
+# DESIGN #111 — refill the Hanlin pool by DRAWING office-less jinshi (kill only the quarterly aether-spawn)
 
-**Status:** REVIEWED (SOUND-WITH-CORRECTIONS, 2026-08-11) — 5 corrections folded below (§CORRECTIONS).
-Implementation-ready. The 3/6/9 cap edit is already staged and folds into THIS task's single review.
+**Status:** REVIEWED CLEAN-WITH-FIXES-FOLDED 2026-08-11. Rewritten to the user's corrected scope (the two prior
+passes — §CORRECTIONS/§CORRECTIONS-2, DELETED — were false-premised, treating the exam cohort's create_character
+as the bug; discarded). A fresh adversarial pass on THIS scope returned SOUND-WITH-CORRECTIONS; its 4 findings
+are folded inline (marked [REVIEW-FIX N]): (1 HIGH) draw gate must add is_governor/is_general/is_admiral = no —
+QING_char_holds_court_position does NOT cover the march-GG roles, so a founding jinshi governor would be stamped
+a pool scholar while governing (#77/#79 1:1 violation); (2 MED) same three roles folded into the retire-pass
+phantom-strip (a governorship is a drawn scholar's likeliest exit, uncaught by pool_drop_member); (3 LOW) dropped
+the redundant NOT=qing_office_held; (4 LOW) commented that count=N is the sole loop terminator in the under-full
+refill. IMPLEMENTATION-READY.
 
-## §CORRECTIONS (from adversarial review — these SUPERSEDE any contradicting text below)
-- **PREMISE CONFIRMED:** real office-less jinshi exist at the 1763.2.16 start — setup/characters/00_Qing.txt
-  bakes `jinshi` on ~5-6 real Qianlong-court men (Yu Minzhong 563, Ji Yun 567, Qian Daxin 569, Zhao Yi 570,
-  Sun Yuting 355, Dai Junyuan 344) via bare add_trait, NOT pool members. Draw is not circular. Restricted cap
-  (3) fills easily; customary (6) ~1 short; broad (9) ~3-4 short at start — acceptable per design.
-- **C1 (CRITICAL) — the cohort is IN SCOPE.** The aether-spawn is NOT only in QING_exam_seed_hanlin_pool.
-  QING_exam_graduate_cohort (se_QING_EXAM.txt:298/310-319, fired triennially from qing_keju.2 both options,
-  qing_keju_events.txt:220/:252 — first cycle ~1 month into a fresh game) ALSO calls QING_exam_mint_scholar
-  (create_character → qing_is_pool_scholar → add_to_variable_list qing_scholar_pool). Rewriting only the seed
-  relocates the bug to the cohort. FIX: convert QING_exam_graduate_cohort to CONFER jinshi/juren via add_trait
-  onto real office-less adult non-degreed courtiers — exactly the laureate model (qing_keju_events.txt:150-159:
-  pick ablest courtier not already jinshi, then confer) extended from 1 to the cohort size. This is the
-  step-3(a) pipeline fix; it gives the seed-draw a renewable real-jinshi supply.
-- **C2 (MEDIUM) — no `max = var` iterator exists in this repo.** Implement the draw as the seed's EXISTING
-  per-law-branch shape: `while = { limit = { var:qing_scholar_pool_count < N }  count = N  <draw-one> }` with
-  N the literal 3/6/9, and `<draw-one>` = `ordered_character = { limit = {…} order_by = finesse max = 1 … }`.
-  The literal `count = N` hard-caps iterations (loop can't hang even when no eligible jinshi remain — the
-  acceptable-shortfall case). Each draw stamps qing_is_pool_scholar so the next iteration excludes it. Count
-  bumped once per add → stays in sync (integrity OK). (Alt: unrolled if-rungs, the QING_subpost_staff_corps
-  pattern se_QING_SUBPOSTS.txt:126-131.)
-- **C3 (MEDIUM) — new phantom-member surface from drawing REAL chars.** A drawn jinshi can later become a
-  governor/general/admiral via engine/events; the pool tick only strips age≥55/dead, and
-  QING_char_holds_court_position does NOT include qing_is_pool_scholar → he lingers as a phantom pool member.
-  FIX: add a strip pass to QING_exam_pool_tick mirroring QING_subpost_strip_double_booked
-  (se_QING_SUBPOSTS.txt:143-171): drop from the pool any member who is now is_governor/is_general/is_admiral
-  (or QING_char_holds_court_position). Minted scholars never needed this; drawn real chars do.
-- **C4 (MEDIUM) — scrub stale fallback text.** The "fallback mint" is REMOVED. Ignore/delete every
-  fallback reference below (the old step-2 fallback framing, "Why keep the fallback", the #90 fallback bullet,
-  "draw-then-fallback-mint" in Files, Review-test items about the fallback). Corrected intent = §CORRECTIONS.
-- **C5 (LOW) — add `age < 55` to the draw limit** so near-retirement jinshi aren't drawn only to be retired
-  next tick (drawn men are older than the old age-28 mints — Yu is 49).
-- **DOWNSTREAM SAFE (confirmed):** under-full/empty pool breaks nothing — the 13 great offices are filled by
-  QING_council_autofill_office which mints its OWN officials (does NOT read qing_scholar_pool); pickers +
-  drop-member + GUI count all self-guard. Only qing_keju.6's opportunistic pool-raise no-ops. (Verify the
-  se_QING_MINISTRY Hanlin roster panel tolerates an empty list — low risk.)
+## The two rules the user fixed the scope with (authoritative — everything below serves these)
+1. **`create_character` with an exam degree is permitted in EXACTLY TWO places, nowhere else:**
+   - (a) the **game-start boot seed** — fills the Hanlin Academy to its cap ONCE at start, exactly as the rest
+     of the Grand Council is seeded. The one-and-only-one-time exception.
+   - (b) the **exam itself** (`QING_exam_graduate_cohort`, surfaced as "The Examinations Convene") — the sole
+     ongoing character factory after game start.
+2. **After game start, the ONLY place characters with exam degrees are created is the exam.** No other effect
+   may spawn a degree-holder post-boot.
 
---- (original draft below; where it contradicts §CORRECTIONS, §CORRECTIONS wins) ---
+## The bug (narrow)
+`QING_exam_seed_hanlin_pool` is called from BOTH:
+- the **boot event** (`qing_force_setup.12`, day-32 deferred — qing_force_setup_events.txt) → legitimate per
+  rule 1(a); and
+- the **quarterly pool tick** (`QING_exam_pool_tick`, se_QING_EXAM.txt:496) → this re-runs the SAME
+  `create_character` mint every quarter to refill the drained bench. THIS violates rule 2 — it fabricates
+  fresh jinshi from the aether instead of drawing from the jinshi the exam has since produced. **This tick
+  top-up is the entire bug.**
 
-## Problem (user)
-The waiting-Hanlin scholar pool is fabricated from the aether. `QING_exam_mint_scholar` (se_QING_EXAM.txt:159)
-`create_character`s a fresh han/confucianism age-28 courtier, stamps the degree trait + `qing_is_pool_scholar`
-+ `qing_needs_bind`, and adds him to `qing_scholar_pool`. Scholars should instead be the empire's real top
-exam graduates — specifically **the highest-finesse JINSHI (進士) holders who do NOT already hold an office**.
+## The fix — a CALLER SPLIT (not a rewrite of the seed guts, and NOTHING in the exam cohort changes)
+Split `QING_exam_seed_hanlin_pool` (se_QING_EXAM.txt:341-378) into two effects:
 
-## Ground truth (traced in source, this session)
-- `qing_scholar_pool` = variable_list on CHI; `qing_scholar_pool_count` = its GUI-read count.
-- `qing_is_pool_scholar` (per-char var) = the ACTIVE Academy posting marker: drives the on-name "Hanlin
-  Scholar" title (00_offices.txt:186) + death-cleanup + the on-seating drop (QING_exam_pool_drop_member,
-  #77/#79) + the deferred-bind gate.
-- Cap = law `qing_law_hanlin_cap` (0 customary / 1 broad / 2 restricted), now **6 / 9 / 3** (this task).
-- `QING_exam_seed_hanlin_pool` (:342) tops the pool up to the cap via a `while` calling mint.
-- `QING_exam_pool_tick` (monthly, 00_monthly_country.txt) retires age≥55/dead (keeps degree, drops marker),
-  binds the `qing_needs_bind` scholars, then calls seed to top up.
-- CONSUMERS that must keep working: the office-fill pickers (QING_exam_fill_first_vacant_from_pool etc.)
-  which already `any_in_list = { variable=qing_scholar_pool  is_alive=yes employer=ROOT NOT={has_variable=qing_office_held} }`;
-  QING_exam_pool_drop_member; the GUI count; the Hanlin roster in se_QING_MINISTRY.
-- SEPARATE create_character sites NOT in scope (leave alone): se_QING_SUBPOSTS (subpost mint), se_QING_WENZHI,
-  se_QING_AMBAN (fanyi_jinshi amban pool). #111 is scoped to the HANLIN scholar pool source only.
+- **`QING_exam_seed_hanlin_pool_boot`** = today's body VERBATIM (the three law-branch `while` loops that call
+  `QING_exam_mint_scholar = { degree = jinshi }` up to the 3/6/9 cap). Called ONLY from the boot event.
+  Preserves rule 1(a) — the Academy starts FULL via create_character, the sanctioned one-time seed.
+- **`QING_exam_refill_hanlin_pool`** = NEW. NO create_character. Called ONLY from `QING_exam_pool_tick`.
+  For each law-branch target N (broad 9 / restricted 3 / customary 6, resolved as a literal per the
+  RHS-comparison rule — same branch shape the boot seed uses today), DRAW office-less jinshi up to N:
+  ```
+  while = {
+      limit = { var:qing_scholar_pool_count < N }
+      count = N                                   # literal hard-cap. [REVIEW-FIX 4] In the refill (unlike the boot
+                                                  # seed, where every iteration mints and the var-limit terminates),
+                                                  # when eligible jinshi run out the body no-ops, count never rises,
+                                                  # and the var-limit never flips false — so count=N is the SOLE
+                                                  # loop terminator here. Safe (N ≥ max possible adds from empty).
+      ordered_character = {
+          limit = {
+              employer = ROOT
+              is_alive = yes
+              is_adult = yes
+              age < 55                            # don't draw a man the retire pass will drop next tick
+              has_trait = jinshi
+              NOT = { has_variable = qing_is_pool_scholar }        # not already on the bench
+              # [REVIEW-FIX 1 HIGH] the "already busy" test MUST mirror the canonical eligible-candidate
+              # picker se_QING_COUNCIL.txt:1149-1151, which lists is_governor/is_general/is_admiral
+              # SEPARATELY. QING_char_holds_court_position (qing_dynasty_triggers.txt:241-257) is a fixed
+              # OR-set of COURT-POST variable markers only and does NOT include the march-GG roles — so a
+              # founding jinshi serving as GOVERNOR (e.g. Liu Tongxun 562, #34) would otherwise pass every
+              # gate and be stamped a pool scholar WHILE GOVERNING = the exact #77/#79 1:1 violation.
+              is_governor = no
+              is_general = no
+              is_admiral = no
+              NOT = { QING_char_holds_court_position = yes }       # not seated in a GC/court post
+              # NOTE: QING_char_holds_court_position already ORs has_variable=qing_office_held (:243), so a
+              # separate NOT={has_variable=qing_office_held} is redundant — dropped (review finding 3).
+          }
+          order_by = finesse                      # user: the highest-finesse jinshi
+          check_range_bounds = no
+          max = 1
+          save_scope_as = drawn_scholar
+      }
+      # stamp + enlist him EXACTLY as the mint's post-create block does (minus create_character):
+      scope:drawn_scholar = {
+          set_variable = { name = qing_is_pool_scholar  value = 1 }   # excludes him next iteration
+          # NO qing_needs_bind deferral needed — he is an EXISTING char (not made this tick), so his
+          # affinity vars read back same-tick. But route the bind through the tick's existing deferred
+          # pass anyway (stamp qing_needs_bind) for uniformity with boot-seeded scholars — safe (write-only).
+          set_variable = { name = qing_needs_bind  value = 1 }
+      }
+      add_to_variable_list = { name = qing_scholar_pool  target = scope:drawn_scholar }
+      change_variable = { name = qing_scholar_pool_count  add = 1 }
+  }
+  ```
+  If fewer than N office-less jinshi exist, the `ordered_character` finds nobody, the iteration no-ops, and the
+  Academy runs UNDER-FULL — honest and self-correcting as the exam produces more jinshi. NO spawn to paper it.
 
-## Design — replace "mint" with "draw from office-less jinshi", keep create_character as bounded fallback
-Rename intent of `QING_exam_seed_hanlin_pool`: instead of minting up to the cap, it should:
-1. **DRAW existing candidates first.** Iterate CHI's characters who: hold the `jinshi` trait, are alive+adult,
-   `employer = ROOT`, do NOT already hold an office/court post (`NOT = { has_variable = qing_office_held }`
-   AND `NOT = { QING_char_holds_court_position = yes }`), and are NOT already pool members
-   (`NOT = { has_variable = qing_is_pool_scholar }`). Select the **highest-finesse** first (`ordered_character
-   order_by = finesse`), add up to (cap − current_count) of them: stamp `qing_is_pool_scholar` (+`qing_needs_bind`),
-   add_to_variable_list qing_scholar_pool, bump count. NO create_character — these are real jinshi.
-   - HANLIN = drawn from jinshi (user): the pool IS the Academy bench; membership drawn from top jinshi. (The
-     `hanlin` posting trait, if still granted anywhere, is the "is/was an academician" style — keep separate
-     from the pool marker per #77/#79; do not add/remove traits here.)
-2. **NO create_character fallback (user correction).** Minting goes away entirely — the aether-spawn is the
-   thing being removed; re-introducing it as a "fallback" is the same bug wearing a hat. If the draw can't
-   fill the pool, the deficiency is UPSTREAM in the exam pipeline, addressed at (3), not papered over by a spawn.
-3. **The exam pipeline MUST produce jinshi (user: "the exam process should 100% produce them, as it did
-   historically").** For the draw to have candidates, the keju/examination pipeline (#114 Examinations Convene,
-   se_QING_EXAM keju events) must grant the jinshi trait to REAL passers climbing shengyuan→juren→gongshi→
-   jinshi, on an ongoing cadence — exactly as the historical triennial metropolitan exam produced a fresh
-   jinshi cohort. Two cases the review must distinguish:
-   - (a) exams produce NO jinshi at all → that is ITS OWN BUG in the exam pipeline; fix the pipeline to confer
-     jinshi to graduates (the primary deliverable if so).
-   - (b) exams produce SOME jinshi but not enough to keep the Hanlin pool (3/6/9) full → a SIMPLE TUNING TWEAK
-     (raise the exam's jinshi yield / cadence, or widen the draw net), NOT a spawner. The Academy simply runs
-     below establishment until enough jinshi exist — historically plausible and self-correcting as exams run.
-   Either way the pool is fed ONLY by real graduates; an under-full Academy is acceptable and honest, a spawned
-   one is not.
+## Candidate supply (why the draw is not circular — traced this session)
+- **Founding jinshi (rule: valid candidates):** setup/characters/00_Qing.txt bakes `jinshi` on real
+  Qianlong-court men (Yu Minzhong 563, Ji Yun 567, Qian Daxin 569, Zhao Yi 570, Sun Yuting 355, Dai Junyuan
+  344) via bare add_trait — office-less at start, so drawable. All are <55 at 1763.2.16 (Yu 49 … Dai 17) → the
+  age<55 gate excludes none of them initially.
+- **Exam-produced jinshi (rule 2):** `QING_exam_graduate_cohort` seats a jinshi lead each triennial when the
+  pass-rate band is healthy (>=30), plus juren extras. Over time this is the renewable supply. Yield is thin
+  (~1 jinshi/triennial from the cohort; juren extras don't count) → the pool will often run under-full. That
+  is ACCEPTED (rule: under-full is honest). Raising exam jinshi yield/cadence is a SEPARATE tuning task
+  (#114 / #2), explicitly NOT in #111.
+- **Re-eligibility (user-confirmed):** the gate is "has no job RIGHT NOW," not "never had one." A jinshi who
+  held an office and left it (retired/dismissed/rotated out) drops `qing_office_held` and becomes drawable
+  again — the draw's `NOT={has_variable=qing_office_held}` + `NOT={QING_char_holds_court_position}` already
+  captures this.
 
-## Why keep the fallback (not a deferral — a graceful-degradation guarantee)
-Removing minting outright would empty the pool whenever the realm has < cap office-less jinshi, starving the
-GC office-fill pickers (a regression). The fallback makes drawn-jinshi PRIMARY and mint the exception, logged
-so the shortfall is visible. If the user wants NO minting ever, that's a one-line removal of the fallback
-branch once the exam pipeline reliably produces jinshi — call it out for the review.
+## One real correction that SURVIVES from the old passes (re-scoped)
+- **Strip a drawn scholar who later takes a job (the phantom-member risk).** A drawn REAL char can later become
+  a governor/general/admiral or seat a court post; the retire tick (se_QING_EXAM.txt:463-477) currently drops
+  only age>=55/dead, so he would linger as a listed-but-employed phantom. FIX: extend that EXISTING retire
+  pass's `limit` OR-block with **BOTH** `QING_char_holds_court_position = yes` **AND** `is_governor = yes` /
+  `is_general = yes` / `is_admiral = yes` — [REVIEW-FIX 2 MEDIUM] the march-GG roles must be listed SEPARATELY
+  because a drawn civil jinshi's LIKELIEST exit is a GOVERNORSHIP, which QING_char_holds_court_position does NOT
+  cover (:241-257 is court-post vars only) AND which QING_exam_pool_drop_member does NOT catch (that fires only
+  from the office/canton/salt/amban/caravan appoint tails, se_QING_COUNCIL.txt:1606 etc. — nothing routes a
+  governor/general assignment through it). Reuse the retire pass's own `remove_list_variable target=prev` +
+  count-decrement + `remove_variable qing_is_pool_scholar` body (:472-476).
+  SAFETY (review-confirmed): folding QING_char_holds_court_position never strips a legit WAITING scholar — a
+  waiting scholar has qing_is_pool_scholar but NOT qing_office_held, and the trigger does not include the pool
+  marker; and no double-decrement with pool_drop_member (that delists at SEATING, this at the tick — a seated
+  man is already off the list by the time the tick runs). (The old note said "mirror
+  QING_subpost_strip_double_booked" — WRONG idiom: that strips a scalar; the pool needs the list-removal the
+  retire pass already does. Fold into the retire pass, don't add a new helper.)
+  NOTE: the boot-seeded (minted) scholars never needed this because minting made purpose-built unemployed men;
+  drawing real chars introduces the need.
 
-## #90-safety / crash rules
-- The draw is a pure marker-stamp on EXISTING characters (no create_character) → no #90 create-then-grant risk.
-- The fallback keeps the proven QING_exam_mint_scholar create_character idiom UNCHANGED (age/culture/religion
-  literals, deferred bind) — no new crash surface.
-- Same-tick read-back: drawn EXISTING characters CAN be read same-tick (they're not created this tick), so the
-  deferred-bind `qing_needs_bind` split is only needed for the fallback mints (unchanged) — drawn scholars
-  could bind immediately, but for uniformity route both through the existing tick-deferred bind (safe).
+## Explicitly NOT in scope (the false-premise fixes from the deleted passes)
+- **NO change to `QING_exam_graduate_cohort`** — the exam creating characters is rule 1(b), intended.
+- **NO "confer degrees on existing courtiers"** — that was the false-premise fix. Discarded.
+- **NO "non-degreed vs not-already-jinshi" reconciliation** — moot; the cohort is untouched.
+- **NO laureate/cohort collision concern** — that only arose from converting the cohort; not happening.
+- **NO deletion of `QING_exam_mint_banner_laureate`** — untouched (it feeds the amban bench, #40); it was only
+  ever "at risk" under the discarded cohort-conversion.
+- **`QING_exam_mint_scholar` is KEPT unchanged** — still the body of the BOOT seed (rule 1(a)).
 
 ## Files
-- common/scripted_effects/se_QING_EXAM.txt — rewrite QING_exam_seed_hanlin_pool (draw-then-fallback-mint);
-  the 3/6/9 cap already staged there.
-- localization/english/laws_l_english.yml — 3/6/9 desc already staged.
-- No change to QING_exam_pool_drop_member, the pickers, the GUI, or the other create_character sites.
+- common/scripted_effects/se_QING_EXAM.txt — split the seed into `_boot` (verbatim) + `_refill` (new draw);
+  point the pool tick (:496) at `_refill`; extend the retire pass (:463-477) with the took-a-job strip. The
+  3/6/9 cap literals are already in the boot branches (staged).
+- events/imp19c_mod_events/qing_force_setup_events.txt — point the boot call at `QING_exam_seed_hanlin_pool_boot`.
+- localization/english/laws_l_english.yml — 3/6/9 desc already staged (customary six / broad nine / restricted three).
+- No change to QING_exam_pool_drop_member, the office-fill pickers, the GUI count, the Hanlin roster, or ANY
+  create_character site other than renaming the boot seed.
 
-## Review must test
-1. Does the draw's `ordered_character` scope + trigger correctly find office-less jinshi (not double-add pool
-   members, not steal seated officials)? Confirm `NOT=qing_office_held` + `NOT=QING_char_holds_court_position`
-   + `NOT=qing_is_pool_scholar` covers all "already busy" cases.
-2. Does the fallback fire ONLY on genuine shortfall (draw first, count-gate the mint)? No double-fill.
-3. Pool-count integrity: count bumped exactly once per add (draw AND fallback), matches list length.
-4. No regression to office-fill pickers / drop-member / roster.
-5. #90: no create-then-grant; fallback create_character unchanged.
-6. Is highest-finesse-first the right selection (user said "highest-finesse jinshi")? Confirm order_by=finesse.
+## Review must test (against THIS scope)
+1. Caller split is correct: boot event → `_boot` (create_character kept); pool tick → `_refill` (draw only, no
+   create_character). No third caller mints post-boot (rule 2 upheld).
+2. The draw's `ordered_character` limit finds office-less jinshi and excludes: already-pool, seated-in-office,
+   court-position-holders, age>=55. No double-add; each draw's marker excludes it next iteration.
+3. `count = N` literal hard-caps the while (can't hang when eligible jinshi are exhausted — the under-full case).
+4. Pool-count integrity: +1 per add, matches list length; retire pass -1 per removal.
+5. Retire-pass strip of a drawn scholar who took a job (phantom-member) works via the list-removal idiom.
+6. Downstream unaffected: office-fill pickers (already gate on employer=ROOT + NOT qing_office_held), drop-member,
+   GUI count, roster all tolerate an under-full/empty pool (13 great offices autofill via
+   QING_council_autofill_office, which does NOT read qing_scholar_pool — confirmed).
+7. #90: the draw is a marker-stamp on EXISTING chars → no create-then-grant. The boot seed's create_character
+   is unchanged and still runs from the DEFERRED day-32 event, not construction.
