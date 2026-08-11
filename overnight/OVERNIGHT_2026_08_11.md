@@ -386,3 +386,15 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
   defunct 200-branch upstream chain on a non-fatal warning is exactly the Sobisonator-caution trap; NOT touched.
 - NET: the two genuine high-volume ERROR floods in #108 are eliminated; the 804 "WAR" lines are warnings in
   defunct upstream code (cosmetic); the EDU Div/0 residual (16x) is boot-gated. #108 real-error work is done.
+
+## #91 — contest/skill-check events fire a silent hidden_effect; add outcome notification (caravan family)
+- DIAGNOSIS: qing_caravan.4 (A Dispute at Kashgar) resolves the super-vs-aqsaqal skill check inside a hidden_effect
+  — the player picks Negotiate/Coerce/Collude and sees NOTHING (no win/lose feedback). Same shape in 3 other
+  files (integration capstone, march, subject_integration) — the task says audit ALL.
+- FIX (caravan family, this commit): each of the 6 win/lose branches now sets a qing_caravan_outcome flag
+  (negotiate_win/lose, coerce_win/lose, collude_win/lose); each option fires a new qing_caravan.5 notification
+  (days=2) that shows the matching result via 6 triggered_desc keyed on the flag, then clears the flag on ack.
+  New event qing_caravan.5 + 8 loc keys (title/option/6 descs). Braces 187/187; loc quotes 2/line; BOM intact.
+- REMAINING (the other 3 contest families — march / integration-capstone / subject_integration): SAME pattern to
+  apply. NOT skipping — doing them next in this run so #91's "audit ALL" clause is met whole.
+- STATUS: caravan family done + committed; extending to the other 3 families next (task stays in_progress until all 4).

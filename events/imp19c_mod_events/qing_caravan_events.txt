@@ -381,15 +381,18 @@ qing_caravan.4 = {
 				if = { limit = { exists = c:KOK }  c:KOK = { add_opinion = { modifier = qing_gp_relation_opinion  target = ROOT } } }
 				if = { limit = { var:qing_caravan_super_holder = { is_alive = yes } }  var:qing_caravan_super_holder = { add_popularity = 8 } }
 				LOG_line = { sys = QING  msg = "caravan: the superintendent out-negotiates the aqsaqal (skill check passed) for" }
+				set_variable = { name = qing_caravan_outcome  value = flag:negotiate_win }   # [#91] outcome for the notification event
 			}
 			else = {
 				QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = -4 }
 				# WRITE-BACK: the consul gets the better of him — the superintendent loses face.
 				if = { limit = { var:qing_caravan_super_holder = { is_alive = yes } }  var:qing_caravan_super_holder = { add_popularity = -6 } }
 				LOG_line = { sys = QING  msg = "caravan: the aqsaqal out-talks the superintendent (skill check failed) for" }
+				set_variable = { name = qing_caravan_outcome  value = flag:negotiate_lose }   # [#91]
 			}
 			remove_variable = qing_caravan_contest_ok
 		}
+			trigger_event = { id = qing_caravan.5  days = 2 }   # [#91] fire the outcome notification (silent hidden_effect never told the player win/lose)
 	}
 
 	# --- COERCE (威嚇) — threaten the escort/force. super.martial vs aqsaqal.martial (he invokes raiders). ---
@@ -411,6 +414,7 @@ qing_caravan.4 = {
 				if = { limit = { exists = c:KOK }  c:KOK = { add_opinion = { modifier = qing_xj_kokand_emboldened  target = ROOT } } }
 				if = { limit = { var:qing_caravan_super_holder = { is_alive = yes } }  var:qing_caravan_super_holder = { add_popularity = 5 } }
 				LOG_line = { sys = QING  msg = "caravan: the superintendent faces down the aqsaqal (coercion succeeded) for" }
+				set_variable = { name = qing_caravan_outcome  value = flag:coerce_win }   # [#91]
 			}
 			else = {
 				# the bluff is called: a khoja scare (only if the oasis isn't already normalised — #367 gate).
@@ -420,9 +424,11 @@ qing_caravan.4 = {
 				}
 				if = { limit = { var:qing_caravan_super_holder = { is_alive = yes } }  var:qing_caravan_super_holder = { add_popularity = -8 } }
 				LOG_line = { sys = QING  msg = "caravan: the aqsaqal calls the superintendent's bluff and stirs the frontier (coercion failed) for" }
+				set_variable = { name = qing_caravan_outcome  value = flag:coerce_lose }   # [#91]
 			}
 			remove_variable = qing_caravan_contest_ok
 		}
+			trigger_event = { id = qing_caravan.5  days = 2 }   # [#91] fire the outcome notification (silent hidden_effect never told the player win/lose)
 	}
 
 	# --- COLLUDE (通同) — split the customs skim with the consul. weights corruption; the aqsaqal's zeal resists. ---
@@ -449,6 +455,7 @@ qing_caravan.4 = {
 				}
 				QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = -2 }
 				LOG_line = { sys = QING  msg = "caravan: the superintendent and the aqsaqal quietly split the skim (collusion succeeded) for" }
+				set_variable = { name = qing_caravan_outcome  value = flag:collude_win }   # [#91]
 			}
 			else = {
 				# the pious consul refuses + denounces: the super is exposed, Kokand affronted.
@@ -458,8 +465,49 @@ qing_caravan.4 = {
 				}
 				if = { limit = { exists = c:KOK }  c:KOK = { add_opinion = { modifier = qing_xj_kokand_emboldened  target = ROOT } } }
 				LOG_line = { sys = QING  msg = "caravan: the aqsaqal refuses the bribe and denounces the superintendent (collusion failed) for" }
+				set_variable = { name = qing_caravan_outcome  value = flag:collude_lose }   # [#91]
 			}
 			remove_variable = qing_caravan_contest_ok
 		}
+			trigger_event = { id = qing_caravan.5  days = 2 }   # [#91] fire the outcome notification (silent hidden_effect never told the player win/lose)
+	}
+}
+
+########################################################################
+# qing_caravan.5 — THE DISPUTE IS SETTLED (交涉之果)  [#91]
+# Outcome notification for qing_caravan.4 (A Dispute at Kashgar). The .4 options resolved the
+# superintendent-vs-aqsaqal skill check in a SILENT hidden_effect — the player picked an approach and
+# saw nothing. This fires ~2 days later and TELLS the player which of the six results occurred, read
+# from the qing_caravan_outcome flag set by the resolving branch. Pure notification (the effects were
+# already applied by .4); a single acknowledge. Player-only (CHI).
+########################################################################
+qing_caravan.5 = {
+	type = country_event
+	title = "qing_caravan.5.t"
+	desc = {
+		# [#91] one desc per resolved outcome, keyed on the qing_caravan_outcome flag set by the .4 branch.
+		triggered_desc = { trigger = { var:qing_caravan_outcome = flag:negotiate_win }   desc = "qing_caravan.5.desc_negotiate_win" }
+		triggered_desc = { trigger = { var:qing_caravan_outcome = flag:negotiate_lose }  desc = "qing_caravan.5.desc_negotiate_lose" }
+		triggered_desc = { trigger = { var:qing_caravan_outcome = flag:coerce_win }      desc = "qing_caravan.5.desc_coerce_win" }
+		triggered_desc = { trigger = { var:qing_caravan_outcome = flag:coerce_lose }     desc = "qing_caravan.5.desc_coerce_lose" }
+		triggered_desc = { trigger = { var:qing_caravan_outcome = flag:collude_win }     desc = "qing_caravan.5.desc_collude_win" }
+		triggered_desc = { trigger = { var:qing_caravan_outcome = flag:collude_lose }    desc = "qing_caravan.5.desc_collude_lose" }
+	}
+	picture = chinese_throne_room
+	hidden = no
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_caravan_outcome
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_caravan.5 (dispute outcome notification) fired for CHI" }
+	}
+
+	# acknowledge; clear the flag so a stale outcome cannot re-render on a later .4
+	option = {
+		name = "qing_caravan.5.a"
+		remove_variable = qing_caravan_outcome
 	}
 }
