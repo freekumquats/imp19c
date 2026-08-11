@@ -476,3 +476,18 @@ central claim in source this session:
 - Knock-on: #116/#117 (GC create_character rule + degree-eligibility) do NOT depend on #118's structural var —
   they can proceed on their own once the user rules on #118's fate. #111/#114 (draw-from-existing) likewise
   key off the pool/degree machinery, not #118.
+
+## #106 — REVERTED (cr106 finding, source+log confirmed): my seed was a redundant no-op
+cr106 caught that my #106 SHIPPING_seed_zone_defaults duplicates a byte-identical 22-zone seed loop that
+ALREADY ships upstream (se_SHIPPING.txt inside SHIPPING_update_TZ_overview_piecharts) and runs in every_country
+immediately before the sole reader (GT_split_cache_TZ_penetration_values) on BOTH the setup and quarterly
+paths. VERIFIED against the NEWEST log (Aug-10 23:18, predates my commit): ZERO `shipping_<zone>` unset-var
+lines — the pre-existing seed already handles that class. My commit 53a3b273b was therefore inert (and added a
+3-place DRY hazard). REVERTED (da81e3e2e).
+- The ~1700 figure in the #106 title came from an OLDER boot; the current (Aug-10) total unset-var count is
+  1109, of which the dominant class is `<GOOD>_stockpile_<ZONE>_tradezone` (154 lines) — a DIFFERENT bug (a
+  per-good-per-zone TZ stockpile read-before-set), NOT the shipping_<zone> class #106 named.
+- #106 RECLASSIFIED: the shipping_<zone> flood it targeted is already gone (upstream seed). Reopening as
+  pending to re-scope onto the REAL current flood (the 154 <good>_stockpile_<zone>_tradezone reads) if that
+  proves worth fixing — but that is a distinct diagnosis, not this task's shipping_<zone> premise. Not closing
+  #106 on an inert fix.
