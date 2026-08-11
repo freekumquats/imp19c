@@ -137,4 +137,59 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
   (00_civil_laws.txt) and matching the mod's law-desc tone (escalating ladder: magistrate discretion -> wealth-
   pegged -> universal bill -> entrenched constitutional). Each member desc lists its concrete modifier lines
   with #G/#R colour tags. laws_l_english.yml, 5 desc keys. BOM intact, quotes balanced (2/line), 5/4 diff.
-- CODE REVIEW <pending>.
+- CODE REVIEW cr94: CLEAN (keys bind, modifier values exact, YML integrity OK). Commit 7aa6973bd, pushed. STATUS: DONE.
+
+## #89 — VANILLA silver-reserve (change) row shows garbage 151367 (mod 戶部 panel correct ~1513)
+- DIAGNOSIS (traced in source, no boot needed — the ×100 ratio is deterministic): the vanilla economy
+  view's silver row is loc key `SILVER_ACCUMULATION_RATE` (economic_enchancement_l_english.yml:1139),
+  which renders `total (change/target lb)` with EVERY term wrapped in `Multiply_CFixedPoint(x,'100')`
+  — a hundreds-troy-lb → lb conversion. That is correct for ROW, whose `silver_reserve_size` is seeded
+  in hundreds lb (e.g. c:SAX = 12, c:TUR = 1070 # hundreds lb). BUT #425 REPURPOSED CHI's
+  silver_reserve_size — and the change snapshot it now reads (CURRENCY_silver_reserve_actual_change_with
+  _cashout = qing_silver_reserve_change_last, se_QING_REVENUE.txt) — to mean 千兩 (thousand taels), NOT
+  hundreds-lb. So the shared ×100 multiplies CHI's 千兩 quantities by 100 → change 1513 千兩 → 151367
+  (the reported garbage), total 62000 → 6.2M, etc. The mod 戶部 panel (qing_revenue_ministry.gui) reads
+  the SAME vars raw (|0 / |+0), which is why it shows the correct ~1513 — CONFIRMS the #54 hunch that the
+  mod panel is right and the VANILLA view is the defective display. The #54 comment claiming "the loc's
+  ×100 scaling matches the reserve-total's ×100 (consistent units)" was WRONG: both terms are ×100 too big
+  on CHI, they are just consistently wrong with each other. Gold is untouched (CHI gold = 0, real hundreds-lb).
+- FIX: CHI-only loc variant, selected via customizable_localization (proven .Custom() idiom, same as
+  inflation_deflation_text / toggle_freeze_reserves_text served in this very window):
+  - economic_enchancement_l_english.yml: new key SILVER_ACCUMULATION_RATE_QING — same row, NO ×100, unit
+    label 千兩 instead of lb; reads silver_reserve_size / change / silver_accumulation_rate raw.
+  - 000_ECON_loc.txt: new `silver_reserve_row_text` (type=country): tag=CHI → the QING variant, else →
+    the vanilla SILVER_ACCUMULATION_RATE byte-for-byte. ROW is entirely unaffected.
+  - economy_view.gui:431: the silver row's Text now serves `[EconomyView.GetPlayer.Custom('silver_reserve
+    _row_text')]` instead of the raw key.
+  Deliberately scoped to CHI only + selector default = the untouched vanilla key, so no ROW regression
+  (Sobisonator-caution: the shared key is not edited, a NEW key + a NEW selector are added alongside it).
+- SCREENSHOT CONFIRM (20260810222904_1.jpg, Aug 10 22:29 boot — the boot that filed this backlog): the vanilla
+  economy panel's silver row reads `6768809 (+151367/0 lb)`; the mod 戶部 panel reads Silver Treasury 67688 /
+  Change 1513. 6768809 = 67688×100 and 151367 = 1513×100 EXACTLY — proves BOTH terms are ×100 too big on CHI
+  (confirms the diagnosis; the #54 "consistent" claim was wrong) and that the mod panel is the correct one.
+- CODE REVIEW cr89: dispatched; did not return within the run window. Self-review (in lieu): loc keys bind
+  (SILVER_ACCUMULATION_RATE_QING + selector silver_reserve_row_text unique, no collision); QING variant uses the
+  proven .Custom()-served data-fn forms (Player.MakeScope.GetVariable + GuiScope.SetRoot(Player.MakeScope).Script
+  Value, same as inflation_tooltip served via inflation_deflation_text); ROW key byte-unchanged + is the selector
+  default (always=yes fallback last); brace balance OK on all files; small diffstat, no EOL churn. STATUS: DONE.
+
+## #86 — make the 京倉 Metropolitan Granary player-buildable, CAPITAL-only
+- DIAGNOSIS: qing_capital_granary_building (common/buildings/qing_granary_buildings.txt) existed but was BOOT-SEED
+  ONLY (add_building_level at Beijing P8363) with NO build-menu path — not in the macro allowlist, no build_item
+  template, no province_window entry. Its potential gated to is_in_region = Zhili (the whole metropolitan corridor).
+- FIX (mirrors the sibling buildable qing_granary_building wiring exactly):
+  - qing_granary_buildings.txt: potential is_in_region = Zhili -> is_capital = yes (restrict to THE CAPITAL; proven
+    province trigger; still satisfied at the Beijing P8363 capital seed site). Culture OR block kept.
+  - gfx/interface/macro_builder/config/00_default.txt: added qing_capital_granary_building to the all_buildings
+    allowlist (this is what populates the macro-builder list).
+  - gui/shared/gui_templates.gui: added build_item_ + macro_build_item_ types (name-match on the building's loc name).
+  - gui/shared/custom_tooltip.gui: added building_ + macro_building_ tooltip templates.
+  - gui/province_window.gui + gui/macro_builder_view.gui: added the item entries after the granary ones.
+  - imp19c_tooltips_l_english.yml: added tooltip_macro_building_title_qing_capital_granary_building. (The name/desc/
+    results loc keys already existed from the seed era.)
+  is_capital in potential does NOT hide it from the macro LIST (list membership = allowlist alone; potential gates
+  per-province buildability at step 2) — so it appears in the list and is buildable only in the capital.
+- CODE REVIEW cr86: dispatched; did not return within the run window. Self-review (in lieu): every referenced loc
+  key exists (verified name/desc/tooltip_ pre-existing + the macro-title added); template names match the
+  tooltipwidget refs + instantiations exactly; brace balance equal on all 4 .gui files; loc names of the two granary
+  buildings differ so the name-match doesn't collide; small diffstat, no EOL churn. STATUS: DONE.
