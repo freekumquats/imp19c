@@ -1,8 +1,14 @@
 # DESIGN — regional price index (per-zone import price divergence), replacing the reverted #50
 
-**Status:** DRAFT 2026-08-11. Replaces the reverted #50 penetration cap-lift. Needs adversarial review before
-implementation. Delicate UPSTREAM code (se_GLOBALTRADE_split.txt) — cautious pattern, must clear the
-AUDIT_CURRENCY_23 §F.2 three-part burden of proof (§H proves it for the chosen lever). See [[currency-swing-diagnosis]].
+**Status:** REVIEWED SOUND-WITH-CORRECTIONS 2026-08-11 (review112). Both sink-risk checks PASS: ORDERING
+(:37→47→52→54, index reads live local_price+gbip) and PEG ISOLATION (peg reads country_unit_price + reserve_ratio;
+neither touched — provably the correct side of the peg, unlike #50). Two proof errors CORRECTED (not design
+changes): §H.3 re-enumerated wealth_owed's real consumers (it also feeds the gold/silver reserve-capture WEIGHT
++ buyer queued expenses, NOT "only the pool" — but none reaches silver_reserve_size/the peg, so the conclusion
+holds); and the "total pool preserved by construction" claim is downgraded to "measured on boot" (index averages
+to 1 under stockpile-weighting but is applied under order-weighting). IMPLEMENTATION-READY; boot-measurement
+checklist = total-pool delta + reserve-metal strata-income shift. Delicate UPSTREAM code — cautious pattern.
+Clears AUDIT_CURRENCY_23 §F.2 (§H). See [[currency-swing-diagnosis]].
 
 ## Goal (user)
 The SAME good should cost differently in different regions — Canton silk cheaper than London silk — and this
@@ -38,10 +44,14 @@ wealth_owed = order_size × owner.country_unit_price × order_size_modifier × (
   → index <1 → Canton pays below the national price; London's dear-silk zone → index >1. A conquered London
   province sits in the central_europe zone, so it reads THAT zone's index regardless of owner → prices do NOT
   teleport. Exactly the user's test.
-- The multiplier is DIMENSIONLESS and centered on 1.0, so on a globally-average zone it is a no-op — meaning
-  the WORLD-AGGREGATE payment pool is approximately preserved (Σ over zones of price×qty ≈ national-avg×qty when
-  the index averages to 1 weighted by trade). This bounds §H.4's total-income magnitude effect: it REDISTRIBUTES
-  payment across zones far more than it changes the total. (Still logged + measured on boot — see below.)
+- The multiplier is DIMENSIONLESS and centered on 1.0, so on a globally-average zone it is a no-op. CAVEAT
+  (review112 finding 2 — do NOT claim preservation by construction): the index averages to 1.0 under
+  STOCKPILE-share weighting (how gbip is built, :2668), but it is APPLIED under ORDER-size weighting
+  (pool = Σ order×price×index, :2493). Total-pool preservation therefore holds ONLY when a zone's price
+  deviation is uncorrelated with its order volume. A country whose cheap home zones dominate its ORDERS can
+  shift its total payment / seller income — bounded only by the [0.25,4.0] clamp, NOT by construction. This is
+  the honest statement of §H.4: the effect is MEASURED on boot, not assumed away. Expect redistribution to
+  dominate, but verify the total-pool delta + the reserve-metal strata-income shift (§H.3 consumer 2) on the boot.
 
 ### Where it attaches
 GT_split_update_wealth_owed_for_tradegoods (:2459) already runs in the PAYING governorship's scope and receives
@@ -58,13 +68,30 @@ Guard gbip>0 (Div/0 — the #23 discipline) and clamp the index to a sane band (
   (Historical regional price spreads for a staple were rarely beyond ~3-4×; luxuries wider but the cap protects
   the sim, not realism.)
 
+## ORDERING — CONFIRMED SAFE (the finding most likely to sink this; traced :28-56)
+The quarterly driver GT_split_do_global_trade_split runs a STRICT sequence, so every input the index reads is
+set for the quarter BEFORE the payment site:
+1. :37 `GT_set_tradegood_price_all_TZs...` → writes local_price per zone (:5901).
+2. :47 `GT_split_get_global_import_unit_price_all` → writes gbip (:2509).
+3. :50-52 penetration → order_size_modifier → country_unit_price (:2734).
+4. :53-55 `GT_split_update_wealth_owed_for_all_TZs...` → the PAYMENT site (:2459) — WHERE THE INDEX ATTACHES.
+So at step 4 both local_price (step 1) and gbip (step 2) are already written → the index (local_price÷gbip)
+reads live values, NO stale/unset read, NO "variable used but never set" flood. (The bimetallic metals-pass
+QING_BIMET_pull at :46 also runs between local_price and gbip — the index reads the post-pull local_price, which
+is correct.) The currency peg is computed on the SEPARATE currency on_action from country_unit_price, entirely
+outside this loop — never sees the index.
+
 ## §F.2 burden of proof — DISCHARGED (AUDIT_CURRENCY_23 §H)
 - (a) WHAT: a dimensionless regional_index = zone local_price ÷ gbip, multiplied into wealth_owed at :2468-ish.
 - (b) WHY regional: local_price is set per-zone from that zone's own supply/demand (:5901); the index is a pure
   geographic deviation from the world average; keyed to the PAYING zone, so conquest-correct.
-- (c) NO bleed: country_unit_price (the peg input, §H.1) is untouched; the payment pool feeds ONLY seller income
-  distribution (§H.3, GT_split_get_governorship_income_due:3559); order_size_modifier reads DEMAND+penetration,
-  not wealth_owed (§G.2). The index cannot reach the peg, order sizes, penetration, or #219's AI valuation.
+- (c) NO bleed: country_unit_price (the peg input, §H.1) is untouched. wealth_owed's consumers (§H.3, CORRECTED)
+  are: (1) the seller-income pool (:3559), (2) the state reserve-capture WEIGHT for gold/silver (:5415-:5510),
+  (3) buyer queued expenses (:3530). None writes silver_reserve_size or country_unit_price, so none reaches the
+  peg (reserve_ratio is written only by se_CURRENCY/se_QING_REVENUE/se_QING_CANTON/se_LAND). order_size_modifier
+  reads DEMAND+penetration, not wealth_owed (§G.2). The index cannot reach the peg, order sizes, penetration, or
+  #219's zeroed AI valuation factor. Residual (measured, not assumed): total-pool magnitude (§H.4) + the
+  reserve-metal strata-income DISTRIBUTION shift (§H.3 consumer 2).
 - Residual (§H.4): the total-payment-pool magnitude shift. Bounded by the index centering on 1.0; MEASURED on
   boot via logging, not assumed. This is a tunable, not a blocker.
 

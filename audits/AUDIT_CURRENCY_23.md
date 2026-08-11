@@ -938,13 +938,23 @@ INPUT, penetration→country_unit_price) and Candidate A does not (it changes on
 #50 tried to make (2) regional by scaling penetration, but penetration only moves (1) — so it dragged the peg
 and never made provinces pay regional prices. Candidate A separates them: keep (1), regionalize (2).
 
-### H.3 — the payment pool's ONLY consumer is seller income distribution (no feedback to peg/orders)
-global_payment_pool_$good$ is read in exactly ONE place: GT_split_get_governorship_income_due_tradegood
-(se_GLOBALTRADE_split.txt:3559-3585) — income_due = (governorship for_sale share of global_stockpile) ×
-global_payment_pool. This is the closed buyer→seller loop: buyers' wealth_owed sums INTO the pool (:2495-2499),
-the pool is redistributed to PRODUCING governorships as income. It does NOT feed country_unit_price,
-essentials_buying_power, order_size_modifier (:2026, reads DEMAND+penetration only — confirmed §G.2), or the
-penetration term. => §F.2(c) SATISFIED for Candidate A.
+### H.3 — the index's consumers, enumerated (CORRECTED per review112 finding 1 — my first pass was WRONG)
+CORRECTION: an earlier draft claimed "wealth_owed feeds ONLY the payment pool → seller income." That is FALSE.
+The full consumer set of wealth_owed_for_$good$ / the payment pool (traced grep):
+  1. global_payment_pool + $tz$_payment_pool (:2495-2499) → GT_split_get_governorship_income_due (:3559-3585),
+     the buyer→seller income redistribution. (the one I had.)
+  2. **var:wealth_owed_for_gold / _silver read DIRECTLY** by GT_split_calculate_trade_shares (:5415, :5451,
+     :5467, :5510) to build trade_share_$category$_the_state_{gold,silver}_reserves — the STATE reserve-capture
+     income WEIGHT. Silver+gold are type-6 goods routed through :2462, so the index DOES reach this for the
+     reserve metals.
+  3. buyer-side queued_trade_expenses (:3530, :3536).
+WHY §F.2(c) STILL HOLDS (the conclusion survives, the proof is now correct): consumer (2) feeds only strata
+INCOME NORMALIZATION (:5597) and the state's own income application is COMMENTED OUT (:3984-3986); crucially it
+NEVER writes silver_reserve_size (that is written only by se_CURRENCY / se_QING_REVENUE / se_QING_CANTON /
+se_LAND — never the trade path, confirmed by review112), so it never reaches the peg's reserve_ratio input.
+None of (1)(2)(3) feed country_unit_price, essentials_buying_power, order_size_modifier (:2026 = DEMAND+pen
+only, §G.2), or penetration. => §F.2(c) SATISFIED — but the index measurably shifts strata income DISTRIBUTION
+for the reserve metals (real, bounded by the clamp; add to the boot-measurement checklist alongside H.4).
 
 ### H.4 — the ONE real magnitude effect (not a bleed — a total-income shift, to be MEASURED not assumed)
 Because buyers would pay regional local_price instead of the national country_unit_price average, the TOTAL
