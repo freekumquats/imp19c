@@ -341,3 +341,13 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
   (same as #106); the else 0-set is behaviour-preserving (init is already 0); no Sobisonator-logic change beyond
   the guard.
 - STATUS: parts 1+2 committed; part 3 (3 sub-roots) explicitly OPEN, task in_progress.
+
+## #92 FOLLOWUP + #125 — loc-scope-syntax fix (cr92 finding)
+- cr92 (review of the shipped #92) found a MEDIUM: qing_revenue.6.desc used [scope:qing_gran_built_province
+  .GetName]. Saved scopes are read BARE in loc ([x.GetName]); the scope: prefix renders literal ERROR:[scope:...]
+  in-game, defeating the province-naming point of the event. Fixed -> [qing_gran_built_province.GetName].
+- cr92 also flagged the identical PRE-EXISTING bug at qing_march_relief.1.desc (qing_march_relief_l_english.yml
+  :10). Filed as #125 and fixed in the same commit (trivial one-line, same pattern). No other [scope: in loc now.
+- All other cr92 findings CLEAN (scope propagation, guard/no-double-charge, 255 cost, is_triggered_only, BOM,
+  log-string, no AI spam) — verdict was ship-after-the-one-loc-edit. Both edits done.
+- Also cr74/cr90/cr94 returned CLEAN (earlier commits confirmed post-hoc).
