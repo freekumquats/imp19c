@@ -160,8 +160,9 @@ Static label strings only (no macro $param$ / # in LOG strings — log-string-ma
 ## Files
 - common/scripted_effects/se_GLOBALTRADE_split.txt — replace the `multiply = owner.var:country_unit_price_$good$`
   at GT_split_update_wealth_owed_for_tradegoods (:2468) with the direct `zone.local_price / (0.5 + owner.pen)`
-  computation (reuse country_unit_price's own `min = 0.0001` divisor guard, :2741) + the strict-positive floor
-  (epsilon, e.g. max=0.01 on the local_price read) — NO ceiling, NO economic band. Nothing else in the price chain changes.
+  computation = country_unit_price's own block (:2730-2739) copied verbatim with gbip→local_price; its
+  `min = 0.0001` on the numerator (now local_price, :2734) IS the strict-positive floor — ONE guard, no separate
+  epsilon, NO ceiling, NO economic band. Nothing else in the price chain changes.
 - common/scripted_effects/se_ECON_LOG_TZPROBE.txt (or the ECON_LOG harness) — the price + pool-delta logging.
 - NO change to country_unit_price (:2734), the peg (CURRENCY_svalues.txt), gbip (:2509), local_price (:5901),
   penetration (:1991), order_size_modifier (:2026), or the income distribution (:3559).
