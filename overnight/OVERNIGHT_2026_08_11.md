@@ -86,3 +86,31 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
   — consistent with the reported missing button.
 - #103 (Arsenal tech-gate tooltip): the Build Arsenal tooltip states "+2 military supplies (munitions)" with NO
   tech-gate caveat shown — supports both #98 (not contributing) and #103 (surface the gate).
+
+### #74 — Examinations "Sell degrees" gives 0 money — FIXED (root cause: shared wealth-grant helper)
+- WHAT: qing_keju.1.c (捐納) calls QING_sell_offices -> CURRENCY_grant_country_wealth { thousands = 80 }.
+  That helper (se_CURRENCY.txt:1318) GUARDS the wealth-per-unit multiply: if the currency's backing price
+  (country_unit_price_silver for CHI's silver standard) is transiently unset THIS frame, it took the `else`
+  branch which did ONLY a LOG_fail -> granted NOTHING. Screenshot-confirmed: "Great Qing gains ¥ 0.00".
+- FIX: the else branch now grants the NOMINAL $thousands$ directly (add_treasury = local_var:wealth_to_grant,
+  which is set to $thousands$ before the guard, UN-multiplied on this path) — a strictly-positive, flood-free
+  fallback (plain literal, no currency svalue read). The exact-conversion branch is unchanged for the common
+  (price-resolved) case. Fixes #74 AND every other caller that silently granted 0 (marriage, customs, mexico,
+  napoleon, treasure-fleet, USCW, self-strengthening, early-industry).
+- ASSUMPTION: fallback = nominal thousands undervalues vs the pegged conversion, but a modest real grant beats
+  zero; logged so a boot can confirm the sale now yields silver. Guard against the flood is PRESERVED.
+- FILE: common/scripted_effects/se_CURRENCY.txt. Braces 531/531, precommit clean. CODE REVIEW <pending>.
+
+### #90 — blank success/failure % on "A Dispute at Kashgar" (qing_caravan.4) — FIXED (screenshot-confirmed)
+- WHAT: the 3 option tooltips rendered "On success (%)" / "On failure (%)" with a BLANK number (screenshot).
+  Root cause: the loc read [ROOT.GetCountry.MakeScope.GetVariable('qing_super_*_shown')...] — but qing_caravan.4
+  is a country_event, so ROOT IS ALREADY the country; the spurious .GetCountry hop resolved EMPTY in the loc
+  data-context -> blank. The _shown vars are set on CHI (=ROOT) in immediate (:349-354), correctly.
+- FIX: dropped .GetCountry -> [ROOT.MakeScope.GetVariable('qing_super_*_shown')...] (the proven idiom; the other
+  6 _shown renders across canton/salt/caravan already use ROOT.MakeScope). 6 refs (3 success + 3 fail across
+  negotiate/coerce/collude). Also fixed the stale header comment that described the broken form as "proven".
+- "PRESUMABLY ALL CONTEST EVENTS": CHECKED — grep confirms caravan.4 was the ONLY place with the .GetCountry
+  hop; all other superintendent/aqsaqal/hoppo/salt/amban _shown renders already use ROOT.MakeScope correctly.
+  Bug was isolated to this one event, not systemic. (Same scope-quirk FAMILY as #72's Dowager fix — a chain
+  that resolves in event scope but not in the option/tooltip data-context.)
+- FILE: localization/english/qing_caravan_l_english.yml. BOM intact, 6/4 diff. CODE REVIEW <pending>.
