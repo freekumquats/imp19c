@@ -843,3 +843,75 @@ Decision rule: switch levers ONLY if the new lever is PROVEN regional AND PROVEN
 alternative can't clear that bar in-analysis, prefer the option whose side-effect surface is already KNOWN
 (revert to 0.4545 = known-good pre-#50 state; or decouple with a bounded, enumerated peg term) over an
 unproven alternative. Rank options by PROVEN-clean side-effect surface, not by elegance.
+
+### F.3 (2026-08-11) — #50 REVERTED (user directive), superseding F.1
+User: "revert 50 and start scanning the codebase for entry points for a regional price index." F.1's
+"decouple, do not revert" is SUPERSEDED. Rationale the user affirmed via the conquest test — "if China
+conquers London, does cheap silk suddenly teleport there?" YES it does, because penetration feeds
+country_unit_price which is per-COUNTRY (§G below), so #50 never produced true regional divergence in the
+first place; it only lifted the country-wide price ceiling AND dragged the currency peg (§F). Wrong lever.
+Committed 54673a6af: se_GLOBALTRADE_split.txt penetration block restored BYTE-FOR-BYTE to pre-#50 vanilla
+(multiply 0.7 → 0.4545, terse "# Divide by 22" comment restored). The #52 tzprobe tooling extended in the
+same #50 commit (se_ECON_LOG_TZPROBE.txt, gen_econ_tzprobe.py) is KEPT — it remains useful for measuring the
+genuine regional-price work. Regional divergence is now a SEPARATE task on a geographic (per-zone) lever — §G.
+
+## §G (2026-08-11) — REGIONAL PRICE-INDEX ENTRY-POINT SCAN (read-only; traced this session)
+Goal: represent that the SAME good costs differently in different regions (Canton silk ≠ London silk) WITHOUT
+dragging the currency peg or re-triggering #219. Below is the full price chain traced in
+common/scripted_effects/se_GLOBALTRADE_split.txt, tagged PER-ZONE (already regional) vs PER-COUNTRY
+(geography-blind — the reason #50 failed).
+
+### G.1 — the chain, node by node (file:line)
+1. **local_price_$good$  — PER-ZONE (already regional). GT_set_tradegood_price (:5901).**
+   Scope: tradezone province. `local_price_$good$ = ($zone$_total_order_size / $zone$_stockpile) × 0.6`
+   (food ÷ DEMAND_num_food_tradegoods). THIS IS THE REGIONAL PRICE — it already differs per trade zone by
+   that zone's own order/stockpile ratio. Silk in the india TZ genuinely differs from silk in the
+   central_europe TZ here. THIS IS THE LEVER a regional index must key off.
+2. **global_base_import_price_$good$ (gbip) — GLOBAL scalar. GT_split_get_global_import_unit_price_tradegood
+   (:2509).** gbip = Σ over 22 zones of (zone.local_price × zone_percentage_of_global_stockpile). A single
+   stockpile-share-weighted world average. Collapses the per-zone spread into ONE number. Empty zones have
+   share 0 so weight out.
+3. **country_unit_price_$good$ — PER-COUNTRY, GEOGRAPHY-BLIND. GT_split_get_country_import_unit_price_tradegood
+   (:2734).** `= gbip / (0.5 + country_global_market_penetration_$good$)`. Keyed on the COUNTRY's penetration,
+   NOT on where its provinces sit. Every province a country owns pays this one price. ← this is why #50
+   (which scaled penetration) could not make Canton ≠ London: both are CHI, both read CHI's country price.
+   This term ALSO feeds the currency peg (essentials_buying_power → CURRENCY_private_cash_ratio) → the §F bleed.
+4. **wealth_owed_for_$good$ — the payment. GT_split_update_wealth_owed_for_tradegoods (:2459), dispatched
+   PER-TRADEZONE by GT_split_update_wealth_owed_for_all_TZs_tradegood (:2319).** KEY FINDING: the dispatcher
+   (:2319) runs a `switch` on which TZ the governorship physically sits in and passes `$tradezone$` as a macro
+   param — so at the payment site THE ZONE IS KNOWN. Yet line 2468 multiplies order_size × **owner.var:
+   country_unit_price_$good$** (the global per-country price), discarding the zone. The regional signal exists
+   one scope away and is thrown out here.
+
+### G.2 — candidate entry points (for the design phase; NOT yet chosen — must clear §F.2 (a)(b)(c))
+- **CANDIDATE A — regional price at the PAYMENT site (:2468).** Replace/blend
+  `owner.var:country_unit_price_$good$` with a term that reads the paying governorship's OWN trade zone's
+  `local_price_$good$` (available: the dispatcher already knows `$tradezone$`; the value is
+  `global_var:global_$tradezone$_tradezone.var:local_price_$good$`). This makes wealth_owed genuinely regional
+  (Canton province pays india/yellow_sea-TZ silk price; a London province pays central_europe-TZ price) —
+  survives conquest correctly (price follows the province's ZONE, not its owner). Side-effect surface to prove
+  per §F.2(c): wealth_owed feeds the $tradezone$_payment_pool + global_payment_pool (trade income
+  distribution) — must confirm a regional price here does NOT feed back into country_unit_price / the currency
+  peg (it should not: peg reads country_unit_price at :2734, a SEPARATE term). This is the MOST PROMISING
+  entry — it is exactly where the geography is discarded, and it is downstream of the peg (no bleed by
+  construction). NEEDS: full trace of every reader of wealth_owed_for_$good$ and the payment pools.
+- **CANDIDATE B — a derived regional_price_index var (read-only display/tax lever).** Compute per-zone
+  local_price ÷ gbip as an index (1.0 = world avg) and expose it WITHOUT touching wealth_owed — a pure
+  reporting/flavour or a small regional tax/tariff modifier. Zero risk to peg/orders/#219 (adds nothing to the
+  existing feedback loops), but also does NOT make provinces actually pay regional prices — weaker on the
+  "Canton silk really is cheaper" goal. Fallback if A's side-effect surface proves entangled.
+- **REJECTED — penetration (the #50 lever).** Per-country, geography-blind, feeds the peg. Proven wrong (§F/§G.1.3).
+
+### G.3 — open questions the design must answer (before any edit — delicate upstream code)
+- Does making wealth_owed regional (Cand. A) change TOTAL trade income materially, or just its DISTRIBUTION
+  across a country's provinces? (order_size × local_price vs × country_unit_price — need the magnitude compare;
+  the tzprobe kept from #50 can measure zone local_price vs gbip.)
+- Do order SIZES read country_unit_price anywhere that would now diverge from the price actually paid
+  (order_size_modifier at :2026 reads DEMAND + penetration, not country_unit_price — likely clean, confirm)?
+- #219 trade-AI: the vanilla trade-request flood was tied to goods-VALUATION diplo factors (memory
+  vanilla-trade-request-flood-open, zeroed in e3f3c2e91). Confirm a regional wealth_owed does not resurrect a
+  valuation signal the AI reads.
+- Manufactured goods: local_price for manufactured goods factors ingredient costs (:5936+, global_mean_price
+  path) — confirm a regional payment term composes correctly with that (raw vs manufactured ordering).
+NEXT: this scan feeds a DESIGN doc (design/DESIGN_REGIONAL_PRICE_INDEX.md) → adversarial review → the §F.2
+three-part burden of proof, before any implementation. Cautious pattern, delicate upstream code.
