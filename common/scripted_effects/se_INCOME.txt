@@ -502,7 +502,13 @@ INCOME_mitigate_deficit = {
 			limit = {
 				has_variable = public_debt_administration
 			}
-			set_local_variable = {
+			# [#108 cr108 MED-1 2026-08-11] COUNTRY var, not local_var — this value is passed into
+			# CURRENCY_alter_own_debt (millions = ... below), and a local_var does NOT cross into the called
+			# macro's scope ([[imp19c-local-var-scope-boundary]]), so it read UNSET there — the identical
+			# cross-macro flood just fixed for <metal>_needed_for_deficit. Dormant only while deficit
+			# countries lack public_debt_administration; a debt-admin country running a deficit would flood.
+			# Same fix pattern: country set_variable -> var: reads -> remove_variable after the last read.
+			set_variable = {
 				name = debt_needed_for_deficit_millions
 				value = {
 					value = treasury
@@ -517,19 +523,20 @@ INCOME_mitigate_deficit = {
 				name = PI_needed_for_deficit
 				value = {
 					value = CURRENCY_debt_issue_political_influence_cost_1m
-					multiply = local_var:debt_needed_for_deficit_millions
+					multiply = var:debt_needed_for_deficit_millions
 				}
 			}
 			add_political_influence = var:PI_needed_for_deficit
 			CURRENCY_alter_own_debt = {
 				thousands = 0
-				millions = local_var:debt_needed_for_deficit_millions
+				millions = var:debt_needed_for_deficit_millions
 				billions = 0
 			}
 			add_treasury = {
 				value = treasury
 				multiply = -1
 			}
+			remove_variable = debt_needed_for_deficit_millions
 		}
 
 		# Sell off metal reserves
@@ -713,9 +720,20 @@ INCOME_sell_reserves = {
 		name = amount_to_sell
 		value = $amount$
 	}
+	# [#108 cr108 LOW 2026-08-11] RHS-comparison rule: `var:X < $amount$` is illegal — $amount$ expands to
+	# var:<metal>_needed_for_deficit, a var-ref on a `<` RHS (6x 'Illegal use of operator <' per boot). Compute
+	# the shortfall (reserve - amount) into a local_var and test it against the literal 0 instead: reserve <
+	# amount  <=>  reserve - amount < 0. LHS var-ref legal, RHS literal legal.
+	set_local_variable = {
+		name = reserve_shortfall_vs_amount
+		value = {
+			value = var:$metal$_reserve_size
+			subtract = local_var:amount_to_sell
+		}
+	}
 	if = {
 		limit = {
-			var:$metal$_reserve_size < $amount$
+			local_var:reserve_shortfall_vs_amount < 0
 		}
 		set_local_variable = {
 			name = amount_to_sell
