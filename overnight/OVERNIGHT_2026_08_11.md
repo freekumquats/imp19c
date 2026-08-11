@@ -114,3 +114,17 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
   Bug was isolated to this one event, not systemic. (Same scope-quirk FAMILY as #72's Dowager fix — a chain
   that resolves in event scope but not in the option/tooltip data-context.)
 - FILE: localization/english/qing_caravan_l_english.yml. BOM intact, 6/4 diff. CODE REVIEW <pending>.
+
+### #93 — construction-queue placeholder icons — DIAGNOSED, arsenal NOT reproducible in source (needs the queue screenshot)
+- CHECKED: arsenal_building icon = gfx/interface/icons/buildings/arsenal_building.dds — EXISTS, valid DDS
+  ('DDS ' magic), 200x200 (identical to every working mod building icon e.g. qing_machine_works_building.dds).
+  The construction queue (mapiconlayer.gui:1038) and build menu (province_window.gui:4520) BOTH resolve via
+  the SAME engine fn [GetBuildingIcon(...GetBuilding)] — path-based, no spriteType registration needed (the
+  mod's own 60+ buildings work this way, all present). Audited ALL qing_*_building icons: every one has its dds.
+- FINDING: no source-level defect for the arsenal — icon present, valid, correct dimensions, resolved by the
+  proven path. The screenshot I have is the build MENU (icons fine), not the queue placeholder, so I cannot see
+  WHICH buildings actually placeholder in the queue. Cannot fabricate a fix for an unlocatable defect.
+- STATUS: in_progress (NOT closed). Needs: the construction-QUEUE screenshot showing the placeholder, to pin
+  the specific building(s). If it's arsenal specifically, the icon is correct in source — likely a vanilla
+  GetBuildingIcon quirk for vanilla-defined buildings (arsenal_building is vanilla 00_military_buildings.txt),
+  not the mod's icon. Deferring to boot-screenshot evidence, per no-fabrication rule. Moving on to fixable tasks.
