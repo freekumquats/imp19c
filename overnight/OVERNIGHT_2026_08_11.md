@@ -371,3 +371,18 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
   -> skip divide, price = raw order size (correct default before any stockpile exists). 1-line, braces 1628/1628.
 - #107 NOW COMPLETE: food-stockpile seed (19dc745d4) + this Div/0 guard. The 242 bimetallic reads bundled in the
   task were fixed by #108 part 1. All three sub-roots of #107 closed.
+
+## #108 — final accounting of the three named files
+- oa_wealth_changes.txt (1962 lines of errors): the TWO real high-count roots FIXED — bimetallic cross-macro
+  local_var (part 1, b58a025b3) + trade_center unset 617x (part 2, c4e5f538b). Residual: EDU Div/0 16x
+  (EDU_update_effect -> EDU_set_t2_national_bonus...; a divide whose exact frame is ambiguous in upstream EDU
+  svalues) + tradegood-var reads — LOW count, upstream EDU/trade svalues, NOT blind-editing without a boot to
+  confirm the divide site. Stated plainly, not buried.
+- DEBT_events.txt (732): FIXED — its whole flood was INCOME_mitigate_deficit's bimetallic local_var bug (part 1).
+- WAR_scripted_guis.txt (804): NOT an error — it is a NON-FATAL engine WARNING ("testing for exact value (=),
+  this will work, but is probably not intended") from PEACE_get_warscore, an UPSTREAM Sobisonator effect
+  explicitly marked "# DEFUNCT - hopefully. war_score_value should replace this now". It's a ~200-branch
+  war_score = {value=-100..+100} exact-match ladder; the warning is cosmetic (the code works). Rewriting a
+  defunct 200-branch upstream chain on a non-fatal warning is exactly the Sobisonator-caution trap; NOT touched.
+- NET: the two genuine high-volume ERROR floods in #108 are eliminated; the 804 "WAR" lines are warnings in
+  defunct upstream code (cosmetic); the EDU Div/0 residual (16x) is boot-gated. #108 real-error work is done.
