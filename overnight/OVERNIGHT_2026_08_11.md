@@ -503,3 +503,36 @@ Both "office-holder is also a Hanlin Scholar" 1:1 bugs are already fixed and nee
   [#79 1:1]. Rotate calls appoint.
 - Both marked completed. This is the same finding that invalidated #118's premise (the per-appoint pool-drop
   is the real 1:1 enforcement; #118's structural var was never needed for these).
+
+## #99 — deferral/overclaim AUDIT (read-only sweep, audit99): 1 actionable finding, rest verified clean
+Triaged ~564 risk-phrase hits across the highest-churn subsystems (economy/goods, Qing offices, exam/scholar,
+protectorate, treaty ports, macro builder, laws, corruption, bimetallic), verifying each "done" claim against
+live code (production terms, call sites, on_actions, gates). 6 read-only passes.
+
+### ACTIONABLE (1) — traces #98's root cause; reframes #69/#71/#103 as OVERSTATED (not inert)
+The machine-works/textile-mill/navy-yard production terms (#69/#71/#103) ARE genuinely live + uncommented
+(GOODS_svalues.txt munitions:2792 / artillery:2867 / clothing:3121 / naval_supplies:2951, all folded into the
+quarterly stockpile write). BUT the player-visible payoff ("arsenal -> more Military Supplies") is structurally
+blocked upstream: MILITARY_supplies_income_country (INCOME_svalues.txt:1063-1170) multiplies by a
+shortage-recovery factor (1 - shortage_<good>); once a governorship's shortage var is CLEARED (se_CONSUME.txt:64-113
+deletes it when the stockpile is non-negative), the income term falls back to the flat DEMAND ceiling — so extra
+production is silently absorbed, invisible on the topbar. That IS #98 ("Arsenal buildings not contributing to
+Military Supplies despite building many"). So #69/#71/#103's "complete" claims are TRUE at the term level but the
+"complete" framing OVERSTATED the user-visible outcome the income formula forecloses. Root cause of #98 now pinned.
+-> #98 is a REAL demand-cap/topbar-attribution bug, not a missing production term. Fix belongs in the income term
+(surface production above the demand ceiling, or show a separate "produced" line), NOT in the building hooks.
+
+### VERIFIED CLEAN / honestly-scoped (no action): MG I3->I6 (live), bimetallic #59 (gate removed, self-anchored),
+corruption Phase-2 (correctly still pending, no false claim), law unit-unlock (real allow gate), #77/#79 pool-drop
+(honestly scoped, #118 correctly open), macro-builder 12 gaps (all wired), create_character-vs-draw (Hoppo/Salt/
+caravan genuinely draw; the amban fallback-spawn is already pending #114, GC autofill already pending #116),
+protectorate (shipped MORE than the doc admits — understated, docs-cleanup nit only), treaty-port/Hoppo concretize
+(live call chains). audit99: "this project's own review discipline is catching most of its own overclaims before
+they go stale."
+
+### NOT deep-verified (logged, not silently dropped): Xinjiang/frontier concretize, GP-tension/tribute concretize,
+the #112/#115 regional-price chain, MG3/MG4, exam-cohort/#111-#119 cluster code (already self-flagged pending).
+Available for a deeper pass if wanted.
+
+STATUS: #99 DONE (audit delivered). Its one actionable output is a root-cause trace that makes #98 concrete;
+recorded on #98. Docs-cleanup nit (DESIGN_PROTECTORS_GENERAL_EVENTS.md stale "awaiting greenlight") noted.
