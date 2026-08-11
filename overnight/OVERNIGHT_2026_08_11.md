@@ -128,3 +128,13 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
   the specific building(s). If it's arsenal specifically, the icon is correct in source — likely a vanilla
   GetBuildingIcon quirk for vanilla-defined buildings (arsenal_building is vanilla 00_military_buildings.txt),
   not the mod's icon. Deferring to boot-screenshot evidence, per no-fabrication rule. Moving on to fixable tasks.
+
+### #94 — Civil "Citizens Rights" laws missing descriptions — FIXED
+- FINDING (more than reported): the 4 member laws (judicial_discretion_rights / wealth_based_rights /
+  bill_of_rights / constitutional_rights) all had PLACEHOLDER stub descs ("<Name> desc"), AND the group header
+  citizens_rights had NO _desc at all (blank card).
+- FIX: wrote real descriptions for all 4 members + the group, grounded in each law's actual modifiers
+  (00_civil_laws.txt) and matching the mod's law-desc tone (escalating ladder: magistrate discretion -> wealth-
+  pegged -> universal bill -> entrenched constitutional). Each member desc lists its concrete modifier lines
+  with #G/#R colour tags. laws_l_english.yml, 5 desc keys. BOM intact, quotes balanced (2/line), 5/4 diff.
+- CODE REVIEW <pending>.
