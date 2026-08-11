@@ -398,3 +398,14 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
 - REMAINING (the other 3 contest families — march / integration-capstone / subject_integration): SAME pattern to
   apply. NOT skipping — doing them next in this run so #91's "audit ALL" clause is met whole.
 - STATUS: caravan family done + committed; extending to the other 3 families next (task stays in_progress until all 4).
+
+## #91 — march family + full audit of ALL 4 contest families (COMPLETES #91)
+- march family: qing_march.2.a "let the GG handle it" resolved its skill-roll in a silent hidden_effect. Fixed:
+  clean/chaotic branches set qing_march_unrest_outcome; option fires new qing_march.6 (2 triggered_desc) + clears
+  the flag on ack. New event + 4 loc keys. Braces 122/122; loc quotes 2/line; BOM-free events / BOM loc.
+- AUDIT of the other 2 families (the "audit ALL" clause): qing_subject_integration.txt AND
+  qing_integration_capstone_events.txt ALREADY fire outcome events after their skill-checks (both do
+  `trigger_event = { id = qing_integ.46 }` post-roll; capstone has 14 trigger_events for its 15 hidden/random
+  blocks; qing_integ.46 exists as the outcome event). So they were NOT silent — no fix needed, verified in source.
+- #91 COMPLETE: 4 contest families audited; the 2 silent ones (caravan, march) fixed; the 2 already-notifying ones
+  (subject-integration, capstone) verified correct. Nothing deferred.
