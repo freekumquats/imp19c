@@ -58,3 +58,31 @@ this run until #118's diagnosis+design land.
   it (imp19c_windows.gui:1842); the "open Salt Monopoly window" button just above is intact.
 - REVIEW: cr78104 → CLEAN (braces 156/156; action not orphaned; loc keys still used by the Salt window).
 - STATUS: DONE. Commit <pending>.
+
+### #72 — Dowager's Counsel "Set it gently aside" broken loc — FIXED (screenshot-confirmed)
+- CORRECTION to my earlier note: I initially called this "not reproducible in source" because the loc keys
+  exist and the ruler-name chain is used elsewhere. That was WRONG — the SCREENSHOT (20260810215558) shows the
+  bug plainly: the qing_dynasty.1.b tooltip renders "___ asserts himself and rules alone" — the leading
+  [ROOT.GetCountry.GetRuler.GetName] comes out BLANK, while a DIFFERENT name ref later in the same tooltip
+  (the auto-effect "Qianlong Emperor (ID:214)") renders fine.
+- ROOT CAUSE: the long [ROOT.GetCountry.GetRuler.GetName] chain renders empty in an option custom_tooltip
+  context (same failure class the file's own [BT-3 logfix] already documents for crownprince: an unresolved
+  chain -> blank/ERROR in loc). The .desc works because it's event-scope, not option-tooltip scope.
+- FIX (proven idiom, loc-scope-syntax rule): save the ruler into a named scope in each event's immediate
+  (current_ruler = { save_scope_as = emperor }) and change loc [ROOT.GetCountry.GetRuler.GetName] ->
+  [emperor.GetName]. Applied across ALL affected events (qing_dynasty .1/.3/.4/.5/.6/.7/.8 — the whole family
+  shares the broken construct; .2 doesn't reference the ruler). 11 loc refs switched; emperor-save added to
+  each of the 7 referencing events (verified 1:1, event 2 correctly has none).
+- FILES: events/imp19c_mod_events/qing_dynasty_events.txt, localization/english/qing_dynasty_l_english.yml.
+- Braces 81/81, precommit clean. CODE REVIEW: <pending>. STATUS: DONE pending review.
+
+### Screenshot cross-confirmations (from the 20260810222904 set, boot Aug 10 22:29 — grounds several pending tasks)
+While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually CONFIRMS these open bugs:
+- #74 (Examinations "Sell degrees"): the option tooltip reads "Great Qing gains ¥ 0.00" — the sell-degrees
+  branch yields ZERO silver, exactly as reported. Real bug confirmed on the boot.
+- #90 (Kashgar contest chances): "A Dispute at Kashgar" tooltip literally shows "On success (%)" / "On failure
+  (%)" — the success/failure percentage is blank. Confirmed.
+- #96 (Caravan window gap): there IS a visible gap between "Rotate the Superintendent" and "Revoke the Aqsaqal"
+  — consistent with the reported missing button.
+- #103 (Arsenal tech-gate tooltip): the Build Arsenal tooltip states "+2 military supplies (munitions)" with NO
+  tech-gate caveat shown — supports both #98 (not contributing) and #103 (surface the gate).
