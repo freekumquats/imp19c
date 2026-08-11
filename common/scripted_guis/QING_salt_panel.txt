@@ -19,6 +19,10 @@ qing_salt_commissioner_seated = {
 
 # ROTATE THE COMMISSIONER (更代) — the player's proactive lever on the salt squeeze. Shown/valid
 # when the post is seated. Mirrors the Canton rotate-Hoppo / caravan rotate-superintendent buttons.
+# [#80 2026-08-11] the EFFECT now OPENS THE CANDIDATE PICKER instead of auto-picking highest-finesse:
+# it stamps the office flag + refreshes the candidate list; the .gui button ALSO fires gui.createwidget
+# to open qing_frontier_picker_window (like the amban Post button). The old auto-pick QING_salt_commissioner_rotate
+# is KEPT for any event/AI caller (none today, but symmetric with the Hoppo dual-path).
 qing_salt_commissioner_rotate_button = {
 	scope = country
 	ai_is_valid = { always = no }
@@ -28,6 +32,61 @@ qing_salt_commissioner_rotate_button = {
 	}
 	is_valid = { has_variable = qing_salt_commissioner_holder }
 	effect = {
-		QING_salt_commissioner_rotate = yes
+		set_variable = { name = qing_frontier_picker_office  value = flag:salt }
+		QING_frontier_office_refresh_candidates = yes
+	}
+}
+
+# ======================================================================
+# [#80/#82/#84 2026-08-11] SHARED FRONTIER-OFFICE CANDIDATE PICKER guis. The three rotate buttons each open the
+# SAME qing_frontier_picker_window (gui/imp19c_windows.gui) after stamping qing_frontier_picker_office; the
+# window lists qing_frontier_candidates and each row runs qing_frontier_office_appoint_selected below.
+# ======================================================================
+# CARAVAN superintendent rotate -> open picker (#82). Mirrors the salt button above.
+qing_caravan_super_rotate_button_pick = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI  has_variable = qing_caravan_super_holder }
+	is_valid = { has_variable = qing_caravan_super_holder }
+	effect = {
+		set_variable = { name = qing_frontier_picker_office  value = flag:caravan }
+		QING_frontier_office_refresh_candidates = yes
+	}
+}
+# HOPPO rotate -> open picker (#84). Mirrors the salt button above.
+qing_canton_rotate_hoppo_button_pick = {
+	scope = country
+	ai_is_valid = { always = no }
+	is_shown = { tag = CHI  has_variable = qing_hoppo_holder }
+	is_valid = { has_variable = qing_hoppo_holder }
+	effect = {
+		set_variable = { name = qing_frontier_picker_office  value = flag:hoppo }
+		QING_frontier_office_refresh_candidates = yes
+	}
+}
+
+# ROW-CLICK: seat the clicked candidate on the selected frontier office. Character scope (the row's char) +
+# saved scope player (the country). Mirrors qing_amban_appoint_selected: the row body keeps the CHARACTER
+# datacontext, so is_valid/effect build their own GuiScope with SetRoot(Character)+AddScope('player', country).
+qing_frontier_office_appoint_selected = {
+	scope = character
+	saved_scopes = { player }
+	ai_is_valid = { always = no }
+	is_shown = {
+		scope:player = { tag = CHI  has_variable = qing_frontier_picker_office }
+		employer = scope:player
+	}
+	is_valid = {
+		is_adult = yes
+		is_alive = yes
+		# one man, one post + still CHI-employed (the picker filter already excludes court-holders, but the
+		# window can linger, so re-gate here — the amban handler does the same).
+		NOT = { QING_char_holds_court_position = yes }
+		employer = scope:player
+	}
+	effect = {
+		LOG_line = { sys = QING  msg = "frontier picker: player PICKED a candidate to seat" }
+		save_scope_as = qing_frontier_pick
+		scope:player = { QING_frontier_office_seat_picked = yes }
 	}
 }

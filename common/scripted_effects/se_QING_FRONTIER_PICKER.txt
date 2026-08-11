@@ -1,0 +1,109 @@
+﻿########################################################################
+# se_QING_FRONTIER_PICKER.txt — [#80/#82/#84 2026-08-11] the shared candidate-LIST picker for the three
+# frontier fiscal offices (Salt Commissioner 兩淮鹽政 / Caravan Superintendent 喀什噶爾參贊大臣 / Hoppo
+# 粵海關監督). Replaces the auto-pick-highest-finesse rotate on the PLAYER buttons with an eligible-character
+# list the player clicks (the GC/amban office UX). Modelled on the AMBAN picker (dr8085's endorsed template:
+# self-contained, no PI/council entanglement) — its own candidate-list var + refresh + row-click handler.
+#
+# FLOW: the panel rotate button -> qing_<office>_open_picker (scripted_gui) sets qing_frontier_picker_office
+# (flag: salt|caravan|hoppo) + runs QING_frontier_office_refresh_candidates + opens qing_frontier_picker_window;
+# the window lists qing_frontier_candidates (this file) sorted by finesse, each row showing finesse + CORRUPTION
+# (so the player can pick a clean man — the durable squeeze lever, dr8085 F4); clicking a row runs
+# qing_frontier_office_appoint_selected (SUB_QING_frontier_picker.txt) which relieves the prior holder, seats
+# the clicked man via the office's shared SEAT helper (holder+marker+pool-drop — #77/#79 preserved), and eases
+# the squeeze (QING_frontier_office_ease_squeeze). The AUTO-pick QING_<office>_rotate effects are UNTOUCHED —
+# they stay for the event/AI callers (qing_canton.2.b/.3.b) that cannot open a GUI (dr8085 F2 dual-path).
+#
+# PREFIX: QING_frontier_ / sys = QING. CHI-only. All LOG static. ROOT / this = the Qing country (CHI).
+# NO BOM header note: common/ script files carry a UTF-8 BOM by convention ([[imp19c-bom-convention-rule]]).
+########################################################################
+
+# ======================================================================
+# QING_frontier_office_refresh_candidates — rebuild qing_frontier_candidates: the free courtiers eligible for
+# WHICHEVER frontier office is selected in qing_frontier_picker_office. The eligibility limit is the SAME one
+# all three _appoint auto-picks use (employer=ROOT, adult/alive, not ruler/heir/commander/officer/governor,
+# not already holding a court post, not hard-disgraced) — so the list offers exactly the men the auto-pick
+# would have considered. Sorted by finesse (the fiscal administrator's gift), capped 12 like the amban list.
+# Country scope (ROOT = CHI). Called from the open-picker scripted_gui just before the window opens.
+# ======================================================================
+QING_frontier_office_refresh_candidates = {
+	LOG_enter = { sys = QING  fn = "QING_frontier_office_refresh_candidates" }
+	clear_variable_list = qing_frontier_candidates
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_adult = yes
+			is_alive = yes
+			is_ruler = no
+			NOT = { QING_char_holds_court_position = yes }
+			is_general = no
+			is_admiral = no
+			is_governor = no
+			NOT = { has_variable = qing_officer_marker }
+			NOT = { QING_char_hard_disgraced = yes }
+			NOT = { AND = { exists = ROOT.primary_heir  this = ROOT.primary_heir } }
+		}
+		order_by = finesse
+		check_range_bounds = no
+		max = 12
+		ROOT = { add_to_variable_list = { name = qing_frontier_candidates  target = prev } }
+	}
+	LOG_line = { sys = QING  msg = "frontier office candidates refreshed for" }
+	LOG_exit = { sys = QING  fn = "QING_frontier_office_refresh_candidates"  result = OK }
+}
+
+# ======================================================================
+# QING_frontier_office_seat_picked — relieve the prior holder of the SELECTED office + seat scope:qing_frontier_pick
+# via that office's shared SEAT helper, then ease the squeeze. Branches on qing_frontier_picker_office. Called
+# from the row-click handler (qing_frontier_office_appoint_selected) with the clicked char saved as
+# scope:qing_frontier_pick. Country scope (ROOT = CHI). Relief mirrors each QING_<office>_rotate's relief head.
+# ======================================================================
+QING_frontier_office_seat_picked = {
+	LOG_enter = { sys = QING  fn = "QING_frontier_office_seat_picked" }
+	if = {
+		limit = { has_variable = qing_frontier_picker_office  var:qing_frontier_picker_office = flag:salt }
+		# relieve the prior commissioner (mirror QING_salt_commissioner_rotate's relief head)
+		if = {
+			limit = { has_variable = qing_salt_commissioner_holder }
+			if = {
+				limit = { var:qing_salt_commissioner_holder = { is_alive = yes } }
+				var:qing_salt_commissioner_holder = { if = { limit = { has_variable = qing_salt_commissioner_marker }  remove_variable = qing_salt_commissioner_marker } }
+			}
+			remove_variable = qing_salt_commissioner_holder
+		}
+		scope:qing_frontier_pick = { QING_salt_commissioner_seat = yes }
+		QING_frontier_office_ease_squeeze = { squeeze = qing_salt_squeeze  holder = qing_salt_commissioner_holder }
+		LOG_line = { sys = QING  msg = "frontier picker: player seated a new Salt Commissioner (兩淮鹽政) for" }
+	}
+	else_if = {
+		limit = { has_variable = qing_frontier_picker_office  var:qing_frontier_picker_office = flag:caravan }
+		if = {
+			limit = { has_variable = qing_caravan_super_holder }
+			if = {
+				limit = { var:qing_caravan_super_holder = { is_alive = yes } }
+				var:qing_caravan_super_holder = { if = { limit = { has_variable = qing_caravan_super_marker }  remove_variable = qing_caravan_super_marker } }
+			}
+			remove_variable = qing_caravan_super_holder
+		}
+		scope:qing_frontier_pick = { QING_caravan_super_seat = yes }
+		QING_frontier_office_ease_squeeze = { squeeze = qing_caravan_super_squeeze  holder = qing_caravan_super_holder }
+		LOG_line = { sys = QING  msg = "frontier picker: player seated a new Caravan Superintendent (參贊大臣) for" }
+	}
+	else_if = {
+		limit = { has_variable = qing_frontier_picker_office  var:qing_frontier_picker_office = flag:hoppo }
+		if = {
+			limit = { has_variable = qing_hoppo_holder }
+			if = {
+				limit = { var:qing_hoppo_holder = { is_alive = yes } }
+				var:qing_hoppo_holder = { if = { limit = { has_variable = qing_hoppo_marker }  remove_variable = qing_hoppo_marker } }
+			}
+			remove_variable = qing_hoppo_holder
+		}
+		scope:qing_frontier_pick = { QING_canton_seat_hoppo = yes }
+		QING_frontier_office_ease_squeeze = { squeeze = qing_hoppo_squeeze  holder = qing_hoppo_holder }
+		LOG_line = { sys = QING  msg = "frontier picker: player seated a new Hoppo (粵海關監督) for" }
+	}
+	# clear the picker flag so a stray row can't re-fire against a stale office.
+	if = { limit = { has_variable = qing_frontier_picker_office }  remove_variable = qing_frontier_picker_office }
+	LOG_exit = { sys = QING  fn = "QING_frontier_office_seat_picked"  result = OK }
+}
