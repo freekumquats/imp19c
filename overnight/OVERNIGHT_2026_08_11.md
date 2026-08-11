@@ -247,3 +247,22 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
   random_list rewrite (no var at all) but REJECTED: svalue-named weight keys are unproven in this codebase/oracles
   (only integer-literal weights attested) — proven-code rule. brace balance 160/160; literal-RHS comparison legal.
 - STATUS: DONE (boot will confirm the flood is gone via the absent error class + the unchanged skill-check LOG_lines).
+
+## #106 — SHIPPING_svalues read-before-set: ~1700 unset shipping_<zone> errors/boot
+- DIAGNOSIS (newest error.log, Aug-10 23:17): 1693 "Failed to fetch variable 'shipping_<zone>'" +
+  contributing to the unset-scope/bad-comparison classes. Pinned to SHIPPING_svalues.txt (88 sites, e.g.
+  :2241) reading `var:shipping_<zone> > 0` UNCONDITIONALLY for all 22 zones. But se_SHIPPING's piechart
+  update only SETS shipping_<zone> for a zone a country actually ships in (the switch at ~:214). A country
+  that does not ship in a zone -> unset var read. CONFIRMED harmless: `unset > 0` already evaluates false
+  (the intended result); this is read-before-set NOISE (memory econ-log-noise-not-bugs), not a logic bug —
+  but 1700 lines/boot of it. Upstream Sobisonator trade code (Sobisonator-caution).
+- FIX (contained, purely additive — does NOT touch the 88 upstream read sites): new SHIPPING_seed_zone_defaults
+  effect (se_SHIPPING.txt) sets all 22 shipping_<zone> vars to 0 (each per-var guarded, so it never overwrites
+  a real value), called ONCE per country at game setup (oa_economy_setup every_country block). The vars persist
+  in the save and the piechart update does not remove them, so a one-time seed covers the whole game with NO
+  quarterly cost; the piechart update overwrites real shippers' zones, non-shippers keep 0. Seeded-zone set
+  cross-checked to EXACTLY match the 22 distinct zones read in SHIPPING_svalues (shipping_power_total correctly
+  excluded — it's a per-province var, not a per-country zone var).
+- CODE REVIEW cr106: dispatched (verdict pending). Brace balance equal on both files; BOM intact (common/);
+  small additive diffstat (+36/-0), no EOL churn.
+- STATUS: DONE (boot will confirm the shipping_<zone> class is gone from error.log).
