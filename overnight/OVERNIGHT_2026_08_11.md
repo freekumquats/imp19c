@@ -450,3 +450,29 @@ EMPIRICALLY VERIFIED against the Aug-10 23:18 error.log + on-disk byte checks:
   each file's existing BOM state (the safe, hook-passing default) and add NO BOMs.
 - BROADER SWEEP (the 80 BOM-less script files, incl. qing_caravan_events.txt / qing_march_events.txt from #91)
   is likewise gated on that ruling — NOT smuggled into #109, NOT done piecemeal. Filed for the user.
+
+## #118 — v2 design re-review (dr118v2): NOT-READY, PREMISE INVALIDATED — escalate scope to user
+dr118v2 (adversarial re-review of the v2 design) returned NOT-READY with 3 blockers, and I VERIFIED its
+central claim in source this session:
+- **The premise is a misdiagnosis.** #118 was scoped/gated as the structural fix for #77/#79 ("Salt
+  Commissioner / Kashgar Superintendent is also a Hanlin Scholar"). But "Hanlin Scholar" = the
+  `qing_is_pool_scholar` title (00_offices.txt:191/253), and #77/#79 are ALREADY FIXED: the salt appoint
+  (se_QING_SALT.txt:69, `[#77 1:1]`) and caravan appoint (se_QING_CARAVAN.txt:882, `[#79 1:1]`) each call
+  `QING_exam_pool_drop_member = yes`, forfeiting the Academy posting on appointment. Same idiom in
+  COUNCIL/AMBAN/CANTON. The design's 14-flag var never touches qing_is_pool_scholar.
+- **BLOCKING-1**: the doc's "7 hand-rolled pickers" are RELIEF-SWEEP branches (outer iter already gated on
+  the family marker); routing them through QING_char_holds_court_position would strip EVERY sitting member →
+  empty the rosters. Roster-destroying, not a fix.
+- **BLOCKING-3**: CHANGE 3+5 lose the multi-marker cleanup the current COUNCIL:1538-1583 block provides.
+- Also: trigger omits qing_is_xj_beg (13/14, not 14/14); hoppo/salt/caravan vacates must clear the COUNTRY
+  holder var not just the personal marker; CHANGE-4 precedent citation was wrong (on_move_country:792 /
+  on_office_lost:453, not the cited death-block lines).
+- **DECISION FOR THE USER (genuine scope call, cannot self-resolve):** the user earlier chose the "full #118
+  refactor" believing it fixed real 1:1 bugs. It does not — the bugs are closed by the per-appoint pool-drop.
+  Options: (a) CLOSE #118 as obsoleted-by-the-per-appoint-pattern (my recommendation — no active bug, and the
+  v1/v2 mechanism is roster-emptying as written); (b) keep #118 as defensive structural hardening despite no
+  active bug (large, risky: new var + 1 chokepoint + 14 vacate paths + save-game backfill). NOT implementing
+  either until the user rules. Design doc DESIGN_ONE_POST_VAR_118.md banner updated to NOT-READY/SUPERSEDED.
+- Knock-on: #116/#117 (GC create_character rule + degree-eligibility) do NOT depend on #118's structural var —
+  they can proceed on their own once the user rules on #118's fate. #111/#114 (draw-from-existing) likewise
+  key off the pool/degree machinery, not #118.
