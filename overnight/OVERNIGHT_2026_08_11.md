@@ -491,3 +491,15 @@ lines — the pre-existing seed already handles that class. My commit 53a3b273b 
   pending to re-scope onto the REAL current flood (the 154 <good>_stockpile_<zone>_tradezone reads) if that
   proves worth fixing — but that is a distinct diagnosis, not this task's shipping_<zone> premise. Not closing
   #106 on an inert fix.
+
+## #77 / #79 — VERIFIED ALREADY CLOSED (source, confirms dr118v2)
+Both "office-holder is also a Hanlin Scholar" 1:1 bugs are already fixed and need no new work:
+- #77 salt: QING_salt_commissioner_appoint (se_QING_SALT.txt:42-70) — picker excludes sitting court members
+  (NOT QING_char_holds_court_position, line 49) AND drops the Academy posting on appointment
+  (QING_exam_pool_drop_member, line 69, tagged [#77 1:1]). The rotate path (line 229) calls appoint, so it's
+  covered too. "Hanlin Scholar" on-name title = the qing_is_pool_scholar VARIABLE (forfeited here), NOT the
+  hanlin degree TRAIT (kept — an earned credential).
+- #79 caravan: identical pattern in QING_caravan_super_appoint (se_QING_CARAVAN.txt:860-883), pool-drop at :882
+  [#79 1:1]. Rotate calls appoint.
+- Both marked completed. This is the same finding that invalidated #118's premise (the per-appoint pool-drop
+  is the real 1:1 enforcement; #118's structural var was never needed for these).
