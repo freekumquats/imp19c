@@ -2891,4 +2891,31 @@ QING_DECLINE_spawn_smuggler = {
 	}
 	LOG_exit = { sys = QING  fn = "QING_DECLINE_spawn_smuggler"  result = OK }
 }
-
+# ======================================================================
+# [#80/#81/#84 2026-08-11] QING_frontier_office_ease_squeeze — shared one-quarter squeeze-easing bridge for the
+# three frontier fiscal offices (salt 兩淮鹽政 / caravan 參贊大臣 / hoppo 粵海關監督). Called by BOTH the
+# auto-pick rotate effects (event/AI path, e.g. qing_canton.2.b/.3.b) AND the new player picker handler, so
+# every rotate path eases the squeeze by the SAME curve tied to the NEW holder's corruption (#81), replacing
+# the old flat -12 / -6-if-finesse.
+#   easing = corruption/5 - 20  (in [-20, 0]): corruption 0 -> -20, 50 -> -10, 100 -> 0 (a venal man cleans nothing).
+# NOTE (design v2 finding F4): the quarterly office pulse OVERWRITES $squeeze$ = seated.corruption, so this
+# nudge is a ONE-QUARTER BRIDGE, not a durable mover — the durable lever is seating a low-corruption man (the
+# candidate list surfaces each man's corruption for exactly this choice). Country scope (ROOT = CHI).
+#   $squeeze$ = the squeeze var name (qing_salt_squeeze | qing_hoppo_squeeze | qing_caravan_super_squeeze)
+#   $holder$  = the holder var name  (qing_salt_commissioner_holder | qing_hoppo_holder | qing_caravan_super_holder)
+# ======================================================================
+QING_frontier_office_ease_squeeze = {
+	if = {
+		limit = { has_variable = $holder$  var:$holder$ = { is_alive = yes } }
+		var:$holder$ = { save_scope_as = qing_frontier_ease_char }
+		if = { limit = { NOT = { has_variable = $squeeze$ } }  set_variable = { name = $squeeze$  value = 30 } }
+		set_variable = { name = qing_frontier_ease_tmp  value = scope:qing_frontier_ease_char.corruption }
+		change_variable = { name = qing_frontier_ease_tmp  divide = 5 }
+		change_variable = { name = qing_frontier_ease_tmp  subtract = 20 }
+		change_variable = { name = $squeeze$  add = var:qing_frontier_ease_tmp }
+		if = { limit = { var:$squeeze$ < 0 }    set_variable = { name = $squeeze$  value = 0 } }
+		if = { limit = { var:$squeeze$ > 100 }  set_variable = { name = $squeeze$  value = 100 } }
+		remove_variable = qing_frontier_ease_tmp
+		LOG_line = { sys = QING  msg = "frontier office rotate: squeeze eased by new holder corruption (one-quarter bridge) for" }
+	}
+}
