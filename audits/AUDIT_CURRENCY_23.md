@@ -678,3 +678,61 @@ Verified traces (seed x=N, y=1): N=0.77 → 0.8775 (√=0.8775) by it3; N=1.3 �
   per-TZ contributor L2500+, country_unit_price=gbip/(0.5+pen) L2717.
 - `common/script_values/DEMAND_svalues.txt` — silver reserve demand (the `agsilver>0` gate suspicion).
 - `common/scripted_effects/se_ECON_LOG.txt` — CURX dump emitter (~L700+).
+
+---
+
+## E. SECOND-ORDER BUG (2026-08-11) — post-#23-fix HIGH-INFLATION PLATEAU: silver price pinned high via empty-stockpile price spike (UPSTREAM)
+
+Surfaced by the Aug-10 boot test (tracked as task #110). The #23 sqrt fix (§C.8/§D-FIX) killed the
+OSCILLATION — confirmed by the boot cross-reference below — but a SEPARATE, pre-existing bug leaves the
+currency on a HIGH-INFLATION PLATEAU (~16% vs the intended ~3%).
+
+### E.1 MEASURED — boot cross-reference (5 logs × git timeline; #23 sqrt fix = 14c9ed899 @ 08-09 06:58)
+Ran tools/curx_analyze.py on every -debug_mode log on disk; mapped each to code state by commit timestamp:
+| boot log | code state | ratio (private_cash_ratio) | verdict |
+|---|---|---|---|
+| Aug 8 22:11 (`logs 4.21.57 AM.zip`) | M1=125M; PRE-#23-fix | 0.01↔7.76 | WILD OSCILLATION |
+| Aug 9 04:22 (`logs 8.06.25 PM.zip`) | PRE-#23-fix | 1.46↔0.004 | WILD OSCILLATION |
+| Aug 9 20:06 | post-fix, NOT -debug_mode (0 IMP19C) | — | — |
+| Aug 9 22:42 (`logs 7.36.46 PM.zip`) | #23-fix + #111a ONLY | 1.59→2.18 | SETTLED, HIGH ~16% |
+| Aug 10 23:18 (`logs.zip`) | ALL overnight econ commits | 1.49→2.67 | SETTLED, HIGH ~16% |
+Conclusions: (1) #23 sqrt fix WORKED — oscillation gone across the pre/post boundary. (2) The overnight econ
+layer (#50/#52/#59/#62/#67/#111a) is EXONERATED for the plateau — the Aug-9-22:42 boot already shows ~16%
+and predates almost all of them; #111a exonerated specifically (only rescaled the Canton yield factor
+×0.7→[0.5,1.3], a bounded reserve-QUANTITY effect, wrong channel + too small). (3) `agsilver`
+(country_unit_price_silver) is pinned at the logger's 1.6 ceiling in EVERY post-fix boot.
+
+### E.2 CODE CHAIN (all UPSTREAM — git-blamed, predates the fork's currency work)
+1. `GT_set_tradegood_price` (se_GLOBALTRADE_split.txt ~L5818): `local_price = total_order_size` then
+   `if stockpile>0 { divide = stockpile }` × 0.6. **The ÷stockpile is GUARDED on stockpile>0 — when a zone's
+   silver stockpile = 0, the divide is SKIPPED and local_price = order_size × 0.6 UNDIVIDED**, spiking price to
+   the order-size magnitude (hundreds).
+2. `gbip_silver` = Σ(zone local_price_silver × zone stockpile-share)  (se_GLOBALTRADE_split.txt gbip build).
+3. `country_unit_price_silver = gbip_silver / (0.5 + penetration_silver)` (GT_split_get_country_import_unit_price
+   _tradegood). Blamed to upstream 172a2097a (2024-05-04). pen~0.1 ⇒ divisor ~0.6 ⇒ country price ~1.6× gbip.
+4. `CURRENCY_wealth_value_from_silver = country_unit_price_silver × 16` (CURRENCY_svalues.txt). Blamed to
+   upstream f20026af7 (2024-08-18). Feeds wealth_value_1_unit → the cost-of-living divisor
+   (CURRENCY_essentials_buying_power ÷ wealth_value_1_unit_scaled_by_reserve_ratio) → private_cash_needed →
+   private_cash_ratio (the logged `ratio`, inflation = (ratio−1)/10).
+
+### E.3 LOG EVIDENCE (tzprobe silver-by-zone, current boot — price|stock|order bands)
+China's own silver zones sit at **stockpile = 0 persistently**, with price railed to the top band exactly when
+stock=0 — the §E.2-step-1 signature:
+- `upper_yangtzi`: every quarter `10-100 | 0 | 1-10..10-100` (stock 0 throughout).
+- `yellow_sea`: `100-1000 | 0` q0-q2, then `1-10..10-100 | 10-100`.
+- `baltic`, `east_europe`: `100-1000 | 0` recurring.
+So silver stockpiles are chronically ~0 → the price formula's ÷stockpile term is skipped → silver price spikes
+structurally → drags gbip_silver and country_unit_price_silver to the high pin → collapses cost-of-living →
+~16% inflation plateau. Consistent with the user's read: turns back to upstream; likely NEVER worked properly
+for a silver-standard economy.
+
+### E.4 STILL UNPROVEN (do NOT fix yet — Sobisonator-caution: upstream logic on an as-yet-unreviewed diagnosis)
+- WHY silver stockpile is ~0: under-produced / over-consumed in the sim, or never seeded a stockpile? (supply
+  side — could be mod seeding or upstream). Need to trace silver production/demand + initial stockpile seed.
+- WHICH fix is right: upstream (the `stockpile>0` guard should FLOOR the price, not skip the divide — an
+  upstream logic change needing explicit user sign-off) vs mod-side (seed a silver stockpile floor). Undecided.
+- NEXT: prove the ~0-stockpile root (production vs demand vs seed) from code+log, THEN adversarial-review this
+  §E diagnosis before proposing any fix. This is the LEADING diagnosis, NOT yet reviewed.
+
+**STATUS §E: high-inflation-plateau root = empty-silver-stockpile price spike (UPSTREAM price formula), LEADING
+diagnosis pending (a) proof of why silver stock is ~0 and (b) its own adversarial review. #110 = this.**
