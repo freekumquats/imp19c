@@ -289,3 +289,14 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
   loc-noise task's scope): timetest_quarterly_tick.22 is DEFINED TWICE (lines 442 + 462); the second overrides
   the first, so DIPLOMACY_get_power_in_play_TZ (first .22) never runs. Needs a renumber, reviewed on its own.
 - STATUS: DONE (loc-noise + parse-error + BOM). #124 left for its own diagnosis->review pass.
+
+## #124 — timetest_quarterly_tick.22 defined twice (duplicate event id)
+- DIAGNOSIS: two `timetest_quarterly_tick.22` blocks (get_power_in_play_TZ + get_top_players_tradezone);
+  the engine keeps only the LAST definition, so the first .22 (DIPLOMACY_get_power_in_play_TZ) was shadowed.
+  BUT: traced dispatch — NOTHING fires timetest_quarterly_tick.* (no trigger_event / on_action anywhere; the
+  se_DIPLOMACY comments call it "the DEBUG timetest harness"; the live quarterly tick runs via oa_wealth_changes
+  + debug_demand). So the whole harness is DEAD and the shadowing had ZERO runtime impact — it's a parse-time
+  duplicate-id defect only. Severity accordingly low (downgraded from the filed wording).
+- FIX: renamed the SECOND .22 -> .31 (a free id). Did NOT renumber .23+ (avoids an 8-event cascade; since
+  dispatch is by-id-nowhere, ordering is irrelevant). All ids now unique; braces 168/168; BOM-free.
+- STATUS: DONE.
