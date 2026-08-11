@@ -208,3 +208,24 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
   No mechanics change — the gates were already correct; this only makes them legible. Quotes balanced (2/line),
   BOM intact, 2-line diffstat. Small loc change -> straight to commit per the overnight skill.
 - STATUS: DONE.
+
+## #92 — automatic Ever-Normal Granary expansion should not be invisible or free
+- DIAGNOSIS: QING_DECLINE_granary_concrete (se_QING_DECLINE.txt) auto-built a real qing_granary_building
+  whenever granary stock >= 60 in a good year — for FREE and with NO player notification. The famine branch
+  (stock <= 15) already flags granaries empty; only the expansion side was costless + silent.
+- FIX:
+  - added `treasury >= 255` to the good-year build limit (affordability gate; proven idiom se_QING_CARAVAN:482)
+    so the expansion waits if the throne cannot bear it.
+  - `save_scope_as = qing_gran_built_province` on the built province (for the notification loc).
+  - after the build, `if = { exists = scope:qing_gran_built_province } { add_treasury = -255 ; trigger_event
+    qing_revenue.6 }` — charges 255 (proven charge idiom se_QING_CARAVAN:494) and notifies the player, ONLY
+    when a granary was actually raised this pulse.
+  - new qing_revenue.6 notification event (pure acknowledge; the cost is charged by the caller) + its loc
+    (.t/.desc/.a; desc names the funded province via [scope:qing_gran_built_province.GetName]).
+- ASSUMPTION/GUESS (logged): 255 treasury cost — chosen to match the Caravan oasis-bazaar endowment (same
+  order, same gate/charge idiom), NOT the granary building's bare cost=60, because this is a STATE-FUNDED
+  strategic-reserve expansion, not a routine local build. Boot will show whether it throttles the auto-expand
+  too hard/soft; tune next round. The qing_revenue.6 LOG_line confirms each funded build on the boot.
+- CODE REVIEW cr92: dispatched (verdict pending at log time). Brace balance equal on both script files; event
+  file BOM-free (0x23...); loc quotes balanced (2/line); small diffstat, no EOL churn.
+- STATUS: DONE (pending cr92 clean).
