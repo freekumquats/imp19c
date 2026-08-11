@@ -5396,13 +5396,28 @@ GT_split_get_governorship_shipping_income = {
 			}
 		}
 	}
-	change_variable = {
-		name = queued_trade_income_due_shipping
-		divide = var:trade_center.SHIPPING_total_in_TZ
+	# [#108 part 2] Guard the trade_center-dependent math: a governorship never assigned to a tradezone has
+	# no `trade_center` var, so `var:trade_center.*` read an unset scope -> 617x "Failed to fetch variable
+	# 'trade_center' / unset scope 'var'" per boot (oa_wealth_changes:485 -> GT_split_do_global_trade_split ->
+	# GT_split_do_shipping_costs -> here). Such a governorship has no TZ shipping income, so leaving
+	# queued_trade_income_due_shipping at its 0 init is correct. Also skip when the TZ total shipping is 0
+	# (a Div/0 that would void the divide anyway) — same behaviour-safe no-op.
+	if = {
+		limit = {
+			has_variable = trade_center
+			var:trade_center.SHIPPING_total_in_TZ > 0
+		}
+		change_variable = {
+			name = queued_trade_income_due_shipping
+			divide = var:trade_center.SHIPPING_total_in_TZ
+		}
+		change_variable = {
+			name = queued_trade_income_due_shipping
+			multiply = var:trade_center.var:queued_TZ_this_quarter_transport_pool
+		}
 	}
-	change_variable = {
-		name = queued_trade_income_due_shipping
-		multiply = var:trade_center.var:queued_TZ_this_quarter_transport_pool
+	else = {
+		set_variable = { name = queued_trade_income_due_shipping  value = 0 }   # no TZ / no shipping capacity -> no shipping income
 	}
 
 }

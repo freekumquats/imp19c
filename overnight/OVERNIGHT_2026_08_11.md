@@ -323,3 +323,21 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
 - CODE REVIEW cr108a: dispatched (pending). Self-review: cross-macro local→country-var is the documented Jomini
   behaviour; the remove_variable cleanup keeps it tidy; no semantics change beyond the var scope.
 - STATUS: part 1 DONE + committed; part 2 (oa_wealth_changes/trade_center) pending — task remains in_progress.
+
+## #108 (part 2) — oa_wealth_changes trade_center unset flood (617x, the biggest single site)
+- DIAGNOSIS: chain = oa_wealth_changes:485 (GT_split_do_global_trade_split type=5) -> GT_split_do_shipping_costs
+  -> GT_split_get_governorship_shipping_income lines 20/24. Those read `var:trade_center.*` on the governorship.
+  A governorship never assigned to a tradezone has no `trade_center` var (set only in TRADE_update_governorship
+  _TZs, se_TRADE.txt:1886) -> 617x "Failed to fetch variable 'trade_center' / unset scope 'var'"/boot.
+- FIX: wrapped the two trade_center-dependent change_variables in `if = { has_variable = trade_center  var:trade
+  _center.SHIPPING_total_in_TZ > 0 }`; else set queued_trade_income_due_shipping = 0. A TZ-less governorship has
+  no shipping income so 0 is correct; the >0 also dodges a Div/0 when TZ total shipping is 0. braces 1627/1627.
+- STILL OPEN (part 3, LOUDLY NOT DONE — these are 3 more DISTINCT roots in the same file, each needs its own trace;
+  NOT folding blind): (a) :341 GT_save_final_tradegood_vars unset 'var' (154x); (b) :101 EDU_set_t2_national_
+  bonus_from_universities Div/0 (271x — a divide by an unset/0 university count); (c) :467 GT_split_cache_DEMAND
+  _reserve_accumulation_basis_svalues 'silver_accumulation_rate' unset (207x — likely the same #106-class
+  seed-defaults fix, silver_accumulation_rate not set for non-CHI). #108 stays IN_PROGRESS for these.
+- CODE REVIEW cr108b: dispatched (pending). Self-review: has_variable guard is the proven read-before-set idiom
+  (same as #106); the else 0-set is behaviour-preserving (init is already 0); no Sobisonator-logic change beyond
+  the guard.
+- STATUS: parts 1+2 committed; part 3 (3 sub-roots) explicitly OPEN, task in_progress.
