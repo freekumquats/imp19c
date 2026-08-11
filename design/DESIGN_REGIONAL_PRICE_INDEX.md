@@ -1,8 +1,10 @@
 # DESIGN #112 — regional import pricing: pay the paying zone's local_price (per-zone divergence), replacing reverted #50
 
-**Status:** CORRECTIONS FOLDED, AWAITING CLEAN RE-REVIEW 2026-08-11 (NOT yet implementation-ready — review112b
-returned SOUND-WITH-CORRECTIONS incl. a CRITICAL max/min floor bug; those fixes are now IN the doc but have NOT
-themselves been reviewed. One more pass must return CLEAN before implementation).
+**Status:** REVIEWED CLEAN 2026-08-11 → IMPLEMENTATION-READY. Three review passes: review112 (peg/ordering
+sound, 2 proof corrections) → review112b (SOUND-WITH-CORRECTIONS: CRITICAL max/min floor bug + 3 more, folded)
+→ review112c (SOUND-WITH-CORRECTIONS: one leftover max=0.01 in §Files, folded) → review112c re-confirm returned
+**CLEAN, zero findings**. "Clean" = a review pass with no findings, NOT self-certification (process lesson this
+session: folding corrections is not the same as re-passing; each correction needs the confirm pass).
 The LEVER is a DIRECT SUBSTITUTION (NOT a "regional index" — see §WHY-DIRECT): at the payment site (:2468) pay
 `zone.local_price / (0.5 + owner.national_penetration)` instead of `owner.country_unit_price`. Reads NO gbip.
 - Both sink-risk checks PASS (review112 + review112b): ORDERING — the direct form reads only local_price
