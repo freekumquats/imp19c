@@ -1,6 +1,8 @@
 # DESIGN #112 — regional import pricing: pay the paying zone's local_price (per-zone divergence), replacing reverted #50
 
-**Status:** REVIEWED TWICE, SOUND-WITH-CORRECTIONS, all folded → IMPLEMENTATION-READY 2026-08-11.
+**Status:** CORRECTIONS FOLDED, AWAITING CLEAN RE-REVIEW 2026-08-11 (NOT yet implementation-ready — review112b
+returned SOUND-WITH-CORRECTIONS incl. a CRITICAL max/min floor bug; those fixes are now IN the doc but have NOT
+themselves been reviewed. One more pass must return CLEAN before implementation).
 The LEVER is a DIRECT SUBSTITUTION (NOT a "regional index" — see §WHY-DIRECT): at the payment site (:2468) pay
 `zone.local_price / (0.5 + owner.national_penetration)` instead of `owner.country_unit_price`. Reads NO gbip.
 - Both sink-risk checks PASS (review112 + review112b): ORDERING — the direct form reads only local_price
