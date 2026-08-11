@@ -36,3 +36,25 @@ this run until #118's diagnosis+design land.
 - STATUS: DONE. Commit <pending>. Boot-watch: total-income shift + §E silver zero-stockpile spike (see ASSUMPTIONS).
 - FOLLOW-ON: #115 (the "both" model — per-zone TZ_penetration denominator) supersedes the denominator on this
   same line if it clears its own pipeline; #112 is the safe minimal form shipping now.
+
+### #102 — raise treasury cap 99999 → 9999999 — DONE
+- WHAT: MAXIMUM_GOLD (00_defines.txt:52) 99999→9999999, plus the two cap-tracking refs that must move in
+  lockstep: CURRENCY_svalues.txt:886 (the paper-money "no cap" minting_rate_cap branch) + the four
+  EE_scripted_guis.txt national-debt is_valid gates (treasury < 99999 → < 9999999).
+- KEY DECISION: MINIMUM_GOLD (debt floor, -99999) left AS-IS — user asked to raise the CAP, not the floor;
+  asymmetry is intentional (logged). cr102 confirmed no functional downside + no third lockstep ref missed.
+- REVIEW: cr102 → CLEAN. #23/#60 bounding untouched (the max=20000 hard cap at :853 is a separate branch).
+- STATUS: DONE. Commit <pending>.
+
+### #104 — finish the Arsenal→Machine Works rename (leftover tooltip word) — DONE
+- WHAT: imp19c_tooltips_l_english.yml:79 "the Jiangnan Arsenal" → "the Jiangnan Machine Works". The building
+  title was already renamed (3ead94d6c); this was a leftover flavor aside inconsistent with the new name.
+- REVIEW: cr78104 → CLEAN. STATUS: DONE. Commit <pending>.
+
+### #78 — remove duplicate "Reform the Salt Gabelle" button from the Revenue window — DONE
+- WHAT: gui/qing_revenue_ministry.gui — deleted the redundant reform-gabelle text_button (the action now
+  lives solely in the Salt Monopoly window per #44; it was duplicated here AND there). Replaced with a [#78]
+  comment. The scripted_gui qing_revenue_ministry_reform_salt is UNTOUCHED — Salt Monopoly window still calls
+  it (imp19c_windows.gui:1842); the "open Salt Monopoly window" button just above is intact.
+- REVIEW: cr78104 → CLEAN (braces 156/156; action not orphaned; loc keys still used by the Salt window).
+- STATUS: DONE. Commit <pending>.
