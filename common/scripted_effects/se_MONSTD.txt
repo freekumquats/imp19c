@@ -1,0 +1,111 @@
+# ======================================================================
+# se_MONSTD.txt — [#75/#59 Tier C] the "Monetary Standard" law group's mechanical half.
+# A law option (00_monetary_standard.txt) has no on_law_change hook in this engine (confirmed:
+# qing_mechanics_on_actions.txt:369, "There is no on_law_change on_action"), so the law is the
+# PLAYER-FACING switch and this file is the MECHANICAL enactment: a boot-time seed (so the starting
+# law matches each country's already-seeded currency backing_type, no turn-1 mismatch) + a monthly
+# reconciler (so a later law change actually flips the currency's backing_type). Additive + globally
+# uniform: every country with a currency is treated identically, no per-tag special-casing.
+# ======================================================================
+
+# Scope: Country. Called ONCE at setup (oa_economy_setup.txt, right after CURRENCY_create_starting_currencies
+# so every country's official_currency + backing_type already exist). Derives the starting law from the
+# ALREADY-SEEDED backing_type rather than a hand-maintained per-tag table, so it stays correct if the
+# currency seed data ever changes.
+MONSTD_seed_starting_law = {
+	LOG_enter = { sys = ECON  fn = "MONSTD_seed_starting_law" }
+	every_country = {
+		limit = {
+			has_variable = official_currency
+			var:official_currency = { has_variable = backing_type }
+		}
+		if = {
+			limit = { var:official_currency = { var:backing_type = flag:gold_standard } }
+			change_law = gold_standard_law
+			# [cr75 fix, verify] gold_standard_law's date/reserve gate lives in `allow`, which a scripted
+			# change_law is assumed to bypass (unlike `potential`, which it respects) — TI precedent, NOT
+			# an engine-documented guarantee. Verify the call actually landed; a silent no-op here would
+			# leave this country on the auto-default silver option, and MONSTD_reconcile would then flip
+			# its REAL currency backing gold->silver on turn 1 — the exact bug this seed exists to prevent.
+			if = {
+				limit = { NOT = { has_law = gold_standard_law } }
+				LOG_fail = { sys = ECON  fn = "MONSTD_seed_starting_law"  reason = "change_law=gold_standard_law did not land (allow-bypass assumption may be wrong) - country stayed on the default option" }
+			}
+		}
+		else_if = {
+			limit = { var:official_currency = { var:backing_type = flag:bimetallic_standard } }
+			change_law = bimetallic_standard_law
+			# [cr75 fix, verify] same unproven allow-bypass assumption as the gold branch above (its
+			# allow also has an unsatisfiable-at-seed-time reserve gate) — mirror the same detector.
+			if = {
+				limit = { NOT = { has_law = bimetallic_standard_law } }
+				LOG_fail = { sys = ECON  fn = "MONSTD_seed_starting_law"  reason = "change_law=bimetallic_standard_law did not land (allow-bypass assumption may be wrong) - country stayed on the default option" }
+			}
+		}
+		else_if = {
+			limit = { var:official_currency = { var:backing_type = flag:silver_standard } }
+			change_law = silver_standard_law
+		}
+		else = {
+			LOG_fail = { sys = ECON  fn = "MONSTD_seed_starting_law"  reason = "backing_type flag matched none of gold/silver/bimetallic" }
+		}
+	}
+	LOG_exit = { sys = ECON  fn = "MONSTD_seed_starting_law"  result = OK }
+}
+
+# Scope: Country. Called from monthly_currency_pulse (oa_wealth_changes.txt), quarterly-throttled by
+# its own cooldown (mirrors CURR_STRESS_pulse's pattern in se_CURRENCY_STRESS.txt) — most countries
+# most months, this is one has_variable check. On an ACTUAL mismatch between the held law and the
+# currency's live backing_type, flips the currency (the proven set-backing_type + recompute idiom
+# already used at currency creation, se_CURRENCY.txt:1864-1870) and applies a one-time switch cost
+# (the historical disruption of a regime change — a stability hit; NOT a reserve revaluation, since
+# the gold:silver valuation-ratio anchor is #59 Tier A/B, not yet built — Tier C stays decoupled from
+# that unbuilt machinery per its own additive-increment design).
+MONSTD_reconcile = {
+	LOG_enter = { sys = ECON  fn = "MONSTD_reconcile" }
+	if = {
+		limit = {
+			has_variable = official_currency
+			var:official_currency = { has_variable = backing_type }
+			NOT = { has_variable = monetary_standard_reconcile_cooldown }
+		}
+		set_variable = { name = monetary_standard_reconcile_cooldown  days = 90 }
+		if = {
+			limit = {
+				has_law = gold_standard_law
+				NOT = { var:official_currency = { var:backing_type = flag:gold_standard } }
+			}
+			MONSTD_switch_backing = { new_standard = gold_standard }
+		}
+		else_if = {
+			limit = {
+				has_law = bimetallic_standard_law
+				NOT = { var:official_currency = { var:backing_type = flag:bimetallic_standard } }
+			}
+			MONSTD_switch_backing = { new_standard = bimetallic_standard }
+		}
+		else_if = {
+			limit = {
+				has_law = silver_standard_law
+				NOT = { var:official_currency = { var:backing_type = flag:silver_standard } }
+			}
+			MONSTD_switch_backing = { new_standard = silver_standard }
+		}
+	}
+	LOG_exit = { sys = ECON  fn = "MONSTD_reconcile"  result = OK }
+}
+
+# Scope: Country. Param: $new_standard$ (one of gold_standard/silver_standard/bimetallic_standard,
+# matching the backing_type FLAG values). Applies the switch cost ONCE (this call site only fires on
+# an actual mismatch, never at the matched steady state, so no re-entrant cost risk), then flips the
+# currency's backing_type using the proven set-then-recompute idiom already used at currency creation.
+MONSTD_switch_backing = {
+	# [best-guess magnitude, boot will confirm/tune] the historical disruption of a monetary regime
+	# change — a modest, one-time stability hit, distinct from (and smaller than) a crisis-grade shock.
+	add_stability = -1
+	LOG_line = { sys = ECON  msg = "monetary standard: switching the currency's backing type for" }
+	var:official_currency = {
+		set_variable = { name = backing_type  value = flag:$new_standard$ }
+		CURRENCY_update_backing_value = yes
+	}
+}

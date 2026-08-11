@@ -1,0 +1,61 @@
+﻿monetary_standard = {
+	# [#75/#59 Tier C] No group-level potential: every country is always on SOME standard (unlike
+	# monetary_policy_setting, a sub-setting gated on legislative_monetary_policy). Availability of
+	# each OPTION is gated per-option below (date for gold, reserve-adequacy for gold/bimetallic).
+	# Starting law is SEEDED at boot by MONSTD_seed_starting_law (se_MONSTD.txt) to match each
+	# country's currency backing_type set in CURRENCY_create_starting_currencies, so there is no
+	# turn-1 mismatch. The MONSTD_reconcile pulse (monthly_currency_pulse) then keeps the currency's
+	# backing_type in sync with whichever option is actively held, applying the switch cost only on
+	# an ACTUAL change. Option keys are suffixed _law to avoid colliding with the backing_type FLAG
+	# values (gold_standard / silver_standard / bimetallic_standard) read elsewhere in se_CURRENCY.txt.
+
+	# The pre-1815 universal default (the Qing 1763 start standard; most tags start here).
+	silver_standard_law = {
+		modifier = {
+			stability_monthly_change = 0.02
+			global_commerce_modifier = -0.02
+		}
+	}
+
+	# [best-guess, boot will confirm/tune] Gated to when the standard historically spread
+	# (Britain 1816/21); adequate gold reserves required to credibly hold it. Commerce/investment
+	# upside, at a small stability cost (rigid convertibility is less forgiving of a bad quarter).
+	# [cr75 fix] the date/reserve gate lives in `allow`, NOT `potential`: `change_law` (used by
+	# MONSTD_seed_starting_law to seed the boot-time starting law from each country's ALREADY-SEEDED
+	# currency backing_type) respects `potential` but bypasses `allow`. A `potential` gate here would
+	# silently no-op the boot seed for every gold-backed country at BOTH bookmarks (1763 and 1815 both
+	# predate 1816), dropping them to the default silver option — which the monthly reconciler would
+	# then "fix" by flipping their REAL currency backing from gold to silver on turn 1. `allow` still
+	# blocks a PLAYER from switching TO gold before 1816 (the Laws UI honours both), without touching
+	# the boot seed.
+	gold_standard_law = {
+		allow = {
+			current_date >= 1816.1.1
+			var:gold_reserve_size > 50
+		}
+		modifier = {
+			global_commerce_modifier = 0.05
+			stability_monthly_change = -0.01
+		}
+		ai_will_do = {
+			base = 5
+		}
+	}
+
+	# [best-guess, boot will confirm/tune] The flexible middle ground — needs adequate reserves of
+	# BOTH metals; some commerce upside but Gresham-exposed (a touch more graft/friction than a
+	# single-metal standard, reflecting the historical bimetallic-arbitrage headache).
+	bimetallic_standard_law = {
+		allow = {
+			var:gold_reserve_size > 20
+			var:silver_reserve_size > 20
+		}
+		modifier = {
+			global_commerce_modifier = 0.02
+			monthly_corruption = 0.01
+		}
+		ai_will_do = {
+			base = 3
+		}
+	}
+}
