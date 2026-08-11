@@ -1,19 +1,23 @@
-# DESIGN — regional price index (per-zone import price divergence), replacing the reverted #50
+# DESIGN #112 — regional import pricing: pay the paying zone's local_price (per-zone divergence), replacing reverted #50
 
-**Status:** REVIEWED SOUND-WITH-CORRECTIONS 2026-08-11 (review112). Both sink-risk checks PASS: ORDERING
-(:37→47→52→54, index reads live local_price+gbip) and PEG ISOLATION (peg reads country_unit_price + reserve_ratio;
-neither touched — provably the correct side of the peg, unlike #50). Two proof errors CORRECTED (not design
-changes): §H.3 re-enumerated wealth_owed's real consumers (it also feeds the gold/silver reserve-capture WEIGHT
-+ buyer queued expenses, NOT "only the pool" — but none reaches silver_reserve_size/the peg, so the conclusion
-holds); and the "total pool preserved by construction" claim is downgraded to "measured on boot" (index averages
-to 1 under stockpile-weighting but is applied under order-weighting). IMPLEMENTATION-READY; boot-measurement
-checklist = total-pool delta + reserve-metal strata-income shift. Delicate UPSTREAM code — cautious pattern.
-Clears AUDIT_CURRENCY_23 §F.2 (§H). See [[currency-swing-diagnosis]].
-CLAMP REMOVED (user directive 2026-08-11): the [0.25,4.0] clamp was NOT upstream — it was MY OWN addition to the
-NEW regional_index term I'm introducing. Removing it touches nothing upstream and does NOT reopen the review112
-safety story (ordering + peg-isolation are independent of the clamp; the clamp only bounded the new term's
-magnitude). The index is now UNBOUNDED except for a strict-positive epsilon floor so a good never goes free
-(user: "it should only prevent goods from going to 0"). Metals stay IN the index (user: do not exempt gold).
+**Status:** REVIEWED TWICE, SOUND-WITH-CORRECTIONS, all folded → IMPLEMENTATION-READY 2026-08-11.
+The LEVER is a DIRECT SUBSTITUTION (NOT a "regional index" — see §WHY-DIRECT): at the payment site (:2468) pay
+`zone.local_price / (0.5 + owner.national_penetration)` instead of `owner.country_unit_price`. Reads NO gbip.
+- Both sink-risk checks PASS (review112 + review112b): ORDERING — the direct form reads only local_price
+  (driver :37) + owner penetration (:50), both set before the payment site (:54); reads no gbip. PEG ISOLATION —
+  country_unit_price (peg input) is NOT written; peg reads country_unit_price + reserve_ratio, the change touches
+  neither → provably the correct side of the peg, unlike #50 (which scaled penetration, a peg INPUT).
+- review112b findings folded: (1 CRITICAL) the floor is `min = 0.0001`, NOT `max` (max = ceiling in this engine —
+  `max=0.01` would have capped all prices at 0.01 and destroyed the lever); (2) copy country_unit_price's own
+  block verbatim, swap gbip→local_price — its `min=0.0001` IS the strict-positive floor, one guard, done;
+  (3) boot-watch the §E zero-stockpile SILVER spike (structural for China's silver zones); (4) ORDERING rewritten
+  for the direct form (no gbip).
+- CLAMP REMOVED (user): the [0.25,4.0] band was MY OWN addition to this new term, not upstream. Only guard on
+  the value = the `min=0.0001` strict-positive floor so a good never goes free ("only prevent goods from going to
+  0"). NO ceiling. Metals stay IN (user: do not exempt gold).
+- MINIMAL form. The fuller "both" model (per-zone TZ_penetration denominator) is #115, separate pipeline,
+  mutually exclusive at :2468.
+Delicate UPSTREAM code — cautious pattern. Clears AUDIT_CURRENCY_23 §F.2 (§H). See [[currency-swing-diagnosis]].
 
 ## Goal (user)
 The SAME good should cost differently in different regions — Canton silk cheaper than London silk — and this
@@ -84,39 +88,42 @@ also MISLEADINGLY suggested a normalized deviation-from-world-average; mechanica
 The DIRECT form above is the same result, reads no gbip, and states plainly what it does. Implement the direct
 substitution, not the index.
 
-### Where it attaches
-GT_split_update_wealth_owed_for_tradegoods (:2459) already runs in the PAYING governorship's scope and receives
-`$tradezone$` (from the :2319 switch dispatcher). At the price multiply (:2466-2469), replace the
-`multiply = owner.var:country_unit_price_$good$` with the direct computation:
-`zone.local_price ÷ (0.5 + owner.penetration)`, where zone.local_price =
-`global_var:global_$tradezone$_tradezone.var:local_price_$good$` and owner.penetration =
-`owner.var:country_global_market_penetration_$good$`. This keeps the exact divisor country_unit_price used
-(:2740-2746, `0.5 + penetration`, min 0.0001), just with local_price as the numerator instead of gbip.
-Guard against Div/0 on the (0.5+pen) divisor exactly as country_unit_price does (min 0.0001). NO clamp on the
-resulting price — only the strict-positive floor below.
+### Where it attaches — the EXACT block (review112b findings 1+2 folded)
+GT_split_update_wealth_owed_for_tradegoods (:2459) runs in the PAYING governorship's scope with `$tradezone$`
+from the :2319 dispatcher. At the price multiply (:2466-2469) replace `multiply = owner.var:country_unit_price_
+$good$` with country_unit_price's OWN block (:2727-2741) verbatim, swapping gbip → the paying zone's local_price:
+```
+multiply = {
+    value = global_var:global_$tradezone$_tradezone.var:local_price_$tradegood$
+    min = 0.0001                                     # ← FLOOR (min = floor in this engine; see below). Doubles as the strict-positive guard.
+    divide = { value = 0.5  add = owner.var:country_global_market_penetration_$tradegood$ }
+}
+```
+That is the WHOLE change. No second guard, no gbip, no Div/0 (the `0.5 +` literal keeps the divisor ≥ 0.5).
 
-### Guards (ONLY these two — no tuning band)
-- **(0.5 + penetration) divisor** → reuse country_unit_price's own `min = 0.0001` guard (:2741) so the divisor is
-  never 0 — CRASH protection, not a tuning band; stays regardless.
-- **strict-positive FLOOR so a good is never literally FREE (user directive: "it should only prevent goods
-  from going to 0").** If the paying zone's local_price = 0 (empty/never-ordered zone) the payment price would be
-  0, which would zero the payment (a free import). Floor the zone price just above 0 with a tiny epsilon (e.g.
-  `max = 0.01` on the local_price read) — NOT an economic floor. The point is only to keep the payment strictly
-  positive, not to bound how cheap a real cheap zone gets. NO ceiling: a starved/spiking zone's price passes
-  through in full (that large one-quarter payment is the real signal, measured on boot).
+### Guards — ONE guard, and it is already in the block above
+- **`min = 0.0001` on local_price = BOTH the strict-positive floor AND all that's needed.** [review112b CRITICAL
+  finding 1] In THIS engine **`min` = floor, `max` = CEILING** (confirmed CURRENCY_svalues.txt:373 `min=0.05`
+  floor vs :700 `max=32000` cap). An earlier draft wrote the floor as `max = 0.01` — that would CAP every zone
+  price at 0.01, pinning all import payments to ~0 and DESTROYING the lever. The floor MUST be `min`. [finding 2]
+  country_unit_price's `min = 0.0001` floors the NUMERATOR (gbip today; local_price after the swap) — NOT the
+  divisor — so copying its block verbatim ALREADY places the strict-positive floor exactly where the design
+  wants it. A never-ordered zone (local_price = 0) → floored to 0.0001 → payment strictly positive, never free.
+- **NO ceiling** (user directive): a starved/spiking zone's price passes through in full — the large one-quarter
+  payment is the real signal, measured on boot. See §H.4 + the §E-spike watch note below (review112b finding 3).
 
-## ORDERING — CONFIRMED SAFE (the finding most likely to sink this; traced :28-56)
-The quarterly driver GT_split_do_global_trade_split runs a STRICT sequence, so every input the payment reads is
-set for the quarter BEFORE the payment site:
-1. :37 `GT_set_tradegood_price_all_TZs...` → writes local_price per zone (:5901).
-2. :47 `GT_split_get_global_import_unit_price_all` → writes gbip (:2509).
-3. :50-52 penetration → order_size_modifier → country_unit_price (:2734).
-4. :53-55 `GT_split_update_wealth_owed_for_all_TZs...` → the PAYMENT site (:2459) — WHERE THE INDEX ATTACHES.
-So at step 4 both local_price (step 1) and gbip (step 2) are already written → the index (local_price÷gbip)
-reads live values, NO stale/unset read, NO "variable used but never set" flood. (The bimetallic metals-pass
-QING_BIMET_pull at :46 also runs between local_price and gbip — the index reads the post-pull local_price, which
-is correct.) The currency peg is computed on the SEPARATE currency on_action from country_unit_price, entirely
-outside this loop — never sees the payment-site price.
+## ORDERING — CONFIRMED SAFE (traced :28-56; corrected for the DIRECT form per review112b finding 4)
+The DIRECT form reads only TWO inputs: the paying zone's local_price and the owner's penetration. It reads NO
+gbip (the whole point of §WHY-DIRECT — do not re-introduce a gbip read here). Both inputs are set for the quarter
+BEFORE the payment site, in the strict driver sequence:
+1. :37 `GT_set_tradegood_price_all_TZs...` → writes local_price per zone (:5901), unconditionally for all 22 zones.
+2. :50 penetration (`GT_split_get_country_global_market_penetration_all`) → writes owner.country_global_market_penetration.
+3. :54 `GT_split_update_wealth_owed_for_all_TZs...` → the PAYMENT site (:2459) — where the substitution attaches.
+So at step 3 both local_price (step 1) and penetration (step 2) are already written → the payment reads live
+values, NO stale/unset read, NO "variable used but never set" flood; a never-ordered zone gives local_price = 0,
+caught by the `min = 0.0001` floor. (gbip's :47 timing is IRRELEVANT to the direct form — it is not read.) The
+currency peg is computed on the SEPARATE currency on_action from country_unit_price, entirely outside this loop —
+never sees the payment-site price.
 
 ## §F.2 burden of proof — DISCHARGED (AUDIT_CURRENCY_23 §H)
 - (a) WHAT: at the payment site (:2466-2469), pay `zone.local_price / (0.5 + owner.national_penetration)` instead
@@ -137,8 +144,16 @@ outside this loop — never sees the payment-site price.
 Under the existing tzprobe / ECON_LOG harness (kept from #50), emit per boot for silk + tea + grain + silver:
 - the paying zone's local_price + the resulting payment price local_price/(0.5+pen), vs the old country_unit_price,
 - total global_payment_pool for the good WITH vs WITHOUT the change (the §H.4 delta),
-so the boot confirms the regional spread is sane and the total-income shift is bounded. Static label strings only
-(no macro $param$ / # in LOG strings — log-string-macro-rule). -debug_mode gated.
+- **[review112b finding 3 — the §E zero-stockpile SILVER spike, watch explicitly]** local_price for the zones
+  whose stockpile persistently sits at 0 (§E.3: China's own upper_yangtzi + yellow_sea SILVER zones). When a
+  zone's stockpile = 0, GT_set_tradegood_price (:5908-5917) SKIPS the `÷stockpile` (guarded `>0`) so local_price
+  = order×0.6 UNDIVIDED — an order-magnitude (order²-scale) spike. The OLD code weighted that spike OUT of the
+  consumed price (empty zone → global-stockpile share 0 → dropped from gbip); the DIRECT form pays local_price
+  at the site and thus RE-EXPOSES the spike for those provinces. It does NOT reach the peg (isolation holds), but
+  it is a STRUCTURAL/persistent treasury-side spike for silver (not the rare war-starved case). Boot-watch: log
+  Chinese silver payments for the zero-stockpile zones specifically; if they blow up treasury, the fix is to the
+  UNDERLYING zero-stockpile local_price bug (§E), NOT a ceiling the user removed.
+Static label strings only (no macro $param$ / # in LOG strings — log-string-macro-rule). -debug_mode gated.
 
 ## Files
 - common/scripted_effects/se_GLOBALTRADE_split.txt — replace the `multiply = owner.var:country_unit_price_$good$`
