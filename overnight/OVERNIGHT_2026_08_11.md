@@ -361,3 +361,13 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
 - STILL OPEN (part 2, NOT done): #107 also bundles 101x Div/0 (oa_wealth_changes:450/416 — separate root, needs
   its own trace) + the 242 bimetallic reads (ALREADY fixed by #108 part 1). Div/0 sub-root left for a boot-verify.
 - STATUS: food-stockpile half committed; Div/0 half open — task in_progress.
+
+## #107 (part 2, COMPLETES #107) — GT_set_tradegood_price Div/0 (85x/boot)
+- DIAGNOSIS: innermost frame GT_set_tradegood_price relative-line-3 = the divide at se_GLOBALTRADE_split.txt:5952,
+  `divide = global_var:$tradezone$_stockpile_$tradegood$`, guarded only by `> 0`. At game SETUP (day 0,
+  oa_economy_setup:2490, before stockpiles are seeded) the stockpile global is UNSET, and a bare `> 0` on an
+  unset global inside a value{} svalue block does not reliably skip the divide -> Div/0 (85x/boot).
+- FIX: add `has_global_variable = $tradezone$_stockpile_$tradegood$` to the limit (read-before-set-safe). Unset
+  -> skip divide, price = raw order size (correct default before any stockpile exists). 1-line, braces 1628/1628.
+- #107 NOW COMPLETE: food-stockpile seed (19dc745d4) + this Div/0 guard. The 242 bimetallic reads bundled in the
+  task were fixed by #108 part 1. All three sub-roots of #107 closed.
