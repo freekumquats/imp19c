@@ -351,3 +351,13 @@ While hunting the #72 shot I read the whole set (logs-skill Rule 5); it visually
 - All other cr92 findings CLEAN (scope propagation, guard/no-double-charge, 255 cost, is_triggered_only, BOM,
   log-string, no AI spam) — verdict was ship-after-the-one-loc-edit. Both edits done.
 - Also cr74/cr90/cr94 returned CLEAN (earlier commits confirmed post-hoc).
+
+## #107 (part 1) — food-stockpile unset flood (~600/boot)
+- DIAGNOSIS: DEMAND_get_stockpile_percentages_all_tradegoods (se_DEMAND.txt:338+) reads var:<food>_stockpile
+  unconditionally for all 6 food goods (grain/livestock/vegetables/temperate_fruit/processed_foods/fish); a
+  governorship only gets a stockpile set once it produces/consumes that good -> ~600 unset-var errors/boot.
+- FIX (#106-class seed-defaults): seed all 6 to 0 (per-var has_variable guard so it NEVER zeroes an accumulated
+  stockpile) at the TOP of TRADE_reset_quarterly_governorship_values (runs at setup + quarterly, per-governorship).
+- STILL OPEN (part 2, NOT done): #107 also bundles 101x Div/0 (oa_wealth_changes:450/416 — separate root, needs
+  its own trace) + the 242 bimetallic reads (ALREADY fixed by #108 part 1). Div/0 sub-root left for a boot-verify.
+- STATUS: food-stockpile half committed; Div/0 half open — task in_progress.
