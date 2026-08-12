@@ -204,3 +204,75 @@ create_character'd character, which this design doesn't need).
 
 **Disposition:** revise per Findings 1-5 (the LOW findings are polish), then dispatch a fresh design
 review before implementation.
+
+## CORRECTED PROPOSAL (2026-08-11) — resolves Findings 1-5
+
+**Scope decision (Finding 5):** #116 is scoped to the RUNTIME BACKFILL path only
+(`QING_office_vacate_dispatch` → `QING_council_autofill_office`, reached from `on_character_death` /
+`QING_justice_strip_for_trial`). The day-32 BOOT autofill pass is treated as the sanctioned boot seed
+under the existing character-creation rule ("create_character permitted at the game-start boot seed")
+and is left untouched — it keeps minting unconditionally, exactly as it does today. This means the
+elaborate 13-calls-in-one-pass stale-scope guard from the original proposal is UNNECESSARY: the backfill
+path calls `QING_council_autofill_office` once per vacancy, never 13 times in a row, so there is no
+same-pass staleness to guard against.
+
+**Corrected design:**
+1. Add a NEW parameter to `QING_council_autofill_office`, `$autofill_source$` (values: `boot` |
+   `backfill`), set by each caller (`QING_council_autofill` passes `boot`;
+   `QING_office_vacate_dispatch` passes `backfill`).
+2. Inside the vacant-seat branch, gate the NEW draw attempt on `$autofill_source$ = backfill` — the boot
+   path skips straight to the existing create_character mint, unchanged.
+3. On the backfill path, attempt an `ordered_character` draw BEFORE the mint, with this gate (Finding 3
+   — fully enumerated, not described by reference):
+   ```
+   employer = scope:qing_autofill_country          # Finding 1 — NEVER bare ROOT
+   is_adult = yes
+   is_alive = yes
+   is_ruler = no
+   is_general = no
+   is_admiral = no
+   is_governor = no
+   NOT = { AND = { exists = scope:qing_autofill_country.current_ruler
+                    this = scope:qing_autofill_country.current_ruler } }
+   NOT = { AND = { exists = scope:qing_autofill_country.primary_heir
+                    this = scope:qing_autofill_country.primary_heir } }
+   NOT = { has_variable = qing_is_harem_consort }
+   NOT = { has_variable = qing_officer_marker }
+   NOT = { QING_char_hard_disgraced = yes }
+   NOT = { has_office = office_foreign_minister }
+   NOT = { has_office = office_royal_tutor }
+   NOT = { has_office = office_marshal }
+   NOT = { has_office = office_master_of_the_guard }
+   NOT = { has_office = office_high_priest_monarchy }
+   NOT = { has_office = office_philosopher }
+   NOT = { has_office = office_steward }
+   NOT = { has_office = office_physician }
+   NOT = { QING_char_holds_court_position = yes }    # Finding 3 — ADDITIVE, not a substitute for the above
+   has_trait = $degree$                              # office/degree congruence with the mint fallback
+   ```
+   (This is `QING_office_eligible_candidate`'s exclusion set, re-anchored per Finding 1, PLUS
+   `QING_char_holds_court_position` and `has_trait = $degree$` — not a reuse of the trigger itself, since
+   it is hardcoded to bare `ROOT`.)
+4. `order_by = combined_stats_council_svalue`, `max = 1`, `save_scope_as = qing_autofill_draw`.
+5. NO stale-scope guard needed (see scope decision above — single call per vacancy on this path). If
+   the draw matched: `scope:qing_autofill_draw = { QING_office_appoint = { office = $office$ } }`. Else:
+   fall through to the existing create_character mint, unchanged.
+6. **Finding 4 (martial-seat near-permanent no-op) — explicit decision, not left open:** the martial
+   offices (war, guard_commandant) use a SOFT preference instead of the hard `has_trait = $degree$`
+   filter used for the 11 civil offices. Rationale: the setup seed has ZERO wu_jinshi holders and the
+   only accrual paths (day-30/31 grant, triennial exam) are slow — a hard filter would make the martial
+   backfill draw permanently dead weight, which is honest but delivers nothing. A soft preference (add
+   `qing_wu_degree_prestige_svalue` to the martial draw's `order_by` instead of gating on `has_trait`)
+   lets a wu_jinshi-holder win the draw when one exists, without making the draw a guaranteed no-op when
+   none does. This reconciles the hard-vs-soft tension #117 independently flagged — #117's design should
+   adopt the SAME civil-hard/martial-soft split rather than making an independent, possibly divergent
+   choice (see Finding 7 / cross-task note below).
+7. **Finding 7 acknowledgment:** `QING_exam_fill_first_vacant_from_pool` (pool-scoped, degree-agnostic,
+   wired to `qing_keju.6`/a GUI button) remains a distinct, intentionally-separate fill-from-existing
+   path — this design does not unify with it. Noted so the two are not mistaken for redundant or
+   conflicting.
+
+**Cross-task note for whoever implements #117 next:** if #117 builds a canonical degree→post predicate
+(per #117's own Finding 5), THIS design's draw gate (step 3's `has_trait = $degree$` / step 6's soft
+martial preference) should consume that same predicate rather than hardcoding its own — implement #117's
+predicate first if both land in the same session, or leave a TODO cross-reference if #116 lands first.
