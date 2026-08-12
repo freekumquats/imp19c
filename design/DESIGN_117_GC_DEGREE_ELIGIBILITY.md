@@ -1,10 +1,10 @@
 # DESIGN — #117 GC office eligibility checks suitable exam degrees
 
-> STATUS 2026-08-11: PROPOSED DESIGN REVIEWED — NOT CLEAN. See "## REVIEW FINDINGS (2026-08-11)" appended
-> at the bottom. Two CRITICAL findings invalidate this doc's core diagnosis (the bench-size count was
-> wrong — the martial bench is NOT empty — and the proposed edit target, `QING_office_eligible_candidate`,
-> is not actually read by the manual picker's real enforcement points). Do not implement the "Proposed
-> resolution" section below as written; it must be rebuilt per the findings, then re-reviewed.
+> STATUS 2026-08-11: FIRST PROPOSAL REVIEWED — NOT CLEAN (see "## REVIEW FINDINGS" below). REBUILT as
+> "## CORRECTED PROPOSAL" further down, addressing all findings; that corrected proposal has its OWN
+> open "generic picker" caveat flagged for the next review round and is not yet re-reviewed. Do not
+> implement either the original "Proposed resolution" or the corrected proposal until a fresh adversarial
+> review clears the corrected proposal's open questions.
 
 ## Task text
 `overnight/SESSION_HANDOFF_2026_08_11.md:62`: "#117 GC office eligibility checks suitable exam degrees
@@ -171,3 +171,91 @@ preference (including the martial/civil ladder split) already exists and already
 is (a) a real GATE on the three inlined enforcement copies (Finding 2) and (b) a canonical degree→post
 map (Finding 5) that #116 should share. Rebuild the proposed resolution around Findings 1-6, then dispatch
 a fresh design review before implementation.
+
+## CORRECTED PROPOSAL (2026-08-11) — resolves Findings 1-6
+
+**Decision (Finding 4, made explicitly, not left open):** GATE, not rank-only. Ranking is already
+solved by existing machinery (Finding 3) and needs no change. The actual gap is that the manual picker
+has NO exclusion at all — #117 adds one.
+
+**Hard/soft split (Finding 1 + reconciled with #116's independent corrected proposal):** HARD filter
+(`has_trait = $degree$` required) for the 11 civil offices. SOFT preference (existing
+`qing_degree_prestige_svalue`/`qing_wu_degree_prestige_svalue` weighting, already sufficient per Finding
+3) for the 2 martial offices (war, guard_commandant) — NOT a hard filter there. Finding 1 corrected the
+bench-size premise (the martial bench isn't empty at boot), but #116's own corrected proposal
+independently chose soft-preference for martial specifically to avoid making its OWN backfill draw a
+near-permanent no-op; keeping #117's martial approach consistent with #116's avoids the exact
+"asymmetric and undocumented" trap this doc's own original open-question worried about — the asymmetry
+is now DELIBERATE and consistent across both tasks, not arbitrary.
+
+**Canonical degree→post predicate (Finding 5):** define, in a shared location (e.g.
+`common/scripted_triggers/qing_dynasty_triggers.txt`, alongside `QING_office_eligible_candidate`):
+```
+QING_office_required_degree_civil = { has_trait = jinshi }
+QING_office_required_degree_martial_soft = yes   # marker only — martial uses ranking, not a hard trigger
+```
+(A single boolean-returning trigger per civil/martial split is sufficient since there are only 2 tiers;
+a full `$office$`-parameterized table is unnecessary complexity — each of the 11 civil offices requires
+the SAME degree (jinshi), and both martial offices require the same soft-preference treatment. If a
+future office introduces a THIRD degree tier, revisit then.) Every civil-office enforcement path (the
+picker's 3 inlined copies below, PLUS #116's backfill draw, PLUS the existing autofill/vacate-dispatch
+`$degree$` args) should consume `QING_office_required_degree_civil` rather than each hardcoding
+`has_trait = jinshi` independently — this is the "one canonical source" Finding 5 asked for, scoped to
+what's actually needed rather than over-built.
+
+**Fix the wrong-chokepoint bug (Finding 2) — edit all THREE inlined copies, not the unused shared
+trigger:**
+1. `QING_council_refresh_candidates` (`se_QING_COUNCIL.txt:1116-1201`): add
+   `QING_office_required_degree_civil = yes` to the `ordered_character.limit` — but ONLY when the
+   candidate is being considered for a CIVIL office context. This builder feeds the GENERIC picker
+   (all 13 offices via one shared list), so the filter cannot be unconditional here; see the "generic
+   picker" caveat below.
+2. `QING_council_refresh_candidates_by` (`:1215-1318`): same predicate, same caveat — this is the
+   PER-OFFICE cache (`$sortval$` already tells it which office's picker is opening), so THIS builder can
+   correctly apply the hard filter conditionally on `$sortval$` (or better, on a new `$office$` param —
+   see below), since it already knows which specific office is being filled.
+3. The row-click handler's `is_valid` (`QING_governance_actions.txt:646-681`, the `trigger_else` "GREAT
+   OFFICES" branch): add the hard civil filter here too, gated on
+   `NOT = { OR = { scope:player.var:qing_gc_picker_office_var = flag:war
+                    scope:player.var:qing_gc_picker_office_var = flag:guard_commandant } }`
+   (i.e., apply the hard filter unless the target is one of the 2 martial offices).
+
+**The "generic picker" caveat — RESOLVED (verified against the live GUI call graph, 2026-08-11):**
+Confirmed via `gui/government_view.gui`: EVERY per-office Appoint/Replace button (including war's, at
+`:3675-3677`) fires a THREE-step onclick chain — `qing_gc_set_picker_office_<office>` (sets the office
+var) → `qing_gov_refresh_candidates_<sortval>` (calls the OFFICE-AWARE `QING_council_refresh_candidates_by`
+with that office's sortval) → `gui.createwidget ... qing_office_picker_window` (opens the shared picker
+window, which always renders whatever list was most recently written to `qing_council_candidates`).
+`QING_council_refresh_candidates` (the generic, non-office-aware builder, enforcement copy #1) is called
+ONLY from the plain Grand-Council-tab-open button (`qing_gov_council_refresh_candidates`,
+`QING_governance_actions.txt:354-362`) — its former quarterly-pulse call was already removed
+(`se_QING_GOVERNANCE.txt:243`, commented out). So the generic list is NEVER the one actually shown when
+a specific office's Appoint/Replace picker opens; that picker always re-refreshes via the office-aware
+builder first. **Decision: option (c)** — do NOT apply the hard civil filter in enforcement copy #1
+(`QING_council_refresh_candidates`); leave it ranking-only exactly as it is today. Apply the hard filter
+only in enforcement copies #2 (`QING_council_refresh_candidates_by`) and #3 (the row-click `is_valid`),
+which ARE office-aware and are the ones that actually gate a real appointment.
+
+**`qing_office.41` disposition (Finding 6, decided explicitly):** KEEP, unchanged, as defense-in-depth.
+It remains load-bearing for `qing_force_setup.1/.11`'s day-30/31 commander reconciliation (a path that
+never goes through the picker) and for any future appointment route that reaches `QING_office_appoint`
+without passing through the now-filtered picker (e.g. #116's backfill draw, which mints/draws
+independently of the manual picker's enforcement copies). It is NOT contradictory with the new hard
+civil filter or the unchanged martial soft-preference, because it only ever fires for the 2 martial
+offices — which never carry a hard filter under this design — so "gate qualification vs. confer it by
+fiat" is not in tension for them; it stays a legitimate backstop.
+
+## Open questions a fresh design review must resolve
+- Independently re-verify the "generic picker" resolution above against the live GUI files (don't take
+  this rebuild's own grep-based confirmation on faith — confirm `QING_council_refresh_candidates`'s only
+  callers really are the tab-open button and nothing else, and that ALL 13 offices' Appoint/Replace
+  buttons — not just war's, which was the one directly checked — follow the same
+  set-office-var → refresh-by-sortval → open-window chain).
+- Confirm `QING_governance_actions.txt`'s row-click `is_valid` fix (enforcement copy #3) is gated on the
+  CORRECT var (`scope:player.var:qing_gc_picker_office_var`, matching the existing pattern at
+  `:1283-1287`/`:1299-1309` in the sibling candidate builder) and that the flag names (`flag:war`,
+  `flag:guard_commandant`) match the office keys used elsewhere in this file.
+- Whether `QING_office_required_degree_civil`'s trivial one-line body (just `has_trait = jinshi`) is
+  worth a named trigger at all, or whether Finding 5's "canonical predicate" intent is better served by
+  a comment-documented convention (since there's genuinely only one degree per split) — lean toward
+  keeping the named trigger for discoverability/greppability even though its body is trivial.
