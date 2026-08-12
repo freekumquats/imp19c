@@ -306,11 +306,58 @@ QING_char_exam_track_civil = {
     NOT = { martial > finesse }
 }
 ```
-`QING_exam_sit_candidate` keeps its if/else_if/else STRUCTURE unchanged — only the branch CONDITIONS
-change to call the shared triggers (`limit = { QING_char_exam_track_banner = yes }`, etc.), with the
-FINAL civil branch remaining a bare `else` (never converted to a `limit` gate). The three cohort helpers'
-`ordered_character.limit` blocks call the matching shared trigger instead of their inlined predicate.
+
+**Corrected structural description (per review — the actual control flow is NESTED, not a flat
+if/else_if/else chain):** `QING_exam_sit_candidate`'s real shape (`common/scripted_effects/se_QING_EXAM.txt:924-1090`
+as of this session) is:
+```
+if = { limit = { banner-culture-check }   -> BANNER track body }
+else = {
+    if = { limit = { martial > finesse }  -> MILITARY track body }
+    else = {                              -> CIVIL track body (bare else, unconditional)
+    }
+}
+```
+i.e. the banner `if` (outer) / else contains a NESTED `if`(military)/`else`(civil), not three siblings.
+Piece B changes ONLY the two inner `limit` conditions:
+- The outer banner `if`'s `limit` becomes `limit = { QING_char_exam_track_banner = yes }`.
+- The nested military `if`'s `limit` (currently `limit = { martial > finesse }`, inside the banner
+  `else`) becomes `limit = { QING_char_exam_track_martial = yes }`.
+- The innermost civil branch stays a BARE `else` (never converted to a `limit` gate) — it is reached
+  only when both outer conditions already failed, exactly as today.
+The three cohort helpers' `ordered_character.limit` blocks call the matching shared trigger instead of
+their inlined predicate, unchanged from the original plan.
+
+**Orphaned-comment relocation (per review):** the existing `[#113 ROUTING-FIX 2026-08-11]` comment
+block (`se_QING_EXAM.txt:979-983` as of this session) documents the deliberate decision to route on
+`martial > finesse` alone (no `martial > charisma` clause) and currently sits directly above the nested
+military `if`'s `limit`. Once that `limit` becomes `QING_char_exam_track_martial = yes`, this rationale
+would be orphaned (the reader would see a trigger call with no explanation of why it's shaped that way).
+Relocate this comment to sit directly above `QING_char_exam_track_martial`'s definition in
+`qing_dynasty_triggers.txt`, so the rationale travels with the logic it explains.
 
 **Sequencing:** Piece A can land on its own review cycle immediately (low risk, mechanical). Piece B is
-NOT urgent (no live bug depends on it; #113's shipped code is already behaviorally correct) — schedule
-it as a reviewed hardening pass whenever convenient, not as a blocker on other work.
+NOT urgent (no live bug depends on it; #113's shipped code is already behaviorally correct; independently
+confirmed #116/#117 do not touch these 4 sites) — schedule it as a reviewed hardening pass whenever
+convenient, not as a blocker on other work.
+
+## DISPOSITION (2026-08-11)
+
+A design review of the ORIGINAL split (before the nested-structure correction + comment-relocation note
+above) returned: **Piece A — CLEAN, safe to implement now** (verified: the 11-trait list is byte-identical
+at all 4 current sites; the scope-mismatch concern doesn't apply, since a scripted_trigger with only
+`NOT = { has_trait = X }` predicates is scope-agnostic and evaluates correctly whether called from an
+`ordered_character.limit` or a plain character-scope `if.limit` — the same precedent
+`QING_char_holds_court_position` already establishes in this codebase; the martial trigger's proposed
+definition faithfully reproduces the current gate's two clauses with nothing dropped or duplicated; the
+nested-else redundant re-check when the self-contained military trigger is called from inside the
+banner-else is provably harmless, since both use the byte-identical culture_group tokens; Piece A and
+Piece B touch disjoint clauses and compose cleanly). **Piece B — correctly deferred** (no live bug, not
+urgent), but that same review flagged two LOW spec-precision gaps in Piece B specifically (the doc
+described the control flow as a flat if/else_if/else chain when it is actually nested; the routing-fix
+rationale comment would be orphaned by the trigger-extraction). Both are now fixed in the "Corrected
+structural description" and "Orphaned-comment relocation" subsections above. **The corrected Piece B spec
+has NOT yet been re-reviewed** — dispatching that review now, before Piece B implementation (still
+deferred/not urgent) is ever picked up. Piece A has been implemented (see
+`common/scripted_triggers/qing_dynasty_triggers.txt` and the 4 call sites in
+`common/scripted_effects/se_QING_EXAM.txt`) and is pending its own code-review gate before commit.

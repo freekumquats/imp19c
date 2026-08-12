@@ -139,6 +139,40 @@ Split `QING_exam_seed_hanlin_pool` (se_QING_EXAM.txt:341-378) into two effects:
 - No change to QING_exam_pool_drop_member, the office-fill pickers, the GUI count, the Hanlin roster, or ANY
   create_character site other than renaming the boot seed.
 
+## RETROACTIVE REVIEW + CORRECTION (2026-08-11)
+
+A retroactive design review of the SHIPPED code (`08b17d8ad`) found two things:
+
+1. **The implementation silently dropped two of THIS document's own already-reviewed fixes**
+   (REVIEW-FIX 1 HIGH: `is_governor`/`is_general`/`is_admiral = no` on the draw gate; REVIEW-FIX 2
+   MEDIUM: the retire-pass phantom-member strip for a drawn scholar who took a job). This is a genuine
+   implementation bug against an already-cleared design, not a new design gap — **fixed directly in code**
+   (`common/scripted_effects/se_QING_EXAM.txt`, `QING_exam_pool_draw_one` and `QING_exam_pool_tick`),
+   restoring exactly what this document specified. No new design review is needed for this part; the
+   design was already reviewed CLEAN before the bug was introduced during implementation. A code review
+   of the restoring diff is still required before commit, per the standing gate.
+
+2. **A genuinely NEW gap, not covered by this document originally**: the draw gate's `has_trait = jinshi`
+   is under-inclusive. Degree traits are mutually exclusive `status` traits (`common/traits/00_imp19c.txt`)
+   — `hanlin` (翰林, the Academy apex) is a SEPARATE, strictly higher trait from `jinshi`, so
+   `has_trait = jinshi` returns FALSE for an office-less hanlin holder. `QING_exam_sit_candidate` (the
+   per-person intake) can and does produce office-less hanlin men, but the pool "named for the Hanlin"
+   can never see them — the apex of the civil ladder is invisible to the very bench meant to harvest it.
+   `gongshi`/`juren` are lower-tier and more debatable (they're the layer BELOW jinshi historically —
+   drawing them into a jinshi-named pool changes the pool's character, not just its inclusiveness), but
+   `hanlin` is unambiguous: he is MORE qualified than a jinshi, not less, and excluding him is a pure
+   under-inclusiveness bug with no offsetting rationale.
+
+## CORRECTED SCOPE for the draw gate (2026-08-11) — resolves the hanlin gap, needs its own review
+
+Change `has_trait = jinshi` to `OR = { has_trait = jinshi  has_trait = hanlin }` in
+`QING_exam_pool_draw_one`'s `ordered_character.limit`. Do NOT add `gongshi`/`juren` — those remain a
+distinct, lower tier the pool was never scoped to include, and adding them is a SEPARATE, larger scope
+question (whether the "Hanlin pool" should become a general civil-degree bench) that this fix does not
+attempt to answer. This keeps the fix narrow: only the ONE trait that is objectively MORE qualified than
+the pool's own name-tier gets included, closing the pure under-inclusiveness gap without opening the
+broader "which lower degrees also count" question.
+
 ## Review must test (against THIS scope)
 1. Caller split is correct: boot event → `_boot` (create_character kept); pool tick → `_refill` (draw only, no
    create_character). No third caller mints post-boot (rule 2 upheld).

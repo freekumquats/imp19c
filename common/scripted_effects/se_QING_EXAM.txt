@@ -264,17 +264,7 @@ QING_exam_seat_civil_graduate = {
 			# since the cohort confers civil slots before the martial slot, he could be cross-tracked
 			# into a civil degree the per-person path would never have given him.
 			NOT = { martial > finesse }
-			NOT = { has_trait = jiansheng }
-			NOT = { has_trait = shengyuan }
-			NOT = { has_trait = juren }
-			NOT = { has_trait = gongshi }
-			NOT = { has_trait = jinshi }
-			NOT = { has_trait = hanlin }
-			NOT = { has_trait = fanyi_jinshi }
-			NOT = { has_trait = wu_shengyuan }
-			NOT = { has_trait = wu_juren }
-			NOT = { has_trait = wu_jinshi }
-			NOT = { has_trait = wu_zhuangyuan }
+			QING_char_exam_degreeless = yes
 		}
 		order_by = finesse
 		max = 1
@@ -370,17 +360,7 @@ QING_exam_seat_banner_laureate = {
 				culture.culture_group = culture_group:jurchen
 				culture.culture_group = culture_group:mongolic
 			}
-			NOT = { has_trait = jiansheng }
-			NOT = { has_trait = shengyuan }
-			NOT = { has_trait = juren }
-			NOT = { has_trait = gongshi }
-			NOT = { has_trait = jinshi }
-			NOT = { has_trait = hanlin }
-			NOT = { has_trait = fanyi_jinshi }
-			NOT = { has_trait = wu_shengyuan }
-			NOT = { has_trait = wu_juren }
-			NOT = { has_trait = wu_jinshi }
-			NOT = { has_trait = wu_zhuangyuan }
+			QING_char_exam_degreeless = yes
 		}
 		order_by = charisma
 		max = 1
@@ -469,17 +449,7 @@ QING_exam_seat_martial_graduate = {
 					culture.culture_group = culture_group:mongolic
 				}
 			}
-			NOT = { has_trait = jiansheng }
-			NOT = { has_trait = shengyuan }
-			NOT = { has_trait = juren }
-			NOT = { has_trait = gongshi }
-			NOT = { has_trait = jinshi }
-			NOT = { has_trait = hanlin }
-			NOT = { has_trait = fanyi_jinshi }
-			NOT = { has_trait = wu_shengyuan }
-			NOT = { has_trait = wu_juren }
-			NOT = { has_trait = wu_jinshi }
-			NOT = { has_trait = wu_zhuangyuan }
+			QING_char_exam_degreeless = yes
 		}
 		order_by = martial
 		max = 1
@@ -643,8 +613,22 @@ QING_exam_pool_draw_one = {
 			age < 55
 			has_trait = jinshi
 			NOT = { has_variable = qing_is_pool_scholar }
+			# [111 retroactive-review fix] QING_char_holds_court_position is a fixed OR-set of COURT-POST
+			# variable markers only (qing_dynasty_triggers.txt:241-257) — it does NOT cover governor/
+			# general/admiral. Without these three, a founding jinshi serving as governor (e.g. Liu
+			# Tongxun, #34) would pass every gate and be drawn into the waiting bench WHILE GOVERNING —
+			# the #77/#79 1:1-violation class this draw must not reintroduce. Matches the already-reviewed
+			# design (design/DESIGN_SCHOLAR_POOL_FROM_JINSHI_111.md, REVIEW-FIX 1 HIGH) that this
+			# implementation had silently dropped.
+			is_governor = no
+			is_general = no
+			is_admiral = no
 			NOT = { QING_char_holds_court_position = yes }
 			NOT = { AND = { exists = ROOT.primary_heir  this = ROOT.primary_heir } }
+			# [111 retroactive-review fix] not a HARD-disgraced official — matches the design's own
+			# eligibility bar (mirrors QING_office_eligible_candidate's parallel exclusion) and closes the
+			# same "already-placed" over-inclusiveness the retroactive review found.
+			NOT = { QING_char_hard_disgraced = yes }
 		}
 		order_by = finesse
 		max = 1
@@ -852,6 +836,21 @@ QING_exam_pool_tick = {
 				OR = {
 					is_alive = no
 					AND = { is_alive = yes  age >= 55 }
+					# [111 retroactive-review fix] a DRAWN (real, pre-existing) pool scholar can take a job
+					# after being drawn — most likely a GOVERNORSHIP, which QING_char_holds_court_position
+					# does NOT cover (court-post vars only) and which QING_exam_pool_drop_member does NOT
+					# catch (it only fires from the office/canton/salt/amban/caravan appoint tails; nothing
+					# routes a governor/general/admiral assignment through it). Without this, a drawn man
+					# who took a job lingers as a listed-but-employed phantom pool member. Matches the
+					# already-reviewed design (design/DESIGN_SCHOLAR_POOL_FROM_JINSHI_111.md, REVIEW-FIX 2
+					# MEDIUM) that this implementation had silently dropped. Safe: a legit waiting scholar
+					# has qing_is_pool_scholar but none of these three roles, so this never strips him; a
+					# man already dropped by pool_drop_member at seating is off the list before this tick
+					# runs, so there is no double-decrement.
+					AND = { is_alive = yes  QING_char_holds_court_position = yes }
+					is_governor = yes
+					is_general = yes
+					is_admiral = yes
 				}
 			}
 			ROOT = {
@@ -933,19 +932,9 @@ QING_exam_sit_candidate = {
 			NOT = { has_variable = qing_sat_keju }
 			is_ruler = no
 			prisoner = no
-			# not already degreed (defensive; a fresh adult never is).
-			NOT = { has_trait = jiansheng }
-			NOT = { has_trait = shengyuan }
-			NOT = { has_trait = juren }
-			NOT = { has_trait = gongshi }
-			NOT = { has_trait = jinshi }
-			NOT = { has_trait = hanlin }
-			NOT = { has_trait = fanyi_jinshi }
-			# [#48] nor already a military-exam degree-holder (parallel guard).
-			NOT = { has_trait = wu_shengyuan }
-			NOT = { has_trait = wu_juren }
-			NOT = { has_trait = wu_jinshi }
-			NOT = { has_trait = wu_zhuangyuan }
+			# not already degreed (defensive; a fresh adult never is) — civil, banner, or
+			# military-exam trait (parallel guard, [#48]).
+			QING_char_exam_degreeless = yes
 		}
 		# sat once, whatever the outcome.
 		set_variable = { name = qing_sat_keju  value = 1 }
