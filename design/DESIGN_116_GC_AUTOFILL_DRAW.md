@@ -1,11 +1,9 @@
 # DESIGN — #116 enforce create_character rule on GC autofill
 
-> STATUS 2026-08-11: FIRST PROPOSAL REVIEWED — NOT CLEAN. See "## REVIEW FINDINGS (2026-08-11)" appended
-> at the bottom for the full verdict. One CRITICAL finding (the draw must anchor on
-> `scope:qing_autofill_country`, not `ROOT` — the proposal as originally written is inert or
-> crash-adjacent on the exact runtime-backfill path #116 targets) plus several HIGH/MEDIUM
-> underspecifications. Do not implement the "## Proposed resolution" section below as originally
-> written — it needs the corrections listed in the review findings first, then a re-review.
+> STATUS 2026-08-11: FULLY CLEAN, READY TO IMPLEMENT. 4 review rounds found and fixed real defects
+> (ROOT-vs-scope anchoring, gate composition, a justice-strip re-seating regression, an invalid
+> if-in-limit mechanism, a marker-clear ordering bug). See "## DISPOSITION" near the bottom for the
+> final implementation checklist. Not yet implemented in code.
 
 ## Task text
 `overnight/SESSION_HANDOFF_2026_08_11.md:61`: "#116 enforce create_character rule across GC positions
@@ -445,10 +443,18 @@ proven two-call + macro-parameterized-svalue-name pattern** (`QING_council_refre
 `se_QING_COUNCIL.txt:1215-1318`, already uses `order_by = $sortval$` with the literal svalue name passed
 in per call site — proven precedent for exactly this need):
 
-1. Define one trivial new script value in `QING_governance_svalues.txt`, mirroring `council_sort_martial`'s
-   existing composition shape (line 229):
+1. Define one trivial new script value in `QING_governance_svalues.txt`. Round 5 review note: the form
+   below (`combined_stats_council_svalue + qing_wu_degree_prestige_svalue`) is SAFE and will parse
+   correctly, but does NOT actually mirror `council_sort_martial`'s shape — `council_sort_martial` is
+   `martial + qing_wu_degree_prestige_svalue` (no civil-degree credit at all), whereas
+   `combined_stats_council_svalue` already folds in the CIVIL `qing_degree_prestige_svalue`, so a
+   candidate would get credit for a civil jinshi on a martial-seat soft-preference ranking. Not a bug
+   (still a sensible generalist-plus-wu-bonus ordering) but a real semantic difference from the cited
+   precedent — use the form below (matches `council_sort_martial` exactly) if faithful mirroring is
+   wanted, otherwise the `combined_stats_council_svalue`-based form is an acceptable, deliberate
+   alternative:
    ```
-   combined_stats_council_svalue_martial = { value = 0  add = combined_stats_council_svalue
+   combined_stats_council_svalue_martial = { value = 0  add = martial
                                                add = qing_wu_degree_prestige_svalue }
    ```
 2. Split the draw into TWO separate `ordered_character` calls inside an outer `if`/`else` in the
@@ -473,17 +479,14 @@ in per call site — proven precedent for exactly this need):
    }
    ```
    This sidesteps all three of Finding 1's problems: `if` is legal here (it's a sibling of the
-   `ordered_character` calls, not nested inside either one's `limit`); no `$degree_hard$ = yes` bareword
-   comparison is evaluated INSIDE a limit (the `$degree_hard$ = yes` check is itself the OUTER `if`'s
-   own limit — re-examine whether even THIS is safe: an `if.limit` block IS a limit block, so this needs
-   one more check — see the round-4 open question below); `order_by` is now a literal name in each
-   branch, never conditional.
-   (Optional simplification acknowledged from round 3, adopted here to shrink blast radius: derive
-   hard-vs-soft from the EXISTING `$degree$` param instead of threading a new `$degree_hard$` — e.g.
-   `if = { limit = { NOT = { has_variable = ... } } }` is unnecessary; simplest is an outer
-   `if = { limit = { $degree$ = flag:wu_jinshi } ... }`-style check IF `$degree$`'s value is
-   comparison-legal in a limit this way — same open question as above, flag for review — otherwise keep
-   the explicit second parameter.)
+   `ordered_character` calls, not nested inside either one's `limit`); `order_by` is now a literal name
+   in each branch, never conditional.
+   **REJECTED, do not implement (round 5 finding):** the "optional simplification" that would derive
+   hard-vs-soft from the existing `$degree$` param (e.g. `if = { limit = { $degree$ = flag:wu_jinshi }
+   ... }`) is UNSAFE — `$degree$` expands to a bareword (`wu_jinshi`/`jinshi`), giving
+   `wu_jinshi = flag:wu_jinshi`, the exact non-yes/no-bareword-LHS class that silently mis-parses
+   elsewhere in this codebase (`se_QING_LEGATIONS.txt:76`'s `$power$ = britain` burn). Keep the explicit
+   `$degree_hard$ = yes` boolean parameter as the ONLY dispatch mechanism.
 
 **Fix for Finding 2 — pin the marker-clear's exact placement.** In `QING_justice_convict_accused`,
 add `remove_variable = qing_pending_trial` immediately AFTER (not before, not grouped with the
@@ -497,12 +500,29 @@ against). Note (informational, not a fix): a THIRD path — the accused dying mi
 handling is needed, but the design should say so explicitly rather than claim the marker "never outlives
 the trial."
 
-## Open question for round 4's review
-Is `if = { limit = { $degree_hard$ = yes } ... }` — used as the OUTER dispatch between the two
-`ordered_character` calls, NOT nested inside either call's own `limit` — itself safe, or does the
-SAME bareword-comparison parse-risk (Finding 1b) apply here too since it's still a comparison against a
-macro parameter? If unsafe, the outer dispatch needs the same fix pattern #123 used (two entirely
-separate effects, selected by whichever caller passes the right one) rather than a runtime `$degree_hard$`
-comparison anywhere at all.
+## Open question for round 4's review — RESOLVED (round 5, 2026-08-11): SAFE, confirmed CLEAN
+
+`if = { limit = { $degree_hard$ = yes } ... }` as the outer dispatch IS safe. Confirmed via multiple
+real precedents in this codebase using the identical `if = { limit = { $param$ = yes } ... }` shape with
+a documented yes/no macro parameter (`se_MOBILIZATION.txt:59`, `se_QING_WORKS.txt:203/273/334/428`,
+`se_QING_MARCH.txt:105/218`, `se_MARRIAGE.txt:307/387`). The risk boundary is not "comparison inside a
+limit block" (round 3's framing was imprecise) — it's specifically when a macro param's LHS expands to a
+**non-yes/no bareword** the engine misreads as an unknown trigger (the two actual in-repo burns,
+`se_QING_LEGATIONS.txt:76` and `se_QING_CENSORATE.txt:216-223`, both expand to a bareword OTHER than
+`yes`/`no`). `$degree_hard$ = yes` expands to `yes = yes` / `no = yes` — RHS is the literal `yes`, the
+attested-safe form. **This design's PRIMARY mechanism (explicit `$degree_hard$` boolean param) is CLEAN
+and safe to implement as specified.** The rejected "optional simplification" above is the one case that
+WOULD hit the real risk boundary (a non-yes/no bareword LHS) — correctly rejected, not implemented.
+
+## DISPOSITION — #116 design is FULLY CLEAN, ready to implement
+After 4 rounds of substantive fixes (justice-strip regression, martial-gate mechanism, cross-death
+staleness, the `if`-in-limit/order_by mechanism) plus this closing round's two informational notes, the
+round-4 corrected proposal (with the optional-simplification rejection folded in above) is confirmed
+CLEAN. Implement per: the scope decision (backfill-only, boot untouched), the enumerated gate (round 2),
+the two-`ordered_character`-call split keyed on the explicit `$degree_hard$` boolean param (round 4, NOT
+the rejected `$degree$`-derived shortcut), the new `combined_stats_council_svalue_martial` script value,
+the `qing_pending_trial` marker with its pinned clear-ordering (round 4 Finding 2), and the cross-death
+stale-scope guard (round 3 Finding C). All 26 call sites need both `$autofill_source$` (round 2) and
+`$degree_hard$` (round 4) threaded through in one implementation pass.
 
 This round-4 proposal needs its own design review before implementation.
