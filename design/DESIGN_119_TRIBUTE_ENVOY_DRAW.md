@@ -235,11 +235,12 @@ makes deletion even safer than the proposal assumed (nothing downstream depends 
 nothing ever cleaned it up). Both `qing_tribute.1` options were re-checked and touch the envoy only via
 the now-removed dismiss call — no other envoy-related logic hides in either option body.
 
-**Disposition:** implement with Findings 1-4's corrections folded in, then dispatch a fresh design
-review (or, given the corrections are now concrete and mechanical, this may be foldable into the
-implementation's own code-review pass — reviewer's judgment at that time) before commit.
+**Disposition:** SUPERSEDED by the "### CORRECTED SHAPE v2" section below — a review of v1 (this
+section) found two MEDIUM gaps (the fallback path's trigger guard was left wrong for that path
+specifically; the rulerless guard used an unproven construct when a proven one already exists in this
+codebase) plus two LOW polish items. v2 resolves all four.
 
-### CORRECTED SHAPE (folds in Findings 1-4, 2026-08-11) — this is what should be implemented
+### CORRECTED SHAPE v1 (folds in Findings 1-4, 2026-08-11) — SUPERSEDED, see v2 below
 
 **`common/scripted_effects/se_QING_TRIBUTE.txt`:**
 1. Delete `QING_tribute_mint_envoy` (`:140-160`) and `QING_tribute_dismiss_envoy` (`:163-181`) entirely.
@@ -261,6 +262,73 @@ implementation's own code-review pass — reviewer's judgment at that time) befo
    Keep `var:qing_trib1_sender = { save_scope_as = trib_sender }`.
 6. Both `option` blocks (`.1.a` at `:69-85`, `.1.b` at `:88-97`): remove
    `QING_tribute_dismiss_envoy = yes` from each (nothing to dismiss).
+
+### CORRECTED SHAPE v2 (2026-08-11) — resolves v1's review findings; this is what should be implemented
+
+Review of v1 found: **(A, MEDIUM)** the fallback path (step 3's "if the var-chain portrait doesn't
+render, persist the ruler as his own var instead") captures a SPECIFIC ruler character at schedule time,
+but v1's trigger guard (step 4) checks the sender's CURRENT ruler at fire time — if the captured ruler
+dies and a successor takes over during the 5-20 day delay, the guard passes (a current ruler exists) but
+the portrait still points at the dead captured ruler → empty/error portrait. The fallback needs its OWN
+guard keyed on the SAME var it persists, not the primary path's guard. **(B, MEDIUM)** v1's rulerless
+guard (`exists = var:qing_trib1_sender.current_ruler`) is itself an unproven var-chain-through-
+`.current_ruler` construct — the exact class of syntax v1's own Finding 3 flagged as unproven for the
+portrait — when a PROVEN scope-block idiom already exists in this codebase
+(`events.txt:150`: `scope:trib_invest_vassal = { exists = current_ruler }`; `se_QING_TRIBUTE.txt:312-316`:
+`$vassal$ = { ... exists = current_ruler }`). **(C, LOW)** the proposed loc replacement duplicates "An
+embassy ... from [trib_sender.GetName]" twice in one paragraph. **(D, LOW)** the deletion ranges should
+extend to the comment headers/delimiters immediately preceding each deleted effect, and several OTHER
+comments describing the now-deleted envoy character (the file header at `se_QING_TRIBUTE.txt:9-16`, the
+BT-7/BT-7b inline comments at `qing_tribute_events.txt:41-44,48-51,61-62`) go stale and should be
+updated/removed alongside the code, not left describing machinery that no longer exists.
+
+**`common/scripted_effects/se_QING_TRIBUTE.txt`:**
+1. Delete `QING_tribute_mint_envoy` INCLUDING its preceding comment header (`:130-160`, not just
+   `:140-160`) and `QING_tribute_dismiss_envoy` INCLUDING its preceding `# ====` delimiter (`:162-181`,
+   not just `:163-181`) — entirely.
+2. Update the file header comment (`:9-16`) to remove "`scope:trib_envoy` = the envoy CHARACTER minted
+   for it" (no envoy exists anymore).
+3. `QING_tribute_schedule_missions`'s `random_subject` body (`:103-113`): remove the
+   `QING_tribute_mint_envoy = { sender = scope:trib_sender }` call and the
+   `set_variable = { name = qing_trib1_envoy  value = scope:trib_envoy }` line. Keep the
+   `qing_trib1_sender` persist and the `trigger_event = { id = qing_tribute.1  days = { 5 20 } }` call
+   unchanged.
+
+**`events/imp19c_mod_events/qing_tribute_events.txt`, `qing_tribute.1`:**
+4. PRIMARY portrait attempt: change `right_portrait = var:qing_trib1_envoy` (`:45`) to
+   `right_portrait = var:qing_trib1_sender.current_ruler`. Boot-verify this renders. Update the stale
+   BT-7b comment above it (`:41-44`) to describe the new portrait source instead of the deleted envoy.
+5. Trigger (`:52-58`): remove `has_variable = qing_trib1_envoy` and `exists = var:qing_trib1_envoy`.
+   Add the rulerless guard using the PROVEN scope-block idiom, NOT a var-chain:
+   `var:qing_trib1_sender = { exists = current_ruler }` (matches `events.txt:150`'s proven form).
+   Update the stale BT-7 comment above it (`:48-51`).
+6. `immediate` (`:60-65`): remove `var:qing_trib1_envoy = { save_scope_as = trib_envoy }`. Keep
+   `var:qing_trib1_sender = { save_scope_as = trib_sender }`. Update the stale comment (`:61-62`).
+7. Both `option` blocks (`.1.a` at `:69-85`, `.1.b` at `:88-97`): remove
+   `QING_tribute_dismiss_envoy = yes` from each.
+8. **IF step 4's primary portrait attempt does not render at boot-test**, apply this fallback INSTEAD of
+   step 4 (not alongside it):
+   - In `QING_tribute_schedule_missions` (`se_QING_TRIBUTE.txt:103-113`), add
+     `set_variable = { name = qing_trib1_ruler  value = scope:trib_sender.current_ruler }` alongside the
+     existing `qing_trib1_sender` persist.
+   - Portrait: `right_portrait = var:qing_trib1_ruler` (not `var:qing_trib1_sender.current_ruler`).
+   - Trigger guard: `exists = var:qing_trib1_ruler` (NOT `var:qing_trib1_sender = { exists = current_ruler }`
+     — that guard is for the PRIMARY path only; the fallback captured a specific character at schedule
+     time, so its guard must check THAT captured var, or a successor ruler taking over mid-delay would
+     pass the sender's own current-ruler guard while the portrait still points at the dead predecessor).
+   - `immediate`: no re-save needed for `qing_trib1_ruler` (it is not read via a named scope anywhere
+     else, only the raw `var:` portrait reference).
+
+**`localization/english/qing_tribute_l_english.yml`, `qing_tribute.1.desc` (line 10):**
+9. Remove `[trib_envoy.GetName]` and the envoy-as-distinct-person framing WITHOUT duplicating "An embassy
+   ... from [trib_sender.GetName]" a second time in the same paragraph. The opening sentence already
+   establishes the sender; the envoy sentence should be reworded around the mission/embassy itself
+   without re-naming the sender, e.g.: *"...bearing tribute for the Son of Heaven — the ritual homage by
+   which the tributary states of the realm acknowledge the centre of the world. Its envoys wait in the
+   antechambers of the [ROOT.GetCountry.Custom('get_country_formal_adjective')] court with their gifts
+   and their memorial of submission. ..."* (switches "the envoy, [Name]" + "his" to "Its envoys" +
+   "their," dropping the individual-character reference entirely while keeping the rest of the paragraph,
+   including the ORDER/prestige framing, unchanged).
 
 **`localization/english/qing_tribute_l_english.yml`, `qing_tribute.1.desc` (line 10, Finding 2):**
 7. Current text: *"An embassy has come to the capital from [trib_sender.GetName], bearing tribute for
