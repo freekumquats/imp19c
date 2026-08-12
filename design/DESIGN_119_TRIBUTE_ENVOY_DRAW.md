@@ -239,6 +239,47 @@ the now-removed dismiss call — no other envoy-related logic hides in either op
 review (or, given the corrections are now concrete and mechanical, this may be foldable into the
 implementation's own code-review pass — reviewer's judgment at that time) before commit.
 
+### CORRECTED SHAPE (folds in Findings 1-4, 2026-08-11) — this is what should be implemented
+
+**`common/scripted_effects/se_QING_TRIBUTE.txt`:**
+1. Delete `QING_tribute_mint_envoy` (`:140-160`) and `QING_tribute_dismiss_envoy` (`:163-181`) entirely.
+2. `QING_tribute_schedule_missions`'s `random_subject` body (`:103-113`): remove the
+   `QING_tribute_mint_envoy = { sender = scope:trib_sender }` call and the
+   `set_variable = { name = qing_trib1_envoy  value = scope:trib_envoy }` line. Keep the
+   `qing_trib1_sender` persist and the `trigger_event = { id = qing_tribute.1  days = { 5 20 } }` call
+   unchanged.
+
+**`events/imp19c_mod_events/qing_tribute_events.txt`, `qing_tribute.1`:**
+3. Change `right_portrait = var:qing_trib1_envoy` (`:45`) to
+   `right_portrait = var:qing_trib1_sender.current_ruler` — boot-verify this renders (Finding 3); if it
+   does not, fall back to persisting the ruler as his own var at schedule time
+   (`set_variable = { name = qing_trib1_ruler  value = scope:trib_sender.current_ruler }` alongside the
+   existing `qing_trib1_sender` persist) and point the portrait at that instead.
+4. `trigger` (`:52-58`): remove `has_variable = qing_trib1_envoy` and `exists = var:qing_trib1_envoy`
+   (Finding 1); add `exists = var:qing_trib1_sender.current_ruler` (Finding 4, rulerless guard).
+5. `immediate` (`:60-65`): remove `var:qing_trib1_envoy = { save_scope_as = trib_envoy }` (Finding 1).
+   Keep `var:qing_trib1_sender = { save_scope_as = trib_sender }`.
+6. Both `option` blocks (`.1.a` at `:69-85`, `.1.b` at `:88-97`): remove
+   `QING_tribute_dismiss_envoy = yes` from each (nothing to dismiss).
+
+**`localization/english/qing_tribute_l_english.yml`, `qing_tribute.1.desc` (line 10, Finding 2):**
+7. Current text: *"An embassy has come to the capital from [trib_sender.GetName], bearing tribute for
+   the Son of Heaven ... The envoy, [trib_envoy.GetName], waits in the antechambers of the
+   [ROOT.GetCountry.Custom('get_country_formal_adjective')] court with his gifts and his memorial of
+   submission. ..."* — the `[trib_envoy.GetName]` token must be removed (it would render `ERROR:[...]`
+   once `scope:trib_envoy` is never saved) and the envoy-as-distinct-person framing dropped. Proposed
+   replacement clause: *"...bearing tribute for the Son of Heaven — the ritual homage by which the
+   tributary states of the realm acknowledge the centre of the world. An embassy from
+   [trib_sender.GetName]'s court waits in the antechambers of the
+   [ROOT.GetCountry.Custom('get_country_formal_adjective')] court with its gifts and its memorial of
+   submission. ..."* (keeps the rest of the paragraph, including the ORDER/prestige framing, unchanged
+   — only the sentence naming a distinct envoy character is reworded around the embassy/mission itself,
+   consistent with the user's ruling that the ruler's portrait is flavor abstraction for the sending
+   court, not a claim he personally traveled).
+
+This corrected shape must pass its own adversarial design review before implementation — do not
+implement directly from this document without that review.
+
 ### User ruling on the ruler-portrait/narrative-fidelity question (2026-08-11)
 A review pass flagged an apparent contradiction: the FIRST revision's Finding 1 (above) argued at
 length that a tributary's reigning monarch personally representing a routine embassy is historically/
