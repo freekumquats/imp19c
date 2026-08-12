@@ -558,3 +558,98 @@ candidate picker). #97 asks to make it follow that template. This is a design-fi
 just built, + the interdiction effect keying off the seated man's zeal/finesse rather than a bare flag). Scoped
 + diagnosed; needs design -> adv-review -> impl -> code-review like #80-85. The frontier-picker infrastructure
 (se_QING_FRONTIER_PICKER.txt) directly enables it — a 4th office branch on qing_frontier_picker_office.
+
+## SESSION CONTINUATION (interactive, 2026-08-11 PM) — #118 landed, then #75/#97/#76/#120
+
+### #118 — qing_current_post structural 1:1 office var — SHIPPED (design f8d13edf5, impl 6454a50cf)
+Design went through 6 independent adversarial review rounds (v3 -> v8) before it was CLEAN. Real driver:
+create_character is being retired for office-filling (#111/#113/#114/#116/#117/#119 draw-existing conversion),
+which raises cross-subsystem double-booking risk across all 14 office families, not just the Hanlin case #77/#79
+already patched. Two blocking + three medium + several low findings across the 6 rounds, incl.: a tautology
+that would have emptied corps rosters (routing relief-sweeps through the wrong trigger); premature COUNCIL
+strip-block deletion that would have orphaned legacy multi-marked characters; an unimplementable on-departure
+hook (miscited precedent -> wrong target -> scope-type mismatch, each caught in turn); amban/march_gg/xj_beg
+made a CONSISTENT exclusion (all three subject-employed, invisible to employer=ROOT machinery — rely on the
+existing marker-only picker gate instead of the new var). Implementation (18 files: new se_QING_POST.txt
+chokepoint, 11 stamp sites, 5 corps relief-sweep repoints incl. threading $post$ through SUBPOSTS' shared
+diplomat/censor/guard effects, corrected on_move_country + on_character_death hooks, boot backfill sweep, the
+standalone qing_is_xj_beg trigger fix) code-reviewed CLEAN after fixing one LOW boot-ordering bug (backfill ran
+after the repointed zongli recompute -> transient empty-roster on migrated saves; fixed by reordering).
+
+### #75 — Monetary Standard law group (#59 Tier C) — SHIPPED (df430859f)
+New law group monetary_standard (gold/silver/bimetallic_standard_law) + MONSTD_seed_starting_law (derives each
+country's starting law from its already-seeded currency backing_type) + MONSTD_reconcile (monthly pulse, flips
+the real backing_type + a one-time stability cost whenever the held law and the currency diverge). cr75 found a
+real bug: gold_standard_law's date/reserve gate was a `potential` block, which silently no-op'd the boot seed's
+change_law for every gold-backed country at BOTH bookmarks (both predate 1816) — the reconciler would then flip
+their currency gold->silver on turn 1. Fixed by moving the gate to `allow` (which change_law is assumed, TI
+precedent, to bypass) + added a LOG_fail no-op detector on both the gold and bimetallic seed branches so a boot
+immediately confirms or refutes that assumption. Re-review CLEAN.
+
+### #97 — Silver & Opium Imperial Commissioner -> real office — SHIPPED (d01033e55)
+Converts the bare qing_lin_zexu_appointed flag into a real character office, following the Salt/Caravan/Hoppo
+frontier-office template exactly (holder var + marker, seat effect, auto-pick appoint for event/AI callers, a
+4th branch on the shared frontier picker, a commissioner card + rotate button, registration in
+QING_char_holds_court_position). cr97 found a CRITICAL bug on the first pass: qing_lin_zexu_appointed (a COUNTRY
+var) was being set in CHARACTER scope inside the seat effect — silently breaking interdiction, the one-shot
+appoint guard, AND the entire Humen crackdown event chain (qing_opium.2 could never fire). Also found a
+legitimacy-farming exploit (the +5 bonus fired on every rotate, not just the first appointment) and a missing
+dead-commissioner reconcile (holder var would point at a corpse forever). All three fixed; re-review CLEAN.
+Deliberately does NOT extend #118's qing_current_post machinery to a 12th family (that design is locked after
+6 review rounds at 11 CHI-employed families) — the QING_char_holds_court_position registration alone closes the
+primary 1:1 risk; this is a stated scope boundary, not a gap.
+
+### #76 — paper money proactive invention gate — SHIPPED (e0955eeb1)
+New invention qing_tech_official_banking (欽定官票, requires qing_tech_han_science) gives a deliberate,
+proactive path to unlock paper currency without waiting for a crisis. The EXISTING crisis path
+(qing_currency_stress >= 70) is unchanged and stays as the reactive fallback; both sit behind the same
+current_date >= 1850.1.1 floor. Before building, confirmed the correct trigger syntax by checking the Invictus
+oracle repo (`invention = <key>`, NOT the unproven `has_invention`/`on_invention` this codebase had zero
+precedent for) — per the oracle-consultation standing rule. cr76 found 2 issues: a missing icon asset (fixed via
+the canonical tools/gen_invention_icons.py generator — a duplicate icon_override line the generator's injection
+created alongside my manual one was caught and removed) and a permanent re-nag on the invention path for a
+player who refuses outside an active crisis (fixed with a qing_paper_invention_declined flag that ONLY
+suppresses the invention arm of the dispatcher's OR, never the crisis arm — verified the crisis path can still
+re-ask under a genuine later crisis). Re-review CLEAN.
+
+### #120 — foreign (Jesuit-type) missionary character — SHIPPED (1238ace7c)
+The missionary system (se_QING_MISSIONARY.txt) already had a real character on the ANTI-missionary side
+(QING_missionary_spawn_agitator, a Han firebrand at fever-pitch sentiment) but nothing concrete for the mission
+itself — qing_missionary_reach was a bare station-count meter. Added QING_missionary_spawn_foreign_missionary
+(mirrors the agitator's exact idiom: create_character, culture=portuguese + religion=catholic — the same proven
+foreign-Catholic pairing se_QING_NAPOLEON.txt already uses for a European figure at the Qing court — traits
+scholar/zealous/righteous), guarded once, hooked into QING_mission_found_station so he is conjured the moment
+the FIRST mission station is ever founded (qing_missionary_reach 0->1). Review CLEAN first pass, no fixes needed.
+
+### #121 — court painter as a real Jesuit + seed Castiglione — SHIPPED (see combined #121+#122 commit below)
+The 如意館 (Ruyiguan painting academy)'s runtime-minted court painter was culture=han/religion=confucianism —
+wrong: historically the Ruyiguan painters were predominantly Jesuits (Castiglione/郎世寧 foremost, also Attiret,
+Sichelbarth). Changed QING_wenzhi_commission_painting's runtime mint to culture=italian/religion=catholic, and
+added QING_wenzhi_seed_castiglione (country scope, #90-safe create_character: age=75, born 1688/died 1766 —
+historically correct for the 1763 bookmark — no modifiers granted inside create_character, markers set in a
+follow-up scope) so the historical figure himself is seeded at boot, sharing the SAME qing_court_artist marker
+the runtime mint uses (deliberately no separate position — the existing live every_character recount in
+QING_wenzhi_commission_painting picks him up automatically, no manual counter sync needed). Wired into
+qing_mechanics_on_actions.txt right after QING_wenzhi_init. Code review CLEAN first pass (verified: the live
+recount catches Castiglione with no manual increment; age=75 create_character is safe — matches two other
+attribute-only, no-trait mint idioms that already boot clean; culture/religion valid; boot-wiring placement
+correct; roster_finalize signature correct; loc key unique; brace-balanced; no log-macro violations; no
+downstream reader assumes the marked character's culture/religion).
+
+### #122 — Art Patronage panel — SHIPPED (combined with #121, commit below)
+Built alongside #121: a new dedicated "Art Patronage" window opened from the Imperial Household panel, surfacing
+Castiglione's portrait card (mirrors the Salt/Caravan/Hoppo/Opium commissioner cards), the astronomy-bureau
+researched Y/N read-out (invention=qing_tech_court_mathematics), the pre-existing Wenzhi patronage meter + 4
+initiative buttons (kept ADDITIVE — not removed from gui/qing_household.gui), and a new "Suppress the Jesuits"
+(禁教) lever (QING_wenzhi_suppress_jesuits: expels every living italian/portuguese qing_court_artist, mints a Han
+replacement, costs patronage/stability, relieves qing_mission_social_friction). Icon reused from qing_hanlin.dds
+(no bespoke art commissioned — a deliberate, honest shortcut). cr122 review found 1 MEDIUM + 2 LOW:
+(MEDIUM) the suppress mint had no cap check, so commission<->suppress cycling (commission mints italians up to
+cap 5 -> suppress relieves them and mints +1 Han that suppress never touches -> repeat) accumulated unbounded
+Han court-artist characters (save bloat) — fixed by rebuilding the living qing_court_artist count the same way
+QING_wenzhi_commission_painting already does, and gating the mint on the same <5 cap; (LOW) the expulsion
+LOG_line fired INSIDE the every_character loop so its trailing scope named the iterated character instead of
+CHI — fixed by moving it outside the loop; (LOW) Castiglione's portrait card kept showing him as seated after
+expulsion (is_shown checked only is_alive, not the qing_court_artist marker) — fixed by adding the marker check
+inline, plus updated the "gone" loc string to cover expulsion as well as death. Follow-up narrow review of all
+three fixes: CLEAN.

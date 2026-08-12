@@ -63,6 +63,52 @@ QING_wenzhi_init = {
 }
 
 # ======================================================================
+# [#121] SEED CASTIGLIONE (郎世寧) AT GAME START — the named historical court painter, not
+# a generic mint. Giuseppe Castiglione (b. 19 July 1688, Milan) had served the Qing court
+# since 1715 across three reigns and was ~75 in 1763 (he died in 1766, so a natural-aging
+# death within a few years of game start is historically correct, not a bug). No separate
+# "Court Jesuit" position is created — he is stamped with the EXISTING qing_court_artist
+# marker (se_QING_WENZHI.txt's QING_wenzhi_commission_painting), the same mechanic a
+# runtime-minted painter carries, so the Household/Art-Patronage surfaces that read that
+# marker see him without any new plumbing. Boot-seed create_character (the proven idiom for
+# a historical figure who must already be active at 1763, mirroring QING_missionary_spawn_
+# foreign_missionary/_agitator's #90-safe shape: no modifiers granted inside create_character,
+# markers set in a follow-up scope). Guarded once by qing_seeded_castiglione. Country scope.
+# ======================================================================
+QING_wenzhi_seed_castiglione = {
+	LOG_enter = { sys = QING  fn = "QING_wenzhi_seed_castiglione" }
+	if = {
+		limit = { NOT = { has_variable = qing_seeded_castiglione } }
+		set_variable = qing_seeded_castiglione
+		create_character = {
+			age = 75
+			culture = italian
+			religion = catholic
+			add_charisma = 7
+			add_finesse = 9   # the master painter of the Sino-European court style
+			add_zeal = 4
+			add_martial = 1
+			save_scope_as = qing_castiglione
+		}
+		set_variable = { name = qing_castiglione_char  value = scope:qing_castiglione }   # [#268 idiom] survives reload
+		scope:qing_castiglione = {
+			set_home_country = ROOT
+			# stamped with the SAME marker QING_wenzhi_commission_painting mints/recounts; that
+			# effect rebuilds qing_court_artist_count from scratch (every_character scan) every
+			# time it runs, so Castiglione is automatically counted against the 5-painter atelier
+			# cap the next time a painting is commissioned — no separate counter to keep in sync.
+			set_variable = { name = qing_court_artist  value = 1 }
+			QING_roster_finalize = { nick = NICKNAME_QING_CASTIGLIONE }
+		}
+		LOG_line = { sys = QING  msg = "wenzhi: Giuseppe Castiglione (郎世寧) takes his place in the Ruyiguan for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_wenzhi_seed_castiglione"  reason = "Castiglione already seeded (qing_seeded_castiglione set)" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_wenzhi_seed_castiglione"  result = OK }
+}
+
+# ======================================================================
 # QUARTERLY PULSE — called from QING_GOV_pulse. Patronage decays slowly (the glory of
 # the court must be renewed by fresh commissions), and a HIGH standing radiates ambient
 # legitimacy (a court famed for its splendour affirms the Mandate). Bounded [0, 100].
@@ -154,6 +200,65 @@ QING_wenzhi_fund_workshops = {
 }
 
 # ======================================================================
+# [#122] SUPPRESS THE JESUITS (禁教) — the Art Patronage panel's suppression lever. Relieves
+# every LIVING Jesuit-culture (italian/portuguese) qing_court_artist — expelled from the
+# Ruyiguan, exactly the fate of the real 1720s Kangxi/Yongzheng-era rites-controversy
+# tension carried forward as a live player choice — then mints ONE fresh Han court artist to
+# keep the atelier staffed (reusing the SAME mint shape QING_wenzhi_commission_painting used
+# before #121, culture=han/religion=confucianism). Costs: the throne loses the prestige of
+# the Sino-European style (a patronage hit) and international standing (a stability hit);
+# gains: relieves the SAME anti-Christian social friction meter #91/#309 already model
+# (se_QING_MISSIONARY.txt), the concrete payoff for a "concrete-over-abstract" throne choice.
+# Scope: country (CHI).
+# ======================================================================
+QING_wenzhi_suppress_jesuits = {
+	LOG_enter = { sys = QING  fn = "QING_wenzhi_suppress_jesuits" }
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			has_variable = qing_court_artist
+			OR = { culture = italian  culture = portuguese }
+		}
+		remove_variable = qing_court_artist
+	}
+	# [cr122 fix] the expulsion LOG moved OUT of the every_character loop: inside the loop `this`
+	# is the iterated character, not CHI, so the "...for" trailing scope named the wrong actor.
+	LOG_line = { sys = QING  msg = "wenzhi: the Jesuit court artists are expelled from the Ruyiguan for" }
+	# [cr122 fix] rebuild the LIVING atelier count (mirrors QING_wenzhi_commission_painting's own
+	# cap rebuild below) so the replacement mint respects the SAME 5-painter cap — otherwise
+	# repeated commission/suppress cycling (commission mints italians -> suppress relieves them
+	# and mints +1 Han that suppress never relieves) would accumulate unbounded Han court artists.
+	set_variable = { name = qing_court_artist_count  value = 0 }
+	every_character = {
+		limit = { has_variable = qing_court_artist  is_alive = yes  employer = ROOT }
+		ROOT = { change_variable = { name = qing_court_artist_count  add = 1 } }
+	}
+	if = {
+		limit = { var:qing_court_artist_count < 5 }
+		create_character = {
+			age = 30
+			culture = han
+			religion = confucianism
+			add_charisma = 6
+			add_finesse = 7
+			add_zeal = 4
+			add_martial = 1
+			save_scope_as = qing_new_court_artist_han
+		}
+		scope:qing_new_court_artist_han = {
+			set_home_country = ROOT
+			set_variable = { name = qing_court_artist  value = 1 }
+		}
+	}
+	QING_wenzhi_advance = { amount = -8 }   # the atelier loses its most famous style, a real setback to patronage
+	add_stability = -3   # the foreign powers take note; a real, if modest, diplomatic cost
+	QING_DECLINE_nudge = { var = qing_mission_social_friction  amount = -8 }   # se_QING_MISSIONARY.txt idiom; the throne's distance from the missions relieves suspicion
+	LOG_line = { sys = QING  msg = "wenzhi: the Jesuits are suppressed, a Han artist takes their place for" }
+	LOG_exit = { sys = QING  fn = "QING_wenzhi_suppress_jesuits"  result = OK }
+}
+
+# ======================================================================
 # INITIATIVE: COMMISSION THE PAINTING ACADEMY (如意館). The court atelier where even
 # the Jesuit Castiglione (郎世寧) serves, fusing Chinese and Western brush. Grants the
 # court-painting modifier once + raises patronage + ruler glory. Scope: country (CHI).
@@ -180,10 +285,16 @@ QING_wenzhi_commission_painting = {
 	}
 	if = {
 		limit = { var:qing_court_artist_count < 5 }
+		# [#121] the 如意館 painters were, historically, predominantly the court's Jesuits
+		# (Castiglione/郎世寧 above all, but also Attiret, Sichelbarth after him) — not Han
+		# literati. italian + catholic mirrors QING_wenzhi_seed_castiglione below (the SAME
+		# pairing that mints him) so a later-commissioned second painter belongs to the same
+		# atelier tradition. No separate "Court Jesuit" position — this stays the EXISTING
+		# qing_court_artist marker/mechanic, just correctly staffed.
 		create_character = {
 			age = 30
-			culture = han   # [#61 2026-07-23] was root.primary_culture — scope-chain create_character field flood
-			religion = confucianism   # [#61 2026-07-23] was root.religion — INVALID field (flood; cf. SOUTHERNSTUDY:97); literal + Design-3-safe.
+			culture = italian
+			religion = catholic
 			add_charisma = 7
 			add_finesse = 6
 			add_zeal = 3
