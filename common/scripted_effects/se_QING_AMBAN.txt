@@ -45,9 +45,16 @@ QING_amban_post = {
 	LOG_enter = { sys = QING  fn = "QING_amban_post" }
 	# [#34] THE KEJU IS THE SOURCE — AMBANS COME OUT OF THE BANNER EXAMINATION, not from
 	# nowhere. Draw the ablest FREE banner-track graduate the court holds (a 繙譯進士
-	# fanyi_jinshi, or failing that any degreed bannerman) and post HIM; only conjure a
-	# fresh resident when the court has no such graduate to spare (the soft-preference
-	# fallback that keeps the march staffed rather than soft-locking on an empty bench).
+	# fanyi_jinshi, or failing that any degreed bannerman) and post HIM.
+	# [#114 2026-08-11] The old else-branch conjured a fresh resident via create_character
+	# when the bench was empty — a THIRD create_character site for a degree-holding court
+	# character (fanyi_jinshi), outside the two sanctioned mints the character-creation
+	# standing rule permits (the boot seed + the exam cohort). Removed: an unattended
+	# dependency with no free banner graduate now simply stays unstaffed until the exam
+	# cohort or on_becoming_adult produces one (the same "under-full is honest, no spawn to
+	# paper it" pattern #111 established for the scholar pool). QING_amban_seed_one (the
+	# ONE-TIME boot seed, called only from qing_force_setup.1/.11) is untouched — it is the
+	# sanctioned boot mint, not a runtime fallback.
 	# The pick excludes the ruler/heir, serving commanders/governors, sitting GC office-
 	# holders, and men already posted as ambans elsewhere (qing_amban_marker).
 	if = {
@@ -127,36 +134,33 @@ QING_amban_post = {
 		# [#34] if the drawn graduate is a pool scholar, drop him from the hiring pool as he
 		# takes the post (the same exit path QING_office_appoint uses for a seated scholar).
 		scope:qing_amban_new = { QING_exam_pool_drop_member = yes }
-		LOG_line = { sys = QING  msg = "amban: drawn from the banner examination pool (翻譯科) for" }
+		# [#114 review-fix] the wire now runs INSIDE this success branch, not after a separate
+		# stale-scope-guarded if. A wrapper if guarded by "does the man in scope:qing_amban_new
+		# still carry qing_amban_marker" is unsound: QING_amban_recall STRIPS that marker on
+		# recall, so a man posted by an earlier call, then recalled, then left sitting in
+		# scope:qing_amban_new (never cleared by a later barren draw) would pass the guard
+		# un-marked and be silently re-wired onto a DIFFERENT subject. Running the wire only on
+		# a path that just produced a fresh draw this same call makes that scope never stale in
+		# the first place — no discriminator needed. [#392 refactor] the post-wiring (move to
+		# subject, role modifier, affinity, storage, marker, tenure timer) is the shared
+		# QING_amban_wire tail so the game-start seed (QING_amban_seed_one) and this runtime
+		# poster stay behaviourally identical — no drift.
+		QING_amban_wire = { subject = $subject$ }
+		LOG_line = { sys = QING  msg = "amban: drawn from the banner examination pool (翻譯科) and posted for" }
+		LOG_exit = { sys = QING  fn = "QING_amban_post"  result = OK }
 	}
 	else = {
-		# FALLBACK — no banner graduate free: conjure a resident (a minor character, adult,
-		# Manchu conquest-elite, middling stats — the great offices kept the best men in
-		# Peking) and confer the banner degree so he too is a keju man, not a stranger.
-		create_character = {
-			age = { 35 50 }
-			culture = manchu          # [logfix] was ROOT.primary_culture (invalid create_character field); amban = Manchu conquest-elite
-			religion = vajrayana      # [logfix] was ROOT.religion
-			add_finesse = { 3 6 }
-			add_martial = { 2 5 }
-			add_charisma = { 3 6 }
-			add_zeal = { 2 5 }
-			add_trait = fanyi_jinshi   # [#34] a resident is a translation-examination laureate
-			save_scope_as = qing_amban_new
-		}
-		# [#34 review-fix] demote the CREATED resident to minor standing HERE (the demotion
-		# was removed from the shared QING_amban_wire tail because the #34 draw-path now feeds
-		# that tail a real full court bannerman — see the wire-tail note). A conjured resident
-		# is a minor character, exactly as before the refactor.
-		scope:qing_amban_new = { set_as_minor_character = THIS }
-		LOG_line = { sys = QING  msg = "amban: no banner graduate free, a resident is raised and degreed for" }
+		# [#114 2026-08-11] FALLBACK — no banner graduate free. The old fallback conjured a
+		# fresh resident via create_character (a THIRD create_character site for a
+		# degree-holding court character, outside the two sanctioned mints the
+		# character-creation standing rule permits: the boot seed and the exam cohort).
+		# Removed: an under-full dependency simply stays unstaffed until the exam cohort or
+		# on_becoming_adult produces a free banner graduate — the same "under-full is
+		# honest, no spawn to paper it" pattern #111 established for the scholar pool
+		# (QING_exam_pool_draw_one's own else, se_QING_EXAM.txt, is the proven precedent).
+		LOG_fail = { sys = QING  fn = "QING_amban_post"  reason = "no free banner graduate to post as amban" }
+		LOG_exit = { sys = QING  fn = "QING_amban_post"  result = FAIL }
 	}
-	# [#392 refactor] the post-wiring (move to subject, role modifier, affinity, storage,
-	# marker, tenure timer) is now the shared QING_amban_wire tail so the game-start seed
-	# (QING_amban_seed_one) and this runtime poster stay behaviourally identical — no drift.
-	QING_amban_wire = { subject = $subject$ }
-	LOG_line = { sys = QING  msg = "amban: posted to for" }
-	LOG_exit = { sys = QING  fn = "QING_amban_post"  result = OK }
 }
 
 # ======================================================================
