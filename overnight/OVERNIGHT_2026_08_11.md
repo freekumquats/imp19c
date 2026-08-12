@@ -722,4 +722,42 @@ Final (fourth) review pass: re-derived the FULL per-person decision tree from QI
 scratch (not a spot-check of the fixes) and cross-checked all three cohort gates token-for-token, including the
 martial==finesse boundary (both paths route civil) — CLEAN, confirmed mutually exclusive and jointly
 exhaustive over every court adult, no fourth instance of the bug class found.
-sibling appointers' single scan (bounded, player-only, acceptable).
+
+### #114 — amban post draws an existing banner laureate, drops the create_character fallback — SHIPPED (06690b4b0)
+Bug (per the standing character-creation rule): QING_amban_post's else branch conjured a fresh Manchu/
+vajrayana resident via create_character (add_trait=fanyi_jinshi) whenever the banner-graduate bench was
+empty — a third, unsanctioned mint site for a degree-holding court character, outside the two sanctioned
+mints (boot seed + exam cohort). Fix: removed the create_character block entirely; the else branch now just
+LOG_fails and exits — an unattended dependency stays unstaffed until the exam cohort or on_becoming_adult
+produces a free banner graduate, the same "under-full is honest, no fallback spawn" pattern #111 established.
+First review round found a MEDIUM: my initial fix wrapped the post-wiring tail (QING_amban_wire) in a
+separate if guarded by a stale-scope check keyed on qing_amban_marker (mirroring #111/#113's idiom). That
+guard was UNSOUND here specifically because QING_amban_recall strips qing_amban_marker on recall — so a man
+posted by an earlier call, then recalled, then left sitting in scope:qing_amban_new (never cleared by a
+later barren draw), would pass the guard un-marked and be silently re-wired onto a DIFFERENT subject. Fixed
+by removing the guard entirely and moving QING_amban_wire directly inside the draw-success branch, so the
+wire only ever runs on a path that just produced a fresh draw this same call — no stale scope is reachable,
+no discriminator needed (a structurally simpler fix than a corrected guard would have been).
+Also fixed (LOW): qing_amban.4's REPLACE option charged 200 gold unconditionally even though the post can
+now legitimately no-op, so the player could pay for a seat that ends up vacant — gated the charge on
+scope:qing_amban_old_subject actually carrying qing_amban_here (set only by a successful QING_amban_wire).
+Independently confirmed qing_amban.5 (a third finding candidate) is genuine dead code — no live
+trigger_event reference anywhere in the repo, superseded by the qing_amban.6 picker flow — no fix needed.
+Final review pass CLEAN: traced the rewrite end-to-end, confirmed the original recalled-then-restale failure
+scenario is now impossible, confirmed qing_amban_here is the correct landed-post discriminator, confirmed no
+other reader of scope:qing_amban_new assumed the old always-succeeds shape, and reconfirmed brace balance +
+all standing-rule checks on both changed files.
+
+### #116 — enforce create_character rule across GC positions — DIAGNOSIS ONLY, NOT IMPLEMENTED
+Diagnosed the sole in-scope site (QING_council_autofill_office, se_QING_COUNCIL.txt) and found a real,
+non-obvious blocker before implementation can start: this site was DELIBERATELY reverted from a draw to
+create_character by commit 578ea7f89 specifically to kill a "double-booking mess," and the trigger that
+draw used (QING_office_eligible_candidate) has since been widened to deliberately INCLUDE current
+office-holders (needed for the manual reshuffle pickers it now also feeds) — reusing it naively for autofill
+would let two of the 13 sequential per-office autofill calls in one pass pick the SAME top-ranked man,
+silently under-filling the council with no error or log signal. #118's newly-shipped qing_current_post
+machinery (this session, 6454a54cf) does not close this gap — it's a teardown-dispatch cleanup, not a new
+eligibility exclusion. Wrote up the full diagnosis, the failure mechanics, and what a correct fix needs (an
+autofill-specific exclusion distinct from the manual-picker trigger) to design/DESIGN_116_GC_AUTOFILL_DRAW.md
+rather than implementing against an unresolved design gap. Needs its own design + adversarial review pass
+before implementation, per the project's diagnosis-before-code discipline.
