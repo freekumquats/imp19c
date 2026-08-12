@@ -177,3 +177,17 @@ country's employ because nothing about rendering a portrait touches `employer`/`
 
 This proposal must still pass adversarial design review before implementation — do not implement
 directly from this document.
+
+### User ruling on the ruler-portrait/narrative-fidelity question (2026-08-11)
+A review pass flagged an apparent contradiction: the FIRST revision's Finding 1 (above) argued at
+length that a tributary's reigning monarch personally representing a routine embassy is historically/
+narratively wrong (real tribute missions were staffed by officials, not the ruler in person). The SECOND
+revision now renders that same ruler's PORTRAIT on the arrival event. **User ruling: this level of
+flavor abstraction is acceptable.** A portrait is not a claim that the ruler personally traveled or
+personally negotiated — it is the same abstraction `left_portrait = root.current_ruler` already uses for
+the Qing side of the identical event (nobody reads that as "the Emperor personally received every
+mission in person" either; it is shorthand for "the throne/office of record"). The two findings are not
+actually in tension once "who is minted/moved as a physical character" is separated from "whose portrait
+represents the country in a flavor event" — the FIRST revision's objection applies to the former (a
+mechanical/ownership concern), not the latter (pure display). No further reconciliation needed; do not
+re-raise this as an open question in future reviews of this document.
