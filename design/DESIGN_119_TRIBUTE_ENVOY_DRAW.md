@@ -134,6 +134,10 @@ point (stop minting a character for this at all).
 
 ## SECOND REVISION — use the ruler's PORTRAIT, mint nothing (user-directed, 2026-08-11)
 
+> REVIEWED 2026-08-11: NOT CLEAN. The core idea is sound (confirmed) but the "Proposed shape" below is
+> incomplete in two feature-breaking ways. See "### REVIEW FINDINGS" after the proposed shape for the
+> required corrections before implementation.
+
 The user's correction: the envoy is pure EVENT FLAVOR. Confirmed by reading the actual rendering code
 (`events/imp19c_mod_events/qing_tribute_events.txt:34-98`) — `scope:trib_envoy` / `qing_trib1_envoy` are
 used for exactly ONE thing, `right_portrait` on `qing_tribute.1` (line 45). Nothing moves the envoy,
@@ -177,6 +181,63 @@ country's employ because nothing about rendering a portrait touches `employer`/`
 
 This proposal must still pass adversarial design review before implementation — do not implement
 directly from this document.
+
+### REVIEW FINDINGS (2026-08-11)
+
+Adversarial design review of the "Proposed shape" above returned **NOT CLEAN**. The core idea (delete
+the character entirely, render the sender's ruler portrait) is confirmed sound, and step 1 (delete the
+mint/dismiss pair) is confirmed safe with no incidental side effects lost. But the proposed shape is
+incomplete in two feature-breaking ways and one syntax risk, all of which must be fixed before
+implementation.
+
+**Finding 1 (CRITICAL) — deleting the `qing_trib1_envoy` persist, without more, makes `qing_tribute.1`
+NEVER FIRE.** Step 2/3 only mention removing the mint call, the persist, and the one `right_portrait`
+line. But `qing_tribute.1` reads `qing_trib1_envoy` in THREE more places the proposal missed:
+`events/imp19c_mod_events/qing_tribute_events.txt:55` (`has_variable = qing_trib1_envoy`, in the
+trigger), `:57` (`exists = var:qing_trib1_envoy`, also in the trigger), and `:64`
+(`var:qing_trib1_envoy = { save_scope_as = trib_envoy }`, in `immediate`). If the scheduler stops
+persisting this var, the trigger's `has_variable` check is never true — the entire tribute-embassy
+arrival event silently stops firing, forever. **Fix:** remove all three of these references (the two
+trigger clauses and the immediate re-save), not just the portrait line.
+
+**Finding 2 (CRITICAL) — the loc description references the now-deleted envoy character and will
+render a broken token.** `localization/english/qing_tribute_l_english.yml:10` (`qing_tribute.1.desc`)
+reads "...The envoy, **[trib_envoy.GetName]**, waits in the antechambers ... with his gifts and his
+memorial of submission..." — `scope:trib_envoy` is only ever saved from the var this revision deletes
+(Finding 1's `:64`), so once removed this token renders `ERROR:[trib_envoy.GetName]` — the exact
+BT-7-class loc-token error this subsystem was previously hardened against. It also narratively casts the
+envoy as a distinct person separate from the sender's ruler, which now contradicts the ruler portrait.
+**Fix:** rewrite the desc to drop `[trib_envoy.GetName]` and the envoy-as-distinct-person framing (e.g.
+describe the embassy/mission itself, or reframe around the sending ruler/court).
+
+**Finding 3 (MEDIUM) — the portrait syntax is unproven, and the "safer two-step" fallback considered
+during review is actually WRONG, not safer.** No bare `var:X.current_ruler` (var as the leading token)
+exists anywhere in the repo as a portrait field today — the only proven `.current_ruler`-off-a-var form
+is `scope:`-led (`scope:diplomatic_play.var:play_target_country.current_ruler`). Critically, re-saving
+`scope:trib_sender` in `immediate` and then using `right_portrait = scope:trib_sender.current_ruler`
+does NOT work as an alternative — portrait fields resolve at EVENT FIRE TIME, BEFORE `immediate` runs
+(the event's own `:41` comment documents this; it is the exact BT-7b bug that forced `right_portrait`
+onto a persisted var in the first place). So `var:qing_trib1_sender.current_ruler` (the var-chain form,
+not the scope form) is the only candidate that can resolve at fire time, but it is unproven-as-written.
+**Fix:** implement with the var-chain form, boot-verify it actually renders, and if it does not, fall
+back to persisting the ruler's character AS ITS OWN var at schedule time (mirroring how `qing_trib1_sender`
+is already persisted) rather than chaining through `.current_ruler`.
+
+**Finding 4 (LOW) — add a rulerless guard.** A subject can be momentarily rulerless (interregnum) in the
+5-20 day scheduler-to-arrival delay window. `var:qing_trib1_sender.current_ruler` on a rulerless sender
+likely renders an empty portrait rather than crashing, but for safety add
+`exists = var:qing_trib1_sender.current_ruler` to the event's trigger, consistent with this subsystem's
+existing defensive re-validation style (it already re-checks `is_subject_of = ROOT` for the same reason).
+
+**Also confirmed (no fix needed):** the "on_death hook" comment in `se_QING_TRIBUTE.txt:168` claiming
+something cleans up dangling envoy references is FALSE — no such hook exists anywhere in the repo. This
+makes deletion even safer than the proposal assumed (nothing downstream depends on envoy cleanup because
+nothing ever cleaned it up). Both `qing_tribute.1` options were re-checked and touch the envoy only via
+the now-removed dismiss call — no other envoy-related logic hides in either option body.
+
+**Disposition:** implement with Findings 1-4's corrections folded in, then dispatch a fresh design
+review (or, given the corrections are now concrete and mechanical, this may be foldable into the
+implementation's own code-review pass — reviewer's judgment at that time) before commit.
 
 ### User ruling on the ruler-portrait/narrative-fidelity question (2026-08-11)
 A review pass flagged an apparent contradiction: the FIRST revision's Finding 1 (above) argued at
