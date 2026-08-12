@@ -235,10 +235,14 @@ makes deletion even safer than the proposal assumed (nothing downstream depends 
 nothing ever cleaned it up). Both `qing_tribute.1` options were re-checked and touch the envoy only via
 the now-removed dismiss call — no other envoy-related logic hides in either option body.
 
-**Disposition:** SUPERSEDED by the "### CORRECTED SHAPE v2" section below — a review of v1 (this
-section) found two MEDIUM gaps (the fallback path's trigger guard was left wrong for that path
-specifically; the rulerless guard used an unproven construct when a proven one already exists in this
-codebase) plus two LOW polish items. v2 resolves all four.
+**Disposition:** SUPERSEDED by the "### CORRECTED SHAPE v3" section at the very bottom of this document.
+v2 (below) was reviewed and found NOT CLEAN: its primary portrait syntax was an unproven var-chain
+(`var:X.current_ruler`) adopted only because a prior review asserted the simpler scope-form couldn't
+work — but that assertion was contradicted by a SHIPPED SIBLING EVENT in this same file
+(`qing_tribute.2`, which uses `right_portrait = scope:trib_invest_vassal.current_ruler`), and v2's
+fallback-path guard still had a death-vs-successor gap the review caught. v3 discards the primary/
+fallback split entirely and uses a single, fully-proven pattern instead — no unproven syntax, no
+fallback needed, no death-mismatch gap.
 
 ### CORRECTED SHAPE v1 (folds in Findings 1-4, 2026-08-11) — SUPERSEDED, see v2 below
 
@@ -347,6 +351,87 @@ updated/removed alongside the code, not left describing machinery that no longer
 
 This corrected shape must pass its own adversarial design review before implementation — do not
 implement directly from this document without that review.
+
+## REVIEW OF v2 (2026-08-11) — NOT CLEAN, superseded by v3
+
+v2 was reviewed and found NOT CLEAN with 2 MEDIUM + 4 LOW findings:
+- **(MEDIUM)** v2's fallback guard (`exists = var:qing_trib1_ruler`) closes the successor-mismatch case
+  but NOT the captured-ruler-DEATH case — this codebase's own proven convention for a character-holder
+  var is an explicit `is_alive = yes` check (`se_QING_TRIBUTE.txt:477`, `se_QING_AMBAN.txt:288/414`:
+  `var:qing_amban_here = { is_alive = yes  employer = ... }`), not bare `exists`/`has_variable`. Without
+  it, a captured ruler who dies mid-delay still passes the guard and renders a dead man's portrait.
+- **(MEDIUM)** v2's primary (`var:qing_trib1_sender.current_ruler`, admittedly unproven) exists only
+  because an earlier review asserted the simpler SCOPE form can't work at portrait-render time. But
+  `qing_tribute.2` (`qing_tribute_events.txt:109-130`) already ships exactly that scope form —
+  `right_portrait = scope:trib_invest_vassal.current_ruler`, with `trib_invest_vassal` re-saved from a
+  persisted var in `immediate` — contradicting the premise the whole primary/fallback split was built on.
+  Rather than resolve which of `.1`/`.2` is right by inspection, v3 sidesteps the question entirely by
+  using neither chained form — see below.
+- 4 LOW findings: a misfiled file-header citation, a leftover contradictory duplicate loc-rewrite block
+  (v2 briefly contained two different rewrites of the same line), an overstated precedent citation for
+  the rulerless-guard idiom (functionally fine, citation was imprecise), and "boot-verify it renders"
+  lacking a concrete observable. All obsoleted by v3's simpler shape (no boot-verify branch needed).
+
+## CORRECTED SHAPE v3 (2026-08-11) — resolves all v2 findings by removing the need for a
+primary/fallback split entirely; this is what should be implemented
+
+**Key simplification:** don't chain `.current_ruler` off anything (neither `var:X.current_ruler` nor
+`scope:X.current_ruler`) — persist the RULER CHARACTER HIMSELF as his own var at schedule time, exactly
+the same shape the ORIGINAL BT-7b fix already proved safe for this exact event
+(`right_portrait = var:qing_office_justice_holder`, cited in the event's own comment history) and the
+same shape `qing_amban_here` uses throughout this file. This is a plain character-holder var — no
+chaining, no ambiguity about scope-vs-var timing, and it reuses this codebase's own proven
+`is_alive = yes` convention for the staleness guard, closing BOTH the death case and the successor-
+mismatch case in one clause.
+
+**`common/scripted_effects/se_QING_TRIBUTE.txt`:**
+1. Delete `QING_tribute_mint_envoy` INCLUDING its preceding comment header (`:130-160`) and
+   `QING_tribute_dismiss_envoy` INCLUDING its preceding `# ====` delimiter (`:162-181`) — entirely.
+2. Update the file header comment: remove the envoy-character framing at `:8-9` ("each a concrete ENVOY
+   CHARACTER who arrives") and `:14-15` ("A real ENVOY create_character per mission") — no envoy exists
+   anymore.
+3. `QING_tribute_schedule_missions`'s `random_subject` body (`:103-113`): remove the
+   `QING_tribute_mint_envoy = { sender = scope:trib_sender }` call and the
+   `set_variable = { name = qing_trib1_envoy  value = scope:trib_envoy }` line. ADD, alongside the
+   existing `qing_trib1_sender` persist:
+   `set_variable = { name = qing_trib1_ruler  value = scope:trib_sender.current_ruler }` — a plain
+   character-holder var, read at SCHEDULE time (not chained through a delayed reference), exactly
+   mirroring how `qing_trib1_sender` itself is already captured on the same line. Keep the
+   `trigger_event = { id = qing_tribute.1  days = { 5 20 } }` call unchanged.
+
+**`events/imp19c_mod_events/qing_tribute_events.txt`, `qing_tribute.1`:**
+4. Portrait: change `right_portrait = var:qing_trib1_envoy` (`:45`) to
+   `right_portrait = var:qing_trib1_ruler` — a bare character-holder var reference, the SAME proven shape
+   the event already used before this change (`var:qing_trib1_envoy` was exactly this shape; only the
+   var name changes, not the pattern). No chaining, no new syntax risk. Update the stale BT-7b comment
+   above it (`:41-44`) to describe the new portrait source.
+5. Trigger (`:52-58`): remove `has_variable = qing_trib1_envoy` and `exists = var:qing_trib1_envoy`. Add,
+   using this file's own proven character-holder-var convention (`se_QING_TRIBUTE.txt:477`):
+   `has_variable = qing_trib1_ruler` and `var:qing_trib1_ruler = { is_alive = yes }` — this single clause
+   closes BOTH the rulerless/interregnum case AND the captured-ruler-died-mid-delay case, since
+   `is_alive = yes` is false in both. Update the stale BT-7 comment above it (`:48-51`).
+6. `immediate` (`:60-65`): remove `var:qing_trib1_envoy = { save_scope_as = trib_envoy }`. Keep
+   `var:qing_trib1_sender = { save_scope_as = trib_sender }`. `qing_trib1_ruler` needs NO re-save into a
+   named scope — nothing reads it except the bare `right_portrait = var:qing_trib1_ruler` reference, so
+   there is no `scope:trib_ruler` to establish. Update the stale comment (`:61-62`).
+7. Both `option` blocks (`.1.a` at `:69-85`, `.1.b` at `:88-97`): remove
+   `QING_tribute_dismiss_envoy = yes` from each.
+
+**`localization/english/qing_tribute_l_english.yml`, `qing_tribute.1.desc` (yml line 10):**
+8. Remove `[trib_envoy.GetName]` and the envoy-as-distinct-person framing without duplicating "An embassy
+   ... from [trib_sender.GetName]" a second time. Replacement clause (only the envoy sentence changes;
+   rest of the paragraph, including the ORDER/prestige framing, is unchanged):
+   *"...bearing tribute for the Son of Heaven — the ritual homage by which the tributary states of the
+   realm acknowledge the centre of the world. Its envoys wait in the antechambers of the
+   [ROOT.GetCountry.Custom('get_country_formal_adjective')] court with their gifts and their memorial of
+   submission. ..."*
+
+**Why v3 is strictly simpler than v2:** no unproven var-chain or scope-chain syntax anywhere (every
+reference is either a bare `var:X` — proven, unchanged shape from before — or `is_alive`/`is_subject_of`
+checks on that var — proven, cited precedent in the SAME file); no primary/fallback split, so no
+boot-verify branch, no "which one actually shipped" ambiguity, and no risk of the two paths' guards
+diverging (v2's Finding-A gap). The `.2` scope-form question this review surfaced is left unresolved
+FOR `.2` (out of scope for #119) but is irrelevant to `.1`'s design once `.1` stops depending on it.
 
 ### User ruling on the ruler-portrait/narrative-fidelity question (2026-08-11)
 A review pass flagged an apparent contradiction: the FIRST revision's Finding 1 (above) argued at

@@ -226,3 +226,91 @@ exclusion (round 1's bug) had no existing cohort code to pattern-match against c
 **Disposition:** Finding 1's shared-trigger extraction is a genuine follow-up fix, not yet implemented.
 It must go through its own design review (per the standing gate) before any code changes — do not
 implement directly from this retroactive finding alone.
+
+## REVIEW OF FINDING 1'S REFACTOR PROPOSAL (2026-08-11) — NOT CLEAN / NEEDS REVISION
+
+A design review of Finding 1's proposed shared-trigger extraction (as described above) returned NOT
+CLEAN, but endorsed the core idea with corrections. Summary of what it found:
+
+- **The two extractions are NOT equally sound.** `QING_char_exam_degreeless` (the 11-trait NOT-list) is
+  genuinely airtight — identical at all 4 sites today, with no dependency on how many exam tracks exist.
+  Extracting it is a pure win, low-risk, worth doing immediately.
+- **The partition extraction (`QING_char_exam_track_civil`/`_banner`/`_martial`) is a real improvement
+  but the "cannot diverge by construction" claim is FALSE for the civil trigger specifically.** Civil is
+  defined as a residual ("not banner, not martial") — if a future 4th track is added to
+  `QING_exam_sit_candidate`'s chain, the per-person path auto-narrows for free (its final branch is a
+  bare `else`), but the extracted `QING_char_exam_track_civil` trigger does NOT auto-narrow (it's a fixed
+  predicate, not a live "else") — someone must remember to redefine it. The accurate claim: "1 co-located
+  definition instead of 4 copies, still manually updated when the track set changes" — a real
+  improvement, not an airtight guarantee. Banner and martial ARE genuinely self-contained (no residual
+  dependency) and their "cannot diverge" framing is fair.
+- **One definition CAN serve both use shapes (sequential routing in `sit_candidate`, independent filter
+  in the cohort helpers) — but ONLY if authored in the demanding, fully self-contained form** (e.g.
+  `QING_char_exam_track_martial` must explicitly encode BOTH "not banner" AND "martial > finesse," not
+  just "martial > finesse" reasoning "the chain already excluded banner above"). This is exactly the
+  mistake that caused two of #113's three original review-round bugs. If this requirement isn't stated
+  explicitly in the design, an implementer could reintroduce the exact leak the refactor exists to
+  prevent.
+- **Evaluation cost is a non-issue** — confirmed zero runtime difference versus the existing inlined
+  predicates, using the same precedent (`QING_char_holds_court_position` already called inside an
+  `ordered_character.limit` at similar cost).
+- **Timing/risk**: migrating 4 working, 4-times-reviewed call sites has a real regression cost against a
+  purely prospective benefit (protecting against a hypothetical future edit, not fixing a live bug). The
+  degreeless extraction is low-risk enough to do now; the partition extraction should go through its own
+  full review cycle given the higher stakes of getting the self-contained form exactly right.
+- **Additional specifics required**: `sit_candidate`'s final civil branch must stay a bare `else` (not
+  converted to `limit = { QING_char_exam_track_civil = yes }`, which would turn an unconditional branch
+  into a conditional one and reintroduce a coverage-gap risk); all triggers are character-scope, matching
+  the `QING_char_holds_court_position` precedent; the civil trigger needs an explicit code comment
+  flagging it as a residual requiring review on any future track addition.
+
+## CORRECTED REFACTOR PROPOSAL (2026-08-11) — resolves the above, split into two independent pieces
+
+**Piece A (do now, low-risk, airtight) — extract `QING_char_exam_degreeless`:**
+```
+QING_char_exam_degreeless = {
+    NOT = { has_trait = jiansheng }
+    NOT = { has_trait = shengyuan }
+    NOT = { has_trait = juren }
+    NOT = { has_trait = gongshi }
+    NOT = { has_trait = jinshi }
+    NOT = { has_trait = hanlin }
+    NOT = { has_trait = fanyi_jinshi }
+    NOT = { has_trait = wu_shengyuan }
+    NOT = { has_trait = wu_juren }
+    NOT = { has_trait = wu_jinshi }
+    NOT = { has_trait = wu_zhuangyuan }
+}
+```
+Defined once (character scope, alongside `QING_char_holds_court_position` in
+`qing_dynasty_triggers.txt`, or co-located in `se_QING_EXAM.txt` near the cohort helpers — either is
+fine, prefer wherever `QING_char_holds_court_position` already lives for discoverability). Replace all 4
+verbatim copies (`QING_exam_sit_candidate`'s outer gate, and the three cohort helpers' `ordered_character.limit`
+blocks) with a single `QING_char_exam_degreeless = yes` call each.
+
+**Piece B (needs its own full design + adversarial review cycle before landing — NOT bundled with Piece
+A) — extract the partition, self-contained form mandated:**
+```
+QING_char_exam_track_banner = {
+    OR = { culture.culture_group = culture_group:jurchen  culture.culture_group = culture_group:mongolic }
+}
+QING_char_exam_track_martial = {
+    NOT = { OR = { culture.culture_group = culture_group:jurchen  culture.culture_group = culture_group:mongolic } }
+    martial > finesse
+}
+# [residual — NOT self-contained against future track additions; see note] civil = neither banner nor martial.
+# If a 4th exam track is ever added to QING_exam_sit_candidate's chain, this trigger's definition MUST be
+# updated in lockstep (it does not auto-narrow the way sit_candidate's bare `else` branch does).
+QING_char_exam_track_civil = {
+    NOT = { OR = { culture.culture_group = culture_group:jurchen  culture.culture_group = culture_group:mongolic } }
+    NOT = { martial > finesse }
+}
+```
+`QING_exam_sit_candidate` keeps its if/else_if/else STRUCTURE unchanged — only the branch CONDITIONS
+change to call the shared triggers (`limit = { QING_char_exam_track_banner = yes }`, etc.), with the
+FINAL civil branch remaining a bare `else` (never converted to a `limit` gate). The three cohort helpers'
+`ordered_character.limit` blocks call the matching shared trigger instead of their inlined predicate.
+
+**Sequencing:** Piece A can land on its own review cycle immediately (low risk, mechanical). Piece B is
+NOT urgent (no live bug depends on it; #113's shipped code is already behaviorally correct) — schedule
+it as a reviewed hardening pass whenever convenient, not as a blocker on other work.
