@@ -230,11 +230,18 @@ predicate; those paths are unaffected by this design and continue passing their 
 unfiltered by design — see the "generic picker" resolution below, which this numbered list must agree
 with, not contradict):**
 1. `QING_council_refresh_candidates_by` (`se_QING_COUNCIL.txt:1215-1318`): add
-   `QING_office_required_degree_civil = yes` to the `ordered_character.limit`, conditionally on
-   `$sortval$` — this is the PER-OFFICE cache (`$sortval$` already tells it which office's picker is
-   opening), so THIS builder can correctly apply the hard filter unless `$sortval$ = council_sort_martial`
-   (which maps to exactly, and only, the 2 martial offices — no civil office ever uses that sortval, so
-   this discriminates perfectly with no new parameter needed).
+   `QING_office_required_degree_civil = yes` to the `ordered_character.limit`, gated on the SAME runtime
+   var item 2 below uses (`qing_gc_picker_office_var`, already read inside this very effect at
+   `:1285`/`:1301`/`:1303-1305`), NOT on `$sortval$` — `$sortval$` is a compile-time macro parameter
+   (text substitution), so `$sortval$ = council_sort_martial` would compile to
+   `council_sort_martial = council_sort_martial`, a script value compared to itself, which is true for
+   EVERY character — that comparison would make the filter permanently inert (a round-5 review finding:
+   the same compile-time-token-treated-as-runtime-value mistake as the mint-args confusion this doc
+   already corrected once). Correct gate:
+   `NOT = { OR = { ROOT.var:qing_gc_picker_office_var = flag:war
+                    ROOT.var:qing_gc_picker_office_var = flag:guard_commandant } }` (apply the civil
+   filter unless the target is one of the 2 martial offices — identical mechanism to item 2, just
+   evaluated inside this builder's own `ordered_character.limit` instead of the row-click's `is_valid`).
 2. The row-click handler's `is_valid` (`QING_governance_actions.txt:646-681`, the `trigger_else` "GREAT
    OFFICES" branch): add the hard civil filter here too, gated on
    `NOT = { OR = { scope:player.var:qing_gc_picker_office_var = flag:war
