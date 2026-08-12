@@ -314,6 +314,13 @@ QING_justice_refresh_accusable = {
 # ======================================================================
 QING_justice_strip_for_trial = {
 	LOG_enter = { sys = QING  fn = "QING_justice_strip_for_trial" }
+	# [#116 2026-08-11] stamp BEFORE the office vacate/backfill runs: without this, the backfill
+	# draw's own eligibility gate (se_QING_COUNCIL.txt, QING_council_autofill_office) would see the
+	# accused as a plain CHI-employed, office-less, non-disgraced candidate (strip removes his
+	# office but applies no disgrace) and could re-seat him into the very office he was just
+	# stripped from FOR TRIAL — silently undoing the strip. Cleared at trial resolution
+	# (QING_justice_convict_accused / QING_justice_acquit_accused) — never left set past the trial.
+	set_variable = { name = qing_pending_trial  value = 1 }
 	# relieve of a Grand Council great office (dispatches to the correct QING_office_vacate branch).
 	if = { limit = { has_variable = qing_office_held }  QING_office_vacate_dispatch = yes }
 	# relieve of army/navy command so the convict is jailable (imprison refuses serving commanders).
@@ -345,6 +352,10 @@ QING_justice_convict_accused = {
 	# disgraced-but-unjailed. Reuse the same strip helper (idempotent — its ifs no-op if he holds nothing).
 	QING_justice_strip_for_trial = yes
 	remove_variable = qing_justice_accused
+	# [#116 2026-08-11] clear AFTER the strip call above (which re-stamps the marker as its own
+	# first line) — this must be the LAST write to qing_pending_trial on this path, or the marker
+	# would outlive every conviction, permanently barring this man from #116's backfill draw.
+	remove_variable = qing_pending_trial
 	# [#419] IMPRISONMENT (下獄): the convict is jailed by the throne through the engine's OWN prison
 	# mechanic. `imprison` runs at COUNTRY scope with target = the character (TI imprison.txt:84); guarded
 	# on `prisoner = no` (the proven already-imprisoned test, imprison.txt:16/25) so it never errors on a
@@ -367,6 +378,9 @@ QING_justice_convict_accused = {
 QING_justice_acquit_accused = {
 	LOG_enter = { sys = QING  fn = "QING_justice_acquit_accused" }
 	remove_variable = qing_justice_accused
+	# [#116 2026-08-11] no internal QING_justice_strip_for_trial call on this path (unlike
+	# conviction), so a single clear anywhere in this effect suffices.
+	remove_variable = qing_pending_trial
 	add_loyalty = loyalty_qing_commended
 	LOG_line = { sys = QING  msg = "justice: an accused acquitted and struck from the docket for" }
 	LOG_exit = { sys = QING  fn = "QING_justice_acquit_accused"  result = OK }

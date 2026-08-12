@@ -229,24 +229,36 @@ predicate; those paths are unaffected by this design and continue passing their 
 **Fix the wrong-chokepoint bug (Finding 2) — edit TWO of the three inlined copies (copy #1 stays
 unfiltered by design — see the "generic picker" resolution below, which this numbered list must agree
 with, not contradict):**
-1. `QING_council_refresh_candidates_by` (`se_QING_COUNCIL.txt:1215-1318`): add
-   `QING_office_required_degree_civil = yes` to the `ordered_character.limit`, gated on the SAME runtime
-   var item 2 below uses (`qing_gc_picker_office_var`, already read inside this very effect at
-   `:1285`/`:1301`/`:1303-1305`), NOT on `$sortval$` — `$sortval$` is a compile-time macro parameter
-   (text substitution), so `$sortval$ = council_sort_martial` would compile to
-   `council_sort_martial = council_sort_martial`, a script value compared to itself, which is true for
-   EVERY character — that comparison would make the filter permanently inert (a round-5 review finding:
-   the same compile-time-token-treated-as-runtime-value mistake as the mint-args confusion this doc
-   already corrected once). Correct gate:
-   `NOT = { OR = { ROOT.var:qing_gc_picker_office_var = flag:war
-                    ROOT.var:qing_gc_picker_office_var = flag:guard_commandant } }` (apply the civil
-   filter unless the target is one of the 2 martial offices — identical mechanism to item 2, just
-   evaluated inside this builder's own `ordered_character.limit` instead of the row-click's `is_valid`).
+1. `QING_council_refresh_candidates_by` (`se_QING_COUNCIL.txt:1215-1318`): add to the
+   `ordered_character.limit` an `OR` clause — NOT a bare sibling `NOT=OR{...}` alongside the filter,
+   which would AND together into "always false for martial offices, filter-or-not for civil" and
+   empty the martial candidate list entirely (a round-6 review finding: the gate and the filter must
+   be COMBINED with OR, not left as two ANDed siblings):
+   ```
+   OR = {
+       AND = { ROOT.var:qing_gc_picker_office_var = flag:war }
+       AND = { ROOT.var:qing_gc_picker_office_var = flag:guard_commandant }
+       QING_office_required_degree_civil = yes
+   }
+   ```
+   (reads as: "the target is martial (no filter applies) OR the candidate passes the civil filter" —
+   gated on the SAME runtime var item 2 below uses, `qing_gc_picker_office_var`, already read inside
+   this very effect at `:1285`/`:1301`/`:1303-1305`; NOT on `$sortval$`, which is a compile-time macro
+   parameter — `$sortval$ = council_sort_martial` would compile to
+   `council_sort_martial = council_sort_martial`, true for EVERY character, permanently inert — a
+   round-5 finding, the same compile-time-token-treated-as-runtime-value mistake as the mint-args
+   confusion this doc already corrected once).
 2. The row-click handler's `is_valid` (`QING_governance_actions.txt:646-681`, the `trigger_else` "GREAT
-   OFFICES" branch): add the hard civil filter here too, gated on
-   `NOT = { OR = { scope:player.var:qing_gc_picker_office_var = flag:war
-                    scope:player.var:qing_gc_picker_office_var = flag:guard_commandant } }`
-   (i.e., apply the hard filter unless the target is one of the 2 martial offices).
+   OFFICES" branch): add the SAME OR-combined gate here — do NOT add a bare sibling
+   `NOT = { OR = { scope:player.var:qing_gc_picker_office_var = flag:war  ... } }` clause alongside the
+   filter (the identical empty-martial-list risk applies here too):
+   ```
+   OR = {
+       AND = { scope:player.var:qing_gc_picker_office_var = flag:war }
+       AND = { scope:player.var:qing_gc_picker_office_var = flag:guard_commandant }
+       QING_office_required_degree_civil = yes
+   }
+   ```
 3. `QING_council_refresh_candidates` (`se_QING_COUNCIL.txt:1116-1201`, enforcement copy #1) is
    DELIBERATELY NOT edited — see "generic picker" resolution below for why leaving it unfiltered is
    correct, not an oversight.
