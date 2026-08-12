@@ -180,6 +180,15 @@ QING_council_autofill_office = {
 	# no-ops and the seat silently fails to refill (the headline death-backfill would be dead). `this` is
 	# CHI on all paths, so saving it here is correct and path-agnostic.
 	save_scope_as = qing_autofill_country
+	# [#116 2026-08-11] seed a scratch var from the macro param via a flag literal, NEVER
+	# compare `$autofill_source$ = backfill` directly -- that would expand to a non-yes/no
+	# bareword LHS (`boot = backfill` / `backfill = backfill`), the exact documented parse
+	# class that silently mis-parses or misreads as an unknown trigger elsewhere in this
+	# codebase (se_QING_LEGATIONS.txt:76-77, se_QING_COUNCIL.txt's own $skill$ fix, the
+	# #123 uphold/$outcome$ burn). The proven idiom (mirrors qing_office_held's own
+	# flag-comparison shape a few lines below) is: seed once as a flag, then compare
+	# var:X = flag:literal.
+	set_variable = { name = qing_autofill_src  value = flag:$autofill_source$ }
 	# [#352 F3/F8] prune a stale-set seat (holder dead / left CHI employ) before filling,
 	# so a var pointing at an invalid character does not read as "already filled" and block
 	# the autofill (the "1 Unassigned that Convene never cleared" boot-test bug).
@@ -192,7 +201,7 @@ QING_council_autofill_office = {
 		# BACKFILL path ($autofill_source$ = backfill, reached via QING_office_vacate_dispatch)
 		# attempts a draw first.
 		if = {
-			limit = { $autofill_source$ = backfill }
+			limit = { var:qing_autofill_src = flag:backfill }
 			# [#116] the draw's country-relative checks MUST anchor on scope:qing_autofill_country,
 			# NEVER bare ROOT — on the backfill path ROOT is the dying/accused character, not CHI
 			# (see the header note above). QING_office_eligible_candidate cannot be reused verbatim
