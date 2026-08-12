@@ -686,3 +686,40 @@ LOG-string macro rule) match proven precedent. Two LOW informational notes, not 
 bench can emit up to 9 LOG_fail lines per quarter (bounded, player-only, consistent with existing noise
 tolerance); (2) the draw's ordered_character global scan now runs up to `count` times per quarter versus the
 sibling appointers' single scan (bounded, player-only, acceptable).
+
+### #113 — exam cohort confers civil/banner/martial degrees on existing court adults — SHIPPED (9f2365c94)
+Extended #111's confer-else-create pattern to QING_exam_graduate_cohort (the triennial exam), the batch
+counterpart to #111's per-tick pool refill and to QING_exam_sit_candidate's per-person on_becoming_adult
+intake: the cohort's civil lead, 2 hall-band civil extras, banner slot, and a NEW martial slot now each try
+QING_exam_seat_civil_graduate / QING_exam_seat_banner_laureate / QING_exam_seat_martial_graduate first —
+ordered_character confer onto the ablest existing degreeless court adult — falling back to the pre-existing
+mint helpers (QING_exam_mint_scholar / QING_exam_mint_banner_laureate / a new QING_exam_mint_martial_graduate)
+only when no eligible living candidate exists. order_by=martial (new for the military ladder) verified against
+proven precedent in the Invictus oracle repo before use (duel_rival.txt, several mission files,
+internal_politics_monarchy/republic.txt) per the standing oracle-consultation rule — no local precedent existed.
+Three review rounds, each catching a DIFFERENT instance of the same bug class (a cohort helper's gate broader
+than QING_exam_sit_candidate's own per-person branch, so the batch path could cross-track a man into a degree
+the per-person path could never have given him):
+(1) MEDIUM — QING_exam_seat_martial_graduate had no culture-group exclusion, so a Manchu/Mongol bannerman with
+martial>finesse could receive a Han wu_juren/wu_jinshi degree, impossible per-person (banner branch runs first
+there). Fixed: added NOT={OR={culture_group:jurchen, culture_group:mongolic}} to the martial gate.
+(2) MEDIUM — re-review of fix (1) found QING_exam_seat_civil_graduate had the SAME missing culture exclusion
+(a bannerman could receive jinshi/juren via the civil lead's finesse ranking). Fixed: same exclusion added.
+(3) MEDIUM — re-review of fix (2) found the civil helper was STILL broader than its per-person counterpart:
+missing the martial<=finesse half of the split (QING_exam_sit_candidate routes non-banner martial>finesse men
+to the military track, else civil), so a martial-dominant Han man could be conferred a civil degree by the
+cohort's civil lead (which runs before the martial slot) instead of the wuju degree the per-person path would
+have given him. Fixed: added NOT={martial>finesse} to the civil gate. This also surfaced (and fixed) a stale
+`martial>charisma` clause in QING_exam_sit_candidate's own military branch that had made the per-person and
+cohort military predicates subtly different (finesse-only vs finesse+charisma) — dropped so both read
+martial>finesse verbatim.
+Also fixed in round 1: LOW is_alive=yes missing from all three seat helpers (added); LOW duplicated
+any_character+ordered_character gate pairs with no drift guard (eliminated — replaced with a single
+ordered_character call per helper, using the SAME stale-scope guard #111's QING_exam_pool_draw_one uses, since
+each seat helper can be called multiple times per single cohort invocation); LOW stale comment referencing a
+non-existent effect name (corrected).
+Final (fourth) review pass: re-derived the FULL per-person decision tree from QING_exam_sit_candidate from
+scratch (not a spot-check of the fixes) and cross-checked all three cohort gates token-for-token, including the
+martial==finesse boundary (both paths route civil) — CLEAN, confirmed mutually exclusive and jointly
+exhaustive over every court adult, no fourth instance of the bug class found.
+sibling appointers' single scan (bounded, player-only, acceptable).
