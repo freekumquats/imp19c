@@ -329,6 +329,110 @@ QING_exam_graduate_cohort = {
 }
 
 # ======================================================================
+# [#111] QING_exam_pool_draw_one — draw ONE EXISTING office-less jinshi into the scholar
+# hire-pool. Scope: COUNTRY (CHI). The tick half of the #111 caller split: the boot event
+# legitimately MINTS fresh graduates (QING_exam_seed_hanlin_pool, unchanged, called only
+# from qing_force_setup.12); the quarterly tick must never re-mint — it used to call
+# QING_exam_seed_hanlin_pool too, which re-ran create_character (QING_exam_mint_scholar)
+# every quarter to refill the drained bench, an unbounded aether-spawn of scholar
+# characters. This effect draws from the LIVING population instead, mirroring
+# QING_opium_commissioner_appoint's proven ordered_character idiom (eligibility limit +
+# order_by finesse + max 1), plus the pool-scholar exclusion (an already-pooled man is not
+# a fresh draw) and an age ceiling matching this pool's own retirement threshold
+# (QING_exam_pool_tick age >= 55 retires a man; a 55+ jinshi is not a fresh recruit).
+#
+# STALE-SCOPE GUARD: this effect is meant to be called repeatedly from a `while` loop
+# (QING_exam_pool_draw_refill, below). save_scope_as only writes on an actual
+# ordered_character match — a round that matches nobody leaves scope:qing_new_pool_draw
+# pointing at whatever the PREVIOUS successful round drew. Re-checking
+# NOT = { has_variable = qing_is_pool_scholar } on that saved scope closes this: a genuine
+# fresh draw never carries the marker (ordered_character's own limit excludes marked men),
+# but a stale leftover from an earlier round in the same loop DOES (we stamp it during
+# processing) — so the stale case falls through to else/no-op instead of double-processing
+# the same man. Under-full is honest; a round with no eligible candidate does nothing.
+# ======================================================================
+QING_exam_pool_draw_one = {
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_adult = yes
+			is_alive = yes
+			is_ruler = no
+			age < 55
+			has_trait = jinshi
+			NOT = { has_variable = qing_is_pool_scholar }
+			NOT = { QING_char_holds_court_position = yes }
+			NOT = { AND = { exists = ROOT.primary_heir  this = ROOT.primary_heir } }
+		}
+		order_by = finesse
+		max = 1
+		save_scope_as = qing_new_pool_draw
+	}
+	if = {
+		limit = {
+			exists = scope:qing_new_pool_draw
+			scope:qing_new_pool_draw = { NOT = { has_variable = qing_is_pool_scholar } }
+		}
+		scope:qing_new_pool_draw = {
+			set_variable = { name = qing_is_pool_scholar  value = 1 }
+			# a drawn man already existed before this tick, so the same-tick read-back
+			# restriction that forces QING_exam_mint_scholar's deferred bind does NOT apply
+			# here (se_QING_AFFINITY.txt QING_char_bind — dozens of call sites bind
+			# pre-existing characters inline; only a create_character'd-THIS-tick character
+			# cannot have its own variables read back the same tick).
+			QING_char_bind = yes
+		}
+		add_to_variable_list = { name = qing_scholar_pool  target = scope:qing_new_pool_draw }
+		change_variable = { name = qing_scholar_pool_count  add = 1 }
+		LOG_line = { sys = QING  msg = "exam: drew an office-less jinshi into the hiring pool for" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_exam_pool_draw_one"  reason = "no eligible office-less jinshi found to draw" }
+	}
+}
+
+# ======================================================================
+# [#111] QING_exam_pool_draw_refill — top the waiting Hanlin/laureate pool back up to the
+# EXAMINATION-ADMISSION LAW's establishment (qing_law_hanlin_cap) by DRAWING existing
+# office-less jinshi (QING_exam_pool_draw_one), never by minting. Scope: COUNTRY (CHI).
+# The tick-side replacement for QING_exam_seed_hanlin_pool at the caller-split (#111) —
+# same three branch targets (9 broad / 3 restricted / 6 customary default), same
+# while+count+limit idiom, so the establishment law reads identically from either path.
+# Called from QING_exam_pool_tick ONLY. Under-full is honest: a realm without enough
+# office-less jinshi walking around simply keeps a thinner bench until one is produced
+# by the exam cycle itself (QING_exam_graduate_cohort) or vacates an office.
+# ======================================================================
+QING_exam_pool_draw_refill = {
+	if = {
+		# BROAD establishment (廣額): a deep bench of 9.
+		limit = { has_variable = qing_law_hanlin_cap  var:qing_law_hanlin_cap = 1 }
+		while = {
+			limit = { var:qing_scholar_pool_count < 9 }
+			count = 9
+			QING_exam_pool_draw_one = yes
+		}
+	}
+	else_if = {
+		# RESTRICTED establishment (減額): a tight bench of 3.
+		limit = { has_variable = qing_law_hanlin_cap  var:qing_law_hanlin_cap = 2 }
+		while = {
+			limit = { var:qing_scholar_pool_count < 3 }
+			count = 3
+			QING_exam_pool_draw_one = yes
+		}
+	}
+	else = {
+		# CUSTOMARY establishment (循例), the default: a bench of 6.
+		while = {
+			limit = { var:qing_scholar_pool_count < 6 }
+			count = 6
+			QING_exam_pool_draw_one = yes
+		}
+	}
+	LOG_line = { sys = QING  msg = "exam: pool draw-refill (drew office-less jinshi toward the admission-law establishment) for" }
+}
+
+# ======================================================================
 # QING_exam_seed_hanlin_pool — fill the waiting Hanlin/laureate pool UP TO the cap the
 # EXAMINATION-ADMISSION LAW sets (qing_law_hanlin_cap: the establishment of degree-holders the
 # throne keeps on the bench awaiting a post). Scope: COUNTRY (CHI). Populated the SAME way the
@@ -492,8 +596,13 @@ QING_exam_pool_tick = {
 		}
 		# [Hanlin pool 2026-07-25] top the waiting bench back up to the admission-law establishment
 		# after retirements/appointments drain it — the pool is LAW-governed, not filled by the old
-		# (removed) autofill events. QING_exam_seed_hanlin_pool only mints while below the law's target.
-		QING_exam_seed_hanlin_pool = yes
+		# (removed) autofill events. [#111 caller-split 2026-08-11] the tick DRAWS existing
+		# office-less jinshi rather than minting — QING_exam_seed_hanlin_pool (create_character)
+		# stays the BOOT-ONLY seed (qing_force_setup.12); re-running it here every quarter re-minted
+		# fresh graduates to refill a bench drained by appointments, an unbounded character-count
+		# leak (the exam-creation standing rule: create_character only at boot-seed + the exam itself,
+		# never a maintenance tick). QING_exam_pool_draw_refill only draws while below the law's target.
+		QING_exam_pool_draw_refill = yes
 		LOG_line = { sys = QING  msg = "exam: pool tick (retired the aged/dead un-placed, topped up to the establishment) for" }
 		LOG_exit = { sys = QING  fn = "QING_exam_pool_tick"  result = OK }
 	}
