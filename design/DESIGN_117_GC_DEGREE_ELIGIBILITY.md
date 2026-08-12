@@ -1,10 +1,11 @@
 # DESIGN — #117 GC office eligibility checks suitable exam degrees
 
-> STATUS 2026-08-11: FIRST PROPOSAL REVIEWED — NOT CLEAN (see "## REVIEW FINDINGS" below). REBUILT as
-> "## CORRECTED PROPOSAL" further down, addressing all findings; that corrected proposal has its OWN
-> open "generic picker" caveat flagged for the next review round and is not yet re-reviewed. Do not
-> implement either the original "Proposed resolution" or the corrected proposal until a fresh adversarial
-> review clears the corrected proposal's open questions.
+> STATUS 2026-08-11: SECOND REVIEW ROUND — NOT CLEAN (see "## REVIEW FINDINGS ROUND 2" below). The
+> "## CORRECTED PROPOSAL" section has now been revised in place to fix all 3 round-2 findings (the
+> under-inclusive jinshi-only predicate, widened to match the amban-draw precedent; the two false
+> premises in the "generic picker" resolution, corrected while keeping the same underlying decision; the
+> unacknowledged martial→civil one-way door, now explicitly recorded as an accepted consequence). Do not
+> implement until a fresh adversarial review clears this revision.
 
 ## Task text
 `overnight/SESSION_HANDOFF_2026_08_11.md:62`: "#117 GC office eligibility checks suitable exam degrees
@@ -188,20 +189,36 @@ near-permanent no-op; keeping #117's martial approach consistent with #116's avo
 "asymmetric and undocumented" trap this doc's own original open-question worried about — the asymmetry
 is now DELIBERATE and consistent across both tasks, not arbitrary.
 
-**Canonical degree→post predicate (Finding 5):** define, in a shared location (e.g.
-`common/scripted_triggers/qing_dynasty_triggers.txt`, alongside `QING_office_eligible_candidate`):
+**Canonical degree→post predicate (Finding 5) — WIDENED per review finding (see "## REVIEW FINDINGS
+ROUND 2" below):** define, in a shared location (e.g. `common/scripted_triggers/qing_dynasty_triggers.txt`,
+alongside `QING_office_eligible_candidate`):
 ```
-QING_office_required_degree_civil = { has_trait = jinshi }
+QING_office_required_degree_civil = {
+    OR = { has_trait = jinshi  has_trait = hanlin  has_trait = gongshi  has_trait = juren }
+}
 QING_office_required_degree_martial_soft = yes   # marker only — martial uses ranking, not a hard trigger
 ```
-(A single boolean-returning trigger per civil/martial split is sufficient since there are only 2 tiers;
-a full `$office$`-parameterized table is unnecessary complexity — each of the 11 civil offices requires
-the SAME degree (jinshi), and both martial offices require the same soft-preference treatment. If a
-future office introduces a THIRD degree tier, revisit then.) Every civil-office enforcement path (the
-picker's 3 inlined copies below, PLUS #116's backfill draw, PLUS the existing autofill/vacate-dispatch
-`$degree$` args) should consume `QING_office_required_degree_civil` rather than each hardcoding
-`has_trait = jinshi` independently — this is the "one canonical source" Finding 5 asked for, scoped to
-what's actually needed rather than over-built.
+`jinshi`-only was found to reproduce the EXACT under-inclusiveness bug #111's own retroactive review
+found in a parallel context: civil degree traits are mutually exclusive `status` traits
+(`common/traits/00_imp19c.txt`) — `hanlin`/`gongshi`/`juren` are NOT jinshi variants, they are DISJOINT
+degrees, so `has_trait = jinshi` alone would wrongly bar every Hanlin academician (the modeled top
+historical civil officials — Li Hongzhang, Zeng Guofan, Zhang Zhidong, Guo Songtao — are all minted
+with `hanlin`, never `jinshi`) plus every gongshi/juren graduate from ANY civil office, civil eligibility
+checks are the specific place this matters (unlike #111's narrower "Hanlin pool," which deliberately
+stayed jinshi-plus-hanlin-only and left gongshi/juren as an open scope question — a GC OFFICE eligibility
+gate has no equivalent narrow-scope justification for excluding a real, qualified degree tier). This
+widened set matches the codebase's own existing convention for "is this man exam-qualified": the amban
+draws (`se_QING_AMBAN.txt:86/90/121/125/258/262`) already use
+`OR = { has_trait = jinshi  has_trait = hanlin  has_trait = gongshi  has_trait = juren  has_trait =
+shengyuan }`, and `qing_rites_events.txt:418-423` pools the same four-plus-shengyuan set. Deliberately
+excludes `fanyi_jinshi` (the banner/translation track feeds amban posts, a separate population from
+civil GC offices — autofill's own `$degree$` args never use it for civil offices either) and
+`shengyuan`/`jiansheng` (the lowest two rungs — the amban bench's own inclusion of `shengyuan` reflects
+that a frontier resident post has a much lower bar than a Grand Council seat; a GC eligibility gate
+should stay at gongshi-and-above, the "passed at least the provincial/metropolitan level" tier). Every
+civil-office enforcement path (the picker's 3 inlined copies below, PLUS #116's backfill draw, PLUS the
+existing autofill/vacate-dispatch `$degree$` args) should consume `QING_office_required_degree_civil`
+rather than each hardcoding a bare `has_trait` check independently.
 
 **Fix the wrong-chokepoint bug (Finding 2) — edit all THREE inlined copies, not the unused shared
 trigger:**
@@ -220,21 +237,31 @@ trigger:**
                     scope:player.var:qing_gc_picker_office_var = flag:guard_commandant } }`
    (i.e., apply the hard filter unless the target is one of the 2 martial offices).
 
-**The "generic picker" caveat — RESOLVED (verified against the live GUI call graph, 2026-08-11):**
-Confirmed via `gui/government_view.gui`: EVERY per-office Appoint/Replace button (including war's, at
-`:3675-3677`) fires a THREE-step onclick chain — `qing_gc_set_picker_office_<office>` (sets the office
-var) → `qing_gov_refresh_candidates_<sortval>` (calls the OFFICE-AWARE `QING_council_refresh_candidates_by`
-with that office's sortval) → `gui.createwidget ... qing_office_picker_window` (opens the shared picker
-window, which always renders whatever list was most recently written to `qing_council_candidates`).
-`QING_council_refresh_candidates` (the generic, non-office-aware builder, enforcement copy #1) is called
-ONLY from the plain Grand-Council-tab-open button (`qing_gov_council_refresh_candidates`,
-`QING_governance_actions.txt:354-362`) — its former quarterly-pulse call was already removed
-(`se_QING_GOVERNANCE.txt:243`, commented out). So the generic list is NEVER the one actually shown when
-a specific office's Appoint/Replace picker opens; that picker always re-refreshes via the office-aware
-builder first. **Decision: option (c)** — do NOT apply the hard civil filter in enforcement copy #1
-(`QING_council_refresh_candidates`); leave it ranking-only exactly as it is today. Apply the hard filter
-only in enforcement copies #2 (`QING_council_refresh_candidates_by`) and #3 (the row-click `is_valid`),
-which ARE office-aware and are the ones that actually gate a real appointment.
+**The "generic picker" caveat — CORRECTED (a review found the original resolution rested on two false
+premises — see "## REVIEW FINDINGS ROUND 2" below for the full finding):**
+`QING_council_refresh_candidates` (the generic, non-office-aware builder, enforcement copy #1) has TWO
+live callers, not one: the plain Grand-Council-tab-open button (`qing_gov_council_refresh_candidates`,
+`QING_governance_actions.txt:354-362`), AND the hidden event `qing_office.40`
+(`qing_office_events.txt:952`), fired by `QING_office_appoint`/`QING_office_vacate` after EVERY appoint/
+vacate. Additionally, the three ministry CORPS token buttons (censor inspector, imperial guardsman,
+zongli diplomat — NOT great offices, a separate capped roster) live in `gui/qing_censorate.gui`,
+`gui/qing_guard.gui`, `gui/qing_zongli.gui` (not `government_view.gui`) and explicitly call the GENERIC
+builder (copy #1), then open the SAME shared `qing_office_picker_window` — so copy #1's list genuinely
+IS shown for corps enrolment, not never-shown as the original resolution claimed.
+
+**Corrected decision (still option (c), but for the right reason):** leave enforcement copy #1
+(`QING_council_refresh_candidates`) UNFILTERED — but not because it's "never shown." It's because the
+row-click `is_valid` (enforcement copy #3) is the AUTHORITATIVE gate regardless of which list populated
+the picker: it branches corps (`trigger_if`, `QING_governance_actions.txt:604-644`) vs. great-office
+(`trigger_else`, `:646-681`) via `scope:player.var:qing_gc_picker_office_var`, and corps enrolment must
+NOT carry a civil-degree filter (a censor inspector or imperial guardsman is not a GC office and has no
+degree requirement). So even though copy #1's unfiltered list IS sometimes the one rendered (corps
+buttons, and any stale state left by `qing_office.40` before a great-office picker re-refreshes via the
+office-aware copy #2), a degreeless man can only ever be CLICKED INTO a corps slot from that list — the
+great-office row-click branch (copy #3) independently re-verifies the hard filter and blocks him from
+any civil GC seat regardless of what the displayed list contained. No degreeless-civil bypass exists;
+copy #1 stays unfiltered by design (it correctly serves BOTH office and corps contexts, and only copy
+#3's branch-aware gate needs to discriminate between them).
 
 **`qing_office.41` disposition (Finding 6, decided explicitly):** KEEP, unchanged, as defense-in-depth.
 It remains load-bearing for `qing_force_setup.1/.11`'s day-30/31 commander reconciliation (a path that
@@ -245,17 +272,63 @@ civil filter or the unchanged martial soft-preference, because it only ever fire
 offices — which never carry a hard filter under this design — so "gate qualification vs. confer it by
 fiat" is not in tension for them; it stays a legitimate backstop.
 
+**Acknowledged consequence (per review — a genuinely NEW behavioral change, accepted, not a bug to
+fix):** `qing_office.41`'s `QING_grant_martial_degree` unconditionally STRIPS all seven civil-track
+traits when a man is appointed to war/guard_commandant, with no inverse effect anywhere in the codebase
+— the only way back to a civil degree is sitting the civil exam fresh. Before this design, a civil
+minister appointed to a martial seat and later reshuffled back to a civil office could still serve (the
+picker applied no degree check either way). AFTER this design's hard civil filter ships, that same man —
+now `wu_jinshi`-holding with no civil degree — is PERMANENTLY BARRED from all 11 civil offices; the
+civil→martial→civil career path that existed before this design is closed. This is a real, deliberate
+behavioral change (arguably a correct one — a Grand Secretary drilled onto a military ladder as a token
+of martial-office congruence is not obviously the right man to reshuffle back into a civil ministry —
+but it is a CHANGE, not something to leave unstated). Recorded here as an accepted consequence of
+shipping the hard civil filter, not a defect requiring a fix.
+
+## REVIEW FINDINGS ROUND 2 (2026-08-11)
+
+Adversarial review of the first corrected proposal returned **NOT CLEAN**. Three findings, all now
+folded into the sections above:
+
+**Finding 1 (CRITICAL, now fixed above) — `has_trait = jinshi` alone reproduces #111's exact
+under-inclusiveness bug.** `hanlin`/`gongshi`/`juren` are mutually exclusive with `jinshi`, not subsets
+of it; the modeled top historical civil officials (Li Hongzhang, Zeng Guofan, Zhang Zhidong, Guo
+Songtao) are all minted `hanlin`-only. A jinshi-only civil filter would silently bar the most senior,
+most qualified civil officials from GC office eligibility — the worst kind of failure since it wouldn't
+crash, just quietly exclude the best candidates. Fixed by widening
+`QING_office_required_degree_civil` to `OR = { jinshi  hanlin  gongshi  juren }`, matching the amban
+draws' own proven precedent.
+
+**Finding 2 (MEDIUM, now fixed above) — the original "generic picker" resolution rested on two false
+premises.** (a) `QING_council_refresh_candidates` has a SECOND live caller, the hidden event
+`qing_office.40` (fired by `QING_office_appoint`/`QING_office_vacate` on every appoint/vacate), not just
+the tab-open button. (b) The three ministry-corps token buttons (censor/guard/zongli — separate GUI
+files from `government_view.gui`) DO call the generic builder before opening the shared picker window,
+so its unfiltered list genuinely is sometimes rendered. The underlying DECISION (leave copy #1
+unfiltered) still holds, but for the correct reason: the row-click `is_valid` (copy #3) is authoritative
+regardless of which list populated the window, and it already branches corps-vs-great-office before
+applying any degree filter — so a degreeless man reachable via copy #1's unfiltered corps view can still
+never be clicked into a civil GC seat. Rationale corrected above; decision unchanged.
+
+**Finding 3 (MEDIUM, now fixed above) — the martial→civil one-way door was an unacknowledged new
+regression.** `qing_office.41`'s unconditional civil-trait strip on martial appointment, combined with
+this design's NEW hard civil filter, permanently bars a former civil minister who served in a martial
+seat from ever returning to a civil office — a real behavioral change the original proposal never
+stated. Now explicitly recorded as an accepted consequence, not silently shipped.
+
 ## Open questions a fresh design review must resolve
-- Independently re-verify the "generic picker" resolution above against the live GUI files (don't take
-  this rebuild's own grep-based confirmation on faith — confirm `QING_council_refresh_candidates`'s only
-  callers really are the tab-open button and nothing else, and that ALL 13 offices' Appoint/Replace
-  buttons — not just war's, which was the one directly checked — follow the same
-  set-office-var → refresh-by-sortval → open-window chain).
+- Re-verify the widened `QING_office_required_degree_civil` predicate (Finding 1's fix) against the
+  actual current trait definitions in `common/traits/00_imp19c.txt` — confirm the OR-set is complete and
+  correctly excludes `fanyi_jinshi`/`shengyuan`/`jiansheng` as intended.
+- Re-verify the corrected "generic picker" rationale (Finding 2's fix): confirm `qing_office.40`'s actual
+  behavior (does it ever leave copy #1's list as the LAST-refreshed state right before a great-office
+  row-click, and if so does copy #3's branch-aware gate genuinely still block a degreeless click, or is
+  there a timing gap the correction missed), and confirm the three corps-panel GUI files
+  (`qing_censorate.gui`/`qing_guard.gui`/`qing_zongli.gui`) really do call the generic builder as
+  claimed.
 - Confirm `QING_governance_actions.txt`'s row-click `is_valid` fix (enforcement copy #3) is gated on the
   CORRECT var (`scope:player.var:qing_gc_picker_office_var`, matching the existing pattern at
   `:1283-1287`/`:1299-1309` in the sibling candidate builder) and that the flag names (`flag:war`,
   `flag:guard_commandant`) match the office keys used elsewhere in this file.
-- Whether `QING_office_required_degree_civil`'s trivial one-line body (just `has_trait = jinshi`) is
-  worth a named trigger at all, or whether Finding 5's "canonical predicate" intent is better served by
-  a comment-documented convention (since there's genuinely only one degree per split) — lean toward
-  keeping the named trigger for discoverability/greppability even though its body is trivial.
+- Whether `QING_office_required_degree_civil`'s now-widened OR-body is worth a named trigger (yes,
+  clearly, now that it's non-trivial) — this question from round 1 is resolved by the widening itself.
