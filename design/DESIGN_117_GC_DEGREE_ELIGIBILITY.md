@@ -1,14 +1,27 @@
 # DESIGN — #117 GC office eligibility checks suitable exam degrees
 
-> STATUS 2026-08-11: THIRD REVIEW ROUND — NOT CLEAN, but confirmed the SUBSTANCE is sound. Round 2's
-> three findings (jinshi-only predicate, false generic-picker premises, unacknowledged martial→civil
-> door) were verified genuinely fixed. Round 3 found the in-place edits left internal contradictions —
-> "edit all THREE copies" vs. the resolved "leave copy #1 unfiltered" decision; "gongshi-and-above"
-> phrasing contradicting the actually-juren-inclusive predicate; the canonical-predicate mandate wrongly
-> including the mint paths. All four now fixed below (numbered list corrected to 2 copies + an explicit
-> "not edited" note for #1; "gongshi-and-above" replaced with the correct "juren-and-above"; the mandate
-> scoped to check-paths only; the #6-principle deviation now explicitly acknowledged). Do not implement
-> until a fresh adversarial review clears this revision.
+> STATUS 2026-08-12: SEVENTH REVIEW ROUND — CLEAN. Round 7 found every line citation in this doc had
+> drifted (~123 lines) against current HEAD after two intervening commits (`6454a50cf`, `3813bb9d1`)
+> added lines to `se_QING_COUNCIL.txt` — a citation-accuracy defect, no logic/behavioral issue. All
+> citations re-verified against current HEAD and corrected below (`se_QING_COUNCIL.txt`: copy #1
+> 1239-1325, copy #2 1338-1441, runtime-var reads 1408/1424/1426-1428, `#6` fix comment 1269/1373,
+> bare-OR precedent 1399). Ready to implement.
+> STATUS 2026-08-11: SIXTH REVIEW ROUND — CLEAN, ready to implement (logic/substance, unaffected by
+> round 7's citation-only fix). Round 4's fix (swap the inert
+> `$sortval$` compile-time self-comparison for the runtime `ROOT.var:qing_gc_picker_office_var` gate) was
+> itself found to reintroduce the empty-martial-list bug from a NEW angle (round 5: a bare AND-sibling
+> NOT-clause ANDs to unconditional-false for a martial target instead of exempting it). Round 5's fix
+> (combine the exemption and the filter with a single OR block, not two ANDed siblings — "target is
+> martial (bypass) OR candidate passes the civil filter") was verified round 6 to produce the CORRECT
+> truth table on all four cases (martial+degreeless, martial+degree-holder, civil+degree-holder,
+> civil+degreeless) and to correctly carry forward every prior round's fix (widened OR-predicate, runtime
+> var keying, ROOT-vs-scope:player scope forms, additive placement, unedited copy #1). Round 6 raised two
+> final non-blocking findings, both folded in below: (a) item 2's OR gate (the row-click `is_valid`) must
+> be wrapped in `custom_tooltip` like every sibling clause in that block, or a blocked civil-office click
+> in the acknowledged stale-refresh window fails with no reason text — a mini-recurrence of the `#6`
+> "listed but un-appointable" bug; (b) the `AND = { <single-clause> }` wrapping around the two office-var
+> checks is legal but needlessly verbose next to this file's own established bare-OR-member idiom
+> (`se_QING_COUNCIL.txt:1399`) — drop it in favour of bare comparison triggers as OR members.
 
 ## Task text
 `overnight/SESSION_HANDOFF_2026_08_11.md:62`: "#117 GC office eligibility checks suitable exam degrees
@@ -20,7 +33,7 @@ The 13 Grand Council offices split into 11 civil (require jinshi per `QING_counc
 - **Autofill** mints a fresh character with the correct degree baked in via `create_character` — always
   degree-correct by construction.
 - **Manual appointment** (`QING_office_eligible_candidate`, `qing_dynasty_triggers.txt:168-225`, and
-  `QING_council_refresh_candidates`/`QING_council_refresh_candidates_by`, `se_QING_COUNCIL.txt:1116-1318`)
+  `QING_council_refresh_candidates`/`QING_council_refresh_candidates_by`, `se_QING_COUNCIL.txt:1239-1441`)
   has NO degree check at all — a completely degreeless courtier can be appointed to any of the 13
   offices, civil or martial.
 - **Retrofit-after-the-fact for the 2 martial seats only**: `qing_office.41`
@@ -46,7 +59,7 @@ years of early game, even though autofill's mint-with-degree is unaffected (self
 
 Two components, both applied to `QING_office_eligible_candidate` (the shared trigger feeding
 `QING_council_refresh_candidates`/`_by` and the row-click handler's `is_valid` in
-`QING_governance_actions.txt:645-681`):
+`QING_governance_actions.txt:646-681`):
 
 1. **Soft preference is already present and sufficient for the 11 civil offices** — no change needed
    there beyond confirming the existing `qing_degree_prestige_svalue` weighting actually dominates
@@ -110,7 +123,7 @@ state, not the static seed, before deciding hard vs. soft.
 **Finding 2 (CRITICAL) — the proposed edit target is the wrong chokepoint; a change to
 `QING_office_eligible_candidate` would be INERT for the manual picker.** The doc's "Proposed resolution"
 says to apply changes to `QING_office_eligible_candidate`. Verified: neither candidate-list builder
-(`QING_council_refresh_candidates`/`_by`, `se_QING_COUNCIL.txt:1116-1201`/`:1215-1318`) nor the row-click
+(`QING_council_refresh_candidates`/`_by`, `se_QING_COUNCIL.txt:1239-1325`/`:1338-1441`) nor the row-click
 handler's `is_valid` (`QING_governance_actions.txt:646-681`) actually CALLS that trigger — all three
 independently HAND-INLINE their own copies of the same exclusion conditions (the row-click's own comment
 even says "inlined because this is CHARACTER scope"). A degree check added only to
@@ -229,21 +242,25 @@ predicate; those paths are unaffected by this design and continue passing their 
 **Fix the wrong-chokepoint bug (Finding 2) — edit TWO of the three inlined copies (copy #1 stays
 unfiltered by design — see the "generic picker" resolution below, which this numbered list must agree
 with, not contradict):**
-1. `QING_council_refresh_candidates_by` (`se_QING_COUNCIL.txt:1215-1318`): add to the
+1. `QING_council_refresh_candidates_by` (`se_QING_COUNCIL.txt:1338-1441`): add to the
    `ordered_character.limit` an `OR` clause — NOT a bare sibling `NOT=OR{...}` alongside the filter,
    which would AND together into "always false for martial offices, filter-or-not for civil" and
    empty the martial candidate list entirely (a round-6 review finding: the gate and the filter must
-   be COMBINED with OR, not left as two ANDed siblings):
+   be COMBINED with OR, not left as two ANDed siblings). Round-6 review also found the `AND = { <single
+   clause> }` wrapping below is legal but needlessly verbose given this same file's own established
+   bare-OR-member idiom (`se_QING_COUNCIL.txt:1399`: `OR = { var:qing_office_held = flag:regent
+   var:qing_office_held = flag:emeritus }`) — use bare comparison triggers as OR members, not
+   single-clause AND wrappers:
    ```
    OR = {
-       AND = { ROOT.var:qing_gc_picker_office_var = flag:war }
-       AND = { ROOT.var:qing_gc_picker_office_var = flag:guard_commandant }
+       ROOT.var:qing_gc_picker_office_var = flag:war
+       ROOT.var:qing_gc_picker_office_var = flag:guard_commandant
        QING_office_required_degree_civil = yes
    }
    ```
    (reads as: "the target is martial (no filter applies) OR the candidate passes the civil filter" —
    gated on the SAME runtime var item 2 below uses, `qing_gc_picker_office_var`, already read inside
-   this very effect at `:1285`/`:1301`/`:1303-1305`; NOT on `$sortval$`, which is a compile-time macro
+   this very effect at `:1408`/`:1424`/`:1426-1428`; NOT on `$sortval$`, which is a compile-time macro
    parameter — `$sortval$ = council_sort_martial` would compile to
    `council_sort_martial = council_sort_martial`, true for EVERY character, permanently inert — a
    round-5 finding, the same compile-time-token-treated-as-runtime-value mistake as the mint-args
@@ -251,15 +268,24 @@ with, not contradict):**
 2. The row-click handler's `is_valid` (`QING_governance_actions.txt:646-681`, the `trigger_else` "GREAT
    OFFICES" branch): add the SAME OR-combined gate here — do NOT add a bare sibling
    `NOT = { OR = { scope:player.var:qing_gc_picker_office_var = flag:war  ... } }` clause alongside the
-   filter (the identical empty-martial-list risk applies here too):
+   filter (the identical empty-martial-list risk applies here too). UNLIKE item 1 (a candidate-builder
+   `limit`, not player-facing), this IS player-facing — every sibling clause in this `is_valid` already
+   wraps its gate in `custom_tooltip = { text = <loc key> <triggers> }` so a blocked row shows the
+   player why (lines 612/647/662/680). A bare gate here would reintroduce a mini-recurrence of the `#6`
+   "listed but un-appointable" bug in the acknowledged stale-refresh window (see below): the click fails
+   with no reason text. Wrap in `custom_tooltip` with a new loc key (e.g. requiring a qualifying exam
+   degree), matching the sibling clauses:
    ```
-   OR = {
-       AND = { scope:player.var:qing_gc_picker_office_var = flag:war }
-       AND = { scope:player.var:qing_gc_picker_office_var = flag:guard_commandant }
-       QING_office_required_degree_civil = yes
+   custom_tooltip = {
+       text = qing_gc_appoint_requires_degree_tt
+       OR = {
+           scope:player.var:qing_gc_picker_office_var = flag:war
+           scope:player.var:qing_gc_picker_office_var = flag:guard_commandant
+           QING_office_required_degree_civil = yes
+       }
    }
    ```
-3. `QING_council_refresh_candidates` (`se_QING_COUNCIL.txt:1116-1201`, enforcement copy #1) is
+3. `QING_council_refresh_candidates` (`se_QING_COUNCIL.txt:1239-1325`, enforcement copy #1) is
    DELIBERATELY NOT edited — see "generic picker" resolution below for why leaving it unfiltered is
    correct, not an oversight.
 
@@ -289,7 +315,7 @@ any civil GC seat regardless of what the displayed list contained. No degreeless
 copy #1 stays unfiltered by design (it correctly serves BOTH office and corps contexts, and only copy
 #3's branch-aware gate needs to discriminate between them).
 
-**Acknowledged deviation (not a defect, stated explicitly):** the `#6` fix (`se_QING_COUNCIL.txt:1142-1147`)
+**Acknowledged deviation (not a defect, stated explicitly):** the `#6` fix (`se_QING_COUNCIL.txt:1269`/`:1377`)
 established a codebase principle of filtering the BUILDER, not just the click-handler, specifically
 because a listed-but-unappointable candidate was a reported bug ("listed but un-appointable"). This
 design's copy #1 deliberately does NOT follow that principle in the narrow `qing_office.40` stale-refresh
