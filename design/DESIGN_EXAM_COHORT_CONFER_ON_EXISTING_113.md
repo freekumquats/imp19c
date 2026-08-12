@@ -1,15 +1,19 @@
 # DESIGN #113 — the triennial exam cohort confers degrees on existing degreeless court adults (all 3 tracks), create_character ONLY as fallback
 
-**Status (2026-08-11): FULLY CLEAN.** Original implementation shipped (commit `9f2365c94`) without a
-prior adversarial design review — a process gap corrected retroactively: 4 rounds of post-implementation
-code review reached a behaviorally-correct state, then a RETROACTIVE design-approach review found the
-shipped design structurally fragile (4-way duplicated partition logic) and proposed a shared-trigger
-refactor, split into Piece A (the degreeless-list extraction) and Piece B (the track-partition
-extraction). **Piece A is now implemented, code-reviewed CLEAN, committed, and pushed.** **Piece B's
-design is reviewed CLEAN** and correctly deferred (no live bug forces it) — ready to implement whenever
-convenient. See "## RETROACTIVE REVIEW FINDINGS," "## REVIEW OF FINDING 1'S REFACTOR PROPOSAL," "##
-CORRECTED REFACTOR PROPOSAL," and "## DISPOSITION" below for the full trail. Distinct from #111 (Hanlin
-POOL caller-split); this is the EXAM COHORT itself.
+**Status (2026-08-11): FULLY CLEAN AND FULLY SHIPPED.** Original implementation shipped (commit
+`9f2365c94`) without a prior adversarial design review — a process gap corrected retroactively: 4 rounds
+of post-implementation code review reached a behaviorally-correct state, then a RETROACTIVE
+design-approach review found the shipped design structurally fragile (4-way duplicated partition logic)
+and proposed a shared-trigger refactor, split into Piece A (the degreeless-list extraction) and Piece B
+(the track-partition extraction). **Both pieces are now implemented, code-reviewed CLEAN, committed, and
+pushed** (Piece A: commit `0f2585f7b`; Piece B: commit `c52362b9b`). The civil/banner/martial partition
+and the 11-trait degreeless list now each live in
+exactly ONE definition (`common/scripted_triggers/qing_dynasty_triggers.txt`), consumed by all 4
+call sites (`QING_exam_sit_candidate` + the three `QING_exam_seat_*_graduate` cohort helpers) — the
+4-way duplication that caused 3 of the original 4 review-round bugs is now structurally closed. See
+"## RETROACTIVE REVIEW FINDINGS," "## REVIEW OF FINDING 1'S REFACTOR PROPOSAL," "## CORRECTED REFACTOR
+PROPOSAL," and "## DISPOSITION" below for the full trail. Distinct from #111 (Hanlin POOL caller-split);
+this is the EXAM COHORT itself. No further work outstanding on #113.
 
 ## The rule this serves (user-authoritative — see [[imp19c-character-creation-rule]])
 `create_character` with an exam degree is permitted in EXACTLY two places: (a) the game-start boot seed, and
