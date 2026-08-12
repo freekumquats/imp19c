@@ -1267,13 +1267,18 @@ QING_DECLINE_pulse = {
 			limit = { has_variable = qing_paper_regime_active }
 			LOG_line = { sys = QING  msg = "paper-money regime active: depreciation meter + mint allowance pulsed for" }
 		}
-		# [#67] PAPER-MONEY crisis-UNLOCK dispatcher — the firing path for qing_paper.1 (the sole setter of
+		# [#67] PAPER-MONEY UNLOCK dispatcher — the firing path for qing_paper.1 (the sole setter of
 		# qing_paper_money_unlocked, the paper_currency law option's allow-gate). Without this, the whole regime
-		# is unreachable dead code (the #67-review CRITICAL). Mirrors the qing_frontier.1 pattern: the FULL crisis
-		# gate + the shared-court-slot claim live HERE (the event itself is is_triggered_only with only a light
+		# is unreachable dead code (the #67-review CRITICAL). Mirrors the qing_frontier.1 pattern: the FULL gate
+		# + the shared-court-slot claim live HERE (the event itself is is_triggered_only with only a light
 		# delay-window re-guard), so trigger_event has a real caller. Fires ONCE (qing_paper_money_unlocked absent),
-		# late-window (>=1850, no paper at the High-Qing zenith — research), on acute currency stress + not during a
-		# post-abolition re-lock, player-only (is_ai=no), and only when the shared quarterly slot is free (#41 class).
+		# late-window (>=1850, no paper at the High-Qing zenith — research), not during a post-abolition re-lock,
+		# player-only (is_ai=no), and only when the shared quarterly slot is free (#41 class).
+		# [#76] TWO alternative paths raise the question, not crisis alone: (a) REACTIVE — acute currency
+		# stress (qing_currency_stress >= 70), the original forced-crisis path; (b) PROACTIVE — the player has
+		# researched qing_tech_official_banking (00_qing_inventions.txt), a deliberate fiscal-modernization
+		# choice made without waiting for a crisis. Both still sit behind the SAME current_date >= 1850.1.1
+		# floor, so researching the invention early does not unlock paper money before 1850 either way.
 		if = {
 			limit = {
 				is_ai = no
@@ -1281,9 +1286,14 @@ QING_DECLINE_pulse = {
 				NOT = { has_variable = qing_paper_relock }
 				NOT = { has_variable = qing_paper_proposal_cd }   # [#70 pass-2] don't re-ask a declined proposal every quarter
 				current_date >= 1850.1.1
-				has_variable = qing_currency_stress
-				var:qing_currency_stress >= 70
 				NOT = { has_variable = qing_gc_event_slot_used }
+				OR = {
+					AND = { has_variable = qing_currency_stress  var:qing_currency_stress >= 70 }
+					# [#76 cr76 fix] the invention arm is permanent, unlike the self-abating crisis arm — a
+					# player who refused it once (qing_paper.1.refuse, outside any active crisis) should
+					# not be re-nagged forever. qing_paper_invention_declined is set only in that case.
+					AND = { invention = qing_tech_official_banking  NOT = { has_variable = qing_paper_invention_declined } }
+				}
 			}
 			set_variable = { name = qing_gc_event_slot_used  value = 1 }   # claim the shared court slot (frontier/works pattern)
 			# [#70 pass-2] Proposal cooldown (~5yr), mirroring qing_frontier_turfwar_cd (se_QING_FRONTIER.txt:184). Without
@@ -1293,7 +1303,15 @@ QING_DECLINE_pulse = {
 			# this cd covers the refuse arm (and any decline) regardless of choice.
 			set_variable = { name = qing_paper_proposal_cd  days = 1825 }
 			trigger_event = { id = qing_paper.1  days = { 5 20 } }
-			LOG_line = { sys = QING  msg = "paper-money proposal: fiscal crisis has forced the question, qing_paper.1 queued for" }
+			# [#76] two distinct static LOG lines (the log-string-macro rule forbids a $param$/# choosing
+			# between them at runtime) so the boot read-back can tell which path actually fired.
+			if = {
+				limit = { has_variable = qing_currency_stress  var:qing_currency_stress >= 70 }
+				LOG_line = { sys = QING  msg = "paper-money proposal: fiscal crisis has forced the question, qing_paper.1 queued for" }
+			}
+			else = {
+				LOG_line = { sys = QING  msg = "paper-money proposal: fiscal modernization (qing_tech_official_banking) invited the question, qing_paper.1 queued for" }
+			}
 		}
 	# Civic identity drifts toward its self-strengthening-gated target FIRST, so
 	# the ethnic-tension drift that follows reads a fresh civic-relief value (§11
