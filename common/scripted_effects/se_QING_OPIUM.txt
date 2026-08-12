@@ -40,6 +40,11 @@
 #     qing_opium_posture           policy: 0 = prohibit (default), 1 = tolerate-for-revenue, 2 = treaty-legalized
 #     qing_opium_domestic_unlocked flag var: Yunnan/Sichuan domestic opium production is on
 #     qing_lin_zexu_appointed      flag var: an Imperial Commissioner is enforcing interdiction
+#   [#97] the Commissioner is now a REAL character actor (欽差大臣 / Lin Zexu), following the
+#   Hoppo/Caravan/Salt office template (se_QING_FRONTIER_PICKER.txt) — not just the bare flag above,
+#   which STAYS (the interdiction-suppression logic elsewhere in this file reads it unchanged):
+#     qing_opium_commissioner_holder   country var: the character serving as Commissioner, if any
+#     qing_opium_commissioner_marker   character var: the per-char post marker (offices custom_loc)
 ########################################################################
 
 # ---- generic clamped-counter nudge (mirror of QING_DECLINE_nudge, sys=QING) --
@@ -297,15 +302,93 @@ QING_opium_set_posture = {
 	LOG_line = { sys = QING  msg = "opium: posture set to $posture$ for" }
 }
 
+# --- [cr97 fix] a dead Commissioner otherwise leaves qing_opium_commissioner_holder pointing at a
+# corpse forever (the card's is_shown gates on has_variable, not is_alive; the ghost qing_lin_zexu_appointed
+# would keep suppressing the import ramp with no one actually enforcing it). Relieve on death only — no
+# double-book/engine-role check needed (unlike salt/caravan/hoppo, this office carries no squeeze/graft
+# meter, so there's nothing else to reconcile) — and BACKFILL a fresh appointee immediately, matching the
+# other 3 frontier offices' "the state keeps this post staffed" model (interdiction is meant to be an
+# ongoing policy, not something that lapses the moment one commissioner dies). Country scope (ROOT = CHI).
+QING_opium_commissioner_reconcile = {
+	if = {
+		limit = {
+			has_variable = qing_opium_commissioner_holder
+			var:qing_opium_commissioner_holder = { is_alive = no }
+		}
+		remove_variable = qing_opium_commissioner_holder
+		QING_opium_commissioner_appoint = yes
+		LOG_line = { sys = QING  msg = "opium: the Commissioner died in office, a replacement was appointed for" }
+	}
+}
+
+# --- [#97] seat THIS character (char scope) as the Commissioner: holder var + post marker +
+# the exam-pool 1:1 forfeit + the qing_lin_zexu_appointed flag the rest of this file already reads.
+# Called by the auto-pick appoint (below, for event/AI callers that cannot open a GUI) AND the
+# player candidate-list handler (qing_frontier_office_appoint_selected) — ONE seating path, mirroring
+# QING_salt_commissioner_seat / QING_caravan_super_seat / QING_canton_seat_hoppo exactly.
+QING_opium_commissioner_seat = {
+	save_scope_as = qing_opium_commissioner_pick
+	# employer, NOT ROOT — on the player-picker path root = the clicked character (GuiScope.SetRoot),
+	# so ROOT would stamp the holder var on the character, not CHI (silently discarded). employer = CHI
+	# on both paths (the auto-pick's ordered_character + the picker handler's is_valid both require it).
+	# [cr97 fix] qing_lin_zexu_appointed is a COUNTRY var (every reader — the ramp suppression at :113,
+	# the one-shot guard below, the appoint-button is_shown, the qing_opium.2 Humen trigger — evaluates
+	# it in country scope) but this whole effect runs in CHARACTER scope: a bare set_variable here was
+	# silently stamping the flag onto the CHARACTER, not CHI, so interdiction never activated, the
+	# one-shot guard never tripped, and the Humen crackdown chain could never fire. Wrapped in employer,
+	# alongside the holder var, exactly like the holder.
+	employer = {
+		# [cr97 fix] legitimacy is a ONE-TIME reward for the FIRST-EVER appointment (matching the
+		# original bare-flag effect's one-shot semantics), never a rotate/replacement bonus — checked
+		# BEFORE the flag below is set, so it fires exactly once regardless of which entry path (the
+		# event auto-pick or the player picker) makes the first appointment. QING_salt_commissioner_seat
+		# grants nothing on ANY seating (its lever is the squeeze instead); opium has no squeeze meter,
+		# so the one-time legitimacy stays, but scoped to first-appointment only, not every rotate.
+		if = {
+			limit = { NOT = { has_variable = qing_lin_zexu_appointed } }
+			add_legitimacy = 5     # a resolute throne appointing a famed incorruptible commissioner
+		}
+		set_variable = { name = qing_opium_commissioner_holder  value = scope:qing_opium_commissioner_pick }
+		set_variable = { name = qing_lin_zexu_appointed  value = 1 }
+	}
+	set_variable = { name = qing_opium_commissioner_marker  value = 1 }
+	QING_exam_pool_drop_member = yes
+	LOG_line = { sys = QING  msg = "opium: Imperial Commissioner (欽差大臣) seated for" }
+}
+
+# --- [#97] auto-pick the ablest eligible courtier and seat him — for the event/AI callers that
+# cannot open the frontier picker window (qing_opium.2's crackdown chain). Mirrors
+# QING_salt_commissioner_appoint. Country scope (ROOT = CHI).
+QING_opium_commissioner_appoint = {
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_adult = yes
+			is_alive = yes
+			is_ruler = no
+			NOT = { QING_char_holds_court_position = yes }
+			is_general = no
+			is_admiral = no
+			is_governor = no
+			NOT = { has_variable = qing_officer_marker }
+			NOT = { QING_char_hard_disgraced = yes }
+			NOT = { AND = { exists = ROOT.primary_heir  this = ROOT.primary_heir } }
+		}
+		order_by = finesse
+		max = 1
+		QING_opium_commissioner_seat = yes
+	}
+}
+
 # --- appoint an Imperial Commissioner (Lin Zexu). Suppresses the import ramp while prohibition
-# holds. A one-shot flag; the crackdown event (qing_opium.2) does the dramatic silver-shock.
+# holds. A one-shot GUARD (this entry point only fires the auto-pick once); the frontier picker
+# (opened from the panel button) can re-pick/rotate the holder afterward like the other 3 offices.
+# The crackdown event (qing_opium.2) does the dramatic silver-shock.
 QING_opium_appoint_commissioner = {
 	QING_opium_init = yes
 	if = {
 		limit = { NOT = { has_variable = qing_lin_zexu_appointed } }
-		set_variable = { name = qing_lin_zexu_appointed  value = 1 }
-		add_legitimacy = 5     # a resolute throne appointing a famed incorruptible commissioner
-		LOG_line = { sys = QING  msg = "opium: Imperial Commissioner (Lin Zexu) appointed for" }
+		QING_opium_commissioner_appoint = yes
 	}
 }
 
@@ -398,6 +481,7 @@ QING_opium_spread_poppy_country = {
 # ======================================================================
 QING_opium_pulse = {
 	LOG_enter = { sys = QING  fn = "QING_opium_pulse" }
+	QING_opium_commissioner_reconcile = yes
 	QING_opium_addiction_pulse = yes
 	# --- offer the pre-crisis trade-balance WARNING once, when the drain first bites but the
 	# treaty order has not yet been forced (the memorial that a wise court heeds). The event
