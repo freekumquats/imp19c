@@ -201,6 +201,102 @@ QING_exam_mint_scholar = {
 }
 
 # ======================================================================
+# [#113 2026-08-11] QING_exam_seat_civil_graduate — CIVIL-TRACK confer-else-create. Scope:
+# COUNTRY (CHI). $degree$ = jinshi | juren (same macro QING_exam_mint_scholar takes). Tries
+# first to CONFER $degree$ onto the ablest existing degreeless court adult (order_by finesse,
+# the civil ladder's own metric); create_character (QING_exam_mint_scholar) fires only via the
+# else — i.e. only when no eligible living man exists. QING_exam_graduate_cohort's civil lead
+# + hall-band extras route through this instead of calling QING_exam_mint_scholar directly, so
+# the triennial cohort promotes a living courtier before minting a brand-new one — the batch
+# counterpart to QING_exam_sit_candidate's per-person conferral (on_becoming_adult already does
+# this one man at a time; this is the SAME behavior at cohort granularity).
+#
+# Candidate gate = QING_exam_sit_candidate's own degreeless check (the 11-trait NOT list,
+# civil+banner+wuju degrees) plus NOT qing_sat_keju, so a cohort confer cannot re-degree a man
+# the per-person intake already resolved, nor be conferred twice by two cohort slots in the
+# same call (qing_sat_keju is stamped immediately below, before the next slot's own gate runs).
+#
+# [#113 pool OPEN-Q resolved] a CONFERRED civil graduate is deliberately NOT inserted into
+# qing_scholar_pool here (unlike QING_exam_mint_scholar's fresh mint, which has nowhere else to
+# come from and so is pool-inserted on creation). A conferred man's existing office status is
+# untouched by this effect; if he is in fact office-less and now carries jinshi, #111's
+# QING_exam_pool_draw_refill sweeps him into the pool on the very next quarterly tick (its own
+# gate is exactly has_trait=jinshi + office-less + NOT qing_is_pool_scholar) — so pool entry is
+# left to that single owning path rather than duplicated here.
+# ======================================================================
+QING_exam_seat_civil_graduate = {
+	# [cr113 fix] a single ordered_character (no separate any_character pre-check to keep in
+	# lockstep) + the SAME stale-scope guard #111's QING_exam_pool_draw_one uses: this effect
+	# is called up to 3 times per QING_exam_graduate_cohort invocation (lead + 2 hall-band
+	# extras), and save_scope_as only writes on an actual match — a round with no eligible
+	# candidate leaves scope:qing_seated_civil_graduate pointing at whichever man an EARLIER
+	# round in the same cohort call already conferred/stamped. Re-checking
+	# NOT = { has_variable = qing_sat_keju } on the saved scope closes this: a genuine fresh
+	# match never carries the marker (the ordered_character limit excludes marked men), but a
+	# stale leftover from an earlier round DOES (stamped during that round's processing) — so
+	# the stale case falls through to the mint fallback instead of re-conferring on (or
+	# double-stamping) the same man.
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_adult = yes
+			is_alive = yes
+			is_ruler = no
+			prisoner = no
+			NOT = { has_variable = qing_sat_keju }
+			# [cr113 re-review fix] mirror QING_exam_sit_candidate's own partition: the per-person
+			# intake checks the banner-culture branch FIRST, so a Manchu/Mongol man can only ever
+			# reach fanyi_jinshi there, never jinshi/juren. Without this exclusion the cohort's
+			# civil lead (order_by finesse, no culture gate) could out-rank the banner slot's own
+			# pick and confer a Han civil degree onto a bannerman — the same cross-track leak the
+			# martial helper's culture exclusion below was added to close.
+			NOT = {
+				OR = {
+					culture.culture_group = culture_group:jurchen
+					culture.culture_group = culture_group:mongolic
+				}
+			}
+			# [cr113 re-review fix #2] mirror the OTHER half of QING_exam_sit_candidate's partition:
+			# once the banner branch is excluded above, the per-person intake's else splits strictly
+			# on martial > finesse -> military, else -> civil. Without this exclusion a non-banner,
+			# martial-dominant man is double-eligible for both this helper (order_by finesse, ranks
+			# him high if his finesse is merely decent) and QING_exam_seat_martial_graduate — and
+			# since the cohort confers civil slots before the martial slot, he could be cross-tracked
+			# into a civil degree the per-person path would never have given him.
+			NOT = { martial > finesse }
+			NOT = { has_trait = jiansheng }
+			NOT = { has_trait = shengyuan }
+			NOT = { has_trait = juren }
+			NOT = { has_trait = gongshi }
+			NOT = { has_trait = jinshi }
+			NOT = { has_trait = hanlin }
+			NOT = { has_trait = fanyi_jinshi }
+			NOT = { has_trait = wu_shengyuan }
+			NOT = { has_trait = wu_juren }
+			NOT = { has_trait = wu_jinshi }
+			NOT = { has_trait = wu_zhuangyuan }
+		}
+		order_by = finesse
+		max = 1
+		save_scope_as = qing_seated_civil_graduate
+	}
+	if = {
+		limit = {
+			exists = scope:qing_seated_civil_graduate
+			scope:qing_seated_civil_graduate = { NOT = { has_variable = qing_sat_keju } }
+		}
+		scope:qing_seated_civil_graduate = {
+			set_variable = { name = qing_sat_keju  value = 1 }
+			add_trait = $degree$
+		}
+		LOG_line = { sys = QING  msg = "exam: conferred a civil degree onto an existing court adult for" }
+	}
+	else = {
+		QING_exam_mint_scholar = { degree = $degree$ }
+	}
+}
+
+# ======================================================================
 # [#40 2026-08-09] QING_exam_mint_banner_laureate - mint a FREE, UNPOSTED banner Translation
 # Laureate (fanyi_jinshi) into the CHI court, so the amban PICKER has real candidates. The
 # on_becoming_adult keju intake (QING_exam_sit_candidate) is the only OTHER source of a free court
@@ -248,6 +344,164 @@ QING_exam_mint_banner_laureate = {
 }
 
 # ======================================================================
+# [#113 2026-08-11] QING_exam_seat_banner_laureate — BANNER-TRACK confer-else-create. Scope:
+# COUNTRY (CHI). Mirrors QING_exam_seat_civil_graduate's shape for the 翻譯科 track: tries to
+# CONFER fanyi_jinshi onto the ablest existing degreeless Manchu/Mongol court adult (order_by
+# charisma, matching QING_exam_sit_candidate's banner-track profile and qing_amban_rank_svalue's
+# own charisma-lead read); QING_exam_mint_banner_laureate (create_character) fires only via the
+# else. QING_exam_graduate_cohort's banner slot routes through this instead of calling the mint
+# directly. QING_exam_mint_banner_laureate remains independently callable — the boot backfill
+# QING_amban_seed_spare_laureates (#40) still calls IT directly, unaffected by this helper.
+# NOT pool-related (fanyi_jinshi never enters qing_scholar_pool, mirrors the mint's own note).
+# ======================================================================
+QING_exam_seat_banner_laureate = {
+	# [cr113 fix] single ordered_character + stale-scope guard, matching
+	# QING_exam_seat_civil_graduate's shape — see that effect's comment for the rationale
+	# (this helper is only called once per cohort, but keeps the same proven idiom).
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_adult = yes
+			is_alive = yes
+			is_ruler = no
+			prisoner = no
+			NOT = { has_variable = qing_sat_keju }
+			OR = {
+				culture.culture_group = culture_group:jurchen
+				culture.culture_group = culture_group:mongolic
+			}
+			NOT = { has_trait = jiansheng }
+			NOT = { has_trait = shengyuan }
+			NOT = { has_trait = juren }
+			NOT = { has_trait = gongshi }
+			NOT = { has_trait = jinshi }
+			NOT = { has_trait = hanlin }
+			NOT = { has_trait = fanyi_jinshi }
+			NOT = { has_trait = wu_shengyuan }
+			NOT = { has_trait = wu_juren }
+			NOT = { has_trait = wu_jinshi }
+			NOT = { has_trait = wu_zhuangyuan }
+		}
+		order_by = charisma
+		max = 1
+		save_scope_as = qing_seated_banner_laureate
+	}
+	if = {
+		limit = {
+			exists = scope:qing_seated_banner_laureate
+			scope:qing_seated_banner_laureate = { NOT = { has_variable = qing_sat_keju } }
+		}
+		scope:qing_seated_banner_laureate = {
+			set_variable = { name = qing_sat_keju  value = 1 }
+			add_trait = fanyi_jinshi
+		}
+		LOG_line = { sys = QING  msg = "exam: conferred the translation degree onto an existing bannerman for" }
+	}
+	else = {
+		QING_exam_mint_banner_laureate = yes
+	}
+}
+
+# ======================================================================
+# [#113 2026-08-11] QING_exam_mint_martial_graduate — create ONE martial-examination (武科)
+# graduate character. Scope: COUNTRY (CHI). $wu_degree$ = wu_juren | wu_jinshi (the fallback
+# create for the new MARTIAL cohort slot). Mirrors QING_exam_mint_scholar's shape exactly (age
+# 28 / Han commoner / confucianism / stat spread / add_trait / LOG), swapping the finesse-lead
+# spread for a martial lead (matches QING_exam_sit_candidate's own martial-track stat framing)
+# and the civil degree for the $wu_degree$ martial one. Not pool-related — the civil hiring
+# pool (qing_scholar_pool) is a CIVIL-office bench; a martial graduate is drawn on by the
+# military-office pickers directly via has_trait, exactly as QING_grant_martial_degree holders
+# already are. #90-safe: no modifiers inside create_character; called only from the triennial
+# cohort's else-branch (deferred/runtime), never at construction.
+# ======================================================================
+QING_exam_mint_martial_graduate = {
+	create_character = {
+		age = 28
+		culture = han
+		religion = confucianism
+		# a fresh martial graduate is battle-fit, not bookish — martial leads, with a spread
+		# so the cohort is not identical clones (mirrors QING_exam_mint_scholar's civil spread).
+		add_martial = 7
+		add_finesse = 3
+		add_charisma = 4
+		add_zeal = 5
+		add_trait = $wu_degree$
+		save_scope_as = qing_new_martial_graduate
+	}
+	scope:qing_new_martial_graduate = {
+		set_home_country = ROOT
+	}
+	LOG_line = { sys = QING  msg = "wuju: minted a martial-examination graduate for" }
+}
+
+# ======================================================================
+# [#113 2026-08-11] QING_exam_seat_martial_graduate — MARTIAL-TRACK confer-else-create. Scope:
+# COUNTRY (CHI). $wu_degree$ = wu_juren | wu_jinshi. Mirrors QING_exam_seat_civil_graduate's
+# shape for the 武科 track: tries to CONFER $wu_degree$ onto the ablest existing degreeless
+# court adult whose martial leads his finesse (order_by martial, the same `martial > finesse`
+# profile QING_exam_sit_candidate's §ROUTING-FIX uses to route a man onto this ladder in the
+# first place); QING_exam_mint_martial_graduate fires only via the else.
+#
+# [cr113 fix] EXCLUDES Manchu/Mongol bannermen (culture_group jurchen/mongolic), mirroring
+# QING_exam_sit_candidate's own partition: there, the banner-track branch runs FIRST and only
+# its else (Han + the general court) ever reaches the civil-vs-military split, so a bannerman
+# can never sit the 武科 in the per-person path. Without this exclusion, a Manchu/Mongol man
+# with martial > finesse who was NOT the ablest-by-charisma pick of the cohort's banner slot
+# (and so left unstamped) would still match here and end up conferred a Han military degree —
+# an outcome the per-person path can never produce. The exclusion keeps both paths partitioning
+# the same population the same way, as the design doc requires.
+# ======================================================================
+QING_exam_seat_martial_graduate = {
+	# [cr113 fix] single ordered_character + stale-scope guard, matching
+	# QING_exam_seat_civil_graduate's shape — see that effect's comment for the rationale.
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_adult = yes
+			is_alive = yes
+			is_ruler = no
+			prisoner = no
+			NOT = { has_variable = qing_sat_keju }
+			martial > finesse
+			NOT = {
+				OR = {
+					culture.culture_group = culture_group:jurchen
+					culture.culture_group = culture_group:mongolic
+				}
+			}
+			NOT = { has_trait = jiansheng }
+			NOT = { has_trait = shengyuan }
+			NOT = { has_trait = juren }
+			NOT = { has_trait = gongshi }
+			NOT = { has_trait = jinshi }
+			NOT = { has_trait = hanlin }
+			NOT = { has_trait = fanyi_jinshi }
+			NOT = { has_trait = wu_shengyuan }
+			NOT = { has_trait = wu_juren }
+			NOT = { has_trait = wu_jinshi }
+			NOT = { has_trait = wu_zhuangyuan }
+		}
+		order_by = martial
+		max = 1
+		save_scope_as = qing_seated_martial_graduate
+	}
+	if = {
+		limit = {
+			exists = scope:qing_seated_martial_graduate
+			scope:qing_seated_martial_graduate = { NOT = { has_variable = qing_sat_keju } }
+		}
+		scope:qing_seated_martial_graduate = {
+			set_variable = { name = qing_sat_keju  value = 1 }
+			add_trait = $wu_degree$
+		}
+		LOG_line = { sys = QING  msg = "wuju: conferred a martial degree onto an existing court adult for" }
+	}
+	else = {
+		QING_exam_mint_martial_graduate = { wu_degree = $wu_degree$ }
+	}
+}
+
+# ======================================================================
 # [#114 2026-08-09] QING_keju_compute_convene — Scope: COUNTRY (CHI). Store the convene-time
 # DISPLAY vars the "Examinations Convene" prompt (qing_keju.1) shows the player: the live academy
 # HALL count, the "test-takers" gathered across that network, the two option COSTS, and the expected
@@ -284,16 +538,32 @@ QING_keju_compute_convene = {
 }
 
 # ======================================================================
-# QING_exam_graduate_cohort — mint the cycle's graduate cohort. Scope: COUNTRY (CHI).
+# QING_exam_graduate_cohort — seat the cycle's graduate cohort. Scope: COUNTRY (CHI).
 # Called from the palace examination (qing_keju.2). [#114 2026-08-09] The two axes are now
 # separated cleanly: degree QUALITY tracks the PASS-RATE (ladder health net of corruption/捐納
 # drag — a vigorous ladder leads with a jinshi, a clogged one with a juren), while graduate COUNT
 # tracks the concrete ACADEMY HALL network (a wider system physically seats and passes more men).
 # This is the #114 model — halls = quantity, integrity = quality — so corruption now debases the
-# DEGREES awarded rather than shrinking the cohort. Bounded (at most 3 minted per cycle: 1 lead +
-# 2 hall-band extras) so the pool cannot balloon past today's healthy-band ceiling — the age-55
-# retirement tick + office draws keep it in a steady band. Self-computes the hall count, so a caller
-# outside the convene path (e.g. a grace exam) still mints correctly.
+# DEGREES awarded rather than shrinking the cohort. Bounded (at most 3 civil slots per cycle: 1
+# lead + 2 hall-band extras) so the pool cannot balloon past today's healthy-band ceiling — the
+# age-55 retirement tick + office draws keep it in a steady band. Self-computes the hall count,
+# so a caller outside the convene path (e.g. a grace exam) still seats correctly.
+#
+# [#113 2026-08-11] EACH slot now routes through the track's confer-else-create helper
+# (QING_exam_seat_civil_graduate / _banner_laureate / _martial_graduate) instead of calling the
+# create_character mint directly — a slot first tries to promote the ablest existing degreeless
+# court adult of that track's profile, and mints a brand-new graduate only when none is eligible.
+# This mirrors QING_exam_sit_candidate's per-person conferral at cohort granularity, and shares
+# its qing_sat_keju stamp — a man the on_becoming_adult intake already resolved, or an earlier
+# slot in THIS SAME cohort call already seated, cannot be re-seated by a later slot.
+#
+# [#113] NEW MARTIAL SLOT — the triennial cycle also seats a 武科 (martial-examination) graduate,
+# the cohort-batch counterpart to QING_exam_sit_candidate's own military track (§ROUTING-FIX:
+# martial > finesse). Scaled by the same hall-count/pass-rate bands the civil lead uses (best-
+# guess magnitude, logged for boot tuning per Rule 1a): 1 martial graduate per cycle once the
+# academy network is live (>=16 halls, the same floor the civil/banner extras use), tier
+# wu_jinshi if the ladder passes merit (pass_rate >= 30) else wu_juren. A thin network (<16
+# halls) yields no martial slot that cycle, matching the civil/banner extras' own floor.
 # ======================================================================
 QING_exam_graduate_cohort = {
 	LOG_enter = { sys = QING  fn = "QING_exam_graduate_cohort" }
@@ -307,23 +577,35 @@ QING_exam_graduate_cohort = {
 	# LEAD graduate — QUALITY by the pass-rate band (jinshi if the ladder passes merit, else juren).
 	if = {
 		limit = { var:qing_exam_pass_rate >= 30 }
-		QING_exam_mint_scholar = { degree = jinshi }
+		QING_exam_seat_civil_graduate = { degree = jinshi }
 	}
 	else = {
-		QING_exam_mint_scholar = { degree = juren }
+		QING_exam_seat_civil_graduate = { degree = juren }
 	}
 	# EXTRA graduates — COUNT scales directly with the academy network (literal-RHS thresholds).
 	# 19 halls → +1 (baseline total 2, matching the historic middling cohort); ≥28 → +2 (total 3,
 	# the healthy-band ceiling); <16 → +0 (a thin/war-shrunk network yields the lone laureate).
-	if = { limit = { var:qing_keju_hall_count >= 16 }  QING_exam_mint_scholar = { degree = juren } }
-	if = { limit = { var:qing_keju_hall_count >= 28 }  QING_exam_mint_scholar = { degree = juren } }
+	if = { limit = { var:qing_keju_hall_count >= 16 }  QING_exam_seat_civil_graduate = { degree = juren } }
+	if = { limit = { var:qing_keju_hall_count >= 28 }  QING_exam_seat_civil_graduate = { degree = juren } }
 	# [#40 2026-08-09] BANNER-TRACK laureate — the triennial 繙譯 (translation) examination also seats an
 	# occasional banner Translation Laureate (fanyi_jinshi), refilling the amban bench that the boot backfill
 	# (QING_amban_seed_spare_laureates) starts. One per cycle keeps the pipeline self-sustaining as posted
 	# seats turn over, without flooding the court (the civil cohort above is the bulk of each cycle). Gated on
 	# a live academy network (>=16 halls) — the same threshold the second civil extra uses — so a war-shrunk
 	# ladder yields no spare banner laureate that cycle.
-	if = { limit = { var:qing_keju_hall_count >= 16 }  QING_exam_mint_banner_laureate = yes }
+	if = { limit = { var:qing_keju_hall_count >= 16 }  QING_exam_seat_banner_laureate = yes }
+	# [#113] MARTIAL-TRACK graduate — the 武科 counterpart, same hall floor, tier by the same
+	# pass-rate band the civil lead uses. Best-guess magnitude (1/cycle); logged for tuning.
+	if = {
+		limit = { var:qing_keju_hall_count >= 16 }
+		if = {
+			limit = { var:qing_exam_pass_rate >= 30 }
+			QING_exam_seat_martial_graduate = { wu_degree = wu_jinshi }
+		}
+		else = {
+			QING_exam_seat_martial_graduate = { wu_degree = wu_juren }
+		}
+	}
 	LOG_line = { sys = QING  msg = "exam: a graduate cohort was seated (lead by pass-rate, size by hall count) for" }
 	LOG_exit = { sys = QING  fn = "QING_exam_graduate_cohort"  result = OK }
 }
@@ -705,9 +987,13 @@ QING_exam_sit_candidate = {
 			# (se_POLITICS.txt:387, diplomatic_play_events.txt). The wuju was a HAN path into the
 			# Green Standard officer corps; bannermen keep the translation-exam branch above.
 			if = {
+				# [#113 ROUTING-FIX 2026-08-11] dropped `martial > charisma` — charisma is not a keju
+				# axis, so a martial+charismatic man still belongs on the military ladder by his martial
+				# lead alone. Applies here AND to the cohort's track-selection
+				# (QING_exam_seat_martial_graduate), so the two paths route the same court adult to
+				# the same track.
 				limit = {
 					martial > finesse
-					martial > charisma
 				}
 				# ---------- THE MILITARY TRACK (武科) → the wuju degrees ----------
 				random = {
