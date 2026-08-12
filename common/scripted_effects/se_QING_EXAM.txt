@@ -244,26 +244,11 @@ QING_exam_seat_civil_graduate = {
 			is_ruler = no
 			prisoner = no
 			NOT = { has_variable = qing_sat_keju }
-			# [cr113 re-review fix] mirror QING_exam_sit_candidate's own partition: the per-person
-			# intake checks the banner-culture branch FIRST, so a Manchu/Mongol man can only ever
-			# reach fanyi_jinshi there, never jinshi/juren. Without this exclusion the cohort's
-			# civil lead (order_by finesse, no culture gate) could out-rank the banner slot's own
-			# pick and confer a Han civil degree onto a bannerman — the same cross-track leak the
-			# martial helper's culture exclusion below was added to close.
-			NOT = {
-				OR = {
-					culture.culture_group = culture_group:jurchen
-					culture.culture_group = culture_group:mongolic
-				}
-			}
-			# [cr113 re-review fix #2] mirror the OTHER half of QING_exam_sit_candidate's partition:
-			# once the banner branch is excluded above, the per-person intake's else splits strictly
-			# on martial > finesse -> military, else -> civil. Without this exclusion a non-banner,
-			# martial-dominant man is double-eligible for both this helper (order_by finesse, ranks
-			# him high if his finesse is merely decent) and QING_exam_seat_martial_graduate — and
-			# since the cohort confers civil slots before the martial slot, he could be cross-tracked
-			# into a civil degree the per-person path would never have given him.
-			NOT = { martial > finesse }
+			# [#113 Piece B] the civil/banner/martial partition now lives in ONE shared definition
+			# (QING_char_exam_track_civil, qing_dynasty_triggers.txt) instead of being hand-negated
+			# here — the exact duplication that caused the cross-track leaks this fix used to guard
+			# against inline. See that trigger's own comment for the residual-track caveat.
+			QING_char_exam_track_civil = yes
 			QING_char_exam_degreeless = yes
 		}
 		order_by = finesse
@@ -356,10 +341,8 @@ QING_exam_seat_banner_laureate = {
 			is_ruler = no
 			prisoner = no
 			NOT = { has_variable = qing_sat_keju }
-			OR = {
-				culture.culture_group = culture_group:jurchen
-				culture.culture_group = culture_group:mongolic
-			}
+			# [#113 Piece B] shared partition trigger, see QING_exam_seat_civil_graduate's comment.
+			QING_char_exam_track_banner = yes
 			QING_char_exam_degreeless = yes
 		}
 		order_by = charisma
@@ -442,13 +425,8 @@ QING_exam_seat_martial_graduate = {
 			is_ruler = no
 			prisoner = no
 			NOT = { has_variable = qing_sat_keju }
-			martial > finesse
-			NOT = {
-				OR = {
-					culture.culture_group = culture_group:jurchen
-					culture.culture_group = culture_group:mongolic
-				}
-			}
+			# [#113 Piece B] shared partition trigger, see QING_exam_seat_civil_graduate's comment.
+			QING_char_exam_track_martial = yes
 			QING_char_exam_degreeless = yes
 		}
 		order_by = martial
@@ -949,12 +927,7 @@ QING_exam_sit_candidate = {
 		employer = { QING_exam_compute_pass_rate = yes }
 		if = {
 			# ---------- THE BANNER TRACK (翻譯科) — Manchu + Mongol bannermen ----------
-			limit = {
-				OR = {
-					culture.culture_group = culture_group:jurchen
-					culture.culture_group = culture_group:mongolic
-				}
-			}
+			limit = { QING_char_exam_track_banner = yes }
 			random = {
 				chance = qing_keju_pass_chance_svalue
 				# a banner pass: the translation laureate (amban stock), or a lower licentiate.
@@ -982,14 +955,10 @@ QING_exam_sit_candidate = {
 			# (se_POLITICS.txt:387, diplomatic_play_events.txt). The wuju was a HAN path into the
 			# Green Standard officer corps; bannermen keep the translation-exam branch above.
 			if = {
-				# [#113 ROUTING-FIX 2026-08-11] dropped `martial > charisma` — charisma is not a keju
-				# axis, so a martial+charismatic man still belongs on the military ladder by his martial
-				# lead alone. Applies here AND to the cohort's track-selection
-				# (QING_exam_seat_martial_graduate), so the two paths route the same court adult to
-				# the same track.
-				limit = {
-					martial > finesse
-				}
+				# routing rationale documented on QING_char_exam_track_martial's own definition
+				# (qing_dynasty_triggers.txt) — the rationale now travels with the shared trigger
+				# both this path and the cohort's QING_exam_seat_martial_graduate call.
+				limit = { QING_char_exam_track_martial = yes }
 				# ---------- THE MILITARY TRACK (武科) → the wuju degrees ----------
 				random = {
 					chance = qing_wuju_pass_chance_svalue
