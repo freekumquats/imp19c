@@ -108,6 +108,7 @@ QING_southernstudy_seed_attendant = {
 	scope:qing_new_attendant = {
 		set_home_country = ROOT
 		set_variable = { name = qing_is_southernstudy  value = 1 }
+		QING_post_stamp = { post = southernstudy }   # [#118]
 		# a Study attendant serves at the emperor's own side — bind him (天子門生) + name him.
 		QING_roster_finalize = { nick = $nick$ }
 	}
@@ -138,6 +139,7 @@ QING_southernstudy_mint_wildcard = {
 	scope:qing_new_attendant = {
 		set_home_country = ROOT
 		set_variable = { name = qing_is_southernstudy  value = 1 }
+		QING_post_stamp = { post = southernstudy }   # [#118]
 		# [BT-study-name fix 2026-07-23] Do NOT pass the descriptive NICKNAME_QING_SS_WILDCARD ("a Scholar of
 		# the Southern Study") to QING_roster_finalize — add_nickname pins it and the character then displayed
 		# with that PHRASE as his name (reported "his firstname is literally 'a Scholar of the Southern
@@ -168,23 +170,32 @@ QING_southernstudy_recompute_roster = {
 	set_variable = { name = qing_southernstudy_literary  value = 0 }
 	every_character = {
 		limit = {
-			has_variable = qing_is_southernstudy
+			# [#118 CHANGE 1] repointed from has_variable=qing_is_southernstudy to the qing_current_post
+			# single source of truth — a character can only ever be stamped into ONE family at a time
+			# (QING_post_stamp vacates the old family first), so this outer gate is now equivalent to the
+			# old marker check for anyone who took the post AFTER this design shipped. Legacy live-save
+			# incumbents are covered by the boot backfill (QING_post_backfill_init, se_QING_POST.txt).
+			var:qing_current_post = flag:southernstudy
 			is_alive = yes
 			employer = ROOT
 		}
 		if = {
-			# [#79 2026-08-08] RELIEVE an attendant who has taken a post that breaks the 1:1 court-position
-			# rule — an army/navy COMMANDER (the Grand-Tutor-made-commander class of bug), a provincial
-			# governor, a great-office holder, or a garrison field officer (qing_officer_marker). The engine's
-			# native command-assignment path is invisible to this home-grown marker layer, so it cannot be
-			# gated at appointment; instead — exactly as the ministry corps do in QING_subpost_strip_double_booked,
-			# run every pulse — we un-double-book HERE by STRIPPING his study markers so he stops rendering the
-			# attendant/Grand-Preceptor title and stops counting toward the roster. (This also self-heals a stale
-			# study marker on a man promoted to a great office, replacing the old NOT={qing_office_held}
-			# roster-exclusion which only SKIPPED him and left the marker to rot.)
-			limit = { OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_office_held  has_variable = qing_officer_marker } }
+			# [#79 2026-08-08; #118 CHANGE 1 corrected] RELIEVE an attendant who has taken a post that
+			# breaks the 1:1 court-position rule — an army/navy COMMANDER (the Grand-Tutor-made-commander
+			# class of bug), a provincial governor, or a garrison field officer (qing_officer_marker). The
+			# engine's native command-assignment path is invisible to this home-grown marker layer, so it
+			# cannot be gated at appointment; instead — exactly as the ministry corps do in
+			# QING_subpost_strip_double_booked, run every pulse — we un-double-book HERE by STRIPPING his
+			# study markers so he stops rendering the attendant/Grand-Preceptor title and stops counting
+			# toward the roster. [#118] the `has_variable = qing_office_held` cross-family term is REMOVED
+			# (routing the outer gate through qing_current_post makes cross-family double-booking
+			# structurally unreachable here — see CHANGE 1); qing_current_post is released below since the
+			# engine-role transition fires no stamp/dispatch of its own and would otherwise orphan it,
+			# re-admitting this man as a phantom roster member once his command/governorship ends.
+			limit = { OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_officer_marker } }
 			remove_variable = qing_is_southernstudy
 			if = { limit = { has_variable = qing_is_southernstudy_chief }  remove_variable = qing_is_southernstudy_chief }
+			QING_post_release = yes   # [#118 dr118v4 fix]
 		}
 		else = {
 			# [#80] clear any stale per-char Grand-Preceptor marker before the chief is re-derived below.
@@ -307,6 +318,7 @@ QING_southernstudy_draw_scholar = {
 			scope:qing_ss_draw_pick = {
 				if = { limit = { has_variable = qing_is_pool_scholar }  remove_variable = qing_is_pool_scholar }
 				set_variable = { name = qing_is_southernstudy  value = 1 }
+				QING_post_stamp = { post = southernstudy }   # [#118]
 				# a tour at the emperor's side binds the scholar closer to the throne.
 				QING_char_bind = yes
 			}

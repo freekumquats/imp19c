@@ -1,0 +1,184 @@
+# ======================================================================
+# se_QING_POST.txt — [#118] the single source-of-truth chokepoint for "which CHI court post does this
+# character hold". Design: design/DESIGN_ONE_POST_VAR_118.md (v8, CLEAN after 6 review rounds).
+#
+# WHY: create_character is being retired as the way offices get filled (#111/#113/#114/#116/#117/#119
+# move exam/GC/tribute posts to DRAWING existing characters). Once many subsystems draw from
+# overlapping pools of live characters, double-booking risk rises sharply. qing_current_post is a
+# char-scope flag-valued var (one of the 11 CHI-employed post families below) that is ADDITIVE to the
+# existing per-family markers (qing_office_held, qing_salt_commissioner_marker, etc.) — those markers
+# are UNCHANGED and still carry the family-specific meaning GUIs/events read. qing_current_post is a
+# second source of truth, atomically vacating any OLD post before a NEW one is stamped, so a character
+# can never hold two posts by construction, and the picker gate (QING_char_holds_court_position) keeps
+# working as the redundant net exactly as it does today.
+#
+# EXCLUDED (deliberately, NOT a gap): amban, march_gg, xj_beg. All three are employed by a SUBJECT
+# country while posted (se_QING_AMBAN.txt, se_QING_MARCH.txt, se_QING_XINJIANG.txt:118/148/189 —
+# employer = c:XNG), invisible to every employer=ROOT-gated piece of this machinery. They continue to
+# rely solely on the existing QING_char_holds_court_position marker gate (already listing
+# qing_amban_marker/qing_march_gg; qing_is_xj_beg was the one missing term, added independently in
+# qing_dynasty_triggers.txt).
+#
+# The 11 CHI-employed families and their flag ids: gc_office, salt_commissioner, caravan_super, hoppo,
+# southernstudy, upperstudy, censor_inspector, zongli_diplomat, imperial_guardsman, palace_eunuch,
+# harem_consort.
+# ======================================================================
+
+# char scope. TAIL of every family fill, called AFTER the family sets its own marker + holder var.
+# $post$ = one of the 11 flag ids above.
+QING_post_stamp = {
+	if = {
+		# already holding a DIFFERENT post -> vacate the old one first. No double-book by construction.
+		limit = { has_variable = qing_current_post  NOT = { var:qing_current_post = flag:$post$ } }
+		QING_post_dispatch_vacate = yes
+	}
+	set_variable = { name = qing_current_post  value = flag:$post$ }
+	LOG_line = { sys = QING  msg = "post-stamp: char takes a CHI court post for" }
+}
+
+# char scope. HEAD of every family vacate/recall/death/departure cleanup. Self-guarded no-op if the
+# character never carried qing_current_post (e.g. the excluded families, or a non-post-holder).
+QING_post_release = {
+	if = {
+		limit = { has_variable = qing_current_post }
+		remove_variable = qing_current_post
+	}
+}
+
+# char scope. 11-branch if-chain on var:qing_current_post -> the right strip-only vacate. The gc_office
+# branch calls the EXISTING no-backfill dispatcher (never the backfill variant — see the no-backfill
+# note below); the other 10 are NET-NEW small strip effects in this file.
+QING_post_dispatch_vacate = {
+	if = { limit = { var:qing_current_post = flag:gc_office }            QING_office_vacate_dispatch_nobackfill = yes }
+	else_if = { limit = { var:qing_current_post = flag:salt_commissioner }   QING_post_vacate_salt_commissioner = yes }
+	else_if = { limit = { var:qing_current_post = flag:caravan_super }      QING_post_vacate_caravan_super = yes }
+	else_if = { limit = { var:qing_current_post = flag:hoppo }              QING_post_vacate_hoppo = yes }
+	else_if = { limit = { var:qing_current_post = flag:southernstudy }      QING_post_vacate_southernstudy = yes }
+	else_if = { limit = { var:qing_current_post = flag:upperstudy }        QING_post_vacate_upperstudy = yes }
+	else_if = { limit = { var:qing_current_post = flag:censor_inspector }   QING_post_vacate_censor_inspector = yes }
+	else_if = { limit = { var:qing_current_post = flag:zongli_diplomat }    QING_post_vacate_zongli_diplomat = yes }
+	else_if = { limit = { var:qing_current_post = flag:imperial_guardsman } QING_post_vacate_imperial_guardsman = yes }
+	else_if = { limit = { var:qing_current_post = flag:palace_eunuch }      QING_post_vacate_palace_eunuch = yes }
+	else_if = { limit = { var:qing_current_post = flag:harem_consort }      QING_post_vacate_harem_consort = yes }
+	QING_post_release = yes
+}
+
+# ---- NET-NEW strip-only vacates (char scope). Each clears the family's marker on `this`, and — for the
+# 3 single-holder families — the country's holder var, ONLY if `this` is that holder (save_scope_as
+# before switching into employer, the proven idiom used by the seat effects themselves, e.g.
+# QING_salt_commissioner_seat). Strip-only, NO backfill branch (matches the highest-risk no-backfill
+# note: a stamp firing dispatch-vacate must never trigger a re-appoint chain).
+# ----
+
+QING_post_vacate_salt_commissioner = {
+	save_scope_as = qing_post_vacate_self
+	if = { limit = { has_variable = qing_salt_commissioner_marker }  remove_variable = qing_salt_commissioner_marker }
+	employer = {
+		if = {
+			limit = { var:qing_salt_commissioner_holder = scope:qing_post_vacate_self }
+			remove_variable = qing_salt_commissioner_holder
+		}
+	}
+}
+
+QING_post_vacate_caravan_super = {
+	save_scope_as = qing_post_vacate_self
+	if = { limit = { has_variable = qing_caravan_super_marker }  remove_variable = qing_caravan_super_marker }
+	employer = {
+		if = {
+			limit = { var:qing_caravan_super_holder = scope:qing_post_vacate_self }
+			remove_variable = qing_caravan_super_holder
+		}
+	}
+}
+
+QING_post_vacate_hoppo = {
+	save_scope_as = qing_post_vacate_self
+	if = { limit = { has_variable = qing_hoppo_marker }  remove_variable = qing_hoppo_marker }
+	employer = {
+		if = {
+			limit = { var:qing_hoppo_holder = scope:qing_post_vacate_self }
+			remove_variable = qing_hoppo_holder
+		}
+	}
+}
+
+# Southern/Upper Study: also drop the study-CHIEF marker if held (mirrors the [#80 review-fix] pattern
+# already used at COUNCIL:1555-1556). Roster count/list self-heal via the existing recompute sweeps
+# (QING_southernstudy_recompute_roster / QING_upperstudy_recompute_roster), which run on the same
+# corrected `var:qing_current_post = flag:<family>` outer condition (CHANGE 1) — this vacate does not
+# need to touch qing_southernstudy_attendants/qing_southernstudy_count directly.
+QING_post_vacate_southernstudy = {
+	if = { limit = { has_variable = qing_is_southernstudy }        remove_variable = qing_is_southernstudy }
+	if = { limit = { has_variable = qing_is_southernstudy_chief }  remove_variable = qing_is_southernstudy_chief }
+}
+
+QING_post_vacate_upperstudy = {
+	if = { limit = { has_variable = qing_is_upperstudy }        remove_variable = qing_is_upperstudy }
+	if = { limit = { has_variable = qing_is_upperstudy_chief }  remove_variable = qing_is_upperstudy_chief }
+}
+
+QING_post_vacate_censor_inspector = {
+	if = { limit = { has_variable = qing_is_censor_inspector }  remove_variable = qing_is_censor_inspector }
+}
+
+QING_post_vacate_zongli_diplomat = {
+	if = { limit = { has_variable = qing_zongli_diplomat }  remove_variable = qing_zongli_diplomat }
+}
+
+QING_post_vacate_imperial_guardsman = {
+	if = { limit = { has_variable = qing_is_imperial_guardsman }  remove_variable = qing_is_imperial_guardsman }
+}
+
+# Palace eunuch: delist from the roster LIST (qing_household_eunuchs, se_QING_HOUSEHOLD.txt) — no
+# per-eunuch holder var exists, only the display-only Chief-Eunuch seat var
+# (qing_office_chief_eunuch_holder, SS_HOUSEHOLD:318/325), cleared ONLY if `this` currently holds it.
+QING_post_vacate_palace_eunuch = {
+	save_scope_as = qing_post_vacate_self
+	if = { limit = { has_variable = qing_is_palace_eunuch }  remove_variable = qing_is_palace_eunuch }
+	employer = {
+		if = {
+			limit = { has_variable_list = qing_household_eunuchs }
+			remove_list_variable = { name = qing_household_eunuchs  target = scope:qing_post_vacate_self }
+		}
+		if = {
+			limit = { var:qing_office_chief_eunuch_holder = scope:qing_post_vacate_self }
+			remove_variable = qing_office_chief_eunuch_holder
+		}
+	}
+}
+
+QING_post_vacate_harem_consort = {
+	if = { limit = { has_variable = qing_is_harem_consort }  remove_variable = qing_is_harem_consort }
+}
+
+# ======================================================================
+# QING_post_backfill_init — [CHANGE 3] one-time guarded boot backfill: live saves have seated characters
+# with family markers but no qing_current_post. Country scope (ROOT = CHI). Per-var guarded on the
+# character (NOT has_variable=qing_current_post) so it is idempotent and safe to call every boot.
+# Because the picker gate is still QING_char_holds_court_position (unchanged), an un-backfilled
+# incumbent is STILL un-drawable even before this sweep runs — belt-and-suspenders, not the sole defense.
+# Only the 11 CHI-employed families are enumerated (amban/march_gg/xj_beg are excluded — see header).
+# ======================================================================
+QING_post_backfill_init = {
+	LOG_enter = { sys = QING  fn = "QING_post_backfill_init" }
+	every_character = {
+		limit = {
+			employer = ROOT
+			NOT = { has_variable = qing_current_post }
+			QING_char_holds_court_position = yes
+		}
+		if = { limit = { has_variable = qing_office_held }               set_variable = { name = qing_current_post  value = flag:gc_office } }
+		else_if = { limit = { has_variable = qing_salt_commissioner_marker }  set_variable = { name = qing_current_post  value = flag:salt_commissioner } }
+		else_if = { limit = { has_variable = qing_caravan_super_marker }      set_variable = { name = qing_current_post  value = flag:caravan_super } }
+		else_if = { limit = { has_variable = qing_hoppo_marker }              set_variable = { name = qing_current_post  value = flag:hoppo } }
+		else_if = { limit = { has_variable = qing_is_southernstudy }         set_variable = { name = qing_current_post  value = flag:southernstudy } }
+		else_if = { limit = { has_variable = qing_is_upperstudy }            set_variable = { name = qing_current_post  value = flag:upperstudy } }
+		else_if = { limit = { has_variable = qing_is_censor_inspector }      set_variable = { name = qing_current_post  value = flag:censor_inspector } }
+		else_if = { limit = { has_variable = qing_zongli_diplomat }          set_variable = { name = qing_current_post  value = flag:zongli_diplomat } }
+		else_if = { limit = { has_variable = qing_is_imperial_guardsman }    set_variable = { name = qing_current_post  value = flag:imperial_guardsman } }
+		else_if = { limit = { has_variable = qing_is_palace_eunuch }         set_variable = { name = qing_current_post  value = flag:palace_eunuch } }
+		else_if = { limit = { has_variable = qing_is_harem_consort }         set_variable = { name = qing_current_post  value = flag:harem_consort } }
+	}
+	LOG_exit = { sys = QING  fn = "QING_post_backfill_init"  result = OK }
+}

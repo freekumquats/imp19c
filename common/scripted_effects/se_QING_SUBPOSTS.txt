@@ -78,6 +78,7 @@ QING_subpost_fill_one_minted = {
 	scope:qing_subpost_new = {
 		set_home_country = scope:qing_subpost_country
 		set_variable = { name = $marker$  value = 1 }
+		QING_post_stamp = { post = $post$ }   # [#118]
 	}
 	change_variable = { name = $count$  add = 1 }
 	LOG_line = { sys = QING  msg = "subpost: created a BRAND-NEW official (holds no other office) for" }
@@ -94,16 +95,22 @@ QING_subpost_staff_corps_minted = {
 	# LIVE recount: rebuild $count$ from the marker, stripping anyone now disqualified (took an
 	# office/command/governorship/harem/officer role since being posted). Mirror of
 	# QING_subpost_staff_corps's recount pass.
+	# [#118 CHANGE 1] $post$ = the qing_current_post flag id matching $marker$'s family (threaded through
+	# from every caller). Outer gate repointed from has_variable=$marker$ — see the SS twin's comment in
+	# se_QING_SOUTHERNSTUDY.txt for the full rationale.
 	set_variable = { name = $count$  value = 0 }
 	every_character = {
 		limit = {
 			employer = ROOT
 			is_alive = yes
-			has_variable = $marker$
+			var:qing_current_post = flag:$post$
 		}
 		if = {
-			limit = { OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_office_held  has_variable = qing_is_harem_consort  has_variable = qing_officer_marker } }
+			# [#118] cross-family qing_office_held/qing_is_harem_consort terms REMOVED (structurally
+			# unreachable once the outer gate is qing_current_post-keyed); release below.
+			limit = { OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_officer_marker } }
 			remove_variable = $marker$
+			QING_post_release = yes   # [#118 dr118v4 fix]
 		}
 		else = {
 			ROOT = { change_variable = { name = $count$  add = 1 } }
@@ -123,12 +130,12 @@ QING_subpost_staff_corps_minted = {
 	# mint new men up to the legislated establishment — one per guarded rung. 6 rungs so the EXPANDED tier
 	# (6) is reachable; lean/standard simply stop earlier. $degree$ threads through so each created official
 	# gets the civil/martial degree its post requires.
-	if = { limit = { var:$count$ < qing_estab_target_tmp_cmpsvalue }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$ } }
-	if = { limit = { var:$count$ < qing_estab_target_tmp_cmpsvalue }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$ } }
-	if = { limit = { var:$count$ < qing_estab_target_tmp_cmpsvalue }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$ } }
-	if = { limit = { var:$count$ < qing_estab_target_tmp_cmpsvalue }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$ } }
-	if = { limit = { var:$count$ < qing_estab_target_tmp_cmpsvalue }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$ } }
-	if = { limit = { var:$count$ < qing_estab_target_tmp_cmpsvalue }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$ } }
+	if = { limit = { var:$count$ < qing_estab_target_tmp_cmpsvalue }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$  post = $post$ } }
+	if = { limit = { var:$count$ < qing_estab_target_tmp_cmpsvalue }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$  post = $post$ } }
+	if = { limit = { var:$count$ < qing_estab_target_tmp_cmpsvalue }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$  post = $post$ } }
+	if = { limit = { var:$count$ < qing_estab_target_tmp_cmpsvalue }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$  post = $post$ } }
+	if = { limit = { var:$count$ < qing_estab_target_tmp_cmpsvalue }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$  post = $post$ } }
+	if = { limit = { var:$count$ < qing_estab_target_tmp_cmpsvalue }  QING_subpost_fill_one_minted = { marker = $marker$  count = $count$  degree = $degree$  post = $post$ } }
 }
 
 # ======================================================================
@@ -149,20 +156,25 @@ QING_subpost_strip_double_booked = {
 	# director). Country scope (ROOT = CHI). Params: $marker$, $count$. No fill, so it never conjures
 	# staff for a headless ministry — it only ever REMOVES a clash. Same merged single-pass shape as
 	# QING_subpost_staff_corps's recount (PERF-AUDIT M1): recount from scratch, dropping the disqualified.
+	# [#118 CHANGE 1] $post$ = the qing_current_post flag id matching $marker$'s family (threaded through
+	# from every caller). Outer gate repointed from has_variable=$marker$.
 	set_variable = { name = $count$  value = 0 }
 	every_character = {
 		limit = {
 			employer = ROOT
 			is_alive = yes
-			has_variable = $marker$
+			var:qing_current_post = flag:$post$
 		}
 		if = {
 			# [BT-7 fix 2026-07-22] ADDED has_variable = qing_officer_marker — a garrison/army field officer
 			# (the #331 set_as_commander marker) is not reliably caught by is_general (e.g. Tsedan 612, a
 			# Green-Standard garrison officer under an amban, leaked into the Diplomat Corps). Matches the
 			# shared gate QING_office_eligible_candidate + the zongli rebuild disqualifier set.
-			limit = { OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_office_held  has_variable = qing_is_harem_consort  has_variable = qing_officer_marker } }
+			# [#118] cross-family qing_office_held/qing_is_harem_consort terms REMOVED (structurally
+			# unreachable once the outer gate is qing_current_post-keyed); release below.
+			limit = { OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_officer_marker } }
 			remove_variable = $marker$
+			QING_post_release = yes   # [#118 dr118v4 fix]
 		}
 		else = {
 			ROOT = { change_variable = { name = $count$  add = 1 } }
@@ -197,9 +209,9 @@ QING_subpost_seed_gamestart = {
 	# (a martial corps). The degree is granted via add_trait inside QING_subpost_fill_one_minted — SAFE
 	# because this whole seed is now DEFERRED to a day-32 runtime event (add_trait at construction is the
 	# known boot-crash class), and runs AFTER any historical figures already hold their posts.
-	QING_subpost_staff_corps_minted = { marker = qing_zongli_diplomat        count = qing_zongli_diplomat_count  target = 4  degree = juren }
-	QING_subpost_staff_corps_minted = { marker = qing_is_censor_inspector    count = qing_censor_inspector_count  target = 4  degree = juren }
-	QING_subpost_staff_corps_minted = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count       target = 4  degree = wu_jinshi }
+	QING_subpost_staff_corps_minted = { marker = qing_zongli_diplomat        count = qing_zongli_diplomat_count  target = 4  degree = juren      post = zongli_diplomat }
+	QING_subpost_staff_corps_minted = { marker = qing_is_censor_inspector    count = qing_censor_inspector_count  target = 4  degree = juren     post = censor_inspector }
+	QING_subpost_staff_corps_minted = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count       target = 4  degree = wu_jinshi  post = imperial_guardsman }
 	LOG_line = { sys = QING  msg = "subpost: game-start ministry corps staffed (all three corps minted fresh) for" }
 	LOG_exit = { sys = QING  fn = "QING_subpost_seed_gamestart"  result = OK }
 }
@@ -228,9 +240,9 @@ QING_subpost_refill_sweep = {
 		# must be unconditional; only the FILL-to-target should wait for a director (a headless ministry
 		# conjures no new staff, but it must not keep a commander on its rolls either).
 		# QING_subpost_strip_double_booked = strip-only (the every_character marker-removal pass, no fill).
-		QING_subpost_strip_double_booked = { marker = qing_zongli_diplomat        count = qing_zongli_diplomat_count }
-		QING_subpost_strip_double_booked = { marker = qing_is_censor_inspector    count = qing_censor_inspector_count }
-		QING_subpost_strip_double_booked = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count }
+		QING_subpost_strip_double_booked = { marker = qing_zongli_diplomat        count = qing_zongli_diplomat_count  post = zongli_diplomat }
+		QING_subpost_strip_double_booked = { marker = qing_is_censor_inspector    count = qing_censor_inspector_count  post = censor_inspector }
+		QING_subpost_strip_double_booked = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count  post = imperial_guardsman }
 		# FILL to establishment — only while the relevant office has a serving director.
 		# [BT-diplomat fix 2026-07-22] DIPLOMATS refill with BRAND-NEW MINTED characters
 		# (QING_subpost_staff_corps_minted), never drawn from the existing court, so a refilled seat can
@@ -241,7 +253,7 @@ QING_subpost_refill_sweep = {
 				has_variable = qing_office_zongli_holder
 				var:qing_office_zongli_holder = { is_alive = yes  employer = ROOT }
 			}
-			QING_subpost_staff_corps_minted = { marker = qing_zongli_diplomat  count = qing_zongli_diplomat_count  target = 4  degree = juren }
+			QING_subpost_staff_corps_minted = { marker = qing_zongli_diplomat  count = qing_zongli_diplomat_count  target = 4  degree = juren  post = zongli_diplomat }
 		}
 		# investigating censors — only while the Censorate has a Grand Inspector.
 		# [BT-officeholder 2026-07-22] refill with BRAND-NEW MINTED civil (juren) officials, never drawn from
@@ -253,7 +265,7 @@ QING_subpost_refill_sweep = {
 				has_variable = qing_office_censor_holder
 				var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
 			}
-			QING_subpost_staff_corps_minted = { marker = qing_is_censor_inspector  count = qing_censor_inspector_count  target = 4  degree = juren }
+			QING_subpost_staff_corps_minted = { marker = qing_is_censor_inspector  count = qing_censor_inspector_count  target = 4  degree = juren  post = censor_inspector }
 		}
 		# guard captains — only while the Guard has a Commandant.
 		# [BT-officeholder 2026-07-22] refill with BRAND-NEW MINTED martial (wu_jinshi) officers, never drawn
@@ -264,7 +276,7 @@ QING_subpost_refill_sweep = {
 				has_variable = qing_office_guard_commandant_holder
 				var:qing_office_guard_commandant_holder = { is_alive = yes  employer = ROOT }
 			}
-			QING_subpost_staff_corps_minted = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count  target = 4  degree = wu_jinshi }
+			QING_subpost_staff_corps_minted = { marker = qing_is_imperial_guardsman  count = qing_guard_corps_count  target = 4  degree = wu_jinshi  post = imperial_guardsman }
 		}
 	}
 }
