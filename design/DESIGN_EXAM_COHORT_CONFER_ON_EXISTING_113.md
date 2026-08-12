@@ -1,7 +1,15 @@
 # DESIGN #113 — the triennial exam cohort confers degrees on existing degreeless court adults (all 3 tracks), create_character ONLY as fallback
 
-**Status:** DRAFT 2026-08-11. Needs one adversarial review before implementation. Distinct from #111 (Hanlin
-POOL caller-split); this is the EXAM COHORT itself.
+**Status:** SHIPPED (commit 9f2365c94) but IMPLEMENTED WITHOUT the adversarial design review this doc
+calls for below — a process gap. Four rounds of POST-IMPLEMENTATION code review were needed to reach a
+behaviorally-correct state (3 rounds each caught a real cross-track leak bug; round 4 confirmed CLEAN).
+A RETROACTIVE adversarial design review (2026-08-11, after the fact) then examined the shipped design
+approach itself and returned NOT CLEAN — see "## RETROACTIVE REVIEW FINDINGS" appended at the bottom of
+this file. That review's Finding 1 (shared-trigger extraction) is a real, actionable follow-up fix,
+distinct from and not fixing any remaining behavioral bug in the shipped code. Treat this doc as
+historical record of what was PLANNED plus what a review found AFTER THE FACT; the planned design below
+was never itself adversarially reviewed before implementation began. Distinct from #111 (Hanlin POOL
+caller-split); this is the EXAM COHORT itself.
 
 ## The rule this serves (user-authoritative — see [[imp19c-character-creation-rule]])
 `create_character` with an exam degree is permitted in EXACTLY two places: (a) the game-start boot seed, and
@@ -149,3 +157,72 @@ conferral stamps qing_sat_keju.
    justify a different choice. No regression to #111.
 8. QING_exam_mint_banner_laureate: if the banner cohort slot now routes through the confer-else-create helper,
    is the standalone mint still called anywhere (QING_amban_seed_spare_laureates boot backfill)? Don't break #40.
+
+## RETROACTIVE REVIEW FINDINGS (2026-08-11, post-implementation design audit)
+
+The shipped code (`common/scripted_effects/se_QING_EXAM.txt`, commit `9f2365c94`) is behaviorally
+correct — the fourth code-review round confirmed the three tracks are mutually exclusive and jointly
+exhaustive, matching `QING_exam_sit_candidate`'s own partition token-for-token, including the
+`martial == finesse → civil` boundary. No remaining behavioral bug was found. But a retroactive
+adversarial review of the DESIGN APPROACH (not just the final code) returned **NOT CLEAN** on
+structural grounds:
+
+**Finding 1 (primary, actionable) — the partition is copy-pasted across four sites with nothing
+forcing lockstep.** The civil/banner/martial track partition lives independently in
+`QING_exam_sit_candidate` (as ordered if/else_if branches) AND in the three cohort helpers
+(`QING_exam_seat_civil_graduate`/`_banner_laureate`/`_martial_graduate`, each as a flat predicate that
+hand-negates the earlier branches). Hand-negating branches into flat predicate form is exactly the step
+that produced all three review-round bugs. Worse, the 11-trait "degreeless" NOT-list is ALSO duplicated
+verbatim in all four sites — a second lockstep hazard that happened to stay consistent by luck, not by
+any review. Nothing today forces a future edit to `QING_exam_sit_candidate` (a new track, a changed
+`martial > finesse` threshold, an added degree trait) to propagate to the three cohort copies — the next
+change could silently reintroduce a cross-track leak with zero compile error and zero failing gate.
+**Recommended fix (not yet implemented, needs its own review before landing):** extract shared
+scripted_triggers — `QING_char_exam_degreeless` (the 11-trait list) and
+`QING_char_exam_track_civil`/`_banner`/`_martial` (the partition) — called from BOTH
+`QING_exam_sit_candidate`'s branch conditions and the three cohort helpers' `ordered_character` limits.
+This pattern is already proven in the same file (`QING_exam_pool_draw_one` already calls a shared
+scripted_trigger, `QING_char_holds_court_position`, inside an `ordered_character` limit), so it is not a
+novel idiom — it converts "verified consistent today" into "cannot diverge by construction."
+
+**Finding 2 (low) — the stale-scope guard is correct but heavier than the call shape needs.** The civil
+helper's guard (borrowed from #111's while-loop draw) is genuinely necessary GIVEN the design chosen
+(one `max=1` save-scope name reused across up to 3 calls per cohort). But the call count here is a
+fixed, small, literal-gated 1+2 (lead + hall-band extras), not an unbounded loop. A single lead
+`ordered_character max=1` followed by one `ordered_character max=2` for the extras would pick 2 DISTINCT
+characters in one call (the lead's `qing_sat_keju` stamp already excludes him), needing NO stale-scope
+guard at all. Caveat: a fully dynamic `max = var:slot_count` is likely unproven in this codebase (same
+class of concern as the `days = var:X` unproven-idiom note elsewhere), so the literal-max-2 split is the
+feasible form, not a dynamic one.
+
+**Finding 3 (low, undocumented tradeoff) — the confer path is a transient early-game backlog drain, not
+a permanent behavior, and this was never stated explicitly.** The cohort's `NOT has_variable
+qing_sat_keju` gate means confer can only ever match characters who never passed through
+`on_becoming_adult` — i.e., the game-start adult backlog. Every NEW adult gets stamped by the per-person
+intake before the cohort ever sees him. So mid-to-late game, the confer path finds nobody and the cohort
+degrades to minting exactly as it did before #113. Likely the intended scope (mirrors the amban-bench
+rationale that the pre-existing generation can't be reached any other way), but a design review would
+have pinned down this lifetime expectation explicitly rather than leaving it implicit.
+
+**Finding 4 (low, consistency gap) — the cohort confer gate doesn't exclude office-holders or the
+primary heir, unlike its sibling pool-draw.** `QING_exam_pool_draw_one` excludes
+`QING_char_holds_court_position` and the primary heir; the three cohort confer helpers exclude neither.
+Harmless in practice (just stamps a prestige trait onto an incumbent), and matches
+`QING_exam_sit_candidate`'s own laxity, but the cohort's purpose is producing NEW talent, not decorating
+incumbents — worth asking whether office-less should gate here too, for consistency with the sibling
+draw path.
+
+**Finding 5 (root-cause, process) — the original task diagnosis (this doc) named the WHAT
+("confer-else-create") but not the CENTRAL RISK ("keep three new gates in lockstep with a fourth
+pre-existing one").** This doc inherited #111's draw-first/mint-fallback shape and treated #113 as a
+mechanical extension. That framing hid that the real hard problem was a mutually-exclusive,
+jointly-exhaustive population partition maintained in FOUR parallel copies. Had this doc's own review
+(called for above, never actually dispatched before implementation) run BEFORE code was written, it
+would very likely have surfaced Finding 1 up front and converted three rounds of post-hoc whack-a-mole
+into one structural decision made once. Bundling a brand-new martial track (no cohort precedent to copy
+from) into the same task as the confer refactor compounded this — the martial helper's missing culture
+exclusion (round 1's bug) had no existing cohort code to pattern-match against carefully.
+
+**Disposition:** Finding 1's shared-trigger extraction is a genuine follow-up fix, not yet implemented.
+It must go through its own design review (per the standing gate) before any code changes — do not
+implement directly from this retroactive finding alone.
