@@ -653,3 +653,36 @@ CHI — fixed by moving it outside the loop; (LOW) Castiglione's portrait card k
 expulsion (is_shown checked only is_alive, not the qing_court_artist marker) — fixed by adding the marker check
 inline, plus updated the "gone" loc string to cover expulsion as well as death. Follow-up narrow review of all
 three fixes: CLEAN.
+
+### #111 — exam scholar-pool tick draws existing jinshi instead of minting — SHIPPED (08b17d8ad)
+Bug (per the standing character-creation rule: create_character for degree-holders is sanctioned ONLY at
+boot-seed + the exam itself): QING_exam_pool_tick (the quarterly maintenance tick, se_QING_EXAM.txt) called
+QING_exam_seed_hanlin_pool — an effect that legitimately create_character-mints fresh graduates ONCE at boot
+(qing_force_setup.12) — every quarter to top the bench back up after appointments drained it. That re-ran
+create_character every tick, an unbounded aether-spawn of scholar characters. Two prior adversarial design
+passes had misdiagnosed this as the exam COHORT's own mint (QING_exam_graduate_cohort) needing removal — both
+were discarded as false-premised (memory imp19c-character-creation-rule.md records the correction).
+Fix (caller split, per the user-locked prescription): QING_exam_seed_hanlin_pool stays boot-only, byte-for-byte
+unchanged. Added QING_exam_pool_draw_one (ordered_character, order_by=finesse, max=1, eligibility mirrors
+QING_opium_commissioner_appoint's proven shape: employer=ROOT, adult, alive, not ruler, age<55, has_trait=jinshi,
+NOT already-pool, NOT court-position, NOT primary heir) and QING_exam_pool_draw_refill (same 9/3/6
+qing_law_hanlin_cap branch structure as the old seed effect, while+count+limit bounded loop, calling the draw
+instead of the mint). QING_exam_pool_tick's call switched from QING_exam_seed_hanlin_pool to
+QING_exam_pool_draw_refill. Under-full is honest — no fallback spawn.
+Resolved before writing code: whether a `while`-wrapped repeated `ordered_character(max=1)` + save_scope_as +
+exists-check risks reprocessing a STALE saved scope from an earlier successful round when a later round matches
+nobody (no codebase precedent combined all four). Closed by re-checking NOT-already-pool-marked on the saved
+scope inside the post-draw `if` — a genuine fresh match is never pre-marked (ordered_character's own limit
+excludes marked men), but a stale leftover from an earlier round in the same loop IS (stamped during that
+round's processing), so it falls through to else/no-op instead of double-processing. Also confirmed
+QING_char_bind can run inline (not deferred) on the drawn man, since he pre-existed before this tick — the
+same-tick variable read-back failure that forces QING_exam_mint_scholar's deferred bind only applies to a
+character create_character'd THIS tick.
+Code review (dedicated agent) CLEAN: independently traced and confirmed the stale-scope guard correct and
+sufficient (including the fresh-boot first-iteration case, where scope:qing_new_pool_draw simply doesn't exist
+yet), confirmed the inline QING_char_bind call safe, confirmed QING_exam_seed_hanlin_pool untouched and still
+boot-only, confirmed all idioms (ordered_character draw shape, while+count+limit loop, RHS-comparison rule,
+LOG-string macro rule) match proven precedent. Two LOW informational notes, not blocking: (1) an under-full
+bench can emit up to 9 LOG_fail lines per quarter (bounded, player-only, consistent with existing noise
+tolerance); (2) the draw's ordered_character global scan now runs up to `count` times per quarter versus the
+sibling appointers' single scan (bounded, player-only, acceptable).
