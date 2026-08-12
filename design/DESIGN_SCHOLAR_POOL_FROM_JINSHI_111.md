@@ -173,6 +173,50 @@ attempt to answer. This keeps the fix narrow: only the ONE trait that is objecti
 the pool's own name-tier gets included, closing the pure under-inclusiveness gap without opening the
 broader "which lower degrees also count" question.
 
+## REVIEW RESULTS (2026-08-11)
+
+Two separate review passes ran against this document's contents.
+
+**Part 1 — the restoration fix (REVIEW-FIX 1 HIGH + REVIEW-FIX 2 MEDIUM, applied to the shipped code
+to bring it back in line with this ALREADY-reviewed-clean design): CLEAN.** Verified: both additions
+(`is_governor/general/admiral = no` on the draw gate; the retire-pass phantom-member strip) are
+syntactically correct and placed correctly; the retire-pass expansion cannot strip a legitimately
+waiting scholar (traced — none of the new OR clauses can match a man who has `qing_is_pool_scholar`
+with no job); no double-decrement risk (`QING_exam_pool_drop_member` removes a seated man from the list
+at seating time, before this quarterly tick ever sees him); both trigger names
+(`QING_char_hard_disgraced`, `QING_char_holds_court_position`) exist verbatim. One low/informational
+note: the added `NOT = { QING_char_hard_disgraced = yes }` clause goes slightly beyond what
+REVIEW-FIX 1/2 specified (which only concerned the governor/general/admiral roles) — benign scope creep,
+mirrors `QING_office_eligible_candidate`'s parallel bar, no action needed. This restoration is
+IMPLEMENTED (staged in the same commit as #113 Piece A) and CLEAN.
+
+**Part 2 — the hanlin addition above: CLEAN to implement as scoped, with one documentation correction.**
+The core change is confirmed safe and correctly scoped (hanlin is strictly higher-tier, mutually
+exclusive with jinshi, and the pool's own name-tier logic makes excluding it an unambiguous bug); the
+proposed `OR = { has_trait = jinshi  has_trait = hanlin }` syntax is proven idiomatic (matches
+`se_QING_AMBAN.txt`'s existing draw/limit usage of the same OR-over-has_trait shape); no downstream
+hazard found (an included hanlin ranks correctly above a jinshi via `order_by = finesse`; the retire
+pass and drop_member gate on role/court-position, not degree trait, so a drawn hanlin is stripped
+identically to a jinshi if he later takes office). **However, the rationale given above ("the prestige
+svalue ladder and a codebase-wide convention support a jinshi-and-above cutoff") is factually wrong and
+must be corrected before this doc is treated as authoritative**: `qing_degree_prestige_svalue`
+(`QING_governance_svalues.txt:19-28`) is a perfectly uniform 5-point ladder with NO cluster boundary at
+jinshi — the jinshi→gongshi step is identical to the gongshi→juren step, so the prestige ranking does
+NOT support a jinshi cutoff, and if anything argues against one. Sibling pools also do not observe a
+jinshi-cutoff convention: `se_QING_AMBAN.txt` and `qing_rites_events.txt` both pool
+jinshi/hanlin/gongshi/juren/shengyuan together. **Corrected rationale**: the hanlin fix stands on its own
+narrower, sufficient ground — hanlin is strictly higher than the pool's own name-tier, so its exclusion
+is a pure bug independent of any gradient argument; deferring gongshi/juren remains the right scope call,
+but as an ACKNOWLEDGED, not a "codebase-convention-settled," scope choice — whether the Hanlin pool
+should broaden to a general civil bench (matching the amban/rites pools) is a real, separate, still-open
+question this fix deliberately does not answer. This document's scope-limiting rationale above (the
+paragraph beginning "Do NOT add gongshi/juren") should be read with this correction; the CODE change
+itself needs no revision — only implement `OR = { has_trait = jinshi  has_trait = hanlin }` as specified.
+
+**Disposition:** the hanlin change is IMPLEMENTATION-READY (design confirmed CLEAN) but NOT YET
+IMPLEMENTED in code as of this note — `QING_exam_pool_draw_one` still reads bare `has_trait = jinshi`.
+Apply the change, then route the resulting diff through the standard code-review gate before commit.
+
 ## Review must test (against THIS scope)
 1. Caller split is correct: boot event → `_boot` (create_character kept); pool tick → `_refill` (draw only, no
    create_character). No third caller mints post-boot (rule 2 upheld).

@@ -276,3 +276,136 @@ same-pass staleness to guard against.
 (per #117's own Finding 5), THIS design's draw gate (step 3's `has_trait = $degree$` / step 6's soft
 martial preference) should consume that same predicate rather than hardcoding its own — implement #117's
 predicate first if both land in the same session, or leave a TODO cross-reference if #116 lands first.
+
+## REVIEW FINDINGS ROUND 2 (2026-08-11) — NOT CLEAN
+
+A design review of the corrected proposal above confirmed Findings 1/2/3 fully resolved (re-anchoring
+correct and verified against the actual code; gate composition verified line-by-line against
+`QING_office_eligible_candidate` with nothing missing; 3-param macro syntax proven elsewhere in this
+file), but found ONE CRITICAL regression and one HIGH spec contradiction, plus a medium gap:
+
+**Finding A (CRITICAL) — the draw re-seats the accused on the `QING_justice_strip_for_trial` backfill
+path, defeating the justice mechanic.** Traced `QING_justice_strip_for_trial`
+(`se_QING_JUSTICE.txt:315-325`): it calls `QING_office_vacate_dispatch` (which backfills) BEFORE
+stripping `is_general`/`is_admiral`/`is_governor` status, and applies NO disgrace at all (hard disgrace
+only happens later, on conviction). At the moment the backfill draw runs, the accused is: alive,
+CHI-employed, his own `qing_office_held` just removed (so `QING_char_holds_court_position` no longer
+excludes him), not yet hard-disgraced, not yet imprisoned. If he holds the office's required degree, he
+is a valid — often the TOP-ranked — candidate for the draw's own vacant seat, and the draw silently
+re-appoints him to the seat he was just stripped from FOR TRIAL, undoing the strip instantly. The
+CURRENT unconditional create_character mint does not have this defect (it mints a stranger, so the
+accused stays out) — this design would REGRESS a working mechanic. (The Censorate impeach-uphold path is
+NOT affected — it applies hard disgrace before its own vacate/backfill call, so the existing
+`NOT = { QING_char_hard_disgraced = yes }` clause correctly excludes that accused.)
+**Fix required:** exclude the specific character currently being stripped-for-trial from the draw. Two
+options: (a) stamp a `qing_pending_trial` marker on the accused BEFORE `QING_office_vacate_dispatch` runs
+in `QING_justice_strip_for_trial`, and add `NOT = { has_variable = qing_pending_trial }` to the draw
+gate (clear the marker at trial resolution, win or lose); or (b) reorder `QING_justice_strip_for_trial`
+so the general/admiral/governor strips (and, if a disgrace-on-accusation policy is acceptable, a light
+taint) run BEFORE the office vacate/backfill, so the accused is already excluded by existing gate clauses
+by the time the draw runs. Option (a) is more surgical (no behavior change to command/governor timing);
+recommend it unless a reviewer prefers (b).
+
+**Finding B (HIGH) — the martial soft-preference (step 6) is stated in prose but CONTRADICTED by the
+concrete gate (step 3) and has no implementation mechanism.** Step 3 lists `has_trait = $degree$` as an
+UNCONDITIONAL gate line for ALL offices; step 4 hardcodes `order_by = combined_stats_council_svalue`
+with no per-office variation. `QING_office_vacate_dispatch` still passes `degree = wu_jinshi` for war/
+guard_commandant. An implementer following steps 3-4 literally, as written, ships a HARD wu_jinshi
+filter for the 2 martial offices — reintroducing Finding 4's near-permanent-no-op exactly as before,
+despite step 6's prose claiming the opposite. **Fix required:** specify the actual mechanism, not just
+the intent. Concretely: gate step 3's `has_trait = $degree$` line itself on a NEW parameter (e.g.
+`$degree_hard_gate$ = yes|no`, set to `no` for war/guard_commandant, `yes` for the 11 civil offices at
+each of the 26 call sites), and make step 4's `order_by` conditional:
+`order_by = combined_stats_council_svalue` when `$degree_hard_gate$ = yes`, else
+`order_by = combined_stats_council_svalue` with `qing_wu_degree_prestige_svalue` ADDED for the 2 martial
+offices (mirroring `council_sort_martial`'s existing shape, `QING_governance_svalues.txt:229`). This is
+buildable (the svalue already exists) but MUST be spelled out as concretely as this, not left as prose
+intent contradicted by a literal spec.
+
+**Finding C (MEDIUM) — the "no stale-scope guard needed" justification only covers same-EXECUTION
+staleness, not same-TICK-different-death staleness, and step 5's match-detection is unspecified.** The
+"single call per vacancy" justification is correct for the ORIGINAL same-pass (13-in-a-row) concern, but
+does not address two ministers dying in the SAME tick, each independently triggering
+`on_character_death` → a SEPARATE `QING_office_vacate_dispatch` → a separate backfill call — could a
+barren second draw read a STALE `scope:qing_autofill_draw` left by the first death's successful draw and
+wrongly re-appoint that already-seated man to the second vacancy? The gate's
+`NOT = { QING_char_holds_court_position = yes }` protects against this IF the stale scope is re-checked
+before use (a successfully-drawn man from death #1 already carries `qing_office_held` by the time death
+#2's draw would read him) — but step 5 never specifies HOW "did the draw match" is detected (presumably
+`exists = scope:qing_autofill_draw`, but this must be stated, and the re-check on the stale scope, not
+just on the fresh `ordered_character` limit, needs to happen before the `QING_office_appoint` call).
+**Fix required:** specify step 5 as: `if = { limit = { exists = scope:qing_autofill_draw
+scope:qing_autofill_draw = { NOT = { QING_char_holds_court_position = yes } } } ... }` — the SAME
+stale-scope-guard idiom used elsewhere this session (#111/#113), reinstated here not for the
+13-in-a-row case (correctly ruled out) but for the cross-death-same-tick case (not previously considered).
+This is cheap insurance, not the original elaborate guard.
+
+**Finding D (LOW) — blast radius understated.** Threading `$autofill_source$` (and now, per Finding B's
+fix, `$degree_hard_gate$`) through all 26 existing call sites (13 boot + 13 backfill) is an all-26-or-
+nothing edit — every site must be updated in the same pass or the macro reference breaks. State this
+explicitly as a single-PR-sized edit, not something that can be partially rolled out.
+
+**Disposition:** fix Findings A and B (both real defects, not documentation gaps), specify Finding C's
+concrete guard, then re-review. Findings 1/2/3 need no further work.
+
+## CORRECTED PROPOSAL ROUND 3 (2026-08-11) — resolves Findings A, B, C
+
+**Fix for Finding A (justice-strip re-seating):** stamp a marker on the accused BEFORE
+`QING_office_vacate_dispatch` runs, exclude it in the draw gate, clear it at trial resolution.
+- `QING_justice_strip_for_trial` (`se_QING_JUSTICE.txt:315-325`): add
+  `set_variable = { name = qing_pending_trial  value = 1 }` as the FIRST line, before the existing
+  `if = { limit = { has_variable = qing_office_held } ... }` vacate-dispatch call.
+- Add `NOT = { has_variable = qing_pending_trial }` to the draw gate (round-2's enumerated list, this
+  doc's earlier section).
+- Clear the marker at BOTH trial outcomes: `QING_justice_convict_accused` (`se_QING_JUSTICE.txt:335+`)
+  and whatever effect handles acquittal/dismissal of the charge (locate and add
+  `remove_variable = qing_pending_trial` to both, so the marker never outlives the trial it was stamped
+  for). This is a narrow, surgical fix — no change to the existing general/admiral/governor strip timing
+  or to the Censorate impeach-uphold path (which is already correctly excluded via hard-disgrace).
+
+**Fix for Finding B (martial soft-preference mechanism):** thread a second boolean parameter,
+`$degree_hard$` (yes|no), alongside the existing `$degree$` param, through all 26 call sites.
+- `QING_council_autofill` (boot, 13 calls, `se_QING_COUNCIL.txt:80-92`): every call passes
+  `degree_hard = yes` (irrelevant on this path per the scope decision — boot never reaches the draw
+  branch — but the parameter must still be supplied at every call site or the macro reference breaks;
+  pass `yes` uniformly for boot-path calls as a harmless placeholder).
+- `QING_office_vacate_dispatch` (backfill, 13 `else_if` branches, `:1741-1753`): the 11 civil branches
+  pass `degree_hard = yes`; the war (`:1745`) and guard_commandant (`:1753`) branches pass
+  `degree_hard = no`.
+- Inside `QING_council_autofill_office`'s backfill draw gate: make the `has_trait = $degree$` line
+  CONDITIONAL — `if = { limit = { $degree_hard$ = yes }  has_trait = $degree$ }` (only gate on it when
+  hard). When `$degree_hard$ = no`, no trait gate is applied to the draw's `ordered_character.limit` at
+  all (any otherwise-eligible man may be drawn); ranking does the work instead.
+- Make `order_by` conditional too: `order_by = combined_stats_council_svalue` when `$degree_hard$ = yes`;
+  when `$degree_hard$ = no`, use a `order_by` script value that ADDS `qing_wu_degree_prestige_svalue` on
+  top of `combined_stats_council_svalue` (mirroring `council_sort_martial`'s existing shape at
+  `QING_governance_svalues.txt:229` — reuse that EXACT svalue rather than inventing a new one, or define
+  a trivial new svalue `combined_stats_council_svalue_martial = { value = 0  add =
+  combined_stats_council_svalue  add = qing_wu_degree_prestige_svalue }` if `ordered_character.order_by`
+  cannot take an inline `add =` expression directly — confirm which form is syntactically legal when this
+  is reviewed).
+
+**Fix for Finding C (cross-death same-tick staleness):** reinstate a minimal stale-scope guard —
+NOT the original 13-in-a-row rationale (correctly ruled out), but for two separate `on_character_death`
+events firing in the same tick, each independently calling this effect:
+```
+if = {
+    limit = {
+        exists = scope:qing_autofill_draw
+        scope:qing_autofill_draw = { NOT = { QING_char_holds_court_position = yes } }
+    }
+    scope:qing_autofill_draw = { QING_office_appoint = { office = $office$ } }
+}
+else = {
+    <existing create_character mint, unchanged>
+}
+```
+This is the same idiom used elsewhere this session (#111/#113) — cheap, and correctly scoped to the
+narrower cross-death case Finding C identified rather than the same-pass case Finding 5 (round 1)
+originally (and correctly) ruled out.
+
+**Blast radius (Finding D, acknowledged, not fixed — informational):** this is now a two-parameter
+thread (`$autofill_source$` from round 2, PLUS `$degree_hard$` from this round) across all 26 call
+sites, an all-26-or-nothing edit. Treat as a single implementation pass, not incremental.
+
+This round-3 proposal needs its own design review before implementation — dispatching now.
