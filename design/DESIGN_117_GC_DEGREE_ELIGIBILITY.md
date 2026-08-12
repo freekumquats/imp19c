@@ -1,11 +1,14 @@
 # DESIGN — #117 GC office eligibility checks suitable exam degrees
 
-> STATUS 2026-08-11: SECOND REVIEW ROUND — NOT CLEAN (see "## REVIEW FINDINGS ROUND 2" below). The
-> "## CORRECTED PROPOSAL" section has now been revised in place to fix all 3 round-2 findings (the
-> under-inclusive jinshi-only predicate, widened to match the amban-draw precedent; the two false
-> premises in the "generic picker" resolution, corrected while keeping the same underlying decision; the
-> unacknowledged martial→civil one-way door, now explicitly recorded as an accepted consequence). Do not
-> implement until a fresh adversarial review clears this revision.
+> STATUS 2026-08-11: THIRD REVIEW ROUND — NOT CLEAN, but confirmed the SUBSTANCE is sound. Round 2's
+> three findings (jinshi-only predicate, false generic-picker premises, unacknowledged martial→civil
+> door) were verified genuinely fixed. Round 3 found the in-place edits left internal contradictions —
+> "edit all THREE copies" vs. the resolved "leave copy #1 unfiltered" decision; "gongshi-and-above"
+> phrasing contradicting the actually-juren-inclusive predicate; the canonical-predicate mandate wrongly
+> including the mint paths. All four now fixed below (numbered list corrected to 2 copies + an explicit
+> "not edited" note for #1; "gongshi-and-above" replaced with the correct "juren-and-above"; the mandate
+> scoped to check-paths only; the #6-principle deviation now explicitly acknowledged). Do not implement
+> until a fresh adversarial review clears this revision.
 
 ## Task text
 `overnight/SESSION_HANDOFF_2026_08_11.md:62`: "#117 GC office eligibility checks suitable exam degrees
@@ -214,28 +217,32 @@ shengyuan }`, and `qing_rites_events.txt:418-423` pools the same four-plus-sheng
 excludes `fanyi_jinshi` (the banner/translation track feeds amban posts, a separate population from
 civil GC offices — autofill's own `$degree$` args never use it for civil offices either) and
 `shengyuan`/`jiansheng` (the lowest two rungs — the amban bench's own inclusion of `shengyuan` reflects
-that a frontier resident post has a much lower bar than a Grand Council seat; a GC eligibility gate
-should stay at gongshi-and-above, the "passed at least the provincial/metropolitan level" tier). Every
-civil-office enforcement path (the picker's 3 inlined copies below, PLUS #116's backfill draw, PLUS the
-existing autofill/vacate-dispatch `$degree$` args) should consume `QING_office_required_degree_civil`
-rather than each hardcoding a bare `has_trait` check independently.
+that a frontier resident post has a much lower bar than a Grand Council seat). The gate stays at
+JUREN-AND-ABOVE (matching the predicate exactly: jinshi, hanlin, gongshi, juren — juren IS included,
+being the fourth member of the OR-set; there is no gongshi-and-above reading anywhere in this design).
+The canonical predicate is consumed ONLY by the eligibility-CHECK paths listed under "Fix the
+wrong-chokepoint bug" below — it is NOT consumed by the autofill/vacate-dispatch `$degree$` args, which
+MINT a character with one concrete degree literal and cannot meaningfully "consume" an OR-of-four
+predicate; those paths are unaffected by this design and continue passing their existing literal
+`degree = jinshi` argument unchanged.
 
-**Fix the wrong-chokepoint bug (Finding 2) — edit all THREE inlined copies, not the unused shared
-trigger:**
-1. `QING_council_refresh_candidates` (`se_QING_COUNCIL.txt:1116-1201`): add
-   `QING_office_required_degree_civil = yes` to the `ordered_character.limit` — but ONLY when the
-   candidate is being considered for a CIVIL office context. This builder feeds the GENERIC picker
-   (all 13 offices via one shared list), so the filter cannot be unconditional here; see the "generic
-   picker" caveat below.
-2. `QING_council_refresh_candidates_by` (`:1215-1318`): same predicate, same caveat — this is the
-   PER-OFFICE cache (`$sortval$` already tells it which office's picker is opening), so THIS builder can
-   correctly apply the hard filter conditionally on `$sortval$` (or better, on a new `$office$` param —
-   see below), since it already knows which specific office is being filled.
-3. The row-click handler's `is_valid` (`QING_governance_actions.txt:646-681`, the `trigger_else` "GREAT
+**Fix the wrong-chokepoint bug (Finding 2) — edit TWO of the three inlined copies (copy #1 stays
+unfiltered by design — see the "generic picker" resolution below, which this numbered list must agree
+with, not contradict):**
+1. `QING_council_refresh_candidates_by` (`se_QING_COUNCIL.txt:1215-1318`): add
+   `QING_office_required_degree_civil = yes` to the `ordered_character.limit`, conditionally on
+   `$sortval$` — this is the PER-OFFICE cache (`$sortval$` already tells it which office's picker is
+   opening), so THIS builder can correctly apply the hard filter unless `$sortval$ = council_sort_martial`
+   (which maps to exactly, and only, the 2 martial offices — no civil office ever uses that sortval, so
+   this discriminates perfectly with no new parameter needed).
+2. The row-click handler's `is_valid` (`QING_governance_actions.txt:646-681`, the `trigger_else` "GREAT
    OFFICES" branch): add the hard civil filter here too, gated on
    `NOT = { OR = { scope:player.var:qing_gc_picker_office_var = flag:war
                     scope:player.var:qing_gc_picker_office_var = flag:guard_commandant } }`
    (i.e., apply the hard filter unless the target is one of the 2 martial offices).
+3. `QING_council_refresh_candidates` (`se_QING_COUNCIL.txt:1116-1201`, enforcement copy #1) is
+   DELIBERATELY NOT edited — see "generic picker" resolution below for why leaving it unfiltered is
+   correct, not an oversight.
 
 **The "generic picker" caveat — CORRECTED (a review found the original resolution rested on two false
 premises — see "## REVIEW FINDINGS ROUND 2" below for the full finding):**
@@ -262,6 +269,15 @@ great-office row-click branch (copy #3) independently re-verifies the hard filte
 any civil GC seat regardless of what the displayed list contained. No degreeless-civil bypass exists;
 copy #1 stays unfiltered by design (it correctly serves BOTH office and corps contexts, and only copy
 #3's branch-aware gate needs to discriminate between them).
+
+**Acknowledged deviation (not a defect, stated explicitly):** the `#6` fix (`se_QING_COUNCIL.txt:1142-1147`)
+established a codebase principle of filtering the BUILDER, not just the click-handler, specifically
+because a listed-but-unappointable candidate was a reported bug ("listed but un-appointable"). This
+design's copy #1 deliberately does NOT follow that principle in the narrow `qing_office.40` stale-refresh
+window (a degreeless man can transiently appear in what LOOKS like a civil-office picker with a
+disabled/blocked Appoint action, until the office-aware copy #2 refresh runs). This is safe (copy #3
+blocks the click) and narrow (requires an appoint/vacate to fire while a civil picker is already open),
+but it is a deliberate, narrow exception to the `#6` principle, not an unnoticed gap.
 
 **`qing_office.41` disposition (Finding 6, decided explicitly):** KEEP, unchanged, as defense-in-depth.
 It remains load-bearing for `qing_force_setup.1/.11`'s day-30/31 commander reconciliation (a path that
