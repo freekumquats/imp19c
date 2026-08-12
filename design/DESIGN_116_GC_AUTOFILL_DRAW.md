@@ -408,4 +408,101 @@ originally (and correctly) ruled out.
 thread (`$autofill_source$` from round 2, PLUS `$degree_hard$` from this round) across all 26 call
 sites, an all-26-or-nothing edit. Treat as a single implementation pass, not incremental.
 
-This round-3 proposal needs its own design review before implementation — dispatching now.
+## REVIEW FINDINGS ROUND 3 (2026-08-11) — NOT CLEAN
+
+A design review of round 3 returned **NOT CLEAN**. Finding A's premise (justice-strip re-seating) and
+Finding C's fix (cross-death staleness guard) were both CONFIRMED sound — no further work needed there.
+But Finding B's fix mechanism is NOT VALID SCRIPT as written, and Finding A's marker-clear has an
+ordering bug that would defeat it on the conviction path.
+
+**Finding 1 (CRITICAL) — round 3's Finding-B mechanism does not parse.** Three separate problems: (a)
+`if = { limit = { $degree_hard$ = yes } ... }` nested INSIDE a `limit` block has ZERO precedent anywhere
+in this ~1630-file repo — every conditional trigger uses `trigger_if`/`trigger_else`, and every `if` near
+an iterator is a SIBLING of `limit` in the effect body, never nested inside it. (b) `$degree_hard$ = yes`
+macro-expands to a bareword LHS (`yes = yes` / `no = yes`) — this exact parse-error class is documented
+and fixed at least 8 times elsewhere in this codebase (most tellingly `se_QING_CENSORATE.txt:216-223`,
+where an identical `$outcome$ = uphold` construct "silently fell through... the exact inverse of the
+player's choice," forcing a redesign into two dedicated effects). (c) There is no precedent for a
+conditional/computed `order_by` selecting between two named script-values inline.
+
+**Finding 2 (MEDIUM-HIGH) — Finding A's marker-clear is order-dependent and, as specified, would
+re-stamp itself on every conviction.** `QING_justice_convict_accused` internally calls
+`QING_justice_strip_for_trial = yes` (which round 3's fix makes the FIRST line of, re-stamping
+`qing_pending_trial = 1`) BEFORE removing `qing_justice_accused`. If the marker-clear is placed anywhere
+before that internal call (e.g. grouped with the taint/disgrace lines), it gets RE-SET by the very call
+it was meant to precede, and `qing_pending_trial` outlives every conviction — the opposite of the fix's
+stated goal. The design must specify the clear's placement precisely, not just "at both outcomes."
+
+**Confirmed sound, no further work:** Finding A's core premise (the justice-strip path really does
+create a live re-seating opportunity); Finding C's guard shape and cross-death-staleness premise
+(verified via 3 in-repo precedents that `save_scope_as` persists across separate `on_action`
+executions); the 26-call-site count; the gate enumeration against `QING_office_eligible_candidate`.
+
+## CORRECTED PROPOSAL ROUND 4 (2026-08-11) — resolves Findings 1 and 2
+
+**Fix for Finding 1 — replace the `if`-inside-`limit` + conditional-`order_by` mechanism with the
+proven two-call + macro-parameterized-svalue-name pattern** (`QING_council_refresh_candidates_by`,
+`se_QING_COUNCIL.txt:1215-1318`, already uses `order_by = $sortval$` with the literal svalue name passed
+in per call site — proven precedent for exactly this need):
+
+1. Define one trivial new script value in `QING_governance_svalues.txt`, mirroring `council_sort_martial`'s
+   existing composition shape (line 229):
+   ```
+   combined_stats_council_svalue_martial = { value = 0  add = combined_stats_council_svalue
+                                               add = qing_wu_degree_prestige_svalue }
+   ```
+2. Split the draw into TWO separate `ordered_character` calls inside an outer `if`/`else` in the
+   CALLING EFFECT BODY (where `if` is legal — never nested inside a `limit` block):
+   ```
+   if = {
+       limit = { $degree_hard$ = yes }
+       ordered_character = {
+           limit = { <round-2's enumerated gate, PLUS> has_trait = $degree$ }
+           order_by = combined_stats_council_svalue
+           max = 1
+           save_scope_as = qing_autofill_draw
+       }
+   }
+   else = {
+       ordered_character = {
+           limit = { <round-2's enumerated gate, NO has_trait line> }
+           order_by = combined_stats_council_svalue_martial
+           max = 1
+           save_scope_as = qing_autofill_draw
+       }
+   }
+   ```
+   This sidesteps all three of Finding 1's problems: `if` is legal here (it's a sibling of the
+   `ordered_character` calls, not nested inside either one's `limit`); no `$degree_hard$ = yes` bareword
+   comparison is evaluated INSIDE a limit (the `$degree_hard$ = yes` check is itself the OUTER `if`'s
+   own limit — re-examine whether even THIS is safe: an `if.limit` block IS a limit block, so this needs
+   one more check — see the round-4 open question below); `order_by` is now a literal name in each
+   branch, never conditional.
+   (Optional simplification acknowledged from round 3, adopted here to shrink blast radius: derive
+   hard-vs-soft from the EXISTING `$degree$` param instead of threading a new `$degree_hard$` — e.g.
+   `if = { limit = { NOT = { has_variable = ... } } }` is unnecessary; simplest is an outer
+   `if = { limit = { $degree$ = flag:wu_jinshi } ... }`-style check IF `$degree$`'s value is
+   comparison-legal in a limit this way — same open question as above, flag for review — otherwise keep
+   the explicit second parameter.)
+
+**Fix for Finding 2 — pin the marker-clear's exact placement.** In `QING_justice_convict_accused`,
+add `remove_variable = qing_pending_trial` immediately AFTER (not before, not grouped with the
+taint/disgrace lines) the existing `remove_variable = qing_justice_accused` line — i.e., after the
+internal `QING_justice_strip_for_trial = yes` call has already run and re-stamped the marker, so the
+clear is genuinely the LAST write to `qing_pending_trial` on this path. In `QING_justice_acquit_accused`,
+a single clear anywhere in the effect body suffices (it has no internal `strip_for_trial` call to race
+against). Note (informational, not a fix): a THIRD path — the accused dying mid-trial — leaves both
+`qing_justice_accused` and `qing_pending_trial` dangling on the corpse; this is harmless for the draw
+(gated on `is_alive = yes`) and already true of the pre-existing `qing_justice_accused` var, so no new
+handling is needed, but the design should say so explicitly rather than claim the marker "never outlives
+the trial."
+
+## Open question for round 4's review
+Is `if = { limit = { $degree_hard$ = yes } ... }` — used as the OUTER dispatch between the two
+`ordered_character` calls, NOT nested inside either call's own `limit` — itself safe, or does the
+SAME bareword-comparison parse-risk (Finding 1b) apply here too since it's still a comparison against a
+macro parameter? If unsafe, the outer dispatch needs the same fix pattern #123 used (two entirely
+separate effects, selected by whichever caller passes the right one) rather than a runtime `$degree_hard$`
+comparison anywhere at all.
+
+This round-4 proposal needs its own design review before implementation.

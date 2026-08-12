@@ -99,12 +99,16 @@ staffs un-flagged dependencies.
 - loc for the new buttons/window.
 
 ## 5. Risks (updated post-review 2026-08-07)
-- **R5 (BIGGEST LIVE RISK): narrow/empty candidate pool + loss of the auto-path's create-a-resident fallback.**
-  The eligible bench (banner-exam graduate, adult, not ruler/heir/commander/governor, no court position) is
-  genuinely narrow, so the picker will FREQUENTLY open empty. The auto-path handles this with a create_character
-  fallback (se_QING_AMBAN.txt:124-144). If we merely gate the button on candidates-existing, the MANUAL player
-  LOSES a capability the AI sweep has. **RESOLUTION: give the picker a "raise a new resident" row** that routes
-  to the fallback-create path — do NOT gate-only. Decide at build; this is the make-or-break UX call.
+- **R5 SUPERSEDED (2026-08-11, #114) — the create_character fallback this risk assumed no longer exists,
+  and must NOT be reintroduced.** `#114` removed `QING_amban_post`'s create_character fallback entirely
+  as an unsanctioned mint site (the character-creation standing rule permits create_character for a
+  degree-holder ONLY at the boot seed and the exam cohort — a runtime "raise a new resident" fallback
+  violates it). The auto-sweep now simply leaves a dependency unstaffed when the bench is empty (the
+  same "under-full is honest" pattern used elsewhere this session). **Do NOT build the "raise a new
+  resident" row this section originally recommended** — any future picker work on a narrow/empty bench
+  must use the SAME honest-empty-state pattern (an empty-bench message, per the existing
+  `IsDataModelEmpty` GUI idiom used by the other pickers in this file), never a create_character
+  fallback. This section is kept for history; its RESOLUTION line is voided.
 - **R2 shared picker window: parallel window is MANDATORY but ROUTINE (down-graded from "biggest unknown").**
   `qing_office_picker_window` (imp19c_windows.gui:36-169) HARDCODES `GetList('qing_council_candidates')` (:79),
   the row action (:92), and the close target (:93) — not parameterized. BUT there are already SIX hand-cloned
