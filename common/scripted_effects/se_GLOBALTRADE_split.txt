@@ -1035,6 +1035,45 @@ GT_split_update_TZ_sell_amount_apply_change = {
 	}
 }
 
+# [#115 2026-08-12] Seed every country's 22 per-tradezone TZ_penetration_<zone> vars to 0. Scope:
+# country (any). WHY: GT_split_cache_TZ_penetration_values below already seeds all 22 zones for
+# every country it walks (every_country, unconditional set_variable) — but it only runs on the
+# periodic cadence (quarterly_reset_trade_transaction_totals / game setup). A country created
+# BETWEEN those passes has none of the 21 vars set yet, and #115's new payment-site read
+# (se_GLOBALTRADE_split.txt, GT_split_update_wealth_owed_for_tradegoods) reads
+# `owner.var:TZ_penetration_<zone>` the moment that new country's governorship pays for an import
+# — the SAME class of gap #106 (734de2ac1) fixed for shipping_<zone>. Unlike shipping_<zone>'s
+# read sites (an explicit `> 0` comparison), this read is a bare `add =` inside a divide — an
+# unset var reads as 0, so the denominator degrades gracefully (0.5+0=0.5, price at most doubles,
+# no crash) — but it still floods error.log with the #106-class unset-var noise for that country
+# until the next periodic cache pass reaches it. Called ONCE per new country
+# (FUNC_setup_new_country, se_FUNC.txt), mirroring #106's SHIPPING_seed_zone_defaults exactly.
+# Per-var has_variable guard: never overwrites a value the periodic cache already set.
+TZ_penetration_seed_zone_defaults = {
+	if = { limit = { NOT = { has_variable = TZ_penetration_atlantic_seaboard } }  set_variable = { name = TZ_penetration_atlantic_seaboard  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_west_mediterranean } }  set_variable = { name = TZ_penetration_west_mediterranean  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_east_mediterranean } }  set_variable = { name = TZ_penetration_east_mediterranean  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_baltic } }  set_variable = { name = TZ_penetration_baltic  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_central_europe } }  set_variable = { name = TZ_penetration_central_europe  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_west_africa } }  set_variable = { name = TZ_penetration_west_africa  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_southern_africa } }  set_variable = { name = TZ_penetration_southern_africa  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_east_africa } }  set_variable = { name = TZ_penetration_east_africa  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_yellow_sea } }  set_variable = { name = TZ_penetration_yellow_sea  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_middle_east } }  set_variable = { name = TZ_penetration_middle_east  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_eastern_steppe } }  set_variable = { name = TZ_penetration_eastern_steppe  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_western_steppe } }  set_variable = { name = TZ_penetration_western_steppe  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_indo_china } }  set_variable = { name = TZ_penetration_indo_china  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_india } }  set_variable = { name = TZ_penetration_india  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_east_south_america } }  set_variable = { name = TZ_penetration_east_south_america  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_west_south_america } }  set_variable = { name = TZ_penetration_west_south_america  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_south_east_asia } }  set_variable = { name = TZ_penetration_south_east_asia  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_east_north_america } }  set_variable = { name = TZ_penetration_east_north_america  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_west_north_america } }  set_variable = { name = TZ_penetration_west_north_america  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_caribbean } }  set_variable = { name = TZ_penetration_caribbean  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_east_europe } }  set_variable = { name = TZ_penetration_east_europe  value = 0 } }
+	if = { limit = { NOT = { has_variable = TZ_penetration_upper_yangtzi } }  set_variable = { name = TZ_penetration_upper_yangtzi  value = 0 } }
+}
+
 GT_split_cache_TZ_penetration_values = {
 	# First, cache SHIPPING_total_in_TZ in every tradezone
 	every_province = {
@@ -2465,18 +2504,34 @@ GT_split_update_wealth_owed_for_tradegoods = {
 	}
 	# [#112 2026-08-11] REGIONAL IMPORT PRICE. Was `multiply = owner.var:country_unit_price_$tradegood$`
 	# (the country's ONE national price = gbip/(0.5+pen), geography-blind). Instead pay the PAYING
-	# governorship's OWN trade-zone local_price, keeping the same (0.5+penetration) national access-discount
-	# divisor. This is the DIRECT form (not a gbip-ratio "index" — that cancels): the numerator swaps
-	# gbip → this zone's local_price. Regional divergence (Canton silk cheap, London silk dear) that is
-	# conquest-correct (a conquered province pays its ZONE's price, not its owner's). country_unit_price the
-	# VARIABLE is NOT written, so the currency peg (which reads country_unit_price, CURRENCY_svalues.txt:673)
-	# is isolated by construction — this is the correct side of the peg, unlike the reverted #50. The block is
-	# country_unit_price's own (:2730-2739) copied verbatim with gbip→local_price; its `min = 0.0001` on the
-	# numerator (now local_price) IS the strict-positive floor (min=floor in this engine), so an empty/
-	# never-ordered zone (local_price 0) is floored just above 0 — a good is never literally free. NO ceiling
-	# (user directive): a starved/spiking zone's price passes through in full. $tradezone$ = the paying gov's
+	# governorship's OWN trade-zone local_price. This is the DIRECT form (not a gbip-ratio "index" —
+	# that cancels): the numerator swaps gbip → this zone's local_price. Regional divergence (Canton
+	# silk cheap, London silk dear) that is conquest-correct (a conquered province pays its ZONE's
+	# price, not its owner's). country_unit_price the VARIABLE is NOT written, so the currency peg
+	# (which reads country_unit_price, CURRENCY_svalues.txt:673) is isolated by construction — this is
+	# the correct side of the peg, unlike the reverted #50. `min = 0.0001` on the numerator (local_price)
+	# IS the strict-positive floor (min=floor in this engine), so an empty/never-ordered zone
+	# (local_price 0) is floored just above 0 — a good is never literally free. NO ceiling (user
+	# directive): a starved/spiking zone's price passes through in full. $tradezone$ = the paying gov's
 	# zone (the :2319 dispatcher, keyed to the governorship LOCATION). [#112 boot-watch] the §E zero-stockpile
 	# SILVER zones (upper_yangtzi/yellow_sea) price undivided → order-scale spike re-exposed here; measured on boot.
+	# [#115 2026-08-12] "BOTH" MODEL — the denominator is now per-zone too, not the national blend.
+	# Was `divide = { add = owner.var:country_global_market_penetration_$tradegood$ }` (a COUNTRY-scope
+	# aggregate = Σ over all 22 zones of stockpile-share × TZ_penetration_<zone> — one number per
+	# country per good, blind to which zone is actually paying). Now both the numerator's zone AND the
+	# denominator's zone are the SAME $tradezone$: a country with strong shipping in one zone but weak
+	# presence in another pays the access-discount that matches where the good is actually landing, not
+	# a blend that over-discounts weak zones and under-discounts strong ones. Reads the CACHED var
+	# (GT_split_cache_TZ_penetration_values, :1038+, run every quarter strictly before this payment
+	# site — same ordering guarantee #112 established for local_price/penetration at this site) — NOT a
+	# live call to the TZ_penetration_$tradezone$ script value, which would recompute an expensive
+	# per-country walk (subjects + trade partners + influenced-states + provinces) on every payment
+	# call instead of once per quarter (the same hot-loop mistake #139's
+	# GT_split_cache_governorship_infrastructure_capacity hoist was written to avoid, :12-17). Zero
+	# penetration floors gracefully (0.5+0=0.5, at most doubles the price — no spike, unlike the
+	# numerator's zero-stockpile case). Peg isolation unchanged: TZ_penetration_<zone> is read-only
+	# here and never read by the peg (CURRENCY_essentials_buying_power/country_unit_price's own setter,
+	# :2748-2762, is untouched and still reads the OLD aggregate for whatever else needs it).
 	change_variable = {
 		name = wealth_owed_for_$tradegood$
 		multiply = {
@@ -2484,7 +2539,7 @@ GT_split_update_wealth_owed_for_tradegoods = {
 			min = 0.0001
 			divide = {
 				value = 0.5
-				add = owner.var:country_global_market_penetration_$tradegood$
+				add = owner.var:TZ_penetration_$tradezone$
 			}
 		}
 	}
