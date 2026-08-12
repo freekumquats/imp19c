@@ -12,8 +12,10 @@
 # tributary order from a defensive-only meter into a living court ceremony.
 #
 # CONCRETE OBJECTS (not a counter):
-#   • A real ENVOY create_character per mission (custom identity via add_nickname, the
-#     roster idiom), scoped into the arrival event so the player receives a PERSON.
+#   • [#119] The envoy is pure event flavor (right_portrait only — no mechanical effect
+#     ever reads him), so the mission renders the SENDER's own ruler on arrival rather
+#     than minting a stranger every time (qing_trib1_ruler, a plain character-holder var
+#     captured at schedule time; see QING_tribute_schedule_missions/qing_tribute.1).
 #   • The REAL subject tags at the 1763/1815 start (KOR / VIE / NEP / RYU / TNN — the
 #     dependency=tributary rows in setup/main/00_default.txt) drive it: a mission only
 #     comes from a tag that STILL exists AND is STILL our subject, so a lost tributary
@@ -101,13 +103,19 @@ QING_tribute_schedule_missions = {
 			# hop back to the overlord (ROOT = CHI is unchanged inside random_subject) to mint
 			# the envoy in Peking's court and fire the arrival country-event on the Qing.
 			ROOT = {
-				QING_tribute_mint_envoy = { sender = scope:trib_sender }
-				# [BT-7 logfix] persist both mission scopes as country vars so the DELAYED
-				# arrival (5-20d later) can re-save them in its own immediate — a raw saved
-				# scope can go stale across the delay window, so scope:trib_sender/trib_envoy
-				# rendered ERROR:[scope:...GetName] in qing_tribute.1. Same class as BT-1.
+				# [BT-7 logfix] persist the sender as a country var so the DELAYED arrival (5-20d
+				# later) can re-save it in its own immediate — a raw saved scope can go stale
+				# across the delay window, so scope:trib_sender rendered ERROR:[scope:...GetName]
+				# in qing_tribute.1. Same class as BT-1.
 				set_variable = { name = qing_trib1_sender  value = scope:trib_sender }
-				set_variable = { name = qing_trib1_envoy   value = scope:trib_envoy }
+				# [#119] the envoy is pure event flavor (right_portrait only) — no mechanical
+				# effect ever reads him, so render the SENDER's own ruler rather than minting a
+				# stranger. Persist him as his own plain character-holder var, captured NOW at
+				# schedule time (not a live .current_ruler chain read later) — the same proven
+				# shape the deleted qing_trib1_envoy var used, just pointed at a different
+				# character. QING_tribute_is_tributary_trigger (this random_subject's own limit)
+				# already guarantees the sender has a ruler at this exact instant.
+				set_variable = { name = qing_trib1_ruler  value = scope:trib_sender.current_ruler }
 				trigger_event = { id = qing_tribute.1  days = { 5 20 } }
 				LOG_line = { sys = QING  msg = "tribute: an embassy is dispatched to Peking for" }
 			}
@@ -126,59 +134,6 @@ QING_tribute_schedule_missions = {
 # (No body needed — the days= cooldown auto-expires and the schedule re-gates on
 #  QING_tribute_is_tributary_trigger every pulse, so a freed-then-resubjugated vassal
 #  simply resumes once its timer lapses. Documented here so the absence is intentional.)
-
-# ======================================================================
-# QING_tribute_mint_envoy — Scope: COUNTRY (CHI). $sender$ = the tributary COUNTRY.
-# Create the mission's envoy as a real character in the Qing court and scope him for
-# the arrival event. Culture follows the sender's primary culture so a Korean mission
-# looks Korean, a Vietnamese one Vietnamese (the proven scope-culture read). Marked so
-# he is a minor diplomatic figure, not an officeholder; QING_tribute_dismiss_envoy sends
-# him back home when the audience ends (both options of qing_tribute.1) so envoys never
-# accumulate in the Qing court. He holds no list membership, so a death leaves no orphan
-# reference (no on_character_death hook needed, unlike the amban/pilgrim/scholar features).
-# ======================================================================
-QING_tribute_mint_envoy = {
-	$sender$ = { save_scope_as = trib_envoy_home }
-	create_character = {
-		age = 45
-		culture = scope:trib_envoy_home.culture
-		religion = scope:trib_envoy_home.religion
-		add_finesse = 6
-		add_charisma = 6
-		add_martial = 1
-		add_zeal = 3
-		save_scope_as = trib_envoy
-	}
-	scope:trib_envoy = {
-		set_home_country = ROOT
-		set_as_minor_character = THIS
-		set_variable = { name = qing_is_tribute_envoy  value = 1 }
-		# record who sent him, so the dismissal can send him back home.
-		set_variable = { name = qing_tribute_envoy_home  value = scope:trib_envoy_home }
-	}
-	LOG_line = { sys = QING  msg = "tribute: minted an embassy envoy for" }
-}
-
-# ======================================================================
-# QING_tribute_dismiss_envoy — [#322 review-fix] Scope: COUNTRY (CHI). The mission is
-# received (either option of qing_tribute.1); the envoy's business is done, so send him
-# HOME to the tributary that sent him rather than let him accumulate in the Qing court
-# forever (each mission otherwise left a permanent minor character — a save/court-list
-# leak). Self-guards on the scope. He keeps his marker so the on_death hook (below)
-# still cleans any dangling reference if he dies abroad.
-# ======================================================================
-QING_tribute_dismiss_envoy = {
-	if = {
-		limit = { exists = scope:trib_envoy }
-		scope:trib_envoy = {
-			if = {
-				limit = { has_variable = qing_tribute_envoy_home  exists = var:qing_tribute_envoy_home }
-				set_home_country = var:qing_tribute_envoy_home
-				LOG_line = { sys = QING  msg = "tribute: envoy dismissed home after audience for" }
-			}
-		}
-	}
-}
 
 # ======================================================================
 # QING_tribute_receive — Scope: COUNTRY (CHI). $sender$ = the tributary. The payload of

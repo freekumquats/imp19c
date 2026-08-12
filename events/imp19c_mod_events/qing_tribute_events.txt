@@ -9,7 +9,8 @@
 #
 #   ROOT / this = the Qing overlord (CHI, player)
 #   scope:trib_sender = the tributary COUNTRY that sent the mission
-#   scope:trib_envoy  = the envoy CHARACTER minted for it
+#   [#119] the envoy is pure portrait flavor, not a real character (see se_QING_TRIBUTE.txt) —
+#   qing_trib1_ruler names the SENDER's own ruler, persisted at schedule time.
 #
 # Namespace = qing_tribute
 #   .1  a tribute embassy arrives at Peking (audience-with-gifts vs perfunctory-dismiss)
@@ -38,30 +39,35 @@ qing_tribute.1 = {
 	picture = council_country
 
 	left_portrait = root.current_ruler
-	# [BT-7b logfix] portrait fields resolve at FIRE time, BEFORE immediate saves the scope, so
-	# scope:trib_envoy was empty here -> ERROR:[scope:trib_envoy.GetName]. Point it at the PERSISTED
-	# var instead (proven: right_portrait = var:qing_office_justice_holder). The desc/options still
-	# read scope:trib_sender/trib_envoy, which immediate re-saves before the body renders.
-	right_portrait = var:qing_trib1_envoy
+	# [#119] the envoy is pure event flavor (this portrait is the only thing that ever reads
+	# him) — render the SENDER's own ruler, captured as a plain character-holder var at
+	# schedule time (qing_trib1_ruler, se_QING_TRIBUTE.txt), the same proven shape the old
+	# per-mission envoy var used. No draw, no create_character, no chained .current_ruler
+	# accessor read at fire time.
+	right_portrait = var:qing_trib1_ruler
 
 
 	# [BT-7 logfix] self-guard on the PERSISTED vars, not raw saved scopes: a scope
 	# saved at the scheduler site can go stale across the 5-20d delay, so the arrival
-	# rendered ERROR:[scope:trib_sender.GetName]/[scope:trib_envoy.GetName]. Guard that
-	# the subject is still ours and the envoy still exists; else cancel cleanly.
+	# rendered ERROR:[scope:trib_sender.GetName]. Guard that the subject is still ours.
+	# [#119] the captured ruler var is guarded the SAME way this file already guards
+	# qing_amban_here (se_QING_TRIBUTE.txt:477): has_variable + is_alive = yes — this single
+	# clause closes BOTH the rulerless/interregnum case AND the case where the captured ruler
+	# died and a successor took over during the 5-20d delay (is_alive tests THIS character,
+	# not "does the sender currently have a ruler").
 	trigger = {
 		tag = CHI
 		has_variable = qing_trib1_sender
-		has_variable = qing_trib1_envoy
+		has_variable = qing_trib1_ruler
 		var:qing_trib1_sender = { is_subject_of = ROOT }
-		exists = var:qing_trib1_envoy
+		var:qing_trib1_ruler = { is_alive = yes }
 	}
 
 	immediate = {
-		# [BT-7 logfix] re-save the persisted vars into the named scopes the desc/portraits
-		# and options read (scope:trib_sender / scope:trib_envoy) BEFORE render.
+		# [BT-7 logfix] re-save the persisted var into the named scope the desc/options
+		# read (scope:trib_sender) BEFORE render. qing_trib1_ruler needs no re-save — nothing
+		# reads it except the bare right_portrait reference above.
 		var:qing_trib1_sender = { save_scope_as = trib_sender }
-		var:qing_trib1_envoy  = { save_scope_as = trib_envoy }
 		LOG_line = { sys = QING  msg = "EVENT qing_tribute.1 (a tribute embassy arrives at Peking) for CHI" }
 	}
 
@@ -79,9 +85,6 @@ qing_tribute.1 = {
 		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = 7 }
 		current_ruler = { add_popularity = 8 }
 		add_stability = 1
-		# [#322 review-fix] the envoy's mission is done — dismiss him home so he does not
-		# accumulate in the Qing court over the game.
-		QING_tribute_dismiss_envoy = yes
 	}
 
 	# --- Receive the tribute, but dismiss the mission perfunctorily ---------------
@@ -93,7 +96,6 @@ qing_tribute.1 = {
 		QING_tribute_receive = { sender = scope:trib_sender }
 		QING_DECLINE_nudge = { var = qing_suzerain_prestige  amount = -3 }
 		add_political_influence = 5
-		QING_tribute_dismiss_envoy = yes
 	}
 }
 

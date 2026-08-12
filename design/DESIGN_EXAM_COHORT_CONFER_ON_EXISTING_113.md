@@ -1,15 +1,15 @@
 # DESIGN #113 — the triennial exam cohort confers degrees on existing degreeless court adults (all 3 tracks), create_character ONLY as fallback
 
-**Status:** SHIPPED (commit 9f2365c94) but IMPLEMENTED WITHOUT the adversarial design review this doc
-calls for below — a process gap. Four rounds of POST-IMPLEMENTATION code review were needed to reach a
-behaviorally-correct state (3 rounds each caught a real cross-track leak bug; round 4 confirmed CLEAN).
-A RETROACTIVE adversarial design review (2026-08-11, after the fact) then examined the shipped design
-approach itself and returned NOT CLEAN — see "## RETROACTIVE REVIEW FINDINGS" appended at the bottom of
-this file. That review's Finding 1 (shared-trigger extraction) is a real, actionable follow-up fix,
-distinct from and not fixing any remaining behavioral bug in the shipped code. Treat this doc as
-historical record of what was PLANNED plus what a review found AFTER THE FACT; the planned design below
-was never itself adversarially reviewed before implementation began. Distinct from #111 (Hanlin POOL
-caller-split); this is the EXAM COHORT itself.
+**Status (2026-08-11): FULLY CLEAN.** Original implementation shipped (commit `9f2365c94`) without a
+prior adversarial design review — a process gap corrected retroactively: 4 rounds of post-implementation
+code review reached a behaviorally-correct state, then a RETROACTIVE design-approach review found the
+shipped design structurally fragile (4-way duplicated partition logic) and proposed a shared-trigger
+refactor, split into Piece A (the degreeless-list extraction) and Piece B (the track-partition
+extraction). **Piece A is now implemented, code-reviewed CLEAN, committed, and pushed.** **Piece B's
+design is reviewed CLEAN** and correctly deferred (no live bug forces it) — ready to implement whenever
+convenient. See "## RETROACTIVE REVIEW FINDINGS," "## REVIEW OF FINDING 1'S REFACTOR PROPOSAL," "##
+CORRECTED REFACTOR PROPOSAL," and "## DISPOSITION" below for the full trail. Distinct from #111 (Hanlin
+POOL caller-split); this is the EXAM COHORT itself.
 
 ## The rule this serves (user-authoritative — see [[imp19c-character-creation-rule]])
 `create_character` with an exam degree is permitted in EXACTLY two places: (a) the game-start boot seed, and
@@ -308,7 +308,7 @@ QING_char_exam_track_civil = {
 ```
 
 **Corrected structural description (per review — the actual control flow is NESTED, not a flat
-if/else_if/else chain):** `QING_exam_sit_candidate`'s real shape (`common/scripted_effects/se_QING_EXAM.txt:924-1090`
+if/else_if/else chain):** `QING_exam_sit_candidate`'s real shape (`common/scripted_effects/se_QING_EXAM.txt:924-1081`
 as of this session) is:
 ```
 if = { limit = { banner-culture-check }   -> BANNER track body }
@@ -334,7 +334,13 @@ block (`se_QING_EXAM.txt:979-983` as of this session) documents the deliberate d
 military `if`'s `limit`. Once that `limit` becomes `QING_char_exam_track_martial = yes`, this rationale
 would be orphaned (the reader would see a trigger call with no explanation of why it's shaped that way).
 Relocate this comment to sit directly above `QING_char_exam_track_martial`'s definition in
-`qing_dynasty_triggers.txt`, so the rationale travels with the logic it explains.
+`qing_dynasty_triggers.txt`, so the rationale travels with the logic it explains. **Reword, don't just
+relocate verbatim** (per review): the original text says "applies HERE AND to the cohort's
+track-selection," where "here" means the per-person branch it currently sits above — once moved onto the
+shared trigger's definition, "here" no longer has a clear referent (the per-person caller loses its
+named reference while the cohort caller keeps one). Reword to name BOTH callers explicitly, e.g.
+"applies to the per-person path in `QING_exam_sit_candidate` AND the cohort's
+`QING_exam_seat_martial_graduate`," so the ONE relocated comment genuinely serves both.
 
 **Sequencing:** Piece A can land on its own review cycle immediately (low risk, mechanical). Piece B is
 NOT urgent (no live bug depends on it; #113's shipped code is already behaviorally correct; independently
@@ -355,9 +361,12 @@ banner-else is provably harmless, since both use the byte-identical culture_grou
 Piece B touch disjoint clauses and compose cleanly). **Piece B — correctly deferred** (no live bug, not
 urgent), but that same review flagged two LOW spec-precision gaps in Piece B specifically (the doc
 described the control flow as a flat if/else_if/else chain when it is actually nested; the routing-fix
-rationale comment would be orphaned by the trigger-extraction). Both are now fixed in the "Corrected
-structural description" and "Orphaned-comment relocation" subsections above. **The corrected Piece B spec
-has NOT yet been re-reviewed** — dispatching that review now, before Piece B implementation (still
-deferred/not urgent) is ever picked up. Piece A has been implemented (see
-`common/scripted_triggers/qing_dynasty_triggers.txt` and the 4 call sites in
-`common/scripted_effects/se_QING_EXAM.txt`) and is pending its own code-review gate before commit.
+rationale comment would be orphaned by the trigger-extraction). Both were fixed in the "Corrected
+structural description" and "Orphaned-comment relocation" subsections above, and a SECOND review of that
+corrected spec returned **CLEAN** (2 further LOW polish notes only — a stale end-line citation and a
+dangling "here" reference in the relocated comment's wording — both now folded in above). **#113 is
+therefore fully CLEAN end to end**: Piece A implemented, code-reviewed CLEAN, committed, and pushed
+(`common/scripted_triggers/qing_dynasty_triggers.txt` + the 4 call sites in
+`common/scripted_effects/se_QING_EXAM.txt`). Piece B's design is CLEAN and ready to implement whenever
+convenient (still correctly deferred, no live bug) — pick up using the corrected structural description
+above, then run its own implementation-conformance code review before commit.
