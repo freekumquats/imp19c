@@ -354,3 +354,40 @@
   and then stripping logs to monitor said changes is insane"), re-stripping BEFORE that confirmation
   would repeat the exact strip-before-verify mistake this task exists to prevent. Left in_progress,
   not force-closed — nothing to commit this pass.
+
+### Task #23 — unify silver/gold reserve values to 千兩 — DONE (full inventory + scoped fix + 1 new follow-up task)
+- **What it was**: task title asked to "unify all silver/gold reserve values to 千兩," explicitly
+  labeled "not a bug, a consistency task." Diagnosis (Explore agent, full inventory of every reserve-
+  adjacent surface touching CHI) found: gold is genuinely, deliberately inert for CHI (`gold_reserve_
+  size = 0` at every seed site, no design doc anywhere gives Qing China a meaningful gold reserve —
+  historically correct, a silver-standard economy) — nothing to unify there. Silver, however, had ONE
+  genuinely unforked display surface: the silver-reserve row's TOOLTIP (`RESERVE_VALUE_SILVER_TT`)
+  computes "Market value"/"Currency value" via svalues calibrated to the vanilla hundreds-troy-lb
+  unit — the exact same garbled-by-scale bug `#89` already fixed for the row's LABEL text, one
+  tooltip layer over, apparently missed when `#89` shipped.
+- **Fix**: forked the tooltip for CHI via a new `silver_reserve_tooltip_text` customizable_
+  localization selector, byte-identical in shape to `#89`'s proven `silver_reserve_row_text`
+  selector — CHI gets a new loc key (`RESERVE_VALUE_SILVER_TT_QING`) showing the raw 千兩 figure
+  directly (no attempt to compute an equivalent "market value" conversion for CHI, since none has a
+  well-defined 千兩 analogue without inventing new economic semantics — correctly out of scope for a
+  unit-CONSISTENCY fix, not a design decision this ticket should make); ROW keeps the vanilla
+  tooltip byte-for-byte.
+- **Found but deliberately NOT folded in (logged loudly, new task #54)**: the same diagnosis pass
+  surfaced a genuinely different, more severe issue while surveying every reserve surface —
+  `INCOME_sell_reserves` (hit by BOTH the manual sell-reserve button and the automatic deficit-
+  mitigation path, confirmed via the function's own code comment that CHI reaches this path) mixes
+  units for CHI's silver: it depletes `silver_reserve_size` (千兩) by `amount_to_sell`, but prices the
+  treasury credit using `global_base_import_price_silver` (hundreds-lb-calibrated) and credits the
+  capital governorship's `silver_stockpile` with the same raw number as if it were hundreds-lb of
+  physical silver goods. This silently mis-prices every CHI reserve sale — a LIVE economic-
+  calculation bug, not a display consistency nit, and a different severity class than what #23's own
+  task text ("not a bug") describes. Per this project's own bug-vs-missing-feature and no-silent-
+  scope-expansion discipline, NOT fixed here — logged as task #54 for its own diagnosis→design→
+  review→fix cycle, matching how economy-touching bugs are handled in this codebase.
+- **Review**: code-review dispatched on the 3-file diff (selector, loc key, GUI wiring) — CLEAN, zero
+  findings. Confirmed selector shape matches the proven `#89` precedent exactly, confirmed the
+  `Custom()`-selector GUI syntax matches another proven live example (`inflation_deflation_tooltip`),
+  confirmed loc formatting-tag balance (9 openers/9 closers, matching the original), confirmed the
+  fork is complete (no second unforked tooltip-wiring site anywhere in the repo).
+- **Commit**: `175596688`, pushed.
+- **STATUS: DONE.**
