@@ -1,6 +1,42 @@
 # DIAGNOSIS — boot/load crash, range `0a81d9b79..merge-overnight`
 
-## Symptom (from the last boot test)
+## RESOLVED (2026-08-12, commit d91726097) — boot confirmed successful
+**Root cause:** `common/laws/00_monetary_standard.txt` (commit 821b9b73e, "75: implement Monetary
+Standard law group") gave `gold_standard_law` and `bimetallic_standard_law` each an
+`ai_will_do = { base = N }` block. `ai_will_do` does NOT exist on a law-option's schema in this
+engine — zero other law files in this repo use it, it never appears inside `common/laws/` in
+either oracle repo (Invictus, Terra Indomita; it IS valid elsewhere, e.g. governor_policies, but
+with a different sub-syntax, `modifier = { add/factor }`, never the decisions/missions-style bare
+`base = N` form that was used here). Feeding that unrecognized field into a law-option's
+field-dispatch desynced the engine's brace tracking, orphaning the file's own closing `}` so a
+LATER, unrelated file's leftover brace got misread as the next lawgroup's NAME — producing the
+literal `laws.cpp:184: Lawgroup '}' has no entries, this will cause crashes!` line seen ~20s
+before the fatal `pdx_assert.cpp:612: Assertion failed: _nSize > 0`.
+
+**Why the initial diagnosis (below) missed it:** the original 103-commit sweep scoped to
+`0a81d9b79..merge-overnight`, which was ONE commit too late — the user later supplied a
+more-precise last-good-boot log (`logs 2.18.32 AM.zip`, HEAD=`9677bdaa9`, confirmed clean via
+`PostValidate` reached + hours of live gameplay in its log) that pinned the true error surface to
+`9677bdaa9..merge-overnight`. The `#88`-focused sweep's best candidate
+(`QING_wenzhi_suppress_jesuits`, trampolined in commit 6197eb70c) was a genuine, independently
+code-reviewed fix for a real (if non-fatal-that-boot) scripted_gui compile-inline risk, but did
+NOT resolve the actual crash — confirmed by a second crash on the identical signature after that
+fix shipped. The real cause was found only after: (1) a byte-level good-vs-bad `error.log` diff
+(not just reading each in isolation) surfaced `Lawgroup '}' has no entries` as the ONE genuinely
+new error class between the two boots, and (2) a targeted 3-lens adversarial workflow specifically
+hunting that error's mechanism, where one lens's `git diff 9677bdaa9 merge-overnight -- common/laws/`
+found `00_monetary_standard.txt` was the only lawgroup file touched in-range and flagged the
+schema-invalid `ai_will_do` field as the standout novel construct.
+
+**Fix:** commit `d91726097` — removed both `ai_will_do` blocks. Code-review confirmed no
+AI-selection regression (every other law in the mod, including this group's own default
+`silver_standard_law`, already has zero author-supplied AI weighting — the engine's built-in
+heuristic on standing modifiers is the only AI signal that exists anywhere in this mod's laws, per
+`design/DESIGN_MO11_MO12_LAWS.md:15`).
+
+## Original diagnosis (superseded — kept for record)
+
+### Symptom (from the first boot test in this sequence)
 - `Assertion failed: _nSize > 0` at `trait.cpp:158` (global trait-opposite-pair registration).
 - Zero `PostValidate` lines in `error.log` — crash is before gamestate construction begins.
 - `setup.log` dies at the same moment.
