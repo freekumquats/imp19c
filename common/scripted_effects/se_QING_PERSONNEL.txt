@@ -106,13 +106,20 @@ QING_personnel_evaluate_governors = {
 							# queue in ONE pulse (multi-fire) AND it escaped the department hold. The ROOT slot check makes it
 							# fire at most once per pulse (once one governor claims the slot, later iterations skip), and the
 							# dept-cd makes it respect a Personnel stand-down. Claims BOTH on the fire path.
+							# [#42 2026-08-13] the dept-cd stamp was ONLY on the fire path (inside the chance=8 success
+							# branch) — a FAILED roll left qing_dept_cd_personnel unset, so the very next governor in
+							# THIS SAME quarterly loop (and every governor every quarter after) re-rolled again. With N
+							# eligible governors that is N independent 8% rolls/quarter, not one — exactly why Personnel
+							# fired far more than Revenue/Works, which both stamp their department cooldown on ENTRY,
+							# before the roll (se_QING_REVENUE.txt:287, se_QING_WORKS.txt:55), consuming ONE attempt per
+							# ~3-quarter window regardless of outcome. Moved the stamp here to match that proven idiom.
 							if = {
 								limit = { ROOT = { NOT = { has_variable = qing_gc_event_slot_used }  NOT = { has_variable = qing_dept_cd_personnel } } }
+								ROOT = { set_variable = { name = qing_dept_cd_personnel  days = 270 } }  # [#42] consume this cycle's attempt regardless of roll outcome
 								random = {
 									chance = 8
 									ROOT = {
 										set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [#55] claim the shared court slot
-										set_variable = { name = qing_dept_cd_personnel  days = 270 }  # [#55] hold the Personnel department ~3 quarters
 										trigger_event = {
 											id = qing_personnel.3
 											days = { 30 90 }
@@ -172,6 +179,13 @@ QING_personnel_evaluate_governors = {
 								ROOT = { NOT = { has_variable = qing_dept_cd_personnel } }
 								NOT = { has_variable = qing_personnel_clashed_recently }
 							}
+							# [#42 2026-08-13] stamp the department cooldown HERE, before the roll — not only on the
+							# chance=10 success path. The old fire-path-only stamp left qing_dept_cd_personnel unset on
+							# a failed roll, so EVERY eligible governor got an independent 10% roll EVERY quarter (N
+							# governors -> 1-(0.9)^N effective chance, not 10%) — the actual cause of "clash fires far
+							# more than other Ministries." Revenue/Works both consume their cycle's attempt on entry
+							# (se_QING_REVENUE.txt:287, se_QING_WORKS.txt:55) regardless of outcome; matched here.
+							ROOT = { set_variable = { name = qing_dept_cd_personnel  days = 270 } }
 							random = {
 								chance = 10
 								set_variable = { name = qing_personnel_clashed_recently  value = 1  days = 730 }  # [#34-D1] this governor won't be re-rolled for ~2 years
@@ -182,7 +196,6 @@ QING_personnel_evaluate_governors = {
 								ROOT = { set_variable = { name = qing_personnel_clash_target  value = scope:the_governor } }
 								ROOT = {
 									set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [BT-57] claim court slot after the chance succeeds (mirrors frontier/works rolls)
-									set_variable = { name = qing_dept_cd_personnel  days = 270 }  # [#55] department stands down ~3 quarters — yields the shared slot to other departments
 									trigger_event = {
 										id = qing_personnel.2
 										days = { 30 90 }
