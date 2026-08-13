@@ -574,3 +574,31 @@
 - **Commit**: `259f01fb2`, pushed. **STATUS: CLOSED — #39's described symptom not reproducible in
   current source (already fixed by prior commit 1b9549d22); one unrelated LOG_fail compile bug found
   in the same file and fixed.**
+
+### Task #40 — "A Dispute at Kashgar" loc broken for all 3 options — FIXED
+- Diagnosis: checked the newest boot log (~/Downloads/logs.zip, Aug 12 18:43) and found the exact live
+  error class matching the raw ERROR:[...] string symptom: `Could not find promote for 'MakeScope' in
+  'ROOT.MakeScope.GetVariable(...)'` — repeated for all 6 `_shown` vars (negotiate/coerce/collude ×
+  success/fail). `ROOT` has no `MakeScope` promote in the loc data-context; only scope objects with a
+  bound country (Player, a saved character/province scope, GetCountry) carry it. The prior "#90
+  2026-08-11" fix had swapped one broken form (`ROOT.GetCountry.MakeScope`) for a DIFFERENT broken form
+  (bare `ROOT.MakeScope`) and called it "proven" without ever boot-verifying it — the tooltip has been
+  rendering the raw error string since that commit, not since before it.
+- Fix: all 6 `GetVariable` reads in the 3 option tooltips (qing_caravan.4.negotiate/.coerce/.collude.tt)
+  now use `[Player.MakeScope.GetVariable(...)]` — the idiom actually proven elsewhere in the codebase
+  (`economic_enchancement_l_english.yml`'s national_debt_text_*, `imp19c_windows.gui:1919`'s salt-income
+  read). CHI is always the player in this mod and the event is CHI-gated (`trigger = { tag = CHI }`), so
+  Player.MakeScope resolves the exact same scope the vars were stashed on in the event's `immediate`.
+- Code-review (dispatched, verdict: fix correct/complete/safe, no CRITICAL/HIGH) caught one MED: my
+  first-draft comment overclaimed that the #90 form was "ALSO broken the same way" as unverified fact —
+  `.GetCountry` DOES carry a MakeScope promote (a materially different chain from bare ROOT), so it may
+  have failed for a different reason. Corrected the comment to state this as a live possibility, not a
+  established mechanism, per the same "don't call unverified things proven" principle the fix itself is
+  about.
+- **Follow-up filed, NOT fixed now (out of this task's boot-confirmed scope)**: the review also flagged
+  `subject_add_to_customs_union_federation` (duplicated in `00_subject_rework_l_english.yml:97` and
+  `trade_actions_l_english.yml:57`) uses `[ROOT.GetCountry.MakeScope.GetVariable('member_of_federation')
+  ...]` — a DIFFERENT chain from the one just fixed, renders only in a subject-trade panel the boot log
+  never exercises, so absence-from-log is not evidence either way. Logged as a new task (#55) to verify
+  live rather than assumed broken.
+- **Commit**: `6d3d18d96`, pushed. **STATUS: DONE.**
