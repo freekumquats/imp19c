@@ -764,3 +764,33 @@
   beyond "investigate the border" — logged as follow-up **#56**, not actioned inline, per the
   no-scope-expansion discipline (same pattern as #54 during #23).
 - **Commit**: `151fe6481` (research digest only), pushed. **STATUS: DIAGNOSED, follow-up #56 filed.**
+
+### Task #52 — audit other backfilling-dispatch callers for #49's redraw hole — FIXED (11 sites, 1 CRITICAL missed on first pass)
+- Diagnosis: audited every live caller of `QING_office_vacate_dispatch` (the backfilling dispatcher whose
+  trailing `QING_council_autofill_office` redraws a replacement ranked by `combined_stats_council_svalue`,
+  with an exclusion list checking only `QING_char_hard_disgraced`/`qing_pending_trial`/`is_alive`). Any
+  punitive-removal option that applies only a loyalty/popularity penalty — or the `QING_char_taint`
+  `corrupt` trait, ALSO not on the exclusion list — leaves the just-vacated man fully eligible to be
+  redrawn straight back into the seat he was just punished for, silently undoing the option's effect.
+- First pass found and fixed 7 sites: `qing_office_events.txt` (qing_office.1.a "purge the grandee",
+  1.b "clip his wings", 9.b both branches "back the abler disputant", 10.a "break the clique", 10.b
+  "sacrifice the chief"), `qing_faction_events.txt` (qing_faction.3.a both branches "purge the smaller
+  bloc"), `se_QING_JUSTICE.txt` (`QING_justice_vindicate_appeal`). All swapped to the existing structural
+  twin `QING_office_vacate_dispatch_nobackfill` (identical per-office branch dispatch, minus the trailing
+  autofill call).
+- Code-review (dispatched) confirmed all 7 swaps correct AND found a CRITICAL scoping miss: the audit's
+  "grep confirmed these are ALL of them" was wrong — 4 more live buggy sites sat in
+  `qing_censorate_events.txt` (qing_censorate.1.c "punish the censor for insolence", 2.c "punish for
+  lèse-majesté" [taint-only, same non-excluded corrupt trait], 4.a "break the captured censorate", 4.c
+  "dissolve the censorate" [net-benign due to a trailing explicit re-vacate, but fragile — fixed for
+  robustness anyway]). Fixed all 4 the same way.
+- Second review pass (dispatched to verify the CRITICAL fix) confirmed: repo-wide grep now finds exactly
+  3 remaining live backfilling calls, all already correctly guarded (on_character_death: target dead;
+  `QING_censorate_impeach_uphold`: hard-disgraces first; `QING_justice_strip_for_trial`: stamps
+  `qing_pending_trial` first) — no other live call anywhere in the repo. Braces balanced across all 4
+  touched files. Confirmed qing_censorate.4.c's trailing `QING_office_vacate = { office = censor }`
+  unconditionally clears the seat regardless of dispatch-call order, so the office can never end up
+  un-vacated.
+- **Commit**: `1e93c2ede`, pushed. **STATUS: DONE** (11 sites fixed total; 3 pre-existing safe sites
+  confirmed and left unchanged; verified clean by a second independent review pass after the CRITICAL
+  was caught and fixed).
