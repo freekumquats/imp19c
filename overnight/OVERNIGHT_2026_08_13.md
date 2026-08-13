@@ -709,3 +709,29 @@
   only one" while displaying "1." Rewrote to "any beyond [laureate.GetName] enter the ranks of waiting
   graduates" — mechanism-neutral and degrades cleanly to "none beyond him" when N=1, no contradiction.
 - **Commit**: `ce82d111e`, pushed. **STATUS: DONE.**
+
+### Task #46 — Salt Gabelle event should reference the Salt Commissioner, not the Revenue minister — FIXED
+- Diagnosis: `qing_revenue.1` (the Salt Gabelle reform event) was written 2026-07-07, before the #44 Salt
+  Commissioner subsystem existed (se_QING_SALT.txt, added 2026-08-10) — a real, always-seated office with
+  its own corruption/finesse/squeeze meter feeding the STANDING quarterly 鹽課 income. The event was never
+  retargeted onto it: it scored (`QING_revenue_assess_fitness`) and portrayed the generic Grand Minister
+  of Revenue on a decision that is squarely the Commissioner's own domain. Confirmed real (a genuine
+  staleness gap from sequential feature addition, not a misdiagnosis).
+- Fix (5 files): added `QING_salt_assess_fitness` (se_QING_SALT.txt) mirroring the proven
+  `QING_revenue_assess_fitness` shape but reading the seated Commissioner; retargeted `qing_revenue.1`'s
+  trigger/scope/all-3-options onto `qing_salt_commissioner_holder`; matched the retargeted trigger in the
+  panel button (`QING_revenue_ministry_panel.txt`) and the AI pulse's offer-roll (`se_QING_REVENUE.txt`)
+  so neither claims the shared court-event slot for an event that would then fail its own trigger; updated
+  loc (`qing_revenue_l_english.yml`) to reference the Commissioner. Option B's corrupt-trait windfall now
+  correctly checks the man actually skimming the gabelle (previously checked the Revenue minister's trait
+  while paying the same character regardless).
+- Code-review (dispatched, verdict: sound, no CRITICAL/HIGH) caught one real MED: Option A's first draft
+  capped `qing_salt_squeeze` directly, but `QING_salt_reconcile` unconditionally re-mirrors that var from
+  the commissioner's REAL corruption stat every quarter — the cap would evaporate after one quarter,
+  overpromising the "durable cleanup" the comment claimed. Fixed by acting on his actual corruption stat
+  via `QING_char_corruption` (mirroring Option B's own idiom), so reconcile mirrors the reduction forward
+  durably. Also fixed a LOW: the pulse's offer-gate matched the event's `is_alive` check but not its
+  `employer = ROOT` clause — added for full parity so a non-ROOT-employer edge case can't still claim the
+  slot for a no-op. Left the panel's double-gate (both Revenue holder AND Commissioner) as-is per the
+  review's own read — a defensible design choice (narratively the Revenue Ministry panel), not a bug.
+- **Commit**: `2333c6164`, pushed. **STATUS: DONE.**
