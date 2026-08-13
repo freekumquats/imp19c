@@ -686,3 +686,26 @@
   mint net catches it correctly; left as-is since the LOW review verdict called it optional cleanup, not
   a defect.
 - **Commit**: `4286fdee3`, pushed. **STATUS: DONE.**
+
+### Task #44 — "Examination Convenes" says N graduates, Palace Examination only names one — FIXED
+- Diagnosis: `qing_keju.1`'s convene prompt shows `qing_keju_expected_grads` (computed by
+  `QING_keju_compute_convene`, se_QING_EXAM.txt), but the follow-up `qing_keju.2` (Palace Examination,
+  fired 60-150 days later) only ever names/confers a degree on the single `scope:laureate` in its desc
+  and both options. The REST of the cohort (hall-band civil extras, a banner Translation Laureate, a
+  martial graduate) IS actually seated — via `QING_exam_graduate_cohort`, called from both options inside
+  a `hidden_effect` — but with zero player-facing text acknowledging it. Judged a text/communication gap,
+  not a logic bug: the 1-named + N-pool-bound-extras split is the deliberate #114/#321 design.
+- Fix: added a sentence to `qing_keju.2.desc` restating the expected total via the same
+  `qing_keju_expected_grads` var qing_keju.1 already shows (proven `Player.MakeScope.GetVariable` form,
+  cross-checked against #40's fix earlier today — NOT the broken bare `ROOT.MakeScope`), and noting the
+  rest join the waiting-graduate ranks.
+- Code-review (dispatched) confirmed the var read is never stale (set once at convene, never cleared,
+  and the 60-150-day fire delay is far shorter than the ~3-year triennial cooldown so no cross-cycle
+  overwrite risk) and the `Player.MakeScope` form is correct — but caught a real MED wording overclaim in
+  my first draft: "join the hiring pool at once" is factually wrong for most of the cohort (conferred
+  juren extras never enter `qing_scholar_pool` at all per its own gate; banner/martial tracks are
+  explicitly NOT pool-related; only a freshly-MINTED civil graduate enters immediately). Also caught a
+  self-contradiction: at a war-shrunk network (expected=1) the original wording asserted "he is not the
+  only one" while displaying "1." Rewrote to "any beyond [laureate.GetName] enter the ranks of waiting
+  graduates" — mechanism-neutral and degrades cleanly to "none beyond him" when N=1, no contradiction.
+- **Commit**: `ce82d111e`, pushed. **STATUS: DONE.**
