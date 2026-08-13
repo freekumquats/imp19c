@@ -94,18 +94,33 @@ QING_household_mint_eunuch = {
 		set_home_country = ROOT
 		set_variable = { name = qing_is_palace_eunuch  value = 1 }
 		QING_post_stamp = { post = palace_eunuch }   # [#118]
-		# [B12 REVERTED — BOOT-CRASHFIX] The castrated trait grant is REMOVED, not relocated. This
-		# effect seeds 4 eunuchs at BOOT (on_game_initialized -> QING_household_init). At the last
-		# CLEAN boot (1f2881f5f) NO boot-reachable create_character inlined a HEALTH-type trait, and
-		# every proven inline trait on this branch is type=status (fanyi_jinshi/juren/jinshi). The
-		# `castrated` trait is type=health (fertility / support_for_character_as_heir modifiers applied
-		# on-add); adding it to a just-created character at gamestate construction — whether inside
-		# create_character OR in a follow-up scope (B12's original) — is the unproven construct here.
-		# The trait was pure flavour, so drop it to restore the exact eunuch mint that booted clean.
+		# [B12 REVERTED — BOOT-CRASHFIX, then fix #31 2026-08-13] The castrated trait grant was
+		# REMOVED here because this function ALSO mints the opening 4-eunuch corps at BOOT
+		# (on_game_initialized -> QING_household_init -> QING_household_seed_eunuchs), and
+		# `castrated` is type=health — adding a HEALTH trait at gamestate construction (inline or in
+		# a same-tick follow-up scope) is the proven boot-crash class. Instead, EVERY eunuch (boot-seeded
+		# or later runtime-minted) gets the trait backfilled from QING_household_pulse, every quarter
+		# (QING_household_backfill_eunuch_traits, below) — a call site well past construction, so the
+		# HEALTH trait grant is boot-safe there. Never grant it here, at construction.
 	}
 	add_to_variable_list = { name = qing_household_eunuchs  target = scope:qing_new_eunuch }
 	change_variable = { name = qing_eunuch_count  add = 1 }
 	LOG_line = { sys = QING  msg = "household: a eunuch enters the palace establishment for" }
+}
+
+# [fix #31 2026-08-13] QING_household_backfill_eunuch_traits — grant the castrated (太監) HEALTH
+# trait to every LIVING eunuch who does not yet carry it. Scope: COUNTRY (CHI). Called ONLY from
+# QING_household_pulse (every quarter, well past gamestate construction) — NEVER from
+# QING_household_init's own boot-time seed (the HEALTH-trait-at-boot crash class). Self-guarded
+# (has_trait check) so an already-traited eunuch, or a repeat call, is a clean no-op — never fight
+# the trait system, per the established idiom used for #103's `just` grant
+# (se_QING_ACCOUNTABILITY.txt:391).
+QING_household_backfill_eunuch_traits = {
+	every_in_list = {
+		variable = qing_household_eunuchs
+		limit = { is_alive = yes  NOT = { has_trait = castrated } }
+		add_trait = castrated
+	}
 }
 
 # QING_household_recompute_eunuchs — rebuild the eunuch roster fresh from the live
@@ -394,6 +409,12 @@ QING_household_pulse = {
 	QING_household_init = yes
 	# [boot #12] refresh the palace-eunuch roster (prunes the dead/departed, keeps the count honest).
 	QING_household_recompute_eunuchs = yes
+	# [fix #31 2026-08-13] backfill the castrated trait on every living eunuch who lacks it, every
+	# pulse — this runtime pulse is well past gamestate construction, so the HEALTH-trait grant that
+	# QING_household_mint_eunuch's own boot-time seed cannot safely do is safe here. Runs unconditionally
+	# (not gated behind the rare eunuch-faction roll below) so a seeded eunuch gets his trait promptly,
+	# not only if/when a faction happens to arise.
+	QING_household_backfill_eunuch_traits = yes
 	# [Batch 6 B1/B2 2026-07-25] compute the eunuch power signal + let it consume into the court.
 	QING_household_compute_eunuch_power = yes
 	QING_household_eunuch_consume = yes
