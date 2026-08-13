@@ -10,6 +10,12 @@
   when `qing_newworld_agriculture` fires — a guess below the golden-crop relief's `-10`, since that
   path is risk-gated and this one is deterministic. Boot-tune against pop logs. See
   design/DESIGN_88_POPULATION_UNIFICATION.md.
+- **#51 customs revenue rollup**: `qing_customs_income_last` publishes the PRE-currency-conversion
+  `thousands` input (~0-20/quarter), not the real post-peg treasury delta (~1000x larger) — a
+  deliberate scale choice to keep it comparable to the other 3 streams in the sum it joins, not a
+  literal ledger reconciliation. Boot-tune against econ logs; if customs visibly dominates or is
+  inert relative to salt/canton/caravan, retune the scale here, not the shared /4 divisor. See
+  design/DESIGN_51_CUSTOMS_REVENUE_PERF_ROLLUP.md.
 
 ## Task #49 — "A Minister Called to Account" duplicate effects — DONE
 - **What it was**: option `.b` visibly double-strips the same character's modifiers (character-
@@ -268,3 +274,40 @@
   subsystem, different scope than task #88 named).
 - **Commit**: `117468c54`, pushed.
 - **STATUS: DONE.**
+
+### Task #51 (4th piece) — Revenue perf rollup — DONE (2 adversarial review rounds, implemented)
+- **What it was**: 3 of #51's 4 named pieces (Customs IG title, Canton card, 1:1 rule) were already
+  done and committed earlier this session (`54cdd52ed`). Diagnosis (Explore agent) traced the 4th
+  ("Revenue perf rollup") to a specific, real gap: `QING_ministry_recompute_perf_revenue`'s term (g)
+  (#431, "TREASURY-INFLOW REWARD") sums three real revenue streams — salt, Canton, caravan — into the
+  Revenue Ministry's own performance score, specifically so a minister isn't punished because one
+  stream underperforms. Maritime Customs (shipped after #431) was never added, purely because the
+  subsystem didn't exist yet when #431 shipped — a missed-follow-up gap, not a deliberate exclusion.
+- **Design round 1 proposed a broken fix**: snapshot the REAL post-currency-conversion treasury delta
+  from the customs revenue grant (mirroring a cited "before/after diff" precedent) and fold that into
+  the existing sum. Adversarial review found this was a HIGH-severity defect the design never
+  checked: the real delta is ~1000x larger than the other three streams (a `CURRENCY_grant_country_
+  wealth` internal ×1000 scaling factor), so folding it in would permanently pin the Ministry's
+  performance term at its `+15` cap forever — the term would stop discriminating between a good and
+  bad minister at all, the opposite of #431's own stated intent. Review also found the cited
+  precedent (`se_SUBJECT_QING.txt:1213`) was misdescribed — it's a min-clamp, not a before/after diff
+  — so no real precedent for that pattern actually exists in this codebase.
+- **Fixed (round 2)**: publish the PRE-conversion `thousands` INPUT value directly instead (a single
+  unconditional `set_variable`, no snapshot, no diff, no branching) — this input (~0-20/quarter) sits
+  in the same order of magnitude as the three existing streams (combined ~0-60), even though it is
+  technically a different currency-scale number, not a literal tael count. A genuinely simpler fix
+  than round 1's, and it fixes the scale problem as a side effect. Second adversarial review round
+  independently re-verified the value range against all three sibling streams' own income
+  computations and found zero further issues — CLEAN, ready to implement.
+- **Implementation**: `se_QING_CUSTOMS.txt` (one new unconditional `set_variable` publishing
+  `qing_customs_income_last`, placed right after `qing_customs_revenue_tmp` is computed and before
+  the existing grant block — untouched); `se_QING_MINISTRY.txt` (one new guarded `has_variable`/
+  `change_variable add` line, identical shape to its three siblings, inside the existing sum).
+- **Review (implementation)**: code-review dispatched on the full diff — CLEAN, zero findings.
+  Verified brace balance, correct read-ordering (the tmp var is fully computed before the new publish
+  line reads it), correct position in the Ministry sum (before the `/4` divide and `+15` cap), zero
+  dangling references repo-wide, and confirmed the explicitly-out-of-scope Accountability metric
+  (`QING_acc_metric_treasury`, a separate "revenue" judgment system this design deliberately did not
+  touch) is genuinely untouched in the diff.
+- **Commit**: `0c04c6620`, pushed.
+- **STATUS: DONE. Task #51 (all 4 pieces) now fully complete.**
