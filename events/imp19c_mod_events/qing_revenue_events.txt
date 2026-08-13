@@ -9,9 +9,18 @@ namespace = qing_revenue
 # ======================================================================
 # qing_revenue.1 — REFORM THE SALT GABELLE (鹽政)
 # The salt monopoly is a vast revenue source, but the salt-merchant patronage
-# system is riddled with graft. The Revenue minister proposes reform: clean up
-# the monopoly (more revenue, upsets patronage networks, corruption down) or
-# milk it for short-term cash (corruption up, entrenched graft).
+# system is riddled with graft. The seated Salt Commissioner (兩淮鹽政) proposes
+# reform: clean up the monopoly (more revenue, upsets patronage networks,
+# corruption down) or milk it for short-term cash (corruption up, entrenched
+# graft).
+# [#46 2026-08-13] RETARGETED onto the Salt Commissioner. This event predates
+# the #44 Salt Commissioner subsystem (se_QING_SALT.txt, added weeks after this
+# event) and was never updated once that office existed — it scored and
+# portrayed the Grand Minister of Revenue (戶部), a domain generalist, on a
+# decision that is squarely the Commissioner's own (兩淮鹽政 is a real, always-
+# seated office with his own corruption/finesse/squeeze meter feeding the
+# standing 鹽課 income, se_QING_SALT.txt). Now reads/portrays the Commissioner
+# via QING_salt_assess_fitness (mirrors QING_revenue_assess_fitness's shape).
 # ======================================================================
 qing_revenue.1 = {
 	type = country_event
@@ -19,21 +28,20 @@ qing_revenue.1 = {
 	desc = "qing_revenue.1.desc"
 	picture = chinese_throne_room
 	left_portrait = root.current_ruler
-	right_portrait = scope:revenue_minister
+	right_portrait = scope:salt_commissioner
 
 	trigger = {
 		tag = CHI
-		has_variable = qing_office_revenue_holder
-		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+		has_variable = qing_salt_commissioner_holder
+		var:qing_salt_commissioner_holder = { is_alive = yes  employer = ROOT }
 		NOT = { has_variable = qing_salt_gabelle_reformed }
 	}
 
 	immediate = {
 		LOG_line = { sys = QING  msg = "EVENT qing_revenue.1 (salt gabelle reform) [ROOT.GetTag]" }
-		var:qing_office_revenue_holder = { save_scope_as = revenue_minister }
-		# assess the minister's fitness for fiscal oversight
-		set_variable = { name = qing_revenue_task  value = flag:oversight }
-		QING_revenue_assess_fitness = { task = oversight }
+		var:qing_salt_commissioner_holder = { save_scope_as = salt_commissioner }
+		# assess the seated commissioner's OWN fitness for the reform (his domain, his squeeze meter)
+		QING_salt_assess_fitness = yes
 	}
 
 	# OPTION A: reform the salt monopoly — honest revenue, upsetting patronage
@@ -41,19 +49,28 @@ qing_revenue.1 = {
 		name = "qing_revenue.1.a"
 		custom_tooltip = "qing_revenue.1.a.tt"
 		trigger = {
-			has_variable = qing_revenue_fitness
-			var:qing_revenue_fitness >= 50
+			has_variable = qing_salt_fitness
+			var:qing_salt_fitness >= 50
 		}
 		# clean up the gabelle: more revenue, corruption down
 		add_country_modifier = { name = qing_salt_gabelle_reformed_mod  duration = -1 }
 		set_variable = { name = qing_salt_gabelle_reformed  value = 1 }
 		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -8 }
-		# but upsetting the salt-merchant networks costs the minister loyalty
-		scope:revenue_minister = {
+		# but upsetting the salt-merchant networks costs the commissioner standing
+		scope:salt_commissioner = {
 			add_loyalty = loyalty_qing_estranged
 			QING_char_promote_standing = { pop = -10  prom = 5 }
+			# [#46 review-fix] the reform also cleans up the commissioner's OWN graft (his source of the
+			# squeeze meter that shaves the standing 鹽課 income, se_QING_SALT.txt). A direct set_variable
+			# on qing_salt_squeeze would have been erased next quarter by QING_salt_reconcile's own mirror
+			# (set_variable = { name = qing_salt_squeeze value = scope:qing_salt_seated.corruption }) — a
+			# one-quarter cosmetic effect only. Acting on his real CORRUPTION STAT instead (mirroring
+			# Option B's own QING_char_corruption use below) is durable: reconcile mirrors the REDUCED
+			# corruption into qing_salt_squeeze every quarter from here on, same idiom as the reform's
+			# realm-wide qing_corruption_level nudge above.
+			if = { limit = { corruption > 20 }  QING_char_corruption = { amount = -20 } }
 		}
-		LOG_line = { sys = QING  msg = "revenue: salt gabelle reformed (+income, -corruption, minister unpopular) for [ROOT.GetTag]" }
+		LOG_line = { sys = QING  msg = "revenue: salt gabelle reformed (+income, -corruption, commissioner unpopular) for [ROOT.GetTag]" }
 	}
 
 	# OPTION B: milk the monopoly — short-term cash, entrenched graft
@@ -65,10 +82,10 @@ qing_revenue.1 = {
 		# but corruption entrenches
 		add_country_modifier = { name = qing_salt_gabelle_graft  duration = 3650 }
 		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
-		# a venal minister benefits
+		# a venal commissioner benefits directly — he IS the man skimming the gabelle
 		if = {
-			limit = { scope:revenue_minister = { has_trait = corrupt } }
-			scope:revenue_minister = {
+			limit = { scope:salt_commissioner = { has_trait = corrupt } }
+			scope:salt_commissioner = {
 				add_gold = 25
 				QING_char_corruption = { amount = 10 }
 			}
@@ -76,17 +93,17 @@ qing_revenue.1 = {
 		LOG_line = { sys = QING  msg = "revenue: salt gabelle milked (+cash, +corruption) for [ROOT.GetTag]" }
 	}
 
-	# OPTION C: defer — no action (vacant or incapable minister outcome)
+	# OPTION C: defer — no action (unfit commissioner outcome)
 	option = {
 		name = "qing_revenue.1.c"
 		custom_tooltip = "qing_revenue.1.c.tt"
 		trigger = {
-			has_variable = qing_revenue_fitness
-			var:qing_revenue_fitness < 50
+			has_variable = qing_salt_fitness
+			var:qing_salt_fitness < 50
 		}
 		# status quo: the patronage system persists, modest graft continues
 		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 2 }
-		LOG_line = { sys = QING  msg = "revenue: salt gabelle reform deferred (minister unfit) for [ROOT.GetTag]" }
+		LOG_line = { sys = QING  msg = "revenue: salt gabelle reform deferred (commissioner unfit) for [ROOT.GetTag]" }
 	}
 }
 

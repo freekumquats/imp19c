@@ -262,3 +262,68 @@ QING_salt_commissioner_rotate = {
 	LOG_line = { sys = QING  msg = "salt: a fresh commissioner (兩淮鹽政) is sent to the salt yards for" }
 	LOG_exit = { sys = QING  fn = "QING_salt_commissioner_rotate"  result = OK }
 }
+
+# ======================================================================
+# [#46 2026-08-13] QING_salt_assess_fitness — the Salt Commissioner's own fitness for the salt-
+# gabelle reform dilemma (qing_revenue.1). Mirrors QING_revenue_assess_fitness's proven shape
+# (se_QING_REVENUE.txt) exactly, but reads the SEATED COMMISSIONER (qing_salt_commissioner_holder),
+# not the Grand Minister of Revenue — the gabelle is HIS domain (兩淮鹽政), not the 戶部's own. This
+# event predates the #44 Salt Commissioner subsystem (introduced weeks later) and was never
+# retargeted onto it; it kept scoring the Revenue minister's generic fitness even though a real,
+# always-seated commissioner with his own corruption/finesse/squeeze meter exists specifically for
+# this domain. Writes qing_salt_fitness (0..100, same clamp shape). Scope: country.
+# ======================================================================
+QING_salt_assess_fitness = {
+	LOG_enter = { sys = QING  fn = "QING_salt_assess_fitness" }
+	set_variable = { name = qing_salt_fitness  value = 50 }
+
+	if = {
+		limit = {
+			has_variable = qing_salt_commissioner_holder
+			var:qing_salt_commissioner_holder = { is_alive = yes  employer = ROOT }
+		}
+		var:qing_salt_commissioner_holder = {
+			# FINESSE is the core skill (the fiscal administrator's gift) — same weight as the Revenue helper.
+			ROOT = {
+				change_variable = { name = qing_salt_fitness  add = prev.finesse }
+				change_variable = { name = qing_salt_fitness  subtract = 5 }
+			}
+			# HONESTY vs CORRUPTION — same trait weights as QING_revenue_assess_fitness.
+			if = {
+				limit = { OR = { has_trait = honest  has_trait = just } }
+				ROOT = { change_variable = { name = qing_salt_fitness  add = 15 } }
+			}
+			if = {
+				limit = { has_trait = corrupt }
+				ROOT = { change_variable = { name = qing_salt_fitness  subtract = 20 } }
+			}
+			# NUMERIC corruption stat — reuses the commissioner's OWN squeeze source (his corruption
+			# stat, the same value QING_salt_reconcile mirrors into qing_salt_squeeze) rather than the
+			# generic qing_corruption_level the Revenue helper reads — the gabelle's own graft is the
+			# relevant signal for THIS man's fitness to reform it.
+			if = {
+				limit = { corruption >= 40 }
+				ROOT = { change_variable = { name = qing_salt_fitness  subtract = 15 } }
+			}
+			else_if = {
+				limit = { corruption >= 20 }
+				ROOT = { change_variable = { name = qing_salt_fitness  subtract = 8 } }
+			}
+			# LOYALTY — a disloyal commissioner won't act for the throne against his own patronage web.
+			if = {
+				limit = { loyalty < 40 }
+				ROOT = { change_variable = { name = qing_salt_fitness  subtract = 20 } }
+			}
+			else_if = {
+				limit = { loyalty >= 70 }
+				ROOT = { change_variable = { name = qing_salt_fitness  add = 10 } }
+			}
+		}
+	}
+	# clamp 0..100
+	if = { limit = { var:qing_salt_fitness > 100 }  set_variable = { name = qing_salt_fitness  value = 100 } }
+	if = { limit = { var:qing_salt_fitness < 0 }    set_variable = { name = qing_salt_fitness  value = 0 } }
+
+	LOG_line = { sys = QING  msg = "salt commissioner fitness (gabelle reform) = for" }
+	LOG_exit = { sys = QING  fn = "QING_salt_assess_fitness"  result = OK }
+}
