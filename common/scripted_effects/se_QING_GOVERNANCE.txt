@@ -205,7 +205,9 @@ QING_GOV_apply_exam_ladder_band = {
 # THE GOVERNANCE PULSE ENTRY POINT
 # Called from the throttled monthly pulse (00_monthly_country.txt) right after
 # the decline pulse, so the council recompute below sees fresh decline counters.
-# All O(1).
+# Mostly O(1); step 2a (admin loyalty re-apply) is O(states x provinces) and the
+# gated block below has its own heavier sweeps — all affordable at this CHI-only,
+# ~90-day-throttled cadence (see qing_mechanics_pulse_on_action).
 # ======================================================================
 QING_GOV_pulse = {
 	LOG_enter = { sys = QING  fn = "QING_GOV_pulse" }
@@ -248,6 +250,18 @@ QING_GOV_pulse = {
 	#    qing_bureau_reach_cache / qing_exam_reach_cache from scratch off the buildings.
 	QING_GOV_update_integrity = yes
 	QING_GOV_cache_reach = yes
+
+	# 2a. [#41 2026-08-13] re-apply the ADMIN_state_loyalty_from_province_drain/_gain state modifiers
+	#     (se_ADMIN.txt) so they track the state's LIVE provided/required admin capacity, not a stale
+	#     snapshot. Root cause: the only other refresh site (yearly_country_pulse, 00_yearly_country.txt)
+	#     is throttled to 730 DAYS because it walks EVERY country — a state could sit labelled
+	#     "Overstretched Administration" for up to ~2 years after the player built enough yamens/
+	#     districts to close the gap, even though the live Administrative Capacity report (which
+	#     computes ADMIN_provided_state/ADMIN_required_state fresh on open) already shows a surplus —
+	#     exactly the reported mismatch. QING_GOV_pulse is already CHI + human-only and ~90-day
+	#     throttled (qing_mechanics_pulse_on_action), so calling it here costs ONE country's
+	#     governorships, not the all-country walk that forced the 730-day throttle in the first place.
+	ADMIN_set_loyalty_impact_all_states = yes
 
 	# 3. re-apply every band
 	QING_council_apply_band = yes
