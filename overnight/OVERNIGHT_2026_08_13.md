@@ -543,3 +543,34 @@
   pattern. Review caught a real gap: Southern Study's cap is LAW-driven (4/8/12), and the first draft
   only added 8 rungs — fixed to 12 so the Broad Cabinet tier is reachable in one pulse too.
 - **Commit**: `cf5d49c7c`, pushed. **STATUS: DONE.**
+
+### Task #39 — Lifan Yuan "Replace amban" only shows for half the sitting ambans — CLOSED (no defect found; one unrelated bug fixed along the way)
+- Diagnosis: traced `qing_amban_manage_replace_button` (`SUB_QING_amban.txt:238+`) to its eligibility
+  gate `QING_amban_warrants_resident_trigger` (`qing_dynasty_triggers.txt:136-148`) — the same shared
+  trigger the Post button uses. Confirmed via `git show 1b9549d22` ("#34") that a prior commit already
+  fixed the EXACT bug class described here: an old culture-only inline test missed the two
+  Manchu-ruled `autonomous_governorship` posts (ILI/ULS), so Replace showed for the mongolic/bodish
+  subjects only — that commit re-aligned BOTH buttons to the shared trigger. That fix is present,
+  unchanged, in the current file.
+- Verified all 6 amban-hosting subjects (TIB/ILI/ULS/MKD/MNC/HLJ) independently satisfy the shared
+  trigger: TIB via `primary_culture = tibetan` (confirmed in the `bodish` culture group,
+  `00_bodish.txt:44`) and the other 5 via `subject_type = autonomous_governorship`
+  (`setup/main/00_default.txt`). No half-coverage in the trigger logic as currently written.
+- Checked the newest boot log (`~/Downloads/logs.zip`) — the manual replace picker fired successfully
+  twice in debug.log, consistent with the button currently working rather than being half-gated.
+- Could not reproduce the reported symptom in source. Verdict: **not a live defect in the current
+  codebase** — the bug class described was already fixed pre-session by #34's commit. Closing with no
+  further change to the Replace-button gating itself.
+- **Found while investigating (unrelated, but real and fixed)**: `qing_amban_events.txt:301` called
+  `LOG_fail = { sys = QING  fn = "qing_amban.6" }` with no `reason` argument. `LOG_fail`'s definition
+  (`se_LOG.txt:88-93`) references `$sys$ $fn$ $reason$` in its debug_log string — a missing required
+  macro param voids the WHOLE invocation at compile time (the established log-string-macro-rule
+  class), so this fail-branch's diagnostic logging was silently dead on every boot. Fixed by adding
+  `reason = "picked candidate no longer eligible or seat filled before the trampoline fired"`,
+  matching the convention used everywhere else (e.g. `se_QING_AMBAN.txt:161`). This does not touch
+  the Replace-button gating and is not believed to be the cause of #39's reported symptom — logged
+  separately per the no-untraced-assertion rule (found live, fixed live, not conflated with #39's
+  premise).
+- **Commit**: `259f01fb2`, pushed. **STATUS: CLOSED — #39's described symptom not reproducible in
+  current source (already fixed by prior commit 1b9549d22); one unrelated LOG_fail compile bug found
+  in the same file and fixed.**
