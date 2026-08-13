@@ -501,3 +501,45 @@
 - **Closed per user instruction** ("close this then") — same disposition as task #22 (#35): a
   correctly-identified hard block, not a defect to force through, closed rather than left spinning on
   a dependency this session cannot satisfy itself.
+
+### Task #35 — qing_personnel/qing_censorate missing localizations — DONE
+- Explore agent found 4 live, unlocalized modifiers (qing_personnel_cultivated_minor/major,
+  qing_censorate_oversight_minor/major, `00_from_events_character.txt`) applied every quarter by
+  `QING_council_apply_officer_buffs` — a capable Personnel Minister or Grand Inspector rendered the
+  raw key on a fellow councillor's tooltip. Found + fixed 2 same-pattern siblings in the same file
+  (`qing_grand_secretary_counsel_*`, `qing_guard_vitality_*`) in the same pass, per the audit's own
+  recommendation. Review found one LOW wording inaccuracy (Personnel's desc said "all council
+  members" when the holder actually excludes himself) — fixed.
+- **Commit**: `3c17f699f`, pushed. **STATUS: DONE.**
+
+### Task #37 — tie Crumbling Fortress event into the Ministry of Works — DONE (3 design review rounds)
+- `flavor_eve.8` is a generic, all-nations event with no `tag = CHI` gate. Round 1 of the design
+  caught a CRITICAL (a static `right_portrait` field would dangle for every non-Qing firing) and a
+  second CRITICAL (the cited dike-cost "finesse-discount factor" doesn't exist). Round 2's fix for
+  the first introduced a NEW dangling-scope bug one layer down (`scope:works_minister`, never saved).
+  Round 3 fixed both by acting directly on `var:qing_office_works_holder` with no scope save at all,
+  matching a proven precedent (`qing_household_events.txt:356`), and derived a real cost number from
+  the dike-cost tier ratio (175/220 ≈ 0.795 → -40 vs -50) instead of an invented constant.
+- Implementation: both options gain a CHI-gated `if`/`else` block entirely in the option body,
+  every non-CHI/vacant-seat case falls through to the exact original flat effects unchanged.
+  Code-review confirmed exactly one `add_treasury` call fires in all 4 possible cases (non-CHI,
+  vacant seat, weak minister, able minister) — the specific risk the design's own reviews flagged.
+- **Commit**: `02e2adc56`, pushed. **STATUS: DONE.**
+
+### Task #38 — confirm Southern/Upper Study fill mechanism, then FIX (user correction mid-session)
+- Diagnosis confirmed both studies' DRAW functions already correctly draw from the exam pool via
+  `QING_char_holds_court_position`'s canonical exclusion, matching every GC position's own idiom —
+  correctly reported as "no defect." **User corrected this reading**: the actual gap is that neither
+  study AUTOFILLS — both were capped at their boot-seed size (2 for Southern Study, 0 for Upper
+  Study) because their quarterly pulses had an autofill explicitly REMOVED on 2026-07-22, before the
+  #116/#118 structural 1:1 protections existed. Since both draw functions already carry those
+  protections (built after that removal), the original removal's safety concern no longer applies to
+  them specifically — reintroducing autofill here does not reproduce the double-booking bug that
+  removal was guarding against, and does not touch the separate #116 decision to keep GC OFFICES on
+  create_character.
+- Fixed: both quarterly pulses now call their own draw function repeatedly (each call self-guarded
+  on count<cap + a real candidate existing, so extra calls are cheap no-ops) — mirroring
+  `QING_subpost_staff_corps_minted`'s own "N rungs so the highest law tier is reachable in one pulse"
+  pattern. Review caught a real gap: Southern Study's cap is LAW-driven (4/8/12), and the first draft
+  only added 8 rungs — fixed to 12 so the Broad Cabinet tier is reachable in one pulse too.
+- **Commit**: `cf5d49c7c`, pushed. **STATUS: DONE.**
