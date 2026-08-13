@@ -2532,14 +2532,58 @@ GT_split_update_wealth_owed_for_tradegoods = {
 	# numerator's zero-stockpile case). Peg isolation unchanged: TZ_penetration_<zone> is read-only
 	# here and never read by the peg (CURRENCY_essentials_buying_power/country_unit_price's own setter,
 	# :2748-2762, is untouched and still reads the OLD aggregate for whatever else needs it).
-	change_variable = {
-		name = wealth_owed_for_$tradegood$
-		multiply = {
-			value = global_var:global_$tradezone$_tradezone.var:local_price_$tradegood$
-			min = 0.0001
-			divide = {
-				value = 0.5
-				add = owner.var:TZ_penetration_$tradezone$
+	# [fix, design/DESIGN_112_ZEROSTOCK_PRICE_GUARD.md, 2026-08-13] a zone with no stockpile has nothing
+	# to sell this quarter — no sale occurred, so no price should be charged. Without this guard,
+	# local_price_$tradegood$ is whatever GT_set_tradegood_price (:6006-6032) wrote when its OWN #107
+	# Div/0 guard (:6011-6014) skipped the divide-by-stockpile: the RAW, un-normalized order count, not
+	# a real price — and #112/#115's payment multiply below had no protection against that (their
+	# `min=0.0001` only floors the LOW side). Guard reuses the SAME condition GT_set_tradegood_price
+	# already uses for the identical variable pair, verbatim, not a new/invented check — confirmed a
+	# genuine top-level global (not scope-local), so this bare form resolves identically from this
+	# governorship scope as it does from GT_set_tradegood_price's tradezone-province scope. `local_price_
+	# $tradegood$` itself, and every one of its ~24 OTHER readers (the world-price blend at :2585-2745,
+	# the manufactured-goods raw-input pass in se_PRICE.txt, the purchase-spend path in se_PURCHASE.txt),
+	# are completely untouched by this fix — only THIS payment site is guarded.
+	if = {
+		limit = {
+			has_global_variable = $tradezone$_stockpile_$tradegood$
+			global_var:$tradezone$_stockpile_$tradegood$ > 0
+		}
+		change_variable = {
+			name = wealth_owed_for_$tradegood$
+			multiply = {
+				value = global_var:global_$tradezone$_tradezone.var:local_price_$tradegood$
+				min = 0.0001
+				divide = {
+					value = 0.5
+					add = owner.var:TZ_penetration_$tradezone$
+				}
+			}
+		}
+	}
+	else = {
+		# no stockpile to sell from in this zone this quarter -> no sale -> zero the payment, not skip
+		# the effect: order_size_modifier/power_trade_bonus multiplies below and the payment-pool adds
+		# still run on a correctly-zeroed wealth_owed, exactly like every other tradegood's code path.
+		change_variable = {
+			name = wealth_owed_for_$tradegood$
+			multiply = 0
+		}
+		# [design/DESIGN_112_ZEROSTOCK_PRICE_GUARD.md diagnostic] country-scope hit counter, reset
+		# quarterly by ECON_LOG_curx_zerostock_guard (se_ECON_LOG.txt) — confirms on the next boot that
+		# this branch actually fires (vs. the aggregate natexp/trout logging, which only shows the
+		# downstream effect, not that THIS guard specifically is what changed it).
+		# [code-review fix] init-guarded to match this codebase's own convention (e.g.
+		# QING_embassy_init/QING_sphere_reset_counters) — the reader removes this var every quarter,
+		# so the first hit each quarter is a cold add onto a just-removed var without this guard.
+		owner = {
+			if = {
+				limit = { NOT = { has_variable = ECON_LOG_zerostock_guard_hits } }
+				set_variable = { name = ECON_LOG_zerostock_guard_hits  value = 0 }
+			}
+			change_variable = {
+				name = ECON_LOG_zerostock_guard_hits
+				add = 1
 			}
 		}
 	}

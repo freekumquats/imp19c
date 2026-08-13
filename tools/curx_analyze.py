@@ -1,11 +1,23 @@
 #!/usr/bin/env python3
 # #23 — read the ENTIRE debug.log line by line (streaming) and reconstruct the full
-# per-quarter economy: the CHI currency chain (CURX) + every trade-zone silver
+# per-quarter economy: the CHI currency chain (CURX) + every trade-zone GOOD's
 # price/stock/order/pct (TZP). One pass, comprehensive picture. Read-only.
-import sys, re
+#
+# [2026-08-12] The TZP probe (se_ECON_LOG_TZPROBE.txt / tools/gen_econ_tzprobe.py) logs ALL 16 goods
+# across all 22 zones, not just silver -- this tool used to hard-code "silver" in its regex and silently
+# read only 1 of the 16 goods present in the log. Added --good (default silver, so old invocations are
+# unchanged) so any tracked good can be inspected the same way.
+import sys, re, argparse
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--good", default="silver", help="which TZP-tracked good to analyze (default: silver). "
+                 "One of: silver, gold, grain, salt, fish, tea, silk, silk_cloth, porcelain, gems, opium, "
+                 "coffee, sugar, spices, tobacco, chili (see tools/gen_econ_tzprobe.py GOODS list).")
+args = ap.parse_args()
+GOOD = args.good
 
 CHAIN = ["gbip","wvuraw","agsilver","wvuscaled","pen","ratio","ess","need","circ",
-         "rratio","agreserve","agdemand","defl","infl"]
+         "rratio","agreserve","agdemand","defl","infl","trout","deflmult","inflmult","natexp"]
 
 def band(v):
     return v.split(" (")[0].strip()
@@ -18,8 +30,8 @@ n_tzp = 0
 tzs = set()
 
 curx_re = re.compile(r'IMP19C CURX ([a-z_]+) (.+?)\s*$')
-tzp_re  = re.compile(r'IMP19C TZP BAND silver ([a-z_]+) (price|stock|order|pct) (.+?)\s*$')
-tzpg_re = re.compile(r'IMP19C TZP BAND silver GLOBAL (stock|gbip) (.+?)\s*$')
+tzp_re  = re.compile(rf'IMP19C TZP BAND {re.escape(GOOD)} ([a-z_]+) (price|stock|order|pct) (.+?)\s*$')
+tzpg_re = re.compile(rf'IMP19C TZP BAND {re.escape(GOOD)} GLOBAL (stock|gbip) (.+?)\s*$')
 mark_re = re.compile(r'IMP19C CURX QUARTER-MARK (PRE|POST)')
 # exact tick layer: LABEL sets current metric; each "unit" line = 1 tick; flag = state
 cxv_label_re = re.compile(r'IMP19C CURXV LABEL ([a-z_]+)')
@@ -46,7 +58,20 @@ for line in sys.stdin:
     if m:
         n_curx += 1
         met, val = m.group(1), band(m.group(2))
-        cur.setdefault("C_"+met, val)
+        # [2026-08-12] "trout" (CURRENCY_trade_wealth_outgoing_currency_value) logs TWO lines per
+        # quarter under the SAME tag ("SIGN = ..." then "abs ..."); the old setdefault kept only the
+        # first and silently dropped the magnitude. Store both under distinct keys so neither is lost.
+        # [I.11 2026-08-12] "natexp" (TRADE_national_expenditure, added to isolate #112/#115's numerator
+        # from wvuraw's divisor per the adversarial review's gap) has the identical SIGN/abs dual-line
+        # shape -- same fix.
+        if met in ("trout", "natexp"):
+            if val.startswith("SIGN"):
+                cur.setdefault(f"C_{met}_sign", val)
+            else:
+                cur.setdefault(f"C_{met}_abs", val)
+            cur.setdefault("C_"+met, val)  # keep old key too, for anything still reading it
+        else:
+            cur.setdefault("C_"+met, val)
         continue
     m = tzp_re.match(s)
     if m:
@@ -78,20 +103,31 @@ for line in sys.stdin:
         continue
 
 print(f"# lines read: {n_lines:,} | CURX matched: {n_curx:,} | TZP matched: {n_tzp:,} | quarter-marks: {len(quarters)}")
-print(f"# trade zones seen: {len(tzs)}")
+print(f"# trade zones seen: {len(tzs)} | good analyzed: {GOOD}")
+if GOOD not in ("silver", "gold"):
+    print(f"# NOTE: --good={GOOD} has NO exact-tick data (that CURXV/EXACT layer is metals-only, per")
+    print(f"#   tools/gen_econ_tzprobe.py's own scope note). Sections 1 and 2b below are ALWAYS the")
+    print(f"#   SILVER-only CHI currency chain (the CURX/CURXV tags carry no good name) -- they do NOT")
+    print(f"#   describe {GOOD}. Only the TZP-BAND sections (2, 2c onward) reflect --good={GOOD}.")
 print()
 
-# 1) CHI currency chain, every quarter in order
-print("=== CHI CURRENCY CHAIN (every PRE/POST snapshot, in order) ===")
-cols = ["gbip","agsilver","wvuraw","wvuscaled","pen","ratio","ess","defl","infl"]
-print("idx ph  | " + " | ".join(c.ljust(11) for c in cols))
+# 1) CHI currency chain, every quarter in order (ALWAYS silver -- CURX/CURXV tags carry no good name)
+print("=== CHI CURRENCY CHAIN (silver-only; every PRE/POST snapshot, in order) ===")
+cols = ["gbip","agsilver","wvuraw","wvuscaled","pen","ratio","ess","need","defl","infl"]
+print("idx ph  | " + " | ".join(c.ljust(11) for c in cols) + " | trout(sign|abs) | natexp(sign|abs)")
 for i,(ph,d) in enumerate(quarters):
     row = " | ".join(d.get("C_"+c,"?")[:11].ljust(11) for c in cols)
-    print(f"{i:3d} {ph:4}| {row}")
+    tsign = d.get("C_trout_sign","?").replace("SIGN = ","")[:16]
+    tabs = d.get("C_trout_abs","?")
+    # [I.11 2026-08-12] natexp = TRADE_national_expenditure, trout's un-divided numerator; printed
+    # alongside trout so a PRE/POST row shows both operands of trout = natexp / wvuraw / 4 at once.
+    nsign = d.get("C_natexp_sign","?").replace("SIGN = ","")[:16]
+    nabs = d.get("C_natexp_abs","?")
+    print(f"{i:3d} {ph:4}| {row} | {tsign} | {tabs} | {nsign} | {nabs}")
 
 # 2) Producer TZ price/stock/order, POST snapshots, in order
 print()
-print("=== SILVER by TRADE ZONE (POST snapshots): price | stock | order ===")
+print(f"=== {GOOD.upper()} by TRADE ZONE (POST snapshots): price | stock | order ===")
 posts = [d for ph,d in quarters if ph=="POST"]
 for tz in sorted(tzs):
     seq = []
@@ -104,12 +140,20 @@ for tz in sorted(tzs):
         for j,x in enumerate(seq):
             print(f"   q{j:2d} POST  {x}")
 
-# 2b) EXACT values from the CURXV tick layer (value = ticks / SCALE)
-SCALE = {"ratio":1000,"agsilver":5000,"ess":1,"need":500,"circ":10,
-         "wvuscaled":5000,"gbip":2000,"pen":2000}
+# 2b) EXACT values from the CURXV tick layer (value = ticks / SCALE) -- ALWAYS silver, see note above.
+# [I.11 2026-08-12] wvuraw/natexp added. The probe stages natexp's tick count as round(value * 0.0002)
+# (scaled DOWN, since natexp runs into the millions); value = ticks / 0.0002, so SCALE["natexp"]=0.0002
+# here too -- this dict is always "value = ticks / SCALE[metric]", matching the probe's own scale literal.
+# [I.14 2026-08-12] need's scale changed 500->50 in se_ECON_LOG.txt (the old /500 hit the 8000-tick cap
+# at need>=16.0 on 17/29 quarters -- an adversarial review flagged this as making need's true magnitude
+# unmeasurable/circular). poptick (country_population, x0.001) and wealthgen (x0.0002, same money-unit
+# scale as natexp) added to close the population and shared-divisor confounds the same review raised.
+SCALE = {"ratio":1000,"agsilver":5000,"ess":1,"need":50,"circ":10,
+         "wvuscaled":5000,"gbip":2000,"pen":2000,"wvuraw":500,"natexp":0.0002,
+         "poptick":0.001,"wealthgen":0.0002}
 print()
-print("=== EXACT VALUES (CURXV tick-count / scale), every snapshot in order ===")
-exact_cols = ["gbip","agsilver","wvuscaled","pen","ratio","ess","need","circ"]
+print("=== EXACT VALUES (silver-only CURXV tick-count / scale), every snapshot in order ===")
+exact_cols = ["gbip","agsilver","wvuscaled","pen","ratio","ess","need","circ","wvuraw","natexp","poptick","wealthgen"]
 print("idx ph  | " + " | ".join(c.ljust(12) for c in exact_cols))
 for i,(ph,d) in enumerate(quarters):
     cells=[]
@@ -124,9 +168,9 @@ for i,(ph,d) in enumerate(quarters):
             cells.append("?".ljust(12))
     print(f"{i:3d} {ph:4}| " + " | ".join(cells))
 
-# 2c) GLOBAL gbip + global stock per quarter
+# 2c) GLOBAL gbip + global stock per quarter (per --good; the probe emits a GLOBAL block for every good)
 print()
-print("=== GLOBAL silver: gbip band + global stock band per snapshot ===")
+print(f"=== GLOBAL {GOOD}: gbip band + global stock band per snapshot ===")
 for i,(ph,d) in enumerate(quarters):
     print(f"{i:3d} {ph:4}| gbip={d.get('GLOBAL.gbip','?'):15} globalstock={d.get('GLOBAL.stock','?')}")
 
@@ -146,8 +190,9 @@ def midband(b):
     try: return float(b)
     except: return 0.0
 
+gbip_note = "" if GOOD in ("silver","gold") else f" (gbip row below is SILVER's exact value, not {GOOD}'s -- no exact tick exists for {GOOD})"
 print()
-print("=== gbip CONTRIBUTION by zone (price_mid × pct_mid), POST quarters — who moves gbip²? ===")
+print(f"=== {GOOD} gbip-shape CONTRIBUTION by zone (price_mid × pct_mid), POST quarters{gbip_note} ===")
 zones = sorted(tzs)
 # header
 print("zone".ljust(20) + " | " + " ".join(f"q{j:02d}" for j in range(len(posts))))
@@ -163,29 +208,30 @@ for tz in zones:
     if max(row) > 0.001:
         print(tz.ljust(20) + " | " + " ".join(f"{x:5.2f}" for x in row))
 print("-"*60)
-print("Σ price×share".ljust(20) + " | " + " ".join(f"{x:5.2f}" for x in tot))
-print("sqrt(Σ)=gbip pred".ljust(20) + " | " + " ".join(f"{x**0.5:5.2f}" for x in tot))
-print("gbip actual (exact)".ljust(20) + " | " + " ".join(
+print(f"Σ price×share [{GOOD}]".ljust(20) + " | " + " ".join(f"{x:5.2f}" for x in tot))
+print(f"sqrt(Σ)=gbip pred[{GOOD}]".ljust(20) + " | " + " ".join(f"{x**0.5:5.2f}" for x in tot))
+print("gbip actual (silver, exact)".ljust(20) + " | " + " ".join(
     (f"{quarters[2*j+1][1].get('V_gbip',0)/2000:5.3f}" if 2*j+1 < len(quarters) else "  ?  ") for j in range(len(posts))))
 
 # 2e) DECISIVE: gbip² = 0.6·Σorder/global_stock (stock cancels in price×share). Track the two aggregates.
+# NOTE: Σorder/global_stock below are for --good=GOOD; "gbip_actual" is ALWAYS silver's exact tick (see note above).
 print()
-print("=== AGGREGATE test: Σorder vs global_stock vs actual gbip (POST) ===")
-print("q   | Σorder_mid | globalstock_mid | Σord/gstk | 0.6*ratio | sqrt() | gbip_actual")
+print(f"=== AGGREGATE test [{GOOD}]: Σorder vs global_stock vs SILVER's actual gbip (POST){gbip_note} ===")
+print("q   | Σorder_mid | globalstock_mid | Σord/gstk | 0.6*ratio | sqrt() | gbip_actual(silver)")
 for j,d in enumerate(posts):
     sord=sum(midband(d.get(f"{tz}.order","0")) for tz in zones)
     gstk=midband(d.get("GLOBAL.stock","0"))
     ratio=(sord/gstk) if gstk>0 else 0.0
     pred=0.6*ratio
-    # gbip actual from chain exact tick (POST snapshot = quarters[2j+1])
+    # gbip actual from chain exact tick (POST snapshot = quarters[2j+1]) -- always silver, see note above
     ga = quarters[2*j+1][1].get("V_gbip",0)/2000 if 2*j+1<len(quarters) else 0
     print(f"q{j:02d} | {sord:9.1f} | {gstk:14.1f} | {ratio:8.3f} | {pred:8.3f} | {pred**0.5:5.3f} | {ga:.4f}")
 
 # 2f) RAW per-TZ ORDER bands, POST, aligned to gbip hi/lo — does Σorder actually collapse?
 print()
-print("=== RAW ORDER bands per TZ (POST), with gbip actual on each quarter — is order ~0 on low-gbip q? ===")
+print(f"=== RAW ORDER bands per TZ [{GOOD}] (POST), with SILVER's gbip actual on each quarter{gbip_note} ===")
 ga_row = [ (quarters[2*j+1][1].get('V_gbip',0)/2000 if 2*j+1<len(quarters) else 0) for j in range(len(posts)) ]
-print("gbip:".ljust(20) + " | " + " ".join((f"{g:.3f}" if g>=0.05 else "  ~0 ") for g in ga_row))
+print("gbip(silver):".ljust(20) + " | " + " ".join((f"{g:.3f}" if g>=0.05 else "  ~0 ") for g in ga_row))
 print("-"*60)
 for tz in sorted(tzs):
     cells=[]

@@ -426,6 +426,59 @@ ECON_LOG_curx_trout = {
 	remove_variable = ECON_LOG_cx_mag
 }
 
+# --- [I.11 2026-08-12] trout's own NUMERATOR, un-divided by wealth_value_1_unit. Audit §I.11 found
+# trout = TRADE_national_expenditure / CURRENCY_wealth_value_1_unit / 4 conflates two separate
+# candidate movers (the #112/#115 payment-price numerator vs. the wealth-per-unit divisor) into one
+# already-divided number, so a swing in trout cannot be attributed to either side without logging
+# them separately. This emitter isolates the raw numerator BEFORE that divide. Bands mirror trout's
+# money-magnitude ladder (same units, pre-division so typically larger). ---
+ECON_LOG_curx_natexp = {
+	# Scope: country. TRADE_national_expenditure — the numerator #112/#115 write into via
+	# wealth_owed_for_$tradegood$ -> trade_expenses_due_* (se_GLOBALTRADE_split.txt:2498-2577).
+	if = { limit = { NOT = { has_variable = TRADE_national_expenditure } }  debug_log = "IMP19C CURX natexp = UNSET" }
+	else = {
+		set_variable = { name = ECON_LOG_cx_mag  value = var:TRADE_national_expenditure }
+		if = {
+			limit = { var:ECON_LOG_cx_mag > -999999999 }
+			if = { limit = { var:ECON_LOG_cx_mag < 0 } debug_log = "IMP19C CURX natexp SIGN = NEGATIVE (inflow)" }
+			else = { debug_log = "IMP19C CURX natexp SIGN = POSITIVE (outflow)" }
+			set_variable = { name = ECON_LOG_cx_mag2  value = var:ECON_LOG_cx_mag }
+			if = { limit = { var:ECON_LOG_cx_mag2 < 0 }  change_variable = { name = ECON_LOG_cx_mag2  multiply = -1 } }
+			if = { limit = { var:ECON_LOG_cx_mag2 >= 20000000 }    debug_log = "IMP19C CURX natexp abs >= 20M" }
+			else_if = { limit = { var:ECON_LOG_cx_mag2 >= 5000000 }  debug_log = "IMP19C CURX natexp abs 5-20M" }
+			else_if = { limit = { var:ECON_LOG_cx_mag2 >= 1000000 }  debug_log = "IMP19C CURX natexp abs 1-5M" }
+			else_if = { limit = { var:ECON_LOG_cx_mag2 >= 500000 }   debug_log = "IMP19C CURX natexp abs 500k-1M" }
+			else_if = { limit = { var:ECON_LOG_cx_mag2 >= 100000 }   debug_log = "IMP19C CURX natexp abs 100-500k" }
+			else_if = { limit = { var:ECON_LOG_cx_mag2 >= 10000 }    debug_log = "IMP19C CURX natexp abs 10-100k" }
+			else_if = { limit = { var:ECON_LOG_cx_mag2 >= 0 }        debug_log = "IMP19C CURX natexp abs 0-10k" }
+			remove_variable = ECON_LOG_cx_mag2
+		}
+		else = { debug_log = "IMP19C CURX natexp = EMPTY (set-but-empty)" }
+		remove_variable = ECON_LOG_cx_mag
+	}
+}
+
+# --- [design/DESIGN_112_ZEROSTOCK_PRICE_GUARD.md 2026-08-13] confirms the new zero-stockpile payment
+# guard (se_GLOBALTRADE_split.txt, GT_split_update_wealth_owed_for_tradegoods) actually FIRES, not just
+# that natexp/trout changed for some other reason. ECON_LOG_zerostock_guard_hits is incremented once per
+# governorship×tradegood×category-pass this quarter the guard's else-branch runs (the payment-site code
+# itself, not here); this emitter reads the country-scope total back and resets it for the next quarter.
+# Per-quarter, not per-call, to avoid the exact log-flood class #106/#107/#108 already fixed elsewhere. ---
+ECON_LOG_curx_zerostock_guard = {
+	# Scope: country (CHI, guarded by the callers above)
+	if = { limit = { NOT = { has_variable = ECON_LOG_zerostock_guard_hits } }  debug_log = "IMP19C CURX zerostockhits = UNSET (guard never ran this quarter)" }
+	else = {
+		set_variable = { name = ECON_LOG_cx_mag  value = var:ECON_LOG_zerostock_guard_hits }
+		if = { limit = { var:ECON_LOG_cx_mag <= 0 }        debug_log = "IMP19C CURX zerostockhits = 0" }
+		else_if = { limit = { var:ECON_LOG_cx_mag < 10 }   debug_log = "IMP19C CURX zerostockhits 1-10" }
+		else_if = { limit = { var:ECON_LOG_cx_mag < 50 }   debug_log = "IMP19C CURX zerostockhits 10-50" }
+		else_if = { limit = { var:ECON_LOG_cx_mag < 200 }  debug_log = "IMP19C CURX zerostockhits 50-200" }
+		else = { debug_log = "IMP19C CURX zerostockhits >= 200" }
+		remove_variable = ECON_LOG_cx_mag
+		remove_variable = ECON_LOG_zerostock_guard_hits
+	}
+}
+
 # ======================================================================
 # [#23 DENOMINATOR-DECOMPOSITION probe, 2026-08-08] The code-trace (a6e9aec55c) found the ratio
 # swing is DENOMINATOR-driven (private_cash_needed explodes), and its dominant term
@@ -594,6 +647,8 @@ ECON_LOG_curx_chain = {
 	ECON_LOG_curx_mag_circ = yes  # NUMERATOR: money supply
 	ECON_LOG_curx_mag_defl_needed = yes  # DENOMINATOR: private_cash_needed
 	ECON_LOG_curx_trout = yes     # DENOM INPUT + #53: trade money out of circulation
+	ECON_LOG_curx_natexp = yes    # [I.11] trout's own un-divided numerator (isolates #112/#115 vs. wvuraw)
+	ECON_LOG_curx_zerostock_guard = yes  # [design/DESIGN_112_ZEROSTOCK_PRICE_GUARD.md] confirms the fix fires
 	# [#23 denominator-decomposition 2026-08-08] the 6 internals of private_cash_needed the code-trace
 	# flagged as un-logged — to confirm whether essentials is pinned at the 32000 cap and which term swings it.
 	ECON_LOG_curx_essentials = yes   # cost of living (the key denominator term; watch for = 32000 AT CAP)
@@ -638,8 +693,10 @@ ECON_LOG_curx_chain = {
 # between the "IMP19C CURX QUARTER-MARK" lines), exact value of metric M = (count of "IMP19C CURXV unit"
 # lines AFTER "LABEL M" and BEFORE the next LABEL) / SCALE(M). Example awk:
 #   awk '/CURXV LABEL ratio/{f=1;n=0} /CURXV LABEL agsilver/{if(f)print "ratio="n/1000;f=0} f&&/CURXV unit/{n++}'
-# SCALE per metric:  ratio /1000 · agsilver /5000 · ess /1 · need /500 · circ /10 · wvuscaled /5000 ·
-#   gbip /2000 · pen /2000.  Cap = 8000 ticks/metric ("flag CAPPED" => scale that metric down further).
+# SCALE per metric:  ratio /1000 · agsilver /5000 · ess /1 · need /50 [rescaled I.14, was /500] · circ /10 ·
+#   wvuscaled /5000 · gbip /2000 · pen /2000 · wvuraw /500 · natexp x0.0002 [I.11] · poptick x0.001 ·
+#   wealthgen x0.0002 [I.14].
+#   Cap = 8000 ticks/metric ("flag CAPPED" => scale that metric down further).
 # "flag ZERO"/"flag EMPTY" => value 0 / set-but-empty. Coarse bands below remain as cross-check + eyeball.
 # (debug_log CANNOT render a number in effect context — this boot proved the [ROOT.GetTag] bracket prints
 # LITERALLY as "ERROR:[ROOT.GetTag]" with zero promote errors — so the value is the unit-tick COUNT, not
@@ -709,9 +766,14 @@ ECON_LOG_curx_exact = {
 	set_variable = { name = ECON_LOG_tickval  value = CURRENCY_essentials_buying_power }
 	set_variable = { name = ECON_LOG_tickscale  value = 1 }
 	ECON_LOG_curx_tick_emit = yes
-	debug_log = "IMP19C CURXV LABEL need"   # /500  range ~0.064..8.8 -> 32..4400
+	# [I.14 adversarial review 2026-08-12] scale /500 hit the 8000-tick CAP (need >= 16.0) on 17 of 29
+	# quarters in the Aug-12 log — the true value on those quarters was UNKNOWN, only ">=16", which made
+	# every "need's swing is >=Nx" argument built on this data circular (a censored ceiling can't be
+	# compared against anything). Rescaled to /50 (10x more headroom: 8000/50 = 160 before re-capping)
+	# so the next boot can actually read need's magnitude past the old ceiling.
+	debug_log = "IMP19C CURXV LABEL need"   # /50  range widened 10x vs prior scale to escape the 16.0 cap
 	set_variable = { name = ECON_LOG_tickval  value = CURRENCY_private_cash_needed }
-	set_variable = { name = ECON_LOG_tickscale  value = 500 }
+	set_variable = { name = ECON_LOG_tickscale  value = 50 }
 	ECON_LOG_curx_tick_emit = yes
 	debug_log = "IMP19C CURXV LABEL circ"   # /10  range ~491 -> ~4910
 	set_variable = { name = ECON_LOG_tickval  value = CURRENCY_amt_circulated_scaled }
@@ -730,6 +792,41 @@ ECON_LOG_curx_exact = {
 	if = { limit = { has_variable = country_global_market_penetration_silver }  set_variable = { name = ECON_LOG_tickval  value = var:country_global_market_penetration_silver } }
 	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
 	set_variable = { name = ECON_LOG_tickscale  value = 2000 }
+	ECON_LOG_curx_tick_emit = yes
+	# [I.11 2026-08-12] the two operands of trout = TRADE_national_expenditure / wealth_value_1_unit / 4,
+	# EXACT (not band-only) so a swing in trout can be attributed to one operand, not both at once.
+	# §I.11 found wvuraw's coarse band (">= 1", unbounded) pinned flat for the whole boot — this exact
+	# tick either confirms that flatness precisely or reveals a sub-band move the coarse ladder missed.
+	debug_log = "IMP19C CURXV LABEL wvuraw"   # /500  range ~0.002..16 -> 1..8000 (unscaled peg, pre-reserve)
+	set_variable = { name = ECON_LOG_tickval  value = CURRENCY_wealth_value_1_unit }
+	set_variable = { name = ECON_LOG_tickscale  value = 500 }
+	ECON_LOG_curx_tick_emit = yes
+	debug_log = "IMP19C CURXV LABEL natexp"   # x0.0002  natexp runs into the millions (band probe above
+	# shows up to >=20M); scaled DOWN (not up) so the 8000-tick cap isn't hit on every quarter — 20M x
+	# 0.0002 = 4000 ticks, well inside the cap, while still resolving quarter-to-quarter magnitude moves.
+	if = { limit = { has_variable = TRADE_national_expenditure }  set_variable = { name = ECON_LOG_tickval  value = var:TRADE_national_expenditure } }
+	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
+	set_variable = { name = ECON_LOG_tickscale  value = 0.0002 }
+	ECON_LOG_curx_tick_emit = yes
+	# [I.14 adversarial review 2026-08-12] `need`'s first term is `ess * country_population / 4000` —
+	# TWO factors, not one. Every prior probe in this chain (I.6-I.14) logged `ess` alone and never
+	# logged `country_population`, so a population change (governorship gain/loss, growth tick, subject
+	# integration) between two snapshots was structurally indistinguishable from a real ess-held-constant
+	# control -- the review flagged this as blocking any "ess held constant -> need's swing must be
+	# something else" inference. Logged here to close that gap on the next boot.
+	debug_log = "IMP19C CURXV LABEL poptick"   # x0.001  country_population runs into the millions of pops
+	# country_population is a bare engine script_value (read directly, never var:-prefixed — confirmed
+	# proven usage at se_QING_POPULATION.txt:85, `limit = { country_population > 0 }`), not a stored var.
+	set_variable = { name = ECON_LOG_tickval  value = country_population }
+	set_variable = { name = ECON_LOG_tickscale  value = 0.001 }
+	ECON_LOG_curx_tick_emit = yes
+	# [I.14 adversarial review 2026-08-12] `wealth_generated` (need's ADDED third term) divides by the
+	# SAME `CURRENCY_wealth_value_1_unit` divisor as `trout` (CURRENCY_svalues.txt:739 vs :967) -- a
+	# shared-divisor confound identical to the one that refuted I.13. Logging it exact here so a swing
+	# in `need` can be attributed to trout specifically, not to this term riding the same divisor.
+	debug_log = "IMP19C CURXV LABEL wealthgen"   # x0.0002  same money-unit scale as natexp
+	set_variable = { name = ECON_LOG_tickval  value = CURRENCY_wealth_generated_country_as_currency_value }
+	set_variable = { name = ECON_LOG_tickscale  value = 0.0002 }
 	ECON_LOG_curx_tick_emit = yes
 	debug_log = "IMP19C CURXV LABEL end"
 }
@@ -779,7 +876,12 @@ ECON_LOG_curx_wvu_raw = {
 	if = { limit = { NOT = { has_variable = ECON_LOG_cx_mag } }        debug_log = "IMP19C CURX wvuraw = UNSET" }
 	else_if = {
 		limit = { var:ECON_LOG_cx_mag > -999999999 }
-		if = { limit = { var:ECON_LOG_cx_mag >= 1 }        debug_log = "IMP19C CURX wvuraw >= 1" }
+		# [I.11 2026-08-12] the old top band (">= 1", unbounded above) could not tell 1 from 50 apart —
+		# exactly the resolution needed to settle whether this divisor (not #112/#115's price numerator)
+		# is the real mover of trout. Added two finer high bands; unbounded top now starts at >=100.
+		if = { limit = { var:ECON_LOG_cx_mag >= 100 }      debug_log = "IMP19C CURX wvuraw >= 100" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 10 }  debug_log = "IMP19C CURX wvuraw 10-100" }
+		else_if = { limit = { var:ECON_LOG_cx_mag >= 1 }   debug_log = "IMP19C CURX wvuraw 1-10" }
 		else_if = { limit = { var:ECON_LOG_cx_mag >= 0.5 } debug_log = "IMP19C CURX wvuraw 0.5-1" }
 		else_if = { limit = { var:ECON_LOG_cx_mag >= 0.1 } debug_log = "IMP19C CURX wvuraw 0.1-0.5" }
 		else_if = { limit = { var:ECON_LOG_cx_mag >= 0.01 } debug_log = "IMP19C CURX wvuraw 0.01-0.1" }

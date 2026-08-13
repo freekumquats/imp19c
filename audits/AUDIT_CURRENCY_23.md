@@ -973,3 +973,752 @@ This is the §F.2 "measure, don't assume" residual — a boot-tunable, not a blo
     geographic; survives conquest correctly (a province's price follows its ZONE, not its owner's nationality).
 (c) NO bleed: proven H.1+H.3 — peg reads country_unit_price (untouched); pool feeds only seller income.
 Residual: H.4 total-income magnitude (measure on boot). Design doc = design/DESIGN_REGIONAL_PRICE_INDEX.md next.
+
+## I. (2026-08-12) — NEW BUG, post-#112/#115: economy PINNED at flat -10% deflation (not oscillating)
+
+Boot-test finding (fresh session). NOT the old §A/§C period-2 oscillation (that stays fixed — the #23 sqrt
+repair is confirmed intact, se_ECON_functional.txt:56-102, recurrence y=param/x, count=12, unchanged). This is
+a DIFFERENT, NEW symptom: `CURRENCY_amt_circulated_deflation` sits flat near its own formula ceiling every
+quarter, no flip back to inflation.
+
+### I.1 — REFRAME (the -10% number itself is not informative)
+`CURRENCY_amt_circulated_deflation` = `(1 - ratio)` floored at 0.001, then `÷10` (CURRENCY_svalues.txt:1157-
+1171). This expression only APPROACHES 0.10 as `ratio -> 0`. A flat reading near -10% means
+`CURRENCY_private_cash_ratio` is pinned NEAR ZERO, not merely below 1. The real question is why the ratio
+collapsed to ~0 and stayed there — not "why -10%."
+
+### I.2 — FIRST HYPOTHESIS (mine), WRONG — killed by user-corrected timeline + math, kept here as a graveyard entry
+I proposed: commit 75f25152a ("Revert 50 penetration cap-lift 0.7 -> 0.4545") pushed the system into deflation,
+since it landed after the user's last-known-good boot and inside the same commit range separating the two
+sessions.
+**REFUTED, two ways:**
+- **Timeline:** `0.4545` is the long-standing PRE-#50 vanilla value (§F/§F.3) — it was already active during
+  the OLD, since-fixed oscillation era, long before this session. A value that predates the symptom's first
+  appearance cannot be what newly caused it. Restoring an old baseline is not a new perturbation.
+- **Magnitude:** even taking the mechanism at face value, `pen` only ranges ~0.07-0.20 (§F). Reverting
+  0.7->0.4545 moves `(0.5+pen)` by at most a few percent. That cannot drag `ratio` from its healthy range down
+  to ~0. The effect is real in DIRECTION (smaller pen -> smaller divisor -> higher price -> more deflationary
+  pressure, confirmed by a second independent read) but three orders of magnitude too small to be the driver.
+**Do not re-propose #50/penetration-shrink as the cause of THIS bug.** Add to the graveyard (§B).
+
+### I.3 — LEADING CANDIDATE (unconfirmed, needs the check §H.4 already called for and never ran)
+§H already proved (H.1-H.3) that #112/#115's payment-site change (`wealth_owed_for_$good$` now multiplies by
+the paying zone's `local_price` instead of the national `country_unit_price`) does NOT bleed into the peg's
+PRICE anchor (`country_unit_price`/`essentials_buying_power` are untouched, confirmed by direct consumer
+enumeration). §H.4 explicitly flagged a SEPARATE, NOT-YET-MEASURED consequence: because buyers now pay
+per-zone prices instead of one national average, **the TOTAL size of the payment pool changes** — and that
+total, unlike the price anchor, DOES reach the currency ratio through a path §H never traced:
+- `TRADE_national_expenditure` (TRADE_svalues.txt:4412) sums, over every governorship,
+  `final_quarterly_trade_expenses_due_resource_extraction` + `final_quarterly_trade_expenses_due_manufacturing`
+  — the SNAPSHOTTED totals of the exact `wealth_owed_for_$good$` values #112/#115 changed the formula for.
+- `TRADE_national_expenditure` feeds `CURRENCY_private_cash_needed` (CURRENCY_svalues.txt:727-728, subtracted)
+  AND `CURRENCY_trade_wealth_outgoing_currency_value` (:949-968), which feeds `CURRENCY_amt_circulated_balance`
+  (:973-993) — the MONTHLY update to the circulating-cash stock itself (`CURRENCY_amt_circulated_thousands`,
+  se_CURRENCY.txt:1408-1416).
+So a shift in total trade-expenditure size from #112/#115 has TWO live paths into the ratio: it can shrink the
+numerator (circulating cash, via the monthly balance update) AND grow the denominator (private_cash_needed)
+simultaneously — either alone would depress the ratio; together they compound. This is exactly the "total-
+income magnitude" effect §H.4 named as a residual and said must be MEASURED, not assumed, before this design
+could be called fully clear. That measurement was never done.
+**NOT YET CONFIRMED.** No boot-instrumented numbers exist for `TRADE_national_expenditure`,
+`CURRENCY_private_cash_needed`, or `CURRENCY_amt_circulated_thousands` pre/post #112/#115 to prove the size or
+even the sign of this effect. This is the leading lead, not a diagnosis.
+
+### I.4 — SECOND CANDIDATE (unconfirmed, lower confidence) — MONSTD_reconcile
+Commit 821b9b73e (#75, Monetary Standard law group) added a NEW recurring monthly effect, `MONSTD_reconcile`
+(se_MONSTD.txt), which can flip a country's currency `backing_type` (gold/silver/bimetallic) when it diverges
+from the held law. A flip changes which metal's `country_unit_price` feeds `CURRENCY_essentials_buying_power`
+(cost of living) via `CURRENCY_update_backing_value` (se_CURRENCY.txt:1956+). This is a genuinely NEW,
+currency-touching, monthly-recurring mechanism absent from the last-known-good boot's code state — structurally
+capable of sustaining a persistent shift if a country's backing flips (or keeps flipping) into a metal whose
+price basis is unfavorable. NOT traced in depth; not ruled in or out. Lower priority than §I.3 pending that
+measurement, since #75 fires only on an actual law/backing MISMATCH (one-time correction per mismatch), while
+§I.3's path runs every quarter unconditionally.
+
+### I.5 — NEXT STEP (not yet done)
+Add targeted se_ECON_LOG lines for `TRADE_national_expenditure`, `CURRENCY_private_cash_needed`,
+`CURRENCY_amt_circulated_thousands`, and `CURRENCY_private_cash_ratio` (none of these are currently traced by
+any existing probe — confirmed by grep, zero hits in either boot's debug.log for `private_cash` or
+`circulated_deflation`), then boot and read actual values. Until then §I.3/§I.4 remain candidates, not a cause.
+No fix attempted.
+
+### I.6 (2026-08-12) — NEW DIAGNOSIS, run against the fresh Aug-12 log with `tools/curx_analyze.py`
+
+The tool this audit already built (`tools/curx_analyze.py`) reads the CURX/CURXV/TZP tags. It still works.
+Ran it against the fresh boot log (Aug 12, 18:43, 4.79M lines, 522 CURX ticks, 29 quarter-marks). This is
+the first time in Section I that a real trace, not a guess, was checked. No fix made. Facts only, below.
+
+**FACT 1 — the ratio never crosses back to a high state.** The CHI CURRENCY CHAIN table (all 29 PRE/POST
+snapshots) shows `ratio` at `0.01-0.10` on 22 of 29 rows, dips to `< 0.01` on 3 rows, and rises only to
+`0.25-0.50` on 2 rows (idx 6-7). It NEVER reaches the old bug's State A band (`>= 1.50`, per §A). `infl`
+reads `= 0` on EVERY row. This confirms the user's report exactly: the system is not oscillating, it sits
+in one low band, with two small dips even lower and one small partial recovery that still falls short of
+inflation territory.
+
+**FACT 2 — `gbip` (the value the #23 sqrt fix targets) is STABLE, not swinging.** The gbip-reconstruction
+table shows `gbip actual (exact)` at 0.76 on quarter 0, then 0.35-0.41 for all 13 remaining quarters — a
+tight, flat band. Compare this to the OLD bug (§C.7/§C.8): a ~250x rail-to-rail swing every quarter
+(0.003 to 0.88). This log shows NO such swing. **This proves the #23 sqrt fix is still working.** The old
+mechanism is not back. This matches the user's own correction: this is a new bug, not the old one returning.
+
+**FACT 3 — `agsilver` (country_unit_price_silver) also settles low and stays there.** It reads `>= 1` only
+on the first 2 rows, then drops to `0.5-1` and stays there for the remaining 26 rows. It does not recover.
+Per §A's own consistency check (`agsilver` follows `gbip`), a lower stable `gbip` naturally gives a lower
+stable `agsilver` — consistent, not a new anomaly on its own.
+
+**FACT 4 — `pen` (penetration) sits inside the range §F already measured, RULING OUT §I.2 again by direct
+observation, not just by the earlier math argument.** `pen` moves from `0-0.1` to `0.1-0.5` at snapshot 3
+and stays there. §F's own two-boot diff measured `pen` at 0.07-0.20 in both of ITS boots (before and after
+the #50 lift). This fresh log's `pen` band overlaps that same range. It is not spiking, not collapsing, and
+not behaving differently from prior boots. §I.2's refutation stands, now confirmed by a THIRD boot's data,
+not just arithmetic.
+
+**WHAT THIS MEANS:** the low, flat `gbip`/`agsilver` band is not an active oscillation, and it is not being
+pushed low by `pen`. The remaining candidates from §I.3/§I.4 (the #112/#115 total-trade-expenditure path,
+and the #75 MONSTD_reconcile backing-flip path) are UNCHANGED by this pass — this log does not carry the
+`TRADE_national_expenditure` / `private_cash_needed` / `amt_circulated_thousands` tags (confirmed again by
+direct grep on this log, zero hits, matching §I.5's earlier finding on the other two logs). So this pass
+answers "is the OLD bug back" (NO) and "is the #50 revert the cause" (NO, confirmed a third way), but does
+NOT yet answer "what is holding gbip/agsilver at this new, lower flat level instead of the old flat level."
+
+**STATUS: §I.2 REFUTED a third time (timeline, math, AND now direct log observation — safe to fully retire).
+§I.3/§I.4 remain the live candidates, still unconfirmed. The missing piece is exactly what §I.5 already
+named: log `TRADE_national_expenditure`, `CURRENCY_private_cash_needed`, `CURRENCY_amt_circulated_thousands`
+directly — the existing CURX/TZP tags do not cover them. No fix attempted.**
+
+### I.7 — SELF-REVIEW of §I.6 (2026-08-12) — attacking my own new facts before calling them a diagnosis
+
+This diagnosis is NOT yet complete. It only rules two things OUT (the old oscillation, the #50 revert). It
+does not name a confirmed cause for the new flat floor. Checking my own work before handing it forward:
+
+1. **Did I mistake "gbip is flat" for "gbip is fine"?** No — I did not claim the CURRENT flat gbip level is
+   correct or healthy. §A's own acceptance criteria (top of this doc) says `private_cash_ratio` should rest
+   NEAR 1 in a well-run economy. This log's ratio sits at 0.01-0.10 nearly the whole game. That is still a
+   bug by the doc's own stated bar — I am only saying it is a DIFFERENT bug shape (flat-low, not
+   oscillating) than the one §C-§D fixed.
+2. **Is my "gbip stable -> old bug not back" claim actually solid?** Yes, on this data: the old bug's own
+   signature (§C.7, exact ticks) was gbip toggling between ~0.003 and ~0.88 EVERY quarter. This log shows
+   13 of 14 quarters within 0.35-0.41 of each other — far tighter than the old swing, and never touching the
+   old bug's near-zero rail (lowest gbip value in this log is 0.35, not 0.003). This is a real, checkable
+   difference, not a band-resolution illusion — the tool prints exact CURXV values, not just bands, for gbip.
+3. **Could the low-but-flat gbip level itself just be the correct, INTENDED level, and the real bug live
+   entirely downstream (in `need`/`private_cash_needed`, matching §I.3's trade-expenditure lead)?** This is
+   the honest open question. I have NOT measured `private_cash_needed` or `TRADE_national_expenditure`
+   directly in this pass — I only confirmed gbip/agsilver/pen are NOT the movers. §I.3's candidate is
+   therefore still standing, unweakened and unconfirmed, exactly as before this pass. I am not overclaiming
+   it as proven.
+4. **Did I check enough of the log, or just the CHI-scope tags?** The CHI CURX tags are CHI-scoped by design
+   (§C.1's own caveat). This pass does not add producer-side or non-CHI evidence. That caveat from the OLD
+   bug still applies in principle, but it is less relevant here because FACT 2 already shows the mechanism
+   the old bug needed (a swinging gbip) is simply absent now — there is no swing left to localize to a
+   producer zone. I am not claiming the caveat is resolved, only that it does not block THIS pass's narrower
+   conclusion (ruling out the OLD bug's return).
+
+**VERDICT of self-review: FACTS 1-4 hold up. The two negative conclusions (not the old bug; not the #50
+revert) are now confirmed by direct log data, not just prior arithmetic. The positive cause (§I.3's
+trade-expenditure path, or something else entirely feeding `private_cash_needed`) is still unconfirmed and
+requires the targeted log lines §I.5 already specified. This is the honest state of the diagnosis. No fix
+attempted, per standing instruction to hold until the mechanism is proven.**
+
+### I.8 (2026-08-12) — tool widened to all 22 zones x 16 goods; new finding + a real, named BLIND SPOT
+
+User asked for full per-good, per-zone logging. Checked what exists: `common/scripted_effects/
+se_ECON_LOG_TZPROBE.txt` (generated by `tools/gen_econ_tzprobe.py`) already logs 22 zones x 16 goods
+(silver, gold, grain, salt, fish, tea, silk, silk_cloth, porcelain, gems, opium, coffee, sugar, spices,
+tobacco, chili) — full coverage already exists in the LOG. The gap was in `tools/curx_analyze.py`, which
+hard-coded a silver-only regex and silently read only 1 of the 16 goods present. Added `--good <name>`
+(default silver, old behaviour unchanged) so any tracked good can be read the same way. Saved as memory
+`imp19c-curx-analyze-tool`.
+
+**Checked every good the widened tool can reach against §H.1's exact list of the 12 goods that actually
+feed `CURRENCY_essentials_buying_power`** (grain, livestock, fish, vegetables, temperate_fruit,
+processed_foods, clothing, furniture, pharmaceuticals, alcohol, luxury_clothing, luxury_furniture — the
+cost-of-living sum that drives `CURRENCY_private_cash_needed` -> the ratio). Result: **the probe's 16
+tracked goods overlap the peg's 12 goods in only 2 places: `grain` and `fish`.** The other 10 goods that
+directly set cost of living (`livestock`, `vegetables`, `temperate_fruit`, `processed_foods`, `clothing`,
+`furniture`, `pharmaceuticals`, `alcohol`, `luxury_clothing`, `luxury_furniture`) have **zero** per-zone
+visibility in any existing log or tool. This is a real, confirmed blind spot, not a guess.
+
+**Checked the 2 goods that ARE both tracked and peg-relevant:** `grain` is cheap and stable in every zone,
+including China's own (yellow_sea, upper_yangtzi) — not a driver. `fish` is small, stable, and contributes
+almost nothing to its own world-price sum (Σ price×share ~0.1-0.6, far below spices' ~1-9) — not a driver.
+**Both peg-relevant goods I can actually see are healthy.** This weakens (does not disprove) any theory
+that blames the everyday cost-of-living basket broadly, and sharpens the open question to: is the driver
+hiding in one of the 10 UNCHECKED peg goods, or genuinely in the trade-expenditure path (§I.3), or in
+`MONSTD_reconcile` (§I.4)?
+
+**A real, checkable side-finding while widening the tool (kept for the record, NOT claimed as the cause of
+THIS bug since spices is not a peg input): `spices` in `yellow_sea` (a China-adjacent zone) shows a
+genuine, non-band-resolution price spike** — price climbs from band `0.1-1` (q0) through `10-100` (q7),
+`100-1000` (q9), to `1000-10000` (q13) while stock collapses `10-100` -> `0-0.01` over the same window.
+Unlike silver's §E.5 refutation (where an empty zone's SHARE also collapses to ~0, weighting the spike
+OUT of the world sum), yellow_sea's spice CONTRIBUTION (price_mid x pct_mid) does NOT collapse — it
+actually PEAKS at 2.75 (the single highest value anywhere in the whole 22-zone table) at q9-11, meaning
+its share did NOT fall proportionally as its stock fell. This shows the §E.5 mechanism ("empty zones
+always weight themselves out") is NOT universal across goods — it can fail for a good/zone pair where
+that zone holds a large enough fraction of a small enough global pool. Real, but spices does not feed
+the currency peg, so this is a candidate MECHANISM (worth remembering if any of the 10 unchecked peg
+goods shows the same shape), not a proven cause of the current deflation floor.
+
+**STATUS: blind spot named and now on record. To close it, `tools/gen_econ_tzprobe.py`'s GOODS list would
+need the 10 missing peg goods added (a real, mechanical extension of an existing generator — not new
+design) and a fresh boot taken. That boot has not been requested or taken. No fix attempted on any game
+file. §I.3/§I.4 remain the standing candidates; this pass narrows but does not close the question.**
+
+### I.9 (2026-08-12) — SELF-REVIEW CORRECTIONS, three real errors found and fixed. `need` was ALREADY measured.
+
+An adversarial review of I.6-I.8 found three real problems. All three checked and confirmed true by
+re-reading the same log directly. Corrections below; nothing in I.6-I.8 is deleted, this section fixes it.
+
+**ERROR 1 (the important one) — I said `CURRENCY_private_cash_needed` was unmeasured. IT IS ALREADY
+MEASURED.** I.5/I.6/I.8 all say "no boot-instrumented numbers exist for `CURRENCY_private_cash_needed`,"
+confirmed by "grep, zero hits for `private_cash`." The grep was for the wrong STRING. The tool's own
+EXACT VALUES table already prints a `need` column every quarter, and `need` IS
+`CURRENCY_private_cash_needed` (§A's own naming; confirmed numerically: `ratio = circ×0.004/need`, e.g.
+idx0: 125×0.004/5.796 = 0.086, matching the printed ratio exactly). I searched for a STRING
+(`private_cash`) instead of recognizing the TAG (`need`) already carries the value. This is exactly the
+project's own standing "hypothesis-grep, not full read" trap.
+
+**What the recovered `need` values actually show (from the same log, re-read directly):**
+```
+idx | need        | ess (cost-of-living)
+  0 | 5.796       | 20
+  1 | 6.978       | 32
+  6 | 1.76        | 64
+  7 | 1.914       | 76
+ 10 | 12.64       | 87
+ 11 | 11.99       | 40
+ 20 | 10.99       | 34
+```
+and roughly HALF the quarters print `16!CAPPED` (the tool's exact-tick counter saturates at 16 — the true
+value is higher, not exactly 16). `ess` stays inside a 20-87 band the WHOLE game (~4x spread at most).
+`need` swings from ~2 up through a repeatedly-capped 16+ — a much bigger swing than `ess` alone can cause.
+**`need`'s own formula (CURRENCY_svalues.txt:719-731) is:**
+`need = ((ess × country_population) / 4000 − CURRENCY_trade_wealth_outgoing_currency_value +
+CURRENCY_wealth_generated_country_as_currency_value) / 2000`
+Since `ess` only moves ~4x and `need` moves far more than that (and repeatedly saturates the logger),
+**the mover is one of the OTHER three terms** — `country_population`, `CURRENCY_trade_wealth_outgoing_
+currency_value` (the exact term §I.3 already named, sourced from `TRADE_national_expenditure`), or
+`CURRENCY_wealth_generated_country_as_currency_value`. This is now a narrowed, three-way question with
+real numbers behind it, not a guess. **This directly strengthens §I.3** (the trade-expenditure path was
+already the leading candidate; it is now the correct explanation for a number I can show is actually
+moving, not just a plausible story).
+
+**ERROR 2 — miscounted rows in Fact 1.** I said ratio dips to `&lt;0.01` on 3 rows. Re-checked against the
+exact-tick table above: idx 4 (0.006), 5 (0.006), 26 (0.009), 27 (0.009), 28 (0.002) — that is **5** rows,
+not 3. (22+5+2=29, matching the total; my original 22+3+2=27 did not even sum to 29 — a check I should
+have run at the time and didn't.) Corrected here; does not change the conclusion, only the count.
+
+**ERROR 3 — the spices/yellow_sea "share does not collapse" claim in I.8 does NOT survive.** The 2.75
+contribution figure is `midband("100-1000") × midband("0-0.01") = 550 × 0.005`, an arithmetic product of
+two BAND MIDPOINTS, not a real reading — spices has no exact-tick layer at all (metals-only, confirmed in
+`gen_econ_tzprobe.py`). The share band `0-0.01` is consistent with a true share anywhere from ~0.0001
+(genuinely near-zero, matching §E.5) to ~0.0099 (not near-zero) — the midpoint approximation cannot tell
+these apart, and asserting a mechanism from it is exactly this document's own catalogued Section-B
+mistake ("assert from bands where exact numbers were needed"). Also: by q13, when stock fully collapses,
+the contribution DOES drop to `0.00` — i.e. the share eventually DOES hit zero, which is §E.5's mechanism
+working, not failing. **RETRACTED. §E.5 (empty zones weight themselves out of the world sum) stands,
+un-contradicted, for every good including spices.** The remaining, correctly-hedged part of I.8 (the
+2-of-12 peg-good coverage gap) is unaffected by this retraction and still stands — it did not depend on
+the spices claim.
+
+**Also corrected: Fact 2's "gbip is stable → proves the sqrt fix is working" overstated what flatness can
+prove.** A flat gbip only rules out the OLD symptom (rail-to-rail oscillation); it cannot, by itself,
+distinguish "correct sqrt on a stable input" from "still-broken sqrt on an input that happens to sit
+below 1.0 every quarter this game" (the broken sqrt returns its input UNCHANGED, not rooted, whenever
+that input is below 1 — see §C.8). The stronger, correct basis for "the old bug is not back" is that the
+sqrt SOURCE is unchanged (`se_ECON_functional.txt:56-102`, checked directly, matches the D-FIX.IMPL text)
+combined with the flat log — source-plus-log together, not the log alone. Restating: "the old bug is not
+back" still holds; "this proves the fix is working" was overclaimed and is corrected to "consistent with
+the fix still working, corroborated by the log."
+
+**STATUS: §I.3 (TRADE_national_expenditure path) is now the STRONGEST standing candidate, not merely the
+"leading, unconfirmed" one — `need`'s own already-measured swing (not merely `ess`) is consistent with a
+term other than cost-of-living driving it, and `TRADE_national_expenditure` is the only one of the three
+remaining candidate terms this document has already traced end-to-end (§I.3). §I.4 (MONSTD_reconcile)
+remains a live but untraced second candidate. NEXT: log `CURRENCY_trade_wealth_outgoing_currency_value`,
+`country_population`, and `CURRENCY_wealth_generated_country_as_currency_value` directly (the three
+un-decomposed terms of `need`) to see which of the three actually moves — `need` itself no longer needs
+a new probe, it is already in hand. No fix attempted on any game file.
+
+### I.10 (2026-08-12) — DIAGNOSIS: §I.4 (MONSTD) ruled out by log; #112/#115's regional-price rewrite is the
+### confirmed cause. Root: a per-zone `local_price` floored at 0.0001 lets an empty-stockpile zone's price
+### spike by orders of magnitude, and that spike now feeds the trade-expenditure term inside `need`.
+
+**Method, per direct instruction:** narrow the commit search to ONLY files that can touch `need`'s three
+formula terms (`CURRENCY_svalues.txt`, `se_CURRENCY.txt`, `WEALTH_svalues.txt`,
+`on_action/economy/*.txt`), read every one of the resulting commits, rule each in/out on the CODE, then
+cross-check the survivor against the real log. Five commits touched that narrow file set:
+
+```
+821b9b73e 75: implement Monetary Standard law group (59 Tier C) + reconciler
+80c0a4c83 Revert "106: seed shipping_<zone> vars to 0 ..."
+434ee3841 106: seed shipping_<zone> vars to 0 ...
+a62300015 74: sell-degrees (捐納) yields silver — fallback grant in CURRENCY_grant_country_wealth
+2de48741e 102: raise treasury cap 99999 -> 9999999
+```
+
+**#74 (a62300015) — RULED OUT.** Diff only touches `CURRENCY_grant_country_wealth`'s rare one-time
+fallback-grant else-branch. Does not touch `need`'s formula at all.
+
+**#102 (2de48741e) — RULED OUT.** Diff raises `MAXIMUM_GOLD` and the paper-money-law branch of
+`CURRENCY_minting_rate_cap`, plus 4 unrelated debt-issue GUI gates. Does not touch `need`'s formula.
+
+**#106 (434ee3841) and its revert (80c0a4c83) — RULED OUT.** Both versions only add/remove
+`SHIPPING_seed_zone_defaults` (seeds 22 `shipping_<zone>` vars to 0 to kill unset-var log noise). Grepped
+the whole repo for `shipping_<zone>`'s only consumer, `SHIPPING_svalues.txt` — it is not read by
+`TRADE_national_expenditure`, `WEALTH_total_new_generated_governorship`, or any term of `need`. No path in.
+
+**#75 (821b9b73e, Monetary Standard law group) — RULED OUT BY THE LOG, not just by code.** This was §I.4's
+long-standing "second candidate," on the theory that `MONSTD_reconcile` flipping a country's
+`backing_type` changes `CURRENCY_wealth_value_1_unit`, which is the divisor of BOTH remaining `need` terms
+— a real mechanism, worth checking directly rather than dismissing on priors. The log resolves it: grepped
+`logs/debug.log` for `MONSTD_reconcile`'s own LOG_enter/LOG_exit pair — it fires every month, every
+country, exactly as designed (confirmed running). But grepped for its OWN callee's log line,
+`MONSTD_switch_backing`'s `LOG_line = "monetary standard: switching..."` — **zero hits in the entire
+boot.** The reconciler ran every month and never once found a mismatch to act on (every country's held law
+already matches its seeded `backing_type` the whole game, exactly as `MONSTD_seed_starting_law` intends).
+The mechanism is real but **inert this boot** — `backing_type` never changes, so `CURRENCY_wealth_value_1_unit`
+never changes for this reason. #75 is not the cause of THIS symptom.
+
+**All 5 commits in the narrow file set are now ruled out.** Per the same instruction ("most of the changes
+did not touch this specific part of the code"), this means the driver is not a change to `need`'s own
+formula — it is a change to one of `need`'s two DOWNSTREAM input terms:
+`CURRENCY_trade_wealth_outgoing_currency_value` (reads `TRADE_national_expenditure`) or
+`CURRENCY_wealth_generated_country_as_currency_value`. Traced `TRADE_national_expenditure`
+(`TRADE_svalues.txt:4412`) down to its real source: it sums, per governorship,
+`final_quarterly_trade_expenses_due_resource_extraction` + `..._due_manufacturing`, which in turn are
+quarterly snapshots of `trade_expenses_due_$category$` — the running total that
+`GT_split_scale_wealth_owed_and_order_size_tradegood` feeds from `wealth_owed_for_$tradegood$`.
+**`wealth_owed_for_$tradegood$` is set by `GT_split_update_wealth_owed_for_tradegoods`
+(`se_GLOBALTRADE_split.txt:2498`) — exactly the effect two commits outside the narrow file set rewrote:**
+
+```
+2b7142977 112: regional import pricing — pay the paying zone's local_price, not the national average
+7663239b1 115: regional import price "both" model -- per-zone penetration denominator
+```
+
+**#112 replaced** `multiply = owner.var:country_unit_price_$tradegood$` (one national price per country,
+computed by `country_unit_price`'s own formula, `min = 0.0001` on the WORLD-AGGREGATE `global_base_import_
+price`) **with** `multiply = { value = global_var:global_$tradezone$_tradezone.var:local_price_$tradegood$
+min = 0.0001 divide = { 0.5 + penetration } }` — a PER-ZONE `local_price`, `min`-floored at 0.0001
+INDIVIDUALLY per zone rather than after a 22-zone blend. #112's own commit message explicitly names the
+mechanism and flags it as unresolved: *"the §E zero-stockpile SILVER zones (upper_yangtzi/yellow_sea)
+price undivided → order-scale spike re-exposed here; measured on boot."* #115 layered a per-zone
+penetration denominator on top (same shape, same floor behavior), not a new mechanism.
+
+**`local_price_$tradegood$` (`se_GLOBALTRADE_split.txt:6000-6032`, `GT_set_tradegood_price`) is**
+`order_size / stockpile` (guarded `has_global_variable` + `>0`, ELSE the divide is skipped and price =
+raw order size — i.e. UNDIVIDED) `× 0.6`. **A zone with zero stockpile and nonzero orders never divides —
+its price is the raw order count itself, not a normalized ratio.** Confirmed directly in the log
+(`unzip -p logs.zip logs/debug.log`, `IMP19C TZP BAND silver upper_yangtzi/yellow_sea`):
+
+- `upper_yangtzi`: `stock 0`, `order 1-10` at q0 (price then `10-100`, i.e. price ≈ raw order, undivided) —
+  the exact zero-stockpile state #112 flagged.
+- `yellow_sea`: `stock 0`, `order 10-100` at q0 (price `10-100`); after stock recovers (`100-1000`+),
+  order stays `10-100`+ but price DROPS to `0.01-0.1` — an order-of-magnitude-plus swing between the
+  undivided (zero-stock) state and the divided (stocked) state, for the exact reason #112's own comment
+  predicted.
+
+This is the concrete mechanism reaching `need`: a zone briefly at zero stockpile prices at its raw,
+undivided order count (can be 10-1000+×), gets paid at that price by `GT_split_update_wealth_owed_for_
+tradegoods` (multiplying `wealth_owed_for_$tradegood$` by this spiked `local_price`), which feeds
+`trade_expenses_due_resource_extraction/manufacturing` → `TRADE_national_expenditure` →
+`CURRENCY_trade_wealth_outgoing_currency_value` → `need`. `trout` (the log tag for this term) is measured
+NEGATIVE (inflow-signed) every single one of 29 quarters with a magnitude band that itself swings across
+three orders of magnitude (`0-10k` / `10-100k` / `100-500k`) over the game — consistent with a spike-driven
+term, though `trout`'s own band resolution (no exact-tick layer exists for it) cannot pin the swing to
+THIS mechanism to the same certainty as the ruled-out commits were ruled out. This is presented as the
+strongest traced mechanism given what's measurable, not as visually confirmed exact-value proof.
+
+**Why this produces persistent (not oscillating) ~-10% deflation specifically:** `CURRENCY_amt_circulated_
+deflation = (1 - private_cash_ratio)`, floored `min=0.001`, `divide=10` — structurally capped at ~10%
+regardless of how far below 1 the ratio falls. §I.6/§I.9 already established `ratio` is pinned near-zero
+most quarters (`ratio` exact values: 0.086, 0.071, 0.03, 0.013, 0.006, 0.006, ...0.024, 0.038 — never once
+recovering near 1 after q0). A `need` inflated by episodic zero-stockpile price spikes (rather than
+oscillating, since #112/#115 apply every quarter, not periodically) pins the ratio persistently low —
+matching the reported symptom exactly (persistent -10%, not the old rail-to-rail oscillation).
+
+**STATUS (superseded by I.11 below): #112/#115 named as leading suspect, pending adversarial review.**
+§I.3/§I.4 are resolved: §I.3's `TRADE_national_expenditure` path was correct as the channel; §I.4's
+`MONSTD_reconcile` mechanism is real but inert this boot (ruled out by direct log evidence, not by
+priors). No fix attempted on any game file.
+
+### I.11 (2026-08-12) — ADVERSARIAL REVIEW of I.10: mechanism CONFIRMED, "confirmed cause" label
+### RETRACTED. Numerator-vs-divisor question unresolved; magnitude never measured.
+
+An adversarial code-review agent checked I.10 point-by-point against the code, git history, and log.
+**Everything mechanical in I.10 held up**: the full formula chain (payment → expenses →
+`TRADE_national_expenditure` → `trade_wealth_outgoing` → `need` → `ratio` → deflation cap) is real and
+file:line-verified; the #112/#115 diffs match; the zero-stockpile undivided-price behavior in
+`GT_set_tradegood_price` is exactly as described; #75/MONSTD is correctly ruled out by log (0 hits on
+`MONSTD_switch_backing`'s own log line against 61,400 `MONSTD_reconcile` entries); the file-set search for
+alternative `need`-term movers was complete (`WEALTH_svalues.txt` had zero commits in range;
+`country_population` is engine-provided, not moddable). The review also confirmed I.10 does NOT repeat the
+§I.9 band-midpoint-multiplication mistake — it reads the price and stock bands separately, not as a
+fabricated product.
+
+**But three real gaps mean "confirmed cause" overclaimed what was shown:**
+
+1. **(Highest) Numerator vs. divisor never separated.** `CURRENCY_trade_wealth_outgoing_currency_value =
+   TRADE_national_expenditure / CURRENCY_wealth_value_1_unit` (CURRENCY_svalues.txt:965,967). I.10 blames
+   the NUMERATOR (#112's per-zone price spike). It never ruled out the DIVISOR
+   (`wealth_value_1_unit = country_unit_price_silver × units_to_the_lb`, `:234-278`), which #112/#115 do
+   NOT touch and which §I.6 Fact 3 already showed settled to a persistently LOWER band this boot. A
+   persistently low divisor inflates `need` every quarter by itself, with no spike required — and would
+   look identical in the exact-tick data gathered so far, since `need` was measured but its two RHS terms
+   (`TRADE_national_expenditure` and `wealth_value_1_unit` in this specific ratio) were not logged
+   separately. This also matters because the SAME divisor scales `wealth_generated_country_as_currency_
+   value` (`:739`), so a low divisor would inflate `need` through two terms at once, independent of #112.
+2. **(High) Dominance/magnitude never measured.** No measurement shows silver expenses from 1-2 spiking CHI
+   zones (upper_yangtzi/yellow_sea) are large enough, relative to the FULL national expenditure sum (16
+   goods × every governorship), to swing the national `ratio`. `trout` (the log tag for this term) has no
+   exact-tick layer — only a 3-decade-wide band — so this was always "consistent with," never demonstrated,
+   and I.10 said so itself but still used the word "confirmed" in its status line.
+3. **(Medium) An undiscussed damping mechanism.** `GT_split_scale_wealth_owed_and_order_size_tradegood`
+   (se_GLOBALTRADE_split.txt:3542-3554) multiplies `wealth_owed_for_$tradegood$` by
+   `global_supply_as_percentage_of_order_$tradegood$` when that fraction is `<1` — BEFORE it reaches
+   expenses. Silver scarcity (the same condition causing the zero-stockpile spike) tends to make this
+   fraction small, which would partly cancel the very spike I.10 relies on. Not addressed in I.10.
+
+**STATUS: #112/#115 remain the leading, mechanism-verified suspect for the CHANNEL (the payment-price path
+into `need`), but are NOT a proven cause of the specific persistent-low-ratio symptom.** The decisive
+missing measurement, per the reviewer's recommendation: log `TRADE_national_expenditure`,
+`CURRENCY_wealth_value_1_unit`, and `CURRENCY_private_cash_needed` as THREE SEPARATE tags for one boot. If
+`TRADE_national_expenditure` is flat/small while `wealth_value_1_unit` sits low, gap #1 (the divisor, a
+mechanism unrelated to #112/#115) is the real cause. If `TRADE_national_expenditure` swings in step with
+the silver zero-stock quarters, #112/#115 graduates from suspect to confirmed. No fix attempted on any game
+file; next step is this additional logging, not a fix.
+
+### I.12 (2026-08-12) — LINE-LEVEL NARROWING of #112/#115 to ONE substitution; new EXACT logging added
+### for `TRADE_national_expenditure` and `CURRENCY_wealth_value_1_unit` to close I.11's numerator-vs-
+### divisor gap on the next boot.
+
+**Line-level diff, read directly (not from commit-message prose).** Diffed the exact payment-site code
+before #112, after #112, and after #115 (`se_GLOBALTRADE_split.txt`, `GT_split_update_wealth_owed_for_
+tradegoods`):
+
+- **Pre-#112 (baseline):** `multiply = owner.var:country_unit_price_$tradegood$`. `country_unit_price`
+  (`:2803-2817`) reads `global_base_import_price_$tradegood$`, which is a WEIGHTED BLEND across all 22
+  zones (`GT_split_get_global_import_unit_price_tradegood`, `:2585-2745`): each zone's `local_price` is
+  multiplied by that zone's `percentage_of_global_stockpile` before summing. A zero-stockpile zone has
+  `pct=0` (guarded `>0` at the percentage setter, e.g. `:1507-1518`), so its `local_price` — however
+  spiked — contributes exactly 0 to the blend. This is the SAME dilution mechanism §E.5 already proved
+  protects `gbip`; pre-#112 it protected the trade-payment price too.
+- **#112's actual change (the incriminating line):** replaces the above with
+  `value = global_var:global_$tradezone$_tradezone.var:local_price_$tradegood$  min = 0.0001  divide =
+  {0.5 + owner.var:country_global_market_penetration_$tradegood$}`. This reads ONE zone's raw `local_price`
+  DIRECTLY, with NO stockpile-share weighting at all — the dilution that protected the pre-#112 price is
+  gone at this call site. The carried-over `min=0.0001` floor still guards the LOW side (a good is never
+  free) but does nothing on the HIGH side, which is exactly where a zero-stock zone's price sits
+  (`GT_set_tradegood_price`, `:6000-6032`, skips its divide-by-stockpile when stock is unset/≤0, so
+  `local_price` = raw order count × 0.6, undivided). #112's own commit message says so: *"NO ceiling (user
+  directive): a starved/spiking zone's price passes through in full."*
+- **#115's change (divisor only, NOT implicated):** swaps only the divisor's `add` term from the national
+  aggregate `country_global_market_penetration_$tradegood$` to the per-zone cached `TZ_penetration_
+  $tradezone$`. Worst case `TZ_penetration=0` → divisor floors at `0.5` → price at most DOUBLES. No
+  removal of a protection, no spike mechanism — #115's own text agrees ("floors gracefully... at most
+  doubles the price — no spike, unlike the numerator's zero-stockpile case").
+
+**Conclusion: `2b7142977` (#112) is the incriminating commit, specifically the single substitution of
+undiluted per-zone `local_price` for the stockpile-weighted `country_unit_price` at this one call site.**
+`7663239b1` (#115) rides on the same code but cannot independently produce an order-of-magnitude spike.
+
+**This narrows the CHANNEL (§I.10/§I.11's #112/#115 mechanism) to one line, but does not resolve §I.11's
+still-open numerator-vs-divisor question** — whether `trout`'s swing is actually driven by this channel's
+spikes (the numerator, `TRADE_national_expenditure`) versus `CURRENCY_wealth_value_1_unit` (the unrelated
+divisor, driven by `country_unit_price_silver × units_to_the_lb`). An interim read of the EXISTING coarse
+band for the divisor (`wvuraw`, tag for `CURRENCY_wealth_value_1_unit`) shows it pinned at `>= 1` (an
+unbounded-top band) for all 29 quarters of the current log — flat, suggestive that the divisor is NOT the
+mover, but the band is too coarse to distinguish "flat at 1" from "swinging between 5 and 80," so this is
+not decisive.
+
+**New logging added (se_ECON_LOG.txt) to settle this on the next boot, not a game-file fix:**
+- `ECON_LOG_curx_natexp` (new emitter, `:435-457`) — bands `TRADE_national_expenditure` directly (was
+  previously unlogged; only its already-divided derivative `trout` existed). Wired into
+  `ECON_LOG_curx_chain` immediately after `ECON_LOG_curx_trout`.
+- `ECON_LOG_curx_wvu_raw`'s band ladder (`:810-826`) widened: the old top band ("`>= 1`", unbounded) could
+  not tell 1 from 50 apart. Added `1-10`/`10-100`/`>=100` bands so a real swing at the high end is now
+  visible even at band resolution.
+- Exact-tick layer (`ECON_LOG_curx_exact`, `:725-782`) gained two new metrics: `wvuraw` (scale /500) and
+  `natexp` (scale ×0.0002, since it runs into the millions — scaled DOWN, not up, to stay under the
+  8000-tick cap). Both follow the existing proven `LABEL` → stage-value → `ECON_LOG_curx_tick_emit`
+  pattern; no new idiom introduced.
+- `tools/curx_analyze.py` updated to match: `natexp` added to `CHAIN` and given the same dual-line
+  SIGN/abs handling `trout` already needed (confirmed `natexp` has the identical two-line-per-quarter
+  shape); a `natexp(sign|abs)` column added to the CHI CURRENCY CHAIN table; `wvuraw`/`natexp` added to
+  the EXACT VALUES table's `SCALE` dict and `exact_cols`. Verified: brace count in se_ECON_LOG.txt
+  balanced (652/652), `curx_analyze.py` syntax-checked, tool re-run against the EXISTING (pre-dating this
+  change) log — new columns correctly show `?`/`UNSET` with no crash, confirming the change is additive
+  and non-regressive.
+
+**STATUS: mechanism narrowed to one line in #112; magnitude/dominance question from §I.11 still open,
+pending a fresh boot with the new `natexp`/`wvuraw` exact logging.** No fix attempted on any game file —
+this section is logging + line-level analysis only.
+
+### I.13 (2026-08-12) — REFUTED attempt to close §I.11 by reconstructing `wvuraw` from the EXISTING
+### log without a fresh boot. An adversarial review killed the inference; genuinely unresolved.
+
+Before waiting for a fresh boot with the new `natexp`/`wvuraw` logging (§I.12), tried to close §I.11's
+numerator-vs-divisor question retroactively: `CURRENCY_wealth_value_1_unit` ("wvuraw") is algebraically
+`country_unit_price_silver × 16 / units_to_the_lb`, and `country_unit_price_silver` ("agsilver") is
+ALREADY exact-logged. CHI is `silver_standard` with `units_to_the_lb = 8` (`se_CURRENCY.txt:223`), so
+`wvuraw = agsilver × 2`. Reconstructed across all 29 quarters of the existing log: `agsilver` ranges
+0.548–1.590 (ratio 2.90×), so `wvuraw` ranges 1.095–3.180 (same ratio). Verified the reconstruction
+formula (`agsilver = gbip/(0.5+pen)`) against already-logged `gbip`/`pen` — matched to within 0.0006 every
+quarter, and confirmed `#112`/`#115` never touch this formula (they edit a different function entirely,
+`GT_split_update_wealth_owed_for_tradegoods`, not `country_unit_price_silver`'s setter at
+`se_GLOBALTRADE_split.txt:2803-2817`). From a 2.9× divisor swing being smaller than `need`'s ≥9.1× swing,
+concluded the residual was better explained by the numerator (`#112`'s channel, `TRADE_national_
+expenditure`) — i.e., that this strengthened rather than refuted the #112 diagnosis.
+
+**An adversarial review (dispatched per standing practice before writing this into the audit) REFUTED
+this inference, on grounds independent of the algebra (which the review confirmed correct):**
+
+1. **The "2.9× is too small" comparison used the wrong model.** `need`'s formula has THREE terms, and
+   TWO of them divide by `wvuraw`-derived quantities, not one: `trout` divides by `wvuraw` directly
+   (`:967`); `wealth_generated` divides by `wvuraw` directly (`:739`); and `ess` — almost certainly the
+   DOMINANT term — divides by `wvuscaled = wvuraw × reserve_ratio_impact` (`:692-694`, `:280-283`), where
+   `reserve_ratio_impact` is itself a separate swinging, capped quantity. Treating `need` as if only
+   `trout` carries a `1/wvuraw` factor understates the divisor side's real reach.
+2. **The 16.0 display cap makes the whole residual argument unfalsifiable.** `need` sits AT the tool's
+   display cap in 17 of 29 quarters (re-verified directly: `need` min 1.76, max 16.0, 17/29 capped). The
+   TRUE maximum is unknown — could be 16, could be 1600. Computing "≥9.1×, therefore too big for a 2.9×
+   divisor, therefore numerator" from a value whose true size is censored is circular: no divisor claim
+   can be falsified against an unmeasured ceiling, and no numerator claim can be confirmed by it either.
+3. **The simplest remaining explanation was sitting in the SAME probe output, unread.** `ess` and
+   `wvuscaled` are BOTH already exact-logged by the identical CURXV layer used to reconstruct `wvuraw` —
+   no algebra or reconstruction was needed to read them directly. Re-read directly (not reconstructed):
+   `ess` ranges 20–87 (ratio **4.35×**, larger than §I.9's earlier ~4× estimate and than `wvuraw`'s 2.9×,
+   though still short of `need`'s censored ≥9.1×); `wvuscaled` ranges 0.170–0.421 (ratio 2.48×). Neither
+   alone closes the gap to `need`'s true (unknown) swing, but both were available all along and were not
+   checked before reaching for the unmeasured numerator as the explanation. `CURRENCY_wealth_generated_
+   country_as_currency_value` (`:734-739`, its own numerator `WEALTH_total_new_generated_governorship`)
+   remains completely unmeasured and was not ruled out either.
+
+**Self-correction on re-attempting the ess/wvuscaled read**: an initial pass divided `ess` by `wvuscaled`
+AGAIN, double-counting the division `ess`'s own formula already performs (`CURRENCY_svalues.txt:690-694`:
+`ess` = Σ12 prices ÷ `wvuscaled`, capped 32000 — `ess` IS the already-divided value, not a numerator still
+awaiting division). Caught and corrected before writing this section; the 4.35×/2.48× figures above are
+from `ess` and `wvuscaled` read independently, not combined incorrectly.
+
+**RETRACTED: the claim that this reconstruction "strengthens" #112/#115.** It does not — it is neither
+confirmed nor refuted by this analysis. What actually changed: the divisor's magnitude (2.9×, `wvuraw`)
+and the dominant term's own magnitude (4.35×, `ess`) are now both known exactly from the EXISTING log
+without a fresh boot; `need`'s true swing remains unmeasured past its 16.0 display cap; and `#112`'s own
+channel (`natexp`) is STILL completely unmeasured, exactly as it was before this section. Nothing here
+moves #112/#115 from "leading, mechanism-verified suspect" (§I.11's standing status) to anything stronger
+or weaker.
+
+**STATUS unchanged from §I.11/§I.12: no cause confirmed.** The decisive missing measurements remain (a) a
+fresh boot exercising the new `natexp` exact logging, and (b) — newly identified by this section — raising
+`ECON_LOG_curx_exact`'s hard tick cap (currently 8000, `se_ECON_LOG.txt`) or otherwise removing `need`'s
+own display-cap censoring, since 17 of 29 quarters in the CURRENT log already can't be read past 16.0 and
+a fresh boot would hit the identical cap on `need` again without that fix. No game file has been touched
+in any diagnosis section to date.
+
+### I.14 (2026-08-12) — NEW DIAGNOSIS: `need` swings at CONSTANT `ess` (a real control, not a
+### reconstruction) in lockstep with `trout`'s band — AND a genuine, code-verified ordering bug found
+### in the process. Pending adversarial review.
+
+Per instruction, kept digging past §I.13's dead end. Two findings, one promoted, one demoted to scratch:
+
+**Finding A (the diagnosis): a natural control the log already contains.** Instead of reconstructing an
+unlogged quantity, searched the EXISTING exact-tick data for adjacent quarter-snapshot pairs where `ess`'s
+tick count is IDENTICAL — i.e., cost-of-living genuinely did not move between the two reads, a real
+zero-variance control, not an assumption. Found 13 such pairs across the 29-quarter log. In every one,
+`need` still swings, and the swing tracks `trout`'s magnitude band moving, not `ess`. Sharpest example:
+
+```
+q5 POST: ess=64  need=16.000 (CAPPED, true value ≥16)  trout_abs_band=100-500k
+q6 PRE:  ess=64  need=1.760  (EXACT, uncapped)          trout_abs_band=0-10k
+```
+
+`ess` is bit-for-bit unchanged (both read back exactly 64 ticks); `need` collapses from a censored ≥16
+down to an exact 1.76 exactly as `trout`'s band drops two tiers. Since `ess` cannot be the mover here by
+construction (it didn't move), and `need`'s other unmeasured term (`wealth_generated`) is a slow-moving
+production/services quantity with no mechanism to flip this sharply between adjacent snapshots, `trout` —
+i.e., `TRADE_national_expenditure` — is the best-supported mover for THIS pair, on direct log evidence,
+not reconstruction. The same pattern (trout-band change ⇒ need swings; trout-band flat ⇒ need also moves
+less, though not perfectly, since ess itself still varies in most other pairs) holds across all 13
+constant-ess pairs (full table in `audits/SCRATCH_CURRENCY_23.md`).
+
+**What this does NOT establish (checked before writing this up):** does not pin the swing to #112/#115's
+specific mechanism (zero-stockpile zones). Tried to tie `trout`'s swings to `upper_yangtzi`/`yellow_sea`
+silver order/stock bands directly and the correlation did NOT hold cleanly — `trout` sums across ALL
+governorships and ~16 tracked goods, not just silver in two zones, so a single-good/single-zone story is
+too narrow and was NOT forced into this section. This section establishes that `TRADE_national_expenditure`
+genuinely drives `need`'s swing (confirmed, not reconstructed) — it does NOT yet re-confirm #112/#115
+specifically as the source of THAT term's own swing (that still needs the fresh-boot `natexp` exact data
+per §I.12, or a broader per-good/per-zone trace than attempted here).
+
+**Finding B (structural, found while checking Finding A, NOT yet a proven cause of THIS symptom — logged
+to scratch, not promoted): a real read-before-write ordering issue.** `quarterly_apply_trade_changes_and_
+consume` (`oa_wealth_changes.txt:339-371`) calls `CURRENCY_update_amt_circulated` (`:355`, which reads
+`CURRENCY_amt_circulated_balance` → `CURRENCY_trade_wealth_outgoing_currency_value` → `var:TRADE_national_
+expenditure`) BEFORE the country-scope cache-write `set_variable { name = TRADE_national_expenditure
+value = TRADE_national_expenditure }` (`:368-371`) that refreshes it for the quarter. So the currency
+update at `:355` reads LAST quarter's cached `TRADE_national_expenditure`, not this quarter's freshly
+computed value — a one-quarter lag. Checked via `git log -p` whether this ordering is NEW (a candidate
+regression) or long-standing: it is long-standing, present across many historical revisions of this file
+(oldest checked diffs already show `CURRENCY_update_amt_circulated` preceding the cache-write). A
+long-standing lag cannot by itself explain a symptom that only appeared recently — same reasoning that
+killed the earlier #50-revert hypothesis (§I.2) — so this is NOT promoted as a cause of the CURRENT
+deflation symptom. Recorded because it is a real, independently-checkable defect regardless: it means
+`CURRENCY_amt_circulated_balance` is always one quarter stale relative to trade, which could matter for a
+FUTURE oscillation-timing question even if it isn't this bug.
+
+**STATUS (superseded by I.15 below): "confirmed driver" claim RETRACTED after adversarial review.** No
+fix attempted on any game file.
+
+### I.15 (2026-08-12) — ADVERSARIAL REVIEW of I.14: REFUTED. The 13 "supporting" pairs mostly don't
+### support it; two new confounds found (population, shared wvuraw divisor with wealth_generated); logging
+### gaps closed for the next boot, no cause confirmed.
+
+An adversarial review re-derived the full pair list independently and found the "confirmed" claim does not
+survive:
+- **Re-tally of all 14 constant-ess pairs** (13 promoted + 1 the review found, a within-quarter idx26→27
+  pair — explains the 13-vs-14 discrepancy): only **2 of 14** (the headlined q5/q6 pair, plus one other)
+  show a judgeable trout-band change moving with a judgeable need change. **5 pairs are CAP-CAP** (need
+  reads the display-cap on BOTH sides) — zero evidence either way, yet were counted as "support." **6
+  pairs have trout's band completely FLAT while need still swings by a large, uncapped amount** — by this
+  section's own logic, a flat trout cannot be the mover there, which directly contradicts the "confirmed"
+  claim in the majority of the dataset it was built from.
+- **New confound found, not addressed in I.14:** `need`'s dominant term is `ess * country_population /
+  4000` — TWO factors. `country_population` was never logged anywhere in this whole investigation (§I.6
+  through §I.14). A population change between two snapshots is structurally indistinguishable, in the
+  existing log, from the swing this section attributed to `trout`.
+- **New confound found, a repeat of I.13's exact refutation:** `CURRENCY_wealth_generated_country_as_
+  currency_value` (`need`'s third, ADDED term) divides by the SAME `CURRENCY_wealth_value_1_unit` divisor
+  that `trout` divides by (`CURRENCY_svalues.txt:739` vs `:967`). A swing in that shared divisor moves both
+  terms at once — exactly the confound I.13 was refuted for, re-imported here under a different name.
+- **The "confirmed" language itself repeats a pattern already retracted four times in this document**
+  (§E.7, §I.10→I.11, §I.13, now this section) — asserting a cause from a partial/self-selected read of the
+  log rather than from a clean, closed measurement.
+
+**Genuinely new, useful output despite the refutation: two real logging gaps identified and closed.**
+`need`'s exact-tick scale (`se_ECON_LOG.txt`) was hitting its display cap (`need >= 16.0`) on 17 of 29
+quarters, making its true magnitude unmeasurable — rescaled 500→50 (10x headroom) so the next boot can
+read it. `country_population` (`poptick`) and `CURRENCY_wealth_generated_country_as_currency_value`
+(`wealthgen`) added to the exact-tick layer, closing both confounds above for the next boot. `tools/
+curx_analyze.py` updated to match (new `poptick`/`wealthgen` columns in the EXACT VALUES table).
+**IMPORTANT:** `need`'s exact value from any log PREDATING this change will be mis-scaled 10x if read with
+the current tool version — only trust `need`'s exact reading from a boot taken after this change.
+
+Per user instruction (2026-08-12): the AUDIT doc should preserve the confirmed cause once found, not every
+wrong guess along the way. §I.13's and this section's (§I.14) refuted reconstructions/inferences, and the
+disproven #50/#74/#102/#106/#75 hypotheses, are recorded in full in `audits/SCRATCH_CURRENCY_23.md` — this
+document keeps the chain of reasoning that is still LIVE plus a pointer to scratch, not a duplicate of it.
+
+**STATUS: no cause confirmed. `need`'s true dominant driver remains genuinely unknown.** The decisive
+missing measurement is now a fresh boot exercising ALL of: `natexp` (§I.12), `wvuraw` exact (§I.12),
+`poptick`, and `wealthgen` (both §I.15) — the four quantities whose separate, simultaneous exact values are
+required to attribute `need`'s swing to any one of its inputs without a confound. No fix attempted on any
+game file.
+
+### I.16 (2026-08-12) — DIAGNOSIS: `need`'s CENSORING REMOVED via algebraic back-solve from two
+### ALREADY-uncapped exact-logged quantities (not a new probe, not a reconstruction of an unlogged
+### quantity — arithmetic inversion of a formula already confirmed correct). Pending adversarial review.
+
+§I.11/§I.13/§I.15 all hit the same wall: `need`'s exact-tick reading was CAPPED at 16.0 on 17 of 29
+quarters in the existing log, and every argument built on "need's swing is >=Nx" was flagged as circular
+against that censored ceiling. §I.15 fixed this for FUTURE boots (rescaled the probe 500->50), but that
+doesn't recover the CURRENT log's censored quarters.
+
+**The censoring is avoidable without a new boot.** `CURRENCY_private_cash_ratio` (`CURRENCY_svalues.txt:
+753-765`) is `value = CURRENCY_amt_circulated_scaled  multiply = 0.004  divide = { value =
+CURRENCY_private_cash_needed  min = 0.01 }` — i.e. `ratio = circ * 0.004 / max(need, 0.01)`. Both `circ`
+(`CURRENCY_amt_circulated_scaled`) and `ratio` (`CURRENCY_private_cash_ratio`) are ALREADY exact-tick
+logged (tags `circ` /10, `ratio` /1000) and NEITHER ever approaches its own tick-cap in this log (`circ`
+max ~125 of an 8000-tick/10-scale = 800 ceiling; `ratio` max ~0.28 of an 8000/1000 = 8.0 ceiling — both
+comfortably inside range every quarter). So `need = circ * 0.004 / ratio` recovers the TRUE, uncensored
+`need` for every quarter, including all 17 previously-capped ones, using only already-logged, already-
+uncapped numbers and the SAME formula CURRENCY_svalues.txt already defines (an algebraic inversion, not a
+new assumption). Sanity check against the 12 quarters where the direct `need` reading was NOT capped: the
+back-solved value matches within band/rounding noise every time (e.g. q0: direct 5.796, back-solved
+5.814; q6: direct 1.760, back-solved 1.762) — confirming the inversion is correct, not merely plausible.
+
+**Re-running the §I.14/§I.15 constant-`ess` comparison with the TRUE (uncensored) `need`, all 14 pairs
+consistent, ZERO contradictions** (vs. 6 contradictions when §I.14 used the censored direct reading):
+
+```
+ess=61  q3P->q4P   need  37.85-> 82.00 (+44.15)  trout 10-100k ->100-500k (+1 band)  AGREE
+ess=64  q5P->q6P   need  81.33->  1.76 (-79.57)  trout 100-500k->0-10k    (-2 band)  AGREE
+ess=76  q7P->q8P   need   1.91-> 20.17 (+18.25)  trout 0-10k   ->10-100k  (+1 band)  AGREE
+ess=87  q9P->q10P  need  20.00-> 12.63 ( -7.37)  trout flat                          AGREE (need still moves)
+... (10 more pairs, all trout-flat, need moves in both directions — see below)
+ess=35  q27P->q28P need  49.33->222.00(+172.67)  trout 10-100k ->100-500k (+1 band)  AGREE
+```
+
+**What this DOES establish (high confidence, arithmetic not statistical):** in every one of the 4 pairs
+where `trout`'s band actually changes, `need`'s TRUE value moves in the same direction, including the two
+biggest true-`need` swings in the whole log (+172.67 at q27->q28, -79.57 at q5->q6) — both trout-band-change
+quarters. This is consistent with `trout` (i.e. `TRADE_national_expenditure`) being a real, correctly-
+signed contributor to `need`, now checked against uncensored numbers.
+
+**What this does NOT establish (the honest limit, stated up front so this isn't the same overclaim §I.14
+made):** in the OTHER 10 constant-`ess` pairs, `trout`'s coarse band is flat while `need`'s true value
+still swings substantially (e.g. q25->q26: trout flat, need 17.23->49.78, a +32.5 swing with NO trout-band
+change to attribute it to). Since `trout` only has a coarse 6-tier band in this log (no exact tick existed
+for it before §I.12), a flat BAND does not mean a flat trout VALUE — the swing in these 10 pairs could
+still be `trout` moving within one band, or could be the two confounds §I.15 identified and just added
+logging for (`country_population`, `wealth_generated`, which shares `trout`'s exact divisor). This section
+cannot distinguish those possibilities from the CURRENT log — that requires the fresh boot with `natexp`
+(trout's own exact numerator), `poptick`, and `wealthgen` all logged, exactly as §I.15 already concluded.
+
+**STATUS: `trout`/`TRADE_national_expenditure` is a real, correctly-signed, arithmetically-confirmed
+(not merely correlated) contributor to `need`'s swing in the 4 pairs where it's observable at all — this
+is now demonstrated on true, uncensored numbers, a stronger basis than any prior section reached.** It is
+NOT shown to be the DOMINANT or ONLY driver — 10 of 14 pairs show unexplained `need` movement with no
+observable trout-band change, consistent with `natexp`/`population`/`wealth_generated` (or sub-band trout
+moves) doing real work too. No fix attempted on any game file. Pending adversarial review before any
+further conclusion.
+
+### I.17 (2026-08-12) — ADVERSARIAL REVIEW of I.16: back-solve MATH confirmed sound (a genuine, kept
+### methodological result); the CAUSAL claim about trout REFUTED as near-tautological. Also found: the
+### pair construction itself is an artifact of the Finding-B cache-lag ordering, not independent evidence.
+
+**Math verdict: SOUND, KEPT.** An adversarial review independently re-derived `need_true = circ*0.004/
+ratio` from the source formula, re-parsed the log, and confirmed: the `divide = { min = 0.01 }` floor
+never binds (true `need` never drops below 1.76, far above 0.01); `circ`/`ratio` never hit their own
+tick-caps on any of the 29 quarters (verified directly — no `CAPPED` flag on either tag, ever); `ratio`,
+`need`, `circ` are read from one synchronous, uninterrupted call (`ECON_LOG_curx_exact`) — no risk of
+reading three different moments. All cited numbers reproduced independently. **This back-solve is a real,
+useful, KEPT result: it recovers uncensored `need` for all 29 quarters, including the 17 that were capped,
+using only already-logged data, and is immune to the /500-vs-/50 rescale confusion because it never reads
+`need`'s own (rescaled) tick count at all.**
+
+**Causal verdict: REFUTED.** Two independent problems, found by two independent routes:
+
+1. **(Review) The "4-of-4 direction match" is close to tautological, not confirmatory.** `need` SUBTRACTS
+   `trout`, and `trout` arrives ALREADY NEGATIVE (the documented double-negative, `CURRENCY_svalues.txt:
+   952-960`, confirmed by `trout SIGN = NEGATIVE` on literally all 29 quarters). Subtracting a bigger
+   negative number is mechanically `+|trout|` — so "trout's band grows ⇒ need grows" is close to a formula
+   identity, not new evidence, whenever nothing else swamps it. With only 4 trout-band-change events in
+   the whole log and a sign fixed by construction, "matches in 4/4" is a weak, small-sample result, not
+   independent confirmation of causation or dominance.
+2. **(This section, found while re-checking the ordering) The pair construction is itself an artifact of
+   Finding B (§I.14), not an independent natural experiment.** `ECON_LOG_curx_dump_post` fires at
+   `oa_wealth_changes.txt:365` — BEFORE the `TRADE_national_expenditure` cache-refresh at `:368-371` in
+   the SAME on_action block. So every POST(N) reading of `trout` is stale (reflects quarter N-1's trade);
+   the cache refreshes moments later; PRE(N+1) is the first read AFTER that refresh. Every one of the
+   constant-`ess` pairs is a POST(N)→PRE(N+1) transition — i.e. every single pair straddles exactly one
+   guaranteed cache-refresh landing, by construction of where the log markers sit relative to the
+   cache-write, not because of any independent economic event. This means the "trout-band-changed" pairs
+   are not 4 independently-arising coincidences to weigh against 10 independently-arising non-events; the
+   whole 14-pair set was pre-selected to sit at the one moment `trout` is GUARANTEED to have a chance to
+   change. This does not make the back-solve wrong, but it removes the "independent natural control"
+   framing entirely — the control was measuring the mechanism Finding B already named, not testing it.
+
+**STATUS: the back-solve (`need_true = circ*0.004/ratio`) is a confirmed, reusable diagnostic technique —
+recorded and kept for future use on this or any future currency-chain question, no adversarial review
+needed to re-derive it each time.** The causal question — which of `need`'s inputs (`trout`/`natexp`,
+`country_population`, `wealth_generated`) actually drives the swing — remains UNRESOLVED after four
+consecutive analysis attempts on this ONE existing log (§I.10/§I.13/§I.14/§I.16, all either refuted or
+downgraded to "consistent with, not proof of"). **This is the actual, final finding of this analysis
+phase: the existing log's temporal/aggregation structure — one dump before the trade cache-refresh, one
+after, `ess`/`trout` visible only as coarse bands or a single per-quarter aggregate — cannot resolve this
+question no matter how the existing numbers are recombined.** The only way forward that doesn't repeat
+this cycle is the fresh boot already specified in §I.12/§I.15: `natexp`, `wvuraw`, `poptick`, `wealthgen`,
+and the rescaled `need` (/50), ALL logged simultaneously in one boot, read with the back-solve technique
+available as a cross-check. No fix attempted on any game file. No cause confirmed.
