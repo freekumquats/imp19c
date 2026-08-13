@@ -602,3 +602,33 @@
   never exercises, so absence-from-log is not evidence either way. Logged as a new task (#55) to verify
   live rather than assumed broken.
 - **Commit**: `6d3d18d96`, pushed. **STATUS: DONE.**
+
+### Task #41 — Henan "Overstretched Administration" despite reported Administrative Capacity surplus — FIXED
+- Diagnosis: `ADMIN_state_loyalty_from_province_drain`/`_gain` (the state modifiers behind the label) are
+  only reapplied by `ADMIN_set_loyalty_impact_all_states` (se_ADMIN.txt), called from exactly 2 sites:
+  economy setup (once) and `yearly_country_pulse` (00_yearly_country.txt:95-99), gated behind a 730-DAY
+  per-country throttle. That throttle exists because the walk is `every_governorships ->
+  every_governorship_state` across EVERY country — the old monthly version of this same call
+  (`monthly_administration_pulse`, oa_wealth_changes.txt) was disabled for "unacceptable monthly
+  slowdowns" for exactly that all-countries cost. Meanwhile the live Administrative Capacity REPORT
+  window (`qing_report_open_admin`) computes `ADMIN_provided_state`/`ADMIN_required_state` fresh on every
+  open — so a state can show a live surplus in the report while its actual loyalty modifier stays stuck
+  on "Overstretched" for up to ~2 years after admin capacity crossed into surplus. Exactly the reported
+  mismatch, not a misdiagnosis (#33/#115 precedent checked — this is a DIFFERENT stale-cache class, not
+  the regional-price formula).
+- Fix: added `ADMIN_set_loyalty_impact_all_states = yes` inside `QING_GOV_pulse` (se_QING_GOVERNANCE.txt,
+  step "2a"), the Qing governance suite's own pulse — already CHI-only + human-only + ~90-day-throttled
+  (`qing_mechanics_pulse_on_action`). This costs ONE country's governorships per quarter, not the
+  all-countries walk that forced the original 730-day throttle, so the state modifier now tracks the
+  report's live numbers within a quarter instead of up to two years, without reintroducing the perf
+  problem that disabled the old monthly version (that walked every AI country; this walks one human one).
+- Code-review (dispatched, verdict: correct/safe, no CRITICAL/HIGH) confirmed: correctly scoped (country
+  scope match), performance claim holds (O(states×provinces), same cost CHI already pays at setup/yearly,
+  now just more often), fully idempotent (remove-then-reapply, safe to double-fire with the yearly call),
+  CHI/human-only confirmed via the trigger chain. One LOW fixed: the function's header comment ("All
+  O(1)") was stale after the insertion — corrected to note the new step's real cost and why it's
+  affordable at this cadence. Two informational notes logged (not action items): the CHI-side yearly
+  730-day refresh is now redundant (harmless, still needed for AI/other countries); a pre-existing
+  upstream quirk means `ADMIN_state_loyalty_gain` can structurally never apply a nonzero stack (the
+  provided/required clamp keeps overall_impact >= 0) — unrelated to this fix, not touched.
+- **Commit**: `ba6396d00`, pushed. **STATUS: DONE.**
