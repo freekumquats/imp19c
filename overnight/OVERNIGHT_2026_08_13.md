@@ -338,3 +338,19 @@
   fix's own narrow scope (the traced error frame, not a speculative expansion to unreachable code).
 - **Commit**: `7b4a92b8d`, pushed.
 - **STATUS: Both DONE.**
+
+### Task #22 (#35) — restore #23 currency verify tooling — HARD BLOCK, correctly left in_progress (Rule 1 block type #3: genuine user-only dependency)
+- **Checked, not re-done**: the tooling restoration itself is already complete from a prior session
+  (`d40a53ffa`/`c9da3fc16`, reverting the premature strip in #16) and verified still intact in-tree
+  this run: `se_ECON_LOG_TZPROBE.txt`, `tools/curx_analyze.py`, `tools/gen_econ_tzprobe.py`, and both
+  call sites (`ECON_LOG_curx_dump_pre` in `se_ECON_LOG.txt:222`, `ECON_LOG_curx_dump_post` in
+  `oa_wealth_changes.txt:365`) all present, nothing has silently re-stripped them since.
+- **Why this is a genuine hard block, not a fake one**: the task's own remaining steps (boot
+  `-debug_mode` across several quarters, run `curx_analyze.py`, confirm #23's gbip-flat/inflation~0
+  fix AND characterize the #46 gold/silver crossover, THEN re-strip as a fresh commit) require the
+  USER's own boot — there is no way to fabricate or substitute for a real multi-quarter play session
+  from within this session. Per the standing `imp19c-verify-before-strip-logs-rule` memory (written
+  after the user's own explicit correction: "making changes deep in the inner workings of the economy
+  and then stripping logs to monitor said changes is insane"), re-stripping BEFORE that confirmation
+  would repeat the exact strip-before-verify mistake this task exists to prevent. Left in_progress,
+  not force-closed — nothing to commit this pass.
