@@ -311,3 +311,30 @@
   touch) is genuinely untouched in the diff.
 - **Commit**: `0c04c6620`, pushed.
 - **STATUS: DONE. Task #51 (all 4 pieces) now fully complete.**
+
+### Task #19 (#107) + #20 (#108 residual) — DONE (#19 already-complete on re-check; #20 boot-log-traced and fixed)
+- **#19 (#107 Div/0 + stockpile + bimetallic error-log flood)**: re-checking the task tracker against
+  `git log` found this was ALREADY FULLY COMPLETE from a prior session (`3ffc8cf03` food-stockpile
+  seed, `02acceb9f` GT_set_tradegood_price Div/0 guard, `ad7765927` final #108 accounting) — the
+  tracker's "pending" status was stale, not a real gap. Verified via `overnight/OVERNIGHT_2026_08_11.
+  md`: all three sub-roots (food-stockpile unset flood, the Div/0 sub-root, the 242 bimetallic reads)
+  closed; the bundled WAR_scripted_guis.txt 804-line flood correctly identified as a non-fatal
+  engine WARNING in defunct upstream code, not a real error. Marked DONE, no new work needed.
+- **#20 (#108 residual EDU Div/0, 16x/boot, explicitly left open for boot-log confirmation)**: read
+  the newest available boot log (`~/Downloads/logs.zip`, 2026-08-12 18:39 — predates today's #101/
+  #88/#51 commits but postdates the #107/#108 fix commits, so it's a valid source for THIS residual)
+  per the logs skill's full-ranked-inventory discipline. Found the exact frame: `oa_wealth_changes.
+  txt:101 -> EDU_update_effect:3 -> EDU_set_t2_national_bonus_from_universities:2`. Traced the call
+  chain (`EDU_set_t2_national_bonus_from_universities` -> `EDU_university_national_bonus` ->
+  `EDU_university_law_religious_colleges_country_impact_owner_scope`, only reachable when
+  `law_university_religious_colleges` is active) to a bare `divide = num_of_cities` with no guard — a
+  country with zero owned cities Div/0s. **Fix**: clamped the divisor via the proven `divide = {
+  value = X  min = 1 }` idiom already used at `ADMIN_svalues.txt:193-195` and `AI_svalues.txt:1234-
+  1238`. Code-review confirmed this is the ONLY unguarded divide reachable from the traced error
+  frame (not a wrong-site guess), confirmed the fallback value is sensible (bounded, in-range,
+  matching the function's own `≤0.9×base` intent), and flagged a LOW-severity twin
+  (`EDU_university_law_religious_colleges_country_impact`, province-scope, same bug shape) that is
+  genuinely DEAD CODE (repo-wide grep: unreferenced anywhere) — correctly left untouched per this
+  fix's own narrow scope (the traced error frame, not a speculative expansion to unreachable code).
+- **Commit**: `7b4a92b8d`, pushed.
+- **STATUS: Both DONE.**
