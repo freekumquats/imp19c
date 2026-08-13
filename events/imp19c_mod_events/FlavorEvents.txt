@@ -503,7 +503,7 @@ flavor_eve.8 = {
 	fire_only_once = yes
 	
 	option = {
-		name = flavor_eve.8.a 
+		name = flavor_eve.8.a
 		ai_chance = { factor = 75 }
 		scope:building_province = {
             add_state_loyalty = -10
@@ -514,14 +514,57 @@ flavor_eve.8 = {
                 duration = 730
             }
         }
+		# [fix #37 2026-08-13] tie into the Ministry of Works — a CHI-only, minister-attributed
+		# neglect beat. flavor_eve.8 has no tag=CHI gate (fires for any nation), so this stays
+		# entirely inside the option body, mirroring flavor_eve.7.a's proven CHI-gated-if-inside-
+		# option shape (no change to the event's own trigger/portraits/immediate). Acts DIRECTLY on
+		# the var (no scope save — flavor_eve.8 never saves a works-minister scope), matching the
+		# proven no-scope-save idiom at qing_household_events.txt:356. Guarded on a living, employed
+		# Works Minister — a vacant seat cannot be blamed for a NAMED minister's neglect, so the
+		# fallback (every non-CHI nation, or a CHI game with a vacant Works seat) is simply nothing
+		# further, unchanged from the original.
+		if = {
+			limit = {
+				tag = CHI
+				has_variable = qing_office_works_holder
+				var:qing_office_works_holder = { is_alive = yes  employer = ROOT }
+			}
+			var:qing_office_works_holder = { add_loyalty = loyalty_qing_estranged }
+			QING_DECLINE_nudge = { var = qing_reform_pressure  amount = 2 }
+		}
 	}
 	option = {
-		name = flavor_eve.8.b 
+		name = flavor_eve.8.b
 		ai_chance = { factor = 25 }
+		custom_tooltip = "flavor_eve.8.b.tt"
 		current_ruler = {
 			add_popularity = 5
 		}
-		add_treasury = -50
+		# [fix #37 2026-08-13] tie into the Ministry of Works — see option .a's comment for the full
+		# rationale (CHI-gated, no scope save, vacant-seat fallback). An able Works Minister (finesse
+		# >=9, matching QING_works_build_dike's own expert-tier cutoff, se_QING_WORKS.txt:194) gets
+		# the repair done for less — derived from that same function's proven dike-cost tier ratio
+		# (175/220 base terms ~ 0.795, applied to this event's flat 50: round(50x0.795)=40), not an
+		# invented number. Every other nation, and a CHI game with a vacant Works seat, pays the
+		# original flat -50 unchanged.
+		if = {
+			limit = {
+				tag = CHI
+				has_variable = qing_office_works_holder
+				var:qing_office_works_holder = { is_alive = yes  employer = ROOT }
+			}
+			if = {
+				limit = { var:qing_office_works_holder = { finesse >= 9 } }
+				add_treasury = -40
+			}
+			else = {
+				add_treasury = -50
+			}
+			var:qing_office_works_holder = { add_loyalty = loyalty_qing_commended }
+		}
+		else = {
+			add_treasury = -50
+		}
 	}
 }
 
