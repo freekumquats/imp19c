@@ -418,3 +418,59 @@
   (mechanism working as designed), not a deferral.
 - **STATUS: DONE (no code change — confirmed self-correcting by design + boot-log evidence + user
   confirmation).**
+
+### Task #25 — Talleyrand phantom-char + scan all events — DONE (fix already shipped; scan clean)
+- **Talleyrand phantom-char half**: already fixed earlier this session (commit `4aef63a7e`,
+  before this compaction) — `qing_roster.8.a`'s inline `QING_customs_establish`/`_appoint_ig` calls
+  were the first-ever writers of `qing_customs_foreign_control`/`qing_customs_efficiency`, and an
+  option's effects are ALSO evaluated once, unexecuted, to render the tooltip preview before the
+  player clicks — the guard's `set_variable` doesn't commit in that pass, so the next read of the
+  same not-yet-existing var threw (14,832 hits in error.log) and spilled the wrong scope (Talleyrand)
+  into the rendered preview. Deferred the real work to a hidden follow-up event (`qing_roster.22`,
+  `is_triggered_only`), mirroring the identical fix already shipped for `qing_keju.4.a` ->
+  `qing_keju.21`.
+- **"Scan all events" half**: dispatched a very-thorough background sweep of every file in
+  `events/imp19c_mod_events/` (including subdirectories) for the same bug class — an option whose own
+  effects are the first-ever writer of some var via an own-var-guard idiom, called inline (not
+  deferred to a hidden event), where a later effect in the SAME option reads that var unconditionally
+  or a create_character risks a phantom-scope spill into the tooltip. Four independent, cross-checked
+  passes (duplicate-var scan, inline-create_character scan, first-writer-function inventory across
+  all ~150 guarded vars in `common/scripted_effects/`, and boot-seed reachability closure) found MANY
+  structurally-similar candidates but confirmed EVERY one is already protected — either boot-seeded
+  unconditionally elsewhere, guarded by `has_variable` before the later read, or already wrapped in
+  `hidden_effect`/`trigger_event` from an earlier fix pass (`#38`/`#92`/`#123`/`#31` are all prior
+  instances of the same defensive pattern already applied). Cross-checked against the newest available
+  error.log (pre-dating this session's own #25 fix) and found zero hits of the diagnostic signature
+  that flagged both prior confirmed instances — consistent with #25 having been the only LIVE instance
+  that had actually fired and left a flood signature.
+- **STATUS: DONE. No further code change needed — the scan is a clean result, not a gap.**
+
+### Task #28 — Robert Hart seated as Caravan Superintendent instead of Maritime Superintendent — DONE
+- **What it was**: task #27 (already shipped, `54cdd52ed`) added `qing_customs_ig_marker` (the
+  Customs Inspector-General, Robert Hart) and `qing_court_artist` (the court painter, Castiglione) to
+  `QING_char_holds_court_position`'s OR-set, which correctly stops FUTURE appointment draws from
+  picking a man already holding either post. But #28 reported Hart STILL showing up seated as Caravan
+  Superintendent — the wrong-post symptom persisted despite #27.
+- **Diagnosis**: each of the three office suites (caravan superintendent, salt commissioner, Hoppo)
+  has its own quarterly RECONCILE function that self-corrects a double-booking arising from a race or
+  a stale/pre-#27 save (the SAME proven pattern that made #26 self-heal without a code change) — but
+  each reconcile's OWN double-book relief gate checked only `is_general`/`is_admiral`/`is_governor`/
+  `qing_officer_marker` (military/administrative double-booking), never `qing_customs_ig_marker` or
+  `qing_court_artist`. So a man double-booked against either of THOSE two posts specifically could
+  never be caught and relieved by the reconcile — the appointment picker was fixed, but nothing would
+  ever un-seat an EXISTING bad double-booking against the new markers.
+- **Fix**: added `has_variable = qing_customs_ig_marker` and `has_variable = qing_court_artist` to
+  all THREE reconciles' double-book OR-conditions (caravan superintendent, salt commissioner, AND the
+  Hoppo — not just the one office #28 named, since all three share the identical #27-caused gap and
+  fixing only one would leave the other two silently broken in the same way), mirroring the existing
+  general/admiral/governor/officer_marker shape exactly.
+- **Review**: code-review dispatched on the 3-file diff — CLEAN, zero findings. Confirmed all three
+  edits are syntactically identical in shape, confirmed the semantic correctness (this is the relief
+  gate, not the picker's own exclusion — a genuinely different piece of code), confirmed the backfill
+  logic immediately after each relief block runs correctly (re-seats a fresh, properly-excluded man
+  the same pulse), confirmed no legitimate double-holding scenario exists that this relief could
+  wrongly break (both markers are explicit "one man, one post" members of `QING_char_holds_court_
+  position`'s own OR-set, per #27's own comments), and confirmed this directly covers #28's reported
+  symptom (Hart as caravan superintendent trips the new OR line, gets relieved, backfilled).
+- **Commit**: `bfb5ff3b9`, pushed.
+- **STATUS: DONE.**
