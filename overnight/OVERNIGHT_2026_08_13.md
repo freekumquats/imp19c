@@ -632,3 +632,30 @@
   upstream quirk means `ADMIN_state_loyalty_gain` can structurally never apply a nonzero stack (the
   provided/required clamp keeps overall_impact >= 0) — unrelated to this fix, not touched.
 - **Commit**: `ba6396d00`, pushed. **STATUS: DONE.**
+
+### Task #42 — Ministry of Personnel clash events firing far more than other Ministries — FIXED
+- Diagnosis: `QING_personnel_evaluate_governors` (se_QING_PERSONNEL.txt) `every_character`-loops over
+  EVERY governor each quarterly pulse; the per-governor clash roll (chance=10) and promotion roll
+  (chance=8) both gate on `NOT has_variable = qing_dept_cd_personnel`, but the cooldown was only
+  STAMPED inside each roll's SUCCESS branch. A failed roll left the cooldown unset, so every OTHER
+  eligible governor in that same quarterly pass rolled independently too (N governors -> effective
+  chance 1-(0.9)^N, not a flat 10%), and a fully-failed quarter left it unset for the NEXT quarter as
+  well, compounding. Confirmed against the proven sibling idiom: Revenue (se_QING_REVENUE.txt:287) and
+  Works (se_QING_WORKS.txt:55) both stamp their department cooldown on ENTRY, before the roll —
+  consuming exactly one attempt per ~3-quarter cycle regardless of outcome. Personnel's stamp-only-on-
+  success was the divergence. Boot log cross-check: 211 personnel-evaluation lines this boot vs a
+  single-digit count for Revenue/Works domain rolls, consistent with the N-governor multiplier.
+- Fix: moved the `qing_dept_cd_personnel` stamp in BOTH the promotion (.3) and clash (.2) branches to
+  fire unconditionally right after the outer gate passes, before the `random` roll — matching
+  Revenue/Works exactly. Removed the now-duplicate stamp from inside each success branch.
+- Code-review (dispatched, verdict: fix correct, bug confirmed real, no CRITICAL/HIGH) flagged two
+  non-blocking trade-offs, both consistent with the fix's own intent rather than new bugs: (1) the
+  promotion and clash rolls now mutually throttle each other within one quarterly pass in an
+  iteration-order-dependent way (a failed promotion roll can consume the department's one attempt
+  before a clash-eligible governor is reached) — Revenue/Works avoid this by picking event TYPE from a
+  random_list AFTER a single roll succeeds, but restructuring Personnel's per-governor dispatch to match
+  is a larger design change outside this bug's scope; (2) Personnel's per-roll chances (8/10%) are much
+  lower than Revenue/Works (30-40%), so the ministry may now read as quieter than before, not just
+  "not too often" — noted as a tuning lever (the chance values), not a defect, if a boot shows it's now
+  under-firing.
+- **Commit**: `6480f63b1`, pushed. **STATUS: DONE.**
