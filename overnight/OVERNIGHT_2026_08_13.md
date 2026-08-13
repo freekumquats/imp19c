@@ -391,3 +391,30 @@
   fork is complete (no second unforked tooltip-wiring site anywhere in the repo).
 - **Commit**: `175596688`, pushed.
 - **STATUS: DONE.**
+
+### Task #26 — Aligun (585) holds Salt Commissioner + Jingzhou garrison commander — NO DEFECT, self-corrects by design (user-confirmed, dropped)
+- **What it was**: task reported Aligun (char:585, the historical Jingzhou banner-garrison commander,
+  raised by `SE_qing_armies` at day-30 boot) also seated as Salt Commissioner — a 1:1-rule violation.
+- **Diagnosis**: traced both draws. `QING_salt_commissioner_appoint`'s candidate gate DOES exclude
+  `has_variable = qing_officer_marker` (the flag stamped on any character successfully attached as a
+  garrison/fleet commander) — so on a clean draw Aligun should never be picked at all. But the two
+  systems race at boot: the garrison raise (`qing_force_setup.1`, day 30, one-shot) and the salt
+  commissioner's first seat (`QING_salt_init`, called from the monthly on_action) land in the same
+  early window, so a commissioner could in principle be drawn just before (or in the same tick as)
+  the garrison stamp lands. Rather than a missing exclusion, `QING_salt_reconcile` (called every
+  pulse, AFTER income is banked) already has a built-in self-correction for exactly this: branch (a)
+  explicitly relieves "a commissioner who later took a command... `has_variable = qing_officer_
+  marker`," then branch (b) immediately backfills a fresh, eligible pick the SAME pulse.
+- **Verified against the newest available boot log** (`~/Downloads/logs.zip`, 2026-08-12): found the
+  EXACT sequence live in `debug.log` — `QING_salt_commissioner_seat`/`QING_post_stamp` at 17:28:40
+  (initial draw), then at 17:41:08 `QING_salt_reconcile` fires `"salt: relieved a double-booked
+  commissioner (also a serving commander/officer) for"` followed immediately by a fresh
+  `QING_salt_commissioner_appoint`/`_seat`/`_post_stamp` sequence in the SAME log block — i.e. the
+  exact self-healing the reconcile design promises, observed actually happening, not just claimed in
+  a comment. The double-booking relief fired exactly once (not repeatedly), consistent with a
+  transient boot-race that the very next pulse corrects, not a persistent live bug.
+- **User confirmation mid-diagnosis: "drop this task, it already solves itself."** Matches the
+  evidence exactly — closing as NO DEFECT, no code change. This is a genuine diagnosis outcome
+  (mechanism working as designed), not a deferral.
+- **STATUS: DONE (no code change — confirmed self-correcting by design + boot-log evidence + user
+  confirmation).**
