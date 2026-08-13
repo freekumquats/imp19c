@@ -474,3 +474,27 @@
   symptom (Hart as caravan superintendent trips the new OR line, gets relieved, backfilled).
 - **Commit**: `bfb5ff3b9`, pushed.
 - **STATUS: DONE.**
+
+### Task #33 — persistent -10% deflation — HARD BLOCK, correctly left in_progress (Rule 1 block type #2: unproven diagnosis on shared upstream currency logic)
+- **Checked, not re-diagnosed from scratch**: `audits/AUDIT_CURRENCY_23.md` already tracks this exact
+  symptom under "Finding 5" (revised 2026-08-13). Status as of the audit's own last update:
+  "PARTIALLY DIAGNOSED, mechanism confirmed real, magnitude and dominant channel NOT yet confirmed."
+  The audit traces a real, unfixed gap in Finding 3's guard (the `order_size/stockpile`-driven
+  `wealth_owed` term can inflate at THIN, non-zero stockpile levels — Finding 3's fix, which is this
+  session's own #30 commit `ba8b38672`, only guards the exact-zero/unset case) — but whether this is
+  actually LARGE at typical (non-worst-case) stockpile levels, and whether the income-tax channel or
+  the state's own channel dominates, are both explicitly still-open questions per the audit's own
+  text, not something resolvable by further static code reading.
+- **Why this is a genuine hard block, not a fake one**: the audit's own "Next step, before any design
+  work" section is explicit: get ONE fresh boot with #30's own diagnostic tags populated
+  (`ECON_LOG_curx_natexp`, `ECON_LOG_curx_zerostock_guard`), read the ACTUAL stockpile values for real
+  goods/zones, and only then determine whether this mechanism is the dominant driver or a red herring.
+  The only log available when the audit was last updated predates #30's own fix by ~7 hours, so it
+  cannot show the post-fix state either — there is no log-reading substitute for the boot this task
+  needs. This is the SAME underlying boot dependency task #22 (#35) tracks, not a separate blocker
+  needing its own resolution.
+- **Not force-closed, not silently dropped**: left in_progress. Per this run's own standing discipline
+  (Rule 1 block type #2 — unproven diagnosis on shared upstream currency logic — respond by building
+  the instrumentation that will prove it, not by guessing at a fix), the instrumentation ALREADY
+  exists (this is exactly what task #22/#35 restored and kept live). No further design/implementation
+  work is legitimate here until that boot lands and the audit's own next-step question is answered.
