@@ -659,3 +659,30 @@
   "not too often" — noted as a tuning lever (the chance values), not a defect, if a boot shows it's now
   under-firing.
 - **Commit**: `6480f63b1`, pushed. **STATUS: DONE.**
+
+### Task #43 — exam event targeted Chenggunjab (25261) for a degree despite already holding fanyi_jinshi — FIXED
+- Diagnosis: `qing_keju.2` (Palace Examination event, qing_keju_events.txt) picks its "laureate" via two
+  candidate pickers (a primary `any_character`+`ordered_character` pair, and an `else` fallback). Both
+  filtered candidates on ONLY `NOT = { has_trait = jinshi }` — narrower than the shared canonical
+  `QING_char_exam_degreeless` trigger (qing_dynasty_triggers.txt), which excludes all 11 exam-degree
+  traits (civil + banner fanyi_jinshi + wuju). Every OTHER exam-conferral site in se_QING_EXAM.txt (mint/
+  cohort-confer/per-person-sit) already used the shared trigger; qing_keju.2 was the one hand-rolled
+  exception. A bannerman already holding fanyi_jinshi passed the narrow filter, got picked as laureate,
+  and option `.2.b`'s `add_trait = jinshi` stacked a SECOND, mutually-exclusive degree onto him (jinshi/
+  fanyi_jinshi are declared `opposites` in 00_imp19c.txt) — exactly the reported Chenggunjab case.
+- Fix: replaced the `NOT = { has_trait = jinshi }` filter with `QING_char_exam_degreeless = yes` in both
+  the primary `any_character` check and its paired `ordered_character`. Also gated the previously-
+  UNFILTERED `else` fallback `ordered_character` (which had no degree check at all) with the same
+  trigger, so when the primary picker finds nobody degreeless, the fallback correctly finds nobody too
+  (rather than re-picking an already-degreed man) and control falls through to the event's existing
+  guaranteed-mint safety net (`create_character` under `NOT exists scope:laureate`) — the same net that
+  already protects against the unrelated Talleyrand-char:0 dangling-scope bug this event was patched for.
+- Code-review (dispatched, verdict: correct, no CRITICAL/HIGH/MED) confirmed the diagnosis, verified
+  `QING_char_exam_degreeless` evaluates correctly in both `any_character.limit` and `ordered_character.
+  limit` (proven precedent at se_QING_EXAM.txt:252/430/921), confirmed the mint safety net still fires
+  correctly, confirmed no residual double-degree race in option `.2.b`'s effect order, and confirmed
+  brace balance. One LOW noted (not fixed): the `else` fallback's `ordered_character` is now dead code
+  (mechanically guaranteed to find nobody once the primary already returned nobody) — harmless, the
+  mint net catches it correctly; left as-is since the LOW review verdict called it optional cleanup, not
+  a defect.
+- **Commit**: `4286fdee3`, pushed. **STATUS: DONE.**
