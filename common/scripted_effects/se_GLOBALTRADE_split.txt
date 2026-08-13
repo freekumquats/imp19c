@@ -2502,6 +2502,37 @@ GT_split_update_wealth_owed_for_tradegoods = {
 		name = wealth_owed_for_$tradegood$
 		value = var:order_size_$tradegood$
 	}
+	# [fix #30 2026-08-13, design/DESIGN_30_QUANTITY_DOUBLECOUNT.md] RATION THE BILLED QUANTITY to
+	# this governorship's own fair share of what the ZONE can actually supply this quarter —
+	# order_size × min(1, zone_stockpile / zone_total_order_size). Root cause: this governorship's
+	# own order_size is one input to $tradezone$_total_order_size (GT_split_update_TZ_order_amount_
+	# apply_change, :2341-2348 adds it in), which is the NUMERATOR of local_price below — so a
+	# governorship's own demand inflates the price it pays AND, without this guard, is billed as if
+	# its FULL order were delivered regardless of scarcity (a governorship paying local_price ×
+	# order_size when the zone can only supply a FRACTION of total demand). `max = 1` is a genuine
+	# ceiling (mirrors `min = 0.0001` a few lines below — min=floor, max=ceiling, confirmed against
+	# BALHIST_normalise_slot's own min/max-in-one-value-block usage, se_BALANCE_HISTORY.txt:141-153):
+	# an ABUNDANT/balanced zone (stockpile >= total_order_size) is a complete no-op (ratio clamps to
+	# exactly 1, quantity unchanged); only a SCARCE zone (stockpile < total_order_size) rations the
+	# billed quantity down to this governorship's proportional share. Deliberately overrides the
+	# #112 "NO ceiling" directive a few lines below AT THIS ONE SITE ONLY (see the design doc's
+	# Finding 5 for the full reasoning) — local_price itself, and every one of its ~24 OTHER readers,
+	# remain completely untouched; this block never reads local_price at all.
+	if = {
+		limit = {
+			has_global_variable = $tradezone$_stockpile_$tradegood$
+			has_global_variable = $tradezone$_total_order_size_$tradegood$
+			global_var:$tradezone$_total_order_size_$tradegood$ > 0
+		}
+		change_variable = {
+			name = wealth_owed_for_$tradegood$
+			multiply = {
+				value = global_var:$tradezone$_stockpile_$tradegood$
+				divide = global_var:$tradezone$_total_order_size_$tradegood$
+				max = 1
+			}
+		}
+	}
 	# [#112 2026-08-11] REGIONAL IMPORT PRICE. Was `multiply = owner.var:country_unit_price_$tradegood$`
 	# (the country's ONE national price = gbip/(0.5+pen), geography-blind). Instead pay the PAYING
 	# governorship's OWN trade-zone local_price. This is the DIRECT form (not a gbip-ratio "index" —
