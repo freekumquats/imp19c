@@ -498,3 +498,6 @@
   the instrumentation that will prove it, not by guessing at a fix), the instrumentation ALREADY
   exists (this is exactly what task #22/#35 restored and kept live). No further design/implementation
   work is legitimate here until that boot lands and the audit's own next-step question is answered.
+- **Closed per user instruction** ("close this then") — same disposition as task #22 (#35): a
+  correctly-identified hard block, not a defect to force through, closed rather than left spinning on
+  a dependency this session cannot satisfy itself.
