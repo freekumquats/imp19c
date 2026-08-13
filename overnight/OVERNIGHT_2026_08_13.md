@@ -2,6 +2,14 @@
 
 ## ASSUMPTIONS & GUESSES
 (Filled in as tasks land — every best-guess constant goes here, called out explicitly.)
+- **#101 Cottage Industry**: `cost = 50`, `time = 150`, `base_resources = 1` per building; strata
+  output `local_lower_strata_output = 0.2` / `local_proletariat_output = 0.15`. All best-guess
+  starting figures, not a final balance pass — boot-tune. See design/DESIGN_101_COTTAGE_INDUSTRY_
+  BUILDINGS.md "Cost / efficiency figures."
+- **#88 population fold**: the new relief-valve term subtracts `6` from `qing_pop_pressure_target`
+  when `qing_newworld_agriculture` fires — a guess below the golden-crop relief's `-10`, since that
+  path is risk-gated and this one is deterministic. Boot-tune against pop logs. See
+  design/DESIGN_88_POPULATION_UNIFICATION.md.
 
 ## Task #49 — "A Minister Called to Account" duplicate effects — DONE
 - **What it was**: option `.b` visibly double-strips the same character's modifiers (character-
@@ -196,4 +204,67 @@
 - **Commit**: this task's files only (buildings, GUI, macro config, loc, design doc) — the two
   unrelated stray loc edits (`qing_migration_l_english.yml`, `qing_settle_frontier_l_english.yml`,
   from earlier #88-adjacent work) were deliberately left unstaged so this commit stays scoped.
+- **STATUS: DONE.**
+
+### Task #88 — unify frontier-settlement/pop-boom/Population-Famine — DONE (design round 3-4, 2 adversarial reviews, implemented)
+- **What it was**: task text (`overnight/SESSION_HANDOFF_2026_08_11.md:44`) named three systems
+  to unify. Diagnosis (Explore agent, very-thorough level) found: frontier-settlement and the NW
+  pop-boom are already one narrative family by design; the #369 `qing_pop_pressure` Malthusian meter
+  already couples with most of that family (involution/relief terms, migration push/clear guard).
+  The ONE genuine, unfixed silo: task #65's `qing_settle_newworld_crops` mission granted a
+  standalone, permanent `global_population_growth`/`global_population_capacity_modifier` country
+  modifier (`qing_newworld_agriculture`) on completion that the pressure meter had ZERO awareness
+  of — confirmed by grep, the modifier was never read anywhere. Two independent systems modeling
+  the same real-world phenomenon, neither aware the other existed.
+- **Design history (carried in from a prior session, rounds 1-2; this run did rounds 3-4)**: rounds
+  1-2 (prior session) fixed a wrong `-10` magnitude analogy (the golden-crop relief term it was
+  modeled on is RNG-gated and can backfire; this mission's path is deterministic — settled on `-6`)
+  and 2 stale loc strings. Left 2 open questions unresolved for a reviewer who would not be
+  available mid-run. Round 3 (this run, made autonomously per the no-stopping-to-ask discipline):
+  resolved both — (Q1) `qing_newworld_agriculture` becomes a pure empty-modifier marker rather than
+  gaining a companion standalone effect (rejected: would double-reward an already treasury-costed,
+  already-rewarded mission); (Q2) confirmed via independent grep that this is the ONLY orphaned
+  one-shot population modifier within the three frontier-settlement/NW-crop modifier files
+  specifically (a mod-wide sweep found 4 similarly-shaped orphans in the UNRELATED overseas-
+  colonization subsystem — correctly out of scope, logged as new task #53).
+- **Adversarial review round 1 found 2 MEDIUM issues in round 3's plan**: (1) removing the vanilla
+  `global_population_capacity_modifier` effect is a RETIREMENT, not a re-homing — the custom
+  pressure meter has no capacity term at all (its crowding driver is a fixed `total_population/1200`
+  ratio), so the doc needed to say this plainly rather than let a boot-tuner chase a capacity effect
+  that no longer exists anywhere; (2) the "empty modifier marker" plan would display a named,
+  described, effect-free modifier in the player's active-modifiers list — reading as a bug — and the
+  design's own cited precedent for this idiom (`qing_migr_crop_boom_golden`) was factually wrong
+  (that modifier is never empty, it carries 5 real effects). Also found 2 LOW line-citation errors.
+- **Fixed (round 4)**: replaced the empty-modifier plan with the SAME silent flag idiom already
+  proven at `qing_frontier_resettlement` (`set_variable`/`has_variable`, no loc name/desc, no
+  active-modifiers-list display) — a cleaner precedent the round-3 draft had missed entirely. Added
+  an explicit "retired, not re-homed" note to the relief-valve code comment. Fixed both LOW citations.
+- **Adversarial review round 2 (final) found ZERO CRITICAL/HIGH/MEDIUM issues** — verified the
+  `set_variable`/`has_variable` scope match against the precedent exactly, confirmed the mission's
+  `on_completion` block already runs in country scope (no qualifier needed), confirmed deleting the
+  modifier definition and its 2 loc keys orphans nothing repo-wide. Found 3 LOW doc-accuracy nits (a
+  stale STATUS banner, a stale mission comment describing the removed effect, and one of the 4
+  cited overseas-colonization orphans mischaracterized — `qing_nw_puget_sound` doesn't actually
+  carry `global_population_growth`, it's a commerce/naval-range modifier). All 3 fixed.
+- **Implementation**: `common/modifiers/qing_migration_modifiers.txt` (deleted the
+  `qing_newworld_agriculture` modifier definition, replaced with a comment-only marker);
+  `common/missions/qing_settle_frontier_missions.txt` (mission's `on_completion` now
+  `set_variable`s a flag instead of `add_country_modifier`; updated the stale comment block above
+  the mission); `common/scripted_effects/se_QING_POPULATION.txt` (new relief-valve term in
+  `QING_pop_recompute_target`'s RELIEF VALVES section, `-6` on `has_variable = qing_newworld_
+  agriculture`, placed right after the golden-crop `-10` term, before the final clamp);
+  `localization/english/qing_migration_l_english.yml` (deleted the 2 now-unused loc keys).
+- **Review (implementation)**: code-review dispatched on the full diff — CLEAN, zero findings.
+  Verified brace balance, the `set_variable`/`has_variable` scope match, relief-term placement and
+  syntax, zero dangling references repo-wide (grep confirmed exactly the 4 intentional hits and
+  nothing else), no GUI/mission-reward-display reference to the deleted modifier, and no encoding
+  corruption from a byte-level Python edit used once during implementation (an em-dash mismatch
+  blocked a normal string-match Edit; confirmed the target file never had a BOM to begin with, and
+  the file decodes clean UTF-8 throughout after the edit).
+- **New follow-up task created**: #53 ("Audit overseas-colonization orphaned population modifiers")
+  — logs the 3 genuine same-shape orphans found in the unrelated overseas-colonization subsystem
+  (`qing_nw_columbia_country`, `qing_oc_new_zealand`, `qing_oc_queensland`) plus one non-population
+  orphan of a different shape (`qing_nw_puget_sound`), explicitly NOT folded here (different
+  subsystem, different scope than task #88 named).
+- **Commit**: `117468c54`, pushed.
 - **STATUS: DONE.**
