@@ -735,3 +735,32 @@
   slot for a no-op. Left the panel's double-gate (both Revenue holder AND Commissioner) as-is per the
   review's own read — a defensible design choice (narratively the Revenue Ministry panel), not a bug.
 - **Commit**: `2333c6164`, pushed. **STATUS: DONE.**
+
+### Task #47 — investigate current map/borders near Kokang — DIAGNOSED (research digest, no code change)
+- No province, tag, or loc string anywhere in the repo names "Kokang" — read the task as the Yunnan-Burma
+  frontier generally, since Kokang sits directly on it. Full research digest at
+  `research/RESEARCH_KOKANG_BURMA_BORDER_1763.md`.
+- Verified finding: BUR's `own_control_core` (00_default.txt:44368) includes the ENTIRE Arakan/Rakhine
+  coast (Akyab + ~9 sibling provinces, 68 provinces total for BUR). Arakan (Mrauk-U) was still an
+  independent kingdom in 1763 — Konbaung Burma didn't conquer it until 1785, well past even the 1765-69
+  Sino-Burmese War window the mod's own research already dates correctly. The project's OWN existing
+  research doc (`1763_WORLD_EAsia_SEAsia.md`) contains an internal contradiction: it lists Arakan under
+  "1763 Territory" while its own "Delta vs 1815" note four lines below correctly assigns Arakan to the
+  LATER Bodawpaya peak-extent era — the setup file inherited the uncorrected 1815-derived line. A
+  pre-existing checklist (`1763_DELTA_Asia.md:355`) explicitly flagged "verify 1763 Konbaung extent...
+  may need to trim Arakan/Assam/Manipur if added by 1815" years ago and it was never applied.
+- Checked Manipur/Assam separately — NOT actually a problem; BUR's core never extended there (no Meitei/
+  Assamese-culture provinces in BUR's core). The Delta checklist's caution was pre-emptive and doesn't
+  apply to this map.
+- Checked the Kokang-adjacent Shan-state cluster itself (Hsipaw/Lisu/Mongmit/Mongpan/Mongkung/Kengtung/
+  etc.) — all correctly modeled as tiny BUR client_states, matching real mid-18th-century Shan-state
+  subordination to Ava. NOT anachronistic. Verified programmatically: zero province overlap between CHI's
+  Yunnan core (614 provinces) and BUR/Shan-state cores — no border gap or double-claim either.
+- Second finding: BUR's ruler was never authored (no character file references BUR) — the Delta doc
+  already names the correct 1763 ruler (Hsinbyushin, acceded Jan 1763, son of Alaungpaya) but it was
+  never applied either.
+- Both real fixes (strip Arakan from BUR's core + decide unowned-frontier vs a minimal Arakan tag; author
+  Hsinbyushin) require a territorial-remap + new-entity design call, which is a genuine scope decision
+  beyond "investigate the border" — logged as follow-up **#56**, not actioned inline, per the
+  no-scope-expansion discipline (same pattern as #54 during #23).
+- **Commit**: `151fe6481` (research digest only), pushed. **STATUS: DIAGNOSED, follow-up #56 filed.**
