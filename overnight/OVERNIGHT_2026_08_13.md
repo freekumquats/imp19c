@@ -822,3 +822,32 @@
   mechanic itself is engine behavior, not provable from a script line, but strongly corroborated.
 - **Commit**: `6ddd18fd7`, pushed. **STATUS: DONE** (icon fixed; number diagnosed as not-a-bug, logged
   loudly rather than silently assumed fine).
+
+### Task #53 — audit overseas-colonization orphaned population modifiers — DIAGNOSED (no defect found)
+- Follow-up from #88, which found and fixed a genuine orphan bug: `qing_newworld_agriculture` (a
+  standalone `global_population_growth`/`global_population_capacity_modifier` modifier) was a SILO —
+  a second system modeling population relief that the #369 Malthusian pressure meter (`qing_pop_pressure`,
+  se_QING_POPULATION.txt) had zero awareness of, so the modifier's effect was invisible to the mechanic
+  meant to react to population pressure. #88's own review flagged 3-4 similarly-SHAPED modifiers in the
+  UNRELATED overseas-colonization subsystem as worth a separate look — this task is that look.
+- Found and checked ALL 6 colonization/new-world modifiers carrying `global_population_growth` (not
+  just the 3 named): `qing_nw_columbia_country`, `qing_oc_new_zealand`, `qing_oc_queensland`,
+  `qing_col_golden_shore`, `qing_col_new_holland_settled`, `qing_nw_alta_california_mod` — each granted
+  once, permanently (`duration = -1`), on a colonization mission's `on_completion`, in
+  `common/modifiers/qing_colonization_modifiers.txt`.
+- **Verdict: NOT orphaned, no fix needed.** These differ structurally from #88's actual bug in the one
+  way that matters: `global_population_growth` is a REAL, always-live VANILLA engine modifier key
+  (confirmed used the same way in `00_hardcoded.txt` and both oracle mods) that the engine applies
+  directly to the country's population-growth RATE every tick — it is not a mod-invented flag nobody
+  reads. The #369 pressure meter's own crowding driver reads `total_population` DIRECTLY at country
+  scope (`QING_pop_recompute_target`, se_QING_POPULATION.txt:60-88) — any extra growth these 6 modifiers
+  cause flows straight into the one number the meter already watches. There is no parallel/duplicate
+  population-relief CONCEPT here the way `qing_newworld_agriculture` duplicated the golden-crop relief
+  term; these are ordinary flavor-reward growth boosts that were never meant to be a pressure-meter INPUT
+  in the first place, and mechanically they already are one (via total_population), just not by name.
+  #88's bug was a modifier the pressure system needed to know about but couldn't see; these are
+  modifiers the pressure system already "sees" through the population count itself.
+- Also confirmed (per #88's own review correction) that `qing_nw_puget_sound`, previously miscited as a
+  4th orphan, does NOT carry `global_population_growth` — it's a commerce/naval-range-only modifier, so
+  there was never anything to check there.
+- No code change. **STATUS: DIAGNOSED — audit complete, no defect found, closing #53.**
