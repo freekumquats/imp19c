@@ -794,3 +794,31 @@
 - **Commit**: `1e93c2ede`, pushed. **STATUS: DONE** (11 sites fixed total; 3 pre-existing safe sites
   confirmed and left unchanged; verified clean by a second independent review pass after the CRITICAL
   was caught and fixed).
+
+### Task #50 — Zhengzhou city panel shows anomalous "+1815%" figure — FIXED (icon), diagnosed (number is not a bug)
+- Diagnosis: dispatched a trace agent (given the difficulty pinning an exact GUI widget from a
+  screenshot's pixels alone) which structurally matched the described icon/percent row to
+  `gui/province_window.gui:1323-1335` (the "province_output" `icon_and_text` block in the compact
+  city card), reading `local_output_modifier` via `GetModifierValue`/`GetModifierTooltip` with an icon
+  at `gfx/interface/icons/modifiers/local_output_modifier.dds`.
+- **Icon (real bug, fixed)**: confirmed via `git log --diff-filter=D` that this exact icon file was
+  deleted in commit `b11371ec3` ("Basic new game compatibility with 2.0", 2021) and never restored,
+  while the GUI's reference to it stayed live and unremoved ever since — every boot since 2021 has
+  rendered this row with the engine's missing-texture fallback glyph (a generic building/box), matching
+  the "anomalous icon" the user described. Restored the original 50x50 ARGB8888 DDS via `git show`
+  against the parent commit — byte-identical format/dimensions to the ~15 sibling icons in the same
+  directory (verified by code-review, including a git-history + DDS-header re-verification pass).
+- **Number (investigated, NOT a bug, not touched)**: traced `local_output_modifier`'s value to the
+  vanilla `civilization_value` modifier block (`common/modifiers/00_hardcoded.txt`, `local_output_
+  modifier = 1.5`), one of several ENGINE-HARDCODED modifier names in that file (its own header:
+  "these names can NOT be removed or changed, as the code uses them") that the engine auto-applies
+  SCALED by the province's own live matching attribute — never manually `add_*_modifier`'d anywhere in
+  script. Review corroborated the pattern with in-repo siblings carrying explicit "scaled by X" comments
+  (`tyranny`, `character_wealth_mod`, `loyal_cohorts`, `office_loyalty`, all in the same file) — and the
+  observed arithmetic (1.5 × Zhengzhou's civilization_value ~12 ≈ +1800%, plus the mod's own small
+  building/event `local_output_modifier` bonuses stacking on top) is the only mechanism that reaches
+  "+1815%"; a flat 150% could not. This is correct vanilla engine behavior for a highly-developed
+  metropolis-tier city, just visually startling — left untouched per the honest framing that the scaling
+  mechanic itself is engine behavior, not provable from a script line, but strongly corroborated.
+- **Commit**: `6ddd18fd7`, pushed. **STATUS: DONE** (icon fixed; number diagnosed as not-a-bug, logged
+  loudly rather than silently assumed fine).
