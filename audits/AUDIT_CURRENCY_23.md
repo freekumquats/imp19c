@@ -108,6 +108,79 @@ which of `need`'s inputs drives a given swing (a separate causal question, addre
 by a different route) — it only removes the display-cap censoring so that question can be asked with
 real numbers.
 
+## FINDING 5 — DIAGNOSED (revised 2026-08-13 after adversarial review found the first draft aimed
+## at the wrong function and the wrong "ruled out" list). Root mechanism unchanged; the real income
+## conduit and the real dominant channel are corrected below.
+**The core mechanism (unchanged, still correct).** `GT_set_tradegood_price`
+(`se_GLOBALTRADE_split.txt`, ~6044-6127) computes `local_price_$tradegood$ = zone_total_order_size /
+zone_stockpile × 0.6` (the divide is SKIPPED, not the whole calculation, when stockpile is 0/unset —
+Finding 3's fix covers exactly this skipped-divide case, and ONLY this case).
+`GT_split_update_wealth_owed_for_tradegoods` (~2498-2621) then sets
+`wealth_owed_for_$tradegood$ = this_governorship's_own_order_size × local_price_$tradegood$`. For a
+zone stockpile of exactly 1 unit, this gives a large number (own_order × zone_total_order × 0.6). But
+at a normal, non-thin stockpile the term is much smaller and close to linear — the first draft's
+"1,500,000" example only holds at stockpile = 1, an extreme case, not a typical one. **This finding
+does NOT yet prove the effect is large at typical stockpile levels — that is still open (see
+Confidence below).**
+
+**CORRECTED: the treasury-income conduit is a DIFFERENT function than the first draft named.**
+The first draft cited `GT_split_calculate_actual_share_of_expenses_category` (seller=the_state).
+That function computes a COST (its value is sign-flipped negative, ~4207-4210) — it cannot explain
+income being too high. The real income conduit is `GT_split_calculate_actual_share_of_income_category`
+(~4083-4092), called for EVERY seller — the_state AND every pop stratum — inside
+`GT_split_distribute_income_category` (~4094-4176). Each call reads the SAME `wealth_owed`-derived
+`trade_income_due_$category$` and scales it by that seller's own share weight.
+
+**CORRECTED: income tax and tariffs are NOT independent of this mechanism — withdrawn from the
+"ruled out" list.** `INCOME_governorship_income_tax_upper_strata`
+(`INCOME_svalues.txt:622-642`, confirmed by direct read) adds
+`this_income_from_manufacturing_upper_strata` and `this_income_from_shipping_upper_strata` straight
+into the income-tax base. These are the SAME `wealth_owed`-derived values as the_state's own share,
+just read for a different seller. Property tax and the cost-of-living excise duty remain
+independently clean (confirmed: they read population/housing counts and `WEALTH_cost_of_living_*`,
+not `wealth_owed`).
+
+**CORRECTED AGAIN (second review found the first correction cited a dead/parallel file with wrong
+numbers): the state-vs-strata weight gap is real but its size is NOT yet proven.** The live weights
+come from `GT_split_calculate_all_trade_shares` (`se_GLOBALTRADE_split.txt:3977-4021`), not from
+`GT_svalues.txt` (that file's `GT_trade_share_*` values are dead/unread by the income split — wrong
+citation, now withdrawn). For the manufacturing category, the live call sets `the_state = 0.001` and
+`upper_strata = 0.6` (`:4013-4014`) — a ~600× gap in the RAW weight, before population scaling.
+
+But `GT_split_calculate_trade_shares` (the function that actually applies these) then multiplies
+`trade_share_$category$_the_state` by `governorship_population` (the WHOLE population) and
+`trade_share_$category$_upper_strata` by `governorship_upper_strata` (only the upper stratum's own,
+much smaller population) — `:5704-5711`. This narrows the effective gap by an unknown amount,
+depending on what fraction of a governorship's population is upper strata (not looked up in this
+pass). The income-tax channel is also discounted by `INCOME_taxrate_income_tax` (a tax rate,
+`INCOME_svalues.txt:655-656`), while the state's own channel is not. **Whether income tax or the
+state channel is the larger contributor in practice is still an open, unproven question** — this
+finding does not pick a winner between them.
+
+**Status: PARTIALLY DIAGNOSED, mechanism confirmed real, magnitude and dominant channel NOT yet
+confirmed.** The order_size/stockpile-driven `wealth_owed` inflation is a real, unfixed gap in
+Finding 3's guard (confirmed: the guard only fires on exact-zero/unset stockpile,
+`se_GLOBALTRADE_split.txt` ~2549-2550) — but whether it is actually large at TYPICAL (not
+worst-case) stockpile levels, and which channel (income tax vs. the state's own share) dominates in
+practice, are both open questions. This finding does NOT yet meet the bar needed to move to a design
+pass; it needs the fresh-boot step below first.
+
+**Next step, before any design work.** Get one fresh boot with the Finding 3 fix's own diagnostic
+tags populated (`ECON_LOG_curx_natexp`, `ECON_LOG_curx_zerostock_guard`), and read the actual
+stockpile values for a few real goods/zones at that point — not the worst-case stockpile=1 example.
+If typical stockpiles are close to order size (not near-zero), this mechanism is likely small and a
+different, still-unfound cause may explain task #30. If typical stockpiles ARE thin, this mechanism
+is likely real and large, and the design pass should target the income-tax channel first, not the
+state's own tiny channel. Tracked as task #30 (existing) — this finding is a partial diagnosis for
+that task, not a finished one, and not yet a fix.
+
+**Confidence: medium on the mechanism being real** (the order_size/stockpile shape and the
+uncovered-by-Finding-3 gap are both confirmed by direct code reading); **low on the mechanism being
+the DOMINANT driver at typical (non-worst-case) stockpile levels** — this has not yet been checked
+against real numbers, and the first draft's "1,500,000" example only holds at an extreme,
+unrepresentative stockpile value. The only log available also predates the Finding 3 fix by ~7
+hours, so it cannot show the post-fix state either.
+
 ## Related files
 - `audits/SCRATCH_CURRENCY_23.md` — full working history: every hypothesis tried on this bug, and the
   adversarial review that refuted each one. Not committed to git; local reference only.
