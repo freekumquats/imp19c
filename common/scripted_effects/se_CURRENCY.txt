@@ -1339,6 +1339,12 @@ CURRENCY_grant_country_wealth = {
 		name = wealth_to_grant
 		value = $thousands$
 	}
+	# [fix, task #79 2026-08-14] seed the per-quarter one-shot-grant accumulator once so both branches
+	# below can safely change_variable/add into it regardless of call order (matches this codebase's
+	# own seed-before-accumulate convention, e.g. QING_ministry_recompute_perf_revenue's oversight-drag
+	# scratch vars). Reset by INCOME_update_treasury_country each quarter (se_INCOME.txt), after
+	# INCOME_national_total_quarterly_display has read it for that quarter.
+	if = { limit = { NOT = { has_variable = CURRENCY_oneshot_grants_this_quarter } } set_variable = { name = CURRENCY_oneshot_grants_this_quarter  value = 0 } }
 	if = {
 		limit = {
 			has_variable = official_currency
@@ -1378,6 +1384,20 @@ CURRENCY_grant_country_wealth = {
 			multiply = CURRENCY_wealth_value_1_unit_scaled_by_reserve_ratio_x1k
 		}
 		add_treasury = local_var:wealth_to_grant
+		# [fix, task #79 2026-08-14] this call pays the treasury DIRECTLY (add_treasury above), entirely
+		# outside INCOME_national_total_quarterly -- the SAME hidden-revenue visibility gap already
+		# closed for salt/Canton/caravan/opium (INCOME_svalues.txt), but for every ONE-SHOT caller of
+		# this function instead (marriage-pact dowries, treasure-fleet hauls, decline/keju/roster/
+		# frontier-sea events, the currency-crisis event) -- confirmed via a fresh-boot log read that a
+		# royal-marriage dowry (se_MARRIAGE.txt:265, thousands=30) actually fired once and, at this
+		# call's own conversion rate (~x400-1000 via CURRENCY_wealth_value_1_unit_scaled_by_reserve_
+		# ratio_x1k), lands squarely in the reported ~9000/quarter spike's order of magnitude -- a
+		# ONE-SHOT event-driven jump matches the user's own "some quarters, not every quarter" framing
+		# far better than any of the standing per-quarter streams already ruled out. Accumulate the
+		# REAL granted amount so INCOME_national_total_quarterly_display (read by the topbar/tooltip)
+		# can surface it the same quarter it fires; reset by INCOME_update_treasury_country each
+		# quarter after that display value is cached (se_INCOME.txt).
+		change_variable = { name = CURRENCY_oneshot_grants_this_quarter  add = local_var:wealth_to_grant }
 	}
 	else = {
 		# [#74 2026-08-11] FALLBACK GRANT instead of skipping to ZERO. The guard above rightly refuses to run
@@ -1388,6 +1408,9 @@ CURRENCY_grant_country_wealth = {
 		# of a plain literal reads no currency svalue). It undervalues vs the pegged conversion, but a modest
 		# real grant beats zero, and the common case (price resolved) still takes the exact-conversion branch above.
 		add_treasury = local_var:wealth_to_grant
+		# [fix, task #79 2026-08-14] same visibility fix as the main branch above -- this fallback also
+		# pays add_treasury directly, outside INCOME_national_total_quarterly.
+		change_variable = { name = CURRENCY_oneshot_grants_this_quarter  add = local_var:wealth_to_grant }
 		LOG_line = { sys = ECON  msg = "CURRENCY_grant_country_wealth: backing price unresolved this frame; granted nominal thousands directly (no peg conversion) for" }
 	}
 }
