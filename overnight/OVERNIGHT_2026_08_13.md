@@ -851,3 +851,27 @@
   4th orphan, does NOT carry `global_population_growth` — it's a commerce/naval-range-only modifier, so
   there was never anything to check there.
 - No code change. **STATUS: DIAGNOSED — audit complete, no defect found, closing #53.**
+
+### Task #55 — verify subject_add_to_customs_union_federation loc in-context — VERIFIED CLEAN (no defect)
+- Follow-up from #40's review, which flagged this loc key (duplicated verbatim across
+  `00_subject_rework_l_english.yml:97` and `trade_actions_l_english.yml:57`) as worth checking in-context
+  since it uses a DIFFERENT scope chain (`ROOT.GetCountry.MakeScope.GetVariable('member_of_federation')`)
+  from the `ROOT.MakeScope` bug #40 actually fixed, and the boot log never exercises it.
+- Traced the full mechanism: `common/customizable_localization/subject_interactions_custom_loc.txt`'s
+  `customs_union_button_tooltip` selector picks this loc variant when `any_governorships = { has_variable
+  = federation_customs_union }` passes on the OVERLORD. The loc text itself reads `member_of_federation`
+  on the SUBJECT's own country (`ROOT.GetCountry` — `ROOT` in a `type = country` custom_loc block IS the
+  country being interacted with) — confirmed via `se_federation.txt:42-47` that `member_of_federation` is
+  genuinely set as a COUNTRY-scope var (not a stray/wrong-scope reference) on every federation member,
+  pointing at `scope:federation_scope` — confirmed at `se_federation.txt:9-13` that this scope is
+  literally a PROVINCE (the federation's "capital" holding province) — so
+  `.GetProvince.MakeScope.Var('federation_name')` in the loc string is the CORRECT chain, matching the
+  var's actual stored type exactly. No `ROOT.MakeScope`-class defect here; internally consistent.
+- Checked the newest boot log: zero errors for `member_of_federation`/`federation_name`/this loc key (one
+  unrelated benign "set but never used" note for `federation_name` elsewhere, not a runtime failure).
+  Confirmed this is genuinely unverifiable live from THIS boot — the federation-customs-union mechanic is
+  a vanilla Western-power feature (German Confederation etc.), never exercised by a CHI-focused session,
+  and confirmed both loc files are vanilla base-game loc carried forward by the mod (not mod-authored
+  Qing content) — the duplicate key across 2 files is harmless (same string, last-load wins per PDX
+  convention), not a functional bug.
+- No code change. **STATUS: VERIFIED CLEAN — closing #55, no defect found.**
