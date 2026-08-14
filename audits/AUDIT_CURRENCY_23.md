@@ -313,7 +313,8 @@ a probe-only change (zero gameplay effect), landed now, not blocked on a fresh b
 
 **Status: root cause NOT yet found.** This is now an open, correctly-scoped hunt (which of 9 newly-
 probed goods crashed, and why) rather than a closed (wrong) diagnosis. Do not re-propose the
-reserve-ratio-rail theory — it is refuted, not just unconfirmed.
+reserve-ratio-rail theory — it is refuted, not just unconfirmed. Ruled-out hypotheses along the way
+(Cottage Industry buildings, Maritime Customs, #30) are logged in `SCRATCH_CURRENCY_23.md`, not here.
 
 ## Related files
 - `audits/SCRATCH_CURRENCY_23.md` — full working history: every hypothesis tried on this bug, and the
