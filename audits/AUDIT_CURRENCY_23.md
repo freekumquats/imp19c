@@ -266,6 +266,55 @@ itself partly fed by the same thin-stock `local_price` inflation from Finding 5 
 distinguished this pass — `ratio`'s own upstream inputs (`wvuraw`, agsilver) were not traced
 back to `wealth_owed` in this session. Not escalated to a new numbered finding pending that trace.
 
+## FINDING 7 — REFUTED (adversarial review, 2026-08-14): the reserve-ratio-rail theory for the
+## inflation escalation is wrong. Real cause: an unexplained ~51% collapse in the essentials-price
+## sum itself, in ONE quarterly tick, with 10 of its 12 inputs never having been probe-covered.
+
+My own first-draft diagnosis for the 7%->22% inflation climb (same Aug-14 boot as Finding 6) claimed
+`CURRENCY_reserve_ratio_impact` (`CURRENCY_svalues.txt:376-397`) rails at its `max=1` cap as CHI's
+silver reserve accumulates, permanently stepping down `CURRENCY_essentials_buying_power` ("ess")
+via its divisor. **An adversarial review agent disproved this directly against the same boot's
+exact-tick data**, and it does not survive:
+
+- `CURRENCY_reserve_ratio_impact` only takes the parabolic/capped branch when
+  `has_variable = public_debt_administration` — a var CHI never gets (only GBR/FRA/SPA/RUS get it at
+  setup, `se_CURRENCY.txt:964-979`, and only via a decision requiring `tech_public_debt_administration`).
+  CHI is ALWAYS on the plain `else` branch (`reserve_ratio_total / 3, min 0`) — a smooth, single-regime
+  function, not a two-regime rail.
+- Direct proof from the log: `wvuscaled` (`CURRENCY_wealth_value_1_unit_scaled_by_reserve_ratio`, the
+  actual divisor) moves 0.4052 -> 0.4058 (+0.15%) across the exact quarter where `ess` collapses 43->21
+  (-51%) and `ratio` jumps 1.26->2.0. The divisor is flat; it cannot be the cause.
+- Back-solving `ess x wvuscaled` (the numerator, i.e. the raw sum of the 12 `country_unit_price_*`
+  essentials goods) shows THAT sum itself falls ~51% in the same single tick, independent of anything
+  in the reserve-ratio chain.
+
+**What IS confirmed (unchanged, still correct):** the downstream algebra. `CURRENCY_private_cash_needed`
+tracks `ess` (`CURRENCY_svalues.txt:719-732`, confirmed against log: population and `trout` both flat
+across the same tick); `CURRENCY_private_cash_ratio = circ x 0.004 / need` (`:753-766`, numerically
+verified exact against the log to 3 decimal places both sides of the jump); `CURRENCY_amt_circulated_
+inflation = (ratio - 1) / 10` when `ratio > 1` (`:1180-1193`, exact match against the log's displayed
+%). So `infl` stepping to its >=10% band and staying there IS a direct, confirmed, mechanical
+consequence of `ratio` jumping — the chain from `ess` downward is solid. The break is upstream: WHY
+did the essentials-price SUM itself crash.
+
+**Why this wasn't caught immediately: instrumentation gap.** `CURRENCY_essentials_buying_power`
+(`CURRENCY_svalues.txt:677-688`) sums 12 goods: grain, livestock, fish, vegetables, temperate_fruit,
+processed_foods, clothing, furniture, pharmaceuticals, alcohol, luxury_clothing, luxury_furniture. The
+existing TZP probe (`tools/gen_econ_tzprobe.py`) only tracked 2 of these 12 (grain, fish) — both of
+which the review checked and found flat/unremarkable across the pivot tick. The other 10 were
+invisible to any log this project has ever produced. **Fix shipped this session:** extended
+`gen_econ_tzprobe.py`'s `GOODS` list with the 9 trackable remaining essentials (livestock, vegetables,
+temperate_fruit, processed_foods, clothing, furniture, pharmaceuticals, luxury_clothing,
+luxury_furniture) and regenerated `se_ECON_LOG_TZPROBE.txt`. `alcohol` is deliberately excluded — the
+generator's own prior note confirms it has no trade-good def block (unloaded, same class as the
+excluded `chocolate`) and would only ever band UNSET. The NEXT boot's `IMP19C TZP BAND <good> <zone>
+price` rows for these 9 goods will name whichever one actually crashed at the pivot quarter — this is
+a probe-only change (zero gameplay effect), landed now, not blocked on a fresh boot to ship.
+
+**Status: root cause NOT yet found.** This is now an open, correctly-scoped hunt (which of 9 newly-
+probed goods crashed, and why) rather than a closed (wrong) diagnosis. Do not re-propose the
+reserve-ratio-rail theory — it is refuted, not just unconfirmed.
+
 ## Related files
 - `audits/SCRATCH_CURRENCY_23.md` — full working history: every hypothesis tried on this bug, and the
   adversarial review that refuted each one. Not committed to git; local reference only.

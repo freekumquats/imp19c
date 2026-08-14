@@ -61,8 +61,22 @@ ZONES = [
 # EXACT-TICK section is metals-only, so log volume stays safe.
 # [#68] chili added so the new cottage-pharmaceutical MEDICINAL demand term on DEMAND_chili is boot-observable
 # (a script_value cannot debug_log; the chili demand band on this probe IS the diagnostic for #68's tuning).
+# [inflation-collapse-hunt 2026-08-14] The 12 goods CURRENCY_essentials_buying_power ("ess") sums
+# (CURRENCY_svalues.txt:677-688) are: grain, livestock, fish, vegetables, temperate_fruit,
+# processed_foods, clothing, furniture, pharmaceuticals, alcohol, luxury_clothing, luxury_furniture.
+# A real boot showed ess's numerator (the sum of all 12 country_unit_price_* reads) collapse ~51% in
+# ONE quarterly tick with no reserve-ratio/circulation cause found (adversarially confirmed REFUTED --
+# see audits/AUDIT_CURRENCY_23.md Finding 7) -- only grain/fish of the 12 were probe-covered, so WHICH
+# good(s) actually crashed could not be isolated from that boot. Added the other 9 tracked-tradegood
+# essentials here (livestock, vegetables, temperate_fruit, processed_foods, clothing, furniture,
+# pharmaceuticals, luxury_clothing, luxury_furniture) so the next boot's BAND rows can name the culprit
+# directly. alcohol is DELIBERATELY excluded: per this file's own #52-review note above, alcohol has NO
+# trade-good def block (unloaded) -- probing it would just band UNSET forever, exactly like the
+# excluded chocolate case, so it is skipped rather than adding a dead row.
 GOODS = ["silver", "gold", "grain", "salt", "fish", "tea", "silk", "silk_cloth",
-         "porcelain", "gems", "opium", "coffee", "sugar", "spices", "tobacco", "chili"]
+         "porcelain", "gems", "opium", "coffee", "sugar", "spices", "tobacco", "chili",
+         "livestock", "vegetables", "temperate_fruit", "processed_foods", "clothing",
+         "furniture", "pharmaceuticals", "luxury_clothing", "luxury_furniture"]
 
 # China-adjacent vs European TZs — the pair the regional-divergence question (#50) turns on. Logged as an
 # explicit BANDSET tag so the read-back can eyeball the same-good gap without hunting all 22 zones.

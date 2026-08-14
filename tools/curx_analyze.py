@@ -12,7 +12,9 @@ import sys, re, argparse
 ap = argparse.ArgumentParser()
 ap.add_argument("--good", default="silver", help="which TZP-tracked good to analyze (default: silver). "
                  "One of: silver, gold, grain, salt, fish, tea, silk, silk_cloth, porcelain, gems, opium, "
-                 "coffee, sugar, spices, tobacco, chili (see tools/gen_econ_tzprobe.py GOODS list).")
+                 "coffee, sugar, spices, tobacco, chili, livestock, vegetables, temperate_fruit, "
+                 "processed_foods, clothing, furniture, pharmaceuticals, luxury_clothing, "
+                 "luxury_furniture (see tools/gen_econ_tzprobe.py GOODS list).")
 args = ap.parse_args()
 GOOD = args.good
 
