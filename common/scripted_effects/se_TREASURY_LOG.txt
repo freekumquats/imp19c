@@ -1,0 +1,44 @@
+########################################################################
+# se_TREASURY_LOG.txt — [task #79/#82 2026-08-14] LOG EVERY add_treasury CALL FOR CHI.
+#
+# TREASURY_LOG_it is a PURE LOGGING call, added as an EXTRA line right after each of the
+# 528+ existing add_treasury call sites across common/ and events/ (mechanics, decisions,
+# missions, event options) -- it does NOT wrap, replace, or touch add_treasury itself.
+# add_treasury stays exactly where it always was, moving exactly the money it always moved;
+# this effect only reads $amount$ (the SAME expression already passed to add_treasury on
+# the line above it) and logs it when the acting country IS CHI. Silent no-op for every
+# other country, so it is safe to call from any scope/context add_treasury is legal in.
+#
+# EXACT-VALUE LOGGING: reuses the proven ECON_LOG_curx_tick_emit unit-count idiom
+# (se_ECON_LOG.txt) -- the ONLY proven way to render an exact numeric value in this engine's
+# logs (no string interpolation exists). scale=1 (treasury amounts are already in the right
+# unit) -- this project's own 8000-line-emit cap on that idiom is an accepted cost for an
+# EXACT number, per the standing "log everything, volume is not a constraint" directive. A
+# negative amount (an expense) is flagged SIGN-NEGATIVE and logged as its positive
+# magnitude (the emit helper's own convention, matching every other exact-tick probe here).
+#
+# ATTRIBUTION: the engine's own debug.log already prints the FULL calling file:line/
+# function-name stack for every debug_log/LOG_enter/LOG_line call (confirmed directly this
+# session, e.g. "common/on_action/marriage_on_actions.txt line: 16; MARRIAGE_pulse line: 31;
+# ...") -- so a single shared label ("IMP19C CURXV LABEL addtreasury") is sufficient; the
+# call-stack trace that already accompanies every log line tells you WHICH of the 528 sites
+# fired, with no need for 528 distinct labels.
+########################################################################
+TREASURY_LOG_it = {
+	if = {
+		limit = { tag = CHI }
+		# (1) the delta this call just added/subtracted.
+		set_variable = { name = ECON_LOG_tickval  value = $amount$ }
+		set_variable = { name = ECON_LOG_tickscale  value = 1 }
+		debug_log = "IMP19C CURXV LABEL addtreasury"
+		ECON_LOG_curx_tick_emit = yes
+		# (2) the RESULTING treasury balance, read AFTER add_treasury already applied the delta
+		# above (this effect is always called immediately following add_treasury at every site) --
+		# so a boot log can read the running balance directly, tick by tick, without having to sum
+		# every prior delta by hand.
+		set_variable = { name = ECON_LOG_tickval  value = treasury }
+		set_variable = { name = ECON_LOG_tickscale  value = 1 }
+		debug_log = "IMP19C CURXV LABEL addtreasury_balance"
+		ECON_LOG_curx_tick_emit = yes
+	}
+}
