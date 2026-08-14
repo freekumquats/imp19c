@@ -2751,7 +2751,20 @@ QING_DECLINE_granary_concrete = {
 	LOG_enter = { sys = QING  fn = "QING_DECLINE_granary_concrete" }
 	if = {
 		# GOOD YEAR, reserves high: build ONE new granary where the basin lacks one.
+		# [fix 2026-08-14] BUILD specifically throttled to ~3 years (1095 days, best-guess/boot-
+		# tunable). QING_DECLINE_granary_concrete itself only runs on the ~90-day governance pulse
+		# already (qing_mechanics_pulse_cooldown), but with MANY Yellow River basin cities lacking a
+		# granary at a 1763 start, this branch matched and built a new one on EVERY one of those
+		# quarterly firings until the backlog was exhausted -- reported as "auto-built very quickly,
+		# every quarter". A real institution-building programme, not a market reaction, so a slower
+		# multi-year cadence fits better than the governance pulse's own rate.
+		# [review-fix, same date] the cooldown must gate ONLY this build sub-block. An earlier draft
+		# put it in this outer limit, which also silently gated the RESTOCK block below (a good-year
+		# stock recovery would then fail to lift qing_granary_empty for up to 3 years, leaving healthy
+		# granaries wrongly flagged empty) -- restock is now its own sibling `if` below, ungated by
+		# this cooldown, exactly as the original code intended.
 		limit = {
+			NOT = { has_variable = qing_granary_build_cd }
 			var:qing_granary_stock >= 60
 			treasury >= 255   # [#92] the state-funded expansion must be affordable (proven idiom se_QING_CARAVAN:482); else it waits
 			any_owned_province = {
@@ -2760,6 +2773,7 @@ QING_DECLINE_granary_concrete = {
 				NOT = { has_building = qing_granary_building }
 			}
 		}
+		set_variable = { name = qing_granary_build_cd  days = 1095 }
 		ordered_owned_province = {
 			order_by = total_population
 			max = 1
@@ -2782,8 +2796,14 @@ QING_DECLINE_granary_concrete = {
 			add_treasury = -255
 			trigger_event = { id = qing_revenue.6  days = 1 }
 		}
-		# [#429] reserves are healthy again — RESTOCK the drained granaries: lift the empty flag from
-		# every basin granary that carries it (the stores are refilled; the building was never lost).
+	}
+	# [#429] reserves are healthy again — RESTOCK the drained granaries: lift the empty flag from
+	# every basin granary that carries it (the stores are refilled; the building was never lost).
+	# [review-fix 2026-08-14] pulled out of the good-year build `if` above -- this must fire on the
+	# stock band ALONE, every pulse, with no build cooldown/treasury/backlog dependency, or a granary
+	# emptied by famine stays wrongly flagged empty for up to 3 years after reserves actually recover.
+	if = {
+		limit = { var:qing_granary_stock >= 60 }
 		every_owned_province = {
 			limit = { has_province_modifier = qing_granary_empty }
 			remove_province_modifier = qing_granary_empty
