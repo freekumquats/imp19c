@@ -5,6 +5,14 @@
 INCOME_national_total_quarterly = {
 	# Scope: Country
 	# This should be cached quarterly to minimise hot-loading it all the time as it is always visible in the ingame topbar
+	# [fix, CRITICAL correction 2026-08-14] do NOT add INCOME_national_total_from_qing_revenue here.
+	# This exact script_value is what INCOME_update_treasury_country's add_treasury reads
+	# (se_INCOME.txt:62) -- it is the REAL PAYMENT, not a display-only figure. Salt/Canton/caravan
+	# already pay the treasury directly via their own add_treasury calls in their respective pulses
+	# (se_QING_SALT.txt:180, se_QING_CANTON.txt:210, se_QING_CARAVAN.txt:265); adding their cached
+	# totals here as well double-credits them every quarter (caught by adversarial code review before
+	# commit). The UI-visibility fix lives ENTIRELY in INCOME_national_total_quarterly_display below,
+	# a separate value that is never read by add_treasury.
 	value = INCOME_national_total_from_regions
 	add = INCOME_national_total_from_subjects
 	# Negative
@@ -14,6 +22,44 @@ INCOME_national_total_quarterly = {
 	add = INCOME_cost_navy_supplies_country
 	add = CURRENCY_national_debt_interest_actual_wealth_cost
 	add = INCOME_cost_poor_law_spending
+}
+
+# [fix] DISPLAY-ONLY total = the real payment (INCOME_national_total_quarterly) + the Qing revenue
+# suite that pays the treasury through its OWN separate add_treasury calls. Read by the topbar's
+# Plus/Minus/Change bindings and the Ministry of Revenue's Total line (gui/ingame_topbar.gui,
+# gui/qing_revenue_ministry.gui) -- NEVER by add_treasury -- so it can show the true quarterly
+# treasury movement without paying anything twice.
+INCOME_national_total_quarterly_display = {
+	# Scope: Country
+	value = INCOME_national_total_quarterly
+	add = INCOME_national_total_from_qing_revenue
+}
+
+# [fix] the STANDING Qing quarterly revenue streams that pay add_treasury directly outside the
+# vanilla governorship-summed INCOME_governorship_total chain: salt gabelle (se_QING_SALT.txt,
+# QING_salt_income, qing_salt_income_last), Canton customs (se_QING_CANTON.txt, QING_canton_pulse,
+# qing_canton_last_state), caravan trade (se_QING_CARAVAN.txt, qing_caravan_income_last). All three
+# are CHI-only mechanics (the vars only exist once QING_revenue_pulse/QING_canton_pulse have fired
+# for CHI at least once), so every non-Qing country reading this same shared total correctly gets 0.
+# Tribute (se_SUBJECT_QING.txt/se_QING_TRIBUTE.txt) is deliberately NOT folded in here: it is an
+# episodic per-subject payment, not a standing per-quarter line item like the three above, and has
+# no persisted "_last" cache to read (it pays and is gone) -- closer in kind to INCOME_national_
+# total_from_subjects, which already exists as its own line.
+INCOME_national_total_from_qing_revenue = {
+	# Scope: Country
+	value = 0
+	if = {
+		limit = { has_variable = qing_salt_income_last }
+		add = var:qing_salt_income_last
+	}
+	if = {
+		limit = { has_variable = qing_canton_last_state }
+		add = var:qing_canton_last_state
+	}
+	if = {
+		limit = { has_variable = qing_caravan_income_last }
+		add = var:qing_caravan_income_last
+	}
 }
 
 INCOME_national_total_from_regions = {
