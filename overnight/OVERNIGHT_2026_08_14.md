@@ -203,6 +203,33 @@ trade). Implemented across `se_QING_OPIUM.txt`, `se_QING_FRONTIER_PICKER.txt`, a
 (`INCOME_national_total_from_qing_revenue`) so it doesn't immediately become a fifth hidden-income
 gap. Code review in progress at time of this log entry.
 
+## Task #63 continued — Opium Commissioner review landed CLEAN, committed
+Review (agent `aa07c1b949914b17c`) returned CLEAN, no CRITICAL/HIGH. One MEDIUM left
+open and logged rather than hidden: the nested `multiply = { value = 100 subtract =
+var:qing_opium_commissioner_squeeze } }` inside a `change_variable` (`se_QING_OPIUM.txt`
+ramp function) is proven only in `script_value` contexts elsewhere in this repo, never
+before demonstrated inside an in-effect `change_variable`. Arithmetic hand-verified
+correct (squeeze=0→-4, squeeze=100→0, squeeze=50→-2); the open risk is purely whether the
+engine's parser accepts this construct here. Per Rule 1a this is NOT a hard block — shipped
+as-is, flagged for boot confirmation, not held back.
+**Commit:** `bb3bbffbd`. **Status: DONE (implementation), boot-verification of the one
+MEDIUM-flagged construct still outstanding.**
+
+## Task #59/#62 — Revenue Minister oversight-drag term (h) + Customs squeeze meter: DONE
+Implemented `DESIGN_59_REVENUE_SQUEEZE_PENALTY.md` + `DESIGN_62_CUSTOMS_SQUEEZE_METER.md`
+together in one pass (the docs are explicitly coupled — #62 depends on #59's scaffold).
+Term (h) in `QING_ministry_recompute_perf_revenue` adds a running-average "subordinate
+oversight drag" (Salt/Canton×0.7/Caravan/Customs squeeze meters ÷ count×9, mathematically
+identical to the old fixed /27 divisor when Customs is absent). Customs gained its own
+`qing_customs_ig_squeeze` meter (seed 30, mirrors Hart's `.corruption` when seated, decays
+toward baseline when vacant — Customs' default state, unlike the other three offices).
+**Review:** dispatched to a fresh agent covering both files together — CLEAN, no
+CRITICAL/HIGH/MEDIUM. Hand-traced running-average arithmetic against 3 cases (3-office
+baseline, all-maxed, Customs-present-and-maxed) all landed exactly on the design docs' own
+predicted values (−3.0, −10.0, −10.28 respectively). One LOW doc nit (new squeeze var
+missing from the file-header inventory) — fixed before commit.
+**Commit:** `daf4732cf`. **Status: DONE.**
+
 ## Related files
 - `audits/AUDIT_CURRENCY_23.md` — Finding 6 (treasury-spike hypotheses ruled out/advanced),
   Finding 7 (inflation reserve-ratio theory refuted, corrected direction).
