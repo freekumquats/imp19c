@@ -875,3 +875,28 @@
   Qing content) — the duplicate key across 2 files is harmless (same string, last-load wins per PDX
   convention), not a functional bug.
 - No code change. **STATUS: VERIFIED CLEAN — closing #55, no defect found.**
+
+### Task #54 — INCOME_sell_reserves unit mismatch for CHI — MISDIAGNOSIS, closed (no fix)
+- The original #23 diagnosis pass claimed `INCOME_sell_reserves` (se_INCOME.txt:716-761) mixes units for
+  CHI: depletes `silver_reserve_size` (labeled "千兩" in a seeding comment) but prices/credits using
+  `global_base_import_price_silver` (labeled "hundreds-lb"), and pollutes `silver_stockpile` with the
+  raw number. Dispatched a dedicated verification agent (research-only, no edits) to confirm or refute
+  before writing a fix, given the severity framing ("real economic bug, not display").
+- **Verdict: misdiagnosis, matching #23's own "not a bug" pattern.** `silver_reserve_size` is ONE engine
+  variable seeded identically for every country (GBR=7, FRA=0, CHI=62000, etc.) via the same
+  `CURRENCY_country_setup_reserves` macro, and read by the SAME uniform backing-value formula
+  (`CURRENCY_update_backing_value`, se_CURRENCY.txt:1996/2018) with zero country-specific branching
+  anywhere. The "千兩" comment is a MASS-EQUIVALENCE relabeling, not a different scale: the mod's own
+  sourcing states 100 troy-lb ≈ 1000 kuping taels (both ≈37.3kg of silver) — so CHI's 62000 genuinely IS
+  62000 of the SAME engine unit every other country uses, just a historically much larger hoard (per
+  #372/#425's own research), not a rescaled number needing conversion. `INCOME_sell_reserves`'s three
+  operations (deplete reserve / credit treasury / credit stockpile) are tautologically unit-consistent
+  by construction for every country: `amount_to_sell = deficit / global_base_import_price_$metal$`, so
+  `price × amount_to_sell = deficit` exactly, with no cross-unit multiplication anywhere, and the
+  stockpile credit uses the same global price unit the trade system already values that stockpile at.
+- One genuinely minor, non-functional finding logged but not worth its own fix: the CHI seeding block's
+  two adjacent lines (`silver_reserve_size` labeled "千兩", `silver_reserve_accumulation_rate` on the
+  next line labeled "hundreds lb") use inconsistent comment labels for the same variable family — almost
+  certainly what seeded the original misdiagnosis's suspicion. A one-line comment clarity fix, not a
+  functional issue; not actioned as its own task since it's purely cosmetic.
+- No code change. **STATUS: MISDIAGNOSIS — closing #54, no defect found** (same resolution class as #23).
