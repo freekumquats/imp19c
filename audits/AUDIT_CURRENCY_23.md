@@ -181,6 +181,91 @@ against real numbers, and the first draft's "1,500,000" example only holds at an
 unrepresentative stockpile value. The only log available also predates the Finding 3 fix by ~7
 hours, so it cannot show the post-fix state either.
 
+## FINDING 6 — fresh boot (logs.zip Aug-14 02:10, 5 Dec 1763 → past 3 Jun 1766, 29 PRE/POST
+## quarter-marks) — answers part of Finding 5's "next step", rules out 3 treasury-spike
+## hypotheses, and surfaces one new instrumentation gap. NOT the currency-oscillation bug;
+## this is the separate "treasury jumps ~2-3x more than the displayed quarterly income every
+## other quarter" symptom the user reported live during this same boot.
+
+**RULED OUT — quarterly pulse double-firing.** Grepped every `IMP19C CURX QUARTER-MARK
+PRE/POST` line's wall-clock timestamp directly from debug.log: all 29 are evenly spaced
+(30s-5min apart), no two ever land back-to-back. `INCOME_update_treasury_country` (the ONLY
+`add_treasury` call reading the cached `INCOME_national_total_quarterly` var that the topbar
+"Change" text also reads, `gui/ingame_topbar.gui:801`) is called from exactly one recurring
+site (`oa_wealth_changes.txt:206`, inside `quarterly_trade_pulse`) plus two ONE-TIME sites
+(`on_game_initialized`, `FUNC_setup_new_country`) that cannot produce a recurring alternating
+pattern. The topbar "Change" number and the actual `add_treasury` amount read the exact same
+variable — they cannot legitimately diverge from each other by construction.
+
+**RULED OUT — reserve-selling / deficit mitigation.** `INCOME_mitigate_deficit` (which DOES
+call `add_treasury` on its own, outside the cached-var path above) only fires when
+`treasury < 0`. Zero occurrences of its LOG_enter, `DEBT_events.1`, or `negative_treasury`
+anywhere in this boot's debug.log — CHI never went into deficit this run. Ruled out for this
+boot; may still be worth re-checking under an actual deficit run.
+
+**RULED OUT (as a double-count) — "Tariffs and shipping" vs "Tariffs" magnitude gap.**
+The topbar tooltip's "Tariffs and shipping" (`INCOME_national_total_from_tariffs_and_shipping`,
+`INCOME_svalues.txt:43-49`) sums `INCOME_governorship_tariffs_and_shipping` across EVERY
+governorship via `every_governorships`. The Economy tab's "Tariffs +74.173 (7.5% rate)" line
+is ONE governorship's own `INCOME_governorship_tariffs_total_positive` figure. An empire-wide
+total being ~20-40x one governorship's figure, for Qing's dozen-plus governorships, is the
+expected shape of a sum — not a double-count. **However, a real defect was found in the same
+read:** `INCOME_governorship_tariffs_and_shipping = tariffs_total_positive + state_port_charges`
+(`INCOME_svalues.txt:184-189`), and `INCOME_governorship_state_port_charges`
+(`:829-843`) reads `this_income_from_shipping_the_state` / `this_expenses_from_shipping_the_state`
+— grepped across all of `common/`, **these two vars are never `set_variable`'d anywhere**. The
+"shipping" half of "Tariffs and shipping" is dead code, always contributing exactly 0; the line
+is really just "Tariffs" (summed nationally) under a misleading label. Cosmetic, not a magnitude
+bug, but worth a follow-up: either wire real shipping income into these vars or rename the line.
+
+**STILL OPEN, but advanced with real data — Finding 5's thin/zero-stockpile `wealth_owed`
+mechanism.** This boot is the "fresh boot" Finding 5 asked for. `tools/curx_analyze.py`'s
+oscillation summary shows **16 of 22 trade zones TOGGLE stock band across the 29 quarters**,
+and at least 9 zones (`east_europe`, `east_mediterranean`, `east_north_america`, `india`,
+`indo_china`, `south_east_asia`, `upper_yangtzi`, `west_africa`, `western_steppe`,
+`yellow_sea`) pass through an exact `stock=0` state at some point — the thin/zero condition
+Finding 3's guard targets is the COMMON case for most zones, not a rare edge case. Order size
+for most zones sits in a comparatively stable 10-100 band (100-1000 for `india`, consistently)
+while stock swings far more widely (0 to 100-1000) — so when a zone's stock dips into
+thin-but-NONZERO territory (1-10, 0.1-1), `order/stockpile` spikes, and Finding 3's guard
+(which only fires at EXACT zero/unset stockpile, confirmed unchanged) does NOT catch it. This
+corroborates Finding 5's open hypothesis that the thin-stock gap is live and frequent.
+
+**But a genuine negative data point against it being the DOMINANT driver:** `natexp`
+(`TRADE_national_expenditure`, the exact metric Finding 3's fix added specifically to measure
+this channel) stayed NEGATIVE and near-zero (coarse band "abs 0-10k", exact tick = 0) across
+ALL 29 quarters of this boot — confirmed genuinely SET every quarter (zero hits on its own
+"= UNSET" log branch), not an unread/uninitialized var. If wealth_owed-driven expenditure were
+spiking from the thin-stock local_price blowups, this expenditure-side metric should show it;
+it doesn't, in this run. This does NOT clear the income side (tariffs/income-tax also read
+wealth_owed, and natexp is expenditure-only) — so Finding 5 remains open, now narrowed: the
+thin-stock gap is confirmed frequent, but its effect (if any) must be showing up on the
+INCOME side, not the expenditure side measured by natexp.
+
+**NEW — instrumentation gap found, not yet a claim about the economy.** `wealthgen`'s
+exact-tick probe (`se_ECON_LOG.txt:829`, the `IMP19C CURXV LABEL wealthgen` line) has NO
+matching coarse-band `IMP19C CURX wealthgen ...` call anywhere in the codebase (only `natexp`
+got one, at `se_ECON_LOG.txt:652`) and reads exact 0 for all 29 quarters. Not yet distinguished
+whether wealth-generation is genuinely near-zero this boot or this specific probe is unwired
+to a live source — flagged for whoever picks up Finding 5 next, not investigated further here.
+
+**Inflation (7%→22% reported by the user across this same boot) — separate mechanism, real
+and structural, not a bug in the sense of a broken formula.** The CHI currency-chain exact
+values show `ratio` and `gbip` making a PERMANENT step up between quarter-index 10 and 11
+(ratio 1.26→2.00, gbip 0.996→1.002 crossing into the next display band) and then **staying
+elevated for the remaining 18 quarter-marks** — a one-time regime shift, not a returning
+oscillation (the #23 bug this doc otherwise tracks was periodic and was fixed in Finding 1).
+`infl`'s coarse band moves in lockstep (settles at ">= 10pct" from the same index onward, per
+the CHI CURRENCY CHAIN table). This is consistent with the reported 7%→22% climb: once `ratio`
+(a trade-wealth/reserve valuation ratio) steps up, `infl` steps up with it and does not revert,
+because nothing in this system currently pulls `ratio` back down once trade wealth outgrows
+reserves — matching the standing `imp19c-no-restoring-drift-ratchet-rule` diagnosis for other
+passive metrics in this codebase. Whether the step is a REALISTIC consequence of a genuinely
+growing trade economy (more governorships/trade volume outpacing metal-reserve growth) or is
+itself partly fed by the same thin-stock `local_price` inflation from Finding 5 was not
+distinguished this pass — `ratio`'s own upstream inputs (`wvuraw`, agsilver) were not traced
+back to `wealth_owed` in this session. Not escalated to a new numbered finding pending that trace.
+
 ## Related files
 - `audits/SCRATCH_CURRENCY_23.md` — full working history: every hypothesis tried on this bug, and the
   adversarial review that refuted each one. Not committed to git; local reference only.
