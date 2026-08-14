@@ -101,14 +101,26 @@ def check_bom_eol(path, staged):
 def check_log_macro(path):
     # LINE-LEVEL: scan only the lines THIS commit adds (not the whole file), so a pre-existing
     # violation elsewhere doesn't block an unrelated clean commit.
+    #
+    # [2026-08-14 correction, task #84] '#' and '$' are NOT the same failure and must not share a
+    # verdict. A bare '#' starts a COMMENT in this engine even inside a quoted string, truncating
+    # the line at PARSE time — everything after it, including closing braces, is chopped, which can
+    # desync brace-tracking for the whole file. That is a real, file-corrupting compile hazard and
+    # stays a hard BLOCK. A '$param$' is different: verified directly against a real -debug_mode
+    # boot's debug.log (task #84) across single-param, multi-param, negative-number, and expression-
+    # valued cases — the call is NOT voided. It fires and renders the real substituted value every
+    # time; the only defect is the cosmetic mangling se_LOG.txt's own header already documents and
+    # the project already tolerates for $sys$/$msg$ (one char eaten before the token, a stray
+    # trailing '$' left over). Ugly, not broken — so '$' is a WARNING, not a fail.
     for i, line in added_lines(path):
         if not LOGFN.search(line):
             continue
         for m in re.finditer(r'"([^"]*)"', line):
             s = m.group(1)
-            if "$" in s or "#" in s:
-                bad = "$" if "$" in s else "#"
-                fails.append(f"[LOGMACRO] {path}:{i}: '{bad}' inside a LOG string voids the whole call: \"{s[:60]}\"")
+            if "#" in s:
+                fails.append(f"[LOGMACRO] {path}:{i}: '#' inside a LOG string truncates the line at parse time: \"{s[:60]}\"")
+            elif "$" in s:
+                warns.append(f"[LOGMACRO] {path}:{i}: '$' inside a LOG string renders mangled but NOT voided (cosmetic only, see se_LOG.txt): \"{s[:60]}\"")
 
 def main():
     files = [f for f in staged_files()]
