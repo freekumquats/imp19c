@@ -16,6 +16,60 @@
   literal ledger reconciliation. Boot-tune against econ logs; if customs visibly dominates or is
   inert relative to salt/canton/caravan, retune the scale here, not the shared /4 divisor. See
   design/DESIGN_51_CUSTOMS_REVENUE_PERF_ROLLUP.md.
+- **#56 Indo-China rulers**: CPK (Sayakumane), LPR (Sotika-Kuomane), VIN (Ong Long), PHN (Chao Ong Lo)
+  all get a placeholder `birth_date` of c.1720-1725 — sources confirm each reigned through 1763.2.16
+  but do not document an exact birth date. Best-guess adult age only; not a claim of a sourced date.
+
+## Task #56 — Fix BUR 1763 territory + author minor Indo-China rulers — DONE
+- **What it was**: task title named a single fix ("strip Arakan core, author Hsinbyushin ruler") for
+  BUR, following on from #47's Kokang-border research digest
+  (`research/RESEARCH_KOKANG_BURMA_BORDER_1763.md`), which found BUR's `own_control_core` at 1763 start
+  was still carrying its full 1815-inherited territory, including Arakan (independent under the Mrauk-U
+  dynasty until Konbaung's 1785 conquest — 22 years after this mod's 1763.2.16 start).
+- **Territorial half**: added new tag `ARK` (`setup/countries/countries.txt`, `setup/countries/
+  indo_china/arakan.txt` — new file) and carved provinces 30/1696/5667/6627 (Arakan proper, per
+  `map_data/areas.txt`'s own area boundary, distinct from Pegu/Lower Burma) out of BUR's
+  `own_control_core` in `setup/main/00_default.txt`, giving ARK its own country block (absolute_kingdom,
+  burmese/theravada, capital=30). Both blocks got comment headers citing #56 and the research digest.
+- **Scope decision (mid-task, logged per Rule 1's genuine-user-decision carve-out)**: before authoring
+  a ruler, checked whether any OTHER minor Indo-China tag had an authored ruler — none did; all ~20
+  siblings (Hsipaw, Kengtung, Siam, Cambodia, the Lao/Vietnamese splinters, etc.) ran on the engine's
+  generated placeholder. Authoring Hsinbyushin alone for BUR would have been the sole exception among
+  ~20 siblings, an inconsistent one-off. This is a genuine judgment call the code/history can't settle
+  on its own (how far to widen scope), so — per the skill's Rule 1 exception for a real user-only
+  decision — asked the user directly rather than picking silently. **User chose the largest of 3
+  offered options: research and author historically-correct 1763 rulers for every minor Indo-China tag
+  with a documentable individual, not just BUR.** This is a deliberate, user-approved scope expansion,
+  not a self-granted one.
+- **Research correction (own assumption overturned)**: the task's own title named "Hsinbyushin" as
+  BUR's ruler, matching common knowledge of the Konbaung dynasty's most famous 18th-century king — but
+  research established Hsinbyushin only accedes 1763.11.28, AFTER the mod's actual 1763.2.16 start
+  (confirmed against `bookmark/1763_bookmark.md:76`, "day after the Treaty of Hubertusburg"). The
+  ruler correctly on the throne at the actual start date is **Naungdawgyi**. Used Naungdawgyi instead,
+  overriding the task title's own wording in favor of accuracy at the real start date. Two more of my
+  own first-guesses were also corrected by the research pass before writing anything: VIE is Nguyễn
+  Phúc Khoát (not Phúc Thuần, who only succeeds 1765), VIN is Ong Long (not Ong Boun/Siribunyasan, who
+  only succeeds 1767).
+- **Ruler half**: new file `setup/characters/00_Indo_China.txt`, char IDs 647-655 (contiguous off the
+  confirmed prior global max of 646), one per tag, each seated via the proven AUS/Korea template
+  (`c:TAG={ set_as_ruler=char:N }` from inside the character block itself — no `00_default.txt` change
+  needed for ruler-seating). Rulers authored: BUR=Naungdawgyi (b.1734, `tactician`), SIA=Ekkathat
+  (b.1718, `lazy` — matches his documented reputation as a disengaged ruler who deferred to his
+  brothers-in-law), CBI=Outey Reachea II (b.1740), CPK=Sayakumane, LPR=Sotika-Kuomane, VIE=Nguyễn Phúc
+  Khoát (b.1714), TRH=Trịnh Doanh (b.1720, `tactician` — successful revolt-suppression record),
+  VIN=Ong Long, PHN=Chao Ong Lo. ARK (this task's own new tag) and CPA (Champa) deliberately get NO
+  authored ruler — research found no individually-documented monarch for either at this date, so both
+  stay on the engine-generated default, same as the other 14 minor tags (CHH/CMI/HSI/KTG/MKN/MLM/MMT/
+  MPN/TNI/LPG/LPP/LSU/NAN + CPA) that were checked and confirmed to have no viable documented ruler.
+- **Review, one fix**: code-review agent found `add_trait = decadent` (my first draft, for SIA/Ekkathat)
+  is not a defined trait anywhere in `common/traits/` — would have silently no-op'd and logged
+  "invalid trait" noise. Swapped for the verified `lazy` (`common/traits/00_personality.txt:548`),
+  which fits the same historical intent. Also added a one-line doc note flagging the 4 placeholder
+  birth dates as best-guess (see ASSUMPTIONS above). All other 8 checks (char-ID contiguity, template
+  match, tag/culture/religion validity, birth-date plausibility, no parser-desync hazard, `dna=""`
+  convention, no double ruler-seating, no BOM) passed clean on first pass.
+- Committed `6bf0364be` (territory) + `24f07942e` (rulers). Both pushed together to `merge-overnight`.
+- **STATUS: DONE — closing #56.**
 
 ## Task #49 — "A Minister Called to Account" duplicate effects — DONE
 - **What it was**: option `.b` visibly double-strips the same character's modifiers (character-
