@@ -930,6 +930,62 @@ QING_ministry_recompute_perf_revenue = {
 		if = { limit = { var:qing_min_revenue_inflow > 15 } set_variable = { name = qing_min_revenue_inflow  value = 15 } }
 		change_variable = { name = qing_min_perf_revenue  add = var:qing_min_revenue_inflow }
 		remove_variable = qing_min_revenue_inflow
+		# (h) [#59] SUBORDINATE OVERSIGHT DRAG — a minister who lets graft run unchecked under his
+		# own purview pays a reputational cost distinct from the lost-revenue reward already
+		# reflected in (g) (squeeze already shaves the raw income figures (g) sums; this is a
+		# DIFFERENT quantity — oversight failure, not revenue loss — deliberately continuous like
+		# siblings (d)/(e)/(f), NOT a cliff: #111a (se_QING_CANTON.txt) already retired a
+		# squeeze>=60 CLIFF on this same meter for yield-grading, for the same reason a cliff is
+		# the wrong shape here. Canton weighted at 0.7x since its squeeze ALSO leaks into
+		# qing_corruption_level (term (e) above already drags on that), so an unweighted 1.0x
+		# would triple-touch Canton relative to Salt/Caravan's double-touch. Opium is deliberately
+		# EXCLUDED here — it has no revenue stream comparable to the other 3/4 at the time this term
+		# was designed; see design/DESIGN_59_REVENUE_SQUEEZE_PENALTY.md Decision 2. Customs IS
+		# included (task #62, running-average scaffold below) via its own new squeeze meter.
+		# [ASSUMPTION] the x9 scale factor and Canton's 0.7x weight are best-guess, boot-tune-checked
+		# via the band log below.
+		set_variable = { name = qing_min_oversight_drag  value = 0 }
+		set_variable = { name = qing_min_oversight_count  value = 0 }
+		if = { limit = { has_variable = qing_salt_squeeze }
+			set_variable = { name = qing_min_oversight_scratch  value = var:qing_salt_squeeze }
+			change_variable = { name = qing_min_oversight_drag  subtract = var:qing_min_oversight_scratch }
+			change_variable = { name = qing_min_oversight_count  add = 1 }
+		}
+		if = { limit = { has_variable = qing_hoppo_squeeze }
+			set_variable = { name = qing_min_oversight_scratch  value = var:qing_hoppo_squeeze }
+			change_variable = { name = qing_min_oversight_scratch  multiply = 0.7 }
+			change_variable = { name = qing_min_oversight_drag  subtract = var:qing_min_oversight_scratch }
+			change_variable = { name = qing_min_oversight_count  add = 1 }
+		}
+		if = { limit = { has_variable = qing_caravan_super_squeeze }
+			set_variable = { name = qing_min_oversight_scratch  value = var:qing_caravan_super_squeeze }
+			change_variable = { name = qing_min_oversight_drag  subtract = var:qing_min_oversight_scratch }
+			change_variable = { name = qing_min_oversight_count  add = 1 }
+		}
+		# [#62] Customs — added by this same session's implementation of task #62 (the running-
+		# average divisor below means adding this 4th office does NOT weaken the already-verified
+		# 3-office magnitude when Customs is absent, the common case: count stays 3, divisor stays 27).
+		if = { limit = { has_variable = qing_customs_ig_squeeze }
+			set_variable = { name = qing_min_oversight_scratch  value = var:qing_customs_ig_squeeze }
+			change_variable = { name = qing_min_oversight_drag  subtract = var:qing_min_oversight_scratch }
+			change_variable = { name = qing_min_oversight_count  add = 1 }
+		}
+		if = { limit = { var:qing_min_oversight_count > 0 }
+			# running average, not a fixed divisor -- scratch-var-then-divide (se_QING_MINISTRY.txt:374
+			# precedent), never the nested "divide = { value=X multiply=Y }" form (no exact precedent
+			# anywhere in this codebase for that shape).
+			set_variable = { name = qing_min_oversight_scratch  value = var:qing_min_oversight_count }
+			change_variable = { name = qing_min_oversight_scratch  multiply = 9 }   # [ASSUMPTION] reproduces the original /27 at count=3 exactly (27/3=9); tuned so 3 offices maxed (100+70+100=270) lands at -10, matching sibling (e)'s -10 rail; boot-tune
+			change_variable = { name = qing_min_oversight_drag  divide = var:qing_min_oversight_scratch }
+		}
+		change_variable = { name = qing_min_perf_revenue  add = var:qing_min_oversight_drag }
+		if = { limit = { var:qing_min_oversight_drag >= -2 }                                        debug_log = "IMP19C REVENUE oversight_drag >= -2 (low graft)" }
+		else_if = { limit = { var:qing_min_oversight_drag >= -5 }                                    debug_log = "IMP19C REVENUE oversight_drag -2..-5 (moderate)" }
+		else_if = { limit = { var:qing_min_oversight_drag >= -10 }                                   debug_log = "IMP19C REVENUE oversight_drag -5..-10 (high)" }
+		else = { debug_log = "IMP19C REVENUE oversight_drag < -10 (severe)" }
+		remove_variable = qing_min_oversight_drag
+		remove_variable = qing_min_oversight_count
+		remove_variable = qing_min_oversight_scratch
 	}
 	else = {
 		# VACANT Board of Revenue — the salt graft entrenches, the granaries empty. Floor it low.

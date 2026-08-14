@@ -24,6 +24,7 @@
 # quarterly revenue via the CURRENCY interface and swaps the efficiency band.
 #   qing_customs_efficiency      0..100  how well-run the service is
 #   qing_customs_foreign_control 0..100  degree of foreign management (Hart-style)
+#   qing_customs_ig_squeeze      0..100  seated IG's own corruption (task #62 squeeze meter)
 # Marks:
 #   qing_customs_established      flag var: the service exists
 #   qing_customs_ig_holder        the Inspector-General character (foreign)
@@ -45,6 +46,11 @@ QING_customs_init = {
 	LOG_enter = { sys = QING  fn = "QING_customs_init" }
 	if = { limit = { NOT = { has_variable = qing_customs_efficiency } }      set_variable = { name = qing_customs_efficiency  value = 40 } }
 	if = { limit = { NOT = { has_variable = qing_customs_foreign_control } } set_variable = { name = qing_customs_foreign_control  value = 0 } }
+	# [fix, task #62 2026-08-14, design/DESIGN_62_CUSTOMS_SQUEEZE_METER.md] the IG's own personal-
+	# corruption meter, mirroring Salt/Canton/Caravan's squeeze pattern exactly (same seed value 30
+	# for consistency, even though Hart is currently the only appointable IG in this codebase --
+	# immediately overwritten by the mirror once he's seated).
+	if = { limit = { NOT = { has_variable = qing_customs_ig_squeeze } } set_variable = { name = qing_customs_ig_squeeze  value = 30 } }
 	LOG_exit = { sys = QING  fn = "QING_customs_init"  result = OK }
 }
 
@@ -128,6 +134,12 @@ QING_customs_appoint_ig = {
 		# [#91 item E] an able IG expands the service — upgrade the custom-house
 		# (adds another level of the real building at a treaty port).
 		QING_customs_build_house = yes
+		# [fix, task #62 2026-08-14] ease the squeeze meter on a new appointment -- a "new broom"
+		# one-quarter bridge, same shared helper Salt/Canton/Caravan already use on rotate/picker.
+		# Placed HERE (inside ROOT, after the holder var is set above) since qing_customs_ig_
+		# squeeze/holder both live on CHI, not on the character -- placing this outside ROOT would
+		# silently misresolve both.
+		QING_frontier_office_ease_squeeze = { squeeze = qing_customs_ig_squeeze  holder = qing_customs_ig_holder }
 	}
 	add_character_modifier = { name = qing_customs_inspector_general  duration = -1 }
 	set_variable = { name = qing_customs_ig_marker  value = 1 }
@@ -190,6 +202,28 @@ QING_customs_pulse = {
 	else_if = {
 		limit = { var:qing_customs_efficiency > qing_customs_eff_target_cmpsvalue }
 		QING_DECLINE_nudge = { var = qing_customs_efficiency  amount = -3 }
+	}
+
+	# [fix, task #62 2026-08-14, design/DESIGN_62_CUSTOMS_SQUEEZE_METER.md] mirror the seated IG's
+	# own corruption onto the squeeze meter, proven save_scope_as idiom (a bare holder.corruption
+	# read has no precedent anywhere in this codebase). "No IG seated" is the DEFAULT state here
+	# (Hart's appointment is a rare, possibly-never-firing event gated to 1854+, with no succession
+	# mechanism once he dies) -- unlike Salt/Canton/Caravan, so decay toward the institutional
+	# baseline (30) instead of freezing at whatever value the meter last held.
+	if = {
+		limit = { has_variable = qing_customs_ig_holder  var:qing_customs_ig_holder = { is_alive = yes } }
+		var:qing_customs_ig_holder = { save_scope_as = qing_customs_ig_seated }
+		set_variable = { name = qing_customs_ig_squeeze  value = scope:qing_customs_ig_seated.corruption }
+	}
+	else = {
+		if = {
+			limit = { var:qing_customs_ig_squeeze > 30 }
+			QING_DECLINE_nudge = { var = qing_customs_ig_squeeze  amount = -2 }
+		}
+		else_if = {
+			limit = { var:qing_customs_ig_squeeze < 30 }
+			QING_DECLINE_nudge = { var = qing_customs_ig_squeeze  amount = 2 }
+		}
 	}
 
 	# --- quarterly revenue: scaled by efficiency (thousands = efficiency / 5, so
