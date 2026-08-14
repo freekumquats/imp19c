@@ -243,23 +243,31 @@ QING_pop_pulse = {
 # ======================================================================
 QING_pop_relief_resettle = {
 	LOG_enter = { sys = QING  fn = "QING_pop_relief_resettle" }
+	# [fix, task #72 2026-08-14, design/DESIGN_72_POPULATION_LEVERS_CONCRETE.md] the tooltip narrates
+	# "open the granaries to feed the stricken" (開倉放糧, distributing EXISTING stored grain) but the
+	# old code ADDED 150 to qing_granary_food (a market purchase funded by treasury) -- backwards from
+	# the narrated action, and disconnected from the granary system entirely. Now SUBTRACTS real stock,
+	# gated on having enough to distribute (mirrors the treasury affordability gate's own idiom: an
+	# action that can't be funded/stocked simply can't be taken). QING_DECLINE_granary_rederive already
+	# floors the pool at 0, so this cannot go negative even if a preceding famine drained it further.
 	if = {
-		limit = { treasury >= 310 }
+		limit = {
+			treasury >= 310
+			has_variable = qing_granary_food
+			var:qing_granary_food >= 150
+		}
 		add_treasury = -310
-		# [#95 slice 5] top up the REAL ever-normal pool (qing_granary_food), not the derived cache — the old
-		# `nudge qing_granary_stock +20` moved only the 0..100 index, which the 180-day pool sweep reverted.
-		if = { limit = { NOT = { has_variable = qing_granary_food } }  set_variable = { name = qing_granary_food  value = 0 } }
-		change_variable = { name = qing_granary_food  add = 150 }
+		change_variable = { name = qing_granary_food  subtract = 150 }
 		QING_DECLINE_granary_rederive = yes
 		QING_DECLINE_nudge = { var = qing_pop_pressure    amount = -15 }
 		QING_DECLINE_nudge = { var = qing_sect_pressure   amount = -6 }
 		# open the frontier valve so the relieved surplus actually resettles.
 		QING_pop_open_frontier_valve = yes
 		add_stability = 1
-		LOG_line = { sys = QING  msg = "population: 賑濟移墾 relief and resettlement mounted for" }
+		LOG_line = { sys = QING  msg = "population: 賑濟移墾 relief distributed real granary stock, resettlement mounted for" }
 	}
 	else = {
-		LOG_fail = { sys = QING  fn = "QING_pop_relief_resettle"  reason = "treasury below 310 — cannot fund relief" }
+		LOG_fail = { sys = QING  fn = "QING_pop_relief_resettle"  reason = "treasury below 310 or granary stock below 150 -- cannot fund relief" }
 	}
 	LOG_exit = { sys = QING  fn = "QING_pop_relief_resettle"  result = OK }
 }
@@ -276,7 +284,19 @@ QING_pop_tax_remission = {
 		add_treasury = -220
 		QING_DECLINE_nudge = { var = qing_pop_pressure  amount = -8 }
 		add_stability = 1
-		LOG_line = { sys = QING  msg = "population: 蠲免 tax remission proclaimed for" }
+		# [fix, task #72 2026-08-14, design/DESIGN_72_POPULATION_LEVERS_CONCRETE.md] the tooltip
+		# narrates "remit the land tax of the stricken provinces" but the old code touched no tax
+		# mechanism at all -- only the abstract pressure meter. Now suspends REAL land tax for a year
+		# via a proven modifier key (local_tax_modifier = -1.0, common/modifiers/imp19c_province_
+		# modifiers.txt). Scoped to every owned city-status province -- qing_pop_pressure has no
+		# per-province breakdown anywhere in this codebase to target "the stricken provinces" more
+		# narrowly than that; a known, logged simplification (design doc §"known limitations"), not
+		# an oversight.
+		every_owned_province = {
+			limit = { has_city_status = yes }
+			add_province_modifier = { name = qing_tax_remission_active  duration = 365 }
+		}
+		LOG_line = { sys = QING  msg = "population: 蠲免 tax remission proclaimed, real land tax suspended for a year for" }
 	}
 	else = {
 		LOG_fail = { sys = QING  fn = "QING_pop_tax_remission"  reason = "treasury below 220" }

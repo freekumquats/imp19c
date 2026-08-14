@@ -151,7 +151,61 @@ candidate list is real and traceable, just not yet finished.**
 `audits/SCRATCH_CURRENCY_23.md`, never in `AUDIT_CURRENCY_23.md` (verified conclusions only) —
 corrected mid-run (commit `5a9e96b88`) after initially polluting the audit doc.
 
+## Task #75/#76 — Ministry of Works building breadth / Macro Builder missing buildings
+Both audited and closed as NO DEFECT FOUND, not fixed:
+- Ministry of Works already auto-constructs dikes, canal depots, wall sections, the two capstone
+  monuments, AND 5 specialty production works (silk/porcelain/tea/cotton/salt) via
+  `QING_works_build_specialty` — genuinely broad. The Ever-Normal Granary auto-build (already
+  fixed, task #74) is a completely separate mechanism, not part of the Works Ministry at all —
+  that's why it looked like "the only thing Works builds."
+- Macro Builder correctly excludes Dujiangyan + 8 other unique historical monuments
+  (`allow = { always = no }`, seeded via `add_building_level` bypassing `allow` — confirmed for
+  Dujiangyan and spot-checked for 3 others sharing the same pattern). Not menu-buildable anywhere,
+  by design, not a bug.
+
+## Task #77/#78 — Lifan Yuan Vacant Positions / Yili garrison line
+Both functions that should be firing (`QING_ministry_recompute_perf_lifanyuan`'s vacant-listing
+else-branch; `QING_fgar_apply_occupation`) had ZERO diagnostic trace anywhere, so neither report
+could be checked against a real boot log. Added logging to both — **first attempt used LOG_line
+with a message ending in "for", which a code review caught as fundamentally broken: `LOG_line`
+never appends a scope name anywhere in this codebase (confirmed via `se_LOG.txt` — it's a literal
+line with no interpolation at all; only `LOG_state`/`LOG_fail` dump real scope info via
+`debug_log_scopes = yes`).** Every historical "...for" `LOG_line` call across the whole codebase
+has the same defect — logged as its own task (#83), not fixed broadly this session. Both of
+TODAY's additions corrected to use `LOG_state` instead, verified by a second review to actually
+resolve to the correct subject scope.
+**Status: both BLOCKED-ON-DATA — the logging is now real, but confirming/refuting either report
+needs the next boot.**
+
+## Task #72 — Relieve & Resettle / Remit the Taxes: DONE
+Designed (design/DESIGN_72_POPULATION_LEVERS_CONCRETE.md), adversarially reviewed (design doc had
+the wrong modifier-file target — corrected to `imp19c_province_modifiers.txt` — plus two logged
+known limitations: relief's flat 150-food draw decays in relative impact as granary capacity
+grows over a campaign; remission's province scope over-shoots "the stricken provinces" since
+`qing_pop_pressure` has no per-province breakdown to target more narrowly), implemented, re-
+reviewed CLEAN. Relieve & Resettle now DISTRIBUTES real granary stock (was backwards — adding to
+the pool, funded by treasury, disconnected from the "open the granaries" narrative) gated on
+having enough to distribute; Remit the Taxes now suspends REAL land tax for a year via a new
+province modifier (`qing_tax_remission_active`, `local_tax_modifier = -1.0`), not just an abstract
+pressure-meter nudge.
+
+## Task #63 — Opium Commissioner revenue + squeeze meter
+Found an EXISTING, fully-adversarially-reviewed design doc from earlier in this session (before
+compaction) — `design/DESIGN_63_OPIUM_COMMISSIONER_REVENUE_SQUEEZE.md`, 6 review rounds, marked
+"FINAL v7, READY FOR IMPLEMENTATION" — and implemented THAT instead of drafting a new one from
+scratch (my own first-draft redesign incorrectly treated this as a Salt-style revenue-farming
+office; the existing design correctly identifies it as an INTERDICTION office modeled on Lin Zexu,
+so the squeeze meter attenuates the prohibition-era suppression bonus continuously rather than
+skimming a tariff, and the revenue piece generalizes an EXISTING one-shot "tolerate-for-revenue"
+grant into a recurring credit instead of inventing a new tax on a still-nominally-prohibited
+trade). Implemented across `se_QING_OPIUM.txt`, `se_QING_FRONTIER_PICKER.txt`, and folded the new
+`qing_opium_income_last` into this session's own hidden-revenue visibility total
+(`INCOME_national_total_from_qing_revenue`) so it doesn't immediately become a fifth hidden-income
+gap. Code review in progress at time of this log entry.
+
 ## Related files
 - `audits/AUDIT_CURRENCY_23.md` — Finding 6 (treasury-spike hypotheses ruled out/advanced),
   Finding 7 (inflation reserve-ratio theory refuted, corrected direction).
 - `audits/SCRATCH_CURRENCY_23.md` — working notes, not committed (local reference only).
+- `design/DESIGN_72_POPULATION_LEVERS_CONCRETE.md`, `design/DESIGN_63_OPIUM_COMMISSIONER_REVENUE_
+  SQUEEZE.md` — design docs for tasks #72/#63.
