@@ -301,8 +301,9 @@ province-window + macro-builder GUI/loc wiring matching every sibling Qing build
 allowlist entry, name/desc/tooltip/macro-title loc), appended to `CottageIndustryItemsRow2` in both
 `province_window.gui` and `macro_builder_view.gui` (4→6 items), per the design's own resolved
 row-capacity fix (no third row — matches this file's own proven ≤7-item-safe threshold).
-**Review**: dispatched, in progress at time of this log entry.
-**Status: implementation DONE, review pending.**
+**Review**: CLEAN, no CRITICAL/HIGH/MEDIUM. One LOW (province_window.gui carries a UTF-8 BOM) --
+confirmed pre-existing (present in HEAD before this task touched the file), not introduced by #58.
+**Commit:** `8d040d1a0`. **Status: DONE.**
 
 ## Related files
 - `audits/AUDIT_CURRENCY_23.md` — Finding 6 (treasury-spike hypotheses ruled out/advanced),
