@@ -230,6 +230,80 @@ predicted values (−3.0, −10.0, −10.28 respectively). One LOW doc nit (new 
 missing from the file-header inventory) — fixed before commit.
 **Commit:** `daf4732cf`. **Status: DONE.**
 
+## Standing instruction — client_state added to amban/garrison eligibility
+Direct user instruction from earlier in the session, carried forward unactioned across the
+compaction boundary: add `client_state` to `QING_amban_garrison_eligible_type_trigger`
+(`common/scripted_triggers/qing_dynasty_triggers.txt`). Done — verified `client_state` is a real,
+already-used subject type (`00_default.txt:542`) before adding it to the OR-set.
+**Commit:** `2afbabee9`. **Status: DONE.**
+
+## Task #57 — Production-linked New World crop pop-boom pulse
+Design (`design/DESIGN_57_NEWWORLD_CROPS_CONCRETE.md`) reached FINAL v9/READY FOR IMPLEMENTATION
+(7 review rounds) earlier in this session, before the context compaction that lost track of this
+status. Implemented the resolved shape exactly: new `QING_pop_newworld_growth_pulse`
+(se_QING_POPULATION.txt), piggybacking `QING_GOV_pulse`'s cadence alongside `QING_pop_pulse`.
+Recomputes `qing_newworld_farmstead_count` every pulse (owned provinces with the New World
+farmstead building), computes `floor(farmstead_count/10)` via the proven `round = floor`
+script-value idiom (se_AI.txt:373-379 precedent), and on an UPWARD tier crossing creates a small,
+FIXED `pops_per_tier=2` pop batch (never scaling with farmstead_count — the exact conflation the
+design's round-1 review existed to prevent) on the 2 highest-population New-World-crop-growing
+provinces, sets `migr_gov_push`, and grants `qing_migr_crop_boom`. The tier ratchet is SET (never
+incremented) per the design's round-5 fix. The removal check is a SEPARATE, unconditional branch
+(NOT nested under the upward gate) per the design's round-3/round-4 fix — the exact stuck-modifier
+bug those rounds existed to prevent. Diagnostic logging is a band-ladder snapshot (tier-crossed +
+total_population band), matching `QING_DECLINE_apply_pop_pressure_band`'s proven idiom, since this
+engine cannot render raw numeric trend values in logs. Retired the OLD event chain's own one-shot
+`create_state_pop` calls (`qing_migration.20.a`, `qing_migration.22.a`) — pop creation is now
+production-linked; the event chain keeps its modifier-swap/capacity/push levers as the narrative
+wrapper, per the design's explicit instruction.
+**New script_value**: `qing_newworld_pop_tier_cmpsvalue` (`00_event_values.txt`), matching the
+file's own proven RHS-comparison-rule idiom (a var-ref is illegal directly on a comparison RHS).
+**Review**: CLEAN except one MEDIUM (unconditional `qing_migr_crop_boom` re-grant could reintroduce
+the neutral boom's growth/tax terms alongside a LATER-resolved `_golden`/`qing_migr_overpopulation`
+state that the event chain had swapped it away for -- distinct modifier keys, would stack) --
+fixed by gating the re-grant on `NOR = { golden, overpopulation }`. Two LOW notes accepted as-is
+(boot-tunable band thresholds; TIER_THRESHOLD=10 duplicated in two commented-together spots). Also
+fixed a pre-existing, unrelated brace-count false positive caught by the pre-commit hook in the
+same file (00_event_values.txt) once touched: a comment quoting the engine's literal "Cannot read
+[{]" error text had an unmatched brace in prose -- reworded, no meaning change.
+**Commit:** `a54618271`. **Status: DONE.**
+
+## Task #58 — Cottage-building culture-gate research pass (10 buildings, not 8)
+Design (`design/DESIGN_58_COTTAGE_CULTURE_GATING.md`) reached FINAL v8/READY FOR IMPLEMENTATION
+(3 review rounds) earlier in this session, before the same compaction. Implemented the resolved
+shape: all 8 original `qing_cottage_*_building` entries (smithy/leadworks/weaving_hut/silk_reeling
+_shed/woodlot/herbalist/founders_workshop/quarry) dropped their Qing-only culture gate — a per-good
+research pass found ZERO of the 8 crafts clear the bar of a genuinely Qing-distinctive institution
+at household/cottage scale, including silk (round-1/round-2 review: household reeling feeding
+urban filatures is close to the DEFAULT pattern everywhere pre-industrial silk was produced, not a
+Chinese peculiarity). The redundant non-Qing generic `row_cottage_workshop_building`
+(`row_production_buildings.txt`) — which had the identical "9 crafts, 1 interchangeable building"
+defect — is DELETED along with its full GUI/loc wiring across 7 files (gui_templates.gui,
+custom_tooltip.gui, province_window.gui, row_buildings_l_english.yml, plus 5 stale "eight Qing
+cottage buildings" header comments across gui_templates.gui/custom_tooltip.gui/
+macro_builder_view.gui/province_window.gui/the macro config, all corrected to state the real
+10-buildings/8-generic+2-Qing-exclusive count).
+Two goods DID clear the bar with a sharper citation and got genuinely NEW Qing-only buildings,
+gated on the SPECIFIC historic province IDs (via the proven bare `province_id = N` trigger,
+`00_omens.txt` precedent — NOT the unprecedented `province = { id = N }` shape my first draft used
+before catching it against source): `qing_timber_lineage_building` (力分/山分 lineage-tenure timber
+contracts, Meng Zhang 2021 — Huangshan/4441 + the 14 terrain-verified Fujian-highland candidate
+provinces; does NOT require `trade_goods = wood` since the institution is about the LAND, not the
+current good — Huangshan is tagged `tea`) and `qing_cottage_sugarhouse_building` (糖廍 pooled
+sugar-house, gated on `trade_goods = sugar` + the 6 Guangdong/Fujian sugar-tagged province IDs).
+**Design's own 2 remaining open historical-geography judgment calls** (the final qualifying subset
+within the 14 Fujian timber candidates; the final subset within the 6 sugar candidates) are
+genuinely unresolvable from any in-repo research per the design doc's own 3 review rounds —
+resolved per Rule 1a with an explicit, logged OVERNIGHT DEFAULT: gate on ALL candidates in both
+lists rather than hold the buildings for an unresolvable call. Both new buildings got full
+province-window + macro-builder GUI/loc wiring matching every sibling Qing building exactly
+(build_item/macro_build_item template pairs, tooltip/macro-tooltip templates, macro-builder
+allowlist entry, name/desc/tooltip/macro-title loc), appended to `CottageIndustryItemsRow2` in both
+`province_window.gui` and `macro_builder_view.gui` (4→6 items), per the design's own resolved
+row-capacity fix (no third row — matches this file's own proven ≤7-item-safe threshold).
+**Review**: dispatched, in progress at time of this log entry.
+**Status: implementation DONE, review pending.**
+
 ## Related files
 - `audits/AUDIT_CURRENCY_23.md` — Finding 6 (treasury-spike hypotheses ruled out/advanced),
   Finding 7 (inflation reserve-ratio theory refuted, corrected direction).
