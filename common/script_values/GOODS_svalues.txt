@@ -3653,6 +3653,11 @@ GOODS_governorship_dyes_produced_mechanised = {
 		multiply = GOODS_governorship_bonus_to_industrial_production_from_industrialisation
 		multiply = INDUSTRY_employment_ratio # [#133 I5] scale factory output by employment fill-ratio
 	}
+	# [MG-hook #66 2026-08-14] the Qing dyeworks (靛青會館) adds dyes directly -- the named-building
+	# production hook, mirroring clothing/naval_supplies/munitions verbatim. Cached wrapper
+	# (dyes_infra_cached) so it rides the same one-pass cache (G4). Pure producer -- supply only,
+	# the factory-assignment path above keys off a different var, so no double-count (R1).
+	add = GOODS_governorship_dyes_infra_output
 }
 
 GOODS_governorship_dyes_produced = {
@@ -3660,6 +3665,39 @@ GOODS_governorship_dyes_produced = {
 	# mechanised term; kept as a wrapper for consumer/consistency (I2 idiom).
 	value = GOODS_governorship_dyes_produced_mechanised
 }
+
+GOODS_governorship_dyes_infra_output = {
+	# [MG-hook #66] Scope: Governorship. Cached wrapper over the dyeworks walk; read the cache
+	# if present, else compute inline (never zero on a cache miss) -- the perf #71 idiom.
+	if = {
+		limit = { has_variable = dyes_infra_cached }
+		value = var:dyes_infra_cached
+	}
+	else = {
+		value = GOODS_governorship_dyes_infra_output_compute
+	}
+}
+
+GOODS_governorship_dyes_infra_output_compute = {
+	# [MG-hook #66] Scope: Governorship. The dyeworks walk. Gated on tech_manufactories (the
+	# building's own allow-block invention), so the term appears exactly when the works can be built.
+	value = 0
+	if = {
+		limit = {
+			owner = { invention = tech_manufactories }
+		}
+		every_governorship_state = {
+			every_state_province = {
+				add = {
+					value = num_of_qing_dyeworks_building
+					multiply = GOODS_dyeworks_dyes_output
+				}
+			}
+		}
+	}
+}
+
+GOODS_dyeworks_dyes_output = { value = 2 }   # [ASSUMPTION, #66] matches textile mill's clothing rate=2
 
 GOODS_governorship_gunpowder_produced_mechanised = {
 	# [#133 I3] MECHANISED-ONLY term (split-writer D1a); this is what the produce loop adds.
