@@ -82,6 +82,13 @@ QING_opium_init = {
 	}
 	if = { limit = { NOT = { has_variable = qing_opium_addicted_share } } set_variable = { name = qing_opium_addicted_share  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_opium_posture } }        set_variable = { name = qing_opium_posture  value = 0 } }  # prohibit
+	# [fix, task #63 2026-08-14, design/DESIGN_63_OPIUM_COMMISSIONER_REVENUE_SQUEEZE.md] the
+	# Commissioner's squeeze meter -- NOT graft on a revenue stream (this office has none; it is
+	# an interdiction post, not a revenue-farming one, per this file's own header). Squeeze here
+	# represents UNDER-ENFORCEMENT: how far the appointee's own corruption blunts the -4 suppression
+	# bonus below. Seeded at 30, matching Canton's Hoppo baseline exactly (the same "moderate but not
+	# zero" starting point the other 3 offices use).
+	if = { limit = { NOT = { has_variable = qing_opium_commissioner_squeeze } } set_variable = { name = qing_opium_commissioner_squeeze  value = 30 } }
 	LOG_exit = { sys = QING  fn = "QING_opium_init"  result = OK }
 }
 
@@ -112,6 +119,16 @@ QING_opium_ramp_import_index = {
 		# a Lin Zexu commissioner + active prohibition suppresses the climb hard (interdiction).
 		limit = { var:qing_opium_posture = 0  has_variable = qing_lin_zexu_appointed }
 		set_variable = { name = qing_opium_climb_tmp  value = -4 }
+		# [fix, task #63 2026-08-14] attenuate the suppression CONTINUOUSLY toward 0 as the seated
+		# Commissioner's own squeeze (under-enforcement) rises -- never a hard threshold/cliff (this
+		# codebase already tried and retired that shape twice: se_QING_CANTON.txt #111a, and
+		# DESIGN_59's own round 1). At squeeze=0 the full -4 suppression applies; at squeeze=100 the
+		# suppression is fully blunted (0, the trade climbs at its natural rate); squeeze=50 -> -2.
+		if = {
+			limit = { has_variable = qing_opium_commissioner_squeeze }
+			change_variable = { name = qing_opium_climb_tmp  multiply = { value = 100  subtract = var:qing_opium_commissioner_squeeze } }
+			change_variable = { name = qing_opium_climb_tmp  divide = 100 }
+		}
 	}
 	else_if = {
 		# tolerate-for-revenue: the trade runs faster (customs winks at it).
@@ -217,6 +234,25 @@ QING_opium_assess_trade_balance = {
 	change_variable = { name = qing_opium_stress_flow  multiply = -1 }
 	LOG_line = { sys = QING  msg = "opium: trade balance assessed; net silver flow stored as currency-stress flow term for" }
 
+	# [fix, task #63 2026-08-14, design/DESIGN_63_OPIUM_COMMISSIONER_REVENUE_SQUEEZE.md] TOLERATE-
+	# FOR-REVENUE (弛禁徵稅) recurring customs take. qing_opium.1's tolerate option already grants a
+	# one-shot add_treasury=20 on adopting posture=1 -- this generalizes that REAL, sourced mechanism
+	# into a recurring quarterly credit instead of inventing a new one. MUST live here: qing_opium_
+	# outflow_tmp is a pure scratch var, removed at the end of this same function every pulse, so no
+	# other function could ever read it. Published unconditionally (even at 0) matching qing_caravan_
+	# income_last's own precedent, so a future Revenue-perf-rollup fold can read it the same way.
+	if = {
+		limit = { var:qing_opium_posture = 1 }
+		set_variable = { name = qing_opium_tolerate_revenue_tmp  value = var:qing_opium_outflow_tmp }
+		change_variable = { name = qing_opium_tolerate_revenue_tmp  divide = 5 }   # [ASSUMPTION] scale factor, boot-tune
+		set_variable = { name = qing_opium_income_last  value = var:qing_opium_tolerate_revenue_tmp }
+		add_treasury = var:qing_opium_tolerate_revenue_tmp
+		remove_variable = qing_opium_tolerate_revenue_tmp
+	}
+	else = {
+		set_variable = { name = qing_opium_income_last  value = 0 }
+	}
+
 	remove_variable = qing_opium_inflow_tmp
 	remove_variable = qing_opium_outflow_tmp
 	remove_variable = qing_opium_net_flow_tmp   # [PERF-AUDIT 2026-07-18 L9] was leaked into every save (its 3 sibling scratch vars are removed; this one wasn't)
@@ -304,20 +340,58 @@ QING_opium_set_posture = {
 
 # --- [cr97 fix] a dead Commissioner otherwise leaves qing_opium_commissioner_holder pointing at a
 # corpse forever (the card's is_shown gates on has_variable, not is_alive; the ghost qing_lin_zexu_appointed
-# would keep suppressing the import ramp with no one actually enforcing it). Relieve on death only — no
-# double-book/engine-role check needed (unlike salt/caravan/hoppo, this office carries no squeeze/graft
-# meter, so there's nothing else to reconcile) — and BACKFILL a fresh appointee immediately, matching the
-# other 3 frontier offices' "the state keeps this post staffed" model (interdiction is meant to be an
-# ongoing policy, not something that lapses the moment one commissioner dies). Country scope (ROOT = CHI).
+# would keep suppressing the import ramp with no one actually enforcing it). BACKFILL a fresh appointee
+# immediately, matching the other 3 frontier offices' "the state keeps this post staffed" model
+# (interdiction is meant to be an ongoing policy, not something that lapses the moment one commissioner
+# dies). [fix, task #63 2026-08-14] the old "no double-book/engine-role check needed... this office
+# carries no squeeze/graft meter" reasoning is now FALSE the moment the squeeze meter below ships --
+# added the same double-book relief Salt/Canton/Caravan all carry, PLUS the squeeze mirror, sequenced
+# (a) relief -> (b) backfill -> (c) mirror, matching their real ordering exactly (mirror strictly AFTER
+# backfill, so a freshly-seated holder's corruption is mirrored the SAME pulse he's seated, not left
+# stale for a quarter). Country scope (ROOT = CHI).
 QING_opium_commissioner_reconcile = {
+	# (a) double-book relief -- mirrors se_QING_SALT.txt's own relief block, adapted to Opium's holder/
+	# marker var names. A commissioner who took a command/governorship, or was drawn into another
+	# courtier post, loses this one.
 	if = {
 		limit = {
 			has_variable = qing_opium_commissioner_holder
-			var:qing_opium_commissioner_holder = { is_alive = no }
+			var:qing_opium_commissioner_holder = { is_alive = yes }
+			var:qing_opium_commissioner_holder = {
+				OR = {
+					is_general = yes
+					is_admiral = yes
+					is_governor = yes
+					has_variable = qing_officer_marker
+					has_variable = qing_customs_ig_marker
+					has_variable = qing_court_artist
+				}
+			}
+		}
+		var:qing_opium_commissioner_holder = { if = { limit = { has_variable = qing_opium_commissioner_marker }  remove_variable = qing_opium_commissioner_marker } }
+		remove_variable = qing_opium_commissioner_holder
+		LOG_line = { sys = QING  msg = "opium: relieved a double-booked commissioner (also a serving commander/officer/other courtier post) for" }
+	}
+	# (b) backfill -- fires on a NATURAL DEATH (var exists, dead) OR after the relief above just
+	# cleared the holder var entirely (var absent). The old limit only covered the first case, which
+	# would have left the post PERMANENTLY vacant after any double-book relief (no other lever
+	# recovers it) -- fixed with the same OR-absent clause Salt's own backfill uses.
+	if = {
+		limit = {
+			OR = {
+				NOT = { has_variable = qing_opium_commissioner_holder }
+				var:qing_opium_commissioner_holder = { is_alive = no }
+			}
 		}
 		remove_variable = qing_opium_commissioner_holder
 		QING_opium_commissioner_appoint = yes
-		LOG_line = { sys = QING  msg = "opium: the Commissioner died in office, a replacement was appointed for" }
+		LOG_line = { sys = QING  msg = "opium: the Commissioner post was vacant or died in office, a replacement was appointed for" }
+	}
+	# (c) mirror + squeeze -- AFTER backfill, so a freshly-seated holder is mirrored the same pulse.
+	if = {
+		limit = { has_variable = qing_opium_commissioner_holder  var:qing_opium_commissioner_holder = { is_alive = yes } }
+		var:qing_opium_commissioner_holder = { save_scope_as = qing_opium_commissioner_seated }
+		set_variable = { name = qing_opium_commissioner_squeeze  value = scope:qing_opium_commissioner_seated.corruption }
 	}
 }
 
@@ -389,6 +463,15 @@ QING_opium_appoint_commissioner = {
 	if = {
 		limit = { NOT = { has_variable = qing_lin_zexu_appointed } }
 		QING_opium_commissioner_appoint = yes
+		# [fix, task #63 2026-08-14] the "new broom" ease bridge lives HERE, not inside the shared
+		# QING_opium_commissioner_appoint (which _reconcile's own backfill step also calls every
+		# quarter -- easing there would fire on every backfill and be immediately overwritten by the
+		# mirror step that always follows it in the same call, silently defeating the ease mechanic
+		# for the backfill/relief paths). This wrapper is the ONE-SHOT fresh-appointment guard, called
+		# only from qing_opium.1's prohibit option and QING_opium_crackdown_destroy, never from
+		# _reconcile -- matching how Salt/Caravan/Canton confine their own ease calls to player-only,
+		# non-reconcile-routed paths (their rotate actions), never their shared _appoint/backfill path.
+		QING_frontier_office_ease_squeeze = { squeeze = qing_opium_commissioner_squeeze  holder = qing_opium_commissioner_holder }
 	}
 }
 
