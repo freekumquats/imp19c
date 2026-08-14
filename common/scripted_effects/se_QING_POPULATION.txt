@@ -237,6 +237,131 @@ QING_pop_pulse = {
 }
 
 # ======================================================================
+# [#57, design/DESIGN_57_NEWWORLD_CROPS_CONCRETE.md] NEW WORLD CROP POP-BOOM PULSE — makes the
+# "New World crops -> boom -> pressure -> migration" loop production-linked instead of a one-shot
+# die roll (`qing_migration.20-23`, unchanged, stays the narrative wrapper). Piggybacks QING_GOV_
+# pulse's cadence (called alongside QING_pop_pulse, se_QING_GOVERNANCE.txt). CHI-only (design's
+# open question 1, v1 scope — the farmstead building itself stays generic/worldwide).
+#
+# TWO DISTINCT quantities, deliberately separate vars so a tier crossing spawns a small FIXED
+# batch, never scaling with the realm's total farmstead count (design's own round-1 warning against
+# reusing one variable for both):
+#   qing_newworld_farmstead_count — the GATE input (farmstead count), recomputed every pulse.
+#   pops_per_tier (literal 2 below) — a separate, small, fixed constant [ASSUMPTION, boot-tune
+#     per Rule 1a] — pops actually created on a tier crossing. NEVER derived from farmstead_count.
+#   qing_newworld_pop_tier — the ratchet: SET (never incremented) to floor(farmstead_count /
+#     TIER_THRESHOLD) on a crossing, so a multi-tier jump in one pulse still only grants ONE
+#     pops_per_tier batch (deliberate, accepted simplification per the design doc).
+# ======================================================================
+QING_pop_newworld_growth_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_pop_newworld_growth_pulse" }
+	if = { limit = { NOT = { has_variable = qing_newworld_pop_tier } } set_variable = { name = qing_newworld_pop_tier  value = 0 } }
+
+	# --- GATE INPUT: count owned provinces with a New World farmstead.
+	set_variable = { name = qing_newworld_farmstead_count  value = 0 }
+	every_owned_province = {
+		limit = { has_building = new_world_farmstead_building }
+		change_variable = { name = qing_newworld_farmstead_count  add = 1 }
+	}
+
+	# floor(farmstead_count / TIER_THRESHOLD) — TIER_THRESHOLD=10 [ASSUMPTION, boot-tune per Rule
+	# 1a; see design doc's 16-province 1763 baseline sanity bound]. Scratch var, removed below.
+	set_variable = {
+		name = qing_newworld_pop_tier_current
+		value = {
+			value = var:qing_newworld_farmstead_count
+			divide = 10
+			round = floor
+		}
+	}
+
+	if = {
+		# UPWARD tier crossing only (the ratchet only ever grows here; the removal branch below is
+		# the separate, unconditional downward-move check).
+		limit = { var:qing_newworld_pop_tier_current > qing_newworld_pop_tier_cmpsvalue }
+		if = {
+			limit = {
+				any_owned_province = {
+					OR = {
+						trade_goods = maize
+						trade_goods = sweet_potato
+						trade_goods = potato
+						trade_goods = peanut
+						trade_goods = chili
+					}
+				}
+			}
+			ordered_owned_province = {
+				order_by = total_population
+				limit = {
+					OR = {
+						trade_goods = maize
+						trade_goods = sweet_potato
+						trade_goods = potato
+						trade_goods = peanut
+						trade_goods = chili
+					}
+				}
+				max = 2   # pops_per_tier [ASSUMPTION, boot-tune per Rule 1a]
+				create_state_pop = freemen
+				set_variable = { name = migr_gov_push  value = 6 }
+			}
+			LOG_line = { sys = QING  msg = "newworld crop boom: pop batch created + heartland push set for" }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_pop_newworld_growth_pulse"  reason = "tier crossed but no owned New World crop province for" }
+		}
+		# [fix, review 2026-08-14] the event chain (qing_migration.21-23) SWAPS qing_migr_crop_boom
+		# away for one of two resolved states (_golden or qing_migr_overpopulation) once the boom
+		# reckoning fires -- an unconditional re-grant here would reintroduce the neutral boom's own
+		# growth/tax terms ALONGSIDE whichever resolved state is now active on a later tier crossing
+		# (they are distinct modifier keys, so both would stack, undoing the crisis path's intended
+		# malus / double-crediting the golden path's growth). Guard against both resolved states.
+		if = {
+			limit = {
+				NOR = {
+					has_country_modifier = qing_migr_crop_boom_golden
+					has_country_modifier = qing_migr_overpopulation
+				}
+			}
+			add_country_modifier = { name = qing_migr_crop_boom  duration = -1 }
+		}
+		set_variable = { name = qing_newworld_pop_tier  value = var:qing_newworld_pop_tier_current }
+		# diagnostic: literal per-tier band string (this engine can't render raw numeric values in
+		# logs, per design/LOGGING_TEMPLATE.md:37-38 — proven band-ladder shape only, matching
+		# QING_DECLINE_apply_pop_pressure_band's idiom).
+		if = { limit = { var:qing_newworld_pop_tier_current = 1 } LOG_line = { sys = QING  msg = "newworld crop boom: pop tier 1 reached for" } }
+		else_if = { limit = { var:qing_newworld_pop_tier_current = 2 } LOG_line = { sys = QING  msg = "newworld crop boom: pop tier 2 reached for" } }
+		else_if = { limit = { var:qing_newworld_pop_tier_current = 3 } LOG_line = { sys = QING  msg = "newworld crop boom: pop tier 3 reached for" } }
+		else = { LOG_line = { sys = QING  msg = "newworld crop boom: pop tier 4+ reached for" } }
+		# population-band snapshot at the moment of the crossing — bands sized around the 1763
+		# baseline (~40k pop objects, se_QING_POPULATION.txt:63-64) so a human reader can compare the
+		# band across quarters to see whether growth accelerated after a crossing.
+		if = { limit = { country_population >= 60000 } LOG_line = { sys = QING  msg = "newworld crop boom: total_population band >= 60000 for" } }
+		else_if = { limit = { country_population >= 50000 } LOG_line = { sys = QING  msg = "newworld crop boom: total_population band >= 50000 for" } }
+		else_if = { limit = { country_population >= 40000 } LOG_line = { sys = QING  msg = "newworld crop boom: total_population band >= 40000 for" } }
+		else = { LOG_line = { sys = QING  msg = "newworld crop boom: total_population band < 40000 for" } }
+	}
+
+	# --- REMOVAL: unconditional, SEPARATE branch, evaluated every pulse independent of the
+	# tier-crossing gate above — nesting removal under the upward gate (which by construction never
+	# fires on a downward move) would make removal structurally unable to ever fire, reproducing the
+	# stuck-modifier bug the design doc's round-3 fix exists to prevent. qing_newworld_pop_tier
+	# itself is NOT reset — the pop/tier ratchet is a permanent, one-way counter by design; only the
+	# flavour modifier (a live read of CURRENT conditions) is reversible.
+	if = {
+		limit = {
+			has_country_modifier = qing_migr_crop_boom
+			var:qing_newworld_farmstead_count < 10   # TIER_THRESHOLD, matching the divide above
+		}
+		remove_country_modifier = qing_migr_crop_boom
+	}
+
+	remove_variable = qing_newworld_pop_tier_current
+	LOG_exit = { sys = QING  fn = "QING_pop_newworld_growth_pulse"  result = OK }
+}
+
+# ======================================================================
 # LEVER: RELIEF & RESETTLEMENT (賑濟移墾) — relieve a famine and resettle the surplus. Tops up the
 # granary reserve, cuts pressure + sect pressure, and opens a frontier pull so the crowd resettles
 # (以工代賑 work-relief + 移民實邊). Treasury cost. Scope: COUNTRY (CHI). Gated by the caller/panel.
