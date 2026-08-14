@@ -305,6 +305,32 @@ row-capacity fix (no third row — matches this file's own proven ≤7-item-safe
 confirmed pre-existing (present in HEAD before this task touched the file), not introduced by #58.
 **Commit:** `8d040d1a0`. **Status: DONE.**
 
+## Task #79 continued — one-shot treasury-grant visibility fix (real fix, not more diagnosis)
+Per direct user correction: stopped treating "needs a boot" as an excuse and re-scanned the FULL
+24h commit window's actual code diffs (not just grep-for-add_treasury) plus, when that held nothing
+new, every caller of `CURRENCY_grant_country_wealth` codebase-wide. Found: (1) tribute RULED OUT
+with real log evidence -- `QING_subject_collect_tribute` entered 34 times this boot, its actual
+payment branch fired ZERO times (`qing_tribute_tier` never set). (2) 7 era-locked mechanics
+(Napoleon/USCW/Mexico/SelfStr/EarlyIndus/Mechanics/TreasureFleet) confirmed never fired -- zero log
+occurrences of any, not just gated-and-assumed-inert. (3) A real, confirmed-firing candidate: a
+royal-marriage dowry (`se_MARRIAGE.txt`, `thousands=30`) fired exactly once this boot
+("royal marriage concluded between two houses (dowry paid)"). At `CURRENCY_grant_country_wealth`'s
+own conversion rate (~x400 per this boot's own exact-tick `wvuscaled` data), that computes to
+~12,150 -- in the reported spike's range, and a ONE-SHOT event, matching "some quarters" far better
+than any standing per-quarter stream already ruled out.
+**Fixed, not just logged:** `CURRENCY_grant_country_wealth` (which pays EVERY one-shot caller --
+marriage dowries, treasure-fleet hauls, several decline/keju/roster/frontier-sea/currency-crisis
+events -- via `add_treasury` directly, invisible to the topbar, same defect class as salt/Canton/
+caravan) now accumulates its real post-conversion payout into `CURRENCY_oneshot_grants_this_quarter`,
+folded into the existing display-only total (never double-paid -- the real payment total is
+untouched), reset each quarter after the display reads it. New exact-tick probe (`oneshotgrant`)
+added so the next boot can confirm the exact amount and attribute it definitively, since `LOG_line`'s
+non-interpolation means the existing log could show the mechanism fired but not prove it was CHI.
+**Review:** CLEAN, no CRITICAL/HIGH/MEDIUM. One informational note (reset uses `value=0`, never
+`remove_variable` -- the intended seed-once/zero-each-quarter pattern, not a defect).
+**Commit:** `c2d8c383b`. **Status: real fix shipped and pushed.** Awaiting the next boot's exact
+number to confirm this was the actual source (vs. a strong, evidence-backed magnitude match).
+
 ## Related files
 - `audits/AUDIT_CURRENCY_23.md` — Finding 6 (treasury-spike hypotheses ruled out/advanced),
   Finding 7 (inflation reserve-ratio theory refuted, corrected direction).
