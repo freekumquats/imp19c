@@ -128,3 +128,45 @@ symmetrically into both teardown paths (the appoint displacement block and `QING
 literal confirmed correct, brace balance confirmed, `monthly_wage_for_character`'s validity in a
 plain (non-office) character modifier confirmed via vanilla's `retiring_general_ambition`, and no
 double-count confirmed via a repo-wide grep). **Commit:** `e9a4bf59e`. **Status: DONE.**
+
+## Task #99 — Quarterly government income tooltip fix
+Root cause: the tooltip (`imp19c_nation_treasury_tooltip`) showed a literal `Foreign debt income:
+#R TODO#!` placeholder to the player, and its listed rows didn't reconcile with the real quarterly
+total. Confirmed "foreign debt income" isn't a real recurring mechanic in this mod (debt issuance is
+a one-shot player-initiated GUI action, already a separate lever; debt SERVICING is already shown as
+"Debt interest") — removed the dead row rather than building an unneeded feature. Found two REAL
+components missing from the breakdown: poor-law spending (already cached every quarter, just never
+surfaced) and one-shot treasury grants (no stable snapshot existed) — added both, with a new cached
+var (`INCOME_national_total_from_oneshot_grants`) so the grants row survives to the next quarter's
+display instead of reading the live in-progress accumulator. **Review:** CLEAN (ordering, cache
+guarantees, loc-string integrity, no other missed debt-income mechanic, no name collision — all
+independently re-verified). **Commit:** `07aa524a0`. **Status: DONE.**
+
+## Task #96 — re-source #87's construction icon as period artwork
+User reported the generic construction icon (shipped in #87) was "ugly as hell," and should be
+"18th century artwork," not a photo. Confirmed the prior pick (a Commons photo of a timber-framed
+shopfront) scored positively on the existing period-art bias filter by TITLE vocabulary alone
+despite being a modern photograph, not a painting/print — the filter doesn't distinguish "photo of
+an old building" from "period illustration." Re-sourced via the same `fetch_wm.py` pipeline with a
+query targeting a genuine woodblock-print source (Yingzao Fashi 營造法式, the classical Chinese
+architectural/carpentry manual) — picked a clear bracket-joinery (dougong) illustration, converted
+to the existing 200x200 donor format, verified visually before committing. **Commit:** `99c72f10e`.
+**Status: DONE.**
+
+## Housekeeping — committed stray uncommitted files from earlier this session
+Found `design/DESIGN_59_REVENUE_SQUEEZE_PENALTY.md`, `DESIGN_62_CUSTOMS_SQUEEZE_METER.md`,
+`DESIGN_63_OPIUM_COMMISSIONER_REVENUE_SQUEEZE.md`, `DESIGN_COTTAGE_FINISHED_GOODS_BUILDINGS.md`, and
+`tools/tariffs_expense_trace.py` sitting untracked in the working tree (from earlier in this same
+session, before context compaction). The three numbered designs (#59/#62/#63) are marked "READY FOR
+IMPLEMENTATION" after multiple adversarial review rounds but were NEVER CODED — this is NOT part of
+the current boot-test backlog (#95-#107) and implementing three new mechanics now would be
+significant unscoped drift, so they are committed as finished design artifacts only, flagged here
+for a FUTURE session to pick up and implement. `DESIGN_COTTAGE_FINISHED_GOODS_BUILDINGS.md` is
+similarly an unshipped draft (already independently confirmed unshipped during this session's #103
+re-check). `tariffs_expense_trace.py` is legitimately part of this session's own #102 work.
+**Commit:** `e9b2e6240`.
+
+## Task #97/#98 — building icon + Macro Builder visibility audit
+IN PROGRESS: dispatched a full read-only audit of every building definition against icon presence,
+`province_window.gui` wiring, and `macro_builder_view.gui` wiring, to scope the fix as one systemic
+pass vs case-by-case. See below for the result once it lands.
