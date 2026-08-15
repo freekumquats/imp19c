@@ -46,6 +46,21 @@
 # ---- Core line writer -------------------------------------------------
 # One tagged message. $sys$ = subsystem tag (SUBJ, TRADE, CURR, ...),
 # $msg$ = free text. Pass numbers/vars pre-formatted into $msg$ by the caller.
+# [task #83, 2026-08-14] added debug_log_scopes=yes -- this is the SAME idiom LOG_state/
+# LOG_fail already use (proven working: a real boot's debug.log shows a genuine
+# "Country Derge [420] / Root: Country Great Qing [419]" scope-stack dump following one of
+# those calls). The old ""/"" bracket-expression idiom used
+# at ~1433 LOG_line call sites across the codebase to inline a scope identifier into the
+# MESSAGE STRING never worked (renders literal "ERROR:[ROOT.GetTag]" text -- bracket
+# data-function syntax is not evaluated inside a debug_log string). Rather than editing
+# every call site, fixing it HERE means every existing LOG_line call automatically gets a
+# real, working scope-stack dump for free, with no site-by-site changes needed. The dead
+# ""/"ERROR:[...]" text left in messages is now just cosmetic noise -- harmless, but
+# safe to strip in a follow-up mechanical pass.
+# NOT applied to LOG_enter/LOG_exit below: the dangling-"for" defect this fixes never
+# occurred in either (checked directly -- all 1433 sites are LOG_line), and both are the
+# highest-frequency call-tracing macros (thousands of calls/tick); adding a multi-line scope
+# dump to them would multiply an already-1.7GB-per-boot debug.log for zero benefit.
 LOG_line = {
 	# Function: write a single tagged diagnostic line to logs/debug.log
 	# Scope:    any
@@ -53,6 +68,7 @@ LOG_line = {
 	# one space survives and the grep KEY renders "IMP19C QING" (not the fused "IMP19CQING"). A
 	# stray $ still trails each param — structural, harmless to a tag grep. See LOGGING_TEMPLATE.md.
 	debug_log = "IMP19C  $sys$: $msg$"
+	debug_log_scopes = yes
 }
 
 # ---- Call tracing -----------------------------------------------------
