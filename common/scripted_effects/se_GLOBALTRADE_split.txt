@@ -2580,17 +2580,85 @@ GT_split_update_wealth_owed_for_tradegoods = {
 			has_global_variable = $tradezone$_stockpile_$tradegood$
 			global_var:$tradezone$_stockpile_$tradegood$ > 0
 		}
-		change_variable = {
-			name = wealth_owed_for_$tradegood$
-			multiply = {
-				value = global_var:global_$tradezone$_tradezone.var:local_price_$tradegood$
-				min = 0.0001
-				divide = {
-					value = 0.5
-					add = owner.var:TZ_penetration_$tradezone$
+		# [task #79] thin-stock price-spike guard. local_price_$tradegood$ = order_size/stockpile
+		# x 0.6 (GT_set_tradegood_price) -- a REAL price formula in principle, but numerically
+		# unstable as stockpile shrinks toward (but not reaching) 0: a real boot showed zones with
+		# stock at 1-10% of order demand paying ~10x (rarely ~100x) the country's stable average,
+		# because the ratio is dominated by raw, largely-unnormalized demand pressure rather than a
+		# meaningful scarcity price. The EXISTING else-branch below already guards the EXACT-zero
+		# case (see its own comment); this guards the low-but-nonzero case the same numeric
+		# instability produces via a real (not skipped) divide. Per explicit user directive
+		# ("NO ceiling... a starved/spiking zone's price passes through in full", #112 comment
+		# above) this does NOT touch the well-stocked case -- only zones below the 10% threshold
+		# are capped, and only at 3x the country's stable average, not reverted to that average.
+		if = {
+			limit = {
+				has_global_variable = $tradezone$_total_order_size_$tradegood$
+				global_var:$tradezone$_total_order_size_$tradegood$ > 0
+			}
+			set_variable = {
+				name = GT_thinstock_ratio_tmp
+				value = global_var:$tradezone$_stockpile_$tradegood$
+				divide = global_var:$tradezone$_total_order_size_$tradegood$
+			}
+		}
+		else = {
+			# no current orders in this zone this quarter -- nothing being bought, so "thin stock
+			# relative to demand" does not apply; treat as not-thin (ratio >= the 0.1 threshold).
+			set_variable = { name = GT_thinstock_ratio_tmp  value = 1 }
+		}
+		if = {
+			limit = {
+				var:GT_thinstock_ratio_tmp < 0.1
+				# gbip=0 for a good with no global trade (GT_split_get_global_import_unit_price_
+				# tradegood's own >0 sqrt-guard, below) -- capping against a meaningless 0 baseline
+				# would zero the payment outright instead of capping it; fall through to the
+				# uncapped multiply (the else branch below) whenever gbip isn't a usable baseline.
+				has_global_variable = global_base_import_price_$tradegood$
+				global_var:global_base_import_price_$tradegood$ > 0
+			}
+			# global_base_import_price_$tradegood$ is SQRT-TRANSFORMED at its own setter (below,
+			# "sqrt = { input = global_var:global_base_import_price_$tradegood$ }") -- the raw
+			# weighted-sum-of-local-prices BEFORE that sqrt is what's actually comparable to
+			# local_price's own (un-sqrt'd) scale. Squaring gbip back (multiply by itself) before
+			# the x3 recovers that pre-sqrt scale -- capping against raw gbip directly would compare
+			# different units and "3x" would swing with the price level instead of holding at a
+			# clean 3x of the real regional average. NOT country_unit_price_$tradegood$ either --
+			# that reads ALREADY divided by (0.5+country_penetration), a second, separate mismatch.
+			change_variable = {
+				name = wealth_owed_for_$tradegood$
+				multiply = {
+					value = global_var:global_$tradezone$_tradezone.var:local_price_$tradegood$
+					min = 0.0001
+					max = {
+						value = global_var:global_base_import_price_$tradegood$
+						multiply = global_var:global_base_import_price_$tradegood$
+						multiply = 3
+					}
+					divide = {
+						value = 0.5
+						add = owner.var:TZ_penetration_$tradezone$
+					}
 				}
 			}
 		}
+		else = {
+			# well-stocked zone (>= 10% of order demand), OR thin stock but no usable gbip baseline:
+			# UNCHANGED, full local-price pass-through -- honors the #112 "no ceiling" directive for
+			# the case it was meant to serve.
+			change_variable = {
+				name = wealth_owed_for_$tradegood$
+				multiply = {
+					value = global_var:global_$tradezone$_tradezone.var:local_price_$tradegood$
+					min = 0.0001
+					divide = {
+						value = 0.5
+						add = owner.var:TZ_penetration_$tradezone$
+					}
+				}
+			}
+		}
+		remove_variable = GT_thinstock_ratio_tmp
 	}
 	else = {
 		# no stockpile to sell from in this zone this quarter -> no sale -> zero the payment, not skip
