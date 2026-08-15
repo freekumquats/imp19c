@@ -99,3 +99,32 @@ passive drift mechanics covered elsewhere). Disposition (full table in
 hardcoded loc numbers, the kept-as-stability rationale re-verified against the live file, the
 dead-code claim re-confirmed with a fresh grep, the vanilla-scope claim re-confirmed). **Commit:**
 `1e250bedb`. **Status: DONE.**
+
+## Task #103 re-confirmation — cottage industry IS wired into military-goods production
+Re-checked against current code (the boot-test note was filed after #98's fix had already landed).
+Cottage industry's automatic per-governorship recipe system (`se_COTTAGEIND.txt`) already sums into
+4 of the 5 military goods' `GOODS_national_production_<good>` (the uncapped figure #98's fix surfaces
+on the topbar) — early_munitions, early_artillery, clothing, construction_materials,
+pharmaceuticals. `late_munitions` is explicitly, intentionally mechanised-only (a stubbed recipe
+comment says so in source). Contribution is real but genuinely tiny under the shared mod-wide
+`COTTAGEIND_scale = 0.0001` constant — not a wiring bug, just hard to notice. **No code change**:
+bumping that constant would rebalance the ENTIRE cottage-industry economy, far outside #103's scope.
+Findings appended to `design/DESIGN_MILITARY_SUPPLIES_TOPBAR_98.md`. **Commit:** `2a36aec4f`.
+**Status: CLOSED, working as designed.**
+
+## Task #101 — Grand Council salaries scaled by rank
+Direct request: Grand Council positions should draw salaries scaled by rank, like vanilla offices.
+Vanilla's own monarchy offices (`common/offices/00_monarchy.txt`) carry `monthly_wage_for_character`
+on a `personal_modifier` block — 0.01 for ordinary offices, 0.02 for the highest-ranked one
+(`office_foreign_minister`). The mod's Grand Council is a fully custom parallel system (not vanilla
+`office` objects), so the equivalent hook is the shared character modifier every seated officer
+already gets on appoint (`qing_officeholder`, `common/modifiers/qing_governance_modifiers.txt:227`,
+granted/stripped in `QING_office_appoint`/`QING_office_vacate`, `se_QING_COUNCIL.txt`). Added
+`monthly_wage_for_character = 0.01` there (base, every seat) plus a new
+`qing_officeholder_chancellor_bonus` modifier (+0.01) granted only to the Grand Chancellor (head of
+the council), giving him 0.02 total — mirroring vanilla's exact 2x top-office ratio. Wired
+symmetrically into both teardown paths (the appoint displacement block and `QING_office_vacate`).
+**Review:** CLEAN (no-op-removal precedent confirmed, flag-comparison ordering confirmed, `chancellor`
+literal confirmed correct, brace balance confirmed, `monthly_wage_for_character`'s validity in a
+plain (non-office) character modifier confirmed via vanilla's `retiring_general_ambition`, and no
+double-count confirmed via a repo-wide grep). **Commit:** `e9a4bf59e`. **Status: DONE.**
