@@ -167,6 +167,63 @@ re-check). `tariffs_expense_trace.py` is legitimately part of this session's own
 **Commit:** `e9b2e6240`.
 
 ## Task #97/#98 — building icon + Macro Builder visibility audit
-IN PROGRESS: dispatched a full read-only audit of every building definition against icon presence,
-`province_window.gui` wiring, and `macro_builder_view.gui` wiring, to scope the fix as one systemic
-pass vs case-by-case. See below for the result once it lands.
+Dispatched a full read-only audit of every building definition (99 total across `common/buildings/
+*.txt`) against icon presence, `province_window.gui` wiring, and `macro_builder_view.gui` wiring.
+Found exactly 6 real gaps, all mechanical:
+- `qing_dyeworks_building`/`qing_yunnan_copper_works_building`: no `.dds` icon at all (the only 2 of
+  99 missing one) — the icon-fetch queue (`tools/gen_table_icons.py`) was never updated after these
+  buildings were added (#66). Sourced period woodblock-print art (Tiangong Kaiwu 天工開物: a drawloom
+  scene for dyeworks, a blast-furnace/fining scene for copper works) via the existing
+  `fetch_wm.py`/`dds_icon.convert` pipeline, visually verified.
+- Same two buildings: real `macro_build_item_` templates already existed in `gui_templates.gui` but
+  were never instantiated in `macro_builder_view.gui` — the exact "#58 forgot one of two files"
+  pattern repeating. `IndustrialItemsRow2` (their natural home row) was already at 6 items — the
+  proven max row size in this file (confirmed by counting every row; a prior #91-era comment
+  documents 8 items/528px overflowing the panel, which is why Industrial was split into 2 rows in the
+  first place). Appending 2 more there would recreate that exact overflow, so added a new
+  `IndustrialItemsRow3` (new `block`/`blockoverride` pair, same proven plumbing) instead.
+- `military_depot_building`/`qing_oasis_bazaar_building`: the REVERSE gap — real `allow`/`potential`
+  gates and real macro-builder wiring, but no `build_item_` template at all, so they could only ever
+  be built via the batch macro builder, never by hand in a single province. Authored the missing
+  `build_item_` templates + `building_..._tooltip` templates (mirroring the proven
+  `qing_salt_yard_building` shape exactly) + `province_window.gui` instantiation. One new loc key
+  (`tooltip_military_depot_building`) written from the building's own def (`local_defensive = 0.02`,
+  its only modifier); `qing_oasis_bazaar_building` reused its already-existing loc key.
+- Explicitly verified NOT gaps, left alone: `row_manufactory_building`/`row_plantation_building` are
+  deliberately excluded from the Qing macro builder per an existing #91-era comment in that exact
+  file (they're rest-of-world-only, `potential = NOT chinese_group`) — a real design decision, not an
+  oversight; and 9 seed-only `allow = { always = no }` wonders (Great Wall, Grand Canal, the two
+  academies, etc.) are correctly absent from one or both menus since they're never player-built
+  through any UI (only via `add_building_level` at setup/decline events).
+**Review:** CLEAN across all 7 verification axes (brace/structure balance including the new Row3
+nesting, every new template reference resolves, the block/blockoverride plumbing confirmed identical
+to the proven Row2 pattern, loc key correctness re-sourced from the real building def, both new .dds
+files confirmed valid 200x200 headers matching the donor exactly, the 6-item row-max claim
+re-verified against every row in the file, and the macro-builder config allowlist confirmed to
+already list all 4 touched building keys so the new UI entries won't render empty).
+**Commit:** `7bcd25256`. **Status: DONE — all 6 identified gaps fixed, nothing deferred.**
+
+## Side finding — the TREASURY_LOG_it "stale log" dispute, now genuinely resolved
+Revisited the two remaining disputed sites from earlier tonight (`QING_works_build_dike`
+`se_QING_WORKS.txt:158`, `QING_censorate_impeach_uphold` `se_QING_CENSORATE.txt:225`) after the user
+firmly rejected my earlier "stale log" dismissal. This time did it properly: discovered the
+compiler's reported "local line N within EFFECT" strips comments and blank lines before counting —
+verified this by an exact, independent recount for BOTH sites (se_QING_WORKS.txt local line 25/30 =
+absolute 197/202; se_QING_CENSORATE.txt local line 20 = absolute 272 — both exact matches, not
+approximate) — and cross-referenced against full `git log -S` history proving these exact call sites
+were NEVER in a broken form in this repo's history.
+
+This is NOT a stale log. It IS a real, currently-live bug — just a different one than either of us
+assumed: TREASURY_LOG_it's own body (`se_TREASURY_LOG.txt:40`, `set_variable = { name=ECON_LOG_tickval
+value=$amount$ }`) trips the compiler's macro-argument validator whenever a caller passes a COMPOUND
+block (`amount = { value=X multiply=Y }`) instead of a flat literal (`amount = -320`) — the validator
+appears to flatten one level too far and treats the block's own inner keys as unrecognized top-level
+macro arguments. Confirmed against the FULL error.log: every single "unknown arguments: X" failure's
+X list exactly matches the inner keys of a compound-block `amount=` call (26 occurrences: value alone
+x7, value+multiply x16, value+divide x1, value+subtract x1, add alone x1); every flat-literal
+`amount=` call has zero errors. Gameplay-harmless (the real `add_treasury` is a separate, unaffected
+call) but silently voids the diagnostic logging for every computed/variable-cost treasury movement —
+exactly the large, meaningful ones a spike-hunt needs. Logged as task #108 for a dedicated mechanical
+sweep (stage the computed amount into a var first, pass `amount = var:X`, the pattern already proven
+throughout this session's own ECON_LOG probes) across ~27 call sites. Not yet fixed — flagged, not
+buried.
