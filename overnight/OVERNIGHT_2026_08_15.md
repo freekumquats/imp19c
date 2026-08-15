@@ -247,3 +247,10 @@ All boot-test note tasks (#95-#101, #103-#108) are DONE. #102 (reopened #79, tar
 BLOCKED-ON-DATA, legitimately -- the diagnostic probe is fixed and shipped (commit `27a70232b`); it
 needs a fresh boot to produce real numbers before the silver hypothesis can be confirmed or refuted.
 Nothing was deferred without being logged loudly as such.
+
+## Boot-test confirmations #100 / #104 — no new work, logged for completeness
+#100 (amban/garrison fix, #77/#78) and #104 (#69 inflation fix) were both re-confirmed working via
+direct screenshot review during this session's earlier /imp19c-logs triage (see
+`~/Downloads/scratch_logs_screenshots.md` for the shot-by-shot evidence) — no code change was needed
+or made tonight. Marked completed in the task tracker on that basis; noted here so the doc's task
+list matches the tracker's.
