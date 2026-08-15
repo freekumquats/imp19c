@@ -2625,6 +2625,18 @@ GT_split_update_wealth_owed_for_tradegoods = {
 			# different units and "3x" would swing with the price level instead of holding at a
 			# clean 3x of the real regional average. NOT country_unit_price_$tradegood$ either --
 			# that reads ALREADY divided by (0.5+country_penetration), a second, separate mismatch.
+			# [task #79] comprehensive logging, per explicit request -- stage the UNCAPPED
+			# local_price before it's overwritten, so the boot can compare "what it would have
+			# been" against "what it was capped to." CHI-gated (owner = the governorship's
+			# country), matching the standing TREASURY_LOG_it idiom. LABEL embeds
+			# $tradegood$/$tradezone$ directly (proven cosmetic-only, never call-voiding).
+			if = {
+				limit = { owner = { tag = CHI } }
+				set_variable = {
+					name = GT_thinstock_uncapped_price_tmp
+					value = global_var:global_$tradezone$_tradezone.var:local_price_$tradegood$
+				}
+			}
 			change_variable = {
 				name = wealth_owed_for_$tradegood$
 				multiply = {
@@ -2640,6 +2652,24 @@ GT_split_update_wealth_owed_for_tradegoods = {
 						add = owner.var:TZ_penetration_$tradezone$
 					}
 				}
+			}
+			if = {
+				limit = { owner = { tag = CHI } }
+				LOG_line = { sys = ECON  msg = "GT thinstock price cap fired" }
+				# [review fix] scale=100 capped too early -- this probe's whole purpose is to catch
+				# extreme thin-stock spikes (the code comment above documents up to ~100x the
+				# country average, itself ~0.5, i.e. raw values up to ~50, and wealth_owed is a full
+				# payment that can run higher still). scale=20 gives 5x more headroom (caps at 400
+				# raw) before hitting the emit helper's 8000-tick ceiling.
+				set_variable = { name = ECON_LOG_tickval  value = var:GT_thinstock_uncapped_price_tmp }
+				set_variable = { name = ECON_LOG_tickscale  value = 20 }
+				debug_log = "IMP19C CURXV LABEL  thinstock_uncapped_$tradegood$_$tradezone$"
+				ECON_LOG_curx_tick_emit = yes
+				set_variable = { name = ECON_LOG_tickval  value = var:wealth_owed_for_$tradegood$ }
+				set_variable = { name = ECON_LOG_tickscale  value = 20 }
+				debug_log = "IMP19C CURXV LABEL  thinstock_capped_result_$tradegood$_$tradezone$"
+				ECON_LOG_curx_tick_emit = yes
+				remove_variable = GT_thinstock_uncapped_price_tmp
 			}
 		}
 		else = {
@@ -2973,6 +3003,25 @@ GT_split_get_country_import_unit_price_tradegood = {
 		set_variable = {
 			name = $tradegood$_ess_last_nonzero_price
 			value = var:country_unit_price_$tradegood$
+		}
+	}
+	else = {
+		# [task #69] comprehensive logging, per explicit request -- not just "did it fire" but
+		# the REAL held value now in use vs. the collapsed live value it replaces, per good.
+		# CHI-gated, matching this project's standing TREASURY_LOG_it idiom. LABEL embeds
+		# $tradegood$ directly (proven cosmetic-only per the corrected log-string-macro-rule
+		# memory -- mangles legibly, never voids the call); TWO leading spaces preserve the tag.
+		if = {
+			limit = { tag = CHI  has_variable = $tradegood$_ess_last_nonzero_price }
+			LOG_line = { sys = ECON  msg = "essentials held-price fallback active" }
+			set_variable = { name = ECON_LOG_tickval  value = var:$tradegood$_ess_last_nonzero_price }
+			set_variable = { name = ECON_LOG_tickscale  value = 1000 }
+			debug_log = "IMP19C CURXV LABEL  essentials_held_$tradegood$"
+			ECON_LOG_curx_tick_emit = yes
+			set_variable = { name = ECON_LOG_tickval  value = var:country_unit_price_$tradegood$ }
+			set_variable = { name = ECON_LOG_tickscale  value = 1000 }
+			debug_log = "IMP19C CURXV LABEL  essentials_collapsed_$tradegood$"
+			ECON_LOG_curx_tick_emit = yes
 		}
 	}
 }
