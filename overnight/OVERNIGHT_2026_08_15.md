@@ -227,3 +227,23 @@ exactly the large, meaningful ones a spike-hunt needs. Logged as task #108 for a
 sweep (stage the computed amount into a var first, pass `amount = var:X`, the pattern already proven
 throughout this session's own ECON_LOG probes) across ~27 call sites. Not yet fixed — flagged, not
 buried.
+
+## Task #108 — fixed the TREASURY_LOG_it bug across all 19 compound-block sites
+Found and fixed every affected call site (13 files, 19 sites total, including one introduced by
+tonight's own #105 fix). Two-case mechanical fix: multi-operator blocks (`{ value=X multiply=Y }`
+etc.) staged into a new `TREASURY_LOG_amt_tmp` var first, then passed as a bare `amount = var:X`;
+single-key blocks reducible to a bare token (`{ value=X }` -> `X`; `{ add=X }` -> `X`, corroborated
+against an existing identical-shape `add_treasury` sibling) had their braces dropped entirely instead
+of staged. Review: CLEAN across all 7 verification axes -- every one of the 15 staged blocks
+individually confirmed token-identical to its sibling `add_treasury` (not sampled, all 15 checked),
+both reduction cases confirmed mathematically exact, no var-name collision anywhere in the repo, every
+stage/log/remove triple confirmed consecutive (no leak), scope confirmed correct at every nesting
+level including the one scripted_gui button site (confirmed against that same file's own existing
+`set_variable` precedent), brace balance confirmed in all 13 files.
+Commit: `a9172944d`. Status: DONE.
+
+## Session summary
+All boot-test note tasks (#95-#101, #103-#108) are DONE. #102 (reopened #79, tariffs magnitude) is
+BLOCKED-ON-DATA, legitimately -- the diagnostic probe is fixed and shipped (commit `27a70232b`); it
+needs a fresh boot to produce real numbers before the silver hypothesis can be confirmed or refuted.
+Nothing was deferred without being logged loudly as such.
