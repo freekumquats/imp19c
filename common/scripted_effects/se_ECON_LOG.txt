@@ -880,77 +880,129 @@ ECON_LOG_curx_exact = {
 }
 
 # ======================================================================
-# [task #79 2026-08-14] the 12 ENGINE-INTERNAL expense vars that feed INCOME_governorship_tariffs_
-# <strata> (INCOME_svalues.txt:757-890) -- this_expenses_from_resource_extraction_<strata> and
-# this_expenses_from_manufacturing_<strata>, one pair per social stratum (upper/middle/lower/
-# proletariat/indentured/slaves). Confirmed ZERO existing logging anywhere in this codebase before
-# this probe -- these are read-only vanilla-engine vars, never set_variable/change_variable'd by any
-# script here, so their formula is opaque from source alone. This is the concrete instrumentation
-# task #79's diagnosis is blocked on: without these numbers, the tariffs-magnitude root cause cannot
-# be traced past "reads engine internals decoupled from country_unit_price and local_price" (both
-# already ruled out as the direct driver). Exact-tick, scale=1 (same order of magnitude as other
-# per-quarter monetary probes here); has_variable-guarded per var (unset is a real, valid state for
-# a stratum with no population, not an error).
+# [task #79/#102 fix 2026-08-15] SCOPE-BUG FIX + stratum correction. Adversarially confirmed this
+# session: this_expenses_from_resource_extraction/manufacturing_<strata> are GOVERNORSHIP-scoped vars
+# (set only inside every_governorships, GT_split_calculate_actual_share_of_expenses_category,
+# se_GLOBALTRADE_split.txt:4358-4365, "# Scope: governorship" at :4369) -- but the probe below
+# originally read them at COUNTRY scope (this whole chain runs inside ECON_LOG_curx_dump_pre/post,
+# both "# Scope: country", tag=CHI-guarded). has_variable at country scope on a governorship var is
+# structurally always false, so this probe emitted all-zero data since its own first boot (commit
+# 3db638045) -- confirmed against a real boot: the sibling expense_taxrate_tariffs metric (which
+# reads INCOME_taxrate_tariffs, a genuine country var per owner.var: usage at INCOME_svalues.txt:777)
+# read a real nonzero 0.075 in the SAME probe run while all 12 expense metrics read ZERO every time.
+# Also corrected the stratum SET: INCOME_governorship_tariffs_total_positive (INCOME_svalues.txt:
+# 748-754) sums exactly upper_strata/middle_strata/lower_strata/proletariat/tribesmen (5 strata,
+# confirmed exact var-name spelling at :757-889) -- the original probe covered upper/middle/lower/
+# proletariat/indentured/slaves (2 of 6 wrong), missing tribesmen entirely.
+#
+# FIX: every_governorships (proven country-scope iterator, se_ADMIN.txt:5, oa_economy_setup.txt:2535)
+# to reach governorship scope, save_scope_as to hold each governorship's identity across the scope
+# switch (proven idiom, this file's own se_GLOBALTRADE_split.txt:751/815/5647/6031/6039 + se_LAND.txt's
+# scope:X.var:Y reads), then owner = { change_variable = { ... add = scope:<saved>.var:<field> } }
+# (owner={} block proven at se_GLOBALTRADE_split.txt:2708-2717) to accumulate each stratum/category's
+# SUM across every governorship CHI owns into a country-scope staging var. NOT local_var to carry the
+# read across the owner={} scope switch -- local_var does not cross a scope boundary this way (memory
+# imp19c-local-var-scope-boundary); NOT an invented "owner.change_variable = {...}" / "scope.EFFECT =
+# {...}" form -- grepped the whole codebase, zero precedent for a scope-prefixed effect CALL (only
+# scope-prefixed VALUE reads like owner.var:X and scope:X.var:Y are attested). Then exact-tick-emit
+# the 10 accumulated totals (5 strata x 2 categories) + the taxrate (still genuinely country-scope,
+# unchanged). This is the real national per-quarter total feeding INCOME_governorship_tariffs_
+# <strata> summed over every governorship -- what the tariffs-magnitude question actually needs.
 # ======================================================================
 ECON_LOG_curx_tariffs_expenses = {
+	# Scope: country (CHI, guarded by the chain caller)
+	set_variable = { name = ECON_LOG_gov_sum_extraction_upper  value = 0 }
+	set_variable = { name = ECON_LOG_gov_sum_manufacturing_upper  value = 0 }
+	set_variable = { name = ECON_LOG_gov_sum_extraction_middle  value = 0 }
+	set_variable = { name = ECON_LOG_gov_sum_manufacturing_middle  value = 0 }
+	set_variable = { name = ECON_LOG_gov_sum_extraction_lower  value = 0 }
+	set_variable = { name = ECON_LOG_gov_sum_manufacturing_lower  value = 0 }
+	set_variable = { name = ECON_LOG_gov_sum_extraction_proletariat  value = 0 }
+	set_variable = { name = ECON_LOG_gov_sum_manufacturing_proletariat  value = 0 }
+	set_variable = { name = ECON_LOG_gov_sum_extraction_tribesmen  value = 0 }
+	set_variable = { name = ECON_LOG_gov_sum_manufacturing_tribesmen  value = 0 }
+	every_governorships = {
+		# Scope: governorship (this = governorship, root = the CHI country)
+		save_scope_as = ECON_LOG_this_gov
+		if = {
+			limit = { has_variable = this_expenses_from_resource_extraction_upper_strata }
+			owner = { change_variable = { name = ECON_LOG_gov_sum_extraction_upper  add = scope:ECON_LOG_this_gov.var:this_expenses_from_resource_extraction_upper_strata } }
+		}
+		if = {
+			limit = { has_variable = this_expenses_from_manufacturing_upper_strata }
+			owner = { change_variable = { name = ECON_LOG_gov_sum_manufacturing_upper  add = scope:ECON_LOG_this_gov.var:this_expenses_from_manufacturing_upper_strata } }
+		}
+		if = {
+			limit = { has_variable = this_expenses_from_resource_extraction_middle_strata }
+			owner = { change_variable = { name = ECON_LOG_gov_sum_extraction_middle  add = scope:ECON_LOG_this_gov.var:this_expenses_from_resource_extraction_middle_strata } }
+		}
+		if = {
+			limit = { has_variable = this_expenses_from_manufacturing_middle_strata }
+			owner = { change_variable = { name = ECON_LOG_gov_sum_manufacturing_middle  add = scope:ECON_LOG_this_gov.var:this_expenses_from_manufacturing_middle_strata } }
+		}
+		if = {
+			limit = { has_variable = this_expenses_from_resource_extraction_lower_strata }
+			owner = { change_variable = { name = ECON_LOG_gov_sum_extraction_lower  add = scope:ECON_LOG_this_gov.var:this_expenses_from_resource_extraction_lower_strata } }
+		}
+		if = {
+			limit = { has_variable = this_expenses_from_manufacturing_lower_strata }
+			owner = { change_variable = { name = ECON_LOG_gov_sum_manufacturing_lower  add = scope:ECON_LOG_this_gov.var:this_expenses_from_manufacturing_lower_strata } }
+		}
+		if = {
+			limit = { has_variable = this_expenses_from_resource_extraction_proletariat }
+			owner = { change_variable = { name = ECON_LOG_gov_sum_extraction_proletariat  add = scope:ECON_LOG_this_gov.var:this_expenses_from_resource_extraction_proletariat } }
+		}
+		if = {
+			limit = { has_variable = this_expenses_from_manufacturing_proletariat }
+			owner = { change_variable = { name = ECON_LOG_gov_sum_manufacturing_proletariat  add = scope:ECON_LOG_this_gov.var:this_expenses_from_manufacturing_proletariat } }
+		}
+		if = {
+			limit = { has_variable = this_expenses_from_resource_extraction_tribesmen }
+			owner = { change_variable = { name = ECON_LOG_gov_sum_extraction_tribesmen  add = scope:ECON_LOG_this_gov.var:this_expenses_from_resource_extraction_tribesmen } }
+		}
+		if = {
+			limit = { has_variable = this_expenses_from_manufacturing_tribesmen }
+			owner = { change_variable = { name = ECON_LOG_gov_sum_manufacturing_tribesmen  add = scope:ECON_LOG_this_gov.var:this_expenses_from_manufacturing_tribesmen } }
+		}
+	}
 	debug_log = "IMP19C CURXV LABEL expense_extraction_upper"
-	if = { limit = { has_variable = this_expenses_from_resource_extraction_upper_strata }  set_variable = { name = ECON_LOG_tickval  value = var:this_expenses_from_resource_extraction_upper_strata } }
-	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
+	set_variable = { name = ECON_LOG_tickval  value = var:ECON_LOG_gov_sum_extraction_upper }
 	set_variable = { name = ECON_LOG_tickscale  value = 1 }
 	ECON_LOG_curx_tick_emit = yes
 	debug_log = "IMP19C CURXV LABEL expense_manufacturing_upper"
-	if = { limit = { has_variable = this_expenses_from_manufacturing_upper_strata }  set_variable = { name = ECON_LOG_tickval  value = var:this_expenses_from_manufacturing_upper_strata } }
-	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
+	set_variable = { name = ECON_LOG_tickval  value = var:ECON_LOG_gov_sum_manufacturing_upper }
 	set_variable = { name = ECON_LOG_tickscale  value = 1 }
 	ECON_LOG_curx_tick_emit = yes
 	debug_log = "IMP19C CURXV LABEL expense_extraction_middle"
-	if = { limit = { has_variable = this_expenses_from_resource_extraction_middle_strata }  set_variable = { name = ECON_LOG_tickval  value = var:this_expenses_from_resource_extraction_middle_strata } }
-	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
+	set_variable = { name = ECON_LOG_tickval  value = var:ECON_LOG_gov_sum_extraction_middle }
 	set_variable = { name = ECON_LOG_tickscale  value = 1 }
 	ECON_LOG_curx_tick_emit = yes
 	debug_log = "IMP19C CURXV LABEL expense_manufacturing_middle"
-	if = { limit = { has_variable = this_expenses_from_manufacturing_middle_strata }  set_variable = { name = ECON_LOG_tickval  value = var:this_expenses_from_manufacturing_middle_strata } }
-	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
+	set_variable = { name = ECON_LOG_tickval  value = var:ECON_LOG_gov_sum_manufacturing_middle }
 	set_variable = { name = ECON_LOG_tickscale  value = 1 }
 	ECON_LOG_curx_tick_emit = yes
 	debug_log = "IMP19C CURXV LABEL expense_extraction_lower"
-	if = { limit = { has_variable = this_expenses_from_resource_extraction_lower_strata }  set_variable = { name = ECON_LOG_tickval  value = var:this_expenses_from_resource_extraction_lower_strata } }
-	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
+	set_variable = { name = ECON_LOG_tickval  value = var:ECON_LOG_gov_sum_extraction_lower }
 	set_variable = { name = ECON_LOG_tickscale  value = 1 }
 	ECON_LOG_curx_tick_emit = yes
 	debug_log = "IMP19C CURXV LABEL expense_manufacturing_lower"
-	if = { limit = { has_variable = this_expenses_from_manufacturing_lower_strata }  set_variable = { name = ECON_LOG_tickval  value = var:this_expenses_from_manufacturing_lower_strata } }
-	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
+	set_variable = { name = ECON_LOG_tickval  value = var:ECON_LOG_gov_sum_manufacturing_lower }
 	set_variable = { name = ECON_LOG_tickscale  value = 1 }
 	ECON_LOG_curx_tick_emit = yes
 	debug_log = "IMP19C CURXV LABEL expense_extraction_proletariat"
-	if = { limit = { has_variable = this_expenses_from_resource_extraction_proletariat }  set_variable = { name = ECON_LOG_tickval  value = var:this_expenses_from_resource_extraction_proletariat } }
-	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
+	set_variable = { name = ECON_LOG_tickval  value = var:ECON_LOG_gov_sum_extraction_proletariat }
 	set_variable = { name = ECON_LOG_tickscale  value = 1 }
 	ECON_LOG_curx_tick_emit = yes
 	debug_log = "IMP19C CURXV LABEL expense_manufacturing_proletariat"
-	if = { limit = { has_variable = this_expenses_from_manufacturing_proletariat }  set_variable = { name = ECON_LOG_tickval  value = var:this_expenses_from_manufacturing_proletariat } }
-	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
+	set_variable = { name = ECON_LOG_tickval  value = var:ECON_LOG_gov_sum_manufacturing_proletariat }
 	set_variable = { name = ECON_LOG_tickscale  value = 1 }
 	ECON_LOG_curx_tick_emit = yes
-	debug_log = "IMP19C CURXV LABEL expense_extraction_indentured"
-	if = { limit = { has_variable = this_expenses_from_resource_extraction_indentured }  set_variable = { name = ECON_LOG_tickval  value = var:this_expenses_from_resource_extraction_indentured } }
-	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
+	debug_log = "IMP19C CURXV LABEL expense_extraction_tribesmen"
+	set_variable = { name = ECON_LOG_tickval  value = var:ECON_LOG_gov_sum_extraction_tribesmen }
 	set_variable = { name = ECON_LOG_tickscale  value = 1 }
 	ECON_LOG_curx_tick_emit = yes
-	debug_log = "IMP19C CURXV LABEL expense_manufacturing_indentured"
-	if = { limit = { has_variable = this_expenses_from_manufacturing_indentured }  set_variable = { name = ECON_LOG_tickval  value = var:this_expenses_from_manufacturing_indentured } }
-	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
-	set_variable = { name = ECON_LOG_tickscale  value = 1 }
-	ECON_LOG_curx_tick_emit = yes
-	debug_log = "IMP19C CURXV LABEL expense_extraction_slaves"
-	if = { limit = { has_variable = this_expenses_from_resource_extraction_slaves }  set_variable = { name = ECON_LOG_tickval  value = var:this_expenses_from_resource_extraction_slaves } }
-	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
-	set_variable = { name = ECON_LOG_tickscale  value = 1 }
-	ECON_LOG_curx_tick_emit = yes
-	debug_log = "IMP19C CURXV LABEL expense_manufacturing_slaves"
-	if = { limit = { has_variable = this_expenses_from_manufacturing_slaves }  set_variable = { name = ECON_LOG_tickval  value = var:this_expenses_from_manufacturing_slaves } }
-	else = { set_variable = { name = ECON_LOG_tickval  value = 0 } }
+	debug_log = "IMP19C CURXV LABEL expense_manufacturing_tribesmen"
+	set_variable = { name = ECON_LOG_tickval  value = var:ECON_LOG_gov_sum_manufacturing_tribesmen }
 	set_variable = { name = ECON_LOG_tickscale  value = 1 }
 	ECON_LOG_curx_tick_emit = yes
 	debug_log = "IMP19C CURXV LABEL expense_taxrate_tariffs"
@@ -959,6 +1011,16 @@ ECON_LOG_curx_tariffs_expenses = {
 	set_variable = { name = ECON_LOG_tickscale  value = 1000 }
 	ECON_LOG_curx_tick_emit = yes
 	debug_log = "IMP19C CURXV LABEL end"
+	remove_variable = ECON_LOG_gov_sum_extraction_upper
+	remove_variable = ECON_LOG_gov_sum_manufacturing_upper
+	remove_variable = ECON_LOG_gov_sum_extraction_middle
+	remove_variable = ECON_LOG_gov_sum_manufacturing_middle
+	remove_variable = ECON_LOG_gov_sum_extraction_lower
+	remove_variable = ECON_LOG_gov_sum_manufacturing_lower
+	remove_variable = ECON_LOG_gov_sum_extraction_proletariat
+	remove_variable = ECON_LOG_gov_sum_manufacturing_proletariat
+	remove_variable = ECON_LOG_gov_sum_extraction_tribesmen
+	remove_variable = ECON_LOG_gov_sum_manufacturing_tribesmen
 }
 
 # --- UPSTREAM-DRIVER fine bands (backup + fast eyeball). The silver price = gbip / (0.5 + pen); if gbip
