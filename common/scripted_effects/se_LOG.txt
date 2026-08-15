@@ -46,21 +46,22 @@
 # ---- Core line writer -------------------------------------------------
 # One tagged message. $sys$ = subsystem tag (SUBJ, TRADE, CURR, ...),
 # $msg$ = free text. Pass numbers/vars pre-formatted into $msg$ by the caller.
-# [task #83, 2026-08-14] added debug_log_scopes=yes -- this is the SAME idiom LOG_state/
-# LOG_fail already use (proven working: a real boot's debug.log shows a genuine
-# "Country Derge [420] / Root: Country Great Qing [419]" scope-stack dump following one of
-# those calls). The old ""/"" bracket-expression idiom used
-# at ~1433 LOG_line call sites across the codebase to inline a scope identifier into the
-# MESSAGE STRING never worked (renders literal "ERROR:[ROOT.GetTag]" text -- bracket
-# data-function syntax is not evaluated inside a debug_log string). Rather than editing
-# every call site, fixing it HERE means every existing LOG_line call automatically gets a
-# real, working scope-stack dump for free, with no site-by-site changes needed. The dead
-# ""/"ERROR:[...]" text left in messages is now just cosmetic noise -- harmless, but
-# safe to strip in a follow-up mechanical pass.
-# NOT applied to LOG_enter/LOG_exit below: the dangling-"for" defect this fixes never
-# occurred in either (checked directly -- all 1433 sites are LOG_line), and both are the
-# highest-frequency call-tracing macros (thousands of calls/tick); adding a multi-line scope
-# dump to them would multiply an already-1.7GB-per-boot debug.log for zero benefit.
+# [task #83, 2026-08-14] REVERTED (task #95, same day): added debug_log_scopes=yes here to
+# give every LOG_line call a real scope-stack dump, proven safe via LOG_state/LOG_fail (both
+# called only from scripted_effects on on_actions, never from inside an event's own immediate/
+# option block). LOG_line is called from THAT context constantly -- and a fresh boot showed
+# Imperator's OWN tooltip-preview system (which renders a one-line description for every
+# effect in an option's chain) tries to describe the bare debug_log_scopes effect and fails,
+# printing the literal fallback "debug_log_scopes has no localization" DIRECTLY IN THE
+# PLAYER-FACING EVENT TOOLTIP -- once in the live effect-preview list, once again in the
+# "Has happened:" recap. Confirmed universal (every event calling LOG_line from an
+# immediate/option block, i.e. most of them) via direct screenshot review of a real boot.
+# debug_log itself is apparently on the engine's own "silent, skip in tooltip" list;
+# debug_log_scopes evidently is not. LOG_state/LOG_fail keep debug_log_scopes (still correct
+# there -- confirmed never called from a directly-clicked option/immediate context). LOG_line
+# goes back to being scope-blind (matching its state before #83, minus #83's other change --
+# the dead "for [X.GetTag]" bracket text already stripped from all 1511 sites stays stripped,
+# since that text never worked either way and removing it was a separate, correct win).
 LOG_line = {
 	# Function: write a single tagged diagnostic line to logs/debug.log
 	# Scope:    any
@@ -68,7 +69,6 @@ LOG_line = {
 	# one space survives and the grep KEY renders "IMP19C QING" (not the fused "IMP19CQING"). A
 	# stray $ still trails each param — structural, harmless to a tag grep. See LOGGING_TEMPLATE.md.
 	debug_log = "IMP19C  $sys$: $msg$"
-	debug_log_scopes = yes
 }
 
 # ---- Call tracing -----------------------------------------------------
