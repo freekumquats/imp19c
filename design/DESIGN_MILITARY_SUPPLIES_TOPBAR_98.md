@@ -90,6 +90,39 @@ direction. The new "Produced" tooltip line is read-only (svalue in loc), zero si
   risk. The exact surface (topbar sub-line vs the building tooltip vs the Military panel) is the impl choice —
   the building tooltip is the lowest-risk, most-local home and matches #103's tech-gate-tooltip precedent.
 
+## #103 re-confirmation (2026-08-15) — "cottage industry not contributing to military supplies"
+Re-opened per a boot-test note filed AFTER the v2 fix above had already shipped (commit
+`83292dc90`), to check whether the fix fully resolved the complaint or whether cottage industry's
+OWN production math is separately broken. Traced every named good in the topbar's new "Produced by
+good" section:
+
+- **4 of 5 goods (early_munitions, early_artillery, clothing, construction_materials,
+  pharmaceuticals) genuinely DO sum a cottage-industry term** inside their
+  `GOODS_governorship_<good>_produced` svalue (`GOODS_svalues.txt`, e.g. :2742-2756 for
+  early_munitions), fed by `COTTAGEIND_scale_production`'s automatic per-governorship recipe system
+  (`se_COTTAGEIND.txt`) — no building required, driven by raw-good stockpiles + pop count. This IS
+  already folded into the uncapped "Produced by good" number the #98 fix surfaces.
+- **`late_munitions` has ZERO cottage contribution BY EXPLICIT DESIGN, not a bug**:
+  `GOODS_governorship_late_munitions_produced = ..._mechanised` only (`GOODS_svalues.txt:2827-2832`),
+  and `se_COTTAGEIND.txt:274-277` explicitly stubs the recipe "CANNOT BE PRODUCED BY COTTAGE
+  INDUSTRY." Same for late_artillery/chemicals/machine_parts — these are intentionally
+  mechanised-only goods.
+- **Magnitude is real but tiny**: the shared `COTTAGEIND_scale = 0.0001`
+  (`COTTAGEIND_svalues.txt:99-101`) plus a further `×0.1` pop-output damping applies to EVERY
+  cottage-industry good across the whole mod, not just military goods. Named mechanized buildings
+  produce flat integers per building (arsenal=2, machine_works=3) by comparison — cottage's
+  contribution is present and non-zero but plausibly too small to notice without reading the exact
+  tooltip number.
+
+**Verdict: NOT a live bug.** Cottage's wiring into military-goods production is correct (4/5 goods)
+and already visible via the #98 fix's "Produced by good" line; the 5th good is intentionally
+mechanised-only. **No code change applied** — `COTTAGEIND_scale` is a single mod-wide constant
+governing the ENTIRE cottage-industry economy across every good and province, not something that
+can be bumped for military goods alone without a much larger, separately-scoped economy-balance
+pass (out of scope for #103, high blast radius on shared logic per the delicate-fix principle).
+#103 closed as explained/working-as-designed, not fixed, per the standing bug-vs-missing-feature
+convention.
+
 ## Adversarial-review asks
 1. Is line 1095 really a bug (should be shortage_late_munitions), or is late_munitions deliberately docked by
    the early shortage for some supply-chain reason? Check whether shortage_late_munitions is even set anywhere
