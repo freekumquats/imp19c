@@ -54,3 +54,48 @@ surviving silver hypothesis (uncapped, high order-size, moderate local-price in 
 as the actual driver of the ~2000-2500/quarter "Tariffs and shipping" plateau. Continuing to the
 rest of the backlog (#96, #97/#98, #99, #101, #103 reconfirm, #105, #106, #107) per the overnight
 skill's "a hard block does not stop the run" rule while this awaits its boot.
+
+## Task #105 — The Resident's Graft now seizes the amban's real wealth
+Diagnosed: `qing_integ.11.a` (`events/imp19c_mod_events/qing_subject_integration.txt`) granted a
+flat, invented `add_treasury = 50` when the player impeaches/recalls a corrupt resident amban.
+Fixed to seize his REAL personal wealth using the exact proven full-confiscation idiom already in
+this codebase (`character_events.txt:468-477`, option `character_events.20.b`): `add_treasury = {
+value = 0  add = scope:corrupt_official.wealth }`, then `scope:corrupt_official = { add_gold = {
+value = 0  subtract = wealth } }` to zero his own hoard afterward. Loc updated ("+¥50 treasury" ->
+"his full personal hoard, pressed into the treasury"). **Review:** CLEAN (scope-validity, ordering,
+no wealth re-grant from the later recall/disgrace calls, brace balance, and zero/negative-wealth
+edge cases all independently verified). **Commit:** `0add912f5`. **Status: DONE.**
+
+## Task #107 — harem passive-conception rate cut
+Direct user report: Qianlong had 5 imperial children in 2 years, "adjust the pregnancy rate down a
+lot." Traced the mechanism: `QING_harem_pulse` (`se_QING_HAREM.txt`) rolls ONE random chance per
+quarter (10/20/30% depending on dynastic-harmony band) to pick a random favoured consort and
+conceive her (guaranteed on success, `number_of_children = 1`). Confirmed via a follow-up grep this
+is the ONLY automatic/passive conception path in the codebase — the other `make_pregnant` caller
+(`QING_harem_favour_consort_target`) is player-initiated via a GUI button, guaranteed-on-click by
+design, correctly left untouched. Cut all three tiers to ~40% of their prior value: 30/20/10 ->
+12/8/4. Best-guess tuning constant (Rule 1a), no further diagnosis was requested or needed — the
+next campaign's observed child count over a comparable stretch is the real confirmation. **Review:**
+CLEAN. **Commit:** `90ba50522`. **Status: DONE.**
+
+## Task #106 — event-reward stability audit (too many/too large, some converted to PI)
+Direct user request: too many event options grant stability, some are too large, convert some to
+political influence. Audited all 20 `add_stability` sites in event/effect-reward context (excluded
+passive drift mechanics covered elsewhere). Disposition (full table in
+`design/DESIGN_106_STABILITY_REWARD_AUDIT.md`):
+- Two +10 grants (fair assize, `qing_justice.4.a`) cut to +6.
+- Two +5 grants (grand investiture `qing_integ.30.a`, banish-agitator `agitator_sponsorship.2.b`)
+  converted FULLY to political influence (15 and 12) — both are political/ceremonial in theme, and
+  the user explicitly asked for some PI conversions. Loc updated at both sites (one had a hardcoded
+  "@stability! +5" string that needed fixing, not just the effect).
+- Three more +5 grants trimmed to +3 (kept as stability where thematically apt or where converting
+  would cancel an existing PI cost the same option already pays).
+- Left untouched with a stated reason: the ideology-apotheosis conservatism reward (a deliberate
+  per-ideology reward-type pattern — stability IS conservatism's designed payoff), `QING_justice_pulse`
+  (confirmed via repo-wide grep to have ZERO call sites — dead code, not a live contributor), and the
+  vanilla-adjacent `ambition_become_dictator_finish` (generic Imperator ambition system, zero
+  Qing-specific content nearby — out of scope per the Sobisonator-caution rule).
+**Review:** CLEAN across all 6 verification axes (brace balance, PI-effect scope validity, no missed
+hardcoded loc numbers, the kept-as-stability rationale re-verified against the live file, the
+dead-code claim re-confirmed with a fresh grep, the vanilla-scope claim re-confirmed). **Commit:**
+`1e250bedb`. **Status: DONE.**
