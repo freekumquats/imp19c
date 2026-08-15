@@ -20,16 +20,25 @@ already-committed curated art from being replaced by a different search pick on 
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(__file__))
-from fetch_wm import fetch, download
+from fetch_wm import fetch, download, _art_score
 from dds_icon import convert
 
 # Titles whose top Commons hit is typically NOT a usable photo (maps, scans, crests).
 BAD_TITLE = ("map", "plan", "pdf", ".svg", "document", "diagram", "chart", "book",
              "letter", "manuscript", "stamp", "coat of arms", "seal ", "memorial")
 
+# [task #91] Building icons were being picked in raw search-rank order, so a query like
+# "electric power station 1890s dynamo" or "Victorian gasworks gasometer" could surface a
+# modern colour photo of a preserved/museum site -- period-correct SUBJECT, anachronistic
+# LOOK. fetch_wm.py already solved exactly this for mission-task icons (#125, "_art_score" --
+# built because a naive top-result search returned a 21st-century container shipyard for
+# "Shipyards"), but this file's own _candidates()/smart_fetch() never adopted it. Re-rank by
+# the same _art_score (period-art vocabulary up, modern-photo vocabulary + post-1911 years
+# down) before the photo-legibility filter runs, so a period engraving/lithograph/monochrome
+# photo outranks a crisp modern colour shot of the same subject.
 def _candidates(query, width=400, limit=12):
     """Commons File-namespace search -> [(thumb_url, title)], jpeg/png only, bad
-    titles dropped, in search-rank order."""
+    titles dropped, ranked period-art-first (fetch_wm._art_score), search-rank as tiebreak."""
     import json, urllib.parse
     from fetch_wm import _get, API
     params = {"action": "query", "generator": "search", "gsrsearch": query,
@@ -38,7 +47,7 @@ def _candidates(query, width=400, limit=12):
     j = json.loads(_get(API + "?" + urllib.parse.urlencode(params)).decode("utf-8"))
     pages = (j.get("query") or {}).get("pages") or {}
     out = []
-    for p in sorted(pages.values(), key=lambda p: p.get("index", 999)):
+    for p in sorted(pages.values(), key=lambda p: (-_art_score(p.get("title")), p.get("index", 999))):
         ii = (p.get("imageinfo") or [{}])[0]
         t = (p.get("title") or "").lower()
         if ii.get("mime") not in ("image/jpeg", "image/png"):
