@@ -209,14 +209,20 @@ The topbar tooltip's "Tariffs and shipping" (`INCOME_national_total_from_tariffs
 governorship via `every_governorships`. The Economy tab's "Tariffs +74.173 (7.5% rate)" line
 is ONE governorship's own `INCOME_governorship_tariffs_total_positive` figure. An empire-wide
 total being ~20-40x one governorship's figure, for Qing's dozen-plus governorships, is the
-expected shape of a sum — not a double-count. **However, a real defect was found in the same
-read:** `INCOME_governorship_tariffs_and_shipping = tariffs_total_positive + state_port_charges`
-(`INCOME_svalues.txt:184-189`), and `INCOME_governorship_state_port_charges`
-(`:829-843`) reads `this_income_from_shipping_the_state` / `this_expenses_from_shipping_the_state`
-— grepped across all of `common/`, **these two vars are never `set_variable`'d anywhere**. The
-"shipping" half of "Tariffs and shipping" is dead code, always contributing exactly 0; the line
-is really just "Tariffs" (summed nationally) under a misleading label. Cosmetic, not a magnitude
-bug, but worth a follow-up: either wire real shipping income into these vars or rename the line.
+expected shape of a sum — not a double-count.
+
+**[CORRECTED 2026-08-15, task #102]** The original note below this line claimed the "shipping"
+half was dead code (`this_income_from_shipping_the_state`/`this_expenses_from_shipping_the_state`
+never set). That was a false negative from a literal-name grep: both vars ARE set, via the
+parameterized macro `this_income_from_$category$_$seller$` / `this_expenses_from_$category$_
+$seller$` (`common/scripted_effects/se_GLOBALTRADE_split.txt:4251,4358`), invoked for
+`category=shipping, seller=the_state` by the live quarterly distributor
+(`GT_do_all_wealth_distribution`, "Called: Every quarter"). Shipping income is LIVE, not dead code.
+(The exact split between the tariff-tax leaf and the shipping leaf was investigated at length
+under task #102 and never conclusively resolved — see `overnight/OVERNIGHT_2026_08_15.md` — so
+this note no longer claims either leaf dominates. The reported ~10x income-magnitude bug was
+fixed pragmatically, by scaling both leaves down, without confirming which one carried the
+overage.)
 
 **STILL OPEN, but advanced with real data — Finding 5's thin/zero-stockpile `wealth_owed`
 mechanism.** This boot is the "fresh boot" Finding 5 asked for. `tools/curx_analyze.py`'s

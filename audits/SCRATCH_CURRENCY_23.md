@@ -68,8 +68,9 @@ whole file otherwise tracks.
 double-firing of `INCOME_update_treasury_country` (wall-clock PRE/POST markers are evenly spaced,
 no back-to-back pairs); `INCOME_mitigate_deficit` reserve-selling (zero occurrences in this boot,
 CHI never went into deficit); "Tariffs and shipping" vs "Tariffs" being a double-count (it's a
-legitimate national-sum-vs-one-governorship scope difference — though the "shipping" HALF of that
-line is separately confirmed dead code, `this_income_from_shipping_the_state` is never set anywhere).
+legitimate national-sum-vs-one-governorship scope difference — the "shipping" half of that line is
+LIVE, not dead code; `this_income_from_shipping_the_state` IS set, via a parameterized macro a
+literal grep misses — see `audits/AUDIT_CURRENCY_23.md`'s 2026-08-15 correction).
 
 **Advanced, not closed:** Finding 5's thin/zero-stockpile mechanism. 16/22 zones toggle stock band
 across the 29 quarters; 9+ hit exact stock=0. This is common, not rare — supports the mechanism
