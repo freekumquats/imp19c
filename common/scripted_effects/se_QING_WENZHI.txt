@@ -146,6 +146,49 @@ QING_wenzhi_pulse = {
 			trigger_event = { id = qing_wenzhi.1  days = { 5 20 } }
 			LOG_line = { sys = QING  msg = "wenzhi: imperial patronage reached its cultural zenith" }
 		}
+		# [fix, task #15 2026-08-16, design/DESIGN_ARTPATRONAGE_PAINTER_EVENTS.md] ambient painter
+		# flavour: the atelier had no narrative events of its own. Rebuild the count HERE (not just
+		# trust the button-maintained qing_court_artist_count) so a stale count from a natural death
+		# between button clicks can't wrongly gate this open.
+		set_variable = { name = qing_court_artist_count  value = 0 }
+		every_character = {
+			limit = { has_variable = qing_court_artist  is_alive = yes  employer = ROOT }
+			ROOT = { change_variable = { name = qing_court_artist_count  add = 1 } }
+		}
+		if = {
+			limit = {
+				var:qing_court_artist_count > 0
+				NOT = { has_variable = qing_dept_cd_wenzhi_painter }
+				NOT = { has_variable = qing_gc_event_slot_used }
+			}
+			random = {
+				chance = 15
+				set_variable = { name = qing_dept_cd_wenzhi_painter  days = 1095 }
+				set_variable = { name = qing_gc_event_slot_used  value = 1 }
+				trigger_event = { id = qing_wenzhi_painter.1  days = { 5 20 } }
+			}
+		}
+	}
+}
+
+# [fix, task #15 2026-08-16, design/DESIGN_ARTPATRONAGE_PAINTER_EVENTS.md] a court painter's death
+# had no narrative acknowledgement. Scope: ROOT = the dying character (on_character_death
+# convention, qing_mechanics_on_actions.txt). Pure no-op for every non-painter death.
+QING_wenzhi_painter_death_check = {
+	if = {
+		limit = { has_variable = qing_court_artist  exists = employer  employer = { tag = CHI } }
+		save_scope_as = qing_dead_painter
+		employer = {
+			if = {
+				limit = { NOT = { has_variable = qing_gc_event_slot_used } }
+				set_variable = { name = qing_gc_event_slot_used  value = 1 }
+				# [review-fix] no delay -- matches the only in-repo precedent for a permanent
+				# save_scope_as read across a scope change on a just-died character (vanilla
+				# 00_ambitions.txt:1085/1124, employer={trigger_event=...} with NO days param).
+				# A multi-day delay on an already-dead character's scope is unproven here.
+				trigger_event = { id = qing_wenzhi_painter.2 }
+			}
+		}
 	}
 }
 
