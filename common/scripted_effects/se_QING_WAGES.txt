@@ -1,0 +1,150 @@
+########################################################################
+# se_QING_WAGES.txt — [fix, task #9 2026-08-16] real wage payment for every Qing
+# character-appointment post.
+#
+# #101/#5 attached `monthly_wage_for_character` (a vanilla Jomini engine field) to all 11
+# Qing-added wage-bearing character modifiers, expecting the engine to pay each holder a
+# percentage of "nation's income" every month, the same way vanilla's own offices do
+# (common/offices/00_monarchy.txt etc.). A live boot + screenshots confirmed the engine DOES
+# read the modifiers (the wealth tooltip lists them correctly and computes a plausible
+# percentage) but the resulting payment is exactly 0.00 in every observed case -- including a
+# non-Qing vanilla-styled office, so this isn't specific to our modifiers. Best-evidenced read:
+# this mod runs its own fully custom income system in parallel with vanilla's native economy
+# (the standing imp19c-two-trade-systems pattern), and whatever internal stat this vanilla
+# formula scales against was never populated by the mod's real income flow.
+#
+# Rather than chase unverifiable vanilla internals, this pays each post DIRECTLY: rate x
+# INCOME_national_total_quarterly (the mod's own real income figure, the same one the topbar
+# and its tooltip read), via the proven add_gold cross-scope idiom already used for the salt/
+# Canton siphon and the Resident's Graft fix. `monthly_wage_for_character` is left in place on
+# the modifiers as a real, cosmetic-only percentage display for the player (matches vanilla's
+# own tooltip convention) -- it just isn't what actually moves money any more.
+#
+# Split per user directive, feeding two national accumulators #4's income tooltip reads:
+#   Military wages   (WAGE_gc_military_paid_last): War + Guard Commandant GC seats, and the
+#                     Guard Commandant's own subordinates (the imperial guardsman corps).
+#   Administrator wages (WAGE_gc_admin_paid_last): every other seat/post.
+# Honestly scoped: does NOT replicate vanilla's corruption/popularity discount multiplier the
+# broken mechanic was computing -- flat rate x real income only.
+########################################################################
+
+# Pay ONE Grand Council seat's wage. $office$ = office key (matches QING_council_perf_
+# accumulate's own enumeration), $bucket$ = admin/military (selects which accumulator this
+# seat's pay tallies into). Scope: COUNTRY (CHI). Self-guarded: no-op on a vacant/dead seat.
+QING_pay_gc_seat_wage = {
+	if = {
+		limit = {
+			has_variable = qing_office_$office$_holder
+			var:qing_office_$office$_holder = { is_alive = yes  employer = ROOT }
+		}
+		set_variable = { name = WAGE_pay_tmp  value = INCOME_national_total_quarterly }
+		change_variable = { name = WAGE_pay_tmp  multiply = 0.01 }
+		var:qing_office_$office$_holder = {
+			add_gold = { value = 0  add = ROOT.var:WAGE_pay_tmp }
+		}
+		change_variable = { name = WAGE_gc_$bucket$_paid_tmp  add = var:WAGE_pay_tmp }
+		remove_variable = WAGE_pay_tmp
+	}
+}
+
+# Pay ONE single-holder commissioner/customs post. $holder_var$ = the country-scope pointer
+# var (e.g. qing_salt_commissioner_holder), $rate$ = the post's own rate. All of these are
+# Administrator wages (none are War/Guard Commandant or their subordinates). Scope: COUNTRY.
+QING_pay_single_post_wage = {
+	if = {
+		limit = {
+			has_variable = $holder_var$
+			var:$holder_var$ = { is_alive = yes  employer = ROOT }
+		}
+		set_variable = { name = WAGE_pay_tmp  value = INCOME_national_total_quarterly }
+		change_variable = { name = WAGE_pay_tmp  multiply = $rate$ }
+		var:$holder_var$ = {
+			add_gold = { value = 0  add = ROOT.var:WAGE_pay_tmp }
+		}
+		change_variable = { name = WAGE_gc_admin_paid_tmp  add = var:WAGE_pay_tmp }
+		remove_variable = WAGE_pay_tmp
+	}
+}
+
+# Pay every character carrying $marker$ (a corps/amban marker, not a single holder-pointer var).
+# $rate$ = the role's own rate, $bucket$ = admin/military. Scope: COUNTRY (CHI).
+QING_pay_marked_corps_wage = {
+	every_character = {
+		limit = {
+			employer = ROOT
+			has_variable = $marker$
+		}
+		save_scope_as = WAGE_this_holder
+		ROOT = {
+			set_variable = { name = WAGE_pay_tmp  value = INCOME_national_total_quarterly }
+			change_variable = { name = WAGE_pay_tmp  multiply = $rate$ }
+			scope:WAGE_this_holder = {
+				add_gold = { value = 0  add = ROOT.var:WAGE_pay_tmp }
+			}
+			change_variable = { name = WAGE_gc_$bucket$_paid_tmp  add = var:WAGE_pay_tmp }
+			remove_variable = WAGE_pay_tmp
+		}
+	}
+}
+
+# QING_pay_officeholder_wages — the quarterly entry point. Scope: COUNTRY (CHI, tag-guarded by
+# the caller like every other CHI-only quarterly pulse). Pays every post, tallies the two
+# national accumulators, then publishes them as the _last snapshot #4's tooltip/cost svalues
+# read (mirrors the qing_salt_income_last / qing_caravan_prosperity publish idiom).
+QING_pay_officeholder_wages = {
+	set_variable = { name = WAGE_gc_admin_paid_tmp     value = 0 }
+	set_variable = { name = WAGE_gc_military_paid_tmp  value = 0 }
+
+	# --- Grand Council seats: War + Guard Commandant are Military; the other 10 are Administrator.
+	QING_pay_gc_seat_wage = { office = war                bucket = military }
+	QING_pay_gc_seat_wage = { office = guard_commandant   bucket = military }
+	QING_pay_gc_seat_wage = { office = personnel          bucket = admin }
+	QING_pay_gc_seat_wage = { office = revenue            bucket = admin }
+	QING_pay_gc_seat_wage = { office = rites              bucket = admin }
+	QING_pay_gc_seat_wage = { office = justice            bucket = admin }
+	QING_pay_gc_seat_wage = { office = works              bucket = admin }
+	QING_pay_gc_seat_wage = { office = censor             bucket = admin }
+	QING_pay_gc_seat_wage = { office = lifanyuan          bucket = admin }
+	QING_pay_gc_seat_wage = { office = chamberlain        bucket = admin }
+	QING_pay_gc_seat_wage = { office = zongli             bucket = admin }
+	QING_pay_gc_seat_wage = { office = grand_secretariat  bucket = admin }
+
+	# --- Chancellor bonus: an extra 0.01 stacked on whichever seat-holder above also carries the
+	# title (Administrator regardless of which base seat he holds -- a ceremonial/administrative
+	# distinction, not a military one).
+	if = {
+		limit = {
+			has_variable = qing_office_chancellor_holder
+			var:qing_office_chancellor_holder = { is_alive = yes  employer = ROOT }
+		}
+		set_variable = { name = WAGE_pay_tmp  value = INCOME_national_total_quarterly }
+		change_variable = { name = WAGE_pay_tmp  multiply = 0.01 }
+		var:qing_office_chancellor_holder = {
+			add_gold = { value = 0  add = ROOT.var:WAGE_pay_tmp }
+		}
+		change_variable = { name = WAGE_gc_admin_paid_tmp  add = var:WAGE_pay_tmp }
+		remove_variable = WAGE_pay_tmp
+	}
+
+	# --- Single-holder commissioner/customs posts (all Administrator, all rate 0.01).
+	QING_pay_single_post_wage = { holder_var = qing_salt_commissioner_holder  rate = 0.01 }
+	QING_pay_single_post_wage = { holder_var = qing_caravan_super_holder      rate = 0.01 }
+	QING_pay_single_post_wage = { holder_var = qing_hoppo_holder              rate = 0.01 }
+	QING_pay_single_post_wage = { holder_var = qing_opium_commissioner_holder rate = 0.01 }
+	QING_pay_single_post_wage = { holder_var = qing_customs_ig_holder        rate = 0.01 }
+
+	# --- Amban (per-subject, multiple possible): rate 0.02, Administrator.
+	QING_pay_marked_corps_wage = { marker = qing_amban_marker         rate = 0.02  bucket = admin }
+	# --- Zongli diplomat / censor-inspector subposts: Administrator. Imperial guardsman subpost:
+	# Military (the Guard Commandant's own subordinates, per user directive).
+	QING_pay_marked_corps_wage = { marker = qing_zongli_diplomat      rate = 0.02  bucket = admin }
+	QING_pay_marked_corps_wage = { marker = qing_is_censor_inspector  rate = 0.01  bucket = admin }
+	QING_pay_marked_corps_wage = { marker = qing_is_imperial_guardsman  rate = 0.01  bucket = military }
+
+	# --- publish the quarterly snapshot for #4's income tooltip / cost svalues to read.
+	set_variable = { name = WAGE_gc_admin_paid_last     value = var:WAGE_gc_admin_paid_tmp }
+	set_variable = { name = WAGE_gc_military_paid_last  value = var:WAGE_gc_military_paid_tmp }
+	remove_variable = WAGE_gc_admin_paid_tmp
+	remove_variable = WAGE_gc_military_paid_tmp
+	LOG_line = { sys = QING  msg = "wages: officeholder salaries paid (see WAGE_gc_admin_paid_last / WAGE_gc_military_paid_last)" }
+}
