@@ -14,8 +14,8 @@ diagnosis -> design -> implement -> review pass, logged below as it happens.
 6. Xinjiang/caravan double-fire (shared slot gap) — DONE
 7. Cottage industry not moving Military Supplies (produced-vs-supplied gap) — DONE (reframed: magnitude bug, not a broken pipe)
 8. Salt Gabelle revenue 10x cut — DONE
-9. GC/subpost salaries not actually paying — IMPLEMENTED (pending review)
-10. "A Dispute at Kashgar" over-firing (qing_caravan_events.txt:379) — TODO (shares root cause with #6)
+9. GC/subpost salaries not actually paying — DONE (not yet independently reviewed, see note below)
+10. "A Dispute at Kashgar" over-firing (qing_caravan_events.txt:379) — DONE
 
 ## Item 8 — Salt Gabelle 10x cut (mechanical, DONE)
 `se_QING_SALT.txt`, `QING_salt_income`: added `change_variable = { name = qing_salt_income_tmp
@@ -154,6 +154,35 @@ pacing overhaul (earlier tonight) never touched this pair.
 success branch -- the exact idiom already used at all 49 other claim sites (no `days=` param;
 cleared by the existing `remove_variable` in `00_monthly_country.txt:80`, same as every other
 site). Now only one of the pair can win the slot in a given quarter. Brace-balanced (357/357).
+
+## Item 10 — "A Dispute at Kashgar" over-firing (DONE)
+Root cause found via the full error.log ranked inventory: `qing_caravan_events.txt:379`
+(`limit = { var:qing_caravan_contest_ok = 1 }` inside `qing_caravan.4`'s "negotiate" option) was
+the single largest mod-specific error site in the entire log — ~5,166 hits for "unset scope" and
+another ~5,166 for "invalid left side comparison" from that one line alone, plus ~5,203 more for
+the underlying `qing_caravan_contest_ok` fetch failure across all 3 options (negotiate/coerce/
+collude combined). The earlier #123 fix (`set_variable = { name = qing_caravan_contest_ok  value
+= 0 }` placed BEFORE the `random` roll) was supposed to guarantee every read hit a valid 0/1.
+Cross-checked against the real `LOG_line` messages each option's resolution emits
+("caravan: the superintendent out-negotiates..." etc.): only **3** real option resolutions
+happened in the entire boot, yet the error count was ~5,200 — proving the failures are not from
+real play, but from the option's tooltip/effect-preview pass re-evaluating the WHOLE
+`hidden_effect` block every time the event window renders, without committing ANY set_variable
+inside it, including the pre-roll initializer #123 added (not just the one inside `random{}`, as
+#123's own comment assumed). This is why the user saw the event "keep repeatedly firing" — the
+window re-evaluating/re-rendering on every preview pass reads as repeated firing, even though the
+underlying event only actually fired 3 times.
+**Fix**: in all 3 options (negotiate, coerce, collude), dropped the pre-roll `set_variable = 0`
+initializer and changed the read from `limit = { var:qing_caravan_contest_ok = 1 }` to `limit =
+{ has_variable = qing_caravan_contest_ok  var:qing_caravan_contest_ok = 1 }`. `has_variable` is
+only true after a REAL, committed `random` roll — a rolled-back preview pass now correctly reads
+as "not set" and falls through to the existing `else` branch instead of erroring, with zero
+gameplay change on a real click (the `else` branch's effects are unchanged). The 3 existing
+`remove_variable = qing_caravan_contest_ok` calls at the end of each option are left unconditional
+(a proven no-op-safe pattern in this codebase, e.g. `absentee_father = {}`-style empty-target
+removals). Brace-balanced (185/185, whole file).
+Shares its root file/chain with item 6 but is a DISTINCT bug (a preview-evaluation var-read
+failure, not a missing shared-slot gate) — fixed independently, not as a side effect of item 6.
 
 ## Item 5 — Imperial Household / Art Patronage duplicate buttons (mechanical, DONE)
 Both `gui/qing_household.gui` and `gui/qing_art_patronage.gui` independently defined all 4
