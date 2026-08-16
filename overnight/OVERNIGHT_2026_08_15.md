@@ -570,3 +570,111 @@ ministry recompute vs censor/guard's exclude-only recompute, Censorate-impeachme
 coverage confirmed). Every Qing character-appointment post (amban, salt/caravan/hoppo/opium
 commissioners, customs IG, zongli diplomat, censor-inspector, imperial guardsman) now draws a
 salary, matching the Grand Council seats' own existing convention.
+
+## Qing pacing overhaul — design review findings, in detail (rounds 1-3, 2026-08-16)
+Round 1 adversarial review of the first draft found two real problems, both corrected before
+implementation:
+- **Section 2 (integration event pulse) diagnosis was wrong.** The draft claimed `SUBJ_QING_
+  integration_pulse` fired every month with zero throttle (~3-4 events/year/subject). Review found
+  its caller, `qing_integration_pulse_on_action`, already self-throttles to ~twice/year at the
+  country level (`00_monthly_country.txt:43/52/53`, a documented cooldown). Real per-subject rate
+  was already ~once/1.75yr. The actual complaint was multi-subject stacking (several actively-
+  integrating subjects all rolling independently on the same twice-yearly country pulse). Redesigned
+  to gate the roll on the shared `qing_gc_event_slot_used` slot instead of inventing a new per-
+  subject cooldown (which would have needed to touch `SUBJ_QING_roll_reaction`, a function shared
+  with the unrelated manual push-button path).
+- **Section 6 (GC event-slot fairness) original design was broken.** The first draft proposed a
+  "rotating priority window" (group-level last-winner tracking + a mod-6 rotation var). Round 1
+  found: (a) blast radius was undercounted ~7x — a full enumeration
+  (`rg -n "set_variable = { name = qing_gc_event_slot_used"`) found **49 separate claim sites across
+  17 files** (DYNASTY×8, WAR×4, FRONTIER×1, FACTION×4, COUNCIL×2, MARCH×5, CANTON×3, PRINCES×2,
+  HAREM×2, DECLINE×5, PERSONNEL×2, WENZHI×1, WORKS×2, MARCH_PULSE×1, CARAVAN×1, REVENUE×5, AMBAN×1)
+  — there is no single place "a group" claims the slot as a unit, so group-level tagging would mean
+  touching most of those 49 sites anyway; (b) hand-simulating the rotation mechanism found it didn't
+  actually deliver "no repeat" — a dominant early-checked group could still win 4 of every 6
+  quarters. Rejected outright and redesigned as two much smaller, targeted fixes instead: halve
+  `QING_frontier_flavour_roll`'s chance (30->15, the single largest structural offender, checked
+  first every quarter) and reorder Canton/Revenue to the front of their own pulse chain (directly
+  targets the reported "Canton never fires," which traces to their pulse position behind ~10-15
+  other same-slot claimants, not a broken trigger). Explicitly disclosed as a partial fix — true
+  uniform randomness across all 49 sites would need a disproportionate rewrite, not attempted.
+Round 2 found two more precision issues, both fixed: the slot-check in section 2's redesign was
+placed in the loop's own outer `limit=` instead of a body-level `if=` (no proven precedent for that
+placement anywhere in the 49 existing sites; costs nothing to match precedent exactly, so moved);
+and the "what this does NOT deliver" disclosure was too generic — sharpened to state explicitly that
+the GOV_pulse chain as a whole still runs before frontier/dynasty/faction/spouse/officer, so the
+"same few events" complaint may resurface in a milder form even after this fix. Round 3 confirmed
+both fixes correct against precedent, found only one label typo ("15 files" should say "17 files").
+Diagnosis-only side finding, not itself acted on further: salt's existing throttle (~once every 2
+years while unreformed) already satisfies "once every few years" — user confirmed via direct
+question that the existing one-time reform decision is fine, no recurring flavour event wanted.
+Caravan's recurring event (caravan.4) was already on the same shared-slot + 270-day pattern; no bug.
+Canton's silver-reserve contribution was already unconditional every quarter, independent of any
+narrative event ever firing; no gap there either.
+
+## Subpost-salary design review — the Censorate/Justice title-strip gap, full history (2026-08-16)
+This emerged from a plain user question ("why does the censorate need fixing?") that surfaced a
+real, previously-uncaught defect during round 5 of the roles-7-9 design review:
+- **Round 5 finding**: `QING_censorate_find_corrupt`'s eligible-target pool has no exclusion for
+  corps members, so the Censorate's "impeach the venal" picker can select a seated zongli diplomat
+  or imperial guardsman. `QING_censorate_impeach_uphold` already stripped the censor-inspector
+  corps marker specifically (a prior #362 fix) but had no equivalent line for the other two roles —
+  an impeached zongli/guardsman kept his corps marker, his post, and (once salaries shipped) would
+  have kept drawing pay forever.
+- **User direction, verbatim principle**: "it should remove all titles, be it commissioner or
+  governor or commander or Captain of the Guard or whatever" — i.e. fix the general case, not just
+  patch the two missing markers.
+- **Widened design**: found the codebase already has 5 proven, independently-used "strip a title"
+  verbs (`QING_office_vacate_dispatch` for GC offices, `remove_command` for military command,
+  `remove_as_governor` for governorships, `QING_post_dispatch_vacate` — a 10-branch dispatcher
+  covering the ENTIRE subpost family in one call — and `remove_all_offices` for vanilla engine
+  offices). Also found the SIBLING disgrace pathway, `QING_justice_strip_for_trial` (Ministry of
+  Justice trial-strip), had the COMPLEMENTARY gap: it stripped office/command/governorship but
+  never the subpost family at all. Widened fix: compose all 5 verbs at the Censorate site
+  (replacing the old single-marker line with a strict superset); add one pure-additive line at the
+  Justice site (tracked separately as task #18, since it doesn't block the salary rollout itself).
+- **Round 6 finding (on the FIRST, narrower patch draft, before widening)**: a bare
+  `remove_variable = <marker>` does NOT clear `qing_current_post` — the corps-establishment scan
+  (`QING_subpost_staff_corps_minted`/`_strip_double_booked`) is keyed on `qing_current_post`, not
+  the marker, for zongli specifically (censor-inspector/guardsman's OWN ministry recompute paths
+  happened to key on the marker directly, so they were accidentally safe already). This meant the
+  narrow patch would have been a correct fix for 2 of 3 roles and a silent no-op for zongli.
+- **Resolution**: the WIDENED fix (using `QING_post_dispatch_vacate`, which ends in
+  `QING_post_release` — confirmed to unconditionally clear `qing_current_post`) resolves this for
+  all three roles uniformly, superseding the narrower patch round 6 reviewed. Round 7 confirmed the
+  widened fix correct end-to-end, with two non-blocking notes: Amban/March-GG/Xinjiang-Beg are
+  formally unreachable by any of the 5 strip verbs (inert today, since both disgrace pickers already
+  gate on `employer = ROOT`, which those 3 roles never satisfy); and the fix incidentally also fixes
+  a previously-unnoticed staleness bug for GC-office holders (their `qing_current_post` was never
+  cleared by the pre-existing `QING_office_vacate_dispatch` line either, until now).
+
+## Task #19 — on_action bare-block merge ambiguity, full resolution (2026-08-16)
+Surfaced while designing the Art Patronage painter-death event: `00_specific_from_code.txt` and
+`qing_mechanics_on_actions.txt` each independently define a BARE inline `on_character_death` block
+(192 vs 65 lines of real logic) and a bare `on_ruler_change` block (67 vs 23 lines). Two comments
+inside `qing_mechanics_on_actions.txt` directly contradicted each other: one (`:5-11`, tagged
+"[develop #254]") claimed bare inline effect blocks do NOT merge across files; another (`:344-346`)
+claimed the opposite for `on_ruler_change` specifically. If the first were true generally, one half
+of each pair would be silently dead code today — a real, load-bearing correctness question
+independent of anything this session set out to touch. A dedicated research pass checked the
+project's designated oracle repos and found direct existence proof in Terra Indomita: two separate
+files (`on_ruler_change_inv_.txt`, `on_ruler_change_CFT.txt`) each define a bare `on_ruler_change`
+block, both containing real gameplay logic, in a mature and actively-played mod — implausible if
+the engine only honored one file's block. Verdict: recurring on_actions (on_character_death,
+on_ruler_change, monthly_country_pulse, etc.) DO merge bare inline blocks across files; the #254
+finding is correctly scoped to `on_game_initialized` specifically (a one-time boot hook, plausibly
+engine-special-cased), not a general rule. No bug; no code change needed. This unblocked the
+painter-death event, which was implemented exactly as originally planned (one new line inside the
+existing `qing_mechanics_on_actions.txt` on_character_death block).
+
+## Session commits and push (2026-08-16)
+All work this session split into 8 logical commits and pushed to origin/merge-overnight:
+1. `5a6e9e047` — #102: cut Tariffs and shipping income 10x, add confirmation logging
+2. `0cab10074` — #107: cut harem passive-conception rate by half again
+3. `8fe3168f5` — #99: restore the Foreign debt income TODO row in the treasury tooltip
+4. `c9ce4dad8` — #103-follow-up: cottage industry building count now moves Military Supplies
+5. `9d6d4468a` — #101-follow-up: salary every Qing character-appointment post, all 9 roles
+6. `52e8c0fdf` — Qing pacing overhaul: integration speed, event stacking, court-slot fairness
+7. `65c3eeb04` — Add Art Patronage / Court Painter narrative events
+8. `d351becf2` — overnight log: 2026-08-16 session summary
+Working tree clean; branch up to date with origin after push.
