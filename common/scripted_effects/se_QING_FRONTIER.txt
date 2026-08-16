@@ -102,7 +102,10 @@ QING_fgar_apply_occupation = {
 			exists = scope:qing_frontier_subject
 			scope:qing_frontier_subject = { NOT = { has_variable = qing_frontier_occupation_cd } }
 		}
-		scope:qing_frontier_subject = { set_variable = { name = qing_frontier_occupation_cd  days = 180 } }
+		# [fix, task #103-pacing 2026-08-16, design/DESIGN_QING_PACING_OVERHAUL.md §1] 180 -> 1825
+		# days (~5y/tick): unthrottled, this was the dominant driver absorbing a garrisoned subject
+		# in ~2.5 years flat -- historically gaitu guiliu (改土歸流) took decades.
+		scope:qing_frontier_subject = { set_variable = { name = qing_frontier_occupation_cd  days = 1825 } }
 		# mark the subject as garrisoned by Beijing (read by the War + Lifan Yuan panels).
 		# [fix, task #78 2026-08-14] this function had NO diagnostic trace anywhere -- a user report
 		# that a garrisoned subject (Yili/ILI) meeting every stated live condition still doesn't show
@@ -113,7 +116,12 @@ QING_fgar_apply_occupation = {
 		# anything, via debug_log_scopes = yes (a real scope-stack dump). Uses LOG_state here so the
 		# next boot actually identifies which subject this fires for, not just that it fired.
 		scope:qing_frontier_subject = {
-			set_variable = { name = qing_frontier_garrisoned  value = 1  days = 200 }
+			# [review-fix, task #103-pacing 2026-08-16] TTL bumped 200 -> 1900 days to span the new
+			# 1825-day occupation cooldown above -- this flag drives the Lifan Yuan panel's "Under
+			# imperial garrison" indicator (gui/qing_lifanyuan.gui:288/377), and was only ever
+			# refreshed by this same function; left at 200 it would go dark ~89% of every cycle
+			# even though the garrison itself persists.
+			set_variable = { name = qing_frontier_garrisoned  value = 1  days = 1900 }
 			LOG_state = { sys = QING  note = "frontier-garrison occupation applied, qing_frontier_garrisoned set" }
 		}
 		# (1) TIGHTEN integration — the garrison is the spine of direct rule (改土歸流).
@@ -135,7 +143,14 @@ QING_fgar_apply_occupation = {
 				}
 			}
 			scope:qing_frontier_subject = { save_scope_as = target }
-			SUBJ_QING_advance_integration = { steps = 1 }
+			# [fix, task #103-pacing 2026-08-16, design/DESIGN_QING_PACING_OVERHAUL.md §1] the
+			# occupation-tick advance is no longer unconditional -- a garrison chafes, but
+			# "administration improves" isn't automatic just because troops are present. 60% keeps
+			# the EXPECTED time-per-step in the same "decades" band as the 1825-day tick above.
+			random = {
+				chance = 60
+				SUBJ_QING_advance_integration = { steps = 1 }
+			}
 		}
 		# (2) OCCUPATION CHAFES — the dependency's loyalty toward Beijing dips (a bayonet
 		# is not a bond). The subject's opinion of the overlord is the loyalty driver
