@@ -364,19 +364,21 @@ qing_caravan.4 = {
 		name = "qing_caravan.4.negotiate"
 		custom_tooltip = "qing_caravan.4.negotiate.tt"
 		hidden_effect = {
-			# [#123] Initialise the flag to 0 BEFORE the random roll. The old code set qing_caravan_contest_ok
-			# only INSIDE random{}, so on a failed roll (and in the option's effect-preview pass, where the
-			# random set does not commit) the var stayed unset — and the downstream reads then errored
-			# ~48x/sec with "Failed to fetch variable / unset scope 'var' / invalid left side comparison".
-			# Defining it up front makes every read hit a valid 0/1, killing the flood; the branch now tests
-			# the VALUE (= 1) rather than existence. Semantics unchanged (chance-gated win vs lose).
-			set_variable = { name = qing_caravan_contest_ok  value = 0 }
+			# [#123, corrected by fix task #10 2026-08-16] The #123 fix set the flag to 0 BEFORE the
+			# random roll so every read would hit a valid 0/1. It did NOT work: real boot logs (Aug 16)
+			# show this exact read still failing ~5,000x/boot, the single largest mod-specific error
+			# class in the log -- confirmed via LOG_line counts that only 3 real option resolutions
+			# happened all boot, so the failures are the tooltip/effect-preview pass re-evaluating this
+			# whole block WITHOUT committing ANY set_variable, including the initializer (not just the
+			# one inside random{}, as #123 assumed). Fix: drop the initializer, guard the read with
+			# has_variable (true only on a REAL, committed run) instead of comparing a var that a
+			# rolled-back preview never actually set.
 			random = {
 				chance = qing_super_contest_chance_svalue
 				set_variable = { name = qing_caravan_contest_ok  value = 1 }
 			}
 			if = {
-				limit = { var:qing_caravan_contest_ok = 1 }
+				limit = { has_variable = qing_caravan_contest_ok  var:qing_caravan_contest_ok = 1 }
 				QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = 6 }
 				# WRITE-BACK: the consul respects a fair settlement — Kokand warms; the super is commended.
 				if = { limit = { exists = c:KOK }  c:KOK = { add_opinion = { modifier = qing_gp_relation_opinion  target = ROOT } } }
@@ -403,13 +405,14 @@ qing_caravan.4 = {
 		name = "qing_caravan.4.coerce"
 		custom_tooltip = "qing_caravan.4.coerce.tt"
 		hidden_effect = {
-			set_variable = { name = qing_caravan_contest_ok  value = 0 }   # [#123] define before the roll — see the negotiate option
+			# [fix, task #10 2026-08-16] see the negotiate option's comment -- dropped the pre-roll
+			# initializer, guard the read with has_variable instead.
 			random = {
 				chance = qing_super_coerce_chance_svalue
 				set_variable = { name = qing_caravan_contest_ok  value = 1 }
 			}
 			if = {
-				limit = { var:qing_caravan_contest_ok = 1 }
+				limit = { has_variable = qing_caravan_contest_ok  var:qing_caravan_contest_ok = 1 }
 				QING_DECLINE_nudge = { var = qing_caravan_prosperity  amount = 3 }
 				# WRITE-BACK: coercion works but rankles — Kokand's grievance hardens even in defeat.
 				if = { limit = { exists = c:KOK }  c:KOK = { add_opinion = { modifier = qing_xj_kokand_emboldened  target = ROOT } } }
@@ -440,13 +443,14 @@ qing_caravan.4 = {
 		name = "qing_caravan.4.collude"
 		custom_tooltip = "qing_caravan.4.collude.tt"
 		hidden_effect = {
-			set_variable = { name = qing_caravan_contest_ok  value = 0 }   # [#123] define before the roll — see the negotiate option
+			# [fix, task #10 2026-08-16] see the negotiate option's comment -- dropped the pre-roll
+			# initializer, guard the read with has_variable instead.
 			random = {
 				chance = qing_super_collude_chance_svalue
 				set_variable = { name = qing_caravan_contest_ok  value = 1 }
 			}
 			if = {
-				limit = { var:qing_caravan_contest_ok = 1 }
+				limit = { has_variable = qing_caravan_contest_ok  var:qing_caravan_contest_ok = 1 }
 				# WRITE-BACK: the skim succeeds — both men pocket silver; the super grows more venal; prosperity
 				# dips a touch (the throne's take is shaved). add_gold touches only CHAR wealth (not treasury/
 				# silver reserve) — cannot perturb the currency sim (the #112a siphon precedent).
