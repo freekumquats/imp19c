@@ -218,6 +218,26 @@ Old icon was a modern photo (car + modern building). Re-sourced via `fetch_wm.py
 woodblock illustration of men working furnaces/casting) -> converted via `dds_icon.py` to the
 existing 200x200 donor format (`--like` qing_cottage_woodlot_building.dds). Visually verified.
 
+## Log pass #2 (2026-08-16, /imp19c-logs re-run — logs.zip 17:30, screenshots 17:09-17:20)
+Full details in `~/Downloads/scratch_logs_screenshots.md`. This boot predates the round-2
+follow-up commits below (pushed ~17:55-17:58) -- confirms round 1 only.
+- **Task 10 confirmed fixed**: `qing_caravan_contest_ok` errors are now 0 (was ~5,200/boot).
+- **New bug found and fixed**: the single largest error class in the log (~78,000+ lines/boot
+  across 3 error types combined, 5 call sites in 4 files) was `var:qing_current_post = flag:X`
+  comparisons with no existence guard, introduced by an earlier #118 refactor that repointed
+  these sites from a safe `has_variable=$marker$` check. Every character who never held any post
+  (the vast majority of a country's character pool) threw this on every `every_character` pass.
+  Pre-existing, not caused by this session's item 9 changes, though it touches the same subpost
+  functions. Fixed all 5 sites (`se_QING_SUBPOSTS.txt` x2, `se_QING_MINISTRY.txt`,
+  `se_QING_SOUTHERNSTUDY.txt`, `se_QING_UPPERSTUDY.txt`) with a `has_variable = qing_current_post`
+  guard -- zero behavior change. Checked `se_QING_POST.txt`'s own unguarded dispatcher (a
+  different, non-iterated call site) and found only 1 hit in the whole log -- not part of the
+  flood, left untouched. All 4 files brace-balanced.
+- Screenshots confirm items 2, 4, and 9's wage-counting are all working as designed on a real
+  boot (State monopolies & One-off windfalls rows rendering; Administrator/Military wages rows
+  much larger, reconciling close to the topbar's own quarterly-change figure; sulphur pit
+  buildable in the macro builder).
+
 ## Follow-up round 2 (2026-08-16, live user feedback during re-test)
 
 - **Khoja Stirs / Road Is Cut cadence.** The shared-slot fix (item 6) stopped the same-quarter
