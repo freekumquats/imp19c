@@ -689,14 +689,26 @@ INCOME_sell_largest_reserve = {
 		set_local_variable = { name = l_silver_reserve_size value = 0 }
 		if = { limit = { has_variable = gold_reserve_size }   set_local_variable = { name = l_gold_reserve_size   value = var:gold_reserve_size } }
 		if = { limit = { has_variable = silver_reserve_size } set_local_variable = { name = l_silver_reserve_size value = var:silver_reserve_size } }
+		# [fix, boot-test 2026-08-17] gold_reserve_value_greater_than_silver's own downstream reader
+		# (INCOME_mitigate_deficit, DEBT_events.txt) threw "Failed to fetch variable... due to not
+		# being set" -- this multiply reads global_var:global_base_import_price_gold/silver unguarded;
+		# on a tick where the economy hasn't priced a metal yet (has_global_variable false, the same
+		# gap the #87 fix below already documents for a DIFFERENT divide further down in this same
+		# function), the multiply corrupts this var's own set_local_variable, and everything
+		# downstream inherits the empty/unset state. Staged into local scratch vars, defaulting a
+		# not-yet-priced metal to 0 (matches the reserve-size guard's own convention two lines above).
+		set_local_variable = { name = l_gold_import_price    value = 0 }
+		set_local_variable = { name = l_silver_import_price  value = 0 }
+		if = { limit = { has_global_variable = global_base_import_price_gold }   set_local_variable = { name = l_gold_import_price    value = global_var:global_base_import_price_gold } }
+		if = { limit = { has_global_variable = global_base_import_price_silver } set_local_variable = { name = l_silver_import_price  value = global_var:global_base_import_price_silver } }
 		set_local_variable = {
 			name = gold_reserve_value_greater_than_silver
 			value = {
 				value = local_var:l_gold_reserve_size
-				multiply = global_var:global_base_import_price_gold
+				multiply = local_var:l_gold_import_price
 				subtract = {
 					value = local_var:l_silver_reserve_size
-					multiply = global_var:global_base_import_price_silver
+					multiply = local_var:l_silver_import_price
 				}
 			}
 		}

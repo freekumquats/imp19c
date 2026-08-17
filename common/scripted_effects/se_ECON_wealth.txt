@@ -629,6 +629,16 @@ WEALTH_generate_from_services_governorship = {
 }
 
 WEALTH_set_new_generated_amount = {
+	# [fix, boot-test 2026-08-17] a fresh boot showed WEALTH_distribute_new_wealth and its
+	# downstream readers (INCOME_calculate_and_distribute_military_procurement_wealth_owed)
+	# throwing "change_variable effect [ Variable not of the 'value' scope type. Type: empty ]"
+	# on the SAME vars this sets. Traced here: var:governorship_$recipient$ is read unguarded.
+	# Real trigger (confirmed by review, not zero-population): a governorship that reached
+	# wealth-gen before TRADE_governorship_get_pops_this_quarter ran on it -- e.g. formed/altered
+	# mid-quarter -- has var:governorship_$recipient$ genuinely UNSET, not zero, for every
+	# stratum including populated ones. has_variable-guarded on both branches, matching the
+	# proven read-before-set idiom; an uninitialized governorship now contributes 0 instead of
+	# corrupting the sum.
 	set_variable = {
 		name = WEALTH_new_generated_$category$_$recipient$
 		value = {
@@ -636,11 +646,24 @@ WEALTH_set_new_generated_amount = {
 			if = {
 				limit = {
 					NOT = { flag:$recipient$ = flag:the_state }
+					has_variable = governorship_$recipient$
 				}
 				multiply = var:governorship_$recipient$
 			}
-			else = {
+			else_if = {
+				limit = {
+					NOT = { flag:$recipient$ = flag:the_state }
+				}
+				multiply = 0
+			}
+			else_if = {
+				limit = {
+					has_variable = governorship_population
+				}
 				multiply = var:governorship_population
+			}
+			else = {
+				multiply = 0
 			}
 		}
 	}
