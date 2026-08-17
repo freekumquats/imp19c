@@ -1080,6 +1080,15 @@ GT_split_cache_TZ_penetration_values = {
 		limit = {
 			has_variable = TZ_name
 		}
+		# [fix, boot-test 2026-08-17] every TZ_penetration_<zone> script value (SHIPPING_svalues.txt,
+		# 22 occurrences) divides its own numerator by this SAME var (global_var:global_<zone>_
+		# tradezone.SHIPPING_total_in_TZ) with NO guard at all -- if literally no country has any
+		# shipping presence in a zone yet (a real, common state early-game/at boot, before any
+		# diplomacy/trade agreements exist), this sets to exactly 0, not merely unset, so a
+		# has_variable guard at each of the 22 read sites would not have helped. Floored here, at
+		# the single point this var is actually written, mirroring the EXACT SAME idiom the
+		# numerator side already uses one line below at each read site (`add = 0.0001`) -- one
+		# fix, one location, instead of 22 reader-side guards for the same constant.
 		set_variable = {
 			name = SHIPPING_total_in_TZ
 			value = {
@@ -1088,6 +1097,7 @@ GT_split_cache_TZ_penetration_values = {
 					variable = shipping_power_list
 					add = var:shipping_power_total
 				}
+				add = 0.0001
 			}
 		}
 	}
@@ -6347,12 +6357,26 @@ GT_save_final_var = {
 }
 
 GT_save_final_tradegood_vars = {
-	set_variable = {
-		name = final_quarterly_income_due_$tradegood$
-		value = var:income_due_$tradegood$
+	# [fix, boot-test 2026-08-17] both reads below were unguarded. Under normal operation
+	# income_due_$tradegood$/wealth_owed_for_$tradegood$ are always set earlier this same quarter
+	# (GT_split_update_wealth_owed_for_tradegoods's own first statement sets wealth_owed_for_
+	# $tradegood$ unconditionally) -- the dominant real cause (a divide-by-zero a few statements
+	# later in that SAME effect chain, now fixed at GT_split_cache_TZ_penetration_values) aborted
+	# the rest of the effect for that governorship/tradegood before it got here, leaving the var
+	# genuinely unset for the quarter. Guarded here too as cheap insurance, matching the
+	# established read-before-set idiom, in case any other path can still leave it unset.
+	if = {
+		limit = { has_variable = income_due_$tradegood$ }
+		set_variable = {
+			name = final_quarterly_income_due_$tradegood$
+			value = var:income_due_$tradegood$
+		}
 	}
-	set_variable = {
-		name = final_quarterly_wealth_owed_for_$tradegood$
-		value = var:wealth_owed_for_$tradegood$
+	if = {
+		limit = { has_variable = wealth_owed_for_$tradegood$ }
+		set_variable = {
+			name = final_quarterly_wealth_owed_for_$tradegood$
+			value = var:wealth_owed_for_$tradegood$
+		}
 	}
 }
