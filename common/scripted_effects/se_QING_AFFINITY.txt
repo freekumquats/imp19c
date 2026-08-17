@@ -46,124 +46,153 @@ QING_char_affinity = {
 	LOG_enter = { sys = QING  fn = "QING_char_affinity" }
 	set_variable = { name = qing_char_affinity  value = 50 }
 
-	# --- CHARISMA: +1 per point of the courtier's charm above the average of 5.
-	change_variable = { name = qing_char_affinity  add = charisma }
-	change_variable = { name = qing_char_affinity  subtract = 5 }
-
-	# --- ZEAL MISMATCH: subtract the ABSOLUTE gap in zeal from throne to servant.
-	set_variable = { name = qing_aff_zeal_gap  value = zeal }
-	change_variable = { name = qing_aff_zeal_gap  subtract = root.current_ruler.zeal }
+	# [fix, boot-test 2026-08-16] guards the SOURCE of the cascade, not just one symptom.
+	# A boot's error.log showed BOTH var:qing_aff_zeal_gap (below) AND the OUTPUT var
+	# var:qing_char_affinity itself (set at the very first statement above, then read again
+	# at the clamp near the end) reported "not being set" in perfect lockstep (5076 hits
+	# each, same invocations) -- meaning the whole scope goes invalid partway through this
+	# macro's execution, not that one set_variable call failed in isolation (an independent
+	# review caught this: guarding only the two qing_aff_zeal_gap reads, as an earlier version
+	# of this fix did, cannot prevent the clamp's OWN later unset-var error). The one thing
+	# every affected statement in this macro has in common is reading root.current_ruler
+	# (zeal/culture/religion/friend/rival/kinship) -- an interregnum (no seated ruler) is a
+	# real, if rare, game state where that link fails. Guarding root.current_ruler's EXISTENCE
+	# once, up front, and skipping the whole ruler-relative scoring when absent, matches this
+	# doc's own stated design ("50 = neutral" is already the pre-set default) and prevents the
+	# cascade at its source instead of patching each downstream symptom.
 	if = {
-		limit = { var:qing_aff_zeal_gap < 0 }
-		change_variable = { name = qing_aff_zeal_gap  multiply = -1 }
-	}
-	change_variable = { name = qing_char_affinity  subtract = var:qing_aff_zeal_gap }
-
-	# --- CULTURE match / mismatch (the 滿漢 dyarchy at the personal level)
-	if = {
-		limit = { culture = root.current_ruler.culture }
-		change_variable = { name = qing_char_affinity  add = 10 }
-	}
-	else = {
-		change_variable = { name = qing_char_affinity  subtract = 8 }
-	}
-
-	# --- RELIGION match / mismatch
-	# [logfix] bare `religion = X` is a COUNTRY trigger — invalid on this CHARACTER scope
-	# (error.log: "religion trigger [ Wrong scope: character, expected country ]", 210x).
-	# Unlike `culture` (a valid char trigger, used above), faith must be read as a SCOPE
-	# LINK on both sides: `this.religion = X.religion` (proven, party_types 00_default_republic.txt:154).
-	if = {
-		limit = { this.religion = root.current_ruler.religion }
-		change_variable = { name = qing_char_affinity  add = 8 }
-	}
-	else = {
-		change_variable = { name = qing_char_affinity  subtract = 8 }
-	}
-
-	# --- FRIENDSHIP / RIVALRY with the sovereign (engine secondary relations)
-	if = {
-		limit = { is_friend = root.current_ruler }
-		change_variable = { name = qing_char_affinity  add = 15 }
-	}
-	if = {
-		limit = { is_rival = root.current_ruler }
-		change_variable = { name = qing_char_affinity  subtract = 20 }
-	}
-
-	# --- KINSHIP & FAMILY PRESTIGE: a close relative of the imperial house is
-	# bound by blood, and a member of the reigning family more so — the great
-	# families' standing (family prestige) is itself a courtier's stake in the
-	# dynasty. A scion of a prestigious house is invested in the throne.
-	if = {
-		limit = { is_close_relative = root.current_ruler }
-		change_variable = { name = qing_char_affinity  add = 8 }
-	}
-	if = {
-		limit = { from_ruler_family = yes }
-		change_variable = { name = qing_char_affinity  add = 8 }
-	}
-	# family prestige, banded (family.prestige is unbounded, so we don't add it raw)
-	if = {
-		limit = { family = { prestige >= 500 } }
-		change_variable = { name = qing_char_affinity  add = 6 }
-	}
-	else_if = {
-		limit = { family = { prestige >= 100 } }
-		change_variable = { name = qing_char_affinity  add = 3 }
-	}
-
-	# --- STATESMANSHIP: the governing skills (finesse the administrator's gift,
-	# martial the general's). A capable man serves the throne well and knows it —
-	# a modest confidence bonus above the average pair (10 = 5+5).
-	set_variable = { name = qing_aff_statecraft  value = finesse }
-	change_variable = { name = qing_aff_statecraft  add = martial }
-	change_variable = { name = qing_aff_statecraft  subtract = 10 }
-	change_variable = { name = qing_aff_statecraft  divide = 2 }
-	change_variable = { name = qing_char_affinity  add = var:qing_aff_statecraft }
-
-	# --- STANDING: popularity (how the people see him) and prominence (his fame)
-	# both raise a man's sense of his own worth to the state. Banded, not raw.
-	if = { limit = { popularity >= 40 }   change_variable = { name = qing_char_affinity  add = 5 } }
-	else_if = { limit = { popularity <= -20 } change_variable = { name = qing_char_affinity  subtract = 5 } }
-	if = { limit = { prominence >= 60 }   change_variable = { name = qing_char_affinity  add = 4 } }
-
-	# --- EXISTING LOYALTY feeds back: a man already loyal is congenial, a
-	# disloyal one estranged (loyalty is a 0..100 state-loyalty read).
-	if = { limit = { loyalty >= 65 }  change_variable = { name = qing_char_affinity  add = 6 } }
-	else_if = { limit = { loyalty < 40 }  change_variable = { name = qing_char_affinity  subtract = 8 } }
-
-	# --- VENALITY: a corrupt official is a self-server; an honest / just one a
-	# pillar. Corruption also drags in step with the realm's corruption level.
-	if = { limit = { has_trait = corrupt } change_variable = { name = qing_char_affinity  subtract = 8 } }
-	if = { limit = { OR = { has_trait = honest  has_trait = just } } change_variable = { name = qing_char_affinity  add = 5 } }
-	# corruption is ALSO a numeric character stat (0..100), distinct from the
-	# corrupt trait: the higher a man's own venality, the more he serves himself.
-	if = { limit = { corruption >= 40 } change_variable = { name = qing_char_affinity  subtract = 8 } }
-	else_if = { limit = { corruption >= 15 } change_variable = { name = qing_char_affinity  subtract = 4 } }
-	# a corrupt court makes even honest men warier of the throne — the realm's
-	# corruption level (the decline counter) drags every courtier's affinity.
-	if = {
-		limit = { ROOT = { has_variable = qing_corruption_level  var:qing_corruption_level >= 60 } }
+		limit = { exists = root.current_ruler }
+		# --- CHARISMA: +1 per point of the courtier's charm above the average of 5.
+		change_variable = { name = qing_char_affinity  add = charisma }
 		change_variable = { name = qing_char_affinity  subtract = 5 }
-	}
 
-	# --- PERSONAL WEALTH & POWER BASE: the Heshen danger. A courtier rich in his
-	# own right and thick with loyal retainers (power_base — holdings + veterans,
-	# which the engine already docks 0.55 loyalty per unit) is powerful but LESS
-	# dependent on the throne's favour, and so a warier, more dangerous servant.
-	if = { limit = { wealth >= 300 }   change_variable = { name = qing_char_affinity  subtract = 5 } }
-	if = { limit = { power_base >= 15 } change_variable = { name = qing_char_affinity  subtract = 6 } }
-	else_if = { limit = { power_base >= 8 } change_variable = { name = qing_char_affinity  subtract = 3 } }
+		# --- ZEAL MISMATCH: subtract the ABSOLUTE gap in zeal from throne to servant.
+		# [fix, boot-test 2026-08-16] the 3 var:qing_aff_zeal_gap reads below were unguarded --
+		# 15228 "Script system error" hits in one boot's error.log (the single largest error class,
+		# ~46% of all "Script system error" instances) traced to this exact site via QING_char_
+		# promote_standing -> QING_char_affinity. If root.current_ruler.zeal ever fails to resolve
+		# (e.g. an interregnum with no seated ruler), change_variable's subtract silently leaves the
+		# var in a bad state, and the next read throws "unset scope"/"invalid left side" even though
+		# the set two lines above looks unconditional. has_variable-guarded, matching the proven
+		# read-before-set idiom used throughout this codebase; degrades safely to "no zeal-gap
+		# contribution this call" instead of erroring.
+		set_variable = { name = qing_aff_zeal_gap  value = zeal }
+		change_variable = { name = qing_aff_zeal_gap  subtract = root.current_ruler.zeal }
+		if = {
+			limit = { has_variable = qing_aff_zeal_gap  var:qing_aff_zeal_gap < 0 }
+			change_variable = { name = qing_aff_zeal_gap  multiply = -1 }
+		}
+		if = {
+			limit = { has_variable = qing_aff_zeal_gap }
+			change_variable = { name = qing_char_affinity  subtract = var:qing_aff_zeal_gap }
+		}
 
-	# --- AGE & HEALTH: an ailing or aged official is a fading (less reliable) asset
-	if = {
-		limit = { health < 0.35 }
-		change_variable = { name = qing_char_affinity  subtract = 10 }
-	}
-	if = {
-		limit = { age >= 70 }
-		change_variable = { name = qing_char_affinity  subtract = 6 }
+		# --- CULTURE match / mismatch (the 滿漢 dyarchy at the personal level)
+		if = {
+			limit = { culture = root.current_ruler.culture }
+			change_variable = { name = qing_char_affinity  add = 10 }
+		}
+		else = {
+			change_variable = { name = qing_char_affinity  subtract = 8 }
+		}
+
+		# --- RELIGION match / mismatch
+		# [logfix] bare `religion = X` is a COUNTRY trigger — invalid on this CHARACTER scope
+		# (error.log: "religion trigger [ Wrong scope: character, expected country ]", 210x).
+		# Unlike `culture` (a valid char trigger, used above), faith must be read as a SCOPE
+		# LINK on both sides: `this.religion = X.religion` (proven, party_types 00_default_republic.txt:154).
+		if = {
+			limit = { this.religion = root.current_ruler.religion }
+			change_variable = { name = qing_char_affinity  add = 8 }
+		}
+		else = {
+			change_variable = { name = qing_char_affinity  subtract = 8 }
+		}
+
+		# --- FRIENDSHIP / RIVALRY with the sovereign (engine secondary relations)
+		if = {
+			limit = { is_friend = root.current_ruler }
+			change_variable = { name = qing_char_affinity  add = 15 }
+		}
+		if = {
+			limit = { is_rival = root.current_ruler }
+			change_variable = { name = qing_char_affinity  subtract = 20 }
+		}
+
+		# --- KINSHIP & FAMILY PRESTIGE: a close relative of the imperial house is
+		# bound by blood, and a member of the reigning family more so — the great
+		# families' standing (family prestige) is itself a courtier's stake in the
+		# dynasty. A scion of a prestigious house is invested in the throne.
+		if = {
+			limit = { is_close_relative = root.current_ruler }
+			change_variable = { name = qing_char_affinity  add = 8 }
+		}
+		if = {
+			limit = { from_ruler_family = yes }
+			change_variable = { name = qing_char_affinity  add = 8 }
+		}
+		# family prestige, banded (family.prestige is unbounded, so we don't add it raw)
+		if = {
+			limit = { family = { prestige >= 500 } }
+			change_variable = { name = qing_char_affinity  add = 6 }
+		}
+		else_if = {
+			limit = { family = { prestige >= 100 } }
+			change_variable = { name = qing_char_affinity  add = 3 }
+		}
+
+		# --- STATESMANSHIP: the governing skills (finesse the administrator's gift,
+		# martial the general's). A capable man serves the throne well and knows it —
+		# a modest confidence bonus above the average pair (10 = 5+5).
+		set_variable = { name = qing_aff_statecraft  value = finesse }
+		change_variable = { name = qing_aff_statecraft  add = martial }
+		change_variable = { name = qing_aff_statecraft  subtract = 10 }
+		change_variable = { name = qing_aff_statecraft  divide = 2 }
+		change_variable = { name = qing_char_affinity  add = var:qing_aff_statecraft }
+
+		# --- STANDING: popularity (how the people see him) and prominence (his fame)
+		# both raise a man's sense of his own worth to the state. Banded, not raw.
+		if = { limit = { popularity >= 40 }   change_variable = { name = qing_char_affinity  add = 5 } }
+		else_if = { limit = { popularity <= -20 } change_variable = { name = qing_char_affinity  subtract = 5 } }
+		if = { limit = { prominence >= 60 }   change_variable = { name = qing_char_affinity  add = 4 } }
+
+		# --- EXISTING LOYALTY feeds back: a man already loyal is congenial, a
+		# disloyal one estranged (loyalty is a 0..100 state-loyalty read).
+		if = { limit = { loyalty >= 65 }  change_variable = { name = qing_char_affinity  add = 6 } }
+		else_if = { limit = { loyalty < 40 }  change_variable = { name = qing_char_affinity  subtract = 8 } }
+
+		# --- VENALITY: a corrupt official is a self-server; an honest / just one a
+		# pillar. Corruption also drags in step with the realm's corruption level.
+		if = { limit = { has_trait = corrupt } change_variable = { name = qing_char_affinity  subtract = 8 } }
+		if = { limit = { OR = { has_trait = honest  has_trait = just } } change_variable = { name = qing_char_affinity  add = 5 } }
+		# corruption is ALSO a numeric character stat (0..100), distinct from the
+		# corrupt trait: the higher a man's own venality, the more he serves himself.
+		if = { limit = { corruption >= 40 } change_variable = { name = qing_char_affinity  subtract = 8 } }
+		else_if = { limit = { corruption >= 15 } change_variable = { name = qing_char_affinity  subtract = 4 } }
+		# a corrupt court makes even honest men warier of the throne — the realm's
+		# corruption level (the decline counter) drags every courtier's affinity.
+		if = {
+			limit = { ROOT = { has_variable = qing_corruption_level  var:qing_corruption_level >= 60 } }
+			change_variable = { name = qing_char_affinity  subtract = 5 }
+		}
+
+		# --- PERSONAL WEALTH & POWER BASE: the Heshen danger. A courtier rich in his
+		# own right and thick with loyal retainers (power_base — holdings + veterans,
+		# which the engine already docks 0.55 loyalty per unit) is powerful but LESS
+		# dependent on the throne's favour, and so a warier, more dangerous servant.
+		if = { limit = { wealth >= 300 }   change_variable = { name = qing_char_affinity  subtract = 5 } }
+		if = { limit = { power_base >= 15 } change_variable = { name = qing_char_affinity  subtract = 6 } }
+		else_if = { limit = { power_base >= 8 } change_variable = { name = qing_char_affinity  subtract = 3 } }
+
+		# --- AGE & HEALTH: an ailing or aged official is a fading (less reliable) asset
+		if = {
+			limit = { health < 0.35 }
+			change_variable = { name = qing_char_affinity  subtract = 10 }
+		}
+		if = {
+			limit = { age >= 70 }
+			change_variable = { name = qing_char_affinity  subtract = 6 }
+		}
 	}
 
 	# --- clamp 0..100

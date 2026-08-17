@@ -717,8 +717,14 @@ ECON_LOG_curx_chain = {
 # Idioms all proven: sentinel > -999999999, change_variable multiply=var:X, round_local_variable, while
 # count=var:X, debug_log in a while body. Cap 8000 hard-bounds the loop. Scope: country.
 ECON_LOG_curx_tick_emit = {
+	# [fix, boot-test 2026-08-16] the sentinel check below (> -999999999) assumed ECON_LOG_tickval
+	# is always AT LEAST set-but-empty by the time this runs, but a boot showed 3652 "Failed to
+	# fetch variable for 'ECON_LOG_tickval' due to not being set" hits at this exact comparison
+	# via TREASURY_LOG_it (called from many events) even though every known caller stages it with
+	# set_variable immediately before calling this -- added the has_variable guard the sentinel
+	# alone didn't cover, matching the proven read-before-set idiom used throughout this file.
 	if = {
-		limit = { var:ECON_LOG_tickval > -999999999 }   # real value (not set-but-empty) — MUST gate before any multiply
+		limit = { has_variable = ECON_LOG_tickval  var:ECON_LOG_tickval > -999999999 }   # real value (not set-but-empty) — MUST gate before any multiply
 		change_variable = { name = ECON_LOG_tickval  multiply = var:ECON_LOG_tickscale }
 		if = {
 			limit = { var:ECON_LOG_tickval < 0 }

@@ -579,13 +579,34 @@ QING_seed_works_building = {
 # separately at seed time -- confirmed on a live check that at least one named province
 # (Haikou, 2218) is actually province_rank=city, so the un-guarded seed would have planted a
 # rural-only institution in a city.
+# [fix, boot-test 2026-08-16] the original version below called QING_seed_works_building = { P
+# = $P$ B = $B$ NAME = $NAME$ }, forwarding an already-quoted $NAME$ string through a SECOND
+# macro layer. Every single one of the 26 named call sites failed to compile ("Compiling source
+# for QING_seed_works_building failed for unknown arguments: sugar, 糖廍" / "timber, 力分/山分" /
+# etc -- the quoted string's own words/punctuation got split into bogus extra arguments once
+# forwarded a second time), silently voiding EVERY sugarhouse/timber-lineage/sulphur-pit seed
+# every boot. Confirmed the SAME $NAME$ strings work with zero errors as DIRECT single-layer
+# calls to QING_seed_works_building elsewhere in this file (e.g. line 317's "White Deer Grotto
+# 白鹿洞書院 (Nankang/Lushan)") -- the failure is specific to the second macro-call layer, not
+# the string content. Fix: inline QING_seed_works_building's body directly instead of calling
+# it, so $NAME$ only ever crosses ONE macro boundary (the proven-safe depth).
 QING_seed_works_building_rural = {
 	if = {
-		limit = { NOT = { p:$P$ = { has_city_status = yes } } }
-		QING_seed_works_building = { P = $P$  B = $B$  NAME = $NAME$ }
+		limit = {
+			NOT = { p:$P$ = { has_city_status = yes } }
+			exists = p:$P$
+			p:$P$ = {
+				owner = c:CHI
+				NOT = { has_building = $B$ }
+			}
+		}
+		p:$P$ = {
+			add_building_level = $B$
+			LOG_line = { sys = QING  msg = "starting buildings: $B$ seeded (p:$P$) — $NAME$" }
+		}
 	}
 	else = {
-		LOG_line = { sys = QING  msg = "starting buildings: SKIP $B$ (p:$P$) — $NAME$ — province is a city, rural-only building" }
+		LOG_line = { sys = QING  msg = "starting buildings: SKIP $B$ (p:$P$) — $NAME$ — city, not CHI-owned, or already present" }
 	}
 }
 
