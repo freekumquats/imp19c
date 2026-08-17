@@ -218,6 +218,49 @@ Old icon was a modern photo (car + modern building). Re-sourced via `fetch_wm.py
 woodblock illustration of men working furnaces/casting) -> converted via `dds_icon.py` to the
 existing 200x200 donor format (`--like` qing_cottage_woodlot_building.dds). Visually verified.
 
+## Follow-up icon audit (2026-08-16, user-requested after the boot-test list)
+While fixing the Village Smithy icon, ran the repo's own `tools/qa_montage.py building` to
+visually review every building icon at once. 13 looked like modern photos in the montage.
+Checked each one individually (converted to PNG, viewed at full size) before touching anything:
+
+**Confirmed bugs, re-sourced (7 DONE):**
+- `qing_capital_granary` — was a modern building + parked cars. Now: a period Canton-waterfront
+  painting (storage/warehouse theme).
+- `qing_cottage_founders_workshop` — same bug class as the Smithy (modern car, modern building).
+  Reused the Smithy's own Tiangong Kaiwu furnace-casting source (both are metalworking cottage
+  buildings).
+- `qing_dike` — was a modern satellite photo. Now: a detail from "The Qianlong Emperor's Southern
+  Inspection Tour, Scroll Four: The Confluence of the Huai and Yellow Rivers" (Met Museum) — a
+  genuine Qing court painting of the exact Yellow River hydraulic-works subject.
+- `qing_grand_canal` — was a modern photo with a construction crane and skyscrapers. Now: a page
+  from 廣輿圖 (Guang Yu Tu), a real Ming-dynasty atlas, showing the canal/waterway grid.
+- `qing_likin_station` — was a modern Mediterranean mansion, wrong subject entirely. Now: "View
+  of the Hongs, Canton" — a genuine period painting of the Canton trade/customs waterfront.
+- `qing_tribute_depot` — was a modern concrete shed. Now: "Tribute Bearers" by Yan Liben and Yan
+  Lide (Palace Museum, Beijing) — a genuine, famous Tang-dynasty painting literally titled for
+  this building's theme.
+- `qing_coal_mine` — was a modern European house with parked cars, wrong subject entirely. Reused
+  the sulphur-pit icon's Tiangong Kaiwu coal-mining plate (the CORRECT subject for this building;
+  it was only ever a closest-available substitute for sulphur).
+
+**Confirmed bugs, left unresolved (2 OPEN — no viable art found, not forced):**
+- `qing_oasis_bazaar` — the one real market-scene candidate (Along the River During the Qingming
+  Festival) is an ultra-wide panoramic scroll; Commons only serves it as a 330x10px sliver,
+  useless at icon scale. Nothing else on Commons matches "Central Asian/Xinjiang bazaar."
+- `qing_yuelu_academy` — no painting or print of the academy exists on Commons; every hit is a
+  modern photograph of the real, still-standing building (the same failure class as the original
+  #96 bug -- "a photo of an old building" isn't period art).
+Both still show their OLD (modern-photo) icon. Rejected two other candidates before landing on
+the 7 above: a Tiangong Kaiwu grain-processing diagram (Figure-labeled technical illustration,
+same "illegible schematic" problem the construction-icon fix already ran into) for the granary,
+and a captioned tripod/bell-casting diagram (same problem) for the founders' workshop -- reused
+the Smithy's clean, uncaptioned furnace scene instead.
+Rejected as NOT bugs after individual review (period-appropriate as-is, left untouched):
+`qing_foreign_concession` (genuine early-1900s photograph; the subject itself is a modern-era
+institution), `qing_hanlin_academy` (genuine painted court scene), `qing_navy_yard` (genuine
+1880s engraving of the Foochow Arsenal bombardment), `qing_telegraph` (genuine period engraving).
+All 7 new icons visually verified at both source resolution and final 200x200 before committing.
+
 ## Item 3 — Construction-generic icon (mechanical, DONE — judgment call, flagged for review)
 Old icon (#96's fix) was a Yingzao Fashi dougong bracket-joinery technical diagram — correct
 period art by the title-vocabulary filter, but user reported it "looks like scratches on
