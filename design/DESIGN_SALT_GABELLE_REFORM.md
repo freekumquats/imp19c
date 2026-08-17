@@ -356,3 +356,36 @@ Full-diff review of the final implementation found two real issues:
    the timeout has lapsed without the chain reaching `.9`.
 
 A second, narrowly-scoped review verified both fixes before commit.
+
+## EXTENSION (direct user instruction, post-implementation) — doubled the chain length
+
+The 4-event chain (`.1`/`.7`/`.8`/`.9`) was too short for "a series of events playing out over
+many years" (requirement 1). Doubled to 8 events by inserting 4 new stages between the existing
+ones, rewiring `trigger_event` targets rather than renumbering the already-reviewed `.1`/`.7`/
+`.8`/`.9` (minimizing re-review surface on already-vetted code):
+
+`.1` -> `.7` (unchanged) -> **`.10` "The Merchants Petition the Throne"** (new) -> `.8`
+(unchanged content, re-pointed target) -> **`.11` "A Test of Loyalty"** (new, includes a
+`random_list`-based bribery-risk branch — a 70/30 split gated on `qing_salt_squeeze >= 40`,
+using the proven `random_list` idiom; an earlier draft of this stage used `random = { ... }
+else = { ... }`, which does NOT exist as valid syntax in this engine — `random` has no `else`
+clause anywhere else in this codebase — caught and fixed before review) -> **`.12` "The Books
+Come to Light"** (new) -> **`.13` "The Court Takes Sides"** (new) -> `.9` (unchanged, still the
+resolution).
+
+Worst-case total delay: Decision->`.1` (20d) + `.1`->`.7` (540d) + 6 more max-720d stage gaps
+= ~4880 days (~13.4 years), roughly 2.5x the original chain's ~5.4-year worst case — genuinely
+"several years," not a cosmetic change. The Decision's `qing_saltreform_timeout` self-heal
+(added in the review-fix above) was widened from 10 years (3650 days) to 20 years (7300 days)
+to keep a real margin against the new, longer worst case rather than a near-miss.
+
+Every new stage keeps the same shape as the originals: two options (an aggressive "press"
+choice with a real cost/risk, and a cautious "wait" choice with weaker progress and no cost),
+each contributing to the SAME `qing_saltreform_authority` meter `.9` already compares against
+the Commissioner's `qing_salt_fitness`. This also naturally raises the authority ceiling well
+above the previous ~60 (now ~125 at max-aggression across 7 accumulating stages), addressing
+the original design's own open question about the chain being potentially unwinnable against a
+highly fit/loyal commissioner.
+
+Sent for full independent review (a fresh implementation review, not just a diff of the
+extension) before commit, matching this feature's own established review cadence.
