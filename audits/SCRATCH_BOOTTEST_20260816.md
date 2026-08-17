@@ -218,6 +218,63 @@ Old icon was a modern photo (car + modern building). Re-sourced via `fetch_wm.py
 woodblock illustration of men working furnaces/casting) -> converted via `dds_icon.py` to the
 existing 200x200 donor format (`--like` qing_cottage_woodlot_building.dds). Visually verified.
 
+## Follow-up round 2 (2026-08-16, live user feedback during re-test)
+
+- **Khoja Stirs / Road Is Cut cadence.** The shared-slot fix (item 6) stopped the same-quarter
+  double-fire, but user reported still seeing these too often, and stated directly: "once every
+  few years is the correct cadence." Root cause: the khoja-scare roll's own base rate (15% per
+  ~90-day pulse) averages under 2 years between rolls, with real variance -- never actually the
+  problem item 6 targeted. Cut to 5% (`se_QING_XINJIANG.txt`), averaging ~5 years between rolls.
+- **A Dispute at Kashgar cadence, real fix.** Re-checked after the same user complaint recurred:
+  `qing_caravan.4`'s offer (`se_QING_CARAVAN.txt`) had **no chance roll at all** -- it fired
+  unconditionally every pulse once both officials were seated, throttled only by a 270-day
+  cooldown floor (~3 quarters between fires once both posts stay filled). Added a 5% chance roll
+  around the existing slot-claim/cooldown/trigger_event, same idiom as the khoja fix -- the
+  cooldown is now a floor under an already-rare roll, not the actual pacing.
+- **Tooltip label style.** User: "State monopolies & customs" should shorten to "State
+  Monopolies"; all row labels should be Title Case ("Tariffs and Shipping", "Subject Duties",
+  "Administrator Wages", etc). Applied to every row in `nation_treasury_tt`'s loc keys
+  (`imp19c_tooltips_l_english.yml`), including the header ("Quarterly Government Income").
+- **Sulphur pit build-menu placement, corrected.** User caught a real placement error: I'd put
+  the sulphur pit in a brand-new `CottageIndustryItemsRow3` (item 2) without checking whether an
+  earlier row had room first. `CottageIndustryItems` (Row1) only held 4 of the proven 6-item
+  budget -- moved sulphur pit there instead, and removed the now-empty Row3 block entirely
+  (`gui_templates.gui`, `province_window.gui`, `macro_builder_view.gui`).
+- **Military Supplies spending + supplies, doubled.** Direct user instruction: CHI should spend
+  more on Military Supplies by default, and get more, both roughly doubled. Added a plain
+  `multiply = 2` to `INCOME_cost_military_supplies_country` (the outgoing) and
+  `MILITARY_supplies_income_country` (the "gains X/quarter" side) in `INCOME_svalues.txt` --
+  `MILITARY_supplies_balance_country` reads from the income svalue, so it doubles automatically
+  too, no separate edit needed. Same pragmatic-multiply-at-final-site style as the tariffs/salt
+  cuts and the cottage-military rate fix.
+- **Cottage-industry buildings seeded at 1763 start (new feature, not a bug).** Confirmed by a
+  repo-wide grep: zero cottage buildings were seeded anywhere in `setup/` -- all 11 were
+  100% player-built-only. User confirmed scope: seed every CHI-owned province that already
+  qualifies under the building's own `allow=` gate (not a hand-picked subset), CHI only, not ROW.
+  Found the exact proven idiom already in this codebase for this: `se_QING_BUILDINGS.txt`'s
+  yamen/green-standard/community-granary block, explicitly documented there as the corrected
+  model over hand-picked lists ("Capital-only lists were the wrong model"). Added:
+  - A new `c:CHI = { every_owned_province = { ... } }` pass for the 8 trade-goods-gated cottage
+    buildings (smithy/iron, leadworks/lead, weaving_hut/textile_fibres, silk_reeling_shed/silk,
+    woodlot/wood, herbalist/vegetables, founders_workshop/copper-or-tin, quarry/stone), each
+    mirroring its building's own `allow=` criteria exactly, guarded by `NOT has_building` for
+    idempotency.
+  - 25 calls to the existing `QING_seed_works_building` macro (already CHI-ownership-gated) for
+    the 3 province-ID-gated buildings: sugarhouse (6 provinces), timber lineage (14 provinces),
+    sulphur pit (5 provinces) -- exact same province-ID lists as each building's own `allow=`.
+  Wired into `SE_qing_starting_buildings` (`se_QING_BUILDINGS.txt`), confirmed this function is
+  actually invoked at boot for BOTH bookmarks (its sibling call right next to it is explicitly
+  tagged `[bookmark-1763 #291]`, no gate between them) via `oa_economy_setup.txt`.
+- **Wage tooltip still shows 0 income, even though wealth is visibly increasing (open, not fixed).**
+  User confirmed the item 9 payment fix IS working (real wealth gain, confirmed). But the
+  character wealth tooltip shows nothing for it, since `add_gold` is a quarterly LUMP grant, not
+  a persistent per-month rate -- the same non-tooltip-visible behavior the salt/Canton siphon
+  precedent already has (also silent). This is a real UX gap, not re-broken payment. Left open --
+  building a "last wage paid" display would need new tooltip infrastructure, not attempted without
+  an explicit ask.
+- **Garrison commanders not earning salaries** -- reported, then retracted by user ("actually
+  never mind I think they are earning, just very little"). No action taken.
+
 ## Follow-up icon audit (2026-08-16, user-requested after the boot-test list)
 While fixing the Village Smithy icon, ran the repo's own `tools/qa_montage.py building` to
 visually review every building icon at once. 13 looked like modern photos in the montage.
