@@ -81,18 +81,65 @@ Both candidates point toward the SAME class of fix (raise effective shipping/imp
 penetration for geographically concentrated goods) but are different code paths to change, so
 distinguishing them matters before proposing a specific fix.
 
+## Mechanism CONFIRMED (adversarial review, 2026-08-17)
+
+Review traced the exact missing step this diagnosis flagged as unlocated — it exists a few
+dozen lines further into the SAME orchestrator (`GT_split_do_global_trade_split`,
+`se_GLOBALTRADE_split.txt`) this diagnosis had already opened, and was findable without a live
+boot probe (a calibration miss on this diagnosis's part, noted honestly — the review's own
+critique, confirmed fair). Full chain, spot-checked directly against the file and confirmed
+accurate at every cited line:
+
+1. `GT_split_create_global_stockpile` (:1469-1519) sums each zone's local stockpile into a
+   global total, then computes `<zone>_percentage_of_global_stockpile_$tradegood$` for all 22
+   zones (each zone's SHARE of world production).
+2. `GT_split_get_country_global_market_penetration_tradegood` (:1824+) computes, per country:
+   `Σ_zones( <zone>'s share of world production × TZ_penetration_<zone> ) × 0.4545` (spot-check:
+   the `× 0.4545` is a real, confirmed OFF constant — the adjacent comment says "divide by 22"
+   which is `× 0.04545`, a 10x discrepancy, present in the code as-is; flagged, not touched).
+3. `TZ_penetration_<zone>` (`SHIPPING_svalues.txt`) is a BILATERAL value — a country's own
+   built-up shipping/trade-agreement presence in that SPECIFIC foreign zone, divided by
+   everyone's combined presence there. Confirmed NOT a function of the producing zone's
+   province count.
+4. This penetration score becomes `order_size_modifier_$tradegood$`
+   (`GT_split_get_order_size_modifier_tradegood`, :2065+), which scales down every governorship's
+   import order before `GT_split_add_amount_imported_tradegood` (:3986-4002, spot-checked)
+   credits it to the governorship's own local stockpile. **Confirmed this import step carries
+   the SAME `has_variable = $tradegood$_stockpile` gate found earlier for order-creation** — a
+   governorship that never produced the good (and was never game-start-seeded with the var)
+   cannot receive an import at all, a second, independent choke point on top of the penetration
+   score.
+
+**Why this explains the province-count correlation without province count being the real
+variable**: for a good produced across most of the 22 zones (grain, livestock), step 2's
+weighted sum is dominated by each country's OWN home-zone term, and every country has
+substantial shipping presence in its own zone by default — penetration stays healthy, imports
+flow. For a good concentrated in ONE zone (silk/tea/vegetables — all China-only here), step 2
+collapses to essentially one term: a country's bilateral shipping presence SPECIFICALLY in
+China's zone. Most of the 1763 world starts cold there (no trade agreements/colonies in China's
+zone yet), so penetration ≈ 0, `order_size_modifier` ≈ 0, and imports stay ≈ 0 — a stable trap
+that doesn't self-correct (a governorship needs the resource to build the very shipping
+infrastructure that would let it get the resource). The real causal variable is "number of trade
+zones with a nonzero production share," not province count directly — they only correlate here
+because every concentrated good in this mod happens to be confined to one region.
+
+**Candidate 2 (a province-count-scaled capacity cap) is confirmed NOT the mechanism** — no such
+cap was found in this chain. Drop it from consideration. Candidate 1 (import access gated on
+pre-existing bilateral penetration) is confirmed correct, sharpened as above.
+
+The 3 zones that stabilize (baltic, central_europe, india) are plausibly the ones with the
+strongest historical head-start in China-zone shipping presence (era-appropriate for
+India/EIC-style China trade, and the two European hubs) — consistent with, but not yet directly
+confirmed against, live boot variable values.
+
 ## Recommendation
 
-Do NOT propose an implementation from this diagnosis alone — the exact mechanism is not fully
-traced, and guessing at a fix without finding the real redistribution step (or confirming there
-isn't one) risks the same category of premature-fix mistake this project has been burned by
-before (memory: reviews catching inert-lever fixes). Recommend:
-1. Send this diagnosis for adversarial review first (per standing process) — an independent
-   pass may trace further into the vanilla trade engine than this one did, or find the actual
-   redistribution mechanism this pass missed.
-2. If review confirms the mechanism is genuinely this shallow (no meaningful redistribution, or
-   a capacity cap that scales badly with province count), the design phase should propose a fix
-   targeted at whichever of the two candidates above turns out to be real — not a blanket
-   production multiplier (already tried, already shown insufficient for the per-zone problem
-   specifically) and not a guess at the shipping formula without confirming it's the actual
-   bottleneck.
+Diagnosis is now confirmed, not speculative — ready for a design phase. Any fix should target
+step 2/3 above (making `country_global_market_penetration` for a geographically-concentrated
+good reachable without requiring an ALREADY-existing bilateral shipping relationship — e.g. a
+floor value, a different penetration curve for single-zone goods, or seeding a minimal
+`shipping_<zone>` value at game start for major trade powers), not a capacity-cap fix (confirmed
+wrong target) and not another production multiplier (already tried this session for vegetables,
+confirmed insufficient for this specific per-zone problem). Not designing or implementing a fix
+in this pass — flagging as ready for its own dedicated design/review/implement cycle when
+picked up next, given the volume of other work already in flight this session.
