@@ -26,11 +26,25 @@
 #   Administrator wages (WAGE_gc_admin_paid_last): every other seat/post.
 # Honestly scoped: does NOT replicate vanilla's corruption/popularity discount multiplier the
 # broken mechanic was computing -- flat rate x real income only.
+#
+# [review-fix 2026-08-17] two real bugs found by independent review, both fixed here:
+# 1. INCOME_national_total_quarterly is a NET figure (adds the negative cost terms -- wages,
+#    supplies, debt interest, poor law). In a deficit quarter it goes negative, so every
+#    add_gold below would have SUBTRACTED gold from officeholders instead of paying them --
+#    exactly backwards. Every payout is now guarded with `var:WAGE_pay_tmp > 0`, matching the
+#    proven siphon idiom (se_QING_SALT.txt / se_QING_CARAVAN.txt both gate their payout the
+#    same way) that this file's own header claimed to follow but didn't actually apply.
+# 2. The amban is deliberately moved OFF CHI while posted (se_QING_AMBAN.txt: `move_country =
+#    $subject$`; "while posted the resident's employer IS the subject"), so the shared
+#    QING_pay_marked_corps_wage macro's `employer = ROOT` filter always excluded him -- he was
+#    never paid, the exact symptom that motivated this whole fix. Split into a dedicated
+#    QING_pay_amban_wage that matches on the marker alone, no employer filter.
 ########################################################################
 
 # Pay ONE Grand Council seat's wage. $office$ = office key (matches QING_council_perf_
 # accumulate's own enumeration), $bucket$ = admin/military (selects which accumulator this
-# seat's pay tallies into). Scope: COUNTRY (CHI). Self-guarded: no-op on a vacant/dead seat.
+# seat's pay tallies into). Scope: COUNTRY (CHI). Self-guarded: no-op on a vacant/dead seat,
+# and no-op on a deficit quarter (does not dock the officeholder's own wealth).
 QING_pay_gc_seat_wage = {
 	if = {
 		limit = {
@@ -39,10 +53,13 @@ QING_pay_gc_seat_wage = {
 		}
 		set_variable = { name = WAGE_pay_tmp  value = INCOME_national_total_quarterly }
 		change_variable = { name = WAGE_pay_tmp  multiply = 0.01 }
-		var:qing_office_$office$_holder = {
-			add_gold = { value = 0  add = ROOT.var:WAGE_pay_tmp }
+		if = {
+			limit = { var:WAGE_pay_tmp > 0 }
+			var:qing_office_$office$_holder = {
+				add_gold = { value = 0  add = ROOT.var:WAGE_pay_tmp }
+			}
+			change_variable = { name = WAGE_gc_$bucket$_paid_tmp  add = var:WAGE_pay_tmp }
 		}
-		change_variable = { name = WAGE_gc_$bucket$_paid_tmp  add = var:WAGE_pay_tmp }
 		remove_variable = WAGE_pay_tmp
 	}
 }
@@ -58,16 +75,20 @@ QING_pay_single_post_wage = {
 		}
 		set_variable = { name = WAGE_pay_tmp  value = INCOME_national_total_quarterly }
 		change_variable = { name = WAGE_pay_tmp  multiply = $rate$ }
-		var:$holder_var$ = {
-			add_gold = { value = 0  add = ROOT.var:WAGE_pay_tmp }
+		if = {
+			limit = { var:WAGE_pay_tmp > 0 }
+			var:$holder_var$ = {
+				add_gold = { value = 0  add = ROOT.var:WAGE_pay_tmp }
+			}
+			change_variable = { name = WAGE_gc_admin_paid_tmp  add = var:WAGE_pay_tmp }
 		}
-		change_variable = { name = WAGE_gc_admin_paid_tmp  add = var:WAGE_pay_tmp }
 		remove_variable = WAGE_pay_tmp
 	}
 }
 
-# Pay every character carrying $marker$ (a corps/amban marker, not a single holder-pointer var).
-# $rate$ = the role's own rate, $bucket$ = admin/military. Scope: COUNTRY (CHI).
+# Pay every CHI-EMPLOYED character carrying $marker$ (a subpost corps marker). $rate$ = the
+# role's own rate, $bucket$ = admin/military. Scope: COUNTRY (CHI). NOT for the amban -- his
+# employer is the subject he's posted to, not CHI; see QING_pay_amban_wage below.
 QING_pay_marked_corps_wage = {
 	every_character = {
 		limit = {
@@ -78,10 +99,38 @@ QING_pay_marked_corps_wage = {
 		ROOT = {
 			set_variable = { name = WAGE_pay_tmp  value = INCOME_national_total_quarterly }
 			change_variable = { name = WAGE_pay_tmp  multiply = $rate$ }
-			scope:WAGE_this_holder = {
-				add_gold = { value = 0  add = ROOT.var:WAGE_pay_tmp }
+			if = {
+				limit = { var:WAGE_pay_tmp > 0 }
+				scope:WAGE_this_holder = {
+					add_gold = { value = 0  add = ROOT.var:WAGE_pay_tmp }
+				}
+				change_variable = { name = WAGE_gc_$bucket$_paid_tmp  add = var:WAGE_pay_tmp }
 			}
-			change_variable = { name = WAGE_gc_$bucket$_paid_tmp  add = var:WAGE_pay_tmp }
+			remove_variable = WAGE_pay_tmp
+		}
+	}
+}
+
+# Pay every character carrying qing_amban_marker. Rate 0.02, Administrator. No employer filter
+# -- a posted amban's employer is the subject he resides in, not CHI (se_QING_AMBAN.txt), so
+# QING_pay_marked_corps_wage's employer=ROOT gate would always exclude him. The marker alone is
+# CHI's own, only ever granted by CHI's own amban-appointment path, so it is a safe sole filter.
+QING_pay_amban_wage = {
+	every_character = {
+		limit = {
+			has_variable = qing_amban_marker
+		}
+		save_scope_as = WAGE_this_holder
+		ROOT = {
+			set_variable = { name = WAGE_pay_tmp  value = INCOME_national_total_quarterly }
+			change_variable = { name = WAGE_pay_tmp  multiply = 0.02 }
+			if = {
+				limit = { var:WAGE_pay_tmp > 0 }
+				scope:WAGE_this_holder = {
+					add_gold = { value = 0  add = ROOT.var:WAGE_pay_tmp }
+				}
+				change_variable = { name = WAGE_gc_admin_paid_tmp  add = var:WAGE_pay_tmp }
+			}
 			remove_variable = WAGE_pay_tmp
 		}
 	}
@@ -119,10 +168,13 @@ QING_pay_officeholder_wages = {
 		}
 		set_variable = { name = WAGE_pay_tmp  value = INCOME_national_total_quarterly }
 		change_variable = { name = WAGE_pay_tmp  multiply = 0.01 }
-		var:qing_office_chancellor_holder = {
-			add_gold = { value = 0  add = ROOT.var:WAGE_pay_tmp }
+		if = {
+			limit = { var:WAGE_pay_tmp > 0 }
+			var:qing_office_chancellor_holder = {
+				add_gold = { value = 0  add = ROOT.var:WAGE_pay_tmp }
+			}
+			change_variable = { name = WAGE_gc_admin_paid_tmp  add = var:WAGE_pay_tmp }
 		}
-		change_variable = { name = WAGE_gc_admin_paid_tmp  add = var:WAGE_pay_tmp }
 		remove_variable = WAGE_pay_tmp
 	}
 
@@ -133,8 +185,9 @@ QING_pay_officeholder_wages = {
 	QING_pay_single_post_wage = { holder_var = qing_opium_commissioner_holder rate = 0.01 }
 	QING_pay_single_post_wage = { holder_var = qing_customs_ig_holder        rate = 0.01 }
 
-	# --- Amban (per-subject, multiple possible): rate 0.02, Administrator.
-	QING_pay_marked_corps_wage = { marker = qing_amban_marker         rate = 0.02  bucket = admin }
+	# --- Amban (per-subject, multiple possible): rate 0.02, Administrator. Dedicated macro --
+	# see QING_pay_amban_wage's own comment for why it can't share QING_pay_marked_corps_wage.
+	QING_pay_amban_wage = yes
 	# --- Zongli diplomat / censor-inspector subposts: Administrator. Imperial guardsman subpost:
 	# Military (the Guard Commandant's own subordinates, per user directive).
 	QING_pay_marked_corps_wage = { marker = qing_zongli_diplomat      rate = 0.02  bucket = admin }
