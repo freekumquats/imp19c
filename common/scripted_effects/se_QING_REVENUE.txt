@@ -243,6 +243,48 @@ QING_revenue_pulse = {
 	# so the panel read-out + any milestone reflect this quarter before the event roll below.
 	QING_revenue_reserve_drift = yes
 
+	# [redesign 2026-08-17, design/DESIGN_SALT_GABELLE_REFORM.md] mirror the Minister-of-
+	# Revenue-vs-Salt-Commissioner charisma gap every quarter into one country-scope var, so
+	# the new qing_reform_salt_monopoly Decision's allow= can read a literal-RHS comparison
+	# (var:X > 0) instead of an illegal var-vs-var trigger (imp19c-rhs-comparison-operator-rule
+	# -- re-confirmed this session against a live boot log). Always safe: both terms default to
+	# 0 if the office/post is vacant or the holder died, matching this file's own has_variable-
+	# before-read convention throughout.
+	# [review-fix] the first draft chained .charisma directly off a var-held scope (var:X.charisma)
+	# in an effect-context value field -- this exact form is already documented as broken
+	# elsewhere in this mod (se_QING_CANAL.txt:128-133, se_QING_CANTON.txt:355): it reads 0
+	# silently instead of erroring, which would have made this gap always compute 0-0=0 and the
+	# Decision permanently un-takeable. save_scope_as -> scope:X.attr is the proven-safe form
+	# (se_QING_CANAL.txt:135-137, se_QING_CANTON.txt:356).
+	set_variable = { name = qing_saltreform_charisma_gap  value = 0 }
+	if = {
+		limit = { has_variable = qing_office_revenue_holder  var:qing_office_revenue_holder = { is_alive = yes } }
+		var:qing_office_revenue_holder = { save_scope_as = qing_saltreform_minister }
+		change_variable = { name = qing_saltreform_charisma_gap  add = scope:qing_saltreform_minister.charisma }
+	}
+	if = {
+		limit = { has_variable = qing_salt_commissioner_holder  var:qing_salt_commissioner_holder = { is_alive = yes } }
+		var:qing_salt_commissioner_holder = { save_scope_as = qing_saltreform_commissioner }
+		change_variable = { name = qing_saltreform_charisma_gap  subtract = scope:qing_saltreform_commissioner.charisma }
+	}
+
+	# [review-fix] each chain event (qing_revenue.1/.7/.8/.9) requires a living seated Minister
+	# and Commissioner in its own trigger; a transient vacancy at the exact moment one of them
+	# is due to fire silently discards it (trigger_event has no retry), leaving
+	# qing_saltreform_authority set forever with no stage left to advance it -- a permanent
+	# soft-lock on the Decision (its potential requires the var to be ABSENT). The Decision's
+	# own qing_saltreform_timeout (set alongside authority, 10-year auto-lapsing var) self-heals
+	# this: once it lapses without the chain having reached .9 (which always removes both vars
+	# together), treat the chain as stalled and clear authority so the Decision can be retaken.
+	if = {
+		limit = {
+			has_variable = qing_saltreform_authority
+			NOT = { has_variable = qing_saltreform_timeout }
+		}
+		remove_variable = qing_saltreform_authority
+		LOG_line = { sys = QING  msg = "revenue: the salt-monopoly reform struggle stalled (office vacancy) -- clearing the attempt" }
+	}
+
 	# [#415] THE SALT GABELLE (鹽課) — a STANDING quarterly revenue, not just an event lever.
 	# Historically the salt tax was ~10-12% of central revenue, a fiscal pillar (the Lianghuai
 	# 兩淮 salt administration alone rivalled whole provinces). We pay a quarterly salt income to
@@ -293,28 +335,11 @@ QING_revenue_pulse = {
 		random = {
 			chance = 40
 			random_list = {
-				# salt gabelle reform (鹽政): revenue vs patronage trade-off
-				20 = {
-					trigger = {
-						# [BT-qing-statutes chunk 2.2 fix] "not yet reformed", robust whether the var exists or not.
-						# The new Salt Administration law's default (qing_salt_farmed) does set_variable value=0, which
-						# CREATES the var — so a bare presence check (NOT has_variable) would wrongly lock out this
-						# reform offer once the law is touched. Guard has_variable BEFORE reading value (reading an
-						# unset var in a comparison is unsafe in this engine — cf. the value reads at :199/:258).
-						OR = {
-							NOT = { has_variable = qing_salt_gabelle_reformed }
-							var:qing_salt_gabelle_reformed = 0
-						}
-						# [#46 2026-08-13] qing_revenue.1's own trigger now requires a living, seated Salt
-						# Commissioner (it is retargeted onto him, not this Revenue holder) — match it here so
-						# a rare gap (commissioner just died, not yet backfilled) doesn't claim the court slot
-						# for an event that will then fail its own trigger and fire as a no-op.
-						has_variable = qing_salt_commissioner_holder
-						var:qing_salt_commissioner_holder = { is_alive = yes  employer = ROOT }
-					}
-					trigger_event = { id = qing_revenue.1  days = { 5 20 } }
-					set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [court-slot] claim on the fire path
-				}
+				# [redesign 2026-08-17, direct user instruction, design/DESIGN_SALT_GABELLE_REFORM.md]
+				# the salt gabelle reform (鹽政) entry that used to live here is REMOVED -- qing_
+				# revenue.1 now fires ONLY from the "Reform the State Salt Monopoly" Decision
+				# (decisions/imp19c_mod_decisions/qing_salt_decisions.txt), a player-initiated
+				# action, not a random court-event roll. See that file + qing_revenue_events.txt.
 				# granary stocking (常平倉): a good harvest lets you build reserves
 				15 = {
 					trigger = {

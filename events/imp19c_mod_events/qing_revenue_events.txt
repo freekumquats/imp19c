@@ -7,20 +7,17 @@
 namespace = qing_revenue
 
 # ======================================================================
-# qing_revenue.1 — REFORM THE SALT GABELLE (鹽政)
-# The salt monopoly is a vast revenue source, but the salt-merchant patronage
-# system is riddled with graft. The seated Salt Commissioner (兩淮鹽政) proposes
-# reform: clean up the monopoly (more revenue, upsets patronage networks,
-# corruption down) or milk it for short-term cash (corruption up, entrenched
-# graft).
-# [#46 2026-08-13] RETARGETED onto the Salt Commissioner. This event predates
-# the #44 Salt Commissioner subsystem (se_QING_SALT.txt, added weeks after this
-# event) and was never updated once that office existed — it scored and
-# portrayed the Grand Minister of Revenue (戶部), a domain generalist, on a
-# decision that is squarely the Commissioner's own (兩淮鹽政 is a real, always-
-# seated office with his own corruption/finesse/squeeze meter feeding the
-# standing 鹽課 income, se_QING_SALT.txt). Now reads/portrays the Commissioner
-# via QING_salt_assess_fitness (mirrors QING_revenue_assess_fitness's shape).
+# qing_revenue.1 — STATECRAFT REFORM (更新治法): the salt gabelle test case
+# [redesign, direct user instruction 2026-08-17, design/DESIGN_SALT_GABELLE_REFORM.md]
+# [correction, direct user instruction] the KICKOFF is now the "Reform the State Salt
+# Monopoly" Decision (decisions/imp19c_mod_decisions/qing_salt_decisions.txt), not this
+# event -- the player already chose to commit to reform (and paid political influence)
+# by taking that decision. This event no longer fires from QING_revenue_pulse's random
+# roll (removed, se_QING_REVENUE.txt) and carries no "decline" option of its own; it is
+# the first narrative beat of the struggle chain the decision just opened, flowing
+# straight into .7. The Commissioner is portrayed here (the throne formally opens
+# scrutiny of HIS domain); the Minister-vs-Commissioner personal struggle itself plays
+# out in .7-.9 below.
 # ======================================================================
 qing_revenue.1 = {
 	type = country_event
@@ -34,77 +31,213 @@ qing_revenue.1 = {
 		tag = CHI
 		has_variable = qing_salt_commissioner_holder
 		var:qing_salt_commissioner_holder = { is_alive = yes  employer = ROOT }
-		NOT = { has_variable = qing_salt_gabelle_reformed }
+		has_variable = qing_saltreform_authority
 	}
 
 	immediate = {
-		LOG_line = { sys = QING  msg = "EVENT qing_revenue.1 (salt gabelle reform) [ROOT.GetTag]" }
+		LOG_line = { sys = QING  msg = "EVENT qing_revenue.1 (statecraft reform: the salt gabelle test case) [ROOT.GetTag]" }
 		var:qing_salt_commissioner_holder = { save_scope_as = salt_commissioner }
-		# assess the seated commissioner's OWN fitness for the reform (his domain, his squeeze meter)
-		QING_salt_assess_fitness = yes
 	}
 
-	# OPTION A: reform the salt monopoly — honest revenue, upsetting patronage
 	option = {
 		name = "qing_revenue.1.a"
 		custom_tooltip = "qing_revenue.1.a.tt"
-		trigger = {
-			has_variable = qing_salt_fitness
-			var:qing_salt_fitness >= 50
-		}
-		# clean up the gabelle: more revenue, corruption down
-		add_country_modifier = { name = qing_salt_gabelle_reformed_mod  duration = -1 }
-		set_variable = { name = qing_salt_gabelle_reformed  value = 1 }
-		QING_DECLINE_nudge = { var = qing_corruption_level  amount = -8 }
-		# but upsetting the salt-merchant networks costs the commissioner standing
-		scope:salt_commissioner = {
-			add_loyalty = loyalty_qing_estranged
-			QING_char_promote_standing = { pop = -10  prom = 5 }
-			# [#46 review-fix] the reform also cleans up the commissioner's OWN graft (his source of the
-			# squeeze meter that shaves the standing 鹽課 income, se_QING_SALT.txt). A direct set_variable
-			# on qing_salt_squeeze would have been erased next quarter by QING_salt_reconcile's own mirror
-			# (set_variable = { name = qing_salt_squeeze value = scope:qing_salt_seated.corruption }) — a
-			# one-quarter cosmetic effect only. Acting on his real CORRUPTION STAT instead (mirroring
-			# Option B's own QING_char_corruption use below) is durable: reconcile mirrors the REDUCED
-			# corruption into qing_salt_squeeze every quarter from here on, same idiom as the reform's
-			# realm-wide qing_corruption_level nudge above.
-			if = { limit = { corruption > 20 }  QING_char_corruption = { amount = -20 } }
-		}
-		LOG_line = { sys = QING  msg = "revenue: salt gabelle reformed (+income, -corruption, commissioner unpopular)" }
+		trigger_event = { id = qing_revenue.7  days = { 180 540 } }
+		LOG_line = { sys = QING  msg = "revenue: statecraft reform opens -- the struggle over the salt gabelle begins" }
+	}
+}
+
+# ======================================================================
+# qing_revenue.7 — THE MINISTER PRESSES HIS CASE
+# First stage of the struggle chain (qing_revenue.1's Option A). The Minister of Revenue
+# formally requests an audit of the 兩淮鹽政's books; the Commissioner cites decades of
+# precedent and the merchants' own stake in stability. Scope: country (CHI).
+# ======================================================================
+qing_revenue.7 = {
+	type = country_event
+	title = "qing_revenue.7.t"
+	desc = "qing_revenue.7.desc"
+	picture = chinese_throne_room
+	left_portrait = scope:revenue_minister
+	right_portrait = scope:salt_commissioner
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_saltreform_authority
+		has_variable = qing_office_revenue_holder
+		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+		has_variable = qing_salt_commissioner_holder
+		var:qing_salt_commissioner_holder = { is_alive = yes  employer = ROOT }
 	}
 
-	# OPTION B: milk the monopoly — short-term cash, entrenched graft
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_revenue.7 (the minister presses his case) [ROOT.GetTag]" }
+		var:qing_office_revenue_holder = { save_scope_as = revenue_minister }
+		var:qing_salt_commissioner_holder = { save_scope_as = salt_commissioner }
+	}
+
+	# OPTION A: press the audit now -- real progress, real cost, commissioner estranged
 	option = {
-		name = "qing_revenue.1.b"
-		custom_tooltip = "qing_revenue.1.b.tt"
-		# quick cash infusion
-		add_treasury = 80
-		TREASURY_LOG_it = { amount = 80 }
-		# but corruption entrenches
-		add_country_modifier = { name = qing_salt_gabelle_graft  duration = 3650 }
-		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 5 }
-		# a venal commissioner benefits directly — he IS the man skimming the gabelle
+		name = "qing_revenue.7.a"
+		custom_tooltip = "qing_revenue.7.a.tt"
+		change_variable = { name = qing_saltreform_authority  add = 20 }
+		add_treasury = -40
+		TREASURY_LOG_it = { amount = -40 }
+		scope:salt_commissioner = { add_loyalty = loyalty_qing_estranged }
+		trigger_event = { id = qing_revenue.8  days = { 360 720 } }
+		LOG_line = { sys = QING  msg = "revenue: minister presses the audit (+authority, -treasury, commissioner estranged)" }
+	}
+
+	# OPTION B: give him time to comply voluntarily -- safe, slow
+	option = {
+		name = "qing_revenue.7.b"
+		custom_tooltip = "qing_revenue.7.b.tt"
+		change_variable = { name = qing_saltreform_authority  add = 5 }
+		trigger_event = { id = qing_revenue.8  days = { 360 720 } }
+		LOG_line = { sys = QING  msg = "revenue: minister gives the commissioner time to comply voluntarily" }
+	}
+}
+
+# ======================================================================
+# qing_revenue.8 — THE COMMISSIONER DIGS IN
+# The pushback stage: the Commissioner defends his entrenched position, either trying to
+# co-opt the Minister (his own graft, qing_salt_squeeze, is the bribe pool) or, if refused,
+# quietly leaning on his merchant patrons. Scope: country (CHI).
+# ======================================================================
+qing_revenue.8 = {
+	type = country_event
+	title = "qing_revenue.8.t"
+	desc = "qing_revenue.8.desc"
+	picture = chinese_throne_room
+	left_portrait = scope:revenue_minister
+	right_portrait = scope:salt_commissioner
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_saltreform_authority
+		has_variable = qing_office_revenue_holder
+		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+		has_variable = qing_salt_commissioner_holder
+		var:qing_salt_commissioner_holder = { is_alive = yes  employer = ROOT }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_revenue.8 (the commissioner digs in) [ROOT.GetTag]" }
+		var:qing_office_revenue_holder = { save_scope_as = revenue_minister }
+		var:qing_salt_commissioner_holder = { save_scope_as = salt_commissioner }
+	}
+
+	# OPTION A: refuse the bribe and press on -- real progress, real retaliation risk
+	option = {
+		name = "qing_revenue.8.a"
+		custom_tooltip = "qing_revenue.8.a.tt"
+		change_variable = { name = qing_saltreform_authority  add = 15 }
 		if = {
-			limit = { scope:salt_commissioner = { has_trait = corrupt } }
-			scope:salt_commissioner = {
-				add_gold = 25
-				QING_char_corruption = { amount = 10 }
+			limit = { has_variable = qing_salt_squeeze  var:qing_salt_squeeze >= 50 }
+			random = {
+				chance = 40
+				add_country_modifier = { name = qing_salt_gabelle_graft  duration = 360 }
+				LOG_line = { sys = QING  msg = "revenue: the commissioner's networks retaliate -- a temporary income dip" }
 			}
 		}
-		LOG_line = { sys = QING  msg = "revenue: salt gabelle milked (+cash, +corruption)" }
+		trigger_event = { id = qing_revenue.9  days = { 360 720 } }
+		LOG_line = { sys = QING  msg = "revenue: minister refuses the bribe and presses on (+authority)" }
 	}
 
-	# OPTION C: defer — no action (unfit commissioner outcome)
+	# OPTION B: let it pass for now -- no risk, no progress
 	option = {
-		name = "qing_revenue.1.c"
-		custom_tooltip = "qing_revenue.1.c.tt"
-		trigger = {
-			has_variable = qing_salt_fitness
-			var:qing_salt_fitness < 50
+		name = "qing_revenue.8.b"
+		custom_tooltip = "qing_revenue.8.b.tt"
+		trigger_event = { id = qing_revenue.9  days = { 360 720 } }
+		LOG_line = { sys = QING  msg = "revenue: minister lets it pass for now" }
+	}
+}
+
+# ======================================================================
+# qing_revenue.9 — THE RECKONING
+# Resolves the chain. qing_saltreform_margin = authority accumulated across .1/.7/.8 minus
+# the Commissioner's OWN fitness (QING_salt_assess_fitness, se_QING_SALT.txt -- his
+# competence at defending the status quo, not a new meter). [correction, direct user
+# instruction] success now CONCLUDES the reform directly by changing qing_salt_admin_law to
+# its qing_salt_reformed option (common/laws/00_qing_statutes_laws.txt) -- change_law is the
+# proven effect for a scripted law change (oracle-attested, TI/Invictus 00_india_effects.txt
+# etc; no player decision/UI action involved). qing_salt_gabelle_reformed is ALSO set
+# directly here (redundant-but-safe: change_law's own on_enact should set it too, but this
+# doesn't rely on that assumption). The short-term treasury cost and long-term production/
+# revenue payoff both land HERE, at the moment the law actually changes -- not at the
+# earlier decision that merely opened the struggle. Failure closes the door for a decade.
+# Scope: country (CHI).
+# ======================================================================
+qing_revenue.9 = {
+	type = country_event
+	title = "qing_revenue.9.t"
+	desc = {
+		triggered_desc = {
+			trigger = { var:qing_saltreform_margin > 0 }
+			desc = "qing_revenue.9.desc_success"
 		}
-		# status quo: the patronage system persists, modest graft continues
-		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 2 }
-		LOG_line = { sys = QING  msg = "revenue: salt gabelle reform deferred (commissioner unfit)" }
+		triggered_desc = { trigger = { always = yes }  desc = "qing_revenue.9.desc_failure" }
+	}
+	picture = chinese_throne_room
+	left_portrait = scope:revenue_minister
+	right_portrait = scope:salt_commissioner
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_saltreform_authority
+		has_variable = qing_office_revenue_holder
+		var:qing_office_revenue_holder = { is_alive = yes  employer = ROOT }
+		has_variable = qing_salt_commissioner_holder
+		var:qing_salt_commissioner_holder = { is_alive = yes  employer = ROOT }
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_revenue.9 (the reckoning) [ROOT.GetTag]" }
+		var:qing_office_revenue_holder = { save_scope_as = revenue_minister }
+		var:qing_salt_commissioner_holder = { save_scope_as = salt_commissioner }
+		QING_salt_assess_fitness = yes
+		set_variable = { name = qing_saltreform_margin  value = var:qing_saltreform_authority }
+		change_variable = { name = qing_saltreform_margin  subtract = var:qing_salt_fitness }
+	}
+
+	# OPTION A: success -- the minister's authority prevails, the law changes now
+	option = {
+		name = "qing_revenue.9.a"
+		custom_tooltip = "qing_revenue.9.a.tt"
+		trigger = { var:qing_saltreform_margin > 0 }
+		set_variable = { name = qing_salt_reform_chain_complete  value = 1 }
+		remove_variable = qing_saltreform_authority
+		remove_variable = qing_saltreform_timeout
+		change_law = qing_salt_reformed
+		set_variable = { name = qing_salt_gabelle_reformed  value = 1 }
+		# short-term cost: the disruption of formally reforming the monopoly
+		add_treasury = -120
+		TREASURY_LOG_it = { amount = -120 }
+		# long-term payoff: the same permanent tax-efficiency modifier the old one-shot event
+		# already granted (proven, unchanged) ...
+		add_country_modifier = { name = qing_salt_gabelle_reformed_mod  duration = -1 }
+		# ... plus a genuine, durable salt-production/revenue cleanup: qing_salt_squeeze is the
+		# ONLY term in the standing quarterly 鹽課 income (QING_salt_income, se_QING_SALT.txt)
+		# that represents how much of the monopoly's real yield actually reaches the treasury
+		# vs. the commissioner's own graft. Reforming sets an immediate, durable floor instead
+		# of waiting on the slow quarterly QING_salt_reconcile drift.
+		if = {
+			limit = { has_variable = qing_salt_squeeze  var:qing_salt_squeeze > 10 }
+			set_variable = { name = qing_salt_squeeze  value = 10 }
+		}
+		scope:revenue_minister = { QING_char_promote_standing = { pop = 10  prom = 5 } }
+		LOG_line = { sys = QING  msg = "revenue: the minister's authority prevails -- the salt gabelle is formally reformed" }
+	}
+
+	# OPTION B: failure -- entrenched interests hold, closed for a decade
+	option = {
+		name = "qing_revenue.9.b"
+		custom_tooltip = "qing_revenue.9.b.tt"
+		trigger = { var:qing_saltreform_margin <= 0 }
+		set_variable = { name = qing_salt_gabelle_reform_failed  days = 3650 }
+		remove_variable = qing_saltreform_authority
+		remove_variable = qing_saltreform_timeout
+		LOG_line = { sys = QING  msg = "revenue: the commissioner's entrenchment holds -- the reform effort collapses" }
 	}
 }
 

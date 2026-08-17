@@ -288,3 +288,71 @@ so the discrepancy doesn't get re-litigated from the same stale comment in a fut
 
 **Status: ready for implementation** with §5 (law-bypass closure) included as part of the
 first-pass build, not deferred.
+
+## POST-REVIEW CORRECTION (direct user instruction, during implementation) — the Decision is
+## the KICKOFF, not the conclusion
+
+Four direct corrections landed mid-implementation, reshaping §1-§4 above. The struggle chain
+(§2), the fitness-vs-authority mechanic, and the charisma-gap mirror (§3) are UNCHANGED — only
+WHERE the decision sits and WHAT concludes the chain changed:
+
+1. **The Decision now KICKS OFF the process**, it does not conclude it. Renamed
+   `qing_reform_salt_gabelle` -> `qing_reform_salt_monopoly` ("Reform the State Salt Monopoly").
+   Its `effect` no longer sets `qing_salt_gabelle_reformed` or applies any cost/payoff beyond
+   `add_political_influence = -10` — it now sets `qing_saltreform_authority = 20` and
+   `trigger_event = { id = qing_revenue.1  days = { 5 20 } }`, i.e. it does exactly what
+   `qing_revenue.1`'s old Option A used to do. `potential`/`allow` otherwise unchanged (still the
+   charisma-gap + OR-guarded reformed-flag check), plus the same in-progress/chain-complete/
+   failed guards `qing_revenue.1`'s own trigger already carried.
+2. **`qing_revenue.1` ("Statecraft Reform") no longer fires from `QING_revenue_pulse`'s random
+   event roll** — that weighted `random_list` entry (chance 20/40) is REMOVED from
+   `se_QING_REVENUE.txt` entirely. `.1` now fires ONLY via the Decision's `trigger_event`, and
+   its own trigger simplifies to `has_variable = qing_saltreform_authority` (set by the decision)
+   + a living seated Commissioner. It also drops its old "decline" Option B (the milk-it flavor)
+   entirely — declining now simply means never taking the decision; there is no in-event opt-out
+   anymore, and `qing_salt_gabelle_declined` is unused going forward (left as dead state, no
+   reader remains, harmless).
+3. **The chain's conclusion (`.9`, success) now directly changes the law**, via `change_law =
+   qing_salt_reformed` (the proven oracle-attested effect for a scripted law change, TI/Invictus
+   `00_india_effects.txt` etc. — NOT a player decision/UI action), plus a redundant-but-safe
+   `set_variable = { name = qing_salt_gabelle_reformed  value = 1 }` in case `change_law`'s own
+   `on_enact` doesn't fire it (unconfirmed either way; the explicit set costs nothing to keep).
+   The short-term treasury cost (`-120`) and the long-term payoff (`qing_salt_gabelle_reformed_mod`
+   + the `qing_salt_squeeze` floor) BOTH MOVED from the (now-defunct) decision-effect to this
+   option — they land at the moment the law actually changes, not at the earlier moment the
+   player merely opened the struggle. `qing_salt_admin_law`'s `qing_salt_reformed` option keeps
+   its `has_variable = qing_salt_reform_chain_complete` allow-gate (§5, unchanged) as a backstop
+   for a player manually re-selecting it from the law menu after the chain has already run.
+4. Net effect: **political-influence cost sits at the kickoff (decision)**; **treasury cost +
+   production/revenue payoff sit at the conclusion (`.9` success, alongside the actual law
+   change)**. This is a cleaner allocation than the original draft's — the disruption happens
+   when the reform actually takes effect, not when the player merely commits to trying.
+
+Implemented directly (not re-sent for a full second design review — the underlying mechanics,
+already reviewed once, are unchanged; only the sequencing of an existing, already-vetted set of
+effects moved between two already-reviewed call sites). A final review pass covers the complete
+diff before commit.
+
+## Implementation review (2026-08-17) — two real bugs found and fixed
+
+Full-diff review of the final implementation found two real issues:
+
+1. **CRITICAL, ship-blocking**: the charisma-gap mirror (§3) chained `.charisma` directly off a
+   var-held scope (`var:qing_office_revenue_holder.charisma`) in an effect-context value field —
+   this exact form is independently documented TWICE elsewhere in this mod
+   (`se_QING_CANAL.txt:128-133`, `se_QING_CANTON.txt:355`) as reading `0` SILENTLY rather than
+   erroring. Verified both cited precedents directly. Would have made the gap always compute
+   `0 - 0 = 0`, permanently failing the Decision's `allow=` and making the whole feature
+   un-takeable from the very first boot. Fixed: `save_scope_as` each holder first, then read
+   `scope:X.charisma` — the proven-safe form both precedents use.
+2. **MEDIUM, latent soft-lock**: every chain event (`.1`/`.7`/`.8`/`.9`) requires a living seated
+   Minister/Commissioner in its own trigger; `trigger_event` has no retry, so a transient office
+   vacancy at the exact fire moment silently discards that stage, leaving
+   `qing_saltreform_authority` set forever with no path to `.9` to clear it — and the Decision's
+   `potential` requires that var to be ABSENT, so this is a permanent, silent lock with no
+   in-game recovery. Fixed with a 10-year auto-lapsing `qing_saltreform_timeout` var (set
+   alongside authority at kickoff, comfortably longer than the chain's worst-case total delay of
+   ~5.4 years) plus a `QING_revenue_pulse` cleanup check that clears a stalled `authority` once
+   the timeout has lapsed without the chain reaching `.9`.
+
+A second, narrowly-scoped review verified both fixes before commit.
