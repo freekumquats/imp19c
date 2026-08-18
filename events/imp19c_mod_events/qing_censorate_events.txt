@@ -22,12 +22,12 @@
 namespace = qing_censorate
 
 ########################################################################
-# .1  IMPEACH A NAMED CORRUPT OFFICIAL  (彈劾)
-# The Grand Inspector impeaches a SPECIFIC venal courtier or office-holder
-# (picked by corruption stat + corrupt trait + disloyalty). The throne upholds
-# (cleanse the man, corruption down, office vacated if held) or suppresses
-# (corruption up, tyranny). DIFFERENT from qing_office.2 (which is generic);
-# this one acts on a REAL named character found by QING_censorate_find_corrupt.
+# .1  IMPEACH A NAMED CORRUPT COURTIER  (彈劾)
+# [#8 split 2026-08-18] The Grand Inspector impeaches a SPECIFIC venal COURTIER —
+# a corrupt man who holds NO court post (NOT QING_char_holds_court_position). The
+# officeholder counterpart is qing_censorate.11 (a corrupt seated officeholder). The
+# throne upholds (cleanse the man, corruption down) or suppresses (corruption up,
+# tyranny). Acts on a REAL named character found by QING_censorate_find_corrupt_courtier.
 # Pair friction: a censor who clashes with the impeached (qing_pair_friction)
 # presses harder (described in desc/options).
 ########################################################################
@@ -51,6 +51,7 @@ qing_censorate.1 = {
 			is_adult = yes
 			is_alive = yes
 			NOT = { has_variable = qing_rebel_foil }
+			NOT = { QING_char_holds_court_position = yes }   # [#8 split] courtiers only — officeholders are qing_censorate.11
 			OR = {
 				corruption >= 30
 				has_trait = corrupt
@@ -60,8 +61,8 @@ qing_censorate.1 = {
 	}
 
 	immediate = {
-		LOG_line = { sys = QING  msg = "EVENT qing_censorate.1 (impeach named official) [ROOT.GetTag]" }
-		QING_censorate_find_corrupt = yes
+		LOG_line = { sys = QING  msg = "EVENT qing_censorate.1 (impeach corrupt courtier)" }
+		QING_censorate_find_corrupt_courtier = yes
 		if = {
 			limit = { exists = scope:qing_censorate_target }
 			# score friction between censor and target (transient, not stored per-pair)
@@ -114,6 +115,112 @@ qing_censorate.1 = {
 			# here (no hard-disgrace, no pending-trial marker) — the backfilling dispatch
 			# could redraw this same censor right back if he's still the ablest jinshi,
 			# undoing the punishment. See #49's identical fix.
+			scope:censor_holder = {
+				QING_office_vacate_dispatch_nobackfill = yes
+				add_loyalty = loyalty_qing_disgraced
+				add_popularity = -30
+			}
+		}
+		# add a "cowed censorate" debuff
+		add_country_modifier = { name = qing_censorate_cowed  duration = 1825 }
+	}
+}
+
+########################################################################
+# .11  IMPEACH A NAMED CORRUPT OFFICEHOLDER  (彈劾在任官員)
+# [#8 split 2026-08-18] The officeholder counterpart to .1. Where .1 impeaches a corrupt
+# COURTIER (a man holding no court post), this impeaches a corrupt seated OFFICEHOLDER —
+# a Grand Council minister, the Hoppo (粵海關監督), a salt/caravan commissioner, a censor-
+# inspector, a zongli diplomat, an imperial guardsman, a study fellow, a palace eunuch, or
+# a harem consort (any holder of qing_current_post). Same three responses. On UPHOLD,
+# QING_censorate_impeach_uphold routes through the post-vacate machinery
+# (qing_current_post -> QING_post_dispatch_vacate), so the impeached officeholder is
+# stripped of his seat automatically — an impeached Hoppo/minister/commissioner loses his
+# post and his backfill draws a fresh honest man. Found by
+# QING_censorate_find_corrupt_officeholder.
+########################################################################
+qing_censorate.11 = {
+	type = country_event
+	title = "qing_censorate.11.t"
+	desc = "qing_censorate.11.desc"
+	picture = senate_debate
+
+	left_portrait = root.current_ruler
+	right_portrait = scope:qing_censorate_target
+
+
+	trigger = {
+		tag = CHI
+		has_variable = qing_office_censor_holder
+		var:qing_office_censor_holder = { is_alive = yes  employer = ROOT }
+		any_character = {
+			employer = ROOT
+			is_ruler = no
+			is_adult = yes
+			is_alive = yes
+			NOT = { has_variable = qing_rebel_foil }
+			has_variable = qing_current_post   # [#8 split] a seated officeholder (uphold fully vacates his post)
+			OR = {
+				corruption >= 30
+				has_trait = corrupt
+				loyalty < 40
+			}
+		}
+	}
+
+	immediate = {
+		LOG_line = { sys = QING  msg = "EVENT qing_censorate.11 (impeach corrupt officeholder)" }
+		QING_censorate_find_corrupt_officeholder = yes
+		if = {
+			limit = { exists = scope:qing_censorate_target }
+			# score friction between censor and target (transient, not stored per-pair)
+			var:qing_office_censor_holder = { save_scope_as = censor_holder }
+			QING_pair_friction = { a = scope:censor_holder  b = scope:qing_censorate_target }
+		}
+	}
+
+	# --- Uphold the impeachment (cleanse the accused, vacate his post, corruption down) ---
+	option = {
+		name = "qing_censorate.11.a"
+		custom_tooltip = "qing_censorate.11.a.tt"
+		QING_censorate_impeach_uphold = yes
+		add_stability = 1
+		# censorate emboldened
+		add_country_modifier = { name = qing_censorate_vigilant  duration = 1825 }
+	}
+
+	# --- Exonerate the accused (censorate chastened, officeholder keeps his post) ---------
+	option = {
+		name = "qing_censorate.11.b"
+		custom_tooltip = "qing_censorate.11.b.tt"
+		if = {
+			limit = { exists = scope:qing_censorate_target }
+			scope:qing_censorate_target = {
+				add_loyalty = loyalty_qing_indulged
+				add_popularity = 10
+			}
+		}
+		if = {
+			limit = { exists = scope:censor_holder }
+			scope:censor_holder = {
+				add_loyalty = loyalty_qing_estranged
+				add_popularity = -15
+			}
+		}
+		QING_DECLINE_nudge = { var = qing_corruption_level  amount = 3 }
+		add_tyranny = 2
+	}
+
+	# --- Suppress the memorial; punish the censor for insolence -------------
+	option = {
+		name = "qing_censorate.11.c"
+		custom_tooltip = "qing_censorate.11.c.tt"
+		QING_censorate_impeach_suppress = yes
+		if = {
+			limit = { exists = scope:censor_holder }
+			# the censor himself is disgraced. NO-BACKFILL twin (see .1.c): only a loyalty/
+			# popularity penalty lands here — the backfilling dispatch could redraw this same
+			# censor right back if he's still the ablest jinshi, undoing the punishment.
 			scope:censor_holder = {
 				QING_office_vacate_dispatch_nobackfill = yes
 				add_loyalty = loyalty_qing_disgraced

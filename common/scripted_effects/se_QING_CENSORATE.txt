@@ -134,6 +134,92 @@ QING_censorate_find_corrupt = {
 }
 
 # ======================================================================
+# [#8 courtier/officeholder split 2026-08-18] TWO narrowed finds so the Censorate
+# has TWO distinct auto-fire impeachment events (user request: "a censor event
+# against corrupt courtiers, and another against corrupt officeholders"):
+#   - COURTIER find (qing_censorate.1): a corrupt man holding NO court post at all
+#     (NOT QING_char_holds_court_position). Cleanse-only on uphold — no office to vacate.
+#   - OFFICEHOLDER find (qing_censorate.11): a corrupt man holding one of the 11 CHI-employed
+#     court posts (has_variable qing_current_post — great offices, Hoppo, salt/caravan
+#     commissioners, censor-inspectors, zongli diplomats, guardsmen, studies, eunuchs,
+#     consorts). qing_current_post is chosen deliberately over the wider
+#     QING_char_holds_court_position: it is EXACTLY the set QING_censorate_impeach_uphold
+#     fully vacates (its `has_variable = qing_current_post -> QING_post_dispatch_vacate`
+#     branch), so an impeached officeholder is always cleanly stripped of his seat. The 3
+#     honorary/specialist posts in QING_char_holds_court_position that carry NO
+#     qing_current_post (court artist 如意館, customs IG 總稅務司, opium commissioner 欽差大臣)
+#     are deliberately left out of BOTH auto-events — uphold does not vacate their bespoke
+#     markers, so auto-firing on them would dangle the marker. They remain reachable by the
+#     MANUAL Impeach-the-Venal picker (unchanged, pre-existing behaviour). Subject-employed
+#     posts (amban/march_gg/xj_beg) are excluded automatically by employer = ROOT.
+# Both share QING_censorate_find_corrupt's misconduct pool byte-for-byte (incl. the
+# thin-academy corruption widening); only the post gate differs.
+# ======================================================================
+QING_censorate_find_corrupt_courtier = {
+	LOG_enter = { sys = QING  fn = "QING_censorate_find_corrupt_courtier" }
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_ruler = no
+			is_adult = yes
+			is_alive = yes
+			NOT = { has_variable = qing_rebel_foil }
+			NOT = { QING_char_holds_court_position = yes }   # a pure courtier — holds no court post
+			OR = {
+				corruption >= 30
+				has_trait = corrupt
+				loyalty < 40
+				AND = { employer = { has_variable = qing_exam_reach_cache  var:qing_exam_reach_cache < 40 }  corruption >= 20 }
+			}
+		}
+		order_by = corruption
+		check_range_bounds = no
+		max = 1
+		save_scope_as = qing_censorate_target
+	}
+	if = {
+		limit = { exists = scope:qing_censorate_target }
+		LOG_line = { sys = QING  msg = "censorate: corrupt courtier target found" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_censorate_find_corrupt_courtier"  reason = "no corrupt courtier found" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_censorate_find_corrupt_courtier"  result = OK }
+}
+
+QING_censorate_find_corrupt_officeholder = {
+	LOG_enter = { sys = QING  fn = "QING_censorate_find_corrupt_officeholder" }
+	ordered_character = {
+		limit = {
+			employer = ROOT
+			is_ruler = no
+			is_adult = yes
+			is_alive = yes
+			NOT = { has_variable = qing_rebel_foil }
+			has_variable = qing_current_post   # a seated officeholder whose post uphold fully vacates
+			OR = {
+				corruption >= 30
+				has_trait = corrupt
+				loyalty < 40
+				AND = { employer = { has_variable = qing_exam_reach_cache  var:qing_exam_reach_cache < 40 }  corruption >= 20 }
+			}
+		}
+		order_by = corruption
+		check_range_bounds = no
+		max = 1
+		save_scope_as = qing_censorate_target
+	}
+	if = {
+		limit = { exists = scope:qing_censorate_target }
+		LOG_line = { sys = QING  msg = "censorate: corrupt officeholder target found" }
+	}
+	else = {
+		LOG_fail = { sys = QING  fn = "QING_censorate_find_corrupt_officeholder"  reason = "no corrupt officeholder found" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_censorate_find_corrupt_officeholder"  result = OK }
+}
+
+# ======================================================================
 # [#9 2026-07-17] QING_censorate_refresh_venal — build the qing_censorate_venal roster (the
 # IMPEACH picker's datamodel) sorted MOST-CORRUPT-FIRST. Country scope (CHI). Mirrors the
 # Accuse-an-Official picker (QING_justice_refresh_accusable): the Impeach-the-Venal lever used
