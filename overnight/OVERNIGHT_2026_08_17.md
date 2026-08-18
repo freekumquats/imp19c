@@ -264,3 +264,46 @@ Investigated, root cause NOT confirmed this pass (logged honestly per Rule 1c �
   remapped good per standing project memory), no action needed.
 
 ---
+
+## Task #3 — Explain requirements in the Reformed Gabelle (票鹽法) law tooltip
+
+STATUS: DONE. Commit `6eee35c38`, pushed to merge-overnight.
+
+WHAT IT WAS: the "Reformed Gabelle" law option must explain its requirements in-game
+(the two things the player must do: take the reform decision and complete the event chain).
+
+DIAGNOSIS (existing-code task, Rule 1c — traced in source this session):
+- The whole salt-monopoly reform is ALREADY built and committed: the kickoff decision
+  `qing_reform_salt_monopoly` (decisions/imp19c_mod_decisions/qing_salt_decisions.txt), the
+  8-event Minister-vs-Commissioner struggle chain (qing_revenue.1/.7/.10/.8/.11/.12/.13/.9,
+  events/imp19c_mod_events/qing_revenue_events.txt), and the enact-side law
+  `qing_salt_admin_law` / option `qing_salt_reformed` (common/laws/00_qing_statutes_laws.txt).
+- The ONE missing piece: the law option's `allow` block held two bare `has_variable`
+  triggers (`qing_reform_track_unlocked`, `qing_salt_reform_chain_complete`). The engine
+  renders a trigger with no custom_tooltip as a raw, unexplained variable-name line — the
+  player saw no reason WHY the reform was locked. This is the EXACT defect the parallel
+  decision's own `allow` already fixed (qing_salt_decisions.txt:40), so the fix idiom was
+  already proven in the same feature.
+- Verified both gate-vars are really set, so the requirement is winnable, not a dead gate:
+  `qing_reform_track_unlocked` set in se_QING_DECLINE.txt:1449 (mid-game reform track);
+  `qing_salt_reform_chain_complete` set at the chain's success, qing_revenue_events.txt:419.
+
+FIX:
+- Wrapped each gate in the proven `custom_tooltip = { text = "K"  <trigger> }` idiom
+  (common/military_traditions/00_qing.txt:44-48). AND-evaluation of both gates is preserved;
+  no behavior change beyond the tooltip.
+- Two new loc strings (localization/english/laws_l_english.yml):
+  * qing_salt_reformed_law_track_req — "The court must have entered its era of reform."
+  * qing_salt_reformed_law_chain_req — "The salt-monopoly reform must already have been won —
+    take the 'Reform the State Salt Monopoly' decision, then see the Grand Minister of Revenue
+    prevail over the entrenched Salt Commissioner in the years-long struggle it begins."
+
+REVIEW: code-review agent `review-salt-law-tooltip` — VERDICT CLEAN, no findings. Confirmed:
+custom_tooltip preserves AND (law not made always-enactable); text= keys match loc keys
+byte-for-byte; loc string safe (no unescaped quote, no stray #-colour); UTF-8 BOM preserved;
+brace balance 558/558; diff adds only the intended lines (no EOL churn).
+
+NO DEFERRALS: the decision + chain were pre-existing and committed; the only in-scope work
+(the tooltip explanation) shipped whole. Nothing carved off.
+
+---
