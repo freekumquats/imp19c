@@ -1,5 +1,15 @@
 # DIAGNOSIS (draft, pre-review) — vegetables still collapsing after the #93 demand trim
 
+> **SUPERSEDED (2026-08-18):** a live-boot re-investigation, then an adversarial review,
+> overturned this doc's conclusions. The ×4 multiplier here rests on a province miscount
+> ("419 CHI provinces" — 418 active provinces are worldwide, Russia-dominant; CHI ~50) and a
+> non-causal ratio. The real cause is a GEOGRAPHY-GATED DEMAND RATCHET: vegetables are grown
+> thin/locally in ~20/22 trade zones, and the shared ±10%-clamp + price-elasticity divide
+> ratchets governorship demand past that thin local production each quarter (zone stock is a
+> per-quarter FLOW, reset+rebuilt every pass — NOT a reservoir, and the infra export cap does
+> NOT bind). The ×4 does not "keep it, merely inert" — it may ACCELERATE the ratchet by
+> cheapening the early price. See `DESIGN_93_VEGETABLES_BOOMBUST_DIAGNOSIS.md` (§4, §5).
+
 ## Prior fix, and what it actually achieved
 
 `design/DESIGN_93_VEGETABLES_SHORTAGE.md` (commit `4ee1f5412`, already live in current code
