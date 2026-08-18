@@ -1448,6 +1448,105 @@ CURRENCY_update_amt_circulated = {
 	}
 }
 
+CPI_update = {
+	# Scope: Country. Called once PER COUNTRY per quarter from
+	# quarterly_apply_trade_changes_and_consume (oa_wealth_changes.txt), right after
+	# CURRENCY_update_amt_circulated. DISPLAY-ONLY Consumer Price Index -- see
+	# design/DESIGN_CPI_INFLATION_READOUT.md. It writes ONLY CPI_* vars (read by the CPI loc/GUI)
+	# and touches NO behavioural currency var, so it cannot alter economy dynamics.
+	# Method: quarter-over-quarter change of the nominal essentials basket, EMA-smoothed, annualised.
+	set_variable = { name = CPI_basket_now  value = CPI_basket_price }
+	if = {
+		# Bootstrap: first quarter, nothing to compare to -> CPI 0 (proven has_variable-else idiom).
+		limit = { NOT = { has_variable = CPI_basket_last } }
+		set_variable = { name = CPI_basket_last  value = var:CPI_basket_now }
+		set_variable = { name = CPI_smoothed  value = 0 }
+		set_variable = { name = CPI_annual  value = 0 }
+		set_variable = { name = CPI_annual_abs  value = 0 }
+	}
+	else_if = {
+		# HOLD guard (both ends, per review F4): a numerator zero (all 10 essentials transiently read
+		# a first-ever 0, the day-0 edge documented at CURRENCY_svalues.txt:686-687) would give
+		# QoQ=-1 -- a false -100% shock the EMA needs a year to wash out. A <=0 last (denominator)
+		# cannot divide. In either case hold CPI_smoothed and only refresh the annual view.
+		limit = {
+			OR = {
+				var:CPI_basket_now <= 0
+				var:CPI_basket_last <= 0
+			}
+		}
+		if = { limit = { NOT = { has_variable = CPI_smoothed } } set_variable = { name = CPI_smoothed  value = 0 } }
+		# Recover a bad last (so next quarter can divide); do NOT overwrite last with a zero numerator.
+		if = {
+			limit = { var:CPI_basket_now > 0 }
+			set_variable = { name = CPI_basket_last  value = var:CPI_basket_now }
+		}
+		set_variable = { name = CPI_annual  value = { value = var:CPI_smoothed  multiply = 4 } }
+		if = {
+			limit = { var:CPI_annual < 0 }
+			set_variable = { name = CPI_annual_abs  value = { value = var:CPI_annual  multiply = -1 } }
+		}
+		else = { set_variable = { name = CPI_annual_abs  value = var:CPI_annual } }
+	}
+	else = {
+		# QoQ = (now - last) / last
+		set_variable = { name = CPI_qoq  value = var:CPI_basket_now }
+		change_variable = { name = CPI_qoq  subtract = var:CPI_basket_last }
+		set_variable = { name = CPI_qoq  value = { value = var:CPI_qoq  divide = var:CPI_basket_last } }
+		# EMA: smoothed += alpha * (qoq - smoothed)
+		if = { limit = { NOT = { has_variable = CPI_smoothed } } set_variable = { name = CPI_smoothed  value = 0 } }
+		set_variable = { name = CPI_ema_delta  value = var:CPI_qoq }
+		change_variable = { name = CPI_ema_delta  subtract = var:CPI_smoothed }
+		change_variable = { name = CPI_ema_delta  multiply = CPI_ema_alpha }
+		change_variable = { name = CPI_smoothed  add = var:CPI_ema_delta }
+		# Annualise (4 quarters) for display; store both signed and absolute magnitude (the deflation
+		# loc key prepends a literal '-' and renders a POSITIVE value, mirroring the proven upstream
+		# deflation_info pattern -- a signed |% is unproven in this repo).
+		set_variable = { name = CPI_annual  value = { value = var:CPI_smoothed  multiply = 4 } }
+		if = {
+			limit = { var:CPI_annual < 0 }
+			set_variable = { name = CPI_annual_abs  value = { value = var:CPI_annual  multiply = -1 } }
+		}
+		else = { set_variable = { name = CPI_annual_abs  value = var:CPI_annual } }
+		set_variable = { name = CPI_basket_last  value = var:CPI_basket_now }
+		remove_variable = CPI_qoq
+		remove_variable = CPI_ema_delta
+	}
+	remove_variable = CPI_basket_now
+	# --- Phase-0 PROBE (design §4): CHI-only, -debug_mode-gated (debug_log emits only in debug mode).
+	# Band-bucketed (a numeric render is infeasible in a script debug_log, proven by ECON_LOG). Shows
+	# the CPI is stable/sane and that CPI_annual DOES go negative naturally (the |% deflation render is
+	# then screenshot-verified at Phase 1). Static label strings, no bare '#'. Strip via verify-then-strip.
+	if = {
+		limit = { tag = CHI }
+		set_variable = { name = CPI_dbg_annual  value = var:CPI_annual }
+		if = { limit = { NOT = { has_variable = CPI_dbg_annual } } debug_log = "IMP19C CPI annual = UNSET" }
+		else_if = {
+			limit = { var:CPI_dbg_annual > -999999999 }
+			if = { limit = { var:CPI_dbg_annual >= 0.10 } debug_log = "IMP19C CPI annual >= +10pct" }
+			else_if = { limit = { var:CPI_dbg_annual >= 0.02 } debug_log = "IMP19C CPI annual +2 to +10pct" }
+			else_if = { limit = { var:CPI_dbg_annual >= 0 } debug_log = "IMP19C CPI annual 0 to +2pct" }
+			else_if = { limit = { var:CPI_dbg_annual >= -0.02 } debug_log = "IMP19C CPI annual -2 to 0pct (deflation)" }
+			else_if = { limit = { var:CPI_dbg_annual >= -0.10 } debug_log = "IMP19C CPI annual -10 to -2pct (deflation)" }
+			else = { debug_log = "IMP19C CPI annual <= -10pct (deflation)" }
+		}
+		else = { debug_log = "IMP19C CPI annual = EMPTY" }
+		remove_variable = CPI_dbg_annual
+		set_variable = { name = CPI_dbg_basket  value = CPI_basket_price }
+		if = { limit = { NOT = { has_variable = CPI_dbg_basket } } debug_log = "IMP19C CPI basket = UNSET" }
+		else_if = {
+			limit = { var:CPI_dbg_basket > -999999999 }
+			if = { limit = { var:CPI_dbg_basket >= 100 } debug_log = "IMP19C CPI basket >= 100" }
+			else_if = { limit = { var:CPI_dbg_basket >= 25 } debug_log = "IMP19C CPI basket 25-100" }
+			else_if = { limit = { var:CPI_dbg_basket >= 5 } debug_log = "IMP19C CPI basket 5-25" }
+			else_if = { limit = { var:CPI_dbg_basket > 0 } debug_log = "IMP19C CPI basket 0-5" }
+			else = { debug_log = "IMP19C CPI basket <= 0 (HOLD guard fired)" }
+		}
+		else = { debug_log = "IMP19C CPI basket = EMPTY" }
+		remove_variable = CPI_dbg_basket
+	}
+}
+
 CURRENCY_alter_amt_circulated = {
 	# Scope: Country
 	# Function: Add to the national debt value, accounting for the thousands, millions and billions values that need to be displayed
