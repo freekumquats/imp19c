@@ -154,3 +154,94 @@ Implemented exactly as corrected above:
 
 Reviewed by `review-char-stat-fix` before commit — see review verdict logged in
 overnight/OVERNIGHT_2026_08_17.md Task 3 write-up.
+
+## BOOT-SEED EXTENSION (2026-08-17) — the day-32 GC + garrison seed batch
+
+The prior fix (above) rebalanced the RUNTIME event pool-feeders. The user then clarified the
+actual complaint: the **initial day-32 seed batch** (`qing_force_setup.12` — the deferred GC +
+garrison seed, delayed off game-start to avoid the create_character construction crash class)
+mints "a large number of characters" whose stats are too skilled *on average*. This section
+extends the SAME target profile to that boot batch. User restatement (this session, verbatim):
+"one low single digit, two mid single digit, one high single digit or low double digit" and
+"exceptions should exist in both directions."
+
+### Target (unchanged in spirit, this is the authoritative restatement)
+Per character, across the 4 attributes: ONE low single-digit (1-3), TWO mid single-digit (4-6),
+ONE peak that is high-single-to-low-double (7-12). The PEAK sits in the character's own DOMAIN
+skill (a general is martial, a mandarin finesse, an amban charisma). Ranged rolls give natural
+exceptions in both directions (a peak rolling 7 = a modest official; the low rolling 1 = a real
+dud stat) — no explicit outlier engineering needed.
+
+### The four boot-batch mints (all reached ONLY from qing_force_setup.12 at day 32)
+1. `QING_council_autofill_office` (se_QING_COUNCIL.txt) — 13 GC offices. Was a flat, deterministic
+   6/5/3/4 clone for EVERY seat (no peak, no low). Also feeds the runtime backfill, so the same
+   edit fixes both.
+2. `QING_subpost_fill_one_minted` (se_QING_SUBPOSTS.txt) — the Zongli-diplomat / Censorate-inspector
+   / Imperial-guard corps (up to 12). Was flat 7/5/1/4; the martial Guard corps wrongly got a
+   finesse peak.
+3. `QING_exam_mint_scholar` (se_QING_EXAM.txt) — the Hanlin waiting bench (3/6/9 by law). Was flat
+   7/5/1/4.
+4. `QING_exam_mint_banner_laureate` (se_QING_EXAM.txt) — the spare amban banner-laureate bench (6).
+   Was already ranged (cha{5 8}/fin{4 7}/mar{1 3}/zeal{2 5}) — the least broken; standardised.
+
+### Key mechanic — degree-trait bonuses STACK on add_X, so the peak add is REDUCED to compensate
+Displayed stat = engine base + `add_X` + degree-trait bonus. The exam-degree traits grant a small
+skill bonus that reinforces the domain skill: jinshi +3 finesse, juren +1 finesse, wu_jinshi +3
+martial, fanyi_jinshi +3 finesse +2 charisma (common/traits/00_imp19c.txt:241-440). Unlike the
+event-family mints (no degree trait), these boot mints ALL carry a degree trait — so the peak
+`add_X` is set BELOW the 7-12 band by exactly the trait bonus, landing the DISPLAYED peak in-band
+instead of overshooting the 12 ceiling. For the amban laureate, fanyi_jinshi's secondary +3 finesse
+is held down (finesse add {1 3}) so finesse does not rise into a SECOND elevated stat (the profile
+wants exactly one). ASSUMPTION (same as the shipped event-family fix): engine base ≈ 0. If the
+next boot's officer-buff probe (QING_council_apply_officer_buffs already logs every seated GC
+member's 4 attributes under -debug_mode) shows systematic overshoot, the trait bonuses are the
+first tuning lever.
+
+### Chosen add_X bands (peak / low / two mid)
+- Council civil (jinshi, +3 fin):   fin {4 9}  mar {1 3}  cha {4 6}  zeal {4 6}
+- Council martial (wu_jinshi, +3 mar): mar {4 9}  fin {1 3}  cha {4 6}  zeal {4 6}
+- Subpost civil (juren, +1 fin):    fin {6 11} mar {1 3}  cha {4 6}  zeal {4 6}
+- Subpost martial (wu_jinshi, +3 mar): mar {4 9}  fin {1 3}  cha {4 6}  zeal {4 6}
+- Hanlin scholar (jinshi, +3 fin):  fin {4 9}  mar {1 3}  cha {4 6}  zeal {4 6}
+- Banner laureate (fanyi, +2 cha,+3 fin): cha {5 10}  fin {1 3}  mar {1 3}  zeal {4 6}
+
+### Implementation shape
+For the two MIXING macros (council, subpost — each serves both civil and martial degrees) the
+stat spread is applied AFTER create_character, on the saved scope, inside an `if (has_trait =
+wu_jinshi) / else` branch. A stat add on a saved scope is NOT a trait/modifier, so it is off the
+#90 create-time crash class, and the whole path is the deferred day-32 event regardless. The two
+single-profile mints (scholar = always civil, laureate = always amban) keep their add_X inside
+create_character, just ranged to the bands above. The named-historical mints (QING_amban_seed_one,
+the static roster) are a DIFFERENT deliberate mechanism and are left untouched — they already sit
+at modest, reproducible, historically-pinned stats (fin 3-4 / mar 2-6) that match the profile.
+
+### POST-REVIEW REFINEMENT (code-review MEDIUM, 2026-08-17) — council peak follows the GOVERNING SKILL, not the degree
+The first council implementation branched the peak on the DEGREE TRAIT (wu_jinshi -> martial peak,
+jinshi -> finesse peak). The code-review caught that this is WRONG for 6 of the 13 council offices:
+`QING_council_score_office` (se_QING_COUNCIL.txt:420-433) scores rites/justice on ZEAL and
+lifanyuan/chamberlain/zongli/grand_secretariat on CHARISMA -- so a blanket finesse peak left those
+offices' real domain skill stuck in the 4-6 mid band. Concrete defect: the Grand Secretary "major"
+officeholder buff gates on `chamberlain charisma >= 12` (se_QING_COUNCIL.txt:1544), permanently
+unreachable if an autofilled chamberlain's charisma maxes at 6. The user's own spec ("the PEAK sits
+in the character's DOMAIN skill") is met only if the peak follows the office's governing skill.
+
+**Fix -- a uniform base + a domain-keyed booster (no if/else needed).** Every seat gets the SAME
+base spread `add_martial {1 3} / add_finesse {1 3} / add_charisma {4 6} / add_zeal {4 6}`, then a
+single `add_$domain$ = { 3 6 }` booster raises the office's own governing skill into the peak band.
+`$domain$` is a new macro param passed by every one of the 26 call sites (13 boot + 13 backfill),
+mapped EXACTLY to the QING_council_score_office table: personnel/revenue/works/censor = finesse;
+rites/justice = zeal; war/guard_commandant = martial; lifanyuan/chamberlain/zongli/grand_secretariat
+= charisma; chancellor = finesse (a civil generalist, scored as the average of all four so any single
+peak nets to a mid average). The booster STACKS additively on the matching base line. The arithmetic
+lands 7-12 for every domain because the degree-trait bonus lines up:
+- finesse  (jinshi   +3): base 1-3 + booster 3-6 + trait 3 = 7-12  (non-finesse jinshi offices keep
+  finesse at 4-6 MID via the +3 trait on the 1-3 base -- a clean second mid stat)
+- martial  (wu_jinshi +3): base 1-3 + booster 3-6 + trait 3 = 7-12  (wu_jinshi grants NO finesse, so
+  martial offices keep finesse at 1-3 LOW -- the correct off-domain weakness)
+- zeal / charisma (no degree bonus): base 4-6 + booster 3-6 = 7-12
+
+Every case is one PEAK (7-12), two MID (4-6), one LOW (1-3), keyed to the true domain. This SUPERSEDES
+the "Chosen add_X bands" table above for the COUNCIL mint only (the subpost + exam mints keep their
+bands: they have NO per-skill scoring gate, so no unreachable-buff defect exists there, and the
+user's spec "a mandarin finesse" matches the juren finesse peak; forcing charisma on a juren would
+break the two-mid shape given juren's mere +1 finesse -- a traced, deliberate scope call, not a defer).
