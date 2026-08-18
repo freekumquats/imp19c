@@ -33,6 +33,11 @@ exclusion is visible, not silently dropped.
   as "not worth counting yet"), matching the existing reserve-size guard's own convention two
   lines above. Not boot-confirmed whether this ever biases the gold-vs-silver sell choice in
   practice (only matters on the rare tick where one metal is priced and the other isn't).
+- Task 3 follow-up (boot-seed mints): engine `create_character` base attribute ≈ 0. All the
+  add_X band arithmetic (peak lands 7-12 = base + add + degree-trait bonus) assumes this. If the
+  base is non-trivial the displayed peak could overshoot 12. Confirmed/tuned by the existing
+  `QING_council_apply_officer_buffs` debug-mode probe (logs every seated GC member's 4 attributes)
+  on the next boot — the trait bonuses are the first tuning lever if overshoot shows.
 
 ## Task 3 — character stat distribution too high (GC auto-seeding + garrison spawning)
 
@@ -82,6 +87,44 @@ mechanism, not what the user's complaint was actually describing, confirmed by 2
 review passes.
 
 Committed `47a7b2e15`, pushed to merge-overnight.
+
+### Task 3 follow-up — the BOOT-SEED batch (qing_force_setup.12), the actual complaint
+
+User clarified the real target: the initial day-32 GC + garrison seed batch (`qing_force_setup.12`,
+deferred off game-start to dodge the create_character construction crash class) mints a large number
+of characters that are too skilled ON AVERAGE. Restatement (verbatim): "one low single digit, two mid
+single digit, one high single digit or low double digit" and "exceptions should exist in both directions".
+Extended the SAME target profile to the four boot mints:
+- `QING_council_autofill_office` (se_QING_COUNCIL.txt) — 13 GC offices, was a flat 6/5/3/4 clone.
+- `QING_subpost_fill_one_minted` (se_QING_SUBPOSTS.txt) — Zongli/Censorate/Guard corps, was flat 7/5/1/4.
+- `QING_exam_mint_scholar` (se_QING_EXAM.txt) — Hanlin bench, was flat 7/5/1/4.
+- `QING_exam_mint_banner_laureate` (se_QING_EXAM.txt) — amban laureate bench, standardised.
+
+Key mechanic: degree-trait skill bonuses (jinshi +3 finesse, wu_jinshi +3 martial, juren +1 finesse,
+fanyi +2 charisma) STACK on add_X, so the peak add is set BELOW the 7-12 band by the trait bonus to
+land the displayed peak in-band. First review (`review-char-stat-fix` re-run) verdict: CORRECT, no bugs,
+but a MEDIUM: the council mint keyed the peak on the DEGREE, while the engine scores 6 of 13 offices on
+zeal/charisma (QING_council_score_office) — so a blanket finesse peak left rites/justice/lifanyuan/
+chamberlain/zongli/grand_secretariat with their real domain skill stuck mid, making e.g. the Grand
+Secretary major buff (chamberlain charisma >= 12) unreachable.
+
+Fix for the MEDIUM: replaced the degree if/else with a uniform base spread + a domain-keyed
+`add_$domain$ = { 3 6 }` booster; `domain` passed by all 26 call sites, mapped exactly to
+QING_council_score_office. `add_$domain$` keyword-substitution is a proven idiom (se_QING_AFFINITY.txt:345).
+Every domain now lands one peak (7-12), two mid (4-6), one low (1-3), keyed to the true governing skill.
+Second review pass (`Re-review council domain-keyed fix`) verdict: CLEAN, all 6 checks confirmed
+(domain map, arithmetic, substitution validity, brace balance 1058/1058, all 26 sites parameterised,
+no downstream dependency). Subpost + exam mints kept their bands — no per-skill scoring gate exists
+there, so no unreachable-buff defect, and the user's "a mandarin finesse" spec matches the juren
+finesse peak; forcing charisma on a juren would break the two-mid shape (juren gives only +1 finesse).
+A traced, deliberate scope call — logged, not a hidden defer.
+
+ASSUMPTION (added to the guesses list): engine create_character base ≈ 0 (same as the runtime-event
+family fix). The existing `QING_council_apply_officer_buffs` probe (debug_mode-gated) logs every seated
+GC member's 4 attributes, so the next boot confirms the displayed peaks land ≤12 and that wu_jinshi
+seats read martial-peaked (validates the domain booster fired).
+
+Committed `8412c3820`, pushed to merge-overnight. STATUS: DONE.
 
 ## Task 5 — GC character tooltips should show salaries
 
