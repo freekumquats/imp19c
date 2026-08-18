@@ -38,6 +38,15 @@ exclusion is visible, not silently dropped.
   base is non-trivial the displayed peak could overshoot 12. Confirmed/tuned by the existing
   `QING_council_apply_officer_buffs` debug-mode probe (logs every seated GC member's 4 attributes)
   on the next boot — the trait bonuses are the first tuning lever if overshoot shows.
+- **Task "GC salary in wealth tooltip" — flat wage V = `monthly_character_wealth = 5`, uniform
+  on all 10 per-post marker modifiers.** GUESS. A static modifier cannot track live income, so
+  per the user's "just pay them a flat rate" directive the old 1%-of-quarterly-income scaling is
+  replaced by a flat 5 gold/month/post. Rationale: sits in the proven in-mod monthly_character_
+  wealth range (ambition mods run 2-24); quarterly treasury cost per holder = 15 (5×3). With
+  ~20-30 seated officeholders the whole wage line is a few hundred gold/quarter. CONFIRMED/TUNED
+  on the next boot by se_QING_WAGES.txt's own emit: the `IMP19C CURXV LABEL wageadmin` /
+  `wagemilitary` debug lines print the two flat quarterly cost totals — if the wealth tooltip
+  reads too high/low, V is the single knob (and the 15 = V×3 quarterly tally must move with it).
 
 ## Task 3 — character stat distribution too high (GC auto-seeding + garrison spawning)
 
@@ -305,5 +314,76 @@ brace balance 558/558; diff adds only the intended lines (no EOL churn).
 
 NO DEFERRALS: the decision + chain were pre-existing and committed; the only in-scope work
 (the tooltip explanation) shipped whole. Nothing carved off.
+
+---
+
+## Task — GC officeholder salary in the vanilla character WEALTH tooltip
+
+STATUS: DONE. Commit `add33b874`, pushed to merge-overnight. (This is the board's Task #2 /
+this doc's backlog item 5, "GC character tooltips should show salaries.")
+
+WHAT IT WAS: the salary of every Grand Council officeholder (and their salaried subordinates)
+must appear in the engine's own character WEALTH change tooltip ("Wealth changes by X each
+month due to: ..."), NOT a separate GUI panel.
+
+HARD CONSTRAINT (user, still in force): GC positions deliberately do NOT use vanilla offices
+(that would add them to every monarchy, not just Qing). Do not break that, and do not override
+the wealth tooltip GUI a different way.
+
+DIAGNOSIS (traced in source this session):
+- The wealth tooltip is engine-generated (loc MONTHLY_WEALTH, rendered by
+  [Character.GetWealthInformation]). It aggregates ONLY a character's monthly_character_wealth
+  modifiers. It cannot be scripted, and an add_gold is invisible to it. So a static
+  monthly_character_wealth on a modifier the holder already carries is the ONLY lever.
+- The old pay was a dynamic quarterly add_gold (1% of live income, tiered) — invisible to the
+  tooltip by construction.
+
+DESIGN (design/DESIGN_GC_SALARY_WEALTH_TOOLTIP.md, adversarial-reviewed):
+- Per the user's flat-rate directive, drop the income scaling and tiers: put a uniform flat
+  monthly_character_wealth = 5 on the 10 existing per-post marker modifiers each holder already
+  carries (qing_officeholder covering all 13 GC seats incl. chancellor; the 4 commissioner + 3
+  subpost *_office shells; qing_amban_resident; qing_customs_inspector_general). Those modifiers
+  have a full add-on-appoint / strip-on-depart lifecycle, so the tooltip line appears and
+  vanishes automatically, is Qing-only, uses no vanilla offices, and does not touch the GUI.
+- se_QING_WAGES.txt converted from PAYING to only TALLYING the real quarterly treasury cost
+  (5/mo × 3 = 15/holder) into the two wage accumulators the topbar income tooltip reads, so that
+  row stays honest (this is a REAL treasury outflow, not cosmetic). Emeritus + the distinct
+  chancellor office are funded as their own tally lines; the chancellor bonus modifier stays
+  EMPTY (flat uniform wage, no 2× tier). Deficit guard dropped (a flat cost can't invert).
+
+LOUD REGRESSION (deliberate, user-directed): this REVERSES the prior 1%-of-income scaling.
+Wages are now a flat 5 gold/month/post and no longer grow with the empire. Flat pay also makes
+the two prior wage bug classes (deficit-quarter payment inversion; amban employer=ROOT filter)
+moot. Not a silent cut — the user chose flat over scaling; logged in the loudest terms here and
+in the design doc's own regression note.
+
+CODE-REVIEW (agent, grounded in source): VERDICT FINDINGS — two stranded-modifier leaks at
+promote-into-office sites (both genuine post-#2 regressions of intent, since the modifier is now
+the payment channel). BOTH FIXED:
+- FINDING 1 (MEDIUM): a sitting Opium Commissioner promoted into a GC seat kept BOTH
+  qing_opium_commissioner_office (+5) AND the seat's qing_officeholder (+5) = +10/mo phantom, a
+  double quarterly treasury tally, and a frozen opium post. Root: opium is the ONE frontier post
+  that never calls QING_post_stamp, so it is not a qing_current_post family and gets no #118
+  chokepoint vacate. FIX: added has_variable = qing_office_held to the opium reconcile's
+  double-book relief OR-set (se_QING_OPIUM.txt) so a GC-promoted holder self-heals within a pulse
+  (strip marker + salary modifier + holder var, then backfill) — the opium post's own established
+  self-heal path, consistent with how it already relieves general/admiral/governor/officer
+  double-books. Re-review: CLEAN (no false positive; qing_office_held is set only on GC seating).
+- FINDING 2 (LOW→resolved): QING_council_prune_seat branch 1 removed only the seat var, leaving
+  qing_officeholder on a LIVING ex-minister who left CHI employ — a lingering +5/mo phantom wealth
+  line. FIX: run the SAME full char-scope teardown QING_office_vacate uses (strip the salary
+  modifiers, office perk-buffs, qing_office_held, and the +4 power base), is_alive-guarded so the
+  dead case is skipped. Re-review noted the first pass stripped only the salary modifiers and left
+  qing_office_held stale (would wrongly exclude a returning ex-minister from NOT-office_held
+  rosters) — corrected to the full teardown, so that latent stale-var bug is closed too.
+- Trap 10 (BOM/CRLF) closed directly: no CR bytes in any diff (clean LF), no BOM flip — the 6
+  common/ files carry no BOM (### header), the loc file keeps its required BOM.
+
+ASSUMPTIONS: V = 5 (flat monthly wage) — see the ASSUMPTIONS & GUESSES section at the top; the
+se_QING_WAGES.txt CURXV wageadmin/wagemilitary emit confirms/tunes it on the next boot.
+
+NO DEFERRALS: every clause shipped whole — all 10 marker posts salaried, both subordinate
+classes (ambans + subposts) covered, the income-tooltip accounting preserved, both review
+findings fixed (not parked). Nothing carved off.
 
 ---
