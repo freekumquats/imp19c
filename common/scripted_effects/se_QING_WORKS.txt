@@ -548,3 +548,184 @@ QING_works_build_grand_canal = {
 	}
 	LOG_exit = { sys = QING  fn = "QING_works_build_grand_canal"  result = OK }
 }
+
+# ======================================================================
+# QING_works_auto_build_pulse — the Ministry of Works auto-builds ONE building
+# per shared cooldown (direct user instruction 2026-08-17): granary, dike, canal
+# depot, wall section, Great Wall, or Grand Canal — whichever is the highest-
+# priority ELIGIBLE type this pulse. This is the ONLY construction path that
+# announces itself via Global News (minor_country_event, qing_works.7-.11);
+# player-clicked verbs (QING_works_build_*), the normal build queue, and any
+# other event-driven build NEVER post here — exactly one automatic build event
+# per cooldown window, nothing else.
+#
+# Called from QING_DECLINE's ~90-day governance pulse (se_QING_DECLINE.txt),
+# right alongside QING_DECLINE_granary_pool/_concrete (which now handles ONLY
+# the granary's ongoing stock/restock health, not new construction — that
+# moved here). Shared cooldown qing_works_auto_build_cd = 1095 days (~3 years,
+# matching the granary's own prior throttle — best-guess/boot-tunable).
+#
+# Priority order (first eligible type wins, checked this pulse): granary, dike,
+# canal depot, wall section, Great Wall, Grand Canal — ordinary infrastructure
+# before rare monuments, by design choice (not a strict historical ranking).
+# No manpower levy on the auto-build (an institutional/state-funded action, not
+# a player-commissioned corvee) — treasury-only, unlike the player verbs.
+# ======================================================================
+QING_works_auto_build_pulse = {
+	LOG_enter = { sys = QING  fn = "QING_works_auto_build_pulse" }
+	if = {
+		limit = { NOT = { has_variable = qing_works_auto_build_cd } }
+
+		# --- 1. GRANARY (常平倉) — good year, reserves high -----------------------
+		if = {
+			limit = {
+				var:qing_granary_stock >= 60
+				treasury >= 255
+				any_owned_province = {
+					has_city_status = yes
+					OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Henan }
+					NOT = { has_building = qing_granary_building }
+				}
+			}
+			set_variable = { name = qing_works_auto_build_cd  days = 1095 }
+			ordered_owned_province = {
+				order_by = total_population
+				max = 1
+				limit = {
+					has_city_status = yes
+					OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Henan }
+					NOT = { has_building = qing_granary_building }
+				}
+				add_building_level = qing_granary_building
+				save_scope_as = qing_gran_built_province
+			}
+			add_treasury = -255
+			TREASURY_LOG_it = { amount = -255 }
+			LOG_line = { sys = QING  msg = "works auto-build: granary (常平倉) — state-funded 255" }
+			trigger_event = { id = qing_revenue.6  days = 1 }
+		}
+		else_if = {
+			# --- 2. DIKE (河堤) --------------------------------------------------
+			limit = {
+				treasury >= 260
+				any_owned_province = { count >= 1  has_minor_river = yes  NOT = { has_building = qing_dike_building } }
+			}
+			set_variable = { name = qing_works_auto_build_cd  days = 1095 }
+			ordered_owned_province = {
+				order_by = total_population
+				max = 1
+				limit = { has_minor_river = yes  NOT = { has_building = qing_dike_building } }
+				add_building_level = qing_dike_building
+				save_scope_as = qing_works_auto_built_province
+			}
+			add_treasury = -260
+			TREASURY_LOG_it = { amount = -260 }
+			LOG_line = { sys = QING  msg = "works auto-build: dike (河堤) — state-funded 260" }
+			trigger_event = { id = qing_works.7  days = 1 }
+		}
+		else_if = {
+			# --- 3. CANAL DEPOT (漕運倉) -----------------------------------------
+			limit = {
+				treasury >= 300
+				any_owned_province = {
+					count >= 1
+					OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Jiangsu  is_in_region = Zhejiang }
+					NOT = { has_building = qing_canal_depot_building }
+				}
+			}
+			set_variable = { name = qing_works_auto_build_cd  days = 1095 }
+			ordered_owned_province = {
+				order_by = total_population
+				max = 1
+				limit = {
+					OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Jiangsu  is_in_region = Zhejiang }
+					NOT = { has_building = qing_canal_depot_building }
+				}
+				add_building_level = qing_canal_depot_building
+				save_scope_as = qing_works_auto_built_province
+			}
+			add_treasury = -300
+			TREASURY_LOG_it = { amount = -300 }
+			LOG_line = { sys = QING  msg = "works auto-build: canal depot (漕運倉) — state-funded 300" }
+			trigger_event = { id = qing_works.8  days = 1 }
+		}
+		else_if = {
+			# --- 4. WALL SECTION (長城段) -----------------------------------------
+			limit = {
+				treasury >= 350
+				any_owned_province = {
+					count >= 1
+					OR = { is_in_region = Zhili  is_in_region = Shanxi  is_in_region = Shaanxi  is_in_region = Gansu  is_in_region = Liaoning }
+					NOT = { has_building = qing_wall_section_building }
+				}
+			}
+			set_variable = { name = qing_works_auto_build_cd  days = 1095 }
+			ordered_owned_province = {
+				order_by = total_population
+				max = 1
+				limit = {
+					OR = { is_in_region = Zhili  is_in_region = Shanxi  is_in_region = Shaanxi  is_in_region = Gansu  is_in_region = Liaoning }
+					NOT = { has_building = qing_wall_section_building }
+				}
+				add_building_level = qing_wall_section_building
+				save_scope_as = qing_works_auto_built_province
+			}
+			add_treasury = -350
+			TREASURY_LOG_it = { amount = -350 }
+			LOG_line = { sys = QING  msg = "works auto-build: wall section (長城段) — state-funded 350" }
+			trigger_event = { id = qing_works.9  days = 1 }
+		}
+		else_if = {
+			# --- 5. GREAT WALL (長城), once-only -------------------------------
+			limit = {
+				treasury >= 700
+				OR = { country_culture_group = jurchen  country_culture_group = chinese_group }
+				NOT = { any_owned_province = { has_building = qing_great_wall_building } }
+				any_owned_province = {
+					count >= 1
+					OR = { is_in_region = Zhili  is_in_region = Shanxi  is_in_region = Shaanxi  is_in_region = Gansu  is_in_region = Liaoning }
+				}
+			}
+			set_variable = { name = qing_works_auto_build_cd  days = 1095 }
+			ordered_owned_province = {
+				order_by = total_population
+				max = 1
+				limit = { OR = { is_in_region = Zhili  is_in_region = Shanxi  is_in_region = Shaanxi  is_in_region = Gansu  is_in_region = Liaoning } }
+				add_building_level = qing_great_wall_building
+				save_scope_as = qing_works_auto_built_province
+			}
+			add_treasury = -700
+			TREASURY_LOG_it = { amount = -700 }
+			LOG_line = { sys = QING  msg = "works auto-build: the Great Wall (長城) — state-funded 700" }
+			trigger_event = { id = qing_works.10  days = 1 }
+		}
+		else_if = {
+			# --- 6. GRAND CANAL (大運河), once-only ----------------------------
+			limit = {
+				treasury >= 700
+				OR = { country_culture_group = jurchen  country_culture_group = chinese_group }
+				NOT = { any_owned_province = { has_building = qing_grand_canal_building } }
+				any_owned_province = {
+					count >= 1
+					OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Jiangsu  is_in_region = Zhejiang }
+				}
+			}
+			set_variable = { name = qing_works_auto_build_cd  days = 1095 }
+			ordered_owned_province = {
+				order_by = total_population
+				max = 1
+				limit = { OR = { is_in_region = Zhili  is_in_region = Shandong  is_in_region = Jiangsu  is_in_region = Zhejiang } }
+				add_building_level = qing_grand_canal_building
+				save_scope_as = qing_works_auto_built_province
+			}
+			add_treasury = -700
+			TREASURY_LOG_it = { amount = -700 }
+			LOG_line = { sys = QING  msg = "works auto-build: the Grand Canal (大運河) — state-funded 700" }
+			trigger_event = { id = qing_works.11  days = 1 }
+		}
+		else = {
+			LOG_fail = { sys = QING  fn = "QING_works_auto_build_pulse"  reason = "no eligible building type this pulse (treasury short, or every eligible province already covered)" }
+		}
+	}
+	LOG_exit = { sys = QING  fn = "QING_works_auto_build_pulse"  result = OK }
+}
