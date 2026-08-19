@@ -2558,6 +2558,19 @@ GT_split_update_wealth_owed_for_tradegoods = {
 		name = wealth_owed_for_$tradegood$
 		value = var:order_size_$tradegood$
 	}
+	# [#21 fix 2026-08-19, design/DESIGN_21_EMPTY_TOTAL_ORDER_SIZE_DIV0.md] Stage total_order_size into
+	# a SCOPE var before the two divides below. A `global_var:X > 0` guard does NOT reject a set-but-
+	# EMPTY global: git-blame confirms both divides carried that guard 3 days before the boot, yet they
+	# fired 3828x ("failed to read divide") + 526x (Div/0). set_variable stores empty WITHOUT erroring,
+	# and a SCOPE-var `> 0` comparison DOES reject empty (proven idiom, se_ECON_LOG.txt) — unlike the
+	# global comparison. Default 0 first, overwrite only if the global exists (avoids reading an unset
+	# global). Both divides below then gate + divide on this scope copy. (WHY the global is empty/stale
+	# is tracked as a separate root-cause probe; this stops the flood safely with correct 0-defaults.)
+	set_variable = { name = GT_wo_total_order_size_tmp  value = 0 }
+	if = {
+		limit = { has_global_variable = $tradezone$_total_order_size_$tradegood$ }
+		set_variable = { name = GT_wo_total_order_size_tmp  value = global_var:$tradezone$_total_order_size_$tradegood$ }
+	}
 	# [fix #30 2026-08-13, design/DESIGN_30_QUANTITY_DOUBLECOUNT.md] RATION THE BILLED QUANTITY to
 	# this governorship's own fair share of what the ZONE can actually supply this quarter —
 	# order_size × min(1, zone_stockpile / zone_total_order_size). Root cause: this governorship's
@@ -2577,14 +2590,15 @@ GT_split_update_wealth_owed_for_tradegoods = {
 	if = {
 		limit = {
 			has_global_variable = $tradezone$_stockpile_$tradegood$
-			has_global_variable = $tradezone$_total_order_size_$tradegood$
-			global_var:$tradezone$_total_order_size_$tradegood$ > 0
+			# [#21 fix] gate on the SCOPE copy staged above -- its `> 0` DOES reject a set-but-empty
+			# operand, unlike the global comparison that was here (and still let the divide fire).
+			var:GT_wo_total_order_size_tmp > 0
 		}
 		change_variable = {
 			name = wealth_owed_for_$tradegood$
 			multiply = {
 				value = global_var:$tradezone$_stockpile_$tradegood$
-				divide = global_var:$tradezone$_total_order_size_$tradegood$
+				divide = var:GT_wo_total_order_size_tmp
 				max = 1
 			}
 		}
@@ -2649,13 +2663,13 @@ GT_split_update_wealth_owed_for_tradegoods = {
 		# are capped, and only at 3x the country's stable average, not reverted to that average.
 		if = {
 			limit = {
-				has_global_variable = $tradezone$_total_order_size_$tradegood$
-				global_var:$tradezone$_total_order_size_$tradegood$ > 0
+				# [#21 fix] gate on the SCOPE copy staged above -- rejects set-but-empty, unlike the global.
+				var:GT_wo_total_order_size_tmp > 0
 			}
 			set_variable = {
 				name = GT_thinstock_ratio_tmp
 				value = global_var:$tradezone$_stockpile_$tradegood$
-				divide = global_var:$tradezone$_total_order_size_$tradegood$
+				divide = var:GT_wo_total_order_size_tmp
 			}
 		}
 		else = {
@@ -2795,6 +2809,8 @@ GT_split_update_wealth_owed_for_tradegoods = {
 			}
 		}
 	}
+	# [#21 fix] drop the staging var on all paths (matches sibling GT_thinstock_ratio_tmp cleanup).
+	remove_variable = GT_wo_total_order_size_tmp
 	change_global_variable = {
 		name = $tradezone$_payment_pool_$tradegood$
 		add = var:wealth_owed_for_$tradegood$
