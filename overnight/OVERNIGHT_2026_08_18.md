@@ -150,6 +150,32 @@ Full diagnosis: design/DESIGN_14_VEGETABLES_DEMAND_COLLAPSE_DIAGNOSIS.md.
 - **#5 reseed (primary supply fix):** implementation delegated (agent impl-veg-reseed, worktree);
   I code-review the diff+manifest before commit.
 
+### #5 — Vegetables geographic reseed (DONE — primary supply fix)
+Design: design/DESIGN_93_VEGETABLES_FIX_A_GEOGRAPHIC_RESEED.md (CLEAN, twice-reviewed).
+Manifest: design/MANIFEST_5_VEGETABLES_RESEED.txt. Tool: tools/reseed_vegetables.py.
+- **Why it ships as the primary fix:** the honest ×4-reverted boot shows ALL 22 zones' vegetables
+  `stock` hits 0 (even the design's 3 "survivor" anchors, just later, q4-6 vs q1-2). Vegetables
+  carries the SAME 1/6 per-capita food-demand share as grain but has only ~419 producing provinces
+  vs grain's ~1747 — a systemic ~4× supply deficit. So a generous reseed is correct, not excessive.
+- **What was applied:** 510 province flips (240 grain + 270 livestock → vegetables) across 145
+  setup/provinces/*.txt files in the 19 collapse zones, sized to ≈0.15×food-province-count + 25%
+  margin per zone (GUESS — see ASSUMPTIONS), spread breadth-first, displacing ONLY grain/livestock
+  (never fish/cash-crops/New-World-differentiated-crops/existing-veg — verified by diff tally),
+  with a per-region depletion guard keeping ≥60% of the displaced good (worst case exactly 0.60).
+- **Anchors central_europe/india/baltic left UNTOUCHED** as the control — their much-later collapse
+  is more consistent with the demand ratchet (#15) than acute supply shortage.
+- **Verified independently (not just the agent's self-report):** 145 files, exactly 510/510
+  line-for-line swaps (no EOL churn), zero non-trade_goods lines changed, BOM preserved on all,
+  all 145 brace-balanced, manifest lists per-province + per-region pre/post depletion counts,
+  anchors absent, deterministic (dry-run reproduces the identical plan). Global veg 419 → 929.
+- **CONFIRM ON BOOT:** the 19 zones' vegetables `stock` band stops hitting 0 and `price` stays low.
+  If a zone still collapses → raise its margin (#5) OR the residual is the demand ratchet (#15).
+
+### #14 — Div/0 Site A (DONE, `26a5d9d9d`)
+The confirmed div/0 (269×/boot, price scriptvalue) was fixed by flooring the divisor
+(`divide = { value = stockpile; min = 1 }`) — see the #14 diagnosis section below. Likely also
+clears the downstream "failed to read divide" cascade (empty local_price). Boot confirms.
+
 ## Adjacent items found, logged for the backlog (NOT fixed here)
 - `QING_censorate_impeach_uphold` is also called from `qing_censorate.7`, a
   CHARACTER event where ROOT = the accused, not CHI. On that path
