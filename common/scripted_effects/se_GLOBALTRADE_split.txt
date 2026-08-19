@@ -760,10 +760,39 @@ GT_split_declare_sell_to_TZ_aggregate_stockpile = {
 
 GT_split_declare_sell_amount = {
 	# Scope: Governorship
-	# Function: 
+	# Function:
 	set_variable = {
 		name = for_sale_$tradegood$
 		value = 0
+	}
+	# [#20 diag probe 2026-08-19] -debug_mode CHI dump at the for_sale clamp. Per CHI governorship,
+	# for vegetables and grain, record whether the good is CLAMPED0 (local stockpile <= DEMAND, so
+	# for_sale stays 0 and this governorship contributes NOTHING to the zone stock) or SURPLUS. If veg
+	# is CLAMPED0 in far more CHI governorships than grain, the collapse is a per-governorship
+	# production shortfall (supply-distribution); if similar, it is NOT. Settles the #20 diagnosis
+	# (design/DESIGN_14_VEGETABLES_DEMAND_COLLAPSE_DIAGNOSIS.md). debug_log is engine-silent outside
+	# -debug_mode; read-only; gated CHI + veg/grain only, so a no-op in normal play.
+	if = {
+		limit = {
+			owner = { tag = CHI }
+			flag:$tradegood$ = flag:vegetables
+		}
+		if = {
+			limit = { has_variable = vegetables_stockpile  var:vegetables_stockpile > DEMAND_vegetables }
+			debug_log = "IMP19C VEGPROBE vegetables SURPLUS"
+		}
+		else = { debug_log = "IMP19C VEGPROBE vegetables CLAMPED0" }
+	}
+	else_if = {
+		limit = {
+			owner = { tag = CHI }
+			flag:$tradegood$ = flag:grain
+		}
+		if = {
+			limit = { has_variable = grain_stockpile  var:grain_stockpile > DEMAND_grain }
+			debug_log = "IMP19C VEGPROBE grain SURPLUS"
+		}
+		else = { debug_log = "IMP19C VEGPROBE grain CLAMPED0" }
 	}
 	if = {
 		limit = {
