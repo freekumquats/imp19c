@@ -96,3 +96,17 @@ into_stockpile = vegetables_stockpile }`. Verified: the svalue, the produces_veg
 vegetables_stockpile var all already exist; the macro guards the write on has_variable so unseeded govs skip.
 The reseed (1223 veg provinces ≈ grain's 1009) now produces properly → veg reaches staple parity, which is
 the user's stated goal. STATUS: FIXED.
+
+## ADVERSARIAL REVIEW of the diagnosis+fix (2026-08-19) — SURVIVES, 4/5 attacks refuted, 1 open caveat
+- Double-count/glut-from-another-path: REFUTED. Only two writes to vegetables_stockpile exist (boot seed
+  se_GOODS.txt:239 + this fix); the one generic top-up (FUNC_every_governorship_update_tradegood_stockpiles,
+  se_FUNC.txt:554) is DEAD CODE (call site commented out by #145 Part B). Cottage path reads the svalue, not
+  the stockpile — symmetric with grain.
+- Intentional-omission: REFUTED, and this CONFIRMS the diagnosis: git history shows vegetables absent from
+  the quarterly enumeration since the earliest 2023 upstream commit (grain present beside it) — a multi-year
+  copy/paste omission, no design doc treats veg specially.
+- Symbols + entrypoint: correct. GOODS_governorship_produce_all fires 4×/year (oa_wealth_changes.txt:175,
+  quarterly_trade_pulse); svalue/marker/stockpile var all match what consume/export read.
+- OPEN CAVEAT (empirical, boot-only): uncapped add like every good; 1223 veg provinces vs grain 1009 → a
+  possible glut/price-crash overshoot before price-demand feedback settles. VEGPROBE + TZP bands will show
+  it on the next boot. Lever if it gluts: trim veg province count toward grain's (currently only ~21% more).
