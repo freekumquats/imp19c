@@ -19,15 +19,22 @@ Every value/decision made WITHOUT boot data, with the log line that confirms it:
     in error.log. They were 4,566 each (13,698 total) — the #1 class.
 - **#9 has no tunable guesses** — a mechanical strip of dead tokens. Confirm on
   boot = the "Could not find data system function 'GetTag'" class drops to zero.
-- **#5 vegetables reseed sizing = GUESS.** Target each collapsing zone to veg-province count
-  ≈ 0.15 × its food-province count + 25% margin, breadth-first across governorships. The
-  earlier probe-first sizing is blocked because raw demand is obscured by supply-scaling
-  (#14), so this reverts to a survivor-ratio target with margin (glut self-damps, so erring
-  high is safe). CONFIRM ON BOOT: the ~19 collapsing zones' vegetables `stock` band stops
-  hitting 0 and `price` stays low; if a zone still collapses, raise that zone's margin.
-- **#14 demand ratchet (task #15) is a PROVEN mechanism but its fix is NOT shipped** — correct
-  fix form unclear + impact unproven vs supply. Gated on the #5 reseed boot. Called out loud,
-  not deferred silently.
+- **#5 vegetables reseed — REDONE as SOURCED (v2), replacing the reverted heuristic.** The first
+  reseed (heuristic "displace grain near cities", commit e297d76b9) was REVERTED (9ef655164) at user
+  direction: it was not research-backed. The redo is driven by
+  research/RESEARCH_VEGETABLES_GEOGRAPHY_1763.md (per-region 1763 horticulture tiers). Sizing per the
+  user directive ("grow to roughly similar numbers as the other staple goods"): 805 provinces flipped
+  → vegetables 419 → 1224, now a co-equal staple (grain 1024, livestock 1802, fish 668, temp_fruit
+  661). Displaced 722 grain (settled arable → gardens plausible; grain keeps huge headroom, >> the
+  ~660 empirical non-collapse threshold shown by fish/temp_fruit) + only 83 livestock (pastoral/arid
+  regions data-driven-avoided: vegetables follow grain). CONFIRM ON BOOT: vegetables `stock` stops
+  hitting 0 and `price` stays low across zones. Magnitude is the one guess (tunable via the tool's
+  tier fractions); GEOGRAPHY is now sourced, not heuristic.
+- **#15 food-demand ±10% clamp — CLOSED, NOT A DEFECT** (design/DESIGN_15_FOOD_DEMAND_RATE_LIMITER.md).
+  Adversarial review confirmed it is a correct multiplicative rate limiter keyed to the previous
+  OUTPUT; slow recovery is intended damping; the crush was SUPPLY (#5). "bands-from-raw" would disable
+  the damping (regression); exact-0 latch not reachable. No fix. NOT gated on a boot — settled by
+  analysis + review.
 - **#12 has no tunable guesses** — a `has_variable` pre-guard. Confirm on boot =
   the `var:CPI_annual` fetch-unset class (~893/boot) drops to zero.
 
