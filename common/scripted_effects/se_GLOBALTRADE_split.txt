@@ -6244,12 +6244,19 @@ GT_set_tradegood_price = {
 			name = local_price_$tradegood$
 			value = {
 				value = global_var:$tradezone$_total_order_size_$tradegood$
-				if = {
-					limit = {
-						has_global_variable = $tradezone$_stockpile_$tradegood$   # [#107] at game SETUP (day 0, oa_economy_setup:2490) the stockpile global is not yet seeded; a bare `> 0` on an UNSET global inside this value{} svalue block does not reliably skip the divide -> Div/0 (85x/boot, innermost frame GT_set_tradegood_price divide). has_global_variable makes the guard read-before-set-safe; unset -> skip the divide, price = raw order size (correct default before stockpiles exist).
-						global_var:$tradezone$_stockpile_$tradegood$ > 0
-					}
-					divide = global_var:$tradezone$_stockpile_$tradegood$
+				# [fix, task 14 2026-08-18] FLOOR the divisor instead of if/limit-guarding it. The old #107
+				# guard (if={limit=has_global_variable + stockpile>0} divide) does NOT reliably skip a divide
+				# NESTED INSIDE a scriptvalue value{} block -> Div/0 still fired (269x at setup via
+				# oa_economy_setup:2493 + runtime; innermost frame "GT_set_tradegood_price line 3", error.log
+				# 2026-08-18). The proven idiom in this codebase floors the DIVISOR directly, not with an
+				# if/limit: EDU_svalues.txt:607-610 (min=1; its #108 comment cites ADMIN_svalues.txt:193-195
+				# and AI_svalues.txt:1234-1236 as the pattern). min=1 (NOT 0.0001) reproduces #107's intended
+				# default EXACTLY: stockpile 0 or unset (reads 0) -> order/1 = raw order size; it also damps the
+				# task-#79 thin-stock (0<stock<1) price explosion to that same order baseline. Real zone
+				# stockpiles are 0 or >=~1 (TZP band data), so every healthy zone's price (stock>=1) is unchanged.
+				divide = {
+					value = global_var:$tradezone$_stockpile_$tradegood$
+					min = 1
 				}
 				multiply = 0.6 # The yearly total of all trade should be loosely in the range of 15-30% of a country's GDP, thus the quarterly total about 4% - 8%
 				if = {
