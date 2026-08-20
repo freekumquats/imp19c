@@ -3725,7 +3725,50 @@ GOODS_governorship_gunpowder_produced_mechanised = {
 		multiply = GOODS_governorship_bonus_to_industrial_production_from_industrialisation
 		multiply = INDUSTRY_employment_ratio # [#133 I5] scale factory output by employment fill-ratio
 	}
+	# [design/DESIGN_MODERN_GUNPOWDER_FACTORY.md v3] the Qing gunpowder works (火藥局) adds
+	# gunpowder directly -- the named-building production hook, mirroring qing_dyeworks_building's
+	# own (GOODS_governorship_dyes_infra_output, this file) verbatim. Pure producer -- supply only,
+	# the factory-assignment path above keys off a different var
+	# (INDUSTRY_factories_assigned_gunpowder), so no double-count.
+	add = GOODS_governorship_gunpowder_infra_output
 }
+
+GOODS_governorship_gunpowder_infra_output = {
+	# [design/DESIGN_MODERN_GUNPOWDER_FACTORY.md, fix post-implementation-review] Cached wrapper
+	# over the gunpowder-works walk; read the cache if present, else compute inline (never zero on
+	# a cache miss) -- the perf #71 idiom, matching GOODS_governorship_dyes_infra_output exactly.
+	# (An earlier version of this comment claimed dyes had no cache-setter -- wrong; dyes_infra_
+	# cached IS set in GOODS_cache_munitions_infra, se_GOODS.txt. gunpowder_infra_cached now is too.)
+	if = {
+		limit = { has_variable = gunpowder_infra_cached }
+		value = var:gunpowder_infra_cached
+	}
+	else = {
+		value = GOODS_governorship_gunpowder_infra_output_compute
+	}
+}
+
+GOODS_governorship_gunpowder_infra_output_compute = {
+	# [design/DESIGN_MODERN_GUNPOWDER_FACTORY.md] Scope: Governorship. The gunpowder-works walk.
+	# Gated on tech_weapon_manufacturing (the building's own allow-block invention), so the term
+	# appears exactly when the works can be built.
+	value = 0
+	if = {
+		limit = {
+			owner = { invention = tech_weapon_manufacturing }
+		}
+		every_governorship_state = {
+			every_state_province = {
+				add = {
+					value = num_of_qing_gunpowder_works_building
+					multiply = GOODS_gunpowder_works_gunpowder_output
+				}
+			}
+		}
+	}
+}
+
+GOODS_gunpowder_works_gunpowder_output = { value = 2 }   # [ASSUMPTION, DESIGN_MODERN_GUNPOWDER_FACTORY.md] matches GOODS_dyeworks_dyes_output
 
 GOODS_governorship_gunpowder_produced = {
 	# [#133 I3] SUMMED total (cottage + mechanised) for CONSUMERS (world price, wealth,
