@@ -2559,13 +2559,18 @@ GT_split_update_wealth_owed_for_tradegoods = {
 		value = var:order_size_$tradegood$
 	}
 	# [#21 fix 2026-08-19, design/DESIGN_21_EMPTY_TOTAL_ORDER_SIZE_DIV0.md] Stage total_order_size into
-	# a SCOPE var before the two divides below. A `global_var:X > 0` guard does NOT reject a set-but-
-	# EMPTY global: git-blame confirms both divides carried that guard 3 days before the boot, yet they
-	# fired 3828x ("failed to read divide") + 526x (Div/0). set_variable stores empty WITHOUT erroring,
-	# and a SCOPE-var `> 0` comparison DOES reject empty (proven idiom, se_ECON_LOG.txt) — unlike the
-	# global comparison. Default 0 first, overwrite only if the global exists (avoids reading an unset
-	# global). Both divides below then gate + divide on this scope copy. (WHY the global is empty/stale
-	# is tracked as a separate root-cause probe; this stops the flood safely with correct 0-defaults.)
+	# a SCOPE var before the two divides below (default 0, overwrite only if the global exists — avoids
+	# reading an unset global). (WHY the global is empty/stale upstream is tracked as a separate
+	# root-cause probe.)
+	# [#21 re-fix 2026-08-19, post-boot] The original version of this fix then GATED each divide on
+	# `var:GT_wo_total_order_size_tmp > 0` via if/limit — but that is the exact pattern task #14 (one
+	# function away, GT_set_tradegood_price:6292-6305) already proved insufficient: an if/limit guard
+	# does NOT reliably skip a divide nested inside a scriptvalue value{} block, so the divide still
+	# evaluates and Div/0s regardless of the outer branch. Confirmed empirically: the if/limit version
+	# still fired 425x Div/0 on the next boot at this exact site, while GT_set_tradegood_price's
+	# min=-floored sibling fired zero. Both divides below now use task #14's proven idiom instead —
+	# `divide = { value = ... min = 1 }` floors the divisor directly, so the divide is always safe
+	# regardless of whether the surrounding effect branch would have fired.
 	set_variable = { name = GT_wo_total_order_size_tmp  value = 0 }
 	if = {
 		limit = { has_global_variable = $tradezone$_total_order_size_$tradegood$ }
@@ -2590,15 +2595,19 @@ GT_split_update_wealth_owed_for_tradegoods = {
 	if = {
 		limit = {
 			has_global_variable = $tradezone$_stockpile_$tradegood$
-			# [#21 fix] gate on the SCOPE copy staged above -- its `> 0` DOES reject a set-but-empty
-			# operand, unlike the global comparison that was here (and still let the divide fire).
-			var:GT_wo_total_order_size_tmp > 0
 		}
 		change_variable = {
 			name = wealth_owed_for_$tradegood$
 			multiply = {
 				value = global_var:$tradezone$_stockpile_$tradegood$
-				divide = var:GT_wo_total_order_size_tmp
+				# [#21 re-fix] floor the divisor (task #14 idiom) instead of if/limit-gating it -- see
+				# the header comment above. total_order_size 0/unset floors to 1: stockpile/1, then
+				# capped by max=1 below -- reproduces the old skip-fallback (unrationed/full billing)
+				# for every healthy zone (stockpile >= 1, per TZP band data).
+				divide = {
+					value = var:GT_wo_total_order_size_tmp
+					min = 1
+				}
 				max = 1
 			}
 		}
@@ -2661,21 +2670,18 @@ GT_split_update_wealth_owed_for_tradegoods = {
 		# ("NO ceiling... a starved/spiking zone's price passes through in full", #112 comment
 		# above) this does NOT touch the well-stocked case -- only zones below the 10% threshold
 		# are capped, and only at 3x the country's stable average, not reverted to that average.
-		if = {
-			limit = {
-				# [#21 fix] gate on the SCOPE copy staged above -- rejects set-but-empty, unlike the global.
-				var:GT_wo_total_order_size_tmp > 0
+		# [#21 re-fix] floor the divisor (task #14 idiom) instead of if/limit-gating it -- see the
+		# header comment above. total_order_size 0/unset floors to 1: ratio = stockpile/1, which is
+		# >= 1 (well above the 0.1 thin-stock threshold below) for every healthy zone reaching this
+		# point (stockpile > 0 is already guaranteed by the enclosing if, and per the TZP band data a
+		# positive stockpile is 0 or >= ~1) -- reproduces the old else-fallback's "not thin" default.
+		set_variable = {
+			name = GT_thinstock_ratio_tmp
+			value = global_var:$tradezone$_stockpile_$tradegood$
+			divide = {
+				value = var:GT_wo_total_order_size_tmp
+				min = 1
 			}
-			set_variable = {
-				name = GT_thinstock_ratio_tmp
-				value = global_var:$tradezone$_stockpile_$tradegood$
-				divide = var:GT_wo_total_order_size_tmp
-			}
-		}
-		else = {
-			# no current orders in this zone this quarter -- nothing being bought, so "thin stock
-			# relative to demand" does not apply; treat as not-thin (ratio >= the 0.1 threshold).
-			set_variable = { name = GT_thinstock_ratio_tmp  value = 1 }
 		}
 		if = {
 			limit = {
