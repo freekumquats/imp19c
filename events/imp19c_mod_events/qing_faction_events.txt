@@ -264,7 +264,24 @@ qing_faction.3 = {
 qing_faction.4 = {
 	type = country_event
 	title = "qing_faction.4.t"
-	desc = "qing_faction.4.desc"
+	# [continuation fix 2026-08-19] per-petition desc so the memorial names its actual subject
+	# instead of generic "press their case" flavor. Proven triggered_desc idiom (qing_march.6.desc).
+	desc = {
+		triggered_desc = { trigger = { var:qing_lobby_petition = flag:succession }            desc = "qing_faction.4.desc_succession" }
+		triggered_desc = { trigger = { var:qing_lobby_petition = flag:council_composition }    desc = "qing_faction.4.desc_council" }
+		# [continuation fix 2026-08-19] one desc per qing_lobby_law_choice so the memorial names the
+		# actual statute at stake (see QING_faction_resolve_law_petition for the full table).
+		triggered_desc = { trigger = { var:qing_lobby_law_choice = flag:exam_cadence }         desc = "qing_faction.4.desc_law_examcadence" }
+		triggered_desc = { trigger = { var:qing_lobby_law_choice = flag:advisory }             desc = "qing_faction.4.desc_law_advisory" }
+		triggered_desc = { trigger = { var:qing_lobby_law_choice = flag:anticorruption }       desc = "qing_faction.4.desc_law_anticorruption" }
+		triggered_desc = { trigger = { var:qing_lobby_law_choice = flag:xinjiang }             desc = "qing_faction.4.desc_law_xinjiang" }
+		triggered_desc = { trigger = { var:qing_lobby_law_choice = flag:missionary }           desc = "qing_faction.4.desc_law_missionary" }
+		triggered_desc = { trigger = { var:qing_lobby_law_choice = flag:integration }          desc = "qing_faction.4.desc_law_integration" }
+		triggered_desc = { trigger = { var:qing_lobby_law_choice = flag:provmil }              desc = "qing_faction.4.desc_law_provmil" }
+		triggered_desc = { trigger = { var:qing_lobby_law_choice = flag:examcurr }             desc = "qing_faction.4.desc_law_examcurr" }
+		triggered_desc = { trigger = { var:qing_lobby_law_choice = flag:regency }              desc = "qing_faction.4.desc_law_regency" }
+		triggered_desc = { trigger = { always = yes }                                          desc = "qing_faction.4.desc" }
+	}
 	picture = council_country
 	left_portrait = root.current_ruler
 	right_portrait = scope:lobby_leader
@@ -281,29 +298,137 @@ qing_faction.4 = {
 	immediate = {
 		QING_faction_form_bloc = yes
 		LOG_line = { sys = QING  msg = "EVENT qing_faction.4 (collective lobby, size=[ROOT.MakeScope.GetVariable('qing_lobby_size').GetValue|0])" }
+		# [review fix 2026-08-19] precompute every option's *_shown preview number HERE, at
+		# immediate/render time. They were previously set only inside the option EFFECT bodies,
+		# which run on CLICK -- but a custom_tooltip's GetVariable interpolation evaluates at
+		# RENDER time, before any option fires. Result: first fire showed 0/100 for every meter,
+		# later fires showed whatever the PREVIOUS firing's chosen option had left behind — never
+		# the live number the player was actually deciding about. Proven idiom: QING_DIKE_set_
+		# display_cost (se_QING_WORKS.txt) is explicitly "called from each event's immediate ... so
+		# the tooltip reads it." Options A2 (concede council_composition, +6) and B (face-down, -3)
+		# used to share ONE var (qing_faction_council_eff_shown) -- since both are visible on screen
+		# at once with independent previews, they needed separate vars; split into _concede_shown /
+		# _facedown_shown.
+		if = {
+			limit = { var:qing_lobby_kind = flag:conservative }
+			set_variable = { name = qing_faction_reform_balance_shown  value = var:qing_reform_faction_balance  subtract = 8 }
+		}
+		else = {
+			set_variable = { name = qing_faction_reform_balance_shown  value = var:qing_reform_faction_balance  add = 8 }
+		}
+		set_variable = { name = qing_faction_council_eff_concede_shown  value = var:qing_council_effectiveness  add = 6 }
+		set_variable = { name = qing_faction_council_eff_facedown_shown  value = var:qing_council_effectiveness  subtract = 3 }
+		if = {
+			limit = { exists = scope:qing_lobby_petition_prince }
+			scope:qing_lobby_petition_prince = { set_variable = { name = qing_faction_prince_backing_shown  value = var:qing_prince_backing  add = 15 } }
+		}
+		if = {
+			limit = { var:qing_lobby_petition = flag:law_other }
+			QING_faction_preview_law_petition = yes
+		}
 	}
 
-	# --- Concede to the memorial — bend the realm's course their way -------------
+	# --- Concede to the memorial (REFORM POSTURE petition) — bend the realm's course their way --
+	# [continuation fix 2026-08-19, user-report] the memorial now presses for a SPECIFIC concrete
+	# decision (qing_lobby_petition, set in QING_faction_form_bloc), not a generic reform nudge.
+	# This variant fires only when the petition IS reform posture. Conceding sets qing_reform_
+	# posture_bias directly — the SAME var qing_reform_posture_law's on_enact sets (00_qing_
+	# statutes_laws.txt:736-762) — so the throne's concession has the SAME durable, structural
+	# effect a real law enactment would, not just a one-off meter bump. The one-off
+	# qing_reform_faction_balance kick is kept alongside it (the news lands NOW, on top of the
+	# durable policy shift).
 	option = {
 		name = "qing_faction.4.a"
 		custom_tooltip = "qing_faction.4.a.tt"
-		trigger = { exists = scope:lobby_leader }
-		# the bloc's demand shifts the reform trajectory in its direction, and the whole
-		# bloc is gratified; the opposite wing is affronted (handled by the ripple around
-		# the spokesman). A reformist/issue win pushes reform; a conservative win rolls back.
+		trigger = { exists = scope:lobby_leader  var:qing_lobby_petition = flag:reform_posture }
 		if = {
 			limit = { var:qing_lobby_kind = flag:conservative }
+			set_variable = { name = qing_reform_posture_bias  value = -1 }
 			change_variable = { name = qing_reform_faction_balance  subtract = 8 }
 			add_stability = 1
 		}
 		else = {
+			set_variable = { name = qing_reform_posture_bias  value = 1 }
 			change_variable = { name = qing_reform_faction_balance  add = 8 }
 			QING_DECLINE_nudge = { var = qing_reform_pressure  amount = -4 }
 		}
+		# [review fix 2026-08-19] qing_faction_reform_balance_shown is now precomputed in immediate
+		# (rendered before this option can ever be clicked) -- no set here anymore.
 		# reward the whole bloc directly (collective satisfaction). The bloc IS the favoured
 		# party here, so the reaction is the per-member grant above — no single-target ripple
 		# (a self-referential favoured==slighted ripple would cancel out; the bloc loop is the
 		# correct collective analogue).
+		every_in_list = {
+			variable = qing_lobby_bloc
+			limit = { is_alive = yes  employer = ROOT }
+			add_loyalty = loyalty_qing_commended
+		}
+		add_political_influence = -15
+	}
+
+	# --- Concede to the memorial (COUNCIL COMPOSITION petition, ex-"issue coalition") ---------
+	# [continuation fix 2026-08-19] fires only for the council_composition petition (always the
+	# issue-coalition's petition — see se_QING_FACTION.txt's petition-roll comment). Conceding now
+	# sets qing_council_comp_bias directly — the SAME var qing_council_composition_law's on_enact
+	# sets (00_qing_statutes_laws.txt:775-790) — a real, durable, already-consumed policy shift
+	# (drives qing_council_eff_target's recompute), not just a temporary effectiveness nudge. The
+	# one-off qing_council_effectiveness kick is kept alongside it for the same reason as above.
+	option = {
+		name = "qing_faction.4.a"
+		custom_tooltip = "qing_faction.4.a2.tt"
+		trigger = { exists = scope:lobby_leader  var:qing_lobby_petition = flag:council_composition }
+		if = {
+			limit = { var:qing_lobby_comp_direction = flag:meritocratic }
+			set_variable = { name = qing_council_comp_bias  value = 5 }
+		}
+		else = {
+			set_variable = { name = qing_council_comp_bias  value = -5 }
+		}
+		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = 6 }
+		# [review fix 2026-08-19] qing_faction_council_eff_concede_shown is now precomputed in
+		# immediate -- no set here anymore (also fixes the A2/B shared-var collision).
+		every_in_list = {
+			variable = qing_lobby_bloc
+			limit = { is_alive = yes  employer = ROOT }
+			add_loyalty = loyalty_qing_commended
+		}
+		add_political_influence = -15
+	}
+
+	# --- Concede to the memorial (SUCCESSION petition) -----------------------------------------
+	# [continuation fix 2026-08-19] fires only when the bloc is pressing to back a specific prince
+	# (qing_lobby_petition_prince, pinned in QING_faction_form_bloc — the front-runner for a
+	# conservative bloc, the dark-horse for a reformist one). Conceding nudges HIS qing_prince_
+	# backing via the proven QING_prince_backing_nudge (se_QING_PRINCES.txt) — the same var that
+	# decides whom QING_princes_seal_succession eventually names. +15 matches the magnitude of the
+	# other backing sources already in that file (council favour +12..25).
+	option = {
+		name = "qing_faction.4.a"
+		custom_tooltip = "qing_faction.4.a3.tt"
+		trigger = { exists = scope:lobby_leader  var:qing_lobby_petition = flag:succession  exists = scope:qing_lobby_petition_prince }
+		scope:qing_lobby_petition_prince = {
+			QING_prince_backing_nudge = { amount = 15 }
+			# [review fix 2026-08-19] qing_faction_prince_backing_shown is now precomputed in
+			# immediate -- no set here anymore.
+		}
+		every_in_list = {
+			variable = qing_lobby_bloc
+			limit = { is_alive = yes  employer = ROOT }
+			add_loyalty = loyalty_qing_commended
+		}
+		add_political_influence = -15
+	}
+
+	# --- Concede to the memorial (LAW petition — one of 9 real Qing statutes) -------------------
+	# [continuation fix 2026-08-19, user-report] the generic dispatcher for qing_lobby_law_choice
+	# (see QING_faction_resolve_law_petition, se_QING_FACTION.txt, for the full per-law table and
+	# why exactly these 9 laws). desc_law_* (below in loc) names the SPECIFIC law being petitioned;
+	# this option's tooltip stays generic since the desc already carries the specifics.
+	option = {
+		name = "qing_faction.4.a"
+		custom_tooltip = "qing_faction.4.a4.tt"
+		trigger = { exists = scope:lobby_leader  var:qing_lobby_petition = flag:law_other }
+		QING_faction_resolve_law_petition = yes
 		every_in_list = {
 			variable = qing_lobby_bloc
 			limit = { is_alive = yes  employer = ROOT }
@@ -322,6 +447,8 @@ qing_faction.4 = {
 		# throne's authority is undivided.
 		add_tyranny = 1
 		QING_DECLINE_nudge = { var = qing_council_effectiveness  amount = -3 }
+		# [review fix 2026-08-19] qing_faction_council_eff_facedown_shown is now precomputed in
+		# immediate -- no set here anymore (also fixes the A2/B shared-var collision).
 		every_in_list = {
 			variable = qing_lobby_bloc
 			limit = { is_alive = yes  employer = ROOT }

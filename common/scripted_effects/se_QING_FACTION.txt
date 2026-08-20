@@ -663,9 +663,15 @@ QING_faction_form_bloc = {
 	# decide the bloc's character: usually factional (following whichever wing is better
 	# represented), but ~1 in 4 a cross-faction issue coalition. random={chance} is the
 	# proven roll idiom; the else picks the majority wing so the caucus reads naturally.
-	random = {
-		chance = 25
-		set_variable = { name = qing_lobby_kind  value = flag:issue }
+	# [continuation fix 2026-08-19] hidden_effect wraps the roll — bare set_variable has no
+	# describable text, so an unwrapped random here leaked as "Has happened: 25% chance of "
+	# (nothing after) in the fired event's tooltip. Proven idiom (qing_integ.40.c / qing_march.*
+	# hidden_effect wraps): the event's own option tooltips state the real outcome instead.
+	hidden_effect = {
+		random = {
+			chance = 25
+			set_variable = { name = qing_lobby_kind  value = flag:issue }
+		}
 	}
 	if = {
 		limit = { NOT = { has_variable = qing_lobby_kind } }
@@ -758,7 +764,108 @@ QING_faction_form_bloc = {
 			save_scope_as = lobby_leader
 		}
 	}
-	LOG_line = { sys = QING  msg = "faction bloc formed (size, kind) lobbying the throne" }
+	# ======================================================================
+	# [continuation fix 2026-08-19, user-report] PETITION SUBJECT. The bloc's KIND (which wing
+	# gathered) previously WAS the memorial's whole content -- conceding just meant "nudge the
+	# reform meter", regardless of what the petitioners were actually asking the throne to DO.
+	# A real memorial presses for a SPECIFIC concrete decision. qing_lobby_petition now names that
+	# decision, using only mechanisms already proven in this codebase (no invented levers):
+	#   flag:council_composition -- an issue bloc's cross-factional grievance is BY DESIGN not about
+	#     reform ideology, so it always resolves to the administrative axis: qing_council_comp_bias,
+	#     the same var qing_council_composition_law's on_enact sets (00_qing_statutes_laws.txt:775).
+	#   flag:succession -- when a succession contest is actually open (>=2 adult princes, unsealed --
+	#     the EXACT guard QING_heirfavor_pulse uses, se_QING_HEIRFAVOR.txt:48-54), the bloc instead
+	#     presses to back one prince over the other: qing_prince_backing (se_QING_PRINCES.txt), via
+	#     the same frontrunner/darkhorse ordered_in_list idiom QING_heirfavor_pulse already uses.
+	#   flag:reform_posture -- the common-case fallback: presses for/against qing_reform_posture_bias,
+	#     the SAME var qing_reform_posture_law's on_enact sets (00_qing_statutes_laws.txt:736-762) --
+	#     so conceding now has the SAME durable, structural effect a real law enactment would.
+	# Direction for reform_posture/succession follows the bloc's kind (reformist/conservative); an
+	# issue bloc has no such lean, so council_composition's direction is a flat coin-flip (documented
+	# limitation -- a majority-identity-weighted direction is a natural follow-up, not built here).
+	# ======================================================================
+	remove_variable = qing_lobby_petition
+	remove_variable = qing_lobby_comp_direction
+	remove_variable = qing_lobby_law_choice
+	if = {
+		limit = { var:qing_lobby_kind = flag:issue }
+		set_variable = { name = qing_lobby_petition  value = flag:council_composition }
+		random = {
+			chance = 50
+			set_variable = { name = qing_lobby_comp_direction  value = flag:meritocratic }
+		}
+		if = {
+			limit = { NOT = { has_variable = qing_lobby_comp_direction } }
+			set_variable = { name = qing_lobby_comp_direction  value = flag:manchu }
+		}
+	}
+	else = {
+		random_list = {
+			# succession only when a contest is genuinely open -- same gate QING_heirfavor_pulse uses.
+			3 = {
+				trigger = {
+					var:qing_prince_count >= 2
+					has_variable_list = qing_princes
+					NOT = { has_variable = qing_secret_succession_sealed }
+				}
+				set_variable = { name = qing_lobby_petition  value = flag:succession }
+			}
+			10 = {
+				set_variable = { name = qing_lobby_petition  value = flag:reform_posture }
+			}
+			# [continuation fix 2026-08-19, user-report "so many laws with so many potential
+			# configurations"] 9 more real Qing statute laws (00_qing_statutes_laws.txt), each with a
+			# clean, unambiguous, bidirectionally-signed reformist/conservative bias_var pair (a
+			# full survey of all 46 law groups found many either have no bias_var, are COMPLEX
+			# on_enact calls, are progress-gated, or have a third pole that isn't a clean
+			# reform/conservative mirror -- these 9 are the ones that survived that filter). Weight
+			# 18 total (2 each) so the pool doesn't stay reform_posture-dominated now that there is
+			# real breadth. QING_faction_resolve_law_petition (below) is the single dispatcher that
+			# actually forces the chosen law's bias_var, keyed off qing_lobby_law_choice.
+			18 = {
+				set_variable = { name = qing_lobby_petition  value = flag:law_other }
+				random_list = {
+					2 = { set_variable = { name = qing_lobby_law_choice  value = flag:exam_cadence } }
+					2 = { set_variable = { name = qing_lobby_law_choice  value = flag:advisory } }
+					2 = { set_variable = { name = qing_lobby_law_choice  value = flag:anticorruption } }
+					2 = { set_variable = { name = qing_lobby_law_choice  value = flag:xinjiang } }
+					2 = { set_variable = { name = qing_lobby_law_choice  value = flag:missionary } }
+					2 = { set_variable = { name = qing_lobby_law_choice  value = flag:integration } }
+					2 = { set_variable = { name = qing_lobby_law_choice  value = flag:provmil } }
+					2 = { set_variable = { name = qing_lobby_law_choice  value = flag:examcurr } }
+					2 = { set_variable = { name = qing_lobby_law_choice  value = flag:regency } }
+				}
+			}
+		}
+	}
+	# succession petition: pin down WHICH prince the bloc is pressing for, using the proven
+	# frontrunner/darkhorse pick (se_QING_HEIRFAVOR.txt:55-70). A reformist bloc backs the dark-horse
+	# (upsetting the expected succession); a conservative bloc backs the front-runner (the expected,
+	# settled order) -- a reformist/conservative pole applied to the ONE axis this contest actually has.
+	if = {
+		limit = { var:qing_lobby_petition = flag:succession }
+		ordered_in_list = {
+			variable = qing_princes
+			order_by = var:qing_prince_backing
+			max = 1
+			save_scope_as = qing_lobby_frontrunner
+		}
+		ordered_in_list = {
+			variable = qing_princes
+			limit = { NOT = { this = scope:qing_lobby_frontrunner } }
+			order_by = var:qing_prince_backing
+			max = 1
+			save_scope_as = qing_lobby_darkhorse
+		}
+		if = {
+			limit = { var:qing_lobby_kind = flag:conservative }
+			scope:qing_lobby_frontrunner = { save_scope_as = qing_lobby_petition_prince }
+		}
+		else = {
+			scope:qing_lobby_darkhorse = { save_scope_as = qing_lobby_petition_prince }
+		}
+	}
+	LOG_line = { sys = QING  msg = "faction bloc formed (size, kind, petition) lobbying the throne" }
 	LOG_exit = { sys = QING  fn = "QING_faction_form_bloc"  result = OK }
 }
 
@@ -771,6 +878,143 @@ QING_faction_form_bloc = {
 #   .3 a council at deadlock (blocs at parity)
 #   .4 a bloc of councillors collectively lobbies the throne (usually factional)
 # ======================================================================
+
+# ======================================================================
+# [continuation fix 2026-08-19] QING_faction_resolve_law_petition -- the single dispatcher for the
+# qing_lobby_law_choice petitions (see QING_faction_form_bloc's petition roll above). No params --
+# reads qing_lobby_kind directly (flag:reformist/flag:conservative) exactly as already staged by
+# the bloc-formation call. Country scope (ROOT = CHI). Each
+# branch forces the SAME bias_var + literal value the corresponding real law's on_enact would set
+# (common/laws/00_qing_statutes_laws.txt) -- a durable, structural policy shift, not an abstract
+# meter. qing_faction_law_bias_shown is written on every branch so the event's tooltip can show a
+# live number regardless of which law got rolled. NOT every Qing law is here -- only the ones a
+# full survey confirmed have a single bias_var with a genuinely bidirectional, unambiguous
+# reformist/conservative pair (no bias_var, COMPLEX on_enact effect calls, progress-gated options,
+# or a muddy third pole all disqualified a law from this list).
+# ======================================================================
+QING_faction_resolve_law_petition = {
+	LOG_enter = { sys = QING  fn = "QING_faction_resolve_law_petition" }
+	if = {
+		# 敕定考課 exam cadence (qing_exam_cadence_law): frequent (wider, faster-renewed pool) vs
+		# sparse (a thinner elite).
+		limit = { var:qing_lobby_law_choice = flag:exam_cadence }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_law_exam_cadence  value = 1 } }
+		else = { set_variable = { name = qing_law_exam_cadence  value = 2 } }
+		set_variable = { name = qing_faction_law_bias_shown  value = var:qing_law_exam_cadence }
+	}
+	else_if = {
+		# foreign advisors (qing_advisory_estab_law): open (師夷長技) vs cautious (拒夷).
+		limit = { var:qing_lobby_law_choice = flag:advisory }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_advisor_slot_cap  value = 5 } }
+		else = { set_variable = { name = qing_advisor_slot_cap  value = 2 } }
+		set_variable = { name = qing_faction_law_bias_shown  value = var:qing_advisor_slot_cap }
+	}
+	else_if = {
+		# anti-corruption (qing_anticorruption_law): draconous audits vs a tolerant blind eye.
+		limit = { var:qing_lobby_law_choice = flag:anticorruption }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_anticorrupt_bias  value = 2 } }
+		else = { set_variable = { name = qing_anticorrupt_bias  value = 0 } }
+		set_variable = { name = qing_faction_law_bias_shown  value = var:qing_anticorrupt_bias }
+	}
+	else_if = {
+		# Xinjiang administration (qing_xinjiang_admin_law): provincialize (direct modern rule) vs
+		# beg indirect (traditional indirect rule).
+		limit = { var:qing_lobby_law_choice = flag:xinjiang }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_xj_admin_bias  value = 10 } }
+		else = { set_variable = { name = qing_xj_admin_bias  value = 0 } }
+		set_variable = { name = qing_faction_law_bias_shown  value = var:qing_xj_admin_bias }
+	}
+	else_if = {
+		# missionary policy (qing_missionary_policy_law): open toleration vs outright prohibition.
+		limit = { var:qing_lobby_law_choice = flag:missionary }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_missionary_tol_bias  value = 8 } }
+		else = { set_variable = { name = qing_missionary_tol_bias  value = -8 } }
+		set_variable = { name = qing_faction_law_bias_shown  value = var:qing_missionary_tol_bias }
+	}
+	else_if = {
+		# national integration (qing_national_integration_law): a civic-nation model vs the
+		# dynastic/Manchu-first model.
+		limit = { var:qing_lobby_law_choice = flag:integration }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_civic_law_bias  value = 10 } }
+		else = { set_variable = { name = qing_civic_law_bias  value = 0 } }
+		set_variable = { name = qing_faction_law_bias_shown  value = var:qing_civic_law_bias }
+	}
+	else_if = {
+		# provincial militarization (qing_provincial_militarization_law): delegated (the Xiang/Huai
+		# provincial-army path) vs centralized (Banners/Green Standard held tight by the throne).
+		limit = { var:qing_lobby_law_choice = flag:provmil }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_provmil_bias  value = 10 } }
+		else = { set_variable = { name = qing_provmil_bias  value = -10 } }
+		set_variable = { name = qing_faction_law_bias_shown  value = var:qing_provmil_bias }
+	}
+	else_if = {
+		# examination curriculum (qing_exam_curriculum_law): practical subjects vs the classical canon.
+		limit = { var:qing_lobby_law_choice = flag:examcurr }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_exam_curriculum_bias  value = 10 } }
+		else = { set_variable = { name = qing_exam_curriculum_bias  value = 0 } }
+		set_variable = { name = qing_faction_law_bias_shown  value = var:qing_exam_curriculum_bias }
+	}
+	else_if = {
+		# regency rules (qing_regency_rules_law): conciliar checks on a regent's power vs an unbound
+		# regent. NOTE the sign is inverted vs the other laws here -- conciliar (the reformist,
+		# check-the-throne pole) is the law's OWN -1, unbound (conservative, absolutist) is +1.
+		limit = { var:qing_lobby_law_choice = flag:regency }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_regency_authority_bias  value = -1 } }
+		else = { set_variable = { name = qing_regency_authority_bias  value = 1 } }
+		set_variable = { name = qing_faction_law_bias_shown  value = var:qing_regency_authority_bias }
+	}
+	LOG_line = { sys = QING  msg = "faction law petition resolved: choice, pole" }
+	LOG_exit = { sys = QING  fn = "QING_faction_resolve_law_petition"  result = OK }
+}
+
+# ======================================================================
+# [review fix 2026-08-19] QING_faction_preview_law_petition — a PREVIEW-ONLY twin of
+# QING_faction_resolve_law_petition, called from qing_faction.4's immediate (before the options
+# render) so the option's tooltip can show the real post-concession number. It CANNOT just call the
+# real resolver early -- that would apply the law change before the player has chosen anything.
+# Instead it only writes qing_faction_law_bias_shown to the same literal each resolver branch would
+# set the real bias_var to. Keep this table byte-identical to the resolver's literals above --
+# a mismatch here is a display bug, not a mechanical one, so it won't be caught by a boot test.
+# ======================================================================
+QING_faction_preview_law_petition = {
+	if = { limit = { var:qing_lobby_law_choice = flag:exam_cadence }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_faction_law_bias_shown  value = 1 } }
+		else = { set_variable = { name = qing_faction_law_bias_shown  value = 2 } }
+	}
+	else_if = { limit = { var:qing_lobby_law_choice = flag:advisory }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_faction_law_bias_shown  value = 5 } }
+		else = { set_variable = { name = qing_faction_law_bias_shown  value = 2 } }
+	}
+	else_if = { limit = { var:qing_lobby_law_choice = flag:anticorruption }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_faction_law_bias_shown  value = 2 } }
+		else = { set_variable = { name = qing_faction_law_bias_shown  value = 0 } }
+	}
+	else_if = { limit = { var:qing_lobby_law_choice = flag:xinjiang }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_faction_law_bias_shown  value = 10 } }
+		else = { set_variable = { name = qing_faction_law_bias_shown  value = 0 } }
+	}
+	else_if = { limit = { var:qing_lobby_law_choice = flag:missionary }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_faction_law_bias_shown  value = 8 } }
+		else = { set_variable = { name = qing_faction_law_bias_shown  value = -8 } }
+	}
+	else_if = { limit = { var:qing_lobby_law_choice = flag:integration }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_faction_law_bias_shown  value = 10 } }
+		else = { set_variable = { name = qing_faction_law_bias_shown  value = 0 } }
+	}
+	else_if = { limit = { var:qing_lobby_law_choice = flag:provmil }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_faction_law_bias_shown  value = 10 } }
+		else = { set_variable = { name = qing_faction_law_bias_shown  value = -10 } }
+	}
+	else_if = { limit = { var:qing_lobby_law_choice = flag:examcurr }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_faction_law_bias_shown  value = 10 } }
+		else = { set_variable = { name = qing_faction_law_bias_shown  value = 0 } }
+	}
+	else_if = { limit = { var:qing_lobby_law_choice = flag:regency }
+		if = { limit = { var:qing_lobby_kind = flag:reformist }  set_variable = { name = qing_faction_law_bias_shown  value = -1 } }
+		else = { set_variable = { name = qing_faction_law_bias_shown  value = 1 } }
+	}
+}
+
 QING_faction_flavour_roll = {
 	LOG_enter = { sys = QING  fn = "QING_faction_flavour_roll" }
 	random_list = {
