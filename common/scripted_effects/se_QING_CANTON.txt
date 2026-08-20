@@ -260,6 +260,10 @@ QING_canton_pulse = {
 		if = {
 			limit = {
 				has_variable = qing_hoppo_holder
+				# [review fix 2026-08-19] NOT employer=ROOT here -- this is a CLEANUP gate (strips a
+				# stale double-booking marker off a possibly-former Hoppo), not a selection gate. Adding
+				# employer=ROOT would let a Hoppo who left ROOT's employ keep the marker + salary
+				# modifier forever, since this reconcile would then skip him. is_alive alone is correct.
 				var:qing_hoppo_holder = { is_alive = yes }
 				var:qing_hoppo_holder = {
 					OR = {
@@ -309,7 +313,7 @@ QING_canton_pulse = {
 		# adjusts THIS creep (the source), not a separate meter: -1 board-audited slows it, +1 tax-farmed
 		# speeds it. Guarded on has_variable (unset until the law is enacted).
 		if = {
-			limit = { has_variable = qing_hoppo_holder  var:qing_hoppo_holder = { is_alive = yes } }
+			limit = { has_variable = qing_hoppo_holder  var:qing_hoppo_holder = { is_alive = yes  employer = ROOT } }
 			var:qing_hoppo_holder = {
 				if = {
 					limit = { corruption < 90 }
@@ -385,8 +389,9 @@ QING_canton_pulse = {
 		if = {
 			limit = {
 				has_variable = qing_hoppo_holder
-				var:qing_hoppo_holder = { is_alive = yes  finesse >= 9  wealth < 150 }
+				var:qing_hoppo_holder = { is_alive = yes  employer = ROOT  finesse >= 9  wealth < 150 }
 				var:qing_hoppo_squeeze < 35
+				NOT = { has_variable = qing_hoppo_settle_cd }  # [continuation fix, user-report 2026-08-19] settle window
 				NOT = { has_variable = qing_canton_commend_cooldown }
 				NOT = { has_variable = qing_gc_event_slot_used }
 				NOT = { has_variable = qing_dept_cd_canton }  # [#55] Canton 粵海關 department umbrella: no Canton event in consecutive quarters (rotates the court slot to other departments)
@@ -402,8 +407,9 @@ QING_canton_pulse = {
 		else_if = {
 			limit = {
 				has_variable = qing_hoppo_holder
-				var:qing_hoppo_holder = { is_alive = yes  wealth >= 150 }
+				var:qing_hoppo_holder = { is_alive = yes  employer = ROOT  wealth >= 150 }
 				var:qing_hoppo_squeeze < 65
+				NOT = { has_variable = qing_hoppo_settle_cd }  # [continuation fix, user-report 2026-08-19] settle window
 				NOT = { has_variable = qing_canton_venal_cooldown }
 				NOT = { has_variable = qing_gc_event_slot_used }
 				NOT = { has_variable = qing_dept_cd_canton }  # [#55] Canton 粵海關 department umbrella: no Canton event in consecutive quarters (rotates the court slot to other departments)
@@ -420,6 +426,7 @@ QING_canton_pulse = {
 		else_if = {
 			limit = {
 				var:qing_hoppo_squeeze >= 65
+				NOT = { has_variable = qing_hoppo_settle_cd }  # [continuation fix, user-report 2026-08-19] settle window
 				NOT = { has_variable = qing_canton_cohong_cooldown }
 				NOT = { has_variable = qing_gc_event_slot_used }
 				NOT = { has_variable = qing_dept_cd_canton }  # [#55] Canton 粵海關 department umbrella: no Canton event in consecutive quarters (rotates the court slot to other departments)
@@ -503,6 +510,16 @@ QING_canton_seat_hoppo = {
 	# on both paths. Proven QING_office_appoint idiom.
 	employer = {
 		set_variable = { name = qing_hoppo_holder  value = scope:qing_hoppo_pick }
+		# [continuation fix, user-report 2026-08-19] SETTLE WINDOW. Every seating (game-start, backfill,
+		# rotate, or player pick) restarts a ~1-month cooldown that blocks the three pulse-fired Hoppo
+		# beats below (COMMENDATION/VENAL EXPOSURE/COHONG). Without this, the boot-seed Hoppo can be
+		# double-booked with a garrison/army post assigned later in the SAME boot sequence (see the #76
+		# reconcile above, which strips + backfills him at the very first QING_canton_pulse — itself the
+		# first month after game start, since qing_mechanics_pulse_cooldown is unset until then), so a
+		# Hoppo event could fire the same pulse a brand-new man is seated — celebrating/impeaching someone
+		# who has held the post for mere days. The settle window forces every event to wait until the man
+		# in the post has actually held it for a month.
+		set_variable = { name = qing_hoppo_settle_cd  days = 35 }
 	}
 	# qing_hoppo_marker doubles as the per-char post marker: it feeds QING_char_holds_court_position
 	# (mutual exclusion both ways) and the character-card title (offices custom-loc), like the other
@@ -523,6 +540,9 @@ QING_canton_rotate_hoppo = {
 	# relieve any prior Hoppo first (the post turns over on a 3-year cycle).
 	if = {
 		limit = { has_variable = qing_hoppo_holder }
+		# [review fix 2026-08-19] NOT employer=ROOT here either -- same reasoning as the reconcile
+		# gate above: this strips the outgoing Hoppo's marker+salary regardless of whether he's still
+		# in ROOT's employ, so the cleanup can't leave those stuck on a man who's left.
 		if = {
 			limit = { var:qing_hoppo_holder = { is_alive = yes } }
 			var:qing_hoppo_holder = {

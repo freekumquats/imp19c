@@ -48,6 +48,18 @@ qing_canton.1 = {
 
 	immediate = {
 		LOG_line = { sys = QING  msg = "EVENT qing_canton.1 (the Cohong debt crisis)" }
+		# [continuation fix 2026-08-19] bind the target scope HERE, matching qing_canton.2's own fix
+		# and qing_censorate.1's template. qing_canton.1.b used to do this save_scope_as INSIDE its
+		# own option body — the same latent defect a forced differential debug confirmed fatal for
+		# qing_canton.2.a (1160-hit error flood in QING_char_affinity, several scope-hops downstream
+		# via QING_censorate_impeach_uphold): an option carrying custom_tooltip is walked by a
+		# separate tooltip-preview pass that does not faithfully replay a save_scope_as issued from
+		# inside the option body. Bind under the SAME broad is_alive+employer gate the option itself
+		# checks; the option's own corruption>10 branch still decides whether to use the bound scope.
+		if = {
+			limit = { has_variable = qing_hoppo_holder  var:qing_hoppo_holder = { is_alive = yes  employer = ROOT } }
+			var:qing_hoppo_holder = { save_scope_as = qing_censorate_target }
+		}
 	}
 
 	# --- Bail the guild out from the customs surplus (公所 Consoo relief) ---------------
@@ -80,9 +92,14 @@ qing_canton.1 = {
 		if = {
 			limit = {
 				has_variable = qing_hoppo_holder
-				var:qing_hoppo_holder = { is_alive = yes  corruption > 10 }
+				var:qing_hoppo_holder = { is_alive = yes  employer = ROOT  corruption > 10 }
+				# [review fix 2026-08-19] qing_canton.1's trigger (unlike .2/.3) doesn't guarantee a
+				# live ROOT-employed Hoppo, so immediate's bind of qing_censorate_target is itself
+				# conditional -- re-check it actually resolved, mirroring qing_canton.2.a exactly.
+				exists = scope:qing_censorate_target
 			}
-			var:qing_hoppo_holder = { save_scope_as = qing_censorate_target }
+			# [continuation fix 2026-08-19] scope now bound in immediate (see above) -- no
+			# save_scope_as here anymore.
 			# [#68 review-fix] strip the Hoppo marker off the disgraced man too (mirror the rotate path's
 			# clean-up, se_QING_CANTON.txt) — the uphold clears offices but not this bespoke marker, so
 			# without this the impeached ex-Hoppo would carry a stale qing_hoppo_marker forever.
@@ -104,7 +121,7 @@ qing_canton.1 = {
 			# investigation RESTRAINS his exactions: reduce his own corruption (the concrete source the
 			# squeeze is derived from, #69), so next pulse the squeeze reads lower. No fortune to seize.
 			if = {
-				limit = { has_variable = qing_hoppo_holder  var:qing_hoppo_holder = { is_alive = yes } }
+				limit = { has_variable = qing_hoppo_holder  var:qing_hoppo_holder = { is_alive = yes  employer = ROOT } }
 				var:qing_hoppo_holder = { add_corruption = -8 }
 			}
 			if = { limit = { has_variable = qing_corruption_level }  QING_DECLINE_nudge = { var = qing_corruption_level  amount = -5 } }
@@ -144,11 +161,29 @@ qing_canton.2 = {
 	trigger = {
 		tag = CHI
 		has_variable = qing_hoppo_holder
-		var:qing_hoppo_holder = { is_alive = yes }
+		var:qing_hoppo_holder = { is_alive = yes  employer = ROOT }
 	}
 
 	immediate = {
 		LOG_line = { sys = QING  msg = "EVENT qing_canton.2 (venal-Hoppo exposure)" }
+		# [continuation fix 2026-08-19, forced differential debug vs qing_censorate.1] bind the
+		# target scope HERE, at real immediate-execution time, matching qing_censorate.1's own
+		# template exactly (QING_censorate_find_corrupt_courtier runs in ITS immediate, never
+		# inside an option). Confirmed root cause of a 1160-hit/error-type flood in QING_char_
+		# affinity, several scope-hops downstream via QING_censorate_impeach_uphold ->
+		# QING_char_cleanse: this save_scope_as used to sit INSIDE option qing_canton.2.a's own
+		# body. An option carrying custom_tooltip is walked by a separate tooltip-preview pass that
+		# does not faithfully replay a save_scope_as issued from within the option body, so the
+		# alias was never really bound in that preview context even though it resolves fine at real
+		# click-time -- the preview walk still descended through the whole chain and hit QING_char_
+		# affinity's clamp with an unset scope. qing_canton.2.b (a sibling option, same var-block
+		# save idiom, but a chain that never reaches QING_char_affinity) is silent in the log,
+		# proving the var-block save itself isn't unsafe -- only doing it from inside an option
+		# whose downstream chain is later tooltip-previewed is.
+		if = {
+			limit = { has_variable = qing_hoppo_holder  var:qing_hoppo_holder = { is_alive = yes  employer = ROOT } }
+			var:qing_hoppo_holder = { save_scope_as = qing_censorate_target }
+		}
 	}
 
 	# --- Impeach him through the Censorate now (查辦抄家) -------------------------------------
@@ -161,9 +196,10 @@ qing_canton.2 = {
 	option = {
 		name = "qing_canton.2.a"
 		custom_tooltip = "qing_canton.2.a.tt"
+		# [continuation fix 2026-08-19] scope now bound in immediate (see above) -- this option only
+		# CONSUMES the alias, matching qing_censorate.1.a's shape exactly.
 		if = {
-			limit = { has_variable = qing_hoppo_holder  var:qing_hoppo_holder = { is_alive = yes } }
-			var:qing_hoppo_holder = { save_scope_as = qing_censorate_target }
+			limit = { exists = scope:qing_censorate_target }
 			scope:qing_censorate_target = {
 				if = { limit = { has_variable = qing_hoppo_marker }  remove_variable = qing_hoppo_marker }
 				remove_character_modifier = qing_hoppo_office
@@ -184,7 +220,7 @@ qing_canton.2 = {
 		# reads 0 silently — the se_QING_CANAL.txt:118-120 trap); he keeps the other two-thirds
 		# (no strip). Then rotate via the existing lever (fresh man, squeeze eases).
 		if = {
-			limit = { has_variable = qing_hoppo_holder  var:qing_hoppo_holder = { is_alive = yes  wealth > 0 } }
+			limit = { has_variable = qing_hoppo_holder  var:qing_hoppo_holder = { is_alive = yes  employer = ROOT  wealth > 0 } }
 			var:qing_hoppo_holder = { save_scope_as = qing_hoppo_seated }
 			add_treasury = { value = scope:qing_hoppo_seated.wealth  divide = 3 }
 			# [#108 fix 2026-08-15] stage into a var -- a compound amount= block trips TREASURY_LOG_it's
@@ -225,7 +261,7 @@ qing_canton.3 = {
 	trigger = {
 		tag = CHI
 		has_variable = qing_hoppo_holder
-		var:qing_hoppo_holder = { is_alive = yes }
+		var:qing_hoppo_holder = { is_alive = yes  employer = ROOT }
 	}
 
 	immediate = {
@@ -239,7 +275,7 @@ qing_canton.3 = {
 		# reward the man (loyalty + a modest honest bonus — NOT a siphon), a small customs surplus
 		# his clean administration delivered, and a stability lift.
 		if = {
-			limit = { has_variable = qing_hoppo_holder  var:qing_hoppo_holder = { is_alive = yes } }
+			limit = { has_variable = qing_hoppo_holder  var:qing_hoppo_holder = { is_alive = yes  employer = ROOT } }
 			var:qing_hoppo_holder = {
 				add_loyalty = loyalty_qing_commended
 				add_gold = 8
