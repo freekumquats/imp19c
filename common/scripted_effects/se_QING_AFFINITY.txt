@@ -175,6 +175,14 @@ QING_char_affinity = {
 		# pillar. Corruption also drags in step with the realm's corruption level.
 		if = { limit = { has_trait = corrupt } change_variable = { name = qing_char_affinity  subtract = 8 } }
 		if = { limit = { OR = { has_trait = honest  has_trait = just } } change_variable = { name = qing_char_affinity  add = 5 } }
+		# [continuation fix 2026-08-19, user-report] DISGRACE: a publicly disgraced man's standing
+		# with the throne is itself part of his affinity, not just whatever residual corrupt trait
+		# he happens to still carry (QING_char_cleanse strips that trait as part of the SAME
+		# punishment, so without this the disgrace itself contributed nothing here). Matches the
+		# two disgrace traits' own severity ordering (QING_char_apply_hard_disgrace escalates PAST
+		# the lesser taint, se_QING_AFFINITY.txt:438-471) -- completely_disgraced is the heavier hit.
+		if = { limit = { has_trait = completely_disgraced }  change_variable = { name = qing_char_affinity  subtract = 15 } }
+		else_if = { limit = { has_trait = disgraced }  change_variable = { name = qing_char_affinity  subtract = 8 } }
 		# corruption is ALSO a numeric character stat (0..100), distinct from the
 		# corrupt trait: the higher a man's own venality, the more he serves himself.
 		if = { limit = { corruption >= 40 } change_variable = { name = qing_char_affinity  subtract = 8 } }
@@ -206,8 +214,16 @@ QING_char_affinity = {
 	}
 
 	# --- clamp 0..100
-	if = { limit = { var:qing_char_affinity > 100 } set_variable = { name = qing_char_affinity  value = 100 } }
-	if = { limit = { var:qing_char_affinity < 0 }   set_variable = { name = qing_char_affinity  value = 0 } }
+	# [error.log fix 2026-08-19] guard the clamp reads with has_variable, matching this same file's
+	# qing_aff_zeal_gap idiom above. Despite the unconditional set_variable at the top of this macro
+	# and the existing is_alive/exists=root.current_ruler guard (fix #11), a boot's error.log still
+	# showed 1160x "Failed to fetch variable for 'qing_char_affinity' due to not being set" at exactly
+	# these two clamp lines, via the newly-restored Censorate impeach path (QING_censorate_impeach_
+	# uphold -> QING_char_cleanse -> QING_char_affinity). Root cause (why the scope/var still goes
+	# unset here) is unresolved after two prior fix passes on this macro; this stops the flood safely
+	# with the same degrade-cleanly idiom used throughout this codebase, without masking a real stat.
+	if = { limit = { has_variable = qing_char_affinity  var:qing_char_affinity > 100 } set_variable = { name = qing_char_affinity  value = 100 } }
+	if = { limit = { has_variable = qing_char_affinity  var:qing_char_affinity < 0 }   set_variable = { name = qing_char_affinity  value = 0 } }
 
 	LOG_line = { sys = QING  msg = "char affinity: w/ throne = (zeal gap)" }
 	LOG_exit = { sys = QING  fn = "QING_char_affinity"  result = OK }
