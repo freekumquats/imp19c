@@ -1392,22 +1392,32 @@ CURRENCY_grant_country_wealth = {
 			name = wealth_to_grant
 			multiply = CURRENCY_wealth_value_1_unit_scaled_by_reserve_ratio_x1k
 		}
-		add_treasury = local_var:wealth_to_grant
-		TREASURY_LOG_it = { amount = local_var:wealth_to_grant }
-		# [fix, task #79 2026-08-14] this call pays the treasury DIRECTLY (add_treasury above), entirely
-		# outside INCOME_national_total_quarterly -- the SAME hidden-revenue visibility gap already
-		# closed for salt/Canton/caravan/opium (INCOME_svalues.txt), but for every ONE-SHOT caller of
-		# this function instead (marriage-pact dowries, treasure-fleet hauls, decline/keju/roster/
-		# frontier-sea events, the currency-crisis event) -- confirmed via a fresh-boot log read that a
-		# royal-marriage dowry (se_MARRIAGE.txt:265, thousands=30) actually fired once and, at this
-		# call's own conversion rate (~x400-1000 via CURRENCY_wealth_value_1_unit_scaled_by_reserve_
-		# ratio_x1k), lands squarely in the reported ~9000/quarter spike's order of magnitude -- a
-		# ONE-SHOT event-driven jump matches the user's own "some quarters, not every quarter" framing
-		# far better than any of the standing per-quarter streams already ruled out. Accumulate the
-		# REAL granted amount so INCOME_national_total_quarterly_display (read by the topbar/tooltip)
-		# can surface it the same quarter it fires; reset by INCOME_update_treasury_country each
-		# quarter after that display value is cached (se_INCOME.txt).
-		change_variable = { name = CURRENCY_oneshot_grants_this_quarter  add = local_var:wealth_to_grant }
+		# [log-triage 2026-08-20] has_local_variable guard: the set_local_variable above is
+		# unconditional, but a handful of boot-test hits still showed "wealth_to_grant not being
+		# set" here (a GUI preview/validity re-evaluation of this scripted_gui's effect= block, per
+		# common/scripted_guis/QING_mechanics_actions.txt's qing_action_sell_offices, is the likely
+		# path -- Jomini can re-walk an effect= chain for button state without actually persisting
+		# local vars from that pass). Guard every downstream read so a dropped local var degrades to
+		# a skipped grant-this-pass instead of an error; the real click path is unaffected.
+		if = {
+			limit = { has_local_variable = wealth_to_grant }
+			add_treasury = local_var:wealth_to_grant
+			TREASURY_LOG_it = { amount = local_var:wealth_to_grant }
+			# [fix, task #79 2026-08-14] this call pays the treasury DIRECTLY (add_treasury above), entirely
+			# outside INCOME_national_total_quarterly -- the SAME hidden-revenue visibility gap already
+			# closed for salt/Canton/caravan/opium (INCOME_svalues.txt), but for every ONE-SHOT caller of
+			# this function instead (marriage-pact dowries, treasure-fleet hauls, decline/keju/roster/
+			# frontier-sea events, the currency-crisis event) -- confirmed via a fresh-boot log read that a
+			# royal-marriage dowry (se_MARRIAGE.txt:265, thousands=30) actually fired once and, at this
+			# call's own conversion rate (~x400-1000 via CURRENCY_wealth_value_1_unit_scaled_by_reserve_
+			# ratio_x1k), lands squarely in the reported ~9000/quarter spike's order of magnitude -- a
+			# ONE-SHOT event-driven jump matches the user's own "some quarters, not every quarter" framing
+			# far better than any of the standing per-quarter streams already ruled out. Accumulate the
+			# REAL granted amount so INCOME_national_total_quarterly_display (read by the topbar/tooltip)
+			# can surface it the same quarter it fires; reset by INCOME_update_treasury_country each
+			# quarter after that display value is cached (se_INCOME.txt).
+			change_variable = { name = CURRENCY_oneshot_grants_this_quarter  add = local_var:wealth_to_grant }
+		}
 	}
 	else = {
 		# [#74 2026-08-11] FALLBACK GRANT instead of skipping to ZERO. The guard above rightly refuses to run
@@ -1417,11 +1427,15 @@ CURRENCY_grant_country_wealth = {
 		# directly to the treasury as an unconverted floor — a strictly-positive, flood-free grant (add_treasury
 		# of a plain literal reads no currency svalue). It undervalues vs the pegged conversion, but a modest
 		# real grant beats zero, and the common case (price resolved) still takes the exact-conversion branch above.
-		add_treasury = local_var:wealth_to_grant
-		TREASURY_LOG_it = { amount = local_var:wealth_to_grant }
-		# [fix, task #79 2026-08-14] same visibility fix as the main branch above -- this fallback also
-		# pays add_treasury directly, outside INCOME_national_total_quarterly.
-		change_variable = { name = CURRENCY_oneshot_grants_this_quarter  add = local_var:wealth_to_grant }
+		# [log-triage 2026-08-20] same has_local_variable guard as the main branch above.
+		if = {
+			limit = { has_local_variable = wealth_to_grant }
+			add_treasury = local_var:wealth_to_grant
+			TREASURY_LOG_it = { amount = local_var:wealth_to_grant }
+			# [fix, task #79 2026-08-14] same visibility fix as the main branch above -- this fallback also
+			# pays add_treasury directly, outside INCOME_national_total_quarterly.
+			change_variable = { name = CURRENCY_oneshot_grants_this_quarter  add = local_var:wealth_to_grant }
+		}
 		LOG_line = { sys = ECON  msg = "CURRENCY_grant_country_wealth: backing price unresolved this frame; granted nominal thousands directly (no peg conversion)" }
 	}
 }
@@ -1558,10 +1572,16 @@ CPI_update = {
 
 CURRENCY_alter_amt_circulated = {
 	# Scope: Country
-	# Function: Add to the national debt value, accounting for the thousands, millions and billions values that need to be displayed
-	change_variable = {
+	# Function: Add to the amount of currency circulated, accounting for the thousands, millions and billions values that need to be displayed
+	# [log-triage 2026-08-20] set_variable + guarded self-read: change_variable on this OUTER var
+	# threw "not being set" for a country whose currency-tracking vars have never been initialized
+	# before this call (same governorship-timing-race class already fixed in WEALTH_distribute_new_wealth).
+	set_variable = {
 		name = CURRENCY_amt_circulated_thousands
-		add = $thousands$
+		value = {
+			value = $thousands$
+			if = { limit = { has_variable = CURRENCY_amt_circulated_thousands } add = var:CURRENCY_amt_circulated_thousands }
+		}
 	}
 	if = {
 		limit = {

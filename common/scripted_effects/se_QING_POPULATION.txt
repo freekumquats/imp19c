@@ -75,6 +75,12 @@ QING_pop_recompute_target = {
 	# the downstream compare flood, but not this read itself). total_population is a valid literal-RHS
 	# trigger (naval_raiding.txt:57, decentralize_realm_button.txt:25). When it's 0/none the seeded 0
 	# stands (a realm with no counted pops has no man-land crisis), so the crowding term is simply skipped.
+	# [log-triage 2026-08-20] country_population itself can still evaluate to 'none' on an early/
+	# not-yet-warm tick ("Wrong scope for trigger for compare trigger 'none'" -- a different symptom
+	# than the 2026-08-07 fix below closed, same underlying not-warm-yet race). Stage it into a var
+	# FIRST with the same wrapped value={value=X} idiom already proven for total_population two lines
+	# down, then gate on the var's comparison instead of the raw trigger -- a var compare never throws.
+	set_variable = { name = qing_pop_country_population_tmp  value = { value = country_population } }
 	if = {
 		# [logfix 2026-08-07] the guard trigger was `total_population > 0` — but total_population is a
 		# PROVINCE-only TRIGGER; in this country-scope effect it errored "Wrong scope for trigger: country,
@@ -82,10 +88,11 @@ QING_pop_recompute_target = {
 		# country-scope sum there.) Use country_population > 0, the PROVEN country-scope pop trigger
 		# (EE_lists.txt:38), which co-warms with total_population off the same pop index — same "pops are
 		# warm" intent, no scope error. The /1200 calibration on the total_population VALUE is unchanged.
-		limit = { country_population > 0 }
+		limit = { var:qing_pop_country_population_tmp > 0 }
 		set_variable = { name = qing_pop_pressure_target  value = { value = total_population } }
 		change_variable = { name = qing_pop_pressure_target  divide = 1200 }
 	}
+	remove_variable = qing_pop_country_population_tmp
 	# floor at 0 (a tiny realm has no man-land crisis).
 	if = { limit = { var:qing_pop_pressure_target < 0 } set_variable = { name = qing_pop_pressure_target  value = 0 } }
 
