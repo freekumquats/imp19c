@@ -1654,19 +1654,6 @@ QING_council_apply_officer_buffs = {
 		}
 		current_ruler = { add_character_modifier = { name = qing_guard_vitality_minor  duration = -1 } }
 	}
-	# [char-stat-rebalance probe 2026-08-17] blocked-on-data per
-	# design/DESIGN_CHARACTER_STAT_DISTRIBUTION.md — quarterly snapshot of every seated GC
-	# officeholder's 4 attributes, to confirm/refute whether the backfill draw's max-picking
-	# logic is still preferentially seating high-stat pool-feeder characters after the fix.
-	if = {
-		limit = { has_variable_list = qing_council_members }
-		every_in_list = {
-			variable = qing_council_members
-			limit = { is_alive = yes }
-			save_scope_as = qing_stat_probe_officer
-			LOG_line = { sys = QING  msg = "officer-stat-probe [qing_stat_probe_officer.GetName]: martial=[qing_stat_probe_officer.GetMartial] finesse=[qing_stat_probe_officer.GetFinesse] charisma=[qing_stat_probe_officer.GetCharisma] zeal=[qing_stat_probe_officer.GetZeal]" }
-		}
-	}
 	LOG_exit = { sys = QING  fn = "QING_council_apply_officer_buffs"  result = OK }
 }
 
@@ -1953,6 +1940,48 @@ QING_office_vacate_dispatch_nobackfill = {
 		employer = { QING_seat_regent_clear = yes }
 	}
 	LOG_exit = { sys = QING  fn = "QING_office_vacate_dispatch_nobackfill"  result = OK }
+}
+
+# ======================================================================
+# [1:1 researcher/governor-fix 2026-08-20] QING_council_relieve_double_booked_office -- the GRAND-COUNCIL
+# family's un-double-booking pass (STRIP ONLY, no backfill). Country scope (ROOT = CHI); run every quarter
+# from QING_GOV_pulse, mirroring QING_subpost_strip_double_booked (the ministry corps) and the two palace
+# studies' recompute sweeps.
+#
+# WHY THIS EXISTS: the corps + both studies already relieve THEIR members every pulse when a man takes a
+# role that breaks the 1:1 court-position rule -- but the 13 GREAT OFFICES (qing_office_held) had NO such
+# sweep: the one-position audit inside QING_council_recompute only LOGS a clash (see ~line 660), it never
+# strips. That gap IS the reported bug -- a Grand Council office-holder ALSO shown as a "Researcher" or a
+# provincial "Governor" (both titles at once). BOTH roles are VANILLA-ENGINE assignments: the Researcher =
+# the native Technology-panel tech office (has_tech_office); the Governor = the native governorship
+# (is_governor). The player assigns them through panels that call NO mod trigger (technology_view.gui's
+# [TechOfficeItem.OpenSelection] is a bare engine command), so the candidate list cannot be gated at the
+# click. So -- exactly as the corps/studies do -- we relieve HERE on the pulse: a GC office-holder who has
+# since taken a vanilla-unhookable role is VACATED from his GC seat (the vanilla role wins, per the user's
+# 1:1 framing; the seat refills via the normal council autofill next cycle). No-backfill this pass.
+# QING_office_vacate fires its recompute via a DEFERRED qing_office.40 event, so this is not re-entrant
+# even though QING_GOV_pulse runs QING_council_recompute immediately after.
+# ======================================================================
+QING_council_relieve_double_booked_office = {
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			has_variable = qing_office_held
+			# the vanilla-engine roles the mod cannot gate at assignment -- the SAME disqualifier set the corps
+			# sweep (QING_subpost_strip_double_booked) uses, PLUS has_tech_office for the Researcher.
+			OR = {
+				is_governor = yes
+				has_tech_office = yes
+				is_general = yes
+				is_admiral = yes
+				has_variable = qing_officer_marker
+			}
+		}
+		QING_office_vacate_dispatch_nobackfill = yes
+		QING_post_release = yes   # release qing_current_post too (the gc_office family of the #118 post system)
+		LOG_line = { sys = QING  msg = "1:1 relief: a Grand Council office-holder took a vanilla-engine role (Researcher/governor/commander) -- vacated his GC seat" }
+	}
 }
 
 # Character-scope dispatcher: vacate whatever office `this` holds. Lets a single

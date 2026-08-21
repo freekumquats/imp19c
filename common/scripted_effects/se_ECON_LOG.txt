@@ -117,15 +117,21 @@ ECON_LOG_currency_snapshot = {
 	# deflation floor and whether the denominator (private_cash_needed) is what moves.
 	if = {
 		limit = { has_variable = official_currency  tag = CHI }
-		# --- private_cash_ratio: the core signal (0..~2.6; deflation floor at <0.1 ⇒ ~-10%) ---
+		# --- private_cash_ratio: the core signal (0..~2.6; floor at <0.1) ---
+		# [1763-fix, task #8 follow-up] RELABELED away from "inflation/deflation" wording, same reason
+		# as ECON_LOG_curx_ratio above (design/DESIGN_CPI_INFLATION_READOUT.md): this is the SAME
+		# money-overhang ratio read a second time under a different var name -- essentials-cost sits
+		# in the denominator, so it moves OPPOSITE to real prices. CPI (CPI_update, se_CURRENCY.txt)
+		# is the correct "is this actual inflation" read. Missed relabeling this sibling block first
+		# pass left the exact same misleading trap live one block down.
 		set_variable = { name = ECON_LOG_cur_ratio  value = CURRENCY_private_cash_ratio }
 		if = { limit = { NOT = { has_variable = ECON_LOG_cur_ratio } }        debug_log = "IMP19C CURR ratio = UNSET" }
 		else_if = {
 			limit = { var:ECON_LOG_cur_ratio > -999999999 }
-			if = { limit = { var:ECON_LOG_cur_ratio >= 1 }        debug_log = "IMP19C CURR ratio >= 1.0 (inflation side)" }
-			else_if = { limit = { var:ECON_LOG_cur_ratio >= 0.5 } debug_log = "IMP19C CURR ratio 0.5-1.0 (mild deflation)" }
-			else_if = { limit = { var:ECON_LOG_cur_ratio >= 0.1 } debug_log = "IMP19C CURR ratio 0.1-0.5 (serious deflation)" }
-			else = { debug_log = "IMP19C CURR ratio < 0.1 (deflation FLOOR ~ -10%)" }
+			if = { limit = { var:ECON_LOG_cur_ratio >= 1 }        debug_log = "IMP19C CURR ratio >= 1.0 (high money-overhang side -- NOT a price-inflation read; see CPI)" }
+			else_if = { limit = { var:ECON_LOG_cur_ratio >= 0.5 } debug_log = "IMP19C CURR ratio 0.5-1.0 (mild cash shortfall)" }
+			else_if = { limit = { var:ECON_LOG_cur_ratio >= 0.1 } debug_log = "IMP19C CURR ratio 0.1-0.5 (serious cash shortfall)" }
+			else = { debug_log = "IMP19C CURR ratio < 0.1 (cash shortfall FLOOR)" }
 		}
 		else = { debug_log = "IMP19C CURR ratio = EMPTY" }
 		remove_variable = ECON_LOG_cur_ratio
@@ -292,24 +298,34 @@ ECON_LOG_quarter = {
 # Country scope, CHI-only, silent outside -debug_mode. Read-only (temps removed each call).
 # ======================================================================
 
-# --- ratio: the core signal. Fine bands around the 1.0 inflation/deflation boundary and the
-# deflation floor (<0.1 ~ -10%), since that is where the reported snap lives. ---
+# --- ratio: the core signal. Fine bands around the 1.0 boundary and the floor (<0.1), since that
+# is where the reported snap lives.
+# [1763-fix, task #8] RELABELED bands away from "inflation/deflation" wording. CURRENCY_private_cash_ratio
+# is a money-overhang LEVEL (circulating cash / essentials cost-of-living NEEDED) with essentials
+# prices in the DENOMINATOR -- it moves OPPOSITE to real prices (cheap essentials -> small
+# denominator -> high ratio), the exact inversion design/DESIGN_CPI_INFLATION_READOUT.md's own
+# §1 documents ("the number was high BECAUSE essentials were cheap, not because prices rose...
+# a defensible upstream modelling simplification, NOT a bug, but the LABEL is misleading"). CPI
+# (CPI_update, se_CURRENCY.txt) is the real nominal-price-level rate and is the correct "is this
+# actual inflation" read; a high CURX ratio alongside a negative CPI is the DESIGNED signature of
+# cheap/falling essentials, not a contradiction. Old "(strong inflation)"-style suffixes were
+# actively misleading a log read into re-flagging this as a bug (confirmed happened, this task).
 ECON_LOG_curx_ratio = {
 	# Scope: country
 	set_variable = { name = ECON_LOG_cx_ratio  value = CURRENCY_private_cash_ratio }
 	if = { limit = { NOT = { has_variable = ECON_LOG_cx_ratio } }              debug_log = "IMP19C CURX ratio = UNSET" }
 	else_if = {
 		limit = { var:ECON_LOG_cx_ratio > -999999999 }
-		if = { limit = { var:ECON_LOG_cx_ratio >= 1.5 }        debug_log = "IMP19C CURX ratio >= 1.50 (strong inflation)" }
-		else_if = { limit = { var:ECON_LOG_cx_ratio >= 1.20 }  debug_log = "IMP19C CURX ratio 1.20-1.50 (inflation)" }
-		else_if = { limit = { var:ECON_LOG_cx_ratio >= 1.05 }  debug_log = "IMP19C CURX ratio 1.05-1.20 (modest inflation)" }
-		else_if = { limit = { var:ECON_LOG_cx_ratio >= 1.00 }  debug_log = "IMP19C CURX ratio 1.00-1.05 (parity, slight inflation)" }
-		else_if = { limit = { var:ECON_LOG_cx_ratio >= 0.90 }  debug_log = "IMP19C CURX ratio 0.90-1.00 (near parity, deflation onset)" }
-		else_if = { limit = { var:ECON_LOG_cx_ratio >= 0.75 }  debug_log = "IMP19C CURX ratio 0.75-0.90 (mild deflation)" }
-		else_if = { limit = { var:ECON_LOG_cx_ratio >= 0.50 }  debug_log = "IMP19C CURX ratio 0.50-0.75 (deflation)" }
-		else_if = { limit = { var:ECON_LOG_cx_ratio >= 0.25 }  debug_log = "IMP19C CURX ratio 0.25-0.50 (serious deflation)" }
-		else_if = { limit = { var:ECON_LOG_cx_ratio >= 0.10 }  debug_log = "IMP19C CURX ratio 0.10-0.25 (severe deflation)" }
-		else_if = { limit = { var:ECON_LOG_cx_ratio >= 0.01 }  debug_log = "IMP19C CURX ratio 0.01-0.10 (deflation FLOOR ~ -10pct)" }
+		if = { limit = { var:ECON_LOG_cx_ratio >= 1.5 }        debug_log = "IMP19C CURX ratio >= 1.50 (high money-overhang -- NOT a price-inflation read; see CPI)" }
+		else_if = { limit = { var:ECON_LOG_cx_ratio >= 1.20 }  debug_log = "IMP19C CURX ratio 1.20-1.50 (elevated money-overhang)" }
+		else_if = { limit = { var:ECON_LOG_cx_ratio >= 1.05 }  debug_log = "IMP19C CURX ratio 1.05-1.20 (modest money-overhang)" }
+		else_if = { limit = { var:ECON_LOG_cx_ratio >= 1.00 }  debug_log = "IMP19C CURX ratio 1.00-1.05 (parity, slight money-overhang)" }
+		else_if = { limit = { var:ECON_LOG_cx_ratio >= 0.90 }  debug_log = "IMP19C CURX ratio 0.90-1.00 (near parity, overhang easing)" }
+		else_if = { limit = { var:ECON_LOG_cx_ratio >= 0.75 }  debug_log = "IMP19C CURX ratio 0.75-0.90 (mild cash shortfall)" }
+		else_if = { limit = { var:ECON_LOG_cx_ratio >= 0.50 }  debug_log = "IMP19C CURX ratio 0.50-0.75 (cash shortfall)" }
+		else_if = { limit = { var:ECON_LOG_cx_ratio >= 0.25 }  debug_log = "IMP19C CURX ratio 0.25-0.50 (serious cash shortfall)" }
+		else_if = { limit = { var:ECON_LOG_cx_ratio >= 0.10 }  debug_log = "IMP19C CURX ratio 0.10-0.25 (severe cash shortfall)" }
+		else_if = { limit = { var:ECON_LOG_cx_ratio >= 0.01 }  debug_log = "IMP19C CURX ratio 0.01-0.10 (cash shortfall FLOOR)" }
 		else = { debug_log = "IMP19C CURX ratio < 0.01 (pinned at floor)" }
 	}
 	else = { debug_log = "IMP19C CURX ratio = EMPTY (Div0/unset operand)" }
