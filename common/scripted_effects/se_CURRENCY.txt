@@ -1201,7 +1201,15 @@ CURRENCY_private_purchase_or_sell_reserves = {
 			NOT = { has_variable = reserves_frozen }
 		}
 		if = {
+			# [1763-fix, task #13] guard the bare LHS reads (was: "Variable not of the 'value' scope
+			# type. Type: empty", 12 hits/boot) -- the RHS script values (CURRENCY_silver_reserve_size/
+			# CURRENCY_gold_reserve_size) already guard read-before-set (2026-07-24), but the LHS
+			# var:gold_reserve_size/var:silver_reserve_size comparisons here never got the same guard.
+			# A country whose reserves haven't been initialised yet this tick now safely no-ops (falls
+			# through to else_if, then out) instead of throwing -- matches the RHS's own "unset == 0"
+			# convention.
 			limit = {
+				has_variable = gold_reserve_size
 				var:gold_reserve_size > CURRENCY_silver_reserve_size
 			}
 			change_variable = {
@@ -1215,6 +1223,7 @@ CURRENCY_private_purchase_or_sell_reserves = {
 		}
 		else_if = {
 			limit = {
+				has_variable = silver_reserve_size
 				var:silver_reserve_size > CURRENCY_gold_reserve_size
 			}
 			change_variable = {

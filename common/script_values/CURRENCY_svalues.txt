@@ -685,11 +685,18 @@ CURRENCY_essentials_buying_power = {
 	# GT_split_get_country_import_unit_price_tradegood, se_GLOBALTRADE_split.txt ~2893-2909); if
 	# stockpile has never once been nonzero (day-0 edge case only), the term adds nothing (0),
 	# matching this formula's pre-existing behavior for that case.
+	# [1763-fix, task #14] added `has_variable = country_unit_price_X` to every "live price" branch
+	# below (same fix as CPI_basket_price's own duplicate of this exact list, per this function's own
+	# maintenance-note above) -- was a bare var:country_unit_price_X read, "Variable not of the 'value'
+	# scope type. Type: empty" (27 hits/boot combined with the CPI_basket_price twin). This function
+	# feeds CURRENCY_private_cash_ratio's DENOMINATOR directly, the exact metric task #8 examined, so
+	# an unguarded empty add here could silently understate the essentials basket some quarters.
 	value = 0
 	if = {
 		limit = {
 			has_global_variable = global_stockpile_grain
 			global_var:global_stockpile_grain > 0
+			has_variable = country_unit_price_grain
 		}
 		add = var:country_unit_price_grain
 	}
@@ -701,6 +708,7 @@ CURRENCY_essentials_buying_power = {
 		limit = {
 			has_global_variable = global_stockpile_livestock
 			global_var:global_stockpile_livestock > 0
+			has_variable = country_unit_price_livestock
 		}
 		add = var:country_unit_price_livestock
 	}
@@ -712,6 +720,7 @@ CURRENCY_essentials_buying_power = {
 		limit = {
 			has_global_variable = global_stockpile_fish
 			global_var:global_stockpile_fish > 0
+			has_variable = country_unit_price_fish
 		}
 		add = var:country_unit_price_fish
 	}
@@ -723,6 +732,7 @@ CURRENCY_essentials_buying_power = {
 		limit = {
 			has_global_variable = global_stockpile_vegetables
 			global_var:global_stockpile_vegetables > 0
+			has_variable = country_unit_price_vegetables
 		}
 		add = var:country_unit_price_vegetables
 	}
@@ -734,6 +744,7 @@ CURRENCY_essentials_buying_power = {
 		limit = {
 			has_global_variable = global_stockpile_temperate_fruit
 			global_var:global_stockpile_temperate_fruit > 0
+			has_variable = country_unit_price_temperate_fruit
 		}
 		add = var:country_unit_price_temperate_fruit
 	}
@@ -745,6 +756,7 @@ CURRENCY_essentials_buying_power = {
 		limit = {
 			has_global_variable = global_stockpile_processed_foods
 			global_var:global_stockpile_processed_foods > 0
+			has_variable = country_unit_price_processed_foods
 		}
 		add = var:country_unit_price_processed_foods
 	}
@@ -756,6 +768,7 @@ CURRENCY_essentials_buying_power = {
 		limit = {
 			has_global_variable = global_stockpile_clothing
 			global_var:global_stockpile_clothing > 0
+			has_variable = country_unit_price_clothing
 		}
 		add = var:country_unit_price_clothing
 	}
@@ -767,6 +780,7 @@ CURRENCY_essentials_buying_power = {
 		limit = {
 			has_global_variable = global_stockpile_furniture
 			global_var:global_stockpile_furniture > 0
+			has_variable = country_unit_price_furniture
 		}
 		add = var:country_unit_price_furniture
 	}
@@ -778,6 +792,7 @@ CURRENCY_essentials_buying_power = {
 		limit = {
 			has_global_variable = global_stockpile_pharmaceuticals
 			global_var:global_stockpile_pharmaceuticals > 0
+			has_variable = country_unit_price_pharmaceuticals
 		}
 		add = var:country_unit_price_pharmaceuticals
 	}
@@ -789,6 +804,7 @@ CURRENCY_essentials_buying_power = {
 		limit = {
 			has_global_variable = global_stockpile_alcohol
 			global_var:global_stockpile_alcohol > 0
+			has_variable = country_unit_price_alcohol
 		}
 		add = var:country_unit_price_alcohol
 	}
@@ -800,6 +816,7 @@ CURRENCY_essentials_buying_power = {
 		limit = {
 			has_global_variable = global_stockpile_luxury_clothing
 			global_var:global_stockpile_luxury_clothing > 0
+			has_variable = country_unit_price_luxury_clothing
 		}
 		add = var:country_unit_price_luxury_clothing
 	}
@@ -811,6 +828,7 @@ CURRENCY_essentials_buying_power = {
 		limit = {
 			has_global_variable = global_stockpile_luxury_furniture
 			global_var:global_stockpile_luxury_furniture > 0
+			has_variable = country_unit_price_luxury_furniture
 		}
 		add = var:country_unit_price_luxury_furniture
 	}
@@ -845,54 +863,62 @@ CURRENCY_essentials_buying_power = {
 # list changes, update BOTH this block and CURRENCY_essentials_buying_power together.
 CPI_basket_price = {
 	# Scope: Country
+	# [1763-fix, task #14] added `has_variable = country_unit_price_X` to every one of the 10 "live
+	# price" branches below (was: bare var:country_unit_price_X reads, "Variable not of the 'value'
+	# scope type. Type: empty", 27 hits/boot -- a country whose unit-price cache hadn't run yet this
+	# tick). This directly feeds CPI_basket_price, the exact metric task #8 examined -- an unguarded
+	# empty add here could silently drop a good from the basket sum some quarters, not just spam the
+	# log. Falling through to the existing else_if (last-nonzero-price) on a not-yet-set price matches
+	# the same branch's existing "stockpile is 0" fallback, so this is a pure safety guard, not a new
+	# behaviour.
 	value = 0
 	if = {
-		limit = { has_global_variable = global_stockpile_grain  global_var:global_stockpile_grain > 0 }
+		limit = { has_global_variable = global_stockpile_grain  global_var:global_stockpile_grain > 0  has_variable = country_unit_price_grain }
 		add = var:country_unit_price_grain
 	}
 	else_if = { limit = { has_variable = grain_ess_last_nonzero_price } add = var:grain_ess_last_nonzero_price }
 	if = {
-		limit = { has_global_variable = global_stockpile_livestock  global_var:global_stockpile_livestock > 0 }
+		limit = { has_global_variable = global_stockpile_livestock  global_var:global_stockpile_livestock > 0  has_variable = country_unit_price_livestock }
 		add = var:country_unit_price_livestock
 	}
 	else_if = { limit = { has_variable = livestock_ess_last_nonzero_price } add = var:livestock_ess_last_nonzero_price }
 	if = {
-		limit = { has_global_variable = global_stockpile_fish  global_var:global_stockpile_fish > 0 }
+		limit = { has_global_variable = global_stockpile_fish  global_var:global_stockpile_fish > 0  has_variable = country_unit_price_fish }
 		add = var:country_unit_price_fish
 	}
 	else_if = { limit = { has_variable = fish_ess_last_nonzero_price } add = var:fish_ess_last_nonzero_price }
 	if = {
-		limit = { has_global_variable = global_stockpile_vegetables  global_var:global_stockpile_vegetables > 0 }
+		limit = { has_global_variable = global_stockpile_vegetables  global_var:global_stockpile_vegetables > 0  has_variable = country_unit_price_vegetables }
 		add = var:country_unit_price_vegetables
 	}
 	else_if = { limit = { has_variable = vegetables_ess_last_nonzero_price } add = var:vegetables_ess_last_nonzero_price }
 	if = {
-		limit = { has_global_variable = global_stockpile_temperate_fruit  global_var:global_stockpile_temperate_fruit > 0 }
+		limit = { has_global_variable = global_stockpile_temperate_fruit  global_var:global_stockpile_temperate_fruit > 0  has_variable = country_unit_price_temperate_fruit }
 		add = var:country_unit_price_temperate_fruit
 	}
 	else_if = { limit = { has_variable = temperate_fruit_ess_last_nonzero_price } add = var:temperate_fruit_ess_last_nonzero_price }
 	if = {
-		limit = { has_global_variable = global_stockpile_processed_foods  global_var:global_stockpile_processed_foods > 0 }
+		limit = { has_global_variable = global_stockpile_processed_foods  global_var:global_stockpile_processed_foods > 0  has_variable = country_unit_price_processed_foods }
 		add = var:country_unit_price_processed_foods
 	}
 	else_if = { limit = { has_variable = processed_foods_ess_last_nonzero_price } add = var:processed_foods_ess_last_nonzero_price }
 	if = {
-		limit = { has_global_variable = global_stockpile_clothing  global_var:global_stockpile_clothing > 0 }
+		limit = { has_global_variable = global_stockpile_clothing  global_var:global_stockpile_clothing > 0  has_variable = country_unit_price_clothing }
 		add = var:country_unit_price_clothing
 	}
 	else_if = { limit = { has_variable = clothing_ess_last_nonzero_price } add = var:clothing_ess_last_nonzero_price }
 	if = {
-		limit = { has_global_variable = global_stockpile_furniture  global_var:global_stockpile_furniture > 0 }
+		limit = { has_global_variable = global_stockpile_furniture  global_var:global_stockpile_furniture > 0  has_variable = country_unit_price_furniture }
 		add = var:country_unit_price_furniture
 	}
 	else_if = { limit = { has_variable = furniture_ess_last_nonzero_price } add = var:furniture_ess_last_nonzero_price }
 	if = {
-		limit = { has_global_variable = global_stockpile_pharmaceuticals  global_var:global_stockpile_pharmaceuticals > 0 }
+		limit = { has_global_variable = global_stockpile_pharmaceuticals  global_var:global_stockpile_pharmaceuticals > 0  has_variable = country_unit_price_pharmaceuticals }
 		add = var:country_unit_price_pharmaceuticals
 	}
 	else_if = { limit = { has_variable = pharmaceuticals_ess_last_nonzero_price } add = var:pharmaceuticals_ess_last_nonzero_price }
 	if = {
-		limit = { has_global_variable = global_stockpile_alcohol  global_var:global_stockpile_alcohol > 0 }
+		limit = { has_global_variable = global_stockpile_alcohol  global_var:global_stockpile_alcohol > 0  has_variable = country_unit_price_alcohol }
 		add = var:country_unit_price_alcohol
 	}
 	else_if = { limit = { has_variable = alcohol_ess_last_nonzero_price } add = var:alcohol_ess_last_nonzero_price }
