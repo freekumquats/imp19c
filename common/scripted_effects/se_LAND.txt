@@ -658,8 +658,10 @@ LAND_release_from_list = {
 	# args + accepted values:
 	# list  			: list of provinces (NOT a variable list)
 	# capital_location 	: flag:by_population / p:provid
-	# primary_culture 	: as_capital / culture script name
-	# country_religion 	: dynamic / religion script name
+	# primary_culture 	: culture script name or scope (ignored if primary_culture_as_capital=yes)
+	# primary_culture_as_capital : yes/no -- yes inherits the new capital province's own culture
+	# country_religion 	: dynamic / religion script name (ignored if country_religion_as_capital=yes)
+	# country_religion_as_capital : yes/no -- yes inherits the new capital province's own religion
 	# country_name 		: dynamic / loc key
 	# country_adj 		: dynamic / loc key
 	# country_flag 		: dynamic / coat_of_arms script tag
@@ -709,43 +711,31 @@ LAND_release_from_list = {
 		create_country = {
 			save_scope_as = new_country_scope
 			# Set culture
-            # [as_capital fix v2 2026-08-01] The prior version seeded `value = $primary_culture$`
-            # RAW, then compared `var: = flag:as_capital`. That fails BOTH caller shapes:
-            #  - sentinel callers passed `flag:as_capital` -> a var holding a flag compared to
-            #    flag:as_capital resolved FALSE (flag-in-var identity is unreliable), so the else fed
-            #    the literal text "flag:as_capital" into set_primary_culture -> invalid-target error.
-            #  - scope callers passed a culture/religion SCOPE -> storing a scope in the var then
-            #    comparing it to a flag threw "Invalid left side during comparison 'var'".
-            # Fix: wrap the passed value with flag:$macro$ (the PROVEN idiom, se_LAND:838 country_name
-            # + se_QING_LEGATIONS:78). flag:$arg$ coerces ANY macro text to a flag, so the comparison
-            # is always flag-vs-flag (never a scope-vs-flag type error): the bare sentinel `as_capital`
-            # becomes flag:as_capital and matches; a scope arg becomes a flag literally named
-            # "scope:..." that simply never matches -> the else fires and uses the RAW $arg$ scope
-            # correctly. REQUIRES sentinel callers pass a BARE `as_capital` (not flag:as_capital),
-            # else flag:flag:as_capital is double-wrapped and never matches. Callers updated to suit.
-            # [#23 2026-08-09 log-flood fix] The v2 var-indirection (set_variable value=flag:$primary_culture$
-            # then var:X = flag:as_capital) DID NOT MATCH — flag-in-var identity is unreliable (the code's own
-            # comment above admits it), so the else fed the literal text "as_capital" into set_primary_culture /
-            # set_country_religion, erroring "Value 'as_capital' is invalid" for EVERY as_capital caller
-            # (send_settlers, DIPLOMACY_resolve_liberate/_colonise, AI_make_peace — a 37-line boot flood). Fix:
-            # compare the passed macro DIRECTLY as a flag against flag:as_capital — the PROVEN direct form
-            # (imp19c_formable_triggers.txt:83 `flag:$tag$ = flag:GER`; 00_trade_scripted_triggers.txt:50), no
-            # var round-trip. Sentinel callers pass BARE `as_capital` -> flag:as_capital = flag:as_capital
-            # matches -> uses the capital province's own culture/faith; a real culture/religion arg -> flag
-            # named e.g. "flag:manchu" never equals flag:as_capital -> the else uses the raw arg correctly.
+            # [as_capital fix v1/v2/#23, 2026-08-01 to 2026-08-09] three prior attempts (var+flag
+            # round-trip, then direct flag:$macro$ = flag:as_capital) all failed: flag:X is itself
+            # a complete boolean trigger, not a comparable value, so comparing two already-evaluated
+            # booleans can never be true for ANY caller. Every sentinel caller therefore fell to the
+            # else and fed the literal text "as_capital" into set_primary_culture/set_country_religion
+            # (silent no-op, confirmed in error.log for send_settlers, SEPARATISM, DIPLOMACY_resolve_
+            # liberate/_colonise, AI_make_peace_province_wishlist, USA_release_confederacy).
+            # [fix 2026-08-22] stop overloading primary_culture/country_religion with a sentinel
+            # string at all. New explicit bool args primary_culture_as_capital / country_religion_as_
+            # capital (same bare-word-bool idiom as this macro's own $give_overlord_hos$ = yes) select
+            # the capital-inherits path; primary_culture/country_religion are then only ever read as
+            # real values, never compared. ALL callers updated.
             if = {
             	limit = {
-            		flag:$primary_culture$ = flag:as_capital
+            		$primary_culture_as_capital$ = yes
             	}
             	set_primary_culture = scope:new_capital_scope.dominant_province_culture # TODO: Add conditions
             }
             else = {
             	set_primary_culture = $primary_culture$
             }
-            # Set religion — same direct flag:$macro$ = flag:as_capital comparison.
+            # Set religion, same fix: explicit bool arg replaces the sentinel-string overload.
             if = {
             	limit = {
-            		flag:$country_religion$ = flag:as_capital
+            		$country_religion_as_capital$ = yes
             	}
             	set_country_religion = scope:new_capital_scope.dominant_province_religion # TODO: Add conditions
             }
