@@ -202,6 +202,42 @@ QING_GOV_apply_exam_ladder_band = {
 # builds (province menu), and loses (war) yamens and academies, and QING_bureau_reach / QING_exam_reach
 # read the resulting network live. No script spawn/demolish loop remains. See design §1/§2/§9.
 # ======================================================================
+# [1:1 vanilla-role audit 2026-08-24] QING_officer_strip_double_booked -- relieve
+# qing_officer_marker (garrison/army field officer, the #331 set_as_commander marker) from
+# any character who has since taken a clearly-non-military vanilla role. Every OTHER
+# GC-position/sub-position family (great offices, ministry corps, ambans, palace eunuchs) has
+# its own strip sweep; qing_officer_marker never did -- once stamped, it stuck forever. Country
+# scope (ROOT = CHI); run every quarter from QING_GOV_pulse. is_general/is_admiral are
+# excluded from the DISQUALIFIER set (being a commander is not itself the conflict); a
+# Researcher, provincial Governor, or base-game council office IS the conflict.
+# [review-fix 2026-08-24] the first version only cleared the mod's OWN bookkeeping flag and left
+# the character's actual vanilla command untouched -- remove_command (proven at
+# se_QING_CENSORATE.txt:342 / se_QING_JUSTICE.txt:349, both citing the base-game annexation.txt:546
+# precedent) ACTUALLY relieves him of a legion/fleet command when he currently holds one. Applied
+# alongside the marker strip, not instead of it: not every qing_officer_marker holder registers
+# is_general (the BT-7 lesson -- some Green-Standard/Banner garrison officers never do), so the
+# marker clear is still needed as the mod's own record; remove_command is the real-world action
+# for the subset who do.
+# ======================================================================
+QING_officer_strip_double_booked = {
+	every_character = {
+		limit = {
+			employer = ROOT
+			is_alive = yes
+			has_variable = qing_officer_marker
+			OR = {
+				has_tech_office = yes
+				is_governor = yes
+				has_any_office = yes
+			}
+		}
+		remove_variable = qing_officer_marker
+		if = { limit = { OR = { is_general = yes  is_admiral = yes } }  remove_command = yes }
+		LOG_line = { sys = QING  msg = "officer: 1:1 relief -- garrison/army officer took a vanilla Researcher/governor/office role, marker stripped and command relieved" }
+	}
+}
+
+# ======================================================================
 # THE GOVERNANCE PULSE ENTRY POINT
 # Called from the throttled monthly pulse (00_monthly_country.txt) right after
 # the decline pulse, so the council recompute below sees fresh decline counters.
@@ -233,6 +269,15 @@ QING_GOV_pulse = {
 	#     their sweeps; the 13 great offices had no such sweep until now (the one-position audit only LOGGED).
 	#     (se_QING_COUNCIL.txt)
 	QING_council_relieve_double_booked_office = yes
+
+	# 0d. [1:1 vanilla-role audit 2026-08-24] garrison commander (qing_officer_marker, the #331
+	#     set_as_commander marker) is one of the GC sub-positions the 1:1 rule covers, but unlike
+	#     every OTHER family it had NO relief mechanism at all -- the marker, once stamped, was
+	#     never removed by anything. Reported bug: a manually-appointed Researcher who was also a
+	#     garrison commander kept BOTH indefinitely. Relieve the marker (not is_general/is_admiral --
+	#     those overlap with what "garrison officer" already represents) when a clearly-non-military
+	#     vanilla role is taken.
+	QING_officer_strip_double_booked = yes
 
 	# 1. recompute the Grand Council's effectiveness from its seated members (+ 1:1 audit + corruption sum)
 	QING_council_recompute = yes
@@ -542,6 +587,14 @@ QING_GOV_pulse = {
 	#     frontier-rivalry pressure the Great-Game events read (self-guards on the
 	#     Zongli holder + tension thresholds). GUI panel HELD (unproven idiom).
 	QING_greatgame_pulse = yes
+	# 18b. [1:1 garrison/researcher-fix 2026-08-23] RELIEVE any posted amban who has since
+	#      taken a vanilla-engine role the mod cannot gate at the click (a "Researcher",
+	#      has_tech_office; a garrison/army field officer, qing_officer_marker; or a
+	#      governor/general/admiral command) -- the same relief the GC offices and the
+	#      ministry corps already get. Runs BEFORE the fill sweep below, UNGATED (a resident
+	#      who took a vanilla role is recalled regardless of whether the Lifan Yuan seat is
+	#      filled). (se_QING_AMBAN.txt)
+	QING_amban_strip_double_booked = yes
 	# 19. Lifan Yuan 理藩院 ↔ ambans/residents (#113): staff an unattended Inner
 	#     Asian dependency (post sweep, gated on the Lifan holder) then score every
 	#     posted resident against the holder + throne (clash/cooperate → subject
@@ -568,6 +621,11 @@ QING_GOV_pulse = {
 	#      office being filled; draws free eligible courtiers, minting above-expectations
 	#      provincial students via the exam when short. (se_QING_SUBPOSTS.txt)
 	QING_subpost_refill_sweep = yes
+	# 19c. [zongli-dispatch 2026-08-24] any Zongli diplomat currently dispatched to a play rolls
+	#      a charisma-weighted chance of a further event nudging that play's success up or down.
+	#      Own dedicated event-slot (not the shared court slot the six rollers above/below
+	#      already contend for), so this doesn't get starved. (se_QING_ZONGLI_DISPATCH.txt)
+	QING_zongli_dispatch_pulse = yes
 	# 20. Province-level ethnic tension (#107): accrue qing_prov_ethnic_tension from
 	#     local conditions, snowball to neighbours, erupt into revolt past threshold.
 	#     Heavy every_owned_province sweep — parallels the migration pulse.

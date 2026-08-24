@@ -113,11 +113,19 @@ QING_canton_pulse = {
 		change_variable = { name = qing_canton_yield_tmp  add = GOODS_national_production_silk }
 		change_variable = { name = qing_canton_yield_tmp  add = GOODS_national_production_porcelain }
 		change_variable = { name = qing_canton_yield_tmp  divide = 8 }
-		if = { limit = { var:qing_canton_yield_tmp < 8 }  set_variable = { name = qing_canton_yield_tmp  value = 8 } }
-		# a runaway export boom must not balloon the customs beyond the port's throughput — cap the raw
-		# goods-basis at 45萬兩/quarter (before the port/squeeze multipliers below), the ceiling of what
-		# the single Canton entrepôt could clear under the 一口通商 single-port system.
-		if = { limit = { var:qing_canton_yield_tmp > 45 }  set_variable = { name = qing_canton_yield_tmp  value = 45 } }
+		# [fix 2026-08-24] removed the "floor at 8 if below 8" clamp on user request, same reasoning as
+		# the 45 ceiling removed below: an arbitrary floor guaranteeing customs income regardless of how
+		# little the empire actually exports is no more justified than an arbitrary ceiling on how much
+		# it can export. The yield now tracks real tea/silk/porcelain production with no artificial
+		# floor OR ceiling on the goods-basis — a collapsed export economy now correctly yields a
+		# correspondingly small (or near-zero) customs take.
+		# [fix 2026-08-24] the 45萬兩/quarter single-port throughput cap that used to sit here was
+		# removed on user request: it modeled a port UPGRADE as "collect more tax from the same fixed
+		# trade volume," never as "clear more actual cargo" — the raw goods-basis could never exceed 45
+		# no matter how developed the port became, which contradicted the port/Customs-House multipliers
+		# just below that ARE meant to respond to development. The real export economy now scales the
+		# base freely; the port-tier and Customs-House multipliers below still differentiate a developed
+		# port from an undeveloped one, on top of whatever the real trade volume is.
 		# scale by Guangzhou's (province 9298) port development — a bigger port, more trade.
 		# port_building levels run 0..3 at 1763; each level above 1 adds a fifth again.
 		if = {
@@ -128,6 +136,21 @@ QING_canton_pulse = {
 			limit = { exists = p:9298  p:9298 = { num_of_port_building >= 2 } }
 			change_variable = { name = qing_canton_yield_tmp  multiply = 1.2 }
 		}
+		# [fix 2026-08-23] scale by the empire's Imperial Customs Houses (qing_customs_house_building) --
+		# the concrete Maritime Customs Service structure had never fed the Canton yield at all, despite
+		# being the on-map building for the same office that runs this trade. +10% per house, mirroring
+		# the port_building tier's magnitude, no cap (a country can only build so many coastal provinces).
+		set_variable = {
+			name = qing_canton_customs_houses_tmp
+			value = {
+				value = 0
+				every_owned_province = { add = num_of_qing_customs_house_building }
+			}
+		}
+		change_variable = { name = qing_canton_customs_houses_tmp  multiply = 0.1 }
+		change_variable = { name = qing_canton_customs_houses_tmp  add = 1 }
+		change_variable = { name = qing_canton_yield_tmp  multiply = var:qing_canton_customs_houses_tmp }
+		remove_variable = qing_canton_customs_houses_tmp
 		# a capable, honest Hoppo delivers more of the trade's worth to the throne; a venal one
 		# lets his squeeze swallow it (high squeeze shaves the yield that actually reaches Peking).
 		# [#69 note] this reads LAST quarter's qing_hoppo_squeeze — the squeeze is re-derived from the
@@ -223,7 +246,13 @@ QING_canton_pulse = {
 		# Hoppo squeeze, tariff law) for free — close the port → yield 0 → inflow 0.
 		# UNITS: qing_canton_yield_tmp is 萬兩; silver_reserve_size is 千兩 → ×10 conversion (fixed), then
 		# ×1.5 trade-specie multiple tuned to the sourced ~100 tons/yr Canton inflow (Deng 2008;
-		# research/1763_CANTON_SILVER_INFLOW.md): 45萬兩 → ×10=450 → ×1.5=675 千兩/qtr ≈ ~100 tons/yr.
+		# research/1763_CANTON_SILVER_INFLOW.md): AT THE HISTORICAL ZENITH (yield_tmp ≈ 45萬兩, back
+		# when the goods-basis was still capped there) this reads 45×10=450, ×1.5=675 千兩/qtr ≈ ~100
+		# tons/yr — the calibration point the ×10/×1.5 conversion factors were tuned against. [fix
+		# 2026-08-24] the 45 cap itself was removed (see the goods-basis comment above); yield_tmp can
+		# now exceed 45 in a larger export economy, and this conversion scales up with it uncapped —
+		# the ×10/×1.5 factors are unchanged, only the input they're applied to can now grow past the
+		# historical zenith that originally calibrated them.
 		# NO upper cap (the 1777 peak is a milestone EVENT, not a ceiling — the peak clamp was removed
 		# from QING_revenue_reserve_drift 2026-08-06); this is a data-driven MARKET writer, so real trade
 		# specie may carry the reserve above the historic peak. Moves silver_reserve_size ONLY — does NOT
@@ -273,6 +302,9 @@ QING_canton_pulse = {
 						has_variable = qing_officer_marker
 						has_variable = qing_customs_ig_marker
 						has_variable = qing_court_artist
+						# [1:1 vanilla-role audit 2026-08-24, review-fix] missing Researcher/base-game-office.
+						has_tech_office = yes
+						has_any_office = yes
 					}
 				}
 			}
@@ -479,6 +511,11 @@ QING_canton_appoint_hoppo = {
 			is_general = no
 			is_admiral = no
 			is_governor = no
+			# [1:1 GC-wide audit 2026-08-24] not a sitting VANILLA "Researcher" (has_tech_office) --
+			# the same gap closed for the GC autofill/amban/subpost pickers; a Hoppo draw could
+			# otherwise seat a man who is also the native Technology-office holder.
+			has_tech_office = no
+			has_any_office = no
 			# [#76 2026-08-08 reopened] ALSO exclude a serving garrison/army FIELD OFFICER. The reported
 			# Aligun/585 case: he commands the Jingzhou banner garrison, attached via set_as_commander at
 			# setup — which stamps qing_officer_marker (imp19c_effects_legion_setup.txt:189) but does NOT

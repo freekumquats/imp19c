@@ -67,6 +67,15 @@ QING_amban_post = {
 				is_general = no
 				is_admiral = no
 				is_governor = no
+				# [1:1 garrison/researcher-fix 2026-08-23] the two vanilla roles the mod cannot gate
+				# at the click (Researcher / garrison-officer) were missing from this picker's
+				# disqualifier set, unlike commander/governor above — a fresh draw could pick a man
+				# QING_amban_strip_double_booked would immediately evict next pulse (post/strip churn).
+				has_tech_office = no
+				# [1:1 vanilla-role audit 2026-08-24, review-fix] same churn risk as has_tech_office
+				# above, now that the strip also evicts on has_any_office=yes.
+				has_any_office = no
+				NOT = { has_variable = qing_officer_marker }
 				# [#46 2026-08-05] one man, one post: exclude anyone ALREADY holding any court
 				# position (office / diplomat / censor / guard / both palace studies / amban / eunuch /
 				# consort) via the single canonical trigger, instead of hand-rolling per-marker NOTs.
@@ -102,6 +111,13 @@ QING_amban_post = {
 				is_general = no
 				is_admiral = no
 				is_governor = no
+				# [1:1 garrison/researcher-fix 2026-08-23] same addition as the any_character gate
+				# above — see that comment for why.
+				has_tech_office = no
+				# [1:1 vanilla-role audit 2026-08-24, review-fix] same churn risk as has_tech_office
+				# above, now that the strip also evicts on has_any_office=yes.
+				has_any_office = no
+				NOT = { has_variable = qing_officer_marker }
 				# [#46 2026-08-05] one man, one post: exclude anyone ALREADY holding any court
 				# position (office / diplomat / censor / guard / both palace studies / amban / eunuch /
 				# consort) via the single canonical trigger, instead of hand-rolling per-marker NOTs.
@@ -245,6 +261,14 @@ QING_amban_refresh_candidates = {
 			is_admiral = no
 			is_governor = no
 			NOT = { QING_char_holds_court_position = yes }
+			# [1:1 GC-wide audit 2026-08-24] the draw-path pickers above (QING_amban_post, :67/:108)
+			# already exclude a sitting Researcher/garrison-officer; this MANUAL candidate-list
+			# builder had drifted out of sync and would still LIST such a man even though a click
+			# on him would be un-appointable -- the same "listed but un-appointable" class the GC
+			# manual picker had. Close it here too.
+			has_tech_office = no
+			has_any_office = no
+			NOT = { has_variable = qing_officer_marker }
 			# [#47 2026-08-07] not a HARD-disgraced official — the MANUAL picker roster must exclude a
 			# corruption-sacked / impeached man too, so the player is never offered him. Same bar as the
 			# auto-draw gates above and the GC pickers. Cleared only by Rehabilitate the Disgraced (#51).
@@ -381,6 +405,44 @@ QING_amban_post_sweep = {
 		}
 	}
 	LOG_exit = { sys = QING  fn = "QING_amban_post_sweep"  result = OK }
+}
+
+# ======================================================================
+# [1:1 garrison/researcher-fix 2026-08-23] QING_amban_strip_double_booked -- the AMBAN
+# family's un-double-booking pass (STRIP ONLY, no backfill). Mirrors
+# QING_subpost_strip_double_booked (se_QING_SUBPOSTS.txt) and
+# QING_council_relieve_double_booked_office (se_QING_COUNCIL.txt): those two families
+# already relieve a member who has since taken a vanilla-engine role the mod cannot gate
+# at the click (Researcher/governor/commander) -- but the amban family had NO such sweep,
+# only a fill (QING_amban_post_sweep, above). Reported bug: the Kashgar resident (參贊大臣)
+# stood as a vanilla "Researcher" (has_tech_office) for years with no relief, because
+# nothing ever re-checked him after posting. Country scope (ROOT = CHI); run every quarter
+# from QING_GOV_pulse, before the fill sweep. Reuses the proven QING_amban_recall teardown
+# (modifier + marker + tenure timer + move_country + panel rebuild) instead of hand-rolling
+# a second strip path.
+# ======================================================================
+QING_amban_strip_double_booked = {
+	every_subject = {
+		limit = {
+			has_variable = qing_amban_here
+			var:qing_amban_here = {
+				is_alive = yes
+				OR = {
+					is_general = yes
+					is_admiral = yes
+					is_governor = yes
+					has_variable = qing_officer_marker
+					has_tech_office = yes
+					# [1:1 vanilla-role audit 2026-08-24] a base-game council office is the same class
+					# of unhookable vanilla assignment as Researcher/governor/commander.
+					has_any_office = yes
+				}
+			}
+		}
+		this = { save_scope_as = qing_amban_strip_target }
+		QING_amban_recall = { subject = scope:qing_amban_strip_target }
+		LOG_line = { sys = QING  msg = "amban: 1:1 relief -- resident took a vanilla-engine role, recalled" }
+	}
 }
 
 # ======================================================================

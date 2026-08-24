@@ -1,0 +1,95 @@
+########################################################################
+# se_QING_ZONGLI_DISPATCH.txt — [zongli-dispatch 2026-08-24] dispatch a Zongli Yamen
+# diplomat to personally work an active diplomatic play. Player-issued alternative to
+# Support, gated CHI-only from the GUI (DIPLO_player_dispatch_diplomat,
+# EE_scripted_guis.txt). Design: design/DESIGN_ZONGLI_DIPLOMAT_DISPATCH.md.
+#
+# Two-sided link (mirrors the amban marker/holder pattern, se_QING_AMBAN.txt):
+#   qing_zongli_dispatched_marker  (character var) — the diplomat is away on a mission.
+#   qing_zongli_dispatched_play    (character var) — which play provobj he is working.
+#   qing_zongli_dispatched_diplomat (province/play var) — which character is working
+#     THIS play; its mere presence enforces "one diplomat per play".
+# Both directions are torn down in ONE place, AI_remove_diplomatic_play (se_AI.txt),
+# since every play-end path already funnels through it.
+########################################################################
+
+# ======================================================================
+# QING_zongli_dispatch_diplomat — pick the available corps member ABLEST AT CHARISMA, mark
+# him dispatched, link him to this play, and raise its success once, scaled by that same
+# stat. Province scope (`this` = the play provobj); scope:player = CHI (set by the GUI).
+# [review-fix 2026-08-24] the pick previously ordered by combined_stats_council_svalue
+# (martial+finesse+charisma+zeal+degree_prestige) while the ongoing event
+# (QING_zongli_dispatch_pulse -> qing_zongli_dispatch.1) weighs its outcome by charisma
+# alone -- a high-martial, low-charisma man could rank ablest overall yet have poor odds in
+# the mechanic that actually matters. Both the pick and the immediate boost now key on
+# charisma throughout, so "his skill" means the same thing everywhere in this feature.
+# ======================================================================
+QING_zongli_dispatch_diplomat = {
+	LOG_enter = { sys = QING  fn = "QING_zongli_dispatch_diplomat" }
+	save_scope_as = qing_zongli_dispatch_play_scope
+	scope:player = {
+		ordered_in_list = {
+			variable = qing_zongli_diplomats
+			limit = { NOT = { has_variable = qing_zongli_dispatched_marker } }
+			order_by = charisma
+			check_range_bounds = no
+			max = 1
+			save_scope_as = qing_zongli_dispatch_pick
+		}
+	}
+	scope:qing_zongli_dispatch_pick = {
+		set_variable = { name = qing_zongli_dispatched_marker  value = 1 }
+		set_variable = { name = qing_zongli_dispatched_play  value = scope:qing_zongli_dispatch_play_scope }
+	}
+	set_variable = { name = qing_zongli_dispatched_diplomat  value = scope:qing_zongli_dispatch_pick }
+	set_variable = {
+		name = qing_zongli_dispatch_amt_tmp
+		value = { value = scope:qing_zongli_dispatch_pick.charisma  divide = 2  min = 5  max = 20 }
+	}
+	DIPLOMACY_modify_play_success = { amt = var:qing_zongli_dispatch_amt_tmp }
+	remove_variable = qing_zongli_dispatch_amt_tmp
+	LOG_line = { sys = QING  msg = "zongli: diplomat dispatched to a play, success raised" }
+	LOG_exit = { sys = QING  fn = "QING_zongli_dispatch_diplomat"  result = OK }
+}
+
+# ======================================================================
+# QING_zongli_dispatch_pulse — quarterly (called from QING_GOV_pulse). For every character
+# still carrying qing_zongli_dispatched_marker on a live play, roll a charisma-weighted
+# chance of a further event nudging that play's success up or down. Country scope
+# (ROOT = CHI), captured explicitly (not via a bare ROOT read, which is unsafe inside a
+# scope:player wrapper elsewhere in this codebase — se_QING_MINISTRY.txt:501-514 is the
+# proven sibling shape this follows). Dedicated event-slot throttle (NOT the heavily
+# shared qing_gc_event_slot_used) so this doesn't get starved by the six other rollers
+# already contending for that slot.
+# ======================================================================
+QING_zongli_dispatch_pulse = {
+	save_scope_as = qing_zongli_dispatch_home
+	every_character = {
+		limit = {
+			employer = scope:qing_zongli_dispatch_home
+			is_alive = yes
+			has_variable = qing_zongli_dispatched_marker
+			has_variable = qing_zongli_dispatched_play
+			var:qing_zongli_dispatched_play = { has_variable = is_diplomatic_play }
+			NOT = { has_variable = qing_zongli_dispatch_event_cd }
+		}
+		save_scope_as = qing_dispatch_evt_diplomat
+		var:qing_zongli_dispatched_play = { save_scope_as = qing_dispatch_evt_play }
+		# [review-fix 2026-08-24] both the slot check/claim AND trigger_event must run in
+		# COUNTRY scope: qing_zongli_dispatch_event_slot_used lives on the country (set/cleared
+		# there), and qing_zongli_dispatch.1 is a country_event whose own trigger checks
+		# tag = CHI -- firing it with `this` still the character (as the original draft did)
+		# fails that check silently every time, and the character-scope slot read was reading a
+		# var that could never be set on him, making the throttle a permanent no-op. The
+		# per-diplomat cooldown stays in character scope (it IS a character var).
+		if = {
+			limit = { scope:qing_zongli_dispatch_home = { NOT = { has_variable = qing_zongli_dispatch_event_slot_used } } }
+			set_variable = { name = qing_zongli_dispatch_event_cd  days = 180 }
+			scope:qing_zongli_dispatch_home = {
+				set_variable = { name = qing_zongli_dispatch_event_slot_used  value = 1 }
+				trigger_event = { id = qing_zongli_dispatch.1  days = { 5 15 } }
+			}
+			LOG_line = { sys = QING  msg = "zongli: dispatch event queued for a working diplomat" }
+		}
+	}
+}

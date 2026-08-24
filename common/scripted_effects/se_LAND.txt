@@ -658,10 +658,11 @@ LAND_release_from_list = {
 	# args + accepted values:
 	# list  			: list of provinces (NOT a variable list)
 	# capital_location 	: flag:by_population / p:provid
-	# primary_culture 	: culture script name or scope (ignored if primary_culture_as_capital=yes)
-	# primary_culture_as_capital : yes/no -- yes inherits the new capital province's own culture
-	# country_religion 	: dynamic / religion script name (ignored if country_religion_as_capital=yes)
-	# country_religion_as_capital : yes/no -- yes inherits the new capital province's own religion
+	# primary_culture 	: culture script name, or scope:new_capital_scope.dominant_province_culture
+	#                     to inherit the new capital's own culture (new_capital_scope is already
+	#                     resolved by this point in the SAME call -- see [fix 2026-08-22] below)
+	# country_religion 	: religion script name, or scope:new_capital_scope.dominant_province_religion
+	#                     to inherit the new capital's own religion, same as above
 	# country_name 		: dynamic / loc key
 	# country_adj 		: dynamic / loc key
 	# country_flag 		: dynamic / coat_of_arms script tag
@@ -718,30 +719,26 @@ LAND_release_from_list = {
             # else and fed the literal text "as_capital" into set_primary_culture/set_country_religion
             # (silent no-op, confirmed in error.log for send_settlers, SEPARATISM, DIPLOMACY_resolve_
             # liberate/_colonise, AI_make_peace_province_wishlist, USA_release_confederacy).
-            # [fix 2026-08-22] stop overloading primary_culture/country_religion with a sentinel
-            # string at all. New explicit bool args primary_culture_as_capital / country_religion_as_
-            # capital (same bare-word-bool idiom as this macro's own $give_overlord_hos$ = yes) select
-            # the capital-inherits path; primary_culture/country_religion are then only ever read as
-            # real values, never compared. ALL callers updated.
-            if = {
-            	limit = {
-            		$primary_culture_as_capital$ = yes
-            	}
-            	set_primary_culture = scope:new_capital_scope.dominant_province_culture # TODO: Add conditions
-            }
-            else = {
-            	set_primary_culture = $primary_culture$
-            }
-            # Set religion, same fix: explicit bool arg replaces the sentinel-string overload.
-            if = {
-            	limit = {
-            		$country_religion_as_capital$ = yes
-            	}
-            	set_country_religion = scope:new_capital_scope.dominant_province_religion # TODO: Add conditions
-            }
-            else = {
-            	set_country_religion = $country_religion$
-            }
+            # [fix 2026-08-22, attempt 4] tried a 4th approach: explicit bool args (primary_culture_
+            # as_capital / country_religion_as_capital) checked via `$bool$ = yes`, on the assumption
+            # this bare-word-bool comparison was a proven idiom (matched this macro's own pre-existing
+            # $give_overlord_hos$ = yes, and an Invictus `$REGION$ = yes` citation). REBOOT-CONFIRMED
+            # BROKEN 2026-08-23: a longer boot showed the SAME "Value 'as_capital' is invalid" error
+            # on every single caller, at the identical relative macro line as before attempt 4 --
+            # the if-branch never fires; `$bool$ = yes` evaluates false regardless of what's passed.
+            # [fix 2026-08-23, attempt 5] stop dispatching inside the macro at all. Confirmed via
+            # vanilla mission events in both oracle repos (Invictus + Terra Indomita,
+            # `set_primary_culture = scope:current_province.dominant_province_culture`, `p:416.
+            # dominant_province_culture`) that a province-scope `.dominant_province_culture`/
+            # `.dominant_province_religion` chain IS a valid set_primary_culture/set_country_religion
+            # target -- the target expression was always fine, only the dispatch was broken. Since
+            # scope:new_capital_scope is already resolved earlier in this SAME call (the ordered_
+            # in_list above), callers that want capital-inherit now pass
+            # `scope:new_capital_scope.dominant_province_culture`/`.dominant_province_religion`
+            # DIRECTLY as their primary_culture/country_religion argument value -- no sentinel, no
+            # bool, no branching, nothing for a 5th attempt to get wrong.
+            set_primary_culture = $primary_culture$
+            set_country_religion = $country_religion$
             # Set name
             set_variable = uses_custom_name
         }

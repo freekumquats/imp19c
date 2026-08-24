@@ -136,10 +136,32 @@ QING_household_recompute_eunuchs = {
 			is_alive = yes
 			employer = ROOT
 		}
-		save_scope_as = qing_roster_eunuch
-		ROOT = {
-			add_to_variable_list = { name = qing_household_eunuchs  target = scope:qing_roster_eunuch }
-			change_variable = { name = qing_eunuch_count  add = 1 }
+		# [1:1 researcher/governor-fix 2026-08-23] relieve a eunuch who has since taken a
+		# VANILLA-engine role the mod cannot gate at the click (Researcher/governor/commander) --
+		# the same disqualifier set QING_subpost_strip_double_booked and
+		# QING_council_relieve_double_booked_office already use for their own families. The
+		# palace-eunuch family had NO such check: QING_office_appoint only strips the marker in
+		# the OPPOSITE direction (a eunuch promoted INTO a Council seat). Reported bug: a palace
+		# eunuch stood as a vanilla officeholder for years with no relief.
+		if = {
+			limit = { OR = { is_general = yes  is_admiral = yes  is_governor = yes  has_variable = qing_officer_marker  has_tech_office = yes  has_any_office = yes } }   # [1:1 vanilla-role audit 2026-08-24] added has_any_office = yes -- a base-game council office is the same class of unhookable vanilla assignment as Researcher/governor/commander.
+			remove_variable = qing_is_palace_eunuch
+			# QING_post_dispatch_vacate (not the bare QING_post_release) so a stripped Chief Eunuch
+			# (掌印太監) also loses qing_office_chief_eunuch_holder (QING_post_vacate_palace_eunuch,
+			# se_QING_POST.txt:148-158) -- calls QING_post_release itself at its tail, so nothing
+			# extra is needed here. Also drop the faction-leader flag: QING_household_eval_chief_eunuch
+			# re-picks the chief FROM qing_eunuch_faction_leader holders (se_QING_HOUSEHOLD.txt ~342-349)
+			# and would otherwise re-seat a man who is no longer even a palace eunuch.
+			if = { limit = { has_variable = qing_current_post }  QING_post_dispatch_vacate = yes }
+			if = { limit = { has_variable = qing_eunuch_faction_leader }  remove_variable = qing_eunuch_faction_leader }
+			LOG_line = { sys = QING  msg = "household: 1:1 relief -- a palace eunuch took a vanilla-engine role, marker stripped" }
+		}
+		else = {
+			save_scope_as = qing_roster_eunuch
+			ROOT = {
+				add_to_variable_list = { name = qing_household_eunuchs  target = scope:qing_roster_eunuch }
+				change_variable = { name = qing_eunuch_count  add = 1 }
+			}
 		}
 	}
 }
