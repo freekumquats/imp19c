@@ -518,26 +518,58 @@ QING_gp_court_russia = {
 
 # ======================================================================
 # [B22] DISPATCH A DIPLOMAT — send a Zongli Yamen envoy (駐外使臣) to a single great power to
-# SOOTHE it: a MODEST bilateral tension cut ($amount$ = -8, deliberately NOT zeroing the meter —
-# repeated missions ease it down over time) plus a small goodwill dose. UNLIKE the 以夷制夷 courtship
-# levers above, this does NOT bristle the other powers — it is quiet bilateral diplomacy, not
-# partisan alignment. Consumes political influence and is gated (in the scripted_gui) on a serving
-# diplomat + a per-power monthly cooldown so it cannot be spammed to instantly wipe tension.
+# SOOTHE it. UNLIKE the 以夷制夷 courtship levers above, this does NOT bristle the other powers —
+# it is quiet bilateral diplomacy, not partisan alignment. Consumes political influence and is
+# gated (in the scripted_gui) on an AVAILABLE serving diplomat + a per-power monthly cooldown so
+# it cannot be spammed to instantly wipe tension.
+# [fix 2026-08-24, user-requested] this used to be diplomat-less: a flat -8 nudge that never
+# touched a character. It now mirrors the Zongli play-dispatch mechanic (se_QING_ZONGLI_DISPATCH.txt):
+# pick the ablest-available (highest-charisma, not already dispatched) diplomat from
+# qing_zongli_diplomats, mark him qing_zongli_dispatched_marker (the SAME marker the play-dispatch
+# uses, so a diplomat working one kind of mission cannot be double-booked onto the other), and
+# scale the immediate soothing by his charisma (charisma 7 = the old flat -8 baseline; clamped
+# [-16, -2] either side). A delayed follow-up report (qing_gp_dispatch.1, 20-40 days) then either
+# reinforces or partly undoes the easing, again charisma-weighted, and releases him.
 # $power$ = britain|france|russia (the tension-var suffix); $tag$ = GBR|FRA|RUS. Country scope (CHI).
 # ======================================================================
 QING_gp_dispatch_diplomat = {
 	QING_gp_init = yes
 	add_political_influence = -15
-	# modest cut — one mission eases tension, it does not erase it.
-	QING_DECLINE_nudge = { var = qing_gp_tension_$power$  amount = -8 }
-	# a single goodwill dose (courtship gives two; this is a lighter touch).
+	ordered_in_list = {
+		variable = qing_zongli_diplomats
+		limit = { NOT = { has_variable = qing_zongli_dispatched_marker } }
+		order_by = charisma
+		check_range_bounds = no
+		max = 1
+		save_scope_as = qing_gp_dispatch_pick
+	}
 	if = {
-		limit = { exists = c:$tag$ }
-		c:$tag$ = { add_opinion = { modifier = qing_gp_relation_opinion  target = ROOT } }
+		limit = { exists = scope:qing_gp_dispatch_pick }
+		scope:qing_gp_dispatch_pick = {
+			save_scope_as = qing_gp_dispatch_evt_diplomat
+			set_variable = { name = qing_zongli_dispatched_marker  value = 1 }
+			set_variable = { name = qing_zongli_dispatched_gp_power  value = flag:$power$ }
+		}
+		# charisma-scaled magnitude: charisma 7 nets the old flat 8, ±1 tension per point either
+		# side, clamped [2, 16] so a very green or very gifted envoy still lands in a sane band.
+		set_variable = { name = qing_gp_dispatch_amt_tmp  value = scope:qing_gp_dispatch_pick.charisma }
+		change_variable = { name = qing_gp_dispatch_amt_tmp  subtract = 7 }
+		change_variable = { name = qing_gp_dispatch_amt_tmp  add = 8 }
+		if = { limit = { var:qing_gp_dispatch_amt_tmp < 2 }   set_variable = { name = qing_gp_dispatch_amt_tmp  value = 2 } }
+		if = { limit = { var:qing_gp_dispatch_amt_tmp > 16 }  set_variable = { name = qing_gp_dispatch_amt_tmp  value = 16 } }
+		change_variable = { name = qing_gp_dispatch_amt_tmp  multiply = -1 }
+		QING_DECLINE_nudge = { var = qing_gp_tension_$power$  amount = var:qing_gp_dispatch_amt_tmp }
+		remove_variable = qing_gp_dispatch_amt_tmp
+		# a single goodwill dose (courtship gives two; this is a lighter touch).
+		if = {
+			limit = { exists = c:$tag$ }
+			c:$tag$ = { add_opinion = { modifier = qing_gp_relation_opinion  target = ROOT } }
+		}
+		trigger_event = { id = qing_gp_dispatch.1  days = { 20 40 } }
+		LOG_line = { sys = QING  msg = "GP dispatch diplomat to $tag$ (sphere $power$, charisma-scaled)" }
 	}
 	# arm the per-power monthly cooldown (the scripted_gui gate reads it; cleared on the GOV pulse).
 	set_variable = { name = qing_gp_diplo_sent_$power$  value = 1 }
-	LOG_line = { sys = QING  msg = "GP dispatch diplomat to $tag$ (sphere $power$, tension -8)" }
 }
 QING_gp_dispatch_diplomat_britain = { QING_gp_dispatch_diplomat = { power = britain  tag = GBR } }
 QING_gp_dispatch_diplomat_france  = { QING_gp_dispatch_diplomat = { power = france   tag = FRA } }
