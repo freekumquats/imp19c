@@ -1,5 +1,60 @@
 # 1763 starting-tech seeding — historical audit + rework plan
 
+## Handoff plan (read this first — this is the answer to "what are the steps")
+
+This session is ending (model switch, to restore web access for real source-checking).
+Phases below, in order. Everything after this section is supporting research already
+done — read it before starting Phase 1, don't re-derive it.
+
+**Phase 1 — finish the research (blocked items only, don't redo what's done):**
+1. Re-run/confirm the GBR/FRA-individual audit (was mid-flight when interrupted; expect
+   confirmation that all of GBR's and the FRA/NED/USA/german block's individually-listed
+   techs are anachronistic, per the "Individual GBR/FRA grants" table below, but verify —
+   don't assume).
+2. Run the CHI-only deep second pass the user explicitly asked for (separate from every
+   other bloc, no bundling). Use real web/academic sources now that they're available —
+   the first-pass CHI findings below were trained-knowledge only. Specific angles to dig
+   into: exact dates of Qing-Jesuit artillery technology transfer and its Qianlong-era
+   stagnation (get real years, not "17th century"); whether Qing fiscal administration
+   (地丁銀 land-poll tax, 常平倉 state granary administration) justifies a civic/oratory
+   tech beyond what's already recommended; cross-check against this mod's other
+   already-built Qing systems (Grand Council, Ministry of Revenue, Industrialisation
+   seeding) so CHI's tech list is consistent with them, not decided in isolation.
+3. Resolve the "Bloc E" open question below (currently-zero-grant Sub-Saharan
+   African/Native American culture groups) — this is a scope ADDITION, not just a cap
+   change, so it needs an explicit decision, ideally source-checked (firearms-by-trade
+   reach into the Sahel/Horn of Africa and eastern-woodland North America by 1763).
+
+**Phase 2 — design.** A fork produced an unplanned but genuinely sharper synthesis than my
+own first-pass audit while this session ran (see "Superseding insight" below) — it caught
+a granularity problem my per-bloc audits missed: `military_level_3` and `religious_level_3`
+each mix pre-1763-real content with Napoleonic/19th-century content, so capping the WHOLE
+tier either denies Europe its period-correct muskets/bayonets or grants it anachronistic
+rifle corps. Use that synthesis's proposed fix (two new 1763-only subset macros,
+`TECH_unlock_military_1763_syw` and `TECH_unlock_religious_1763_enlightenment`) as the
+starting point for Phase 2, not my cruder uniform-tier-cap approach. Fold in the Phase-1
+CHI/GBR-FRA results. Produce one concrete edit spec: per-bloc tier ceiling, named
+exceptions (e.g. the oratory-4 banking trio for GBR/NED/Sweden/FRA/German only), and the
+exact new macro contents — ready to paste into `se_TEST.txt`'s `else` branch.
+
+**Phase 3 — adversarial review.** Dispatch a skeptical pass against the Phase 2 design
+specifically (not the individual per-bloc audits again) — check internal consistency
+across blocs (e.g.: does CHI end up out-bureaucracying Europe but lagging it in
+mechanization, as intended? does the Western-Europe leader/laggard split — if adopted —
+actually match which countries use which OR-list in the file?), and re-verify a sample of
+the historical claims against real sources now that web access exists.
+
+**Phase 4 — implement.** Edit `se_TEST.txt`'s 1763 `else` branch (currently the uniform
+heuristic cap) to the reviewed design. Verify brace balance
+(`python3 -c "print(open(f).read().count('{'), open(f).read().count('}'))"`-style check,
+already the pattern used this session). Ideally boot-test.
+
+Files already touched this session for this feature: `common/scripted_effects/se_TEST.txt`
+(will be edited again in Phase 4). Design docs on disk: this file, plus
+`design/DESIGN_1763_STARTING_TECH.md` (the fork's unplanned synthesis — untracked,
+uncommitted, not reviewed by the user yet, but its analysis is the Phase 2 starting point
+per above — read it in full, don't just skim the excerpt below).
+
 ## Context
 
 `common/scripted_effects/se_TEST.txt`'s `TECH_unlock_all_starting_techs` grants free
@@ -102,7 +157,7 @@ confirm before implementing, don't assume.
 | Category | Cap | Why |
 |---|---|---|
 | Military | L2, + Russia-specific mass_artillery + commissioned_staff | Russia fielded a large, competent army with real artillery by 1763 (beat Prussia at Kunersdorf 1759, took Berlin 1760; Shuvalov's unicorn-gun artillery reforms). But L3 as a **bloc** grant is wrong — hands rifles/skirmisher_corps to Poland-Lithuania (militarily moribund, army capped near 12,000 by law) and the Balkans too. Bloc gets L0-2; add the two Russia-specific L3 items individually if a c:RUS block is added. |
-| Oratory | L2 | No central bank (State Assignation Bank 1769, State Loan Bank 1786), no developed public debt market (first foreign loan 1769). |
+| Oratory | L2 | No central bank in 1763 (State Assignation Bank FOUNDED 1768 by Catherine II's decree, operational/branches-open 1769 — corrected 2026-08-26, was misdated "1769 founded"; State Loan Bank 1786), no developed public-debt market (first foreign loan 1769). All postdate 1763, so the no-central-banking cap holds. |
 | Civic | L2 | Even L3 spinning_frame (1769 English) is wrong for Russia. Level 1-2 justified: Urals ironworks (Demidov), Vyshny Volochyok canal system operational. |
 | Religious | L2, Russia-specific L3 optional | St. Petersburg Academy of Sciences (1724), Moscow University (1755) give Russia a thin L3 claim, but wrong as a bloc grant for Poland/Balkans. Optionally add L3 for c:RUS specifically. |
 
@@ -151,7 +206,7 @@ fully separated from this and re-run on its own with more scrutiny**):
 | Category | Verdict | Why |
 |---|---|---|
 | Military L0-1 (weapon_manufacturing, firearms, shipyards, permanent_army, field_ambulances, warships, cannons) | Keep | Eight Banners (八旗) + Green Standard (綠營) — arguably the largest standing army on earth in 1763. Jesuit-cast bronze artillery (17th-c. Verbiest guns) genuinely existed. |
-| Military L2 (bombard_cannons) | Keep excluded | Correct: Qing artillery had stagnated by 1763, foundries reproducing 17th-c. Jesuit designs rather than advancing — granting an "advanced bombard" tier overstates mid-18th-c. Qing gunnery vs. Europe. |
+| Military L2 (bombard_cannons) | Keep excluded — RATIONALE CORRECTED | Excluded, but NOT on "already stagnated by 1763" grounds — an academic dive (Andrade, *The Gunpowder Age*, Princeton UP 2016) shows that framing is chronologically backwards: stagnation is a process whose ONSET Andrade dates to the "Great Qing Peace" of 1760-1839, so 1763 is its leading edge, not its result. The earlier "reproducing 17th-c. Verbiest designs, nothing since" implication is also CONTRADICTED — Jesuit cannon work continued to the eve of 1763 (Félix da Rocha, court cannon-maker, Jinchuan 1747-49 and Zunghar campaigns 1755-59; Needham *SCC* Vol.5 Pt.7, Cambridge UP; Entenmann, *Hmong Studies Journal*). Correct basis for withholding the heavy-siege tier: Qing used LIGHTER cannon by deliberate doctrine (earthen-core walls absorb shot better than European stone; heavy siege trains are useless against steppe cavalry) — a rational adaptation, not neglect. Conclusion (no bombard_cannons) stands; the rationale is now doctrine, not stagnation. |
 | `tech_rocket_artillery` | Keep (mild) | Chinese/Ming-Qing gunpowder rocket arrows (火箭) have deep pedigree; Ten Great Campaigns used rocket volleys. Slightly gamey but defensible; low priority to remove. |
 | Oratory L1-2 | Keep — "strongest fit in the whole grant" | Qing bureaucracy, Grand Council (軍機處), standardized Hanzi, Board of Revenue monetary management, archival tradition (檔案). Audit suggests CHI should arguably be a **leader** here, on par with or ahead of Europe. |
 | `tech_census`, `tech_postal_administration` | Keep | 保甲 registration + 1741+ population counts; 驛站 courier-relay network. Ancient, well-justified. |
