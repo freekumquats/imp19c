@@ -320,15 +320,23 @@ flavor_eve.6 = {
 		# `add = root.INCOME_national_total_quarterly` (a POSITIVE credit — the reported "gives
 		# money instead of costing it" bug). Relief now DEBITS the treasury: a quarter of the
 		# nation's quarterly income (~one month's take) is a proportionate one-province relief
-		# sum, negated via multiply = -1 (the proven cost idiom, cf. shortage.1.a).
+		# sum, negated via multiply = -1 (the proven cost idiom, cf. shortage.1.a — shortage.1.a's
+		# value is a sum of good prices x population, always >= 0, so it never needed a clamp;
+		# income here CAN go negative in a deficit quarter, and unlike shortage.1.a this had none).
+		# [review-fix 2026-08-25] adversarial review of the flavor_eve.16/.11 fixes flagged this
+		# as the same bug class, unfixed: with no clamp, a deficit quarter's negative income,
+		# divided and negated, becomes a POSITIVE gain -- this "relief" event would then hand the
+		# player money instead of costing them any, exactly the #101 bug this option was
+		# originally written to fix. max=0 caps the negated result at a ceiling of 0 (never a gain).
 		add_treasury = {
 			value = root.INCOME_national_total_quarterly
 			divide = 4
 			multiply = -1
+			max = 0
 		}
 		# [#108 fix 2026-08-15] stage into a var -- a compound amount= block trips TREASURY_LOG_it's
 		# macro-arg validator (see se_STATE_INVESTMENT.txt for the full note).
-		set_variable = { name = TREASURY_LOG_amt_tmp  value = { value = root.INCOME_national_total_quarterly  divide = 4  multiply = -1 } }
+		set_variable = { name = TREASURY_LOG_amt_tmp  value = { value = root.INCOME_national_total_quarterly  divide = 4  multiply = -1  max = 0 } }
 		TREASURY_LOG_it = { amount = var:TREASURY_LOG_amt_tmp }
 		remove_variable = TREASURY_LOG_amt_tmp
 	}
@@ -672,16 +680,26 @@ flavor_eve.11 = {
 		name = flavor_eve.11.a
 		custom_tooltip = "flavor_eve.11.a.tt"
 		ai_chance = { factor = 75 }
-		# [fix 2026-08-23] same class of bug as flavor_eve.16: a deficit quarter makes
-		# root.INCOME_national_total_quarterly negative, so `subtract = X` (= -X) flips this
-		# "spend" event into a gain. Clamp income to a floor of 0 before subtracting.
+		# [fix 2026-08-25, corrected same day] added an explicit top-level `value = 0` base
+		# before `subtract = {...}` for clarity/consistency. NOTE: an adversarial review found
+		# the original justification here false -- se_AI.txt/se_POLITICS.txt/se_ECON_wealth.txt/
+		# se_INCOME.txt do NOT contain the claimed pattern (se_POLITICS.txt and se_ECON_wealth.txt
+		# have no add_treasury calls at all; se_AI.txt/se_INCOME.txt's calls are plain
+		# scalars/vars, no subtract block). `subtract = {...}` with no explicit base already
+		# defaults to 0 in this engine, so this line was a real spend before and after this
+		# edit -- the actual "gains 0" symptom the user reported for this event was the
+		# auto-generated tooltip WORDING only (a deficit-quarter delta of exactly 0 renders as
+		# "gains 0"), not a computation bug; the inner `min = 0` (floors income at 0 before
+		# subtracting, so a deficit quarter spends nothing rather than becoming a windfall) was
+		# already correct.
 		add_treasury = {
+			value = 0
 			subtract = { value = root.INCOME_national_total_quarterly  min = 0 }
 		}
 		# [#108 fix 2026-08-15] stage into a var -- { subtract = X } = -X, not reducible to a bare token,
 		# and a compound amount= block trips TREASURY_LOG_it's macro-arg validator even with one key
 		# (see se_STATE_INVESTMENT.txt for the full note).
-		set_variable = { name = TREASURY_LOG_amt_tmp  value = { subtract = { value = root.INCOME_national_total_quarterly  min = 0 } } }
+		set_variable = { name = TREASURY_LOG_amt_tmp  value = { value = 0  subtract = { value = root.INCOME_national_total_quarterly  min = 0 } } }
 		TREASURY_LOG_it = { amount = var:TREASURY_LOG_amt_tmp }
 		remove_variable = TREASURY_LOG_amt_tmp
 		capital_scope = {
@@ -1004,18 +1022,20 @@ flavor_eve.16 = {
 			add_loyalty = loyalty_love_encouraged
 			add_prominence = 10
 		}
-		# [fix 2026-08-23] a deficit quarter makes root.INCOME_national_total_quarterly negative,
-		# so multiply=-1 alone flips this "spend on the party" event into a windfall (confirmed
-		# in-game: -221.935/quarter income produced a +223.71 gain instead of a cost). Clamp
-		# income to a floor of 0 BEFORE negating, so the event only ever spends, never gains.
+		# [fix 2026-08-25] the 2026-08-23 fix clamped BEFORE negating, but min/max apply LAST
+		# regardless of text position (documented at JOBS_svalues.txt:421, "applied before the
+		# min=1 floor" -- i.e. after every multiply/add/subtract), so `min=0` was actually
+		# clamping the NEGATED result -- in a solvent quarter (the common case) that turned a
+		# real -223 spend into max(-223,0)=0, the exact reported "gains 0" bug. A spend must
+		# never exceed 0, so this needs a CEILING (`max`) on the negated result, not a floor.
 		add_treasury = {
 			value = root.INCOME_national_total_quarterly
-			min = 0
 			multiply = -1
+			max = 0
 		}
 		# [#108 fix 2026-08-15] stage into a var -- a compound amount= block trips TREASURY_LOG_it's
 		# macro-arg validator (see se_STATE_INVESTMENT.txt for the full note).
-		set_variable = { name = TREASURY_LOG_amt_tmp  value = { value = root.INCOME_national_total_quarterly  min = 0  multiply = -1 } }
+		set_variable = { name = TREASURY_LOG_amt_tmp  value = { value = root.INCOME_national_total_quarterly  multiply = -1  max = 0 } }
 		TREASURY_LOG_it = { amount = var:TREASURY_LOG_amt_tmp }
 		remove_variable = TREASURY_LOG_amt_tmp
 		add_tyranny = 1

@@ -196,6 +196,39 @@ QING_council_prune_all_seats = {
 	QING_council_prune_seat = { office = guard_commandant }
 }
 
+# [fix 2026-08-25] Refill every seat still empty after a quarterly prune. Country scope.
+# Call this AFTER QING_council_prune_all_seats has already returned (e.g. from QING_GOV_pulse,
+# once step 1's recompute/prune has finished) -- NEVER from inside QING_council_prune_seat's own
+# call frame, which is exactly the nested prune_seat -> vacate_dispatch -> autofill_office ->
+# prune_seat cycle the 2026-07-23 no-backfill twin was built to avoid (see that fix's note above).
+# Called sequentially like this, each QING_council_autofill_office call below re-prunes the SAME
+# already-pruned seat (a harmless no-op re-check) and then either no-ops (line 227-228: seat still
+# has a valid holder) or fills it -- it cannot recurse because the newly-drawn officer is excluded
+# from holding a conflicting role by the draw's own eligibility limit.
+#
+# Root cause this closes: QING_council_relieve_double_booked_office and prune_seat's own
+# conflicting-role branch (both added 2026-07-23/2026-08-20/2026-08-24) strip a Grand Council
+# seat when its holder takes a vanilla role (general/admiral/governor/Researcher/base-game
+# office), but ONLY death ever triggered a backfill (QING_office_vacate_dispatch, the
+# WITH-backfill twin). A holder who just took a second job never dies, so his seat was left
+# vacant forever -- reported symptom: Minister of War, Censorate and Commandant of the Guard
+# sitting vacant for several quarterly pulses running.
+QING_council_refill_vacant_seats = {
+	QING_council_autofill_office = { office = chancellor        domain = finesse  degree = jinshi     autofill_source = backfill  degree_hard = yes }
+	QING_council_autofill_office = { office = personnel         domain = finesse  degree = jinshi     autofill_source = backfill  degree_hard = yes }
+	QING_council_autofill_office = { office = revenue           domain = finesse  degree = jinshi     autofill_source = backfill  degree_hard = yes }
+	QING_council_autofill_office = { office = rites             domain = zeal     degree = jinshi     autofill_source = backfill  degree_hard = yes }
+	QING_council_autofill_office = { office = war               domain = martial  degree = wu_jinshi  autofill_source = backfill  degree_hard = no }
+	QING_council_autofill_office = { office = justice           domain = zeal     degree = jinshi     autofill_source = backfill  degree_hard = yes }
+	QING_council_autofill_office = { office = works             domain = finesse  degree = jinshi     autofill_source = backfill  degree_hard = yes }
+	QING_council_autofill_office = { office = censor            domain = finesse  degree = jinshi     autofill_source = backfill  degree_hard = yes }
+	QING_council_autofill_office = { office = lifanyuan         domain = charisma degree = jinshi     autofill_source = backfill  degree_hard = yes }
+	QING_council_autofill_office = { office = chamberlain       domain = charisma degree = jinshi     autofill_source = backfill  degree_hard = yes }
+	QING_council_autofill_office = { office = zongli            domain = charisma degree = jinshi     autofill_source = backfill  degree_hard = yes }
+	QING_council_autofill_office = { office = grand_secretariat domain = charisma degree = jinshi     autofill_source = backfill  degree_hard = yes }
+	QING_council_autofill_office = { office = guard_commandant  domain = martial  degree = wu_jinshi  autofill_source = backfill  degree_hard = no }
+}
+
 # Fill ONE office if vacant with the ablest unassigned courtier. Country scope.
 # $office$ = the office key. Reuses combined_stats_council_svalue as the ranking
 # (the same overall-worth measure the old pool used); the office's own governing
