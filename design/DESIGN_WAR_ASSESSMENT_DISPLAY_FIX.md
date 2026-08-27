@@ -1,6 +1,27 @@
 # Design: fix "War is likely" display driven by unbounded treasury term
 
-## Finding (safety check, done before any code change)
+## CORRECTION (2026-08-27) — the original safety claim below is FALSE
+
+An independent review traced one hop further than the grep below and found
+`war_assessment`'s three display-bucket triggers
+(`common/scripted_triggers/imp19c_diplomacy_triggers.txt:8-22`) are
+themselves read as `ai_chance factor=100` modifiers on real "Declare
+war"/"Back down" event options in
+`events/imp19c_mod_events/diplomatic_play/diplomatic_play_events.txt:631-636,735-856`,
+`send_settlers.txt:90,142,199-293`, and `agadir_crisis_type.txt:312-368,
+638-666`. **This is a real AI-behavior change, not a display-only fix.**
+The "Finding" section immediately below is preserved for its accurate
+grep work (the two reader CLASSES it found are correct) but its
+conclusion ("100% display-only... safe to change without any risk to
+actual AI behavior") does not hold — the display triggers are dual-use.
+
+The original fix (bounding `treasury`) is NOT being reverted: the old
+unbounded dominance was itself a real AI-decision-quality problem (any
+solvent instigator became almost automatically war-willing regardless of
+every other factor — a bug, not a feature). See "Recalibration" section
+near the end for the corrected magnitude and reasoning.
+
+## Finding (safety check, done before the original code change — CONCLUSION CORRECTED ABOVE)
 
 `war_assessment` (country-scope var) is written ONLY by
 `AI_diplomatic_play_evaluate_war` (`se_AI.txt:1302-1405`), which copies a
@@ -13,105 +34,112 @@ Full repo grep for `war_assessment` finds exactly two classes of reader:
    `common/scripted_triggers/imp19c_diplomacy_triggers.txt:8-22`
    (`DIPLOMACY_play_war_willing_trigger` / `_undecided_trigger` /
    `_reluctant_trigger`) — these drive the "War is likely" /
-   "War is undecided" / "War is unlikely" loc text.
+   "War is undecided" / "War is unlikely" loc text **AND** (per the
+   correction above) real `ai_chance` war/peace weighting.
 2. `AI_debug_test_war_all_diplomatic_plays` (`se_AI.txt:1407-1450+`) — a
    standalone debug utility effect. Grepped its own name repo-wide: it is
-   **never called anywhere**. Dead code.
-
-**Conclusion: `war_assessment` is 100% display-only.** No real AI
-war-declaration decision reads it. It is therefore safe to change its
-computation without any risk to actual AI behavior — the only consumer
-is the player-facing text this task is fixing.
+   **never called anywhere**. Dead code — this part of the original
+   finding still holds.
 
 ## Root cause
 
 `AI_diplomatic_play_evaluate_war`'s formula sums several terms. Every
 term except one is deliberately bounded:
 - infamy cost and stability cost are each squared then capped at
-  `max = 100000` (`se_AI.txt:1318-1327`) — since squaring a value over
-  ~316 already exceeds that cap, these terms are implicitly designed
-  for small (roughly 0-300) raw inputs.
+  `max = 100000` (`se_AI.txt:1318-1327`) — this cap is a CEILING/backstop
+  for pathological inputs, not evidence of the terms' typical real
+  contribution (see Recalibration below — this distinction is exactly
+  what the original fix's magnitude reasoning got wrong).
 - war-exhaustion terms are likewise multiplied and capped at
   `max = 100000` (`se_AI.txt:1334-1339`, `1356-1361`).
 - the observer-support adjustments are small fractions of
   `DIPLOMACY_power` (`×0.01` / `×0.005`, `se_AI.txt:1376-1395`).
 
 The one exception: `add = treasury` (`se_AI.txt:1354`), added completely
-raw — no scaling, no cap. Treasury is a currency magnitude (this mod's
-1763 economy runs on taels/wén at scales of thousands to tens of
-millions per memory `1763-money-supply-research` /
-`silver-reserve-figures`), several orders of magnitude larger than every
-other term's ~0-300 working range. Any country with a positive treasury
-(the normal case) pushes the whole score positive almost regardless of
-the other terms, which is exactly the reported symptom: "War is likely"
-reads positive near-permanently for a solvent instigator, independent of
-`AI_play_attitude` (which is separately, properly scaled to ±20 and
-bucketed at >20 — hence "Talks are friendly" can show at the same time
-with no actual contradiction in the underlying math, just a broken
-display term on one side).
+raw — no scaling, no cap. Any country with a positive treasury (the
+normal case) pushed the whole score positive almost regardless of the
+other terms — this was the real symptom, and remains a real symptom for
+both the display AND the `ai_chance` war-declaration weighting.
 
-This is consistent with the term being disowned by its own author as a
-debug leftover — it was written once, never calibrated, and left in a
-state where one term dominates the rest by construction.
+## Recalibration (2026-08-27) — replacing the ±300 guess with evidence
 
-## Fix
+The original ±300 bound was justified by comparing treasury to the
+sibling cost terms' `max = 100000` cap. That comparison is invalid: the
+cap is a ceiling for extreme/pathological raw inputs (reached only if the
+underlying infamy/stability cost value exceeds ~316), not a statement
+about what those terms typically contribute for a normal AI country. No
+conclusion should have been drawn from it about "matching" treasury's
+scale to theirs.
 
-Bound the treasury term into the same rough order of magnitude as the
-formula's other raw (pre-square) inputs, using `min`/`max` the same way
-this formula already bounds every other term — this is the formula's
-own established idiom, not a new pattern:
+Better evidence, gathered directly from this codebase:
+- **Treasury thresholds already used elsewhere in this mod** (mission
+  `allow`/trigger gates in `qing_new_world_missions.txt`,
+  `qing_burma_war_missions.txt`, and others) cluster between 40 and 440,
+  with common values at 55, 60, 70, 80, 100, 120, 150, 220, 255, 285, 310,
+  360, 400, 440. These are the mod's own de facto definition of
+  "meaningful" treasury magnitudes for gating AI/player behavior — nowhere
+  near the "thousands to tens of millions" scale the original fix's
+  comment speculated (that speculation was unverified and appears to have
+  been wrong).
+- **A sibling AI scoring formula in the same file family**
+  (`AI_svalues.txt:2069`, the AI's peace-suing threshold score) treats
+  treasury with `value = treasury, multiply = 0.02` against a base-50
+  scale, when treasury is negative — a proportional-scaling idiom, not a
+  hard clamp. Its base scale (50) is much smaller than
+  `AI_diplomatic_play_evaluate_war`'s (implicit 0-100000 per term), so its
+  exact multiplier doesn't transfer directly, but it confirms this
+  codebase's convention is "scale treasury down to be proportional to the
+  formula it's entering," which a hard min/max clamp also achieves, just
+  more bluntly.
+
+Given this evidence, ±300 was not badly wrong — it sits within the mod's
+own observed range of "meaningful" treasury magnitudes, just below the
+top of the "very wealthy" cluster (400/440). Adjusted to **±400** to
+cover that top end without reopening the original runaway-dominance
+problem: a treasury of 10,000+ (if that scale ever occurs — unconfirmed
+without a boot) still contributes no more than any other single term's
+typical range, while a treasury of 40-440 (the mod's own common gate
+range) now contributes close to its full raw value, proportional and
+comparable to the other terms instead of dominating or being negligible.
 
 ```
-add = { value = treasury  min = -300  max = 300 }
+add = { value = treasury  min = -400  max = 400 }
 ```
 
-This is a **best-guess magnitude**, not derived from a proven precedent
-(no existing "treasury_scaled" or comparable normalization constant was
-found elsewhere in the codebase — checked `WEALTH_total_private_moveable_wealth_scaled`,
-which is a GDP-like denominator for ratios, not a fit for this raw-score
-context). ±300 is chosen to match the implicit ~0-300 range the squared
-cost terms operate in before their own cap, so treasury becomes a
-comparable-weight input instead of a dominating one. **Logged under
-ASSUMPTIONS & GUESSES for the next boot to confirm** — if "War is
-likely" still reads as near-permanent after this, the bound needs
-tightening further; if it now varies sensibly with the other inputs,
-±300 was a reasonable first guess.
+**Still a best-guess magnitude** — the exact typical treasury range for
+mid/late-game AI countries in a live save is Jomini-engine-derived and
+not fully derivable from static source. Logged under ASSUMPTIONS &
+GUESSES for the next boot to confirm AI war-declaration FREQUENCY (not
+just the display text) looks sensible — if AI countries still seem to
+declare war almost regardless of attitude/stability, tighten further; if
+AI countries with strong treasuries now seem under-weighted toward war
+even when otherwise justified, loosen toward the observed 440 ceiling or
+beyond.
 
 ## Alternative considered and rejected
 
-Building a wholly separate, parallel "display-only" normalized score
-(distinct script_value/effect, leaving `AI_diplomatic_play_evaluate_war`
-untouched) was considered, per the directive's stated preference for
-touching shared logic as little as possible. Rejected because:
-`war_assessment`'s ONLY consumers are display + dead debug code — there
-is no "shared" AI logic here to protect. A parallel value would
-duplicate ~50 lines of the same formula for no safety benefit, and would
-still need the exact same guess for the treasury bound to be
-meaningful — it just moves the guess to a second place instead of fixing
-it in the one place the value is actually computed.
+Building a wholly separate, parallel "display-only" normalized score was
+considered and is now DEFINITELELY rejected, not just for the original
+reason (no separate concern to protect) but because it's now known the
+real display triggers are dual-use — a parallel value would fail to fix
+the actual AI-decision-weighting problem, only cosmetics, which was never
+the actual complete symptom.
 
-## Adversarial self-review (this fork has no Agent-tool access — see
-hard rule; self-review substitutes)
+## Adversarial self-review (no Agent-tool access in this fork context — self-review substitutes, per this session's repeated fork-tooling constraint)
 
-- **Could this break the real AI's war decisions?** No — confirmed by
-  the full-repo grep above; nothing else reads `war_assessment`, and
-  this change does not touch `AI_play_war_assessment`'s local-var value
-  in any way `AI_diplomatic_play_evaluate_war`'s CALLERS could observe
-  (the local var itself is unaffected in scope/lifetime; only the raw
-  `treasury` term feeding it is bounded).
-- **Could ±300 be so wrong it makes the display WORSE (e.g. everything
-  reads negative now)?** Possible if this mod's typical treasury values
-  are, say, always in the low hundreds (then ±300 barely changes
-  anything) or if the OTHER terms' real typical magnitudes are far
-  larger than their ~300 implicit design range (then even a bounded
-  treasury term still gets dwarfed the other way). This is exactly the
-  kind of magnitude question that needs a boot to confirm, per skill
-  Rule 1a — implementing the best guess now, not blocking on it.
-- **Is there a less invasive fix?** Considered leaving `treasury`
-  unbounded but flipping the display bucket's threshold from `> 0` to a
-  larger constant (e.g. `> 5000`) to compensate. Rejected: this still
-  leaves ANY two countries' comparison dominated by whichever has more
-  money, for a metric that's supposed to reflect strategic risk
-  calculus, not wealth ranking. Bounding the outlier term is more
-  faithful to the formula's own evident intent (a bounded multi-factor
-  score) than moving the goalposts on the threshold.
+- **Could bounding treasury at ±400 instead of ±300 meaningfully change
+  AI behavior versus the already-shipped ±300?** Only for instigators
+  with treasury in the 300-400 (or -300 to -400) range, where the score
+  contribution grows by at most 100 magnitude — small relative to the
+  other terms' working range, not a dramatic behavior swing versus what
+  already shipped.
+- **Is there a risk the ±400 bound is still wrong in the OTHER
+  direction (too generous, restoring dominance)?** No — the "very
+  wealthy" mission-threshold ceiling observed in this codebase is 440;
+  countries far above that (if such extreme treasuries occur) are capped
+  the same way instigators just past today's 400/440 threshold are,
+  matching the mod's own established idea of "very wealthy" as a ceiling,
+  not an unbounded ramp.
+- **Did the recalibration touch anything besides the treasury bound?**
+  No — same single `add = { value = treasury ... }` line, only the
+  min/max constants changed (300→400); no other term, no other effect.
