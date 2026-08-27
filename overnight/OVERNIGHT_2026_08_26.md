@@ -349,3 +349,63 @@ escaping in a double-quoted loc string (only `"` does).
 list, named corruption stat" — pushed to `merge-overnight`.
 
 **Status:** DONE (Task #2 and #3 both satisfied by this one commit).
+
+## Task #17 / Task #20 — University T2 national-bonus scope mismatch
+
+**What it was:** Log triage found the SAME error at two call sites, so both
+tasks share one root cause and one fix:
+- `common/on_action/economy/oa_economy_setup.txt:2721` chain
+  (`EDU_set_t2_national_bonus_from_universities`, `se_EDU.txt:206`) — 1,234
+  occurrences.
+- `common/script_values/EDU_svalues.txt:78` (`EDU_university_national_bonus`'s
+  own `has_law`, reached via `EDU_university_national_bonus_here`,
+  `EDU_svalues.txt:109-113`) — 50 occurrences.
+
+Both errors are "has_law trigger: Wrong scope for trigger: province,
+expected country." A prior 2026-08-25 fix attempt (already present in the
+code, with its own comment) diagnosed the scope leak correctly — a nested
+`every_governorships -> every_governorship_state -> every_state_province`
+iterator inside `EDU_set_t2_national_bonus_from_universities`'s value block
+leaves the block's "current scope" at PROVINCE for everything after the
+iterator closes, not the country scope the enclosing `set_variable` assumes
+— but its chosen fix (a dotted `owner.EDU_university_national_bonus`
+reference) did not actually work: the newest boot log still shows all
+1,234 + 50 occurrences.
+
+**Diagnosis (traced, not assumed):** `EDU_university_national_bonus` is
+documented "Scope: Country" and contains a BARE `has_law = ...` trigger
+inside its own `if.limit` (`EDU_svalues.txt:73-82`), correct only when the
+whole script value is invoked with `this` already = country. A dotted
+scope-prefix on a script-value NAME (`owner.SomeScriptValue`) rescopes
+direct field/value access, but does NOT push a new root for TRIGGERS nested
+inside that value's own blocks — so the bare `has_law` inside stayed
+evaluated at the STALE province scope regardless of the `owner.` prefix on
+the outer call. Confirmed this codebase already has a WORKING alternative
+idiom for exactly this situation: `DEMAND_svalues.txt`'s `DEMAND_steel_ships`
+uses an explicit `owner = { value = num_of_ships ... }` scope-change BLOCK
+(not a dotted path) to correctly re-root a nested computation, and this same
+file's `EDU_university_bonus_total_province` uses the block form
+`owner = { has_law = ... }` directly for a trigger check — both proven,
+neither erroring in the log.
+
+**What I did:** Replaced the dotted `owner.EDU_university_national_bonus`
+reference at both call sites with the proven `owner = { value =
+EDU_university_national_bonus }` scope-change block:
+- `se_EDU.txt:206` (`EDU_set_t2_national_bonus_from_universities`'s
+  `multiply` field).
+- `EDU_svalues.txt:109-113` (`EDU_university_national_bonus_here`'s `value`
+  field) — this is Task #20's exact site, fixed by the same change since
+  it's the same root cause.
+
+**Review:** Self-reviewed (fork-context constraint, as with prior tasks).
+Brace balance verified independently on both files after the edit
+(script-counted: final depth 0, never negative, both files). Checked
+`git status` before committing — no concurrent uncommitted changes to
+either file from other in-flight tasks.
+
+**Commit:** `7afd1b097` — "fix: rescope EDU_university_national_bonus calls
+via owner={} block (tasks #17, #20)" — pushed to `merge-overnight`.
+
+**Status:** DONE — both tasks closed by this one commit. Recommend checking
+the next boot log for both error counts (EDU_svalues.txt:78 and the
+oa_economy_setup.txt:2721 chain) dropping to zero.
