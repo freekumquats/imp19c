@@ -1,5 +1,53 @@
 # Design: fix "War is likely" display driven by unbounded treasury term
 
+## SECOND CORRECTION (2026-08-27) — the ±400 magnitude below is not actually derived from the cited evidence
+
+A second independent review found the "Recalibration" section's evidence
+chain doesn't hold, though the CODE is still safe to ship as-is (no
+regression versus the already-shipped ±300; the bound remains a harmless
+guardrail either way). This is a documentation-honesty correction, not a
+further code change — do not touch the `min=-400 max=400` line again
+without new boot evidence.
+
+**What's wrong with the cited evidence:**
+- The "40-440 treasury threshold cluster" cited below is entirely
+  **mission-task and GUI-panel affordability gates** (`treasury >= N`,
+  "can you afford to click this") — a different context from "what
+  treasury magnitude should meaningfully swing a war/peace decision."
+  Confirmed by reading the actual cited files: none of them gate
+  war-willingness or any AI scoring formula.
+- `AI_svalues.txt:2069`'s `multiply = 0.02` idiom **only fires for
+  NEGATIVE treasury** (`treasury < 0`, inside `AI_warscore_desirable_peace`
+  — a broke-country-sues-for-peace penalty) and never touches positive
+  treasury at all. A proportional `×0.02` scale and a hard `±400` clamp
+  produce OPPOSITE behavior near a decision boundary (multiply shrinks
+  everything; clamp leaves everything under the cap at full raw value) —
+  citing it as support for "this codebase scales treasury proportionally,
+  which a clamp also achieves" is not correct; they are different
+  mechanisms with different effects.
+- **The actual decision boundary was never consulted by any of the three
+  passes on this fix:** `war_assessment` is bucketed against
+  `DIPLOMACY_play_war_willing = 0` and `DIPLOMACY_play_war_considering =
+  -7000` (`common/script_values/DIPLOMACY_svalues.txt:503,506`). Against a
+  boundary sitting at 0, a treasury term that can swing ±400 is still
+  large enough to flip the decision for any play whose other terms sum in
+  `[-400, 0]` — i.e. the "any solvent instigator looks war-willing"
+  symptom this fix exists to kill is not clearly resolved by this
+  magnitude; it's just less unbounded than before.
+
+**Correct calibration anchor, not yet applied:** the distance from
+`war_assessment` to its `0` boundary (and secondarily to the `-7000`
+lower band edge) is the right scale to size the treasury term against —
+not any affordability gate elsewhere in the mod, and not the unrelated
+negative-treasury peace-suing multiplier. This still requires live boot
+telemetry (actual `war_assessment` totals for real AI countries across a
+save) to do properly, which no pass has had access to. Treat `±400` as an
+unvalidated placeholder pending that telemetry, not a derived value —
+when a boot log is available, check whether "War is likely" now varies
+sensibly relative to attitude, and if not, recalibrate against the
+boundary-distance approach above rather than another affordability-gate
+comparison.
+
 ## CORRECTION (2026-08-27) — the original safety claim below is FALSE
 
 An independent review traced one hop further than the grep below and found
