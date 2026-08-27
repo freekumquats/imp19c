@@ -62,3 +62,98 @@ instead of inside the header span, unlike the file's own convention (e.g.
 the gloss inside the `#T ... #!` header on both strings. No other findings.
 
 **Status:** DONE.
+
+## Task #16 — Fix office-appointment var-scope failure cascade (qing_accountability_events)
+
+**What it was:** The single largest error class in the latest boot log
+(`error.log`, ~38,000 occurrences), reported at
+`events/imp19c_mod_events/qing_accountability_events.txt:107` (via
+`QING_office_appoint`) and `:120`/`:121` (via `QING_council_recompute`):
+"Failed to fetch variable for 'qing_office_held' due to not being set" /
+"Event target link 'var' returned an unset scope" / "Invalid left side during
+comparison 'var'" — three log lines per occurrence, all describing the same
+one failed evaluation of a variable-holding-a-flag comparison against an
+unset variable.
+
+**Diagnosis (traced in source, not asserted):**
+- `QING_office_appoint` (`common/scripted_effects/se_QING_COUNCIL.txt:1759-1763`,
+  pre-fix) used a single flat `limit` block:
+  `limit = { has_variable = qing_office_held  NOT = { var:qing_office_held = flag:$office$ } }`.
+  For any appointee who has never held a great office before (the common case
+  — every autofill-seeded scholar, every fresh keju laureate), `has_variable`
+  is correctly false, but the engine still evaluates the sibling
+  `NOT = { var:qing_office_held = flag:$office$ }` leaf, which fails to fetch
+  the unset variable and logs the three-line error — even though the overall
+  boolean AND outcome (correctly "false, don't vacate anything") is
+  unaffected. This is the exact "read-before-set" class documented in memory
+  (`local_var scope boundary`). Confirmed this is the ONLY site in the whole
+  effect (1744-1914) where `qing_office_held` is read before its own
+  unconditional `set_variable` at line 1800.
+- `QING_council_recompute`'s parallel error for `qing_pos_marker_ct`
+  (`se_QING_COUNCIL.txt:685-722`) I could **not** pin to a defect after
+  exhaustive tracing: full-repo grep confirms `qing_pos_marker_ct` is used
+  ONLY inside this one `every_character` block; it is unconditionally
+  `set_variable`'d to 0 at line 699 before every read/increment/removal in
+  the same iteration; brace depth across the block is verified balanced
+  (0 in, 0 out, never negative); the `ROOT = { ... }` re-scope at 687-690 is
+  an idiom used 20+ times elsewhere in this codebase without issue and
+  correctly returns to character scope at its closing brace. I also checked
+  the specific call site the log attributes this to
+  (`qing_accountability_events.txt` option `.1.b`, `QING_council_recompute = yes`
+  at line 121) — the event is `type = country_event` with `ROOT = CHI`
+  throughout, so the `employer = ROOT` guards inside the recompute walk are
+  correctly scoped there too (ruling out the sibling "ROOT = the appointee,
+  not CHI" bug class that `QING_office_appoint`'s own #373 comment documents
+  as a real, previously-fixed instance of this exact mistake elsewhere).
+  **Left as-is** — no changes made to this block. Hypothesis, not fact: this
+  may be downstream fallout from the `qing_office_held` failure in the same
+  call chain (the two errors are adjacent event options), in which case
+  fixing #16's confirmed bug may reduce or eliminate this count too; or it
+  may be a benign engine self-logging artifact of the same "leaf-still-
+  evaluated" class on some OTHER of `QING_council_recompute`'s 21 callers
+  (per its own comment) that error.log's line attribution didn't let me
+  localize further. **Check the next boot's error.log for the
+  `qing_pos_marker_ct` count** — if it drops to zero or near-zero, this fix
+  alone resolved it; if the count is materially unchanged, it needs its own
+  follow-up task with the other 20 call sites audited for the ROOT-vs-
+  employer mismatch.
+
+**What I did:** Restructured `QING_office_appoint`'s guard (`se_QING_COUNCIL.txt`,
+~line 1759) from a flat two-leaf `limit` into a nested `if`: the outer `if`
+gates on `has_variable = qing_office_held` alone; only its inner `if` (run
+only when the outer already passed) evaluates
+`NOT = { var:qing_office_held = flag:$office$ }`. Same net effect
+(`QING_office_vacate_dispatch_nobackfill` still fires under the identical
+combined condition), but the var-flag compare is now structurally
+unreachable while the variable is unset.
+
+**Review:** Self-reviewed (fork context did not permit spawning a
+code-review subagent — same constraint as Task #1). Checked: brace balance
+verified across the whole file (script-counted, net 0, never negative);
+no macro-void risk (plain comment, no LOG/debug_log string touched); no
+RHS-comparison-rule violation (unchanged — `flag:$office$` is a literal
+RHS, same as before); `git diff --stat` shows 17 insertions / 9 deletions,
+no EOL/BOM churn (file has no BOM before or after, consistent).
+
+**Commit:** `ccb2dca00` — "fix: read-before-set var-flag error in
+QING_office_appoint (~38k boot-log lines)" — pushed to `merge-overnight`.
+
+**Bonus finding (out of this task's scope, logged for Task #9):** while
+tracing `QING_char_holds_court_position`'s OR-set
+(`common/scripted_triggers/qing_dynasty_triggers.txt:299-320`) against
+`QING_office_appoint`'s own "strip every other court marker on seating"
+block (`se_QING_COUNCIL.txt:1811-1865`), found the strip block is MISSING
+`qing_court_artist` (Court Painter), `qing_caravan_super_marker`,
+`qing_salt_commissioner_marker`, `qing_is_xj_beg`,
+`qing_opium_commissioner_marker`, and `qing_customs_ig_marker` — six markers
+that the candidate-exclusion trigger and the 1:1-audit walk both know
+about, but that a man keeps if he is promoted INTO a great office while
+holding one of them. This is very likely the exact mechanism behind Task
+#9's screenshot repro (Court Painter + Minister of Culture held at once).
+Left untouched here (out of scope for #16) — Task #9 should extend the
+strip block at lines 1811-1865 with these six markers, following the exact
+pattern already used there for `qing_hoppo_marker`.
+
+**Status:** DONE (confirmed fix shipped + pushed). `qing_pos_marker_ct`
+cascade NOT independently fixed — see hypothesis above; recommend checking
+its count on the next boot before deciding whether it needs its own task.
