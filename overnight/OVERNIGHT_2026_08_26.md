@@ -709,6 +709,17 @@ of this task's scope and does not appear to be broken.
 **Commit:** `7bcfe2b50` — "fix: read-before-set empty-var bug in
 manufacturing income (task #29)" — pushed to `merge-overnight`.
 
+**Follow-up review (dispatched despite fork-scope constraints, see note
+below):** PASS, no findings. Confirmed cumulative-total semantics
+preserved (multiply applies to the fresh value before the self-add, so
+the running total isn't corrupted), pattern byte-for-byte matches the
+sibling fix, brace balance clean. Bonus finding: the parallel
+`this_income_from_manufacturing_the_state` / `..._resource_extraction_the_state`
+vars are guarded-read-only with no write site anywhere — not a crash (the
+guard makes it a safe no-op), but state-share income from these sources is
+always silently 0. Filed as Task #30 for the coordinator to investigate as
+a design gap, not fixed here.
+
 **Coordinator flag (out of scope for this task, noted per fork protocol):**
 while working in this same working tree, found commit `72358651c` —
 "revert: Court Corruption coloring is benefit-based, not sign-based" —
