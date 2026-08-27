@@ -195,15 +195,28 @@ EDU_set_t2_national_bonus_from_universities = {
 					}
 				}
 			}
-			# [logfix 2026-08-25] the nested every_governorships->every_state_province
-			# iterator above leaves the value-block's current scope at PROVINCE (the
-			# deepest iterator scope), not the outer country scope this set_variable
-			# claims -- error.log: "has_law trigger [ Wrong scope for trigger: province,
-			# expected country ]" at EDU_svalues.txt:78 (EDU_university_national_bonus's
-			# bare has_law), ~3.4k lines/session. owner. qualification is the proven fix
-			# (matches EDU_university_national_bonus_here, EDU_svalues.txt:109-111, which
-			# calls this exact function the same way from a documented Province scope).
-			multiply = owner.EDU_university_national_bonus
+			# [logfix 2026-08-25, corrected 2026-08-26 task #17] the nested
+			# every_governorships->every_state_province iterator above leaves the
+			# value-block's current scope at PROVINCE (the deepest iterator scope), not
+			# the outer country scope this set_variable claims -- error.log: "has_law
+			# trigger [ Wrong scope for trigger: province, expected country ]" at
+			# EDU_svalues.txt:78 (EDU_university_national_bonus's bare has_law).
+			# The 2026-08-25 attempt used a dotted `owner.EDU_university_national_bonus`
+			# reference, which still left 1,234 occurrences of the SAME error in the next
+			# boot: a dotted scope-prefix on a script-value NAME only rescopes direct
+			# field access, it does NOT push a new root for TRIGGERS nested inside that
+			# value's own `if.limit` blocks (has_law stays evaluated at the stale
+			# PROVINCE scope regardless of the `owner.` prefix on the outer call). The
+			# proven fix in this codebase is the scope-change BLOCK form, not a dotted
+			# path — see DEMAND_svalues.txt's DEMAND_steel_ships (`owner = { value =
+			# num_of_ships ... } `) and this same file's EDU_university_bonus_total_province
+			# (`owner = { has_law = ... }`), both of which correctly re-root everything
+			# nested inside the block, not just the immediate field.
+			multiply = {
+				owner = {
+					value = EDU_university_national_bonus
+				}
+			}
 		}
 	}
 }
