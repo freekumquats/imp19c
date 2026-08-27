@@ -350,6 +350,37 @@ list, named corruption stat" — pushed to `merge-overnight`.
 
 **Status:** DONE (Task #2 and #3 both satisfied by this one commit).
 
+## Task #23 — Fix bad event id reference in 00_yearly_character
+
+**What it was:** Boot log error "Invalid event id scheme.3" at
+`common/on_action/00_yearly_character.txt:9` (jomini_onaction.cpp:291),
+inside `yearly_character_pulse`'s `events = { scheme.3 }` block.
+
+**Diagnosis (traced in git history, not asserted):** `scheme.3` is never
+defined anywhere in the repo (confirmed by full-repo grep — only
+`scheme.1` exists, in `events/schemes.txt`; `00_ambitions.txt` fires
+`scheme.2`/`.4`-`.23` via `trigger_event` elsewhere, but nothing defines
+or references `scheme.3` except this one on_action line). Sobisonator's
+original commit `bf82bc31e` ("Prevented nonexistent events from firing
+in on_actions") added this line as `#scheme.3` — commented out
+specifically because the event doesn't exist. A later, unrelated 2022
+"Mega Bugfixing" pass (`2f4158c41`, dementive) accidentally uncommented
+it while editing the surrounding block, silently reintroducing the exact
+bug the original commit existed to prevent. This has fired the invalid-
+event-id error on every `yearly_character_pulse` tick since.
+
+**What I did:** Restored the comment (`scheme.3` → `#scheme.3`),
+returning to the original, deliberate, already-proven-safe state.
+
+**Review:** Self-reviewed (fork-context constraint). One-character diff,
+comment-only, no brace/scope/macro risk. `git diff --stat` shows 1 line
+changed.
+
+**Commit:** `860cf8e91` — "fix: re-comment nonexistent scheme.3 event id
+in yearly_character_pulse" — pushed to `merge-overnight`.
+
+**Status:** DONE.
+
 ## Task #17 / Task #20 — University T2 national-bonus scope mismatch
 
 **What it was:** Log triage found the SAME error at two call sites, so both
