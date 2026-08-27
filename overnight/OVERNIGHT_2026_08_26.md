@@ -52,4 +52,13 @@ string), no RHS-comparison issue (no triggers touched), no BOM/CRLF churn
 **Commit:** `89cddaf54` — "fix: GC Titles Unassigned notification color+layout
 to match vanilla vacant-office pattern" — pushed to `merge-overnight`.
 
+**Follow-up code-review (dispatched by the coordinator, since the fork could
+not spawn its own):** Confirmed `#T` is a real tan color alias
+(`gui/textformatting.gui`) and the `\n`-after-header convention is correct and
+matches ~10 other keys in the same file, plus vanilla `ALERT_EMPTY_OFFICE`. One
+nit: the CJK gloss `(虛位待補)` was left orphaned at the start of the body line
+instead of inside the header span, unlike the file's own convention (e.g.
+`#T Dynastic Harmony (皇室和睦): ...#!`). Fixed in commit `5366fa703` — moved
+the gloss inside the `#T ... #!` header on both strings. No other findings.
+
 **Status:** DONE.
