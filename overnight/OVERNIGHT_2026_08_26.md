@@ -1764,3 +1764,83 @@ subject_integration) contain branching/probabilistic options that need a
 design decision before converting, not a mechanical fix. Do not mark this
 task completed without either finishing the remaining 6 structural files or
 explicitly re-scoping it.
+
+## Task #4 continuation — finished remaining 6 files, resolved the Part B design question
+
+**Part A (6 structural files, commit `8c0aa5e99`):** moved every inline
+parenthetical modifier mention to the proven own-line
+`\n#COLOR Name: sign N#!` format across `qing_revenue`, `qing_pilgrimage`,
+`qing_treaties`, `qing_techtransfer`, `qing_personnel`, `qing_march`. Every
+number traced to its real effect script, not reused uncritically from
+prose — this caught and quantified several mentions that were actually
+vague (the Task #3 pattern, missed by the original file-level regex
+because it only flags a NUMBER already inside parentheses):
+`qing_revenue.12.a`'s "a touch of unrest" is Court Corruption +2 (traced
+via `QING_DECLINE_nudge`); `qing_personnel.2.a`'s "loses loyalty and
+prominence" is Loyalty -15 / Prominence -5 (traced via
+`add_loyalty = loyalty_qing_delta_n15` and `add_prominence = -5`);
+`qing_revenue.9.a` was also missing its permanent +0.02/month Legitimacy
+component entirely (only the +8% tax efficiency was mentioned) — added.
+
+Two options are genuinely probabilistic, not deterministic, and got a
+labeled branch format instead of a single flat line so neither outcome is
+misstated: `qing_revenue.11.a` ("If the man holds:" / "If ... suborned:",
+70/30 `random_list`) and `qing_march.2.a` ("On a clean suppression:" /
+"On a chaotic one:", GG skill-check).
+
+**Part B design question — RESOLVED, not by inventing a new convention:**
+read every option in `qing_faction`, `qing_integ_capstone`, and
+`qing_subject_integration` directly (not just the ones the original
+regex caught) before deciding anything. Finding: `qing_subject_integration`
+ALREADY implements the exact "On success (X%): ... / On failure (Y%): ..."
+labeled-branch convention (options `.10.d`, `.12.d`) that Part A's
+probabilistic options above were just given — it wasn't missing, the
+first pass just hadn't read this file closely enough to see it already
+existed. The remaining garrison-comparison options across all three files
+(`qing_faction.4.a`, `qing_integ.30.e`, `qing_integ.41.e`, `qing_integ.10.e`,
+`qing_integ.12.e`) use LIVE `GetVariable(...)_shown` percentages and
+contextual amban/garrison-state branch text — a genuinely MORE accurate
+display than a static number, since the real value depends on live
+character stats and which actors are present. Flattening these into the
+static own-line list would be a regression, not a fix — confirmed this
+by reading each option's actual effect block, not assumed from the
+original fork's flag. Left all of these untouched.
+
+One genuinely static, deterministic hit was found and fixed:
+`qing_integ.11.a` (Court of Colonial Affairs impeachment) had Stability +2
+and Tyranny +3 inline in parentheses — moved to own-line. Its treasury
+gain ("his full personal hoard") is confirmed genuinely dynamic
+(`add_treasury = { value = 0  add = scope:corrupt_official.wealth }`, no
+fixed amount exists anywhere) — left as descriptive prose, NOT given a
+bracketed number. (One self-caught mistake: first attempt wrote
+`[corrupt_official.GetWealth]`, an invented, unverified loc function with
+zero precedent anywhere in this codebase's loc files — caught before
+commit and reverted to plain prose; the proven-code rule holds even for a
+one-line fix.)
+
+**Out of scope, noted for a future pass, not silently dropped:**
+`qing_faction`'s options `.1.a/b/c`, `.2.a/b`, `.3.a/b/c`, `.4.b/c` are
+mostly VAGUE with no numbers at all (the Task #3 pattern) — but this
+file wasn't part of the original structural-regex hit list beyond one
+line (`.4.a`, which is dynamic and correct), so a full vague-language
+audit of it is new scope, not part of what this task's inventory
+covered. Flagging for whoever does the full Qing-event vague-language
+sweep (if one is scoped beyond the original 16-file structural list).
+
+**Review:** self-reviewed (fork context, no nested Agent tool). Quote
+balance verified across all 7 touched files (corrected an initial script
+bug that mis-flagged blank lines — re-ran and confirmed genuinely clean).
+BOM preserved on all 7 (efbbbf). `git diff --stat` proportional to the
+edits, no EOL churn.
+
+**Commit:** `8c0aa5e99` — pushed to `merge-overnight`.
+
+**Status:** DONE. All 16 originally-hit files now resolved: 13 files
+reformatted to the own-line convention (7 from the first pass, commit
+`a6aec1853`, plus 6 more this pass — 5 deterministic, 1 with two
+probabilistic branches), 1 file (`qing_subject_integration`) got a single
+targeted fix for its one genuinely-static option, and 2 files
+(`qing_faction`, `qing_integ_capstone`) plus the rest of
+`qing_subject_integration` were confirmed already correct with their own
+superior dynamic convention and deliberately left unchanged. Task #4
+marked completed.
