@@ -1231,9 +1231,55 @@ before staging.
 **Commit:** `eda0c7a34` — "feat: gate GC office/sub-position appointment by
 sex and Women's Rights law tier (task #10)" — pushed to `merge-overnight`.
 
-**Status:** DONE — flagging the lower/senior office split (ASSUMPTIONS
-above) for user confirmation; everything else traced and verified, not
-guessed.
+**REOPENED — code review found a real MEDIUM gap.** Only ONE of the two
+claimed enforcement points actually did anything:
+- `QING_office_eligible_candidate` (the trigger the sex gate was added
+  to) is DEAD CODE — zero real call sites anywhere in the repo, confirmed
+  by full grep. Adding the gate there enforced nothing.
+- The REAL click-time handler, `qing_gov_office_appoint_selected`'s
+  `is_valid` (`QING_governance_actions.txt:592-697`), does NOT call the
+  gate at all. It already has a documented stale-refresh-window backstop
+  for the DEGREE requirement (lines 688-695) but had none for sex — so in
+  that window an ineligible woman could still appear as a pickable row
+  and be appointed, contradicting the original "never over-permit" claim.
+- Only live enforcement was `QING_council_refresh_candidates_by`'s
+  picker-list filter (`se_QING_COUNCIL.txt:1552`), correct for the normal
+  flow but not click-time-authoritative.
+
+**Fix (commit `e01ab3104`):** added an inlined sex-eligibility
+`custom_tooltip` block to `qing_gov_office_appoint_selected`'s `is_valid`,
+directly alongside the existing degree backstop, reproducing
+`QING_char_gc_office_sex_eligible`'s exact tier mapping (9 LOWER / 6
+SENIOR / 1 APEX office flags, same law identifiers, same Imperial Clan
+exemption) but inlined via `scope:player` rather than calling the trigger
+directly — that trigger's `ROOT`/`employer` links resolve differently in
+this GUI `is_valid`'s scope (confirmed by comparing both contexts: here
+`scope:player` is explicitly saved to CHI via `saved_scopes`, whereas the
+trigger's own `ROOT`/`employer` usage assumes a different calling
+context, proven correct only where it's actually invoked today). Added
+the new tooltip's loc key (`qing_gc_appoint_requires_sex_eligibility_tt`,
+`qing_governance_l_english.yml`). Also corrected
+`QING_office_eligible_candidate`'s header comment, which falsely claimed
+"applied at every appointment chokepoint" — replaced with an explicit
+dead-code note (other files' own comments already independently call it
+"orphaned," corroborating the grep). Left the trigger's logic in place as
+a reference rather than deleting it.
+
+**Review:** dispatched code-review agent (`a17ee68b315486f1f`) got stuck
+on the same sub-agent-delegation issue prior reviews hit (no Bash access,
+tried to delegate a grep and stalled). Verified directly instead: brace
+balance clean (script-counted, final/min depth 0 across the whole file);
+dead-code claim reconfirmed by grep (only self-references and other
+files' own "orphaned"/"belt-and-suspenders if this... is ever [wired]"
+comments, zero real invocations); loc key matches between script and loc
+file exactly; inlined OR/AND structure and law identifiers compared
+side-by-side against `QING_char_gc_office_sex_eligible` and confirmed
+equivalent for all 16 office flags; RHS-comparison form matches proven
+precedent (`var:X = flag:Y`, literal RHS) throughout.
+
+**Status:** DONE — click-time gap closed and verified. Lower/senior
+office split (from the original implementation) still stands as a
+flagged assumption for user confirmation, unchanged by this fix.
 
 ## Task #13 — Audit all law groups for progressive tiers and add sequential prerequisites
 
