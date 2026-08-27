@@ -348,7 +348,21 @@ escaping in a double-quoted loc string (only `"` does).
 **Commit:** `bdbf49eab` — "fix: Consort Clan modifier display — own-line
 list, named corruption stat" — pushed to `merge-overnight`.
 
-**Status:** DONE (Task #2 and #3 both satisfied by this one commit).
+**Coordinator correction:** the benefit-to-country coloring for Court
+Corruption directly contradicted the user's explicit rule for this
+formatting pass ("positive number changes in green text and negative in
+red", example "Dynastic Harmony rises by [green]2[/green]" — sign of the
+number, not sentiment about the stat). Existing codebase precedent
+(`qing_household.9.b.tt`) is not authority over an explicit standing
+instruction from the user for this exact task. Fixed to strict sign-based
+color in commit `d84a74eed`: Court Corruption -4 is now `#R` (red),
+matching Dynastic Harmony and Loyalty's sign-based coloring on the same
+lines. +5 was already red and needed no change. Task #4's sweep of all
+Qing events must use STRICT sign-based coloring throughout — do not
+repeat the benefit-based judgment call.
+
+**Status:** DONE (Task #2 and #3 both satisfied; coloring corrected in
+`d84a74eed`).
 
 ## Task #23 — Fix bad event id reference in 00_yearly_character
 
@@ -440,3 +454,33 @@ via owner={} block (tasks #17, #20)" — pushed to `merge-overnight`.
 **Status:** DONE — both tasks closed by this one commit. Recommend checking
 the next boot log for both error counts (EDU_svalues.txt:78 and the
 oa_economy_setup.txt:2721 chain) dropping to zero.
+
+## Task #11 — Rename Women's Rights law tiers to drop leading "Women"
+
+**What it was:** `localization/english/laws_l_english.yml:693-699`, the four
+tiers of the `womens_law` group (`common/laws/00_social_laws.txt:142-179`)
+each repeated "Women"/"Womens" in their own display name on top of the group
+header ("Women's Rights") already saying it: "Women Second Class Status",
+"Women Limited Legal Rights", "Women Equal Legal Rights", "Womens Suffrage"
+(missing the apostrophe).
+
+**What I did:** Loc-only change to the four display names:
+`women_second_class_status` -> "Second Class Status",
+`women_limited_legal_rights` -> "Limited Legal Rights",
+`women_equal_legal_rights` -> "Equal Legal Rights",
+`womens_suffrage_law` -> "Women's Suffrage" (added the apostrophe, per the
+task's explicit instruction to keep "Women's" only on the last tier). Did
+NOT touch the internal law option keys (`women_second_class_status` etc.) —
+grepped the repo for any other hardcoded occurrence of the old display
+strings first (none found), and left the keys alone since has_law checks
+and other law files reference them by key, not by display text.
+
+**Review:** Self-reviewed (fork-context constraint, as with prior tasks).
+Diff is exactly the 4 intended lines (`git diff` reviewed before commit);
+apostrophe in "Women's Suffrage" is safe unescaped in a double-quoted loc
+string (same precedent as Task #2/#3's "Empress's").
+
+**Commit:** `5c78f2271` — "fix: drop leading \"Women\" from Women's Rights
+law-tier names (task #11)" — pushed to `merge-overnight`.
+
+**Status:** DONE.
