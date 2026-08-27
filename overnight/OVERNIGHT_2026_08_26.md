@@ -1393,3 +1393,80 @@ office sex/tier gate (task #15)" — pushed to `merge-overnight`.
 **Status:** DONE — flagging the `is_close_relative`-to-current-ruler proxy
 (ASSUMPTIONS above) for user confirmation; a true clan-wide concept would
 need new tracked state, out of scope for this task as named.
+
+## Task #25 — Investigate large unresolved "Unexpected token"/"Unknown trigger type" boot cascade
+
+**What it was:** error.log (newest zip, 22:38, predates tonight's fixes
+but none of tonight's other fixes touch this area) has 116 "Unexpected
+token" and 11 "Unknown trigger type" lines. Full ranked-inventory pass
+found these distinct classes:
+
+1. **gfx/asset/shader files (test_ship.asset, pdxmesh.shader, etc.)** —
+   vanilla engine assets, not mod script. Out of scope, not touched.
+2. **common/script_values/MOVEMENT_svalues.txt — 22 TZ-region blocks,
+   CONFIRMED STRUCTURAL DEFECT, NOT FIXED.** See Task #32 (filed) for the
+   full diagnosis: `every_<X>_TZ_region` (auto-generated from the
+   scripted_list in TRADE_lists.txt) fails to parse inside a
+   `value = {}` script_value block, at the identical relative position
+   in all 22 blocks (evenly spaced, ~37 lines apart) — this is a
+   systemic, 100%-reproducible defect, not cascade noise. No proven fix
+   syntax found in this repo or either oracle (Invictus, Terra Indomita)
+   for iterating a static scripted_list inside a script_value
+   specifically — the one precedent found (`every_in_list` in
+   EE_svalues.txt:2770) iterates a runtime-SAVED list variable, not a
+   static scripted_lists definition, so it is not a confirmed drop-in
+   fix. Per the overnight skill's Rule 1 hard-block category 1 (unproven
+   capability, no precedent anywhere), did NOT guess-convert all 22
+   blocks. This means all 22 trade-zone transportation svalues currently
+   compute with NO railway/port/canal bonus applied, silently, every
+   quarter — filed as Task #32, left open, needs a labelled boot-spike
+   on ONE block before a repo-wide fix.
+3. **common/military_traditions/*.txt (00_arabic/manchu/napoleon/qing +
+   vanilla-derived 01_default.txt) and common/modifiers/*.txt — ~90
+   "Unexpected token: <modifier-key-name>" lines, NOT FIXED.** Sampled
+   one site (00_napoleon.txt:291): the surrounding brace/key=value syntax
+   is structurally valid; the parser is rejecting the KEY NAME itself
+   (`monthly_general_loyalty`), not the block structure. No
+   `static_modifiers`/`modifier_definitions` directory exists in this
+   repo, so these keys rely on vanilla built-ins or were never properly
+   registered — unconfirmed which. Since vanilla-derived `01_default.txt`
+   is ALSO affected, this may be mod-wide/engine-version-wide, not
+   Qing-specific. Filed as Task #33 for full investigation — ran out of
+   scope/time in this pass to confirm root cause with confidence.
+4. **events/imp19c_mod_events/diplomatic_play/diplomatic_play_events.txt:831
+   — CONFIRMED AND FIXED.** `any_allied_country = scope:catcher` is
+   invalid (the iterator needs a condition block, not a direct scope
+   assignment) — this desynced the parser and produced the cascaded
+   "Unknown trigger type: modifier" error at line 835. Fixed to the
+   proven `this = scope:X` identity-check idiom (precedent:
+   `events/annexation.txt:367-368,376-377,405`). Brace balance of the
+   whole file verified (203 open / 203 close) after the edit.
+5. **Other scattered single-instance "Unknown trigger type"/"Unexpected
+   token" lines** (agitator_sponsorship.txt, shortage_events.txt,
+   marriage_on_actions.txt, FlavorEvents.txt, 00_mission_events.txt,
+   POLITICS_svalues.txt, PRICE_svalues.txt) — each is a DIFFERENT,
+   isolated cascade from its own file's own earlier parse issue (e.g.
+   "Badly read script value X" a few lines above in the same file).
+   NOT triaged individually in this pass — each would need its own
+   diagnosis pass; not confirmed whether any share a common root cause
+   with classes 2/3 above. Left untriaged, out of scope for tonight.
+
+**What I did:** Fixed class 4 (commit below). Filed Task #32 (class 2,
+high-impact, needs a boot-spike) and Task #33 (class 3, needs full
+investigation) rather than guessing at either. Did not touch class 1
+(vanilla assets, not mod script) or fully triage class 5 (scattered,
+each needs its own pass).
+
+**Review:** Self-reviewed the one fix (fork-context constraint, no
+Agent-tool access as a one-shot worker fork). Whole-file brace count
+verified balanced (203/203) after the edit; the fix is a 1-for-1 idiom
+substitution with a proven precedent, no macro-void/RHS-comparison risk.
+
+**Commit:** `c31419d2c` — "fix: malformed any_allied_country scope check
+(task #25)" — pushed to `merge-overnight`.
+
+**Status:** LEFT IN_PROGRESS. Class 4 is done; classes 2 and 3 are
+real, confirmed-nontrivial, unresolved defects (not deferrals — each is
+filed as its own task with the diagnosis chain so far, per the
+no-silent-punt rule) and class 5 is untriaged. Task #25 itself should
+stay open until Tasks #32/#33 land or are explicitly closed.
