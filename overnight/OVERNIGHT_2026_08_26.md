@@ -1908,3 +1908,48 @@ targeted fix for its one genuinely-static option, and 2 files
 `qing_subject_integration` were confirmed already correct with their own
 superior dynamic convention and deliberately left unchanged. Task #4
 marked completed.
+
+## Task #10 (final) — Imperial Clan exemption scope fix + corps sex backstop
+
+**Continuing from "REOPENED AGAIN":** fixed both gaps found by the
+coordinator's post-hoc review.
+
+**Fix 1:** `QING_char_is_imperial_clan = yes` (a direct trigger call that
+assumed ROOT = CHI, but ROOT is the appointee CHARACTER in this
+scripted_gui, so the exemption never resolved) replaced with
+`is_close_relative = scope:player.current_ruler`, inlined the same way
+the rest of this backstop already handles the ROOT/scope:player
+mismatch. Verified this exact idiom (`<country-scope-link>.current_ruler`)
+is the proven, established pattern for `is_close_relative` in this
+codebase: `se_QING_SEATS.txt:281,290` ("bare current_ruler is null in
+char scope... prefix the country ruler-link"), `se_QING_IDEOLOGY.txt:46`,
+`common/ambitions/01_schemes.txt:2203`.
+
+**Fix 2:** added an equivalent sex-eligibility `custom_tooltip` block to
+the corps `trigger_if` branch (censor_inspector / imperial_guardsman /
+zongli_diplomat), as a sibling of the existing corps-validity
+`custom_tooltip`, gating all three on Limited Legal Rights or better
+(their confirmed LOWER tier) with the same corrected Imperial Clan
+exemption.
+
+**Verification (self, per fork-boilerplate hard rule against spawning
+subagents):** brace balance script-checked, final/min depth 0 across the
+whole file. Confirmed via grep: zero remaining references to the broken
+`QING_char_is_imperial_clan` call; exactly 2 occurrences of the corrected
+`is_close_relative = scope:player.current_ruler` (great-office copy +
+new corps copy). BOM preserved (`ef bb bf`), diff is small and additive
+(23 insertions/1 deletion), no EOL churn. Traced both stale-refresh
+scenarios: a stale ineligible woman targeting a great office is rejected
+by the existing backstop (unchanged); a stale ineligible woman targeting
+a corps sub-post is now rejected by the new backstop (previously would
+have passed unconditionally); an imperial clanswoman is now correctly
+exempted at click-time in BOTH branches (previously failed in both, since
+both used the same broken call before this fix — the great-office copy
+had the identical bug, just not flagged until this fix touched the same
+pattern).
+
+**Commit:** `cd4ec2812` — "fix: correct Imperial Clan exemption scope +
+gate corps sub-posts by sex (task #10)" — pushed to `merge-overnight`.
+
+**Status:** DONE. Both gaps closed and independently traced through both
+branches' stale-refresh scenario.
