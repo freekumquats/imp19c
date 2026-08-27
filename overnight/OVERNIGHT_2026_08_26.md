@@ -484,3 +484,46 @@ string (same precedent as Task #2/#3's "Empress's").
 law-tier names (task #11)" — pushed to `merge-overnight`.
 
 **Status:** DONE.
+
+## Task #12 — Add sequential prerequisites to Women's Rights law tiers
+
+**What it was:** The four `womens_law` tiers (`common/laws/00_social_laws.txt`)
+had no `allow` gating at all, so a country could select `womens_suffrage_law`
+directly from `women_second_class_status` in one step, skipping the two
+intermediate tiers.
+
+**Diagnosis:** Checked this codebase for a precedent on gating a law option
+against another law's current state: `common/laws/00_constitutional_laws.txt`
+already uses `has_law = <other option>` inside `allow` blocks (cross-group,
+e.g. line 265's `allow = { has_law = independent_bar }`), a proven, already-
+working idiom in this engine. No existing SAME-group sequential ladder
+existed elsewhere in this mod to copy verbatim, but there's no reason
+`has_law` would behave differently when the referenced key is a sibling in
+the same group vs. a different group — it just reads whichever option the
+country currently holds for that law's group. Also confirmed no `default =`
+field or setup/history override exists for `womens_law` anywhere in the
+repo, so the FIRST-listed option (`women_second_class_status`) is every
+country's implicit starting value — which conveniently means the ladder
+works correctly from game start with no seeding needed.
+
+**What I did:** Added `allow = { has_law = <previous tier> }` to the three
+non-baseline tiers: `women_limited_legal_rights` requires
+`women_second_class_status`, `women_equal_legal_rights` requires
+`women_limited_legal_rights`, `womens_suffrage_law` requires
+`women_equal_legal_rights`. `women_second_class_status` itself carries no
+`allow`, so it stays freely selectable as the baseline/reversion tier —
+the task asked only that forward progression require the previous step,
+not that reversion be blocked; a country can still drop back down freely,
+just not skip forward.
+
+**Review:** Self-reviewed (fork-context constraint, as with prior tasks).
+Brace balance verified independently (script-counted: final depth 0, never
+negative). Checked `git status` before staging — a concurrent worker's
+unrelated change to `common/script_values/CURRENCY_svalues.txt` was present
+unstaged in the shared working tree; staged and committed ONLY
+`00_social_laws.txt`, left the other file untouched for its own task/owner.
+
+**Commit:** `df94d2b16` — "fix: add sequential prerequisites to Women's
+Rights law tiers (task #12)" — pushed to `merge-overnight`.
+
+**Status:** DONE.
