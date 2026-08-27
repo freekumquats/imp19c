@@ -1470,3 +1470,67 @@ real, confirmed-nontrivial, unresolved defects (not deferrals — each is
 filed as its own task with the diagnosis chain so far, per the
 no-silent-punt rule) and class 5 is untriaged. Task #25 itself should
 stay open until Tasks #32/#33 land or are explicitly closed.
+
+## Task #4 — Audit all Qing events for modifier formatting and quantification (PARTIAL — honest scope cut)
+
+**What it was:** apply Task #2/#3's rules (own-line modifier list, Capitalized
+names, benefit-based color, exact traced numbers, no vague terms) to EVERY
+Qing event, not just Consort Clan.
+
+**Full inventory (syntactic anti-pattern grep, `\.tt:[0-9]+ ".*\([^)]*[+-][0-9]`):**
+16 loc files hit: qing_accountability, qing_canal, qing_dynasty, qing_guard,
+qing_household, qing_faction, qing_integ_capstone, qing_march,
+qing_office_events, qing_personnel, qing_pilgrimage, qing_secretariat,
+qing_revenue, qing_treaties, qing_techtransfer, qing_subject_integration.
+This grep only catches the syntactic tell (a number inside parentheses); the
+vague-no-number cases (the Task #3 pattern, e.g. "corruption eases") don't
+match it and were found by reading each hit's surrounding prose.
+
+**DONE this pass (7 files, commit `a6aec1853`):** qing_dynasty (options 2-6
+and 8; option 7 was already done in Task #2/#3), qing_accountability (1.a/b/c
+— traced 2-character loyalty/popularity/prominence deltas via
+`common/loyalty/00_imp19c_loyalty.txt` and `QING_char_promote_standing`),
+qing_canal (2.a), qing_secretariat (3.a/b — both were the exact vague
+"corruption eases"/"corruption up" pattern, now -6/+5 traced from
+`QING_DECLINE_nudge`), qing_office_events (1.a/b/c, 10.c — 1.a/1.c were vague,
+now -12/+10 traced), qing_guard (3.a/b — vague "veterans and loyalty
+cut"/"loyalty and standing rise", now -10/-4 and +15/+2/+4 traced), qing_household
+(harem.9.a/b — vague "harmony", now +2/-2 traced from `QING_dynasty_harmony_nudge`).
+
+**NOT done — explicit remaining scope, not silently dropped:**
+- qing_revenue, qing_pilgrimage, qing_treaties, qing_techtransfer, qing_personnel:
+  hits here already carry exact numbers and are already `#G`/`#R` colored —
+  the remaining defect is purely structural (inline-in-prose, not on an own
+  line at the bottom). Lower severity than the vague-number bug class, not yet
+  converted.
+- qing_march: same structural-only gap (skill-check-scaled stability toll,
+  numbers already present).
+- **Deliberately NOT forced into the flat template** (a genuine design
+  question, not an oversight): `qing_faction.4.a` (the effect literally
+  branches on which bloc is petitioning — reformist vs conservative get
+  OPPOSITE-signed reform-pressure effects, so a single flat modifier line
+  would misstate whichever branch didn't fire) and `qing_revenue.11.a` (a
+  70/30 `random_list` chance-of-two-outcomes, not a deterministic modifier).
+  `qing_integ_capstone` and `qing_subject_integration`'s garrison/amban
+  skill-check options are the SAME shape (dynamic success/fail % with
+  different modifiers per branch) — already display their live success
+  chance via `GetVariable(...)_shown` and are already `#G`/`#R` colored
+  per-branch; flattening these into one always-shown number list would make
+  them LESS accurate, not more. Flagging as a design question: should
+  probabilistic/branching events get a different display convention (e.g.
+  "on success: ... / on failure: ...", each its own mini-list) rather than
+  being silently exempted forever?
+
+**Review:** self-reviewed (fork context, no nested Agent tool). Quote-balance
+verified via script on all 7 touched files (odd-quote-count scan, all clean).
+Every number rewritten was traced to its actual effect script (loyalty deltas
+via `00_imp19c_loyalty.txt`, `QING_DECLINE_nudge` amounts, flat `add_*`
+effects) — none guessed from prose.
+
+**Status:** LEFT IN_PROGRESS. 7 of 16 hit files done; 5 more (revenue,
+pilgrimage, treaties, techtransfer, personnel, march) are same-severity
+structural-only remaining work; 3 files (faction, integ_capstone,
+subject_integration) contain branching/probabilistic options that need a
+design decision before converting, not a mechanical fix. Do not mark this
+task completed without either finishing the remaining 6 structural files or
+explicitly re-scoping it.
