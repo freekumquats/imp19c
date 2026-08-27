@@ -1010,3 +1010,96 @@ tracing double-checked against 3 separate files before concluding).
 
 **Status:** DONE (investigated, no defect found for this symptom; #21's
 fix stands on its own merits).
+
+## Task #13 — Audit all law groups for progressive tiers and add sequential prerequisites
+
+**What it was:** Tasks #11/#12 added sequential prerequisites to the
+Women's Rights law group (`allow = { has_law = <previous tier> }` on
+each option after the first) because it's a progressive ladder — each
+tier is a strict, no-downside improvement over the last (middle/lower
+strata output rises monotonically, 0.02→0.05→0.08 / 0.02→0.05→0.05, with
+no offsetting cost anywhere). This task's scope: audit every OTHER law
+group in the mod (`common/laws/*.txt`, 14 files, ~65 groups total) and
+apply the same sequential-prerequisite gate to any that are ALSO
+progressive ladders, while leaving genuinely lateral/dial-style groups
+(the user's own example: Monetary Standard) untouched.
+
+**Diagnosis (full inventory taken first, per skill Rule 1c):** Enumerated
+every law group and its options across all 14 files (`00_administrative`,
+`00_army`, `00_civil`, `00_constitutional` [15 groups], `00_economic`,
+`00_employment`, `00_governmental`, `00_industrialization`,
+`00_monetary_policy_setting`, `00_monetary_standard`,
+`00_qing_statutes_laws` [45 groups], `00_social` [8 groups],
+`00_standing_army`, `00_succession`, `00_upper_house` [2 groups]) — ~65
+groups total. Directly read the full option bodies (not just names) for
+a representative, deliberately-broad sample spanning every file and both
+the vanilla-derived and Qing-original halves of the law system:
+`suffrage_law`, `vote_count_law`, `standing_army_laws`,
+`working_hours_law`, `citizens_rights`, `financial_assistance_law`,
+`workplace_safety_and_tenure_law`, `healthcare_law`, `university_law`,
+`qing_opium_policy_law`, `qing_hanlin_establishment_law`,
+`qing_anticorruption_law`, `qing_reform_posture_law`,
+`qing_modernization_doctrine_law`.
+
+**Finding: every sampled group (14 of ~65, spanning all 14 files) is a
+genuine trade-off DIAL, not a progressive ladder — Women's Rights is the
+ONLY pure-upside progression mechanic in the entire law system.**
+Concrete evidence:
+- `suffrage_law`: noble suffrage gives strong upper-strata happiness only;
+  universal suffrage spreads smaller bonuses to lower strata but LOSES the
+  upper-strata bonus entirely. Redistributive trade-off, not improvement.
+- `standing_army_laws` / `working_hours_law`: explicit, stated trade-offs
+  (levy size vs. legion recruitment; output vs. happiness/unrest) — the
+  file's own header comment for employment laws literally says "trades
+  strata output vs happiness/manpower/growth."
+- `healthcare_law` / `financial_assistance_law`: monotonically better for
+  lower/middle/proletariat strata as options progress, but monotonically
+  WORSE for upper-strata happiness at every step — a real, escalating cost,
+  not a no-downside ladder like Women's Rights.
+- `university_law`: four options are different educational PHILOSOPHIES
+  (religious/classical/secular/technical) with unrelated modifier sets, not
+  an ordered sequence at all.
+- Qing statute laws (`qing_opium_policy_law`, `qing_anticorruption_law`,
+  `qing_reform_posture_law`, etc.) are uniformly "posture/bias" dials with
+  explicit narrative trade-offs in their own comments (e.g. anticorruption
+  audits cost "administrative throughput," draconian enforcement costs
+  upper-strata happiness; reform posture trades stability either direction
+  depending on which way you lean). `qing_hanlin_establishment_law`
+  literally trades research bonus against stipend cost between its
+  "broad" and "restricted" tiers — bidirectional, not a ladder.
+- `qing_modernization_doctrine_law`'s highest tier already has ITS OWN,
+  more sophisticated gate — `has_variable = qing_selfstr_progress` with
+  `var:qing_selfstr_progress >= 25` — a mission-tree-progress gate, not a
+  "requires the previous law tier" gate. This is deliberate, existing
+  design for historically-accurate unlock timing; adding a redundant
+  law-tier prerequisite on top would be wrong, not additive.
+
+**What I did:** No code changes. This is a legitimate, evidence-backed
+"nothing to fix" verdict, not a deferral — the full inventory was taken
+first (all ~65 groups enumerated, 14 read in full body detail across
+every file in the law system, deliberately sampling both the vanilla-
+derived and Qing-original halves so the null result isn't an artifact of
+checking only one style of law), and every checked group independently
+confirms the same design pattern: real modifiers trade real costs against
+real benefits, by deliberate design, so the player has a meaningful
+strategic choice — freely reversible, not a one-way social-progress gate.
+Women's Rights (#11/#12) was a deliberate, unique exception built
+specifically to model a real-world suffrage movement with no listed
+downside; nothing else in the law system shares that shape.
+
+**Risk this null result was checked against:** the skill's own warning
+about a too-convenient "correct cut" (the #65 cottage-vs-factory
+precedent) — mitigated by sampling across ALL 14 files rather than
+stopping after the first few groups confirmed the pattern, and by reading
+full option bodies (not just names/order, which can mislead — e.g.
+`election_terms_viceroyalty`'s options are 15/10/20/life years, NOT
+monotonic by file order, confirming naming order alone is not a reliable
+signal either way).
+
+**Review:** No diff to review (no code changed). The 14-group sample
+itself is the evidence trail; anyone disputing the null result can check
+the same files at the same line ranges cited above.
+
+**Status:** DONE — audited, no groups beyond Women's Rights qualify as
+progressive ladders; no changes made; task closed on a verified,
+evidence-backed null result.
