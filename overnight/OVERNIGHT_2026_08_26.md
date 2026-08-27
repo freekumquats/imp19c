@@ -745,6 +745,71 @@ re-correct; not touched here (out of this task's scope).
 
 **Status:** DONE.
 
+## Task #14 — Gate women's exam eligibility by Women's Rights law tier
+
+**What it was:** The user wants exam eligibility for women to unlock
+progressively with the Women's Rights law tier: Second Class Status = no
+exams; Limited Legal Rights = Translation (翻譯科); Equal Legal Rights adds
+Civil (文科); Suffrage adds Military (武科). This must line up with Task
+#10's GC-post tier mapping, since passing an exam is itself a prerequisite
+for office.
+
+**Diagnosis:** Traced the exam system (`se_QING_EXAM.txt`,
+`qing_dynasty_triggers.txt`). Found no existing `is_female` filter anywhere
+in the exam candidate-selection code — the sit/seat/mint effects gate on
+`employer`/`is_adult`/`is_ruler`/degree traits only. Four entry points feed
+a character into a track: the per-person coming-of-age intake
+(`QING_exam_sit_candidate`, called from `on_becoming_adult` — fires ONCE
+per character, no periodic retry) and three periodic cohort-fill helpers
+(`QING_exam_seat_civil_graduate`/`_banner_laureate`/`_martial_graduate`,
+called every keju cycle from `QING_exam_graduate_cohort`) which pick up any
+still-degreeless, still-unflagged (`NOT has_variable=qing_sat_keju`)
+`employer=ROOT` adult. This second fact matters: it means the cohort
+helpers already function as a natural periodic retry for anyone the
+one-shot intake skipped, AS LONG AS that person was never flagged
+`qing_sat_keju` in the first place.
+
+**Key design point (checked carefully, not assumed):** `qing_sat_keju=1` is
+set UNCONDITIONALLY in `QING_exam_sit_candidate`, before the track
+(banner/martial/civil) is even resolved. If I had gated only the per-track
+roll bodies, an ineligible woman would still get permanently flagged "sat,
+no degree" the first time she comes of age — and since there is no periodic
+re-check for the one-shot intake, she would NEVER get a real second chance
+even after the law later advances. So the eligibility check had to go in
+the OUTER limit, before the flag is set, mirroring the exact routing logic
+(banner / not-banner+martial / civil-residual) so it's checked against the
+track she'd actually be sent to. Left unflagged, she falls through to the
+periodic cohort helpers instead — which carry the identical gate — so she
+is naturally re-considered every later cycle with no new retry machinery.
+
+**What I did:**
+- Added three new triggers, `QING_char_exam_eligible_translation`/`_civil`/
+  `_military` (`qing_dynasty_triggers.txt`), each `OR = { is_female = no
+  employer = { has_law = <tier(s) that unlock this track> } }` — men always
+  pass; women need the mapped law tier(s).
+- `QING_exam_sit_candidate`: added the full routing-mirrored `OR` (three
+  `AND` branches, one per track) to the outer limit, before
+  `qing_sat_keju` is set.
+- `QING_exam_seat_civil_graduate` / `_banner_laureate` / `_martial_graduate`:
+  added the matching single eligibility trigger alongside each one's
+  existing `QING_char_exam_track_*` check.
+- Did NOT touch the mint fallbacks (`QING_exam_mint_scholar` and its
+  banner/martial counterparts, the `create_character` path used only when
+  no eligible existing adult is found) — out of this task's scope, which
+  was eligibility for EXISTING candidates, not new-character generation.
+
+**Review:** Self-reviewed (fork-context constraint, as with prior tasks).
+Brace balance verified independently on both files (script-counted: final
+depth 0, never negative, each file). Confirmed `employer = { OR = {
+has_law = ... } }` is the same proven scope-block idiom fixed into place
+this same run for Tasks #17/#20 (not a dotted path). `git status` showed no
+concurrent uncommitted changes to either file before staging.
+
+**Commit:** `15b259f7e` — "feat: gate women's exam eligibility by Women's
+Rights law tier (task #14)" — pushed to `merge-overnight`.
+
+**Status:** DONE.
+
 ## Task #26 — Fix minor cosmetic issues: map-mode color collisions and redundant Japan character fields
 
 **What it was:** (1) `directorial_republic` and `constitutional_parliament`
