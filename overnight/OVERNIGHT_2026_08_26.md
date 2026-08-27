@@ -24,6 +24,12 @@
   reasoning, including why the Grand Regent seat was deliberately left
   ungated (its Empress-Dowager priority pick is already historically
   correct and predates any Women's Rights law).
+- Task #15 (Imperial Clan exemption): the engine has no multi-generation
+  dynasty/house concept, so "Imperial Clan member" is proxied as
+  `is_close_relative` to the CURRENT reigning emperor (reusing the same
+  proven idiom already used for "imperial prince" in the regent picker),
+  not a true clan-wide marker. This drifts across reigns rather than
+  tracking the whole Aisin Gioro lineage. Flag for confirmation.
 
 ## Task #1 — Fix GC "Titles Unassigned" notification style
 
@@ -1293,3 +1299,51 @@ Constraint: I am a one-shot forked agent with no Agent-tool access in this
 run, so I could not dispatch an adversarial design review as a fuller
 investigation would call for; this diagnosis should be treated as a
 first pass, not a final word.
+
+## Task #15 — Exempt Imperial Clan members from office degree requirements
+
+**What it was:** All members of the Imperial Clan should be exempt from
+office eligibility requirements and appointable anywhere, with a confirmed
+FULL exemption — overriding the Women's Rights sex/law-tier gate just added
+in Task #10, not merely a degree requirement (there was never a literal
+degree check on GC offices, per Task #10's own investigation).
+
+**Diagnosis:** Grepped the whole repo for any existing "Imperial Clan" /
+dynasty / house concept — none exists. This engine has no multi-generation
+dynasty/house scope link at all. The closest PROVEN primitive already used
+in this exact codebase for an equivalent concept is `is_close_relative`,
+used by `QING_seat_pick_regent`'s own priority-2 "adult imperial prince"
+pick (`se_QING_SEATS.txt:274-291`, `is_close_relative = root.current_ruler`).
+
+**What I did:** Added `QING_char_is_imperial_clan` (`qing_dynasty_triggers.txt`)
+as `is_close_relative = ROOT.current_ruler` — the same proxy, reused rather
+than inventing a new primitive. Logged as an ASSUMPTION: this tracks
+closeness to the CURRENT ruler, which drifts across reigns, rather than a
+true multi-generation clan marker (which would need its own stamp-at-birth
+mechanic to build properly). Wired it as an unconditional OR-leaf into
+`QING_char_gc_office_sex_eligible` (task #10) — placed before the
+`qing_gc_picker_office_var` no-op guard, ahead of all four tier `AND`
+blocks, so a clanswoman bypasses every tier including Second Class Status,
+matching the confirmed full-exemption answer.
+
+**What I deliberately did NOT do:** did not also wire this into the exam
+eligibility triggers (task #14) — the task's own wording ("appointed
+anywhere") is about office appointment, and Task #10's investigation
+already established GC offices carry no literal degree requirement, so
+there is nothing exam-shaped for a clanswoman to be exempted FROM at the
+office-appointment layer. If the user separately wants Imperial Clan women
+exempt from the exam-eligibility gate too (e.g. so a clanswoman could hold
+an exam-track trait without sitting), that is a distinct ask outside what
+this task named — flagging rather than silently expanding scope.
+
+**Review:** Self-reviewed (fork-context constraint, as with prior tasks).
+Brace balance verified independently (script-counted: final depth 0, never
+negative). `git status` showed no concurrent uncommitted changes to the
+file before staging.
+
+**Commit:** `96700587c` — "feat: exempt Imperial Clan members from GC
+office sex/tier gate (task #15)" — pushed to `merge-overnight`.
+
+**Status:** DONE — flagging the `is_close_relative`-to-current-ruler proxy
+(ASSUMPTIONS above) for user confirmation; a true clan-wide concept would
+need new tracked state, out of scope for this task as named.
