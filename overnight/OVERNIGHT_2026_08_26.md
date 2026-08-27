@@ -154,9 +154,21 @@ Left untouched here (out of scope for #16) — Task #9 should extend the
 strip block at lines 1811-1865 with these six markers, following the exact
 pattern already used there for `qing_hoppo_marker`.
 
-**Status:** DONE (confirmed fix shipped + pushed). `qing_pos_marker_ct`
-cascade NOT independently fixed — see hypothesis above; recommend checking
-its count on the next boot before deciding whether it needs its own task
+**Follow-up code-review (dispatched by the coordinator, same as Task #1):**
+Confirmed correctness — before/after truth tables identical for all three
+cases (never held office, holds this office, holds a different office);
+brace balance clean (2 opens, 2 closes, enclosing effect closes correctly
+at line 1922); nested-if-under-has_variable is the dominant idiom in this
+file (35 other occurrences), not a novel form; no RHS-comparison violation.
+Verdict: ship as-is, no findings to fix. Reviewer also spotted two more
+sites with the same flat-AND anti-pattern — `se_QING_AFFINITY.txt:225-226`
+and `se_ECON_LOG.txt:743` (both already comment-flagged as the same class)
+— out of scope for this commit, filed as Task #28.
+
+**Status:** DONE (confirmed fix shipped + pushed, reviewed clean).
+`qing_pos_marker_ct` cascade NOT independently fixed — see hypothesis
+above; recommend checking its count on the next boot before deciding
+whether it needs its own task
 (tracked as Task #27).
 
 ## Task #9 — Add Court Painter to 1:1 court-position restriction
