@@ -1315,7 +1315,33 @@ side-by-side against `QING_char_gc_office_sex_eligible` and confirmed
 equivalent for all 16 office flags; RHS-comparison form matches proven
 precedent (`var:X = flag:Y`, literal RHS) throughout.
 
-**Status:** DONE — click-time gap closed and verified. Lower/senior
+**REOPENED AGAIN — coordinator's own post-hoc review found two real
+gaps this fix's self-verification missed.**
+
+**Finding 1 (MEDIUM, real bug):** the Imperial Clan exemption in the new
+backstop calls `QING_char_is_imperial_clan = yes` directly. That trigger
+is `is_close_relative = ROOT.current_ruler` (Scope: character, ROOT=CHI)
+— but in THIS scripted_gui, ROOT is the appointee CHARACTER, not CHI
+(every other country reference in this same block correctly uses
+`scope:player`, as the fix's own adjacent comment explains it had to for
+the sex-tier logic — then the clan check was left calling the trigger
+directly with the exact ROOT mismatch that comment describes working
+around). An imperial clanswoman is shown in the picker correctly but gets
+a dead click when appointed, because her exemption fails to resolve.
+
+**Finding 2 (LOW/MEDIUM):** the sex backstop lives only in `trigger_else`
+(13 great offices). The 3 corps sub-posts (censor_inspector,
+imperial_guardsman, zongli_diplomat) route through the separate
+`trigger_if` corps branch, which the backstop never reaches — those 3
+LOWER-tier lines inside the backstop are dead code for corps posts, and
+an ineligible woman could still be enrolled into a corps sub-post during
+the stale-refresh window.
+
+Both flagged for a follow-up fix; the 13-great-office backstop, tier
+mapping, law syntax, loc keys, and dead-code comment correction are all
+independently confirmed correct and unchanged.
+
+**Status:** REOPENED, in_progress. Lower/senior
 office split (from the original implementation) still stands as a
 flagged assumption for user confirmation, unchanged by this fix.
 
