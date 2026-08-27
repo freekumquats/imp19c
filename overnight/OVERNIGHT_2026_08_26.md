@@ -620,7 +620,23 @@ diff against `origin/merge-overnight` confirmed no divergence before committing.
 **Commit:** `3c0592eba` — "fix: 4 boot-log bugs in oa_wealth_changes.txt (tasks #18/#19/#21/#22)"
 — pushed to `merge-overnight`.
 
-**Status:** ALL FOUR DONE.
+**Post-hoc code review (dispatched by the coordinator):** PASS on all
+four. #18's guard is a faithful copy of the sibling pattern, genuinely
+skips the divide at 0. #19's strata-wealth conversion matches the proven
+se_ECON_wealth.txt pattern; confirmed the sibling manufacturing-income
+vars (Task #29) use the identical pattern with no missed site. #21's
+`DIPLOMACY_update_all_diplomatic_plays` exists, takes no params, iterates
+a scope-independent global list — safe from both call sites; already in
+live use elsewhere, confirming the name is correct. #22's 7 RHS sites all
+correctly switched, none missed/doubled, new script_value file correctly
+BOM'd. Two informational notes, neither blocking: (a) the manufacturing
+vars accumulate every quarter with no reset — pre-existing behavior,
+faithfully preserved, not introduced by this fix; (b) se_INCOME.txt and
+CURRENCY_svalues.txt are CRLF — coordinator verified this is the files'
+pre-existing state (diff is small/additive, not a full rewrite), not EOL
+churn from this commit.
+
+**Status:** ALL FOUR DONE, reviewed clean.
 
 ## Task #24 — Add missing loc entries for GP/Zongli dispatch events and diplomatic_play.4.a
 
