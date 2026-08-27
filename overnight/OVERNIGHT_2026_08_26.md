@@ -955,3 +955,58 @@ modifier capitalization (task #7)" — pushed to `merge-overnight`. (Also
 unintentionally carries 2 files belonging to Task #26 — see flag above.)
 
 **Status:** DONE.
+
+## Task #6 — Investigate contradictory diplomatic play status text
+
+**What it was:** UI shows "War is likely" and "Talks are friendly" at
+once on a diplomatic play (screenshot `20260826221538_1.jpg`).
+
+**Log/screenshot freshness:** the newest `~/Downloads/logs.zip` and
+screenshot set are timestamped 22:37-22:38, well BEFORE commit `3c0592eba`
+(23:26, Task #21's rename fix) landed. So this evidence cannot confirm
+anything post-fix — conclusions below are from source-tracing only, not
+from a fresh boot.
+
+**Diagnosis (traced in source):**
+- "War is likely" reads `var:war_assessment`; "Talks are friendly" reads
+  `var:AI_play_attitude` (`common/scripted_triggers/imp19c_diplomacy_triggers.txt:1-44`).
+  These are TWO INDEPENDENT axes — military war-willingness vs.
+  diplomatic tone — each set by its own effect
+  (`AI_diplomatic_play_evaluate_war` / `AI_diplomatic_play_evaluate_attitude`,
+  both called together from `DIPLOMACY_diplomatic_play_update_status`,
+  `se_DIPLOMACY.txt:524-568`). They can legitimately coexist by design —
+  posturing for war while talks stay polite is a real, intended state, not
+  a single value read twice.
+- Both are kept live independent of Task #21's fix: `DIPLOMACY_update_all_diplomatic_plays`
+  is ALSO called monthly via `diplomatic_plays_on_action`
+  (`common/on_action/00_monthly_country.txt:10,262-276`), a working path
+  gated by a 20-day cooldown var — so the two values were not permanently
+  frozen from play creation even before Task #21's fix. Task #21's rename
+  fix is still a real, worthwhile fix (removed a dead/erroring duplicate
+  call), just not the cause of THIS symptom.
+- The originally-cited lead (`MARRIAGE_PLAY_actions.txt:158` /
+  `DIPLOMACY_kickoff_play_event` country-vs-flag mismatch) does NOT feed
+  either displayed value: `MARRIAGE_PLAY_actions.txt:140-160` is
+  marriage-picker validation (opposite-sex / not-already-betrothed
+  checks), and `DIPLOMACY_kickoff_play_event` (`se_DIPLOMACY.txt:355+`)
+  only picks which character's POV triggers a narrative play-event popup —
+  neither touches `war_assessment` or `AI_play_attitude`. This lead was a
+  mis-attribution from an earlier speculative pass; dropped.
+
+**What I did:** No code change. No defect found causing this specific
+contradiction beyond normal two-independent-axis design, both confirmed
+live-updated by working code paths. Forcing a "fix" here would have meant
+inventing a problem — per the diagnosis-first rule, a clean verdict is a
+legitimate outcome when backed by traced evidence, which this is.
+
+**Open item for the user, not a bug:** if the two-line display is
+genuinely confusing in play (reads as contradictory even though it's two
+different axes), that's a copy/UI clarity question — e.g. relabeling to
+"War posture" / "Talks tone" to visually separate the axes — not a defect
+to silently decide on. Flagged here rather than assumed.
+
+**Review:** Self-reviewed (no code changed, so no diff to review; source
+tracing double-checked against 3 separate files before concluding).
+
+**Status:** DONE (investigated, no defect found for this symptom; #21's
+fix stands on its own merits).
