@@ -55,10 +55,9 @@ invention adds 0):
 `tech_firearms` (granted to the Africa/Native-America floor bloc) grants 0 —
 confirmed absent from this table.
 
-Government-type base values (`00_default.txt`), partial:
-- `tribal` = 10
-- `tribal_federation` = 15
-- most others = 30-40
+Government-type base values: see the "Structural finding" section below for the
+complete, confirmed list of all 15 nonzero-base types and all 30 zero-base
+types — superseding the early partial read that follows in Case 1.
 
 ## Case 1 — Africa/Native-America floor bloc (most extreme cut) — CONFIRMED
 
@@ -74,10 +73,9 @@ countries in this bloc:
   (no `country_civilization_value` key in its `base` block at all).
 - `absolute_kingdom` (Kongo, Hausa, etc. — `00_albert.txt:272-293`): **base = 0**, same.
 - `absolute_duchy` / `absolute_principality` / `absolute_grand_duchy` (other African
-  tags in this bloc): not yet individually re-checked, but same file/pattern as
-  `absolute_kingdom` (monarchy-type governments outside the ~15-entry base-value table
-  in `00_default.txt` carry no `country_civilization_value` key) — high-confidence 0,
-  pending a final per-type re-check.
+  tags in this bloc): CONFIRMED base = 0 — see the "Structural finding" section
+  below, which directly read all 30 `00_albert.txt` government types including
+  these three and found none with a `country_civilization_value` key.
 
 **So for this entire bloc, government base = 0 regardless of tribal vs. kingdom-tier
 government. Calculated cap = 0 + 3 = 3.**
@@ -171,14 +169,18 @@ NOT granted — mining_rails contributes 0 to the tally either way, so this
 doesn't change what mining_rails alone would have done, but gear_systems(+5)
 and templating(+1) are real, deliberately excluded contributions.)
 
-**Final calculated cap for CHI = 0 + 6 = 6** — higher than the pre-fix 4, but
-deliberately below the 12 every Old World bloc reaches, per the audit doc's
-intended relative positioning (bureaucratic leader, mechanization laggard).
-Re-checked against the same samples: Guangxi's flat 6 now sits exactly AT the
-new cap (not over); Far East's 5 is now under, but 7/8/10 are still over the
-cap of 6 — a smaller, partial fix, not a full resolution. Whether those
-remaining Far East outliers need a province-level setup adjustment, or
-whether cap=6 itself still needs revisiting, is not decided here.
+**Final calculated cap for CHI = 0 + 6 = 6** — higher than the pre-fix 4.
+NOTE (superseded almost immediately, see "Complete bloc table" below): at the
+time this fix landed, the intent was for CHI to stay deliberately below
+Europe's cap of 12 (bureaucratic leader, mechanization laggard). That relative
+positioning did NOT survive the next round — the user pointed out the
+Industrial Revolution hadn't started anywhere in 1763, so Europe's civic_2
+grant was just as anachronistic as CHI's would have been. Every Old World
+bloc was brought down to the SAME cap of 6 in commit `b1c65c5b4`, so CHI ends
+up at parity with everyone else, not deliberately below them. Re-checked
+against the same samples: Guangxi's flat 6 sits exactly AT the cap (not over);
+Far East's 5 is under, but 7/8/10 are still over — a partial fix for CHI's
+setup values specifically, unaffected by the later bloc-wide sweep.
 
 ## Structural finding — this explains why the pattern repeats across every bloc
 
@@ -224,12 +226,10 @@ tonight's tech rework) or intentional (civilization meant to be earned purely
 through tech under this mod's design) is not something I can determine from
 source alone — flagging it as the key remaining judgment call, not deciding it.
 
-## Status: 2 of ~7 blocs individually confirmed (Africa/NA floor bloc, CHI), plus
-the structural cause identified (zero government base across ~30 of this mod's
-own government types). Both individually-checked blocs show real, confirmed
-over-cap provinces using only static source, no boot test, no guessing.
-
 ## Complete bloc table (all blocs in the 1763 branch)
+
+(Supersedes the Case 1/Case 2 write-ups above for final numbers — those
+sections are kept for the diagnosis trail, not as the current state.)
 
 Government-type base is 0 for every bloc below UNLESS the specific country holds one
 of the 15 vanilla-derived `00_default.txt` types (checked per-country, not assumed).
