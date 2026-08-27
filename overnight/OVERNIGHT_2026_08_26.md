@@ -348,21 +348,19 @@ escaping in a double-quoted loc string (only `"` does).
 **Commit:** `bdbf49eab` — "fix: Consort Clan modifier display — own-line
 list, named corruption stat" — pushed to `merge-overnight`.
 
-**Coordinator correction:** the benefit-to-country coloring for Court
-Corruption directly contradicted the user's explicit rule for this
-formatting pass ("positive number changes in green text and negative in
-red", example "Dynastic Harmony rises by [green]2[/green]" — sign of the
-number, not sentiment about the stat). Existing codebase precedent
-(`qing_household.9.b.tt`) is not authority over an explicit standing
-instruction from the user for this exact task. Fixed to strict sign-based
-color in commit `d84a74eed`: Court Corruption -4 is now `#R` (red),
-matching Dynastic Harmony and Loyalty's sign-based coloring on the same
-lines. +5 was already red and needed no change. Task #4's sweep of all
-Qing events must use STRICT sign-based coloring throughout — do not
-repeat the benefit-based judgment call.
+**Coordinator correction, then reverted — benefit-based coloring is
+correct:** the coordinator initially "corrected" the Court Corruption
+line to strict sign-based coloring (commit `d84a74eed`), misreading the
+user's rule as raw-sign-only. The user confirmed benefit-to-country
+coloring is the intended rule: green means the change is good for the
+country, red means bad, regardless of arithmetic sign. Reverted in commit
+`72358651c` — Court Corruption -4 is `#G` (green, easing corruption is
+good) again, matching the original `bdbf49eab` coloring and the
+`qing_household.9.b.tt` precedent. Task #4's sweep of all Qing events must
+use BENEFIT-BASED coloring throughout, per the corrected task description.
 
-**Status:** DONE (Task #2 and #3 both satisfied; coloring corrected in
-`d84a74eed`).
+**Status:** DONE (Task #2 and #3 both satisfied; coloring reverted to
+benefit-based in `72358651c`).
 
 ## Task #23 — Fix bad event id reference in 00_yearly_character
 
@@ -599,3 +597,67 @@ diff against `origin/merge-overnight` confirmed no divergence before committing.
 — pushed to `merge-overnight`.
 
 **Status:** ALL FOUR DONE.
+
+## Task #24 — Add missing loc entries for GP/Zongli dispatch events and diplomatic_play.4.a
+
+**What it was (original framing, turned out false):** Boot log showed
+"Unrecognized loc key" for `qing_gp_dispatch.1.t/.desc/.a`,
+`qing_zongli_dispatch.1.t/.desc/.a`, and `diplomatic_play.4.a`, framed as
+missing loc text to write.
+
+**Diagnosis (Rule 1c — false premise caught before writing anything):**
+Read both dedicated loc files
+(`localization/english/qing_gp_dispatch_l_english.yml`,
+`qing_zongli_dispatch_l_english.yml`) directly — every single key
+(`.t`, `.desc`, `.a`, `.a.good.tt`, `.a.bad.tt`) already existed with
+correct, on-theme text. Nothing to write. The real causes, found by
+reading the full error.log context around these lines (not just the
+"Unrecognized loc key" lines in isolation, per imp19c-logs Rule 3):
+1. Neither `qing_gp_dispatch_events.txt` nor `qing_zongli_dispatch_events.txt`
+   had a `namespace = ...` declaration before its first event id — every
+   sibling event file in this codebase (`japan_bakumatsu_events.txt`,
+   `diplomatic_play_events.txt`, `qing_dynasty_events.txt`, checked all
+   three) declares `namespace = X` right after its header comment block;
+   these two skipped straight to `qing_gp_dispatch.1 = {`. This produced
+   "does not have a valid namespace" + "Duplicated event ID" cascades that
+   spilled into UNRELATED files loaded near them in the batch
+   (`japan_bakumatsu_events.txt`, and a phantom duplicated `'}'` event id
+   in `diplomatic_play_events.txt:856`) — parser/registration desync, not
+   a loc-content gap. This is why the loc lookup for keys that DID exist
+   still failed: the event never registered correctly under its namespace.
+2. Both loc files were separately flagged "Missing UTF8 BOM" —
+   confirmed via direct byte check (`f.read(3) == b'\xef\xbb\xbf'`), both
+   false. Every other loc file in `localization/english/` checked (e.g.
+   `mod_events_l_english.yml`) does have the BOM.
+3. `diplomatic_play.4.a` specifically: unrelated third bug, a typo in
+   `mod_events_l_english.yml:111` — `diplomatic_play_4.a` (underscore)
+   instead of `diplomatic_play.4.a` (period). The `.tt`/`.b`/`.b.tt` keys
+   immediately around it were already correct; only this one line had the
+   wrong separator.
+
+**What I did:**
+1. Added `namespace = qing_gp_dispatch` to `qing_gp_dispatch_events.txt`
+   and `namespace = qing_zongli_dispatch` to `qing_zongli_dispatch_events.txt`,
+   matching the exact convention used by every sibling event file.
+2. Prepended the UTF-8 BOM (`EF BB BF`) to both loc files via a direct
+   byte-level Python write (content otherwise untouched).
+3. Fixed the `diplomatic_play_4.a` → `diplomatic_play.4.a` typo.
+
+**Review:** Self-reviewed only (this fork's directive explicitly forbids
+spawning subagents, including the code-review agent). Checked: brace
+count balanced in both event files before and after (44/44 and 24/24,
+unchanged by the one added line each); `git diff --stat` shows only the
+5 files this task touched, nothing else staged (other in-flight forks'
+uncommitted edits in the shared working tree were left untouched); no
+CRLF churn (Python BOM write only prepended 3 bytes, rest of each file
+untouched).
+
+**Commit:** `f8c3ffd15` — "fix: missing namespace declarations + BOM on
+GP/Zongli dispatch events, diplomatic_play.4.a typo" — pushed to
+`merge-overnight`.
+
+**Status:** DONE. Recommend the next boot log be checked for: the
+namespace-desync cascade fully clearing (no more phantom duplicate-ID
+hits in `japan_bakumatsu_events.txt` / `diplomatic_play_events.txt`), and
+`qing_gp_dispatch.1` / `qing_zongli_dispatch.1` firing and displaying
+correctly in play.
