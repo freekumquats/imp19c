@@ -96,7 +96,7 @@ are genuinely over their calculated cap at game start. This is a real, confirmed
 instance of the bug, not a guess — every number above is read directly from source,
 not simulated or boot-tested.
 
-## Case 2 — CHI (Qing) — CONFIRMED, THEN FIXED (commit a6ef6b68a)
+## Case 2 — CHI (Qing) — CONFIRMED, FIXED, THEN CORRECTED (commits a6ef6b68a, 7a83859eb)
 
 1763 grant (`se_TEST.txt:396-411`, PRE-FIX): `TECH_unlock_military_level_0` + `_level_1`,
 `tech_rocket_artillery`, `TECH_unlock_oratory_level_1` + `_level_2`, `tech_census`,
@@ -138,25 +138,47 @@ Setup `civilization_value` samples:
 historical Chinese heartland provinces were set up well above the calculated cap of 4.**
 
 **ROOT CAUSE, traced via `git blame`:** CHI's civic tier stopping at level 1 was
-NOT a deliberate historical judgment. The commit that first split the 1763/1815
-branches (`86fa05438`, 2026-08-25) stated its own general rule as "civic level 1-2"
-for every bloc, but CHI's specific block was written with `civic_level_1` only,
+partly an oversight. The commit that first split the 1763/1815 branches
+(`86fa05438`, 2026-08-25) stated its own general rule as "civic level 1-2" for
+every bloc, but CHI's specific block was written with `civic_level_1` only,
 missing `_level_2` — and this was never re-examined when the rest of the branch got
 its historical-sourcing audit (`b19c50eb7`, tonight), which touched CHI's military
-and oratory grants with real citations but left civic untouched. Every other Old
-World bloc (Western Europe, Slavic, Ottoman/Islamic, South/SE Asia) gets civic 1+2.
-Nothing in `design/DESIGN_1763_STARTING_TECH.md` argues Qing specifically lacked
-canal/gear-system/templating-tier engineering by 1763 — civic 1-2 is marked
-"OK — all pre-industrial" for everyone, no CHI carve-out.
+and oratory grants with real citations but left civic untouched.
 
-**FIXED, commit `a6ef6b68a`:** added `TECH_unlock_civic_level_2 = yes` to CHI's
-1763-branch grant only (the frozen 1815-branch CHI block already had it and was
-untouched). New invention contribution: 4 + `tech_artificial_canals`(2) +
-`tech_gear_systems`(5) + `tech_templating`(1) = **12**.
+**FIRST FIX, commit `a6ef6b68a` (SUPERSEDED — do not repeat this reasoning):**
+granted the WHOLE `civic_level_2` block, on the claim that "nothing in the design
+docs argues Qing specifically lacked" this tier. **That claim was wrong** — a
+code-review check found `design/DESIGN_1763_STARTING_TECH_AUDIT.md` has a
+dedicated CHI section that explicitly addresses this exact tier and says the
+opposite: do NOT grant the whole block, cherry-pick `tech_artificial_canals`
+only. Its stated reasoning: the Grand Canal (大運河) and Qing hydraulic
+engineering (河工) justify canal technology specifically, but `gear_systems`/
+`templating` imply proto-industrial mechanization Qing did not have by
+1763 — granting the whole tier is a "false-equivalence trap" with Europe. The
+same doc's cross-bloc note: CHI should end up "out-bureaucracying Europe but
+lagging it in mechanization," not matching it tier-for-tier. That doc also
+records that the user explicitly asked for CHI to get its own dedicated,
+separately-scrutinized second pass — which never happened before tonight, so
+this tier was left both under-granted (civic_1 only, missing even the
+recommended canals cherry-pick) AND unresolved until now.
 
-**New calculated cap for CHI = 0 + 12 = 12** — now matches every other Old World
-bloc. Re-checked against the same samples: Guangxi's flat 6 and Far East's 5/7/8/10
-are now all UNDER the new cap of 12. This closes CHI's confirmed over-cap gap.
+**CORRECTED FIX, commit `7a83859eb`:** reverted the whole-block grant, added
+only `unlock_invention = tech_artificial_canals` instead, following the
+audit doc's specific recommendation. New invention contribution: 4 (weapon_mfg
+1 + shipyards 1 + metalworking 1 + construction 1) + `tech_artificial_canals`
+(2) = **6**. (`tech_gear_systems`/`tech_templating`/`tech_mining_rails` are
+NOT granted — mining_rails contributes 0 to the tally either way, so this
+doesn't change what mining_rails alone would have done, but gear_systems(+5)
+and templating(+1) are real, deliberately excluded contributions.)
+
+**Final calculated cap for CHI = 0 + 6 = 6** — higher than the pre-fix 4, but
+deliberately below the 12 every Old World bloc reaches, per the audit doc's
+intended relative positioning (bureaucratic leader, mechanization laggard).
+Re-checked against the same samples: Guangxi's flat 6 now sits exactly AT the
+new cap (not over); Far East's 5 is now under, but 7/8/10 are still over the
+cap of 6 — a smaller, partial fix, not a full resolution. Whether those
+remaining Far East outliers need a province-level setup adjustment, or
+whether cap=6 itself still needs revisiting, is not decided here.
 
 ## Structural finding — this explains why the pattern repeats across every bloc
 
@@ -215,19 +237,22 @@ of the 15 vanilla-derived `00_default.txt` types (checked per-country, not assum
 | Bloc | Grant (se_TEST.txt) | Invention contribution | Typical base | Calculated cap |
 |---|---|---|---|---|
 | Africa/Native-America floor | weapon_mfg, firearms, civic_1 | 3 | 0 (federated_tribe/absolute_kingdom) | **3** |
-| CHI (Qing) — POST-FIX (`a6ef6b68a`) | mil 0-1, oratory 1-2, civic 1**+2 (fixed)**, religious 1, +rocket_artillery/census/postal_admin | 12 (was 4) | 0 (imperial_monarchy) | **12** (was 4) |
+| CHI (Qing) — POST-FIX (`7a83859eb`) | mil 0-1, oratory 1-2, civic 1**+canals cherry-pick**, religious 1, +rocket_artillery/census/postal_admin | 6 (was 4) | 0 (imperial_monarchy) | **6** (was 4) |
 | Bloc A — Western Europe | mil 0-2+SYW, oratory 1-2, civic 1-2, religious 1-2+Enlightenment | 12 | 0 (charter_parliament) | **12** |
 | Bloc B — Slavic | identical grant to Bloc A | 12 | 0 (imperial_monarchy), but 35 if aristocratic_monarchy (some Polish-type tags) | **12** (up to 47 for the minority on a real-base type) |
 | Bloc C — South/SE Asia periphery | mil 0-2, oratory 1-2, civic 1-2, religious 1 | 12 | 0 | **12** |
 | Bloc D — Ottoman/Islamic | mil 0-2+mortar+wheeled_cannons, oratory 1-2, civic 1-2, religious 1 | 12 | 0 | **12** |
 | GBR/NED banking carve-out | Bloc A grant + oratory 3-4 (central_banking etc., all zero-contribution) | 12 | 0 | **12** |
 
-Civic tier was the deciding factor: every Old World bloc (A/B/C/D) gets `civic_level_1`
-+`civic_level_2` (contribution 2+8=10, plus the shared 2 from military = 12). CHI was
-the only literate/administrative civilization capped at `civic_level_1` ONLY (2, plus
-2 from military = 4) — traced to an oversight (not a historical judgment, see Case 2
-above) and fixed in commit `a6ef6b68a`, bringing CHI's cap to 12, matching every other
-Old World bloc. The Africa/NA floor bloc still gets neither tier fully (just
+Civic tier was the deciding factor: every Old World bloc (A/B/C/D) gets the full
+`civic_level_1`+`civic_level_2` (contribution 2+8=10, plus the shared 2 from
+military = 12). CHI was capped at `civic_level_1` ONLY (2, plus 2 from military
+= 4) — partly an oversight (see Case 2 above), corrected in commit `7a83859eb`
+to a deliberate CHI-specific cherry-pick (canals only, not the whole tier) per
+`design/DESIGN_1763_STARTING_TECH_AUDIT.md`'s explicit recommendation, landing
+CHI's cap at 6 — higher than the pre-fix 4, but intentionally below the 12 every
+Old World bloc reaches (bureaucratic leader, mechanization laggard is the
+documented intent). The Africa/NA floor bloc still gets neither tier fully (just
 `civic_level_1` alone plus 2 martial techs = 3) — not yet investigated for the same
 class of oversight; unlike CHI's fix this one is NOT obviously a mistake, since the
 whole point of this bloc is a deliberately minimal "previously-zero-grant" floor.
@@ -239,8 +264,8 @@ whole point of this bloc is a deliberately minimal "previously-zero-grant" floor
 | `00_Great_Lakes.txt` (C3F, ojibwe-potawatomi) | Africa/NA floor | 3 | mostly 0, one province at **15** | **5x OVER** |
 | `00_Congo_Basin.txt` (Kongo/Luba etc.) | Africa/NA floor | 3 | mostly 0, several at 5-7 | **OVER** at every nonzero province |
 | `00_Sahel.txt` (Hausa/Fulani/Songhai/Mossi/Tuareg) | Africa/NA floor | 3 | mostly 0, max 1 | under, fine |
-| `00_Guangxi.txt` (CHI, Han) | CHI | 12 (was 4) | flat **6** | **FIXED** — was over cap 4, now under cap 12 |
-| `00_Far_East.txt` (CHI, Han) | CHI | 12 (was 4) | 207×0, 2×5, 1×7, 1×8, 10×10 | **FIXED** — 5/7/8/10 were over cap 4, now all under cap 12 |
+| `00_Guangxi.txt` (CHI, Han) | CHI | 6 (was 4) | flat **6** | **AT cap** — was over cap 4, now exactly at cap 6 |
+| `00_Far_East.txt` (CHI, Han) | CHI | 6 (was 4) | 207×0, 2×5, 1×7, 1×8, 10×10 | **PARTIAL** — the 5 is now under cap 6, but 7/8/10 are STILL over |
 | `00_Andalusia.txt` (FRA/Spain) | Bloc A | 12 | 25×10, 1×12, 8×15, 1×17, 2×20 | **OVER** at 12/15/17/20 (majority of nonzero provinces) |
 | `00_Baltic_states.txt` (RUS-adjacent) | Bloc B | 12 (or 47 if aristocratic_monarchy) | 45×7, 31×10, 4×12, 2×15 | at cap=12: OVER at the 15s, AT cap at the 12s; if the owning tag is on a real-base type (35), all clear |
 | `00_Aegean.txt` (Ottoman/Turkish) | Bloc D | 12 | flat 10 | under, fine — no violation in this sample |
@@ -254,11 +279,14 @@ calculated cap of 12. The magnitude of the overshoot varies a lot: pre-fix, CHI 
 Africa/NA showed the worst RELATIVE overshoot (up to 5x) because their caps were
 lowest; Bloc A/B show smaller absolute overshoot (15-20 vs cap 12) but still real.
 
-**CHI's case is now fixed** (commit `a6ef6b68a`) — the civic-tier gap was a
-genuine oversight (traced via `git blame` to `86fa05438`, never a deliberate
-historical call), not a structural cap problem, so it had a clean, targeted fix:
-grant the missing tier. Both real samples checked (Guangxi, Far East) are now
-under the corrected cap.
+**CHI's case is partly fixed** (commits `a6ef6b68a`, corrected by `7a83859eb`)
+— the civic-tier gap was partly a genuine oversight (traced via `git blame` to
+`86fa05438`), but the correct-sized fix is smaller than first thought: an
+explicit design doc (`DESIGN_1763_STARTING_TECH_AUDIT.md`) argues Qing should
+deliberately lag Europe in mechanization, so only `tech_artificial_canals` was
+added, not the whole tier. This raises CHI's cap from 4 to 6 — Guangxi now sits
+exactly at cap, but Far East's higher provinces (7/8/10) are still over. This is
+a partial, not complete, fix for CHI.
 
 Two distinct, independently-real contributing factors remain for the OTHER blocs,
 not one bug:
