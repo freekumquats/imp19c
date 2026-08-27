@@ -1969,3 +1969,53 @@ observations noted (missing `exists` guard before `is_close_relative`;
 redundant dead corps entries in the great-office tier list) — neither
 introduced by this fix, neither a regression. Task #10 is closed for
 real this time, after 4 passes and 3 genuine bugs caught.
+
+## Task #34 — Sweep qing_faction event for vague/unquantified modifier language
+
+**What it was:** Task #4's sweep flagged qing_faction's options .1-.3 and
+.4.b/c as mostly vague, un-numbered prose ("costs political influence",
+"a touch of tyranny", "council effectiveness rises a little", "a heavy
+blow to dynastic harmony") — new scope beyond the original inline-
+parenthetical hit-list, filed as its own task.
+
+**What I did:** Traced every vague mention to its real effect in
+events/imp19c_mod_events/qing_faction_events.txt and the loyalty types in
+common/loyalty/00_imp19c_loyalty.txt, then rewrote all 9 affected options
+(1.a/b/c, 2.a/b, 3.a/b/c, 4.b/c) in localization/english/
+qing_faction_l_english.yml to the proven own-line `\n#COLOR Name: sign
+N#!` format, Capitalized, colored by benefit to the country:
+- 1.a: reformer Loyalty +12, conservative Loyalty -5, Political Influence -10
+- 1.b: Stability +1, conservative Loyalty +12, reformer Loyalty -5
+- 1.c: Council Effectiveness +2, reformer/conservative Loyalty -4 each
+- 2.a: Dynastic Harmony +6, Dowager's Popularity +30, Council Effectiveness -3
+- 2.b: Emperor's Popularity +15, Dynastic Harmony -14, Political Influence -15
+- 3.a: Purged Spokesman's Loyalty -5, Tyranny +2
+- 3.b: Political Influence -20, Council Effectiveness +5, both Loyalty +12
+- 3.c: Council Effectiveness -6
+- 4.b: Bloc's Loyalty -5, Tyranny +1 (kept the existing live-GetVariable
+  Council Effectiveness display unchanged, per the qing_subject_integration
+  precedent — a live meter shouldn't be flattened to a static number)
+- 4.c: lobby_leader's Loyalty +12, Prominence +10, rest-of-bloc Loyalty -3,
+  Political Influence -10
+
+Left narrative-only effects as flavor text with no number (reform
+trajectory shift, QING_faction_ripple, add_rival, and 3.a's
+QING_council_recompute-driven effectiveness recovery — none has a single
+static delta to show; 3.a's is a genuine recalculation, not a knowable
+fixed number, same reasoning as Task #4's treatment of GetVariable-shown
+meters).
+
+**Review:** dispatched code-review agent, told explicitly to Read the
+current file state directly rather than delegate diff-fetching (the known
+stall pattern in this session). Came back clean: all 9 numbers verified
+against the actual effect blocks and loyalty definitions, no missed
+modifiers, coloring internally consistent with the untouched 4.a-family
+lines, quote balance and name-macro usage both correct. One low-severity
+observation, not an error: 1.a also nudges `qing_reform_pressure` by -4,
+left unlisted since the reform-balance/pressure meters are treated as
+flavor throughout this file, consistent with the rest of the fix.
+
+**Commit:** `a0032686f` — "fix: quantify vague modifier mentions in
+qing_faction event (task #34)" — pushed to `merge-overnight`.
+
+**Status:** DONE.
