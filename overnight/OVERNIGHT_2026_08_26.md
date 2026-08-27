@@ -527,3 +527,75 @@ unstaged in the shared working tree; staged and committed ONLY
 Rights law tiers (task #12)" — pushed to `merge-overnight`.
 
 **Status:** DONE.
+
+## Tasks #18, #19, #21, #22 — 4 log-triage bugs in oa_wealth_changes.txt's quarterly pulse
+
+**What they were (all reported at/around `common/on_action/economy/oa_wealth_changes.txt`'s
+`every_country` quarterly block, lines 208-219):**
+- **#18** Div/0, `INCOME_update_treasury_country` (174 occurrences).
+- **#19** `change_variable effect [ Variable not of the 'value' scope type. Type: empty ]`,
+  `INCOME_calculate_and_distribute_military_procurement_wealth_owed` (7 distinct relative-line
+  sites, repeating every ~7 lines — ~910+ lines total across the session).
+- **#21** `Unknown effect AI_update_all_diplomatic_plays` (3 occurrences, 2 call sites).
+- **#22** `Illegal use of operator >`, `LOGISTICS_scan_worst_shortages` (7 sites).
+
+**Diagnosis (traced in source, read from the newest `~/Downloads/logs.zip` error.log myself):**
+- **#18:** `INCOME_update_treasury_country` reads `INCOME_national_total_quarterly`
+  (`INCOME_svalues.txt:5`), which adds `CURRENCY_national_debt_interest_actual_wealth_cost` ->
+  `CURRENCY_national_debt_interest_actual` -> `CURRENCY_debt_to_GDP_ratio`
+  (`CURRENCY_svalues.txt:14-17`), which did `divide = WEALTH_total_private_moveable_wealth_scaled`
+  with NO guard — a country with zero cached private moveable wealth (boot/init, or an economy-less
+  subject) divides by zero every quarter. Confirmed this is the ONLY unguarded use of this exact
+  divisor in the codebase; its sibling `CURRENCY_reserve_to_gdp_ratio` (line 1347-1356, 3 lines
+  below) already guards the identical divisor with `if = { limit = { X > 0 } divide = X }` —
+  copied that exact proven guard.
+- **#19:** `INCOME_calculate_and_distribute_military_procurement_wealth_owed`
+  (`se_INCOME.txt:326-372`) ran 7 `change_variable` calls (upper/middle/lower_strata_wealth,
+  proletariat/indentured/slaves/tribesmen_wealth) — `change_variable` requires the target to
+  ALREADY be a `value`-type variable; a governorship whose trade-split init hasn't touched these
+  vars yet this session fails with "Type: empty". This is the SAME class already fixed once in this
+  codebase (`se_ECON_wealth.txt:949-958`, "[1763-fix, log-triage 2026-08-20]") — copied that exact
+  proven fix (set_variable + guarded self-read add) to all 7 sites here. NOTE: a parallel comment at
+  `INCOME_svalues.txt:988-998` shows a DIFFERENT prior cause of this same error text
+  (`DEMAND_late_artillery_base` undefined) was already fixed upstream of this — my fix is
+  independent and additionally covers the read-before-set case regardless of that cause.
+  Also found (NOT fixed, out of scope — same 7-line pattern, `se_INCOME.txt:380-...`,
+  `this_income_from_manufacturing_*` change_variable calls): these read `has_variable`-guarded
+  elsewhere (`INCOME_svalues.txt:736`) suggesting the SAME twin bug may exist here too, but the
+  log did not report it this session — flag for a follow-up boot check.
+- **#21:** `grep`'d the whole repo for the effect name — `AI_update_all_diplomatic_plays` does not
+  exist anywhere; `DIPLOMACY_update_all_diplomatic_plays` (`se_DIPLOMACY.txt:501`) is clearly the
+  live effect it was renamed to (same "update all diplomatic plays" semantics, iterates
+  `global_all_diplomatic_plays`). Two stale call sites: `oa_wealth_changes.txt:219` (every quarterly
+  pulse) and `events/DEBUG/timetest_quarterly_tick.txt:294`. Since the old name silently no-op's
+  ("Unknown effect", not fatal), diplomatic plays have never received this quarterly status/event
+  update in the current build — **this is very likely the real root cause of the separately-tracked
+  "War is likely" / "Talks are friendly" contradiction (task #6)**, not two legitimately-coexisting
+  indicators; task #6 should re-verify against this fix before concluding anything else.
+- **#22:** `LOGISTICS_scan_worst_shortages` (`se_LOGISTICS.txt:55-129`) had 7 comparisons of the
+  form `var:shortage_phys_X > scope:logistics_country.var:LOGISTICS_tmp_worst_land` — a var-ref
+  (`scope:X.var:Y`) on a relational-operator RHS, illegal per the engine
+  (`imp19c-rhs-comparison-operator-rule` memory, `jomini_trigger.cpp:1342`). Proven fix = named
+  script_value on the RHS.
+
+**What I did:**
+- #18: guarded the divide in `CURRENCY_debt_to_GDP_ratio` (`CURRENCY_svalues.txt`).
+- #19: converted all 7 `change_variable` calls to `set_variable` + guarded self-read `add`
+  (`se_INCOME.txt`).
+- #21: renamed both call sites to `DIPLOMACY_update_all_diplomatic_plays`
+  (`oa_wealth_changes.txt`, `timetest_quarterly_tick.txt`).
+- #22: added `common/script_values/LOGISTICS_svalues.txt` (2 named svalues, BOM'd per convention)
+  and switched all 7 RHS var-refs in `se_LOGISTICS.txt` to them.
+
+**Review:** Self-reviewed (fork-context constraint — could not spawn a nested code-review
+subagent, same as prior tasks). Brace balance verified on all 6 touched files (script-counted,
+open==close on every file). No macro-void risk (no LOG/debug_log strings touched). No new
+RHS-comparison violations (fixed the ones that existed; new svalue reads are the proven-legal
+form). No BOM/CRLF churn on existing files; new file created with BOM to match the
+`common/script_values/` convention (verified against `EDU_svalues.txt`'s BOM). `git fetch` +
+diff against `origin/merge-overnight` confirmed no divergence before committing.
+
+**Commit:** `3c0592eba` — "fix: 4 boot-log bugs in oa_wealth_changes.txt (tasks #18/#19/#21/#22)"
+— pushed to `merge-overnight`.
+
+**Status:** ALL FOUR DONE.
