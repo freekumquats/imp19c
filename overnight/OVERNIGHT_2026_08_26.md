@@ -230,3 +230,63 @@ block and the new blocks.
 markers (task #9)" — pushed to `merge-overnight`.
 
 **Status:** DONE — all six markers fixed, not just Court Painter.
+
+**Post-hoc code review (dispatched by the coordinator against commit
+f63d58628):** PASS, no bugs. All six modifier/holder-var names independently
+verified against source (confirmed `qing_customs_inspector_general` is
+correct, `qing_customs_ig_office` does not exist anywhere in `common/`).
+Confirmed `qing_lin_zexu_appointed` untouched. Confirmed the `employer={}`
+wrap is necessary and correct at this scope. Two non-blocking observations:
+(1) the `qing_is_xj_beg` strip is effectively unreachable in practice, like
+the pre-existing `qing_march_gg`/`qing_is_harem_consort` defensive strips —
+harmless to include for list completeness; (2) the `qing_court_artist` strip
+also fixes a second, previously-unreported bug: `qing_court_artist_count`'s
+rebuild didn't exclude office-holders, so a promoted painter was silently
+inflating the atelier's cap-5 count and could block new appointments — this
+fix closes that too, as a side effect of removing the marker on seating.
+
+## Task #28 — Fix flat-AND read-before-set anti-pattern in se_QING_AFFINITY and se_ECON_LOG
+
+**What it was:** A code review of Task #16's fix flagged two more sites with
+the identical flat-AND read-before-set shape: a `limit` block combining
+`has_variable = X` with a sibling leaf that reads/compares `X`, which the
+engine still evaluates even when `has_variable` already fails, logging a
+spurious error for every case where `X` was never set.
+- `common/scripted_effects/se_QING_AFFINITY.txt:225-226` (`QING_char_affinity`'s
+  0..100 clamp): `has_variable = qing_char_affinity  var:qing_char_affinity > 100`
+  (and the mirror `< 0` line). Both already carried a 2026-08-19 comment
+  documenting 1160x "Failed to fetch variable" hits at exactly these lines.
+- `common/scripted_effects/se_ECON_LOG.txt:743` (`ECON_LOG_curx_tick_emit`'s
+  sentinel check): `has_variable = ECON_LOG_tickval  var:ECON_LOG_tickval >
+  -999999999`. Already carried a 2026-08-16 comment documenting 3652 hits.
+
+**What I did:**
+- AFFINITY: merged the two independent flat-AND ifs into one outer
+  `if = { limit = { has_variable = qing_char_affinity } ... }` with the two
+  compares nested inside as separate inner `if`s — one shared guard instead
+  of two duplicated flat leaves, same net effect (both clamps still fire
+  under the identical combined condition as before).
+  ) — no behavior change, only the spurious "not set" log removed.
+- ECON_LOG: nested the sentinel compare inside its own `if`, gated on
+  `has_variable`. **Key correctness point, checked carefully:** the ORIGINAL
+  code had a single `else = { debug_log = "IMP19C CURXV flag EMPTY" }` on the
+  flat if, which fired for BOTH failure reasons (never-set, or set-but-
+  sentinel). A naive nest would only route the never-set case to that else,
+  silently dropping the set-but-sentinel case with no flag emitted at all —
+  a real behavior change, not just a log-noise fix. Preserved the original
+  combined semantics by duplicating the identical `else = { debug_log =
+  "IMP19C CURXV flag EMPTY" }` one level in (on the new inner if), so both
+  failure reasons still emit the same flag, exactly as before.
+
+**Review:** Self-reviewed (fork-context constraint, as with Tasks #16/#9).
+Brace balance verified independently on both files after the edit
+(script-counted: final depth 0, never negative, for each file). Re-read the
+full original ECON_LOG if-block (through its own nested caps/while/else at
+line ~770) before restructuring, specifically to catch the else-semantics
+issue above rather than assume a bare copy of the AFFINITY pattern would be
+safe.
+
+**Commit:** `0682c6941` — "fix: nest 2 more flat-AND read-before-set sites
+(task #28)" — pushed to `merge-overnight`.
+
+**Status:** DONE — both sites fixed, ECON_LOG else-semantics preserved.
