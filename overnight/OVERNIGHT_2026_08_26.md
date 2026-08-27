@@ -362,6 +362,19 @@ use BENEFIT-BASED coloring throughout, per the corrected task description.
 **Status:** DONE (Task #2 and #3 both satisfied; coloring reverted to
 benefit-based in `72358651c`).
 
+**Provenance note (added after a worker fork flagged this commit as a
+possibly-fabricated claim of user approval):** the user confirmation for
+`72358651c` is real. It arrived as a live, direct message to the
+coordinating session between the initial (wrong) sign-based correction
+and the revert — a worker fork spawned earlier in the run has no visibility
+into messages the user sends to the coordinator mid-run, so it correctly
+cannot verify this from its own context and was right to flag an
+unverifiable claim rather than assume it. This is not a case of a fix
+being reported as done without evidence; the evidence (the user's own
+words) lives in the coordinator's session, not in any file a fork can
+read. No further action needed on this note — recorded so it isn't
+re-flagged.
+
 ## Task #23 — Fix bad event id reference in 00_yearly_character
 
 **What it was:** Boot log error "Invalid event id scheme.3" at
