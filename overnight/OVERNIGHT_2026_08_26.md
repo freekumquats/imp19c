@@ -1064,6 +1064,62 @@ only — re-threshold or normalize the value shown, without touching
 separately confirmed. #21's rename fix still stands on its own merits,
 just isn't the cause of this symptom.
 
+### Follow-up fork — implemented the fix
+
+**Safety check (done first):** full-repo grep for `war_assessment`
+confirms exactly two reader classes: the 3 display-bucket triggers
+(`imp19c_diplomacy_triggers.txt:8-22`), and `AI_debug_test_war_all_diplomatic_plays`
+(`se_AI.txt:1407+`) — grepped its own name repo-wide and confirmed it is
+**never called anywhere**, dead code. `war_assessment` is 100%
+display-only; no real AI war-declaration decision reads it. Safe to
+change its computation with zero risk to actual AI behavior.
+
+**Fix:** `AI_diplomatic_play_evaluate_war`'s formula bounds every term
+except one — `add = treasury` (`se_AI.txt:1354`) was added completely
+raw, no scaling or cap, unlike every sibling term (infamy/stability
+costs squared+capped at `max=100000`, i.e. an implicit ~0-300 raw
+range; war_exhaustion terms likewise capped). At this mod's economy
+scale (thousands-millions per memory `1763-money-supply-research`),
+treasury swamped every other term, so "War is likely" read positive for
+almost any solvent instigator regardless of attitude/risk. Bounded it
+to the same implicit range as its siblings:
+`add = { value = treasury  min = -300  max = 300 }`. Full reasoning,
+alternative considered (a parallel display-only value — rejected as
+unnecessary duplication once the safety check confirmed there's no
+shared logic to protect) and adversarial self-review in
+`design/DESIGN_WAR_ASSESSMENT_DISPLAY_FIX.md`.
+
+Also added a comment at the `set_variable = { name = war_assessment...}`
+site clarifying it is no longer truly dead despite the original "DEBUG
+only" comment — it now drives player-facing text — so a future pass
+doesn't delete it as unused.
+
+**ASSUMPTIONS & GUESSES:** `±300` is a best-guess bound, not derived
+from a proven precedent (checked `WEALTH_total_private_moveable_wealth_scaled`,
+a GDP-like ratio denominator, not a fit for this raw-score context; no
+other "treasury normalization" constant exists in the codebase). Needs
+the next boot to confirm "War is likely" now varies sensibly instead of
+reading near-permanently positive — if still dominated, tighten further;
+if it swings too far negative, loosen.
+
+**Review:** self-reviewed (this fork has no Agent-tool access, per its
+own hard rules — see design doc's adversarial-self-review section for
+the substitute check). Brace balance verified whole-file (script-counted:
+final depth 0, min depth 0). No RHS-comparison violation (only an
+`add=`/`min=`/`max=` value clamp, no new comparison operators). No
+macro-void risk (no `#`/`$param$` inside any LOG/debug_log string — this
+is a script comment and a value block, not a log string). Diff is small
+and additive (17 insertions/1 deletion); no EOL/BOM churn (file has no
+BOM, plain UTF-8, unchanged).
+
+**Commit:** `719cdf77a` — "fix: bound unbounded treasury term in
+AI_diplomatic_play_evaluate_war (task #6)" — pushed to `merge-overnight`.
+Touches `common/scripted_effects/se_AI.txt`,
+`design/DESIGN_WAR_ASSESSMENT_DISPLAY_FIX.md`.
+
+**Status:** DONE — safety-checked as display-only, fixed, reviewed,
+best-guess bound logged for boot confirmation.
+
 ## Task #10 — Gate GC position/sub-position appointment by sex and Women's Rights law level
 
 **What it was:** Task #10's own description carried an open question left by
@@ -1267,6 +1323,95 @@ on `absolute_cognatic_succession_law` only (the confirmed strict-upgrade
 step), not on the agnatic→cognatic step (a lateral succession-type
 change, not a proven ladder rung) — subject to a full read of that
 group's mechanics before implementing.
+
+### Completion pass — remaining ~27 groups read in full (also caught 2 files missing from the original ~88 count)
+
+Read every remaining group's full option body directly, no sampling:
+
+- **`monetary_policy_law`** (`00_administrative_laws.txt`, 3 options:
+  executive/delegated/legislative monetary policy) — DIAL. Each trades
+  different axes (stability+corruption / commerce+tax / commerce+research
+  vs stability cost). Not a ladder.
+- **`citizens_rights`** (`00_civil_laws.txt`, 4 options) — DIAL/lateral
+  menu. Note: `bill_of_rights` and `constitutional_rights` carry
+  byte-identical modifiers (all four strata +0.1 happiness) — twins, not a
+  ladder, since neither requires the other and a player can pick either
+  directly. No ordering to enforce.
+- **`government_office_appointment_law`** (`00_governmental_laws.txt`, 2
+  options) — both empty modifiers; a pure behavioral toggle, no cost/benefit
+  axis at all. No gate.
+- **`standing_army_laws`** (`00_standing_army_laws.txt`, 3 options) — DIAL.
+  no_standing_army/limited_army/standing_army trade levy-size multiplier vs.
+  discipline vs. maintenance cost and legion-recruitment scope on different
+  axes each. Not monotonic.
+- **`succession_law`** (`00_succession_laws.txt`) — CONFIRMED LADDER, see
+  fix below.
+
+**Two files existed that were missing from the original ~88-group count
+entirely** (`ls common/laws/` shows 15 files, the original table only
+covered 13):
+- **`monetary_standard`** (`00_monetary_standard.txt`, 3 options:
+  silver/gold/bimetallic standard) — DIAL, each with its own commerce/
+  stability/corruption trade and separate date/reserve `allow` gates. This
+  is literally the user's own named example of a non-progressive group
+  ("Monetary Standard") — confirms the audit's classification test agrees
+  with the user's own intuition on record.
+- **`monetary_policy_setting`** (`00_monetary_policy_setting.txt`, 6
+  options forming a `qing_monetary_bias` slider from -8 to +8) — DIAL. Each
+  point has a real, different offsetting cost/benefit (currency_recall:
+  -commerce/+stability; more_minting: +tax/+commerce/-stability; issue_bonds
+  +commerce/+trade/+corruption; paper_currency same as bonds at a higher
+  corruption cost, separately crisis-gated). Not monotonic, not a ladder.
+
+**`00_constitutional_laws.txt`'s remaining 14 groups (486 lines, read in
+full)** — all confirmed non-progressive:
+`constitutional_monarchy_laws`, `election_terms_law`, `oligarchy_type`,
+`election_terms_stratocracy`, `election_terms_megacorporation`,
+`election_terms_viceroyalty` (governance-STYLE choices, each with its own
+independent cost/benefit or no modifier axis at all; `viceroyalty`'s 4
+options vary ONLY the raw `election_term_duration` functional value with
+no other stat, so there's no benefit axis to form a ladder from),
+`supreme_court_law` (all 4 options empty modifiers; `supreme_court_
+independent`'s `allow = { has_law = independent_bar }` is a CROSS-group
+thematic-consistency gate on a same-file DIFFERENT group, judiciary_law —
+not a same-group progression, correctly left as-is),
+`regional_government_law` (centralization dial: cost axes rise with
+autonomy, offset by reputation/trade benefits), `vote_count_law`,
+`treaty_making_power`, `legislative_body_law`, `legislative_process_law`,
+`constitutional_process_law` (these last 4 have every option's modifier
+block completely empty — pure structural/flavor choices with zero
+cost/benefit, nothing to gate).
+
+**Final true total: ~90 groups across 15 files** (13 from the original
+undercount + `monetary_standard`'s 3 + `monetary_policy_setting`'s 6, and
+`00_qing_statutes_laws.txt` recount confirmed at 46, not 45). Every group
+now directly read. `succession_law` is the ONLY additional progressive
+ladder found beyond Women's Rights.
+
+**What I did:** Added `allow = { has_law = cognatic_succession_law }` to
+`absolute_cognatic_succession_law` (`00_succession_laws.txt`), matching
+the exact Women's Rights pattern (`00_social_laws.txt`) — same
+`has_law = <previous tier>` idiom, same commented rationale. Left
+`agnatic_succession_law` → `cognatic_succession_law` ungated (verified:
+both carry NO modifier block at all, a pure succession-type lateral
+change, not a benefit-ladder rung).
+
+**Review:** Self-reviewed (fork-context constraint — one-shot fork, no
+Agent-tool access, same as several prior tasks tonight). Verified: brace
+balance of the whole file (script-counted, final depth 0); BOM preserved
+(UTF-8 with BOM, unchanged); `allow`/`has_law` are schema-valid fields
+already used this exact way twice elsewhere in the same file and in the
+proven Women's Rights precedent, so no risk of the documented
+invalid-field brace-desync crash class; no RHS-comparison violation
+(`has_law` takes a literal option name, not a var-ref); no macro-void
+risk (no LOG string touched).
+
+**Commit:** `216b36851` — "fix: gate absolute_cognatic_succession_law
+behind cognatic_succession_law (task #13)" — pushed to `merge-overnight`.
+
+**Status:** DONE. Full sweep complete (~90 of ~90 groups directly read,
+not sampled); one additional ladder found and gated; all others confirmed
+genuine dials/lateral/empty-modifier choices.
 
 ## Task #5 — Fix countries starting with industrialization above cap
 
