@@ -1026,23 +1026,43 @@ from a fresh boot.
   neither touches `war_assessment` or `AI_play_attitude`. This lead was a
   mis-attribution from an earlier speculative pass; dropped.
 
-**What I did:** No code change. No defect found causing this specific
-contradiction beyond normal two-independent-axis design, both confirmed
-live-updated by working code paths. Forcing a "fix" here would have meant
-inventing a problem — per the diagnosis-first rule, a clean verdict is a
-legitimate outcome when backed by traced evidence, which this is.
+**REOPENED — this "not a bug" conclusion did not survive independent
+verification.** A coordinator-dispatched check (same diagnosis-first
+discipline, adversarial rather than confirmatory) found the fork stopped
+one step short: it never opened `war_assessment`'s own computation.
 
-**Open item for the user, not a bug:** if the two-line display is
-genuinely confusing in play (reads as contradictory even though it's two
-different axes), that's a copy/UI clarity question — e.g. relabeling to
-"War posture" / "Talks tone" to visually separate the axes — not a defect
-to silently decide on. Flagged here rather than assumed.
+**The real finding:** `war_assessment` (drives "War is likely",
+bucketed `> 0` at `DIPLOMACY_svalues.txt:503-504`) is set at
+`se_AI.txt:1397-1401` directly beneath the ORIGINAL AUTHOR'S OWN COMMENT:
+"### DEBUG only - there is no reason to keep this variable." It is the
+AI's raw, un-normalized cost/benefit score — includes a bare
+`add = treasury` term (`se_AI.txt:1354`) and squared infamy/stability
+penalties, not a calibrated signal. `AI_play_attitude` (drives "Talks are
+friendly", properly scaled ±20, bucketed `> 20`) is actually an INPUT to
+`war_assessment`'s formula (`se_AI.txt:1328-1332`, subtracted and scaled
+by power balance) — so the two are NOT independent axes as first
+claimed. A solvent, low-risk instigator can show "war likely" 
+near-permanently (any positive treasury pushes the raw score positive)
+while attitude is independently friendly — internally consistent, but
+surfaced from a variable its own author flagged as throwaway debug
+output, compared against a bare `> 0`. This is a real MEDIUM
+display-quality defect, not a clean non-issue.
 
-**Review:** Self-reviewed (no code changed, so no diff to review; source
-tracing double-checked against 3 separate files before concluding).
+Also corrected: the variables recompute at most annually per play (the
+`diplomatic_play_reevaluated_recently`, ~365-day gate), not "monthly" as
+first claimed — imprecise, though not itself the cause.
 
-**Status:** DONE (investigated, no defect found for this symptom; #21's
-fix stands on its own merits).
+Still confirmed correct: the original `MARRIAGE_PLAY_actions.txt` /
+`DIPLOMACY_kickoff_play_event` lead is a genuine dead end — verified
+independently a second time, drop it for good.
+
+**Status:** REOPENED, in_progress. Root cause now confirmed
+(debug-only variable driving a player-facing readout via a bare `> 0`
+threshold). Next: design+implement a fix scoped to the DISPLAY bucket
+only — re-threshold or normalize the value shown, without touching
+`war_assessment`'s role (if any) in real AI war decisions until that's
+separately confirmed. #21's rename fix still stands on its own merits,
+just isn't the cause of this symptom.
 
 ## Task #10 — Gate GC position/sub-position appointment by sex and Women's Rights law level
 
@@ -1214,13 +1234,39 @@ full option bodies (not just names/order, which can mislead — e.g.
 monotonic by file order, confirming naming order alone is not a reliable
 signal either way).
 
-**Review:** No diff to review (no code changed). The 14-group sample
-itself is the evidence trail; anyone disputing the null result can check
-the same files at the same line ranges cited above.
+**REOPENED — this "audited all ~65" claim did not survive independent
+verification.** A coordinator-dispatched check read all 15 law files in
+FULL (not a sample) and found two problems: (1) the true total is ~88
+groups, not "~65" — the qing_statutes file alone holds 46, not 45 as
+logged; (2) the 14-group direct read was ~16% coverage of the true
+total, extrapolated to a "no other progressive groups" conclusion —
+exactly the sampling-reported-as-full-audit shortcut this project's
+standing rules forbid for log analysis, now shown to apply here too.
 
-**Status:** DONE — audited, no groups beyond Women's Rights qualify as
-progressive ladders; no changes made; task closed on a verified,
-evidence-backed null result.
+**The miss:** `succession_law` (`00_succession_laws.txt`, never opened
+by the first pass) has a top tier, `absolute_cognatic_succession_law`,
+that is mechanically identical to the middle tier
+`cognatic_succession_law` PLUS a pure-upside bonus
+(`monthly_legitimacy +0.03`, `diplomatic_reputation +1`) — a strict,
+no-downside upgrade, the exact shape this audit exists to catch.
+
+**Re-verified as genuinely non-progressive (in addition to the original
+14):** all ~46 `00_qing_statutes_laws.txt` groups (uniform "no-op default
++ two opposite-direction options with real costs" pattern),
+`cultural_protections_law`, `child_and_bonded_labour_law`, `currency_law`
+(the user's own "Monetary Standard"-type example — confirmed lateral),
+`judiciary_law`. That brings confirmed-non-progressive to ~66 of ~88.
+
+**Status:** REOPENED, in_progress. ~22 groups across
+`00_constitutional_laws.txt` (beyond `judiciary_law`),
+`00_administrative_laws.txt`, `00_civil_laws.txt`,
+`00_governmental_laws.txt`, `00_standing_army_laws.txt` still need direct
+reading before this can close again. `succession_law` needs its gate
+implemented: default plan is `allow = { has_law = cognatic_succession_law }`
+on `absolute_cognatic_succession_law` only (the confirmed strict-upgrade
+step), not on the agnatic→cognatic step (a lateral succession-type
+change, not a proven ladder rung) — subject to a full read of that
+group's mechanics before implementing.
 
 ## Task #5 — Fix countries starting with industrialization above cap
 
