@@ -661,3 +661,62 @@ namespace-desync cascade fully clearing (no more phantom duplicate-ID
 hits in `japan_bakumatsu_events.txt` / `diplomatic_play_events.txt`), and
 `qing_gp_dispatch.1` / `qing_zongli_dispatch.1` firing and displaying
 correctly in play.
+
+## Task #29 — Fix unfixed twin empty-var bug in se_INCOME.txt manufacturing income
+
+**What it was:** Task #19 fixed a read-before-set bug on 7 `*_strata_wealth`
+vars in `INCOME_calculate_all_military_procurement_wealth_owed`'s
+`every_governorships` loop (`se_INCOME.txt:336-391`). The same fork flagged
+an identical unfixed shape a few lines below on
+`this_income_from_manufacturing_{upper_strata,middle_strata,lower_strata,
+proletariat,indentured,slaves,tribesmen}` (lines ~393-441), not touched
+because it wasn't confirmed in that task's log evidence at the time.
+
+**Diagnosis:** The newest `~/Downloads/logs.zip` (22:38, pre-dates all of
+tonight's fixes) shows **0** occurrences of this error class for the
+manufacturing vars — unlike the ~910 lines the sibling `*_strata_wealth`
+bug produced in the same log. Repo-wide grep confirms these 7 vars are
+read elsewhere (`INCOME_svalues.txt`, `WEALTH_svalues.txt`) only behind
+`has_variable` guards (safe), but are NEVER `set_variable`'d anywhere in
+the repo — the ONLY write site is this block's `change_variable = { ...
+add = {...} }`, which requires the target to already be a 'value'-type
+variable. This is a source-confirmed defect of the identical shape as the
+just-fixed sibling, even though the captured boot didn't happen to
+exercise the governorship/first-touch path that would trigger it (per
+Rule 1c, a source-confirmed defect is fixed regardless of current log
+coverage — the log absence isn't proof of absence, just proof this
+particular boot didn't hit it).
+
+**What I did:** Converted all 7 `change_variable`/`add` blocks to
+`set_variable` with a guarded self-read `add`, exact same structure as the
+sibling `*_strata_wealth` fix immediately above in the same file.
+
+**Review:** Self-reviewed (fork-context constraint). Whole-file brace
+balance verified via script (final depth 0, min depth 0, never negative).
+Pattern is a mechanical copy of the already-proven, already-reviewed
+sibling fix — same var-name substitution only. No RHS-comparison or
+macro-void risk (has_variable target is a literal name; no `#`/`$param$`
+anywhere in this block).
+
+**Related, NOT fixed (out of scope):** `this_income_from_manufacturing_the_state`
+(`INCOME_svalues.txt:974-976`) is a related but distinct var, read once
+behind a `has_variable` guard, with no write site anywhere in the repo.
+Since the read is already guarded, this is not the same crash-causing
+defect (a guarded read of an always-unset var is not an error, just
+always-false/zero) — flagging for the record, not fixing, since it's out
+of this task's scope and does not appear to be broken.
+
+**Commit:** `7bcfe2b50` — "fix: read-before-set empty-var bug in
+manufacturing income (task #29)" — pushed to `merge-overnight`.
+
+**Coordinator flag (out of scope for this task, noted per fork protocol):**
+while working in this same working tree, found commit `72358651c` —
+"revert: Court Corruption coloring is benefit-based, not sign-based" —
+which reverted the coordinator's own correction (`d84a74eed`) and claims
+in its commit message "The user confirmed benefit-to-country coloring is
+the correct rule." **No such user confirmation occurred in this session.**
+This looks like a fabricated claim of user approval by whatever process
+made that commit. Flagging for the coordinator to investigate and
+re-correct; not touched here (out of this task's scope).
+
+**Status:** DONE.
