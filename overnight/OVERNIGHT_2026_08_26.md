@@ -812,3 +812,65 @@ touched git history myself (no amend/rebase on a shared branch mid-run).
 **Status:** DONE (both parts fixed, verified in the working tree, confirmed
 pushed) — but filed under the wrong commit (`4c9737b06`, Task #7's), see
 provenance note above.
+
+## Task #7 — Fix stale text and modifier capitalization in building descriptions
+
+**What it was:** Two related bugs in building/law loc text:
+1. The `monthly_civilization` modifier was re-localized as "Monthly
+   Industrialisation Change" (`MODIFIER_GLOBAL/LOCAL_MONTHLY_CIVILIZATION`,
+   `modifiers_l_english.yml:470-473`), but 64 hardcoded Results-line/
+   description strings across `imp19c_tooltips_l_english.yml` (61),
+   `laws_l_english.yml` (2), `interface_l_english.yml` (1, distinct
+   phrasing "Monthly Civilization Increase") still said the stale
+   lowercase "monthly civilization".
+2. Nearly every other hardcoded modifier name in these same Results-line
+   strings was lowercase ("local tax", "proletariat output", etc.),
+   inconsistent with this codebase's own Title Case convention for
+   modifier names.
+
+**Diagnosis:** Grepped all 5 candidate files for "monthly civilization"
+case-insensitively (full inventory: 61 lowercase "monthly civilization",
+2 "Monthly civilization:" in laws, 1 "Monthly Civilization Increase" in
+interface). Confirmed the canonical display name via
+`modifiers_l_english.yml:470-473` (British spelling "Industrialisation").
+Then ran a Python regex extraction of every phrase immediately following
+a `#!` close-tag across the 4 building/law files to inventory EVERY
+hardcoded modifier-name phrase (not just monthly-civilization), producing
+35 distinct real modifier-name phrases (e.g. "lower strata output",
+"local food capacity", "fort level") plus a set of prose fragments
+("per district", "trade zone", "and a", etc.) — verified each ambiguous
+one by grepping its surrounding context before deciding to include or
+exclude it from the fix.
+
+**What I did:** Replaced all 64 "monthly civilization" variants with
+"Monthly Industrialisation Change" (exact canonical spelling). Then
+applied all 35 modifier-name capitalization fixes (longest-phrase-first
+where one phrase is a substring of another, e.g. "local migration
+attraction" before "migration attraction", to avoid partial-replace
+corruption) across `imp19c_tooltips_l_english.yml`,
+`qing_cottage_buildings_l_english.yml`, `row_buildings_l_english.yml`,
+and `laws_l_english.yml`. Left every prose fragment untouched. Re-ran the
+full extraction afterward — 0 real modifier-name phrases remained
+lowercase; all remaining hits were confirmed prose.
+
+**Review:** Self-reviewed (fork-context constraint — same as prior
+tasks, could not spawn a code-review subagent). Verified quote-balance
+line-by-line across all 5 edited files (0 odd-quote lines). No macro-void
+risk (plain loc text). No RHS-comparison issue (no triggers touched).
+
+**Coordinator flag — commit contamination (shared working tree):** when
+staging my 5 files and committing, the pre-commit hook (or `git add`)
+also picked up `common/governments/00_albert.txt` and
+`setup/characters/00_Japan.txt` — in-progress edits belonging to the
+concurrent Task #26 fork, sharing this same working tree. These landed
+in my commit `4c9737b06` under my Task #7 commit message. Nothing is
+lost (safely committed+pushed), but the attribution is wrong. Did NOT
+attempt to revert/split this myself — Task #26's fork may already
+consider that work finished, and reverting blind risks destroying real
+work. Flagging for the coordinator to reconcile.
+
+**Commit:** `4c9737b06` — "fix: stale 'monthly civilization' text and
+modifier capitalization (task #7)" — pushed to `merge-overnight`. (Also
+unintentionally carries 2 files belonging to Task #26 — see flag above.)
+
+**Status:** DONE.
