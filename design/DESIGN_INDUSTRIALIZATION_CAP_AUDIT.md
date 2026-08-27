@@ -237,47 +237,39 @@ of the 15 vanilla-derived `00_default.txt` types (checked per-country, not assum
 | Bloc | Grant (se_TEST.txt) | Invention contribution | Typical base | Calculated cap |
 |---|---|---|---|---|
 | Africa/Native-America floor | weapon_mfg, firearms, civic_1 | 3 | 0 (federated_tribe/absolute_kingdom) | **3** |
-| CHI (Qing) — POST-FIX (`7a83859eb`) | mil 0-1, oratory 1-2, civic 1**+canals cherry-pick**, religious 1, +rocket_artillery/census/postal_admin | 6 (was 4) | 0 (imperial_monarchy) | **6** (was 4) |
-| Bloc A — Western Europe | mil 0-2+SYW, oratory 1-2, civic 1-2, religious 1-2+Enlightenment | 12 | 0 (charter_parliament) | **12** |
-| Bloc B — Slavic | identical grant to Bloc A | 12 | 0 (imperial_monarchy), but 35 if aristocratic_monarchy (some Polish-type tags) | **12** (up to 47 for the minority on a real-base type) |
-| Bloc C — South/SE Asia periphery | mil 0-2, oratory 1-2, civic 1-2, religious 1 | 12 | 0 | **12** |
-| Bloc D — Ottoman/Islamic | mil 0-2+mortar+wheeled_cannons, oratory 1-2, civic 1-2, religious 1 | 12 | 0 | **12** |
-| GBR/NED banking carve-out | Bloc A grant + oratory 3-4 (central_banking etc., all zero-contribution) | 12 | 0 | **12** |
+| CHI (Qing) — FIXED (`7a83859eb`) | mil 0-1, oratory 1-2, civic 1+canals cherry-pick, religious 1, +rocket_artillery/census/postal_admin | 6 (was 4) | 0 (imperial_monarchy) | **6** (was 4) |
+| Bloc A — Western Europe — FIXED (`b1c65c5b4`) | mil 0-2+SYW, oratory 1-2, civic 1+canals cherry-pick, religious 1-2+Enlightenment | 6 (was 12) | 0 (charter_parliament) | **6** (was 12) |
+| Bloc B — Slavic — FIXED (`b1c65c5b4`) | identical grant to Bloc A | 6 (was 12) | 0 (imperial_monarchy), but 35 if aristocratic_monarchy (some Polish-type tags) | **6** (up to 41 for the minority on a real-base type) |
+| Bloc C — South/SE Asia periphery — FIXED (`b1c65c5b4`) | mil 0-2, oratory 1-2, civic 1+canals cherry-pick, religious 1 | 6 (was 12) | 0 | **6** (was 12) |
+| Bloc D — Ottoman/Islamic — FIXED (`b1c65c5b4`) | mil 0-2+mortar+wheeled_cannons, oratory 1-2, civic 1+canals cherry-pick, religious 1 | 6 (was 12) | 0 | **6** (was 12) |
+| GBR/NED banking carve-out — FIXED (`b1c65c5b4`) | Bloc A grant + oratory 3-4 (central_banking etc., all zero-contribution) | 6 (was 12) | 0 | **6** (was 12) |
 
-Civic tier was the deciding factor: every Old World bloc (A/B/C/D) gets the full
-`civic_level_1`+`civic_level_2` (contribution 2+8=10, plus the shared 2 from
-military = 12). CHI was capped at `civic_level_1` ONLY (2, plus 2 from military
-= 4) — partly an oversight (see Case 2 above), corrected in commit `7a83859eb`
-to a deliberate CHI-specific cherry-pick (canals only, not the whole tier) per
-`design/DESIGN_1763_STARTING_TECH_AUDIT.md`'s explicit recommendation, landing
-CHI's cap at 6 — higher than the pre-fix 4, but intentionally below the 12 every
-Old World bloc reaches (bureaucratic leader, mechanization laggard is the
-documented intent).
+**Every bloc in the 1763 branch except the deliberately-minimal Africa/NA floor
+now converges to the same cap (6).** Reasoning for the sweep, prompted directly
+by the user: the initial fix reasoning (CHI specifically lagged Europe in
+mechanization by 1763) was the wrong frame entirely — the Industrial Revolution
+had not begun ANYWHERE in 1763 (Hargreaves' spinning jenny is 1764, Watt's
+improved steam engine is 1769, both still in the future even in Britain). So
+`gear_systems`/`templating` (proto-industrial mechanization tech) being
+anachronistic isn't a China-specific historical judgment — it's true for every
+1763 bloc, including Western Europe itself. `civic_level_2`'s whole-block grant
+was removed from Bloc A/B/C/D the same way it was from CHI, cherry-picking only
+`tech_artificial_canals` (genuinely ancient/universal pre-industrial
+engineering) everywhere. This is a materially different, more defensible
+position than either the original state (CHI capped well below everyone else
+for no stated reason) or the first CHI-only fix (CHI still capped at half of
+Europe for a reason — "mechanization lag" — that doesn't actually distinguish
+1763 from anyone else, since NOBODY had that mechanization yet).
 
-**Africa/Native-America floor bloc (both the tradezone-based grant and the true
-"Bloc E" catch-all) — CHECKED, NOT AN OVERSIGHT.** `design/DESIGN_1763_STARTING_TECH.md`
-(lines 204-224) explicitly labels this grant deliberate: the tradezone-based bloc
-(west/east/southern Africa, Middle East, India, SE Asia tradezones) uses "same
-grant (weapon_manufacturing, firearms, civic_level_1), same idiom, zero new
-logic" by design, and the true Bloc E catch-all's floor (military_0 + civic_1,
-"nothing more") is explicitly justified: firearms reached these regions via
-centuries of fur-trade/gun-commerce contact, and that floor was a deliberate
-design choice, not an unexamined default. Unlike CHI's civic gap, there is no
-stated general rule this violates — cap = 3 is intended, no fix applies here.
-
-**Bloc A/B/C/D (Western Europe, Slavic, Ottoman/Islamic, South/SE Asia) —
-CHECKED, ALSO NOT AN OVERSIGHT.** `DESIGN_1763_STARTING_TECH.md` confirms each
-bloc's civic 1-2 grant was "already correct in the current branch — no change"
-during the audit that produced tonight's rework. No gap found for these blocs'
-tech grants themselves — their remaining setup-value overages (Andalusia,
-Baltic states) are a DIFFERENT class of issue (setup numbers vs. a correctly-
-granted cap), not a tech-grant oversight like CHI's.
-
-This closes the oversight-hunt across every bloc in the 1763 branch: CHI was the
-only tech-grant gap, and it is now fixed to the audit doc's specific
-recommendation. What remains open (see Bottom line) is a different question —
-whether to adjust setup values or government-type bases for the blocs whose
-grant is correct but whose setup province values still exceed it.
+**Africa/Native-America floor bloc — CHECKED, NOT AN OVERSIGHT, left as-is.**
+`design/DESIGN_1763_STARTING_TECH.md` (lines 204-224) explicitly labels this
+grant deliberate: "same grant (weapon_manufacturing, firearms, civic_level_1),
+same idiom, zero new logic" by design, and the true Bloc E catch-all's floor
+(military_0 + civic_1, "nothing more") is explicitly justified — firearms
+reached these regions via centuries of fur-trade/gun-commerce contact, and
+the floor itself, not full civic parity, was the deliberate design choice.
+This bloc never had `civic_level_2` to remove, so the sweep doesn't touch it,
+and its lower cap relative to everyone else remains intentional.
 
 ## Setup-value comparison, real samples pulled from source
 
@@ -288,43 +280,52 @@ grant is correct but whose setup province values still exceed it.
 | `00_Sahel.txt` (Hausa/Fulani/Songhai/Mossi/Tuareg) | Africa/NA floor | 3 | mostly 0, max 1 | under, fine |
 | `00_Guangxi.txt` (CHI, Han) | CHI | 6 (was 4) | flat **6** | **AT cap** — was over cap 4, now exactly at cap 6 |
 | `00_Far_East.txt` (CHI, Han) | CHI | 6 (was 4) | 207×0, 2×5, 1×7, 1×8, 10×10 | **PARTIAL** — the 5 is now under cap 6, but 7/8/10 are STILL over |
-| `00_Andalusia.txt` (FRA/Spain) | Bloc A | 12 | 25×10, 1×12, 8×15, 1×17, 2×20 | **OVER** at 12/15/17/20 (majority of nonzero provinces) |
-| `00_Baltic_states.txt` (RUS-adjacent) | Bloc B | 12 (or 47 if aristocratic_monarchy) | 45×7, 31×10, 4×12, 2×15 | at cap=12: OVER at the 15s, AT cap at the 12s; if the owning tag is on a real-base type (35), all clear |
-| `00_Aegean.txt` (Ottoman/Turkish) | Bloc D | 12 | flat 10 | under, fine — no violation in this sample |
+| `00_Andalusia.txt` (FRA/Spain) | Bloc A | 6 (was 12) | 25×10, 1×12, 8×15, 1×17, 2×20 | **NOW OVER EVERYWHERE** — even the 25 provinces at 10 (previously fine under cap 12) are now over cap 6 |
+| `00_Baltic_states.txt` (RUS-adjacent) | Bloc B | 6 (was 12; or 41 if aristocratic_monarchy) | 45×7, 31×10, 4×12, 2×15 | **NOW OVER EVERYWHERE** at cap=6 (previously only the 15s were over cap 12); if the owning tag is on a real-base type (35), all still clear |
+| `00_Aegean.txt` (Ottoman/Turkish) | Bloc D | 6 (was 12) | flat 10 | **NOW OVER** — this sample was clean under cap 12, is over under the corrected cap 6 |
 
 ## Bottom line
 
-The bug is real and confirmed by static source across every bloc sampled except the
-Ottoman one (which happened to sample clean). It is NOT limited to CHI or to the most
-severely-cut blocs — even Western Europe (Andalusia) shows provinces well above its
-calculated cap of 12. The magnitude of the overshoot varies a lot: pre-fix, CHI and
-Africa/NA showed the worst RELATIVE overshoot (up to 5x) because their caps were
-lowest; Bloc A/B show smaller absolute overshoot (15-20 vs cap 12) but still real.
+**Tech-grant fix is done and applied uniformly** (commits `a6ef6b68a` →
+`7a83859eb` → `b1c65c5b4`). The key correction, prompted directly by the user:
+the first CHI-only fix was reasoning from the wrong premise — "CHI should lag
+Europe in mechanization" implies Europe HAD mechanization to lag behind in
+1763, which isn't true. The Industrial Revolution had not started anywhere at
+this date (spinning jenny 1764, Watt's engine 1769, both still in the future).
+So `civic_level_2`'s proto-industrial techs (`gear_systems`/`templating`) are
+anachronistic for every bloc, not a China-specific exclusion — and every bloc's
+grant has now been corrected the same way, cherry-picking only
+`tech_artificial_canals`. Every Old World bloc (CHI, Western Europe, Slavic,
+Ottoman/Islamic, South/SE Asia) now converges on the same cap: **6**. The
+Africa/NA floor bloc, whose lower cap (3) was already confirmed deliberate
+elsewhere in the design docs, is unaffected.
 
-**CHI's case is partly fixed** (commits `a6ef6b68a`, corrected by `7a83859eb`)
-— the civic-tier gap was partly a genuine oversight (traced via `git blame` to
-`86fa05438`), but the correct-sized fix is smaller than first thought: an
-explicit design doc (`DESIGN_1763_STARTING_TECH_AUDIT.md`) argues Qing should
-deliberately lag Europe in mechanization, so only `tech_artificial_canals` was
-added, not the whole tier. This raises CHI's cap from 4 to 6 — Guangxi now sits
-exactly at cap, but Far East's higher provinces (7/8/10) are still over. This is
-a partial, not complete, fix for CHI.
+**Consequence, stated plainly:** this makes the setup-value mismatch problem
+WORSE for the Old World blocs, not better, in the sense that far more
+provinces are now measurably over cap than before the sweep (Andalusia's
+25 provinces at civilization_value 10 were fine under the old miscalculated
+cap of 12; they are now over the corrected cap of 6). This is not a regression
+— it means the TRUE size of the bug was being undercounted by the earlier,
+too-generous cap calculation for those blocs. The bug is now confirmed, by
+static source, across every sampled bloc with no exception (the one previously
+clean sample, Aegean/Ottoman, is now also over).
 
-Two distinct, independently-real contributing factors remain for the OTHER blocs,
-not one bug:
-1. **The 1763 tech-grant cut itself** (intentional, historically-correct per the user's
-   own instruction — not to be reverted). Bloc A/B/C/D and the Africa/NA floor bloc
-   were all deliberately reduced this way, and — unlike CHI — nothing found so far
-   suggests any of THEIR tiers are an unintended oversight the way CHI's civic gap was.
+Two distinct, independently-real factors remain, not yet acted on:
+1. **The 1763 tech-grant cut itself is done and correct** — every bloc's grant
+   now reflects a consistent, defensible 1763 reality (nobody had proto-
+   industrial mechanization yet), so this side of the problem is closed.
 2. **This mod's own 30 custom government types have zero `country_civilization_value`
    base**, unlike the 15 leftover vanilla types. This is very likely a PRE-EXISTING
    gap, not something the 1763 rework introduced — it was simply invisible before
    because the old, bigger uniform tech grant was large enough to keep setup values
-   under cap on its own. The 1763 rework didn't cause this zero-base gap; it exposed it.
+   under cap on its own. The 1763 rework didn't cause this zero-base gap; it exposed it,
+   and tonight's cap correction (12→6 for most blocs) makes the exposed gap larger,
+   not smaller.
 
-Still not decided (this is a bigger, cross-cutting call, not a targeted oversight
-fix like CHI's): whether the remaining over-cap blocs (Western Europe/Andalusia,
-Slavic/Baltic, Africa-NA) should have their setup `civilization_value` numbers
-lowered per-province to match each bloc's cap, or whether the 30 zero-base
-government types should get a real base value (which would raise every affected
-cap, all eras, not just 1763 — a much bigger blast radius, needs its own decision).
+Still not decided (this is a bigger, cross-cutting call, not a targeted
+tech-grant fix like the ones above): whether the now-widespread over-cap
+setup `civilization_value` numbers should be lowered per-province to match
+each bloc's corrected cap of 6 (touches setup files across every region), or
+whether the 30 zero-base government types should get a real base value
+(which would raise every affected cap, all eras, not just 1763 — a much
+bigger blast radius, needs its own decision, not a default assumption).
