@@ -1953,3 +1953,19 @@ gate corps sub-posts by sex (task #10)" — pushed to `merge-overnight`.
 
 **Status:** DONE. Both gaps closed and independently traced through both
 branches' stale-refresh scenario.
+
+**Final independent verification (dispatched by the coordinator, 4th
+pass on this file):** CONFIRMED COMPLETE, no substantive gap remains.
+The `is_close_relative = scope:player.current_ruler` idiom is a faithful
+analog of the canonical trigger's own `ROOT.current_ruler` (confirmed
+against 3 other precedents in this codebase using the same pattern). The
+corps backstop correctly mirrors the great-office one: same LOWER tier,
+same scope:player usage, same corrected exemption (byte-identical in
+both branches, no divergent re-fix). Full tier mapping (13 offices + 3
+corps) matches the canonical trigger exactly. Both stale-refresh
+scenarios (great-office and corps, ineligible woman vs. imperial
+clanswoman) trace correctly. Two LOW, non-blocking, pre-existing
+observations noted (missing `exists` guard before `is_close_relative`;
+redundant dead corps entries in the great-office tier list) — neither
+introduced by this fix, neither a regression. Task #10 is closed for
+real this time, after 4 passes and 3 genuine bugs caught.
