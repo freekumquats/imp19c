@@ -1756,17 +1756,25 @@ QING_office_appoint = {
 	# the same seat (a no-op refresh) doesn't needlessly churn. The primary guard is
 	# the GUI is_valid gate (a man holding any office is not offered elsewhere), so
 	# this is the belt-and-suspenders for event / autofill call paths.
+	# [read-before-set fix, task #16 2026-08-26] nested instead of one flat AND-limit: a flat
+	# `limit = { has_variable = qing_office_held  NOT = { var:qing_office_held = flag:$office$ } }`
+	# still gets its SECOND leaf evaluated (and logs "Failed to fetch variable ... due to not
+	# being set" + the two follow-on "Event target link 'var'" / "Invalid left side" lines) even
+	# when the FIRST leaf already fails, for every appointee who has never held an office before
+	# (the common case — this was the single largest class in error.log, ~38k lines). Nesting the
+	# var-flag compare inside its own `if`, gated by the has_variable check, means the engine only
+	# ever reaches it once the variable is confirmed set.
 	if = {
-		limit = {
-			has_variable = qing_office_held
-			NOT = { var:qing_office_held = flag:$office$ }
+		limit = { has_variable = qing_office_held }
+		if = {
+			limit = { NOT = { var:qing_office_held = flag:$office$ } }
+			# [BT-appointment-redesign 2026-07-22] use the NO-BACKFILL dispatcher: appointing a sitting
+			# minister to another seat is a MANUAL reshuffle, and the user's rule is "clicking Appoint
+			# creates NO characters." The backfilling QING_office_vacate_dispatch would spawn a fresh
+			# official for the seat this man just left; the no-backfill twin tears it down and leaves it
+			# empty for the player to fill by hand (only death/departure auto-creates a replacement).
+			QING_office_vacate_dispatch_nobackfill = yes
 		}
-		# [BT-appointment-redesign 2026-07-22] use the NO-BACKFILL dispatcher: appointing a sitting
-		# minister to another seat is a MANUAL reshuffle, and the user's rule is "clicking Appoint
-		# creates NO characters." The backfilling QING_office_vacate_dispatch would spawn a fresh
-		# official for the seat this man just left; the no-backfill twin tears it down and leaves it
-		# empty for the player to fill by hand (only death/departure auto-creates a replacement).
-		QING_office_vacate_dispatch_nobackfill = yes
 	}
 	employer = {
 		# vacate the previous holder of this office if any
