@@ -13,6 +13,17 @@
   arithmetic sign. If the user actually wants strict sign-based coloring
   (so a corruption DECREASE always shows red because -4 is negative),
   this specific line needs flipping back — flag for confirmation.
+- Task #10 (GC office sex gate): the mod has NO existing rank/tier data for
+  the 13 great offices, so the lower/senior split behind the Limited-Legal-
+  Rights vs Equal-Legal-Rights unlock is a historical judgment call, not a
+  fact traced from the mod: LOWER = Censorate, Lifan Yuan, Chamberlain,
+  Zongli Yamen, Grand Secretariat, Guard Commandant (+ their 3 paired
+  sub-posts); SENIOR = the Six Ministries (Personnel/Revenue/Rites/War/
+  Justice/Works); APEX (Suffrage-only) = Grand Chancellor. Flag for
+  confirmation/re-ranking. See Task #10's own log entry for the full
+  reasoning, including why the Grand Regent seat was deliberately left
+  ungated (its Empress-Dowager priority pick is already historically
+  correct and predates any Women's Rights law).
 
 ## Task #1 — Fix GC "Titles Unassigned" notification style
 
