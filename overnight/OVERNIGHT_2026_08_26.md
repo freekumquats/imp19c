@@ -1120,6 +1120,36 @@ Touches `common/scripted_effects/se_AI.txt`,
 **Status:** DONE — safety-checked as display-only, fixed, reviewed,
 best-guess bound logged for boot confirmation.
 
+**REOPENED A THIRD TIME — the "display-only, zero AI-decision risk"
+safety claim is FALSE.** An independent verification (dispatched by the
+coordinator specifically because this touches AI-adjacent code) traced
+one hop further than the original safety check and found `war_assessment`
+feeds three triggers (`imp19c_diplomacy_triggers.txt:9,15-16,22`) that are
+used as `ai_chance factor=100` modifiers on REAL "Declare war"/"Back down"
+options across `diplomatic_play_events.txt:631-636,735-856`,
+`send_settlers.txt:90,142,199-293`, and `agadir_crisis_type.txt:312-368,
+638-666`. Bounding `treasury` is therefore a genuine AI-behavior change
+(likely a net improvement — the old unbounded dominance was itself a
+"solvent country always war-willing" bias — but shipped under an
+incorrect "zero risk" characterization, without the AI-logic care this
+project's standing rules require).
+
+**Second problem, same review:** the ±300 bound itself may be
+miscalibrated. It was justified as matching sibling terms' "implicit
+range," but that only matches their PRE-SQUARE input range (~0-316) — the
+sibling infamy/stability cost terms' actual CONTRIBUTION reaches up to
+100000 post-square (`value² max=100000`). At ±300, treasury now
+contributes 2+ orders of magnitude less than those terms can, risking an
+overcorrection the other direction (treasury becomes nearly irrelevant to
+the AI's real war/peace choice, not just "no longer dominant").
+
+**Not reverting outright** — the original unbounded behavior was also a
+confirmed problem for AI decision quality, not just display, so a revert
+isn't obviously safer than a properly-recalibrated bound. Recalibration
+dispatched as a follow-up with the full diagnose→adversarial-design-
+review→implement→code-review loop, per the AI-logic-change care this
+should have gotten the first time.
+
 ## Task #10 — Gate GC position/sub-position appointment by sex and Women's Rights law level
 
 **What it was:** Task #10's own description carried an open question left by
@@ -1412,6 +1442,15 @@ behind cognatic_succession_law (task #13)" — pushed to `merge-overnight`.
 **Status:** DONE. Full sweep complete (~90 of ~90 groups directly read,
 not sampled); one additional ladder found and gated; all others confirmed
 genuine dials/lateral/empty-modifier choices.
+
+**Post-hoc code review (dispatched by the coordinator, given the
+documented law-option brace-desync crash class):** PASS, no findings.
+`allow = { has_law = cognatic_succession_law }` confirmed schema-valid
+against 4+ existing precedents in this same file and the Women's Rights
+sweep; spelling matches the option id character-for-character; whole-file
+brace count 9/9 balanced; agnatic→cognatic step independently confirmed
+to carry no modifier on either side, correctly left ungated. Safe to
+ship as-is.
 
 ## Task #5 — Fix countries starting with industrialization above cap
 
