@@ -156,4 +156,65 @@ pattern already used there for `qing_hoppo_marker`.
 
 **Status:** DONE (confirmed fix shipped + pushed). `qing_pos_marker_ct`
 cascade NOT independently fixed — see hypothesis above; recommend checking
-its count on the next boot before deciding whether it needs its own task.
+its count on the next boot before deciding whether it needs its own task
+(tracked as Task #27).
+
+## Task #9 — Add Court Painter to 1:1 court-position restriction
+
+**What it was:** Task #16's investigation found the root cause already:
+`QING_office_appoint`'s "strip every other court marker on seating" block
+(`se_QING_COUNCIL.txt`, ~1811-1865) stripped guard/censor/zongli/study/
+eunuch/amban/hoppo/march_gg/consort markers on great-office promotion, but
+missed six: `qing_court_artist` (Court Painter), `qing_caravan_super_marker`,
+`qing_salt_commissioner_marker`, `qing_is_xj_beg`,
+`qing_opium_commissioner_marker`, `qing_customs_ig_marker`. Screenshot
+`20260826222001_1.jpg` confirmed the live repro (Court Painter + Minister of
+Culture held at once). Task #9's scope was widened to all six, not just
+Court Painter, since it's the same bug under six names.
+
+**Diagnosis verification (traced independently, not taken on trust):**
+Read the strip block directly, then traced each of the six markers to its own
+grant/vacate/rotate site to classify it:
+- **Four single-holder posts** (caravan superintendent, salt commissioner,
+  opium commissioner, customs Inspector-General) each carry the same
+  three-part state as Hoppo: a per-char marker, a salary `character_modifier`,
+  and a COUNTRY-side holder var. Confirmed exact names against each office's
+  own vacate/rotate code: `qing_caravan_super_office`/`qing_caravan_super_holder`
+  (`se_QING_CARAVAN.txt:945-949`), `qing_salt_commissioner_office`/
+  `qing_salt_commissioner_holder` (`se_QING_SALT.txt:82-87`),
+  `qing_opium_commissioner_office`/`qing_opium_commissioner_holder`
+  (`se_QING_OPIUM.txt:434-451` — confirmed `qing_lin_zexu_appointed`, a
+  separate one-time-ever flag, must NOT be touched by the strip), and
+  `qing_customs_inspector_general`/`qing_customs_ig_holder`
+  (`se_QING_CUSTOMS.txt:116-152`, cross-checked against the modifier name
+  used by its own vacate-previous-IG block at lines 126/175 — NOT
+  `qing_customs_ig_office`, which doesn't exist).
+- **Two many-seat corps markers** (`qing_court_artist`, `qing_is_xj_beg`) have
+  NO character_modifier and NO country holder var — confirmed by reading
+  their grant sites (`se_QING_WENZHI.txt`, `se_QING_XINJIANG.txt`): both are
+  capped corps whose counts (`qing_court_artist_count`, `qing_xj_beg_count`)
+  are rebuilt from a live `every_character` scan on demand, never
+  incrementally tracked, matching the existing bare-`remove_variable` pattern
+  already used in this same block for the guard/censor/study marks.
+
+**What I did:** Added four three-part strip blocks (marker + modifier +
+employer-wrapped holder-var clear) for the single-holder posts, matching the
+proven Hoppo pattern exactly, plus two bare `remove_variable` strips for the
+corps markers, matching the guard/censor/study pattern exactly. All six
+inserted into the same scope (`this` = the appointee, confirmed unchanged
+from `QING_office_appoint`'s own header comment; `employer` resolves to CHI
+identically to the adjacent, already-proven Hoppo block — no scope-changing
+effect sits between them).
+
+**Review:** Self-reviewed (same fork-context constraint noted in Task #16 —
+could not spawn a nested code-review subagent). Verified independently:
+brace balance of the whole file after edit (script-counted: final depth 0,
+never negative); all six modifier/var names cross-checked against their own
+files' vacate/rotate code rather than assumed; confirmed `qing_lin_zexu_appointed`
+is untouched; confirmed no scope-changing effect between the proven Hoppo
+block and the new blocks.
+
+**Commit:** `f63d58628` — "fix: close 1:1 court-position strip gap for 6
+markers (task #9)" — pushed to `merge-overnight`.
+
+**Status:** DONE — all six markers fixed, not just Court Painter.
