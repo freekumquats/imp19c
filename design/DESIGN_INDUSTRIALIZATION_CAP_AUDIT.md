@@ -252,10 +252,32 @@ to a deliberate CHI-specific cherry-pick (canals only, not the whole tier) per
 `design/DESIGN_1763_STARTING_TECH_AUDIT.md`'s explicit recommendation, landing
 CHI's cap at 6 — higher than the pre-fix 4, but intentionally below the 12 every
 Old World bloc reaches (bureaucratic leader, mechanization laggard is the
-documented intent). The Africa/NA floor bloc still gets neither tier fully (just
-`civic_level_1` alone plus 2 martial techs = 3) — not yet investigated for the same
-class of oversight; unlike CHI's fix this one is NOT obviously a mistake, since the
-whole point of this bloc is a deliberately minimal "previously-zero-grant" floor.
+documented intent).
+
+**Africa/Native-America floor bloc (both the tradezone-based grant and the true
+"Bloc E" catch-all) — CHECKED, NOT AN OVERSIGHT.** `design/DESIGN_1763_STARTING_TECH.md`
+(lines 204-224) explicitly labels this grant deliberate: the tradezone-based bloc
+(west/east/southern Africa, Middle East, India, SE Asia tradezones) uses "same
+grant (weapon_manufacturing, firearms, civic_level_1), same idiom, zero new
+logic" by design, and the true Bloc E catch-all's floor (military_0 + civic_1,
+"nothing more") is explicitly justified: firearms reached these regions via
+centuries of fur-trade/gun-commerce contact, and that floor was a deliberate
+design choice, not an unexamined default. Unlike CHI's civic gap, there is no
+stated general rule this violates — cap = 3 is intended, no fix applies here.
+
+**Bloc A/B/C/D (Western Europe, Slavic, Ottoman/Islamic, South/SE Asia) —
+CHECKED, ALSO NOT AN OVERSIGHT.** `DESIGN_1763_STARTING_TECH.md` confirms each
+bloc's civic 1-2 grant was "already correct in the current branch — no change"
+during the audit that produced tonight's rework. No gap found for these blocs'
+tech grants themselves — their remaining setup-value overages (Andalusia,
+Baltic states) are a DIFFERENT class of issue (setup numbers vs. a correctly-
+granted cap), not a tech-grant oversight like CHI's.
+
+This closes the oversight-hunt across every bloc in the 1763 branch: CHI was the
+only tech-grant gap, and it is now fixed to the audit doc's specific
+recommendation. What remains open (see Bottom line) is a different question —
+whether to adjust setup values or government-type bases for the blocs whose
+grant is correct but whose setup province values still exceed it.
 
 ## Setup-value comparison, real samples pulled from source
 
