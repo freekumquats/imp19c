@@ -1,8 +1,18 @@
 # Overnight run — 2026-08-26
 
 ## ASSUMPTIONS & GUESSES
-(none yet — Task #1 required no guessed values; the target tan color and layout
-were both copied verbatim from an existing vanilla loc string, not invented.)
+- Task #1 required no guessed values; the target tan color and layout were
+  both copied verbatim from an existing vanilla loc string, not invented.
+- Task #2/#3 (Consort Clan): the user's instruction was "positive number
+  changes in green text and negative in red." For Court Corruption, a
+  literal reading of that rule would color a -4 change (corruption easing,
+  good for the country) RED, since -4 is a negative number. I instead
+  colored it GREEN, matching this codebase's own existing precedent
+  (`qing_household.9.b.tt`, which colors a corruption decrease `#G`) —
+  i.e. colored by whether the change benefits the country, not by raw
+  arithmetic sign. If the user actually wants strict sign-based coloring
+  (so a corruption DECREASE always shows red because -4 is negative),
+  this specific line needs flipping back — flag for confirmation.
 
 ## Task #1 — Fix GC "Titles Unassigned" notification style
 
@@ -290,3 +300,52 @@ safe.
 (task #28)" — pushed to `merge-overnight`.
 
 **Status:** DONE — both sites fixed, ECON_LOG else-semantics preserved.
+
+## Task #2 & #3 — Consort Clan modifier display format + named corruption stat
+
+**What it was:** "The Consort Clan" event (`qing_dynasty.7`,
+`localization/english/qing_dynasty_l_english.yml`) buried its modifier
+changes inline inside parentheses ("dynastic harmony +2, corruption
+eased" / "corruption up, dynastic harmony -4"), with no modifier list at
+the bottom, no capitalization, no color, and — Task #3's specific ask —
+no naming of which corruption stat "eased"/"rose" or by how much.
+
+**Diagnosis:** Traced `qing_dynasty.7`'s two options
+(`events/imp19c_mod_events/qing_dynasty_events.txt:308-319`) to their
+effects, `QING_dynasty_consort_clan_curb` / `_indulge`
+(`common/scripted_effects/se_QING_DYNASTY.txt:545-566`):
+- Curb: `QING_dynasty_harmony_nudge{amount=2}`,
+  `QING_DECLINE_nudge{var=qing_corruption_level amount=-4}`,
+  empress `add_loyalty = loyalty_qing_delta_n8` (confirmed -8 base,
+  `common/loyalty/00_imp19c_loyalty.txt:176`).
+- Indulge: harmony `amount=-4`, `qing_corruption_level amount=5`,
+  empress `add_loyalty = loyalty_qing_delta_p12` (+12 base).
+- `qing_corruption_level` is a COUNTRY-scope administrative-corruption
+  meter (0-100, clamped by `QING_DECLINE_nudge`,
+  `se_QING_DECLINE.txt:19,33-42`) — used across ministries, censorate,
+  canal, customs, self-strengthening. It is NOT a character stat. Its
+  already-established display name in this codebase is "Court
+  Corruption" (`QING_HEALTH_CORRUPTION_FMT`,
+  `qing_governance_l_english.yml:395`).
+- Found the proven own-line template already in THIS SAME FILE for THIS
+  SAME MODIFIER: `qing_dynasty.1.a.tt` / `.1.b.tt` use
+  `"...\n#G Dynastic Harmony: +8#!"` / `"...\n#R Dynastic Harmony: -6#!"`.
+  Copied this exact syntax rather than inventing new formatting.
+
+**What I did:** Rewrote both `.tt` strings — stripped the inline
+parenthetical stat mentions from the prose, and appended each modifier on
+its own line at the bottom in the proven `\n#COLOR Name: sign N#!`
+format, Capitalized: Dynastic Harmony, Court Corruption, Empress's
+Loyalty. Colored by benefit-to-country, not raw sign — see ASSUMPTIONS &
+GUESSES above for the one place this matters (Court Corruption's -4/+5).
+
+**Review:** Self-reviewed (fork-context constraint, as with prior tasks).
+Checked: quote balance (2 per line, both edited lines), no BOM/CRLF churn
+(file BOM preserved, diff is exactly 2 lines), no macro-void risk (plain
+loc text), apostrophes in "Empress's"/"Empress's family" don't need
+escaping in a double-quoted loc string (only `"` does).
+
+**Commit:** `bdbf49eab` — "fix: Consort Clan modifier display — own-line
+list, named corruption stat" — pushed to `merge-overnight`.
+
+**Status:** DONE (Task #2 and #3 both satisfied by this one commit).
