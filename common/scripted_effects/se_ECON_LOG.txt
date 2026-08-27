@@ -739,35 +739,46 @@ ECON_LOG_curx_tick_emit = {
 	# via TREASURY_LOG_it (called from many events) even though every known caller stages it with
 	# set_variable immediately before calling this -- added the has_variable guard the sentinel
 	# alone didn't cover, matching the proven read-before-set idiom used throughout this file.
+	# [read-before-set fix, task #28 2026-08-26] nested instead of one flat AND-limit: a flat
+	# `has_variable = X  var:X > N` still evaluates the second leaf even when has_variable already
+	# fails — the same class fixed for QING_office_appoint in task #16 (ccb2dca00). Nesting the
+	# sentinel compare inside its own `if`, gated by has_variable, means the compare is only reached
+	# once the variable is confirmed set. The inner `else` re-emits the SAME "flag EMPTY" the outer
+	# one did, so the set-but-sentinel case (has_variable true, value <= -999999999) is reported
+	# identically to the never-set case — no behavior change, only the spurious log line removed.
 	if = {
-		limit = { has_variable = ECON_LOG_tickval  var:ECON_LOG_tickval > -999999999 }   # real value (not set-but-empty) — MUST gate before any multiply
-		change_variable = { name = ECON_LOG_tickval  multiply = var:ECON_LOG_tickscale }
+		limit = { has_variable = ECON_LOG_tickval }
 		if = {
-			limit = { var:ECON_LOG_tickval < 0 }
-			debug_log = "IMP19C CURXV flag SIGN-NEGATIVE"
-			change_variable = { name = ECON_LOG_tickval  multiply = -1 }
-		}
-		# integerize via round_local_variable (the proven rounder; round-to-NEAREST, not floor — fine for a probe)
-		set_local_variable = { name = tickround  value = var:ECON_LOG_tickval }
-		round_local_variable = { name = tickround  nearest = 1 }
-		set_variable = { name = ECON_LOG_tickval  value = local_var:tickround }
-		# CAP 8000: worst case ~8 metrics x 8000 x 2 (pre+post) x ~15 quarters. A metric hitting the cap emits
-		# a distinct flag so we know to scale it down.
-		if = {
-			limit = { var:ECON_LOG_tickval >= 8000 }
-			set_variable = { name = ECON_LOG_tickval  value = 8000 }
-			debug_log = "IMP19C CURXV flag CAPPED"
-		}
-		# VALUE line = "IMP19C CURXV unit" (DISTINCT word from the "flag ..." diagnostics, so grep -c "unit"
-		# counts ONLY value ticks). round(V*scale) = the exact value; read back count/scale.
-		if = {
-			limit = { var:ECON_LOG_tickval > 0 }
-			while = {
-				count = var:ECON_LOG_tickval
-				debug_log = "IMP19C CURXV unit"
+			limit = { var:ECON_LOG_tickval > -999999999 }   # real value (not set-but-empty) — MUST gate before any multiply
+			change_variable = { name = ECON_LOG_tickval  multiply = var:ECON_LOG_tickscale }
+			if = {
+				limit = { var:ECON_LOG_tickval < 0 }
+				debug_log = "IMP19C CURXV flag SIGN-NEGATIVE"
+				change_variable = { name = ECON_LOG_tickval  multiply = -1 }
 			}
+			# integerize via round_local_variable (the proven rounder; round-to-NEAREST, not floor — fine for a probe)
+			set_local_variable = { name = tickround  value = var:ECON_LOG_tickval }
+			round_local_variable = { name = tickround  nearest = 1 }
+			set_variable = { name = ECON_LOG_tickval  value = local_var:tickround }
+			# CAP 8000: worst case ~8 metrics x 8000 x 2 (pre+post) x ~15 quarters. A metric hitting the cap emits
+			# a distinct flag so we know to scale it down.
+			if = {
+				limit = { var:ECON_LOG_tickval >= 8000 }
+				set_variable = { name = ECON_LOG_tickval  value = 8000 }
+				debug_log = "IMP19C CURXV flag CAPPED"
+			}
+			# VALUE line = "IMP19C CURXV unit" (DISTINCT word from the "flag ..." diagnostics, so grep -c "unit"
+			# counts ONLY value ticks). round(V*scale) = the exact value; read back count/scale.
+			if = {
+				limit = { var:ECON_LOG_tickval > 0 }
+				while = {
+					count = var:ECON_LOG_tickval
+					debug_log = "IMP19C CURXV unit"
+				}
+			}
+			else = { debug_log = "IMP19C CURXV flag ZERO" }
 		}
-		else = { debug_log = "IMP19C CURXV flag ZERO" }
+		else = { debug_log = "IMP19C CURXV flag EMPTY" }
 	}
 	else = { debug_log = "IMP19C CURXV flag EMPTY" }
 	remove_variable = ECON_LOG_tickval

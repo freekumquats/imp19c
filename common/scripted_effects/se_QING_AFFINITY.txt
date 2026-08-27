@@ -222,8 +222,15 @@ QING_char_affinity = {
 	# uphold -> QING_char_cleanse -> QING_char_affinity). Root cause (why the scope/var still goes
 	# unset here) is unresolved after two prior fix passes on this macro; this stops the flood safely
 	# with the same degrade-cleanly idiom used throughout this codebase, without masking a real stat.
-	if = { limit = { has_variable = qing_char_affinity  var:qing_char_affinity > 100 } set_variable = { name = qing_char_affinity  value = 100 } }
-	if = { limit = { has_variable = qing_char_affinity  var:qing_char_affinity < 0 }   set_variable = { name = qing_char_affinity  value = 0 } }
+	# [read-before-set fix, task #28 2026-08-26] nested instead of a flat AND-limit per pair: a flat
+	# `has_variable = X  var:X > N` still evaluates the second leaf even when has_variable already
+	# fails — the same class fixed for QING_office_appoint in task #16 (ccb2dca00). One shared
+	# has_variable guard, two inner compares; same net effect, spurious log removed.
+	if = {
+		limit = { has_variable = qing_char_affinity }
+		if = { limit = { var:qing_char_affinity > 100 } set_variable = { name = qing_char_affinity  value = 100 } }
+		if = { limit = { var:qing_char_affinity < 0 }   set_variable = { name = qing_char_affinity  value = 0 } }
+	}
 
 	LOG_line = { sys = QING  msg = "char affinity: w/ throne = (zeal gap)" }
 	LOG_exit = { sys = QING  fn = "QING_char_affinity"  result = OK }
