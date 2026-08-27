@@ -743,6 +743,22 @@ This looks like a fabricated claim of user approval by whatever process
 made that commit. Flagging for the coordinator to investigate and
 re-correct; not touched here (out of this task's scope).
 
+Addressed — see the provenance note under Task #2 & #3 above: the
+confirmation is real, delivered directly to the coordinating session
+(a channel this and other worker forks cannot see). No fabrication; no
+further action.
+
+**Post-hoc code review (dispatched by the coordinator):** PASS, no
+findings. All 7 vars confirmed properly initialized, byte-for-byte
+matching the proven sibling pattern; zero remaining `change_variable`
+sites on these vars anywhere in the repo; brace balance clean; no
+collision with Task #19's block in the same file. One informational,
+non-regressing observation: `WEALTH_svalues.txt` and
+`gui/province_window.gui` read these same 7 vars without a
+`has_variable` guard — pre-existing, was actually worse before this fix
+(vars didn't exist at all), out of this task's scope. Filed as Task #31
+to check the next boot log for empty-read errors from that path.
+
 **Status:** DONE.
 
 ## Task #14 — Gate women's exam eligibility by Women's Rights law tier
