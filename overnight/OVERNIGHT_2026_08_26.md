@@ -1150,6 +1150,44 @@ dispatched as a follow-up with the full diagnose→adversarial-design-
 review→implement→code-review loop, per the AI-logic-change care this
 should have gotten the first time.
 
+**Recalibration (commit `5e77f4447`):** Gathered real evidence instead
+of guessing again. Treasury thresholds already used elsewhere in this
+codebase (mission `allow`/trigger gates across
+`qing_new_world_missions.txt`, `qing_burma_war_missions.txt`, others)
+cluster between 40 and 440 — nowhere near the "thousands to tens of
+millions" scale the original fix's comment speculated (that speculation
+was unverified and wrong). A sibling AI scoring formula in the same file
+(`AI_svalues.txt:2069`, the AI's peace-suing threshold) confirms this
+codebase's own convention is to scale treasury proportionally rather than
+clamp it to an unrelated formula's ceiling. The original ±300 bound was
+compared against the sibling terms' `max=100000` — a ceiling for extreme
+inputs, not their typical contribution — so that comparison was invalid;
+against the REAL treasury-threshold evidence, ±300 was actually close,
+just short of the top "very wealthy" cluster (400/440). Widened to ±400
+to cover that cluster. Also corrected the false "display-only, zero
+AI-decision risk" claim in both the design doc and the two code comments
+in `se_AI.txt` (one on the treasury line, one on the `set_variable` a few
+lines below) — both now state plainly that `war_assessment` drives real
+`ai_chance` war/peace weighting, not just text, so a future maintainer
+won't repeat the same mistake.
+
+Self-reviewed only (fork context, no Agent-tool access — consistent with
+every other fork tonight that hit this same tooling constraint). Brace
+balance verified script-counted (final depth 0, min depth 0 across the
+whole file). No RHS-comparison violation (only `min=`/`max=` constant
+changes). No macro-void risk (comment-only changes besides the one
+constant). Diff: 2 files, 135 insertions/99 deletions (mostly the design
+doc rewrite, not the code).
+
+**Commit:** `5e77f4447` — "fix: recalibrate war_assessment treasury bound
+with real evidence (task #6)" — pushed to `merge-overnight`.
+
+**Status:** DONE. Still logged under ASSUMPTIONS & GUESSES: the exact
+typical treasury range for mid/late-game AI countries in a live save is
+Jomini-engine-derived and not fully derivable from static source — the
+±400 bound is evidence-based but still needs the next boot to confirm AI
+war-declaration FREQUENCY (not just display text) looks sensible.
+
 ## Task #10 — Gate GC position/sub-position appointment by sex and Women's Rights law level
 
 **What it was:** Task #10's own description carried an open question left by
