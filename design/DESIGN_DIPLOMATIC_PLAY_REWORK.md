@@ -243,6 +243,105 @@ proportional to how lopsided the military balance is — not just a boolean
 willing/not-willing switch). Flagging as the next step once the formula
 itself is confirmed, not bundled into this change.
 
+## USER DIRECTIVE (2026-08-28): AI_play_attitude rearchitected around relations
+
+Same pattern, second target. Current `AI_diplomatic_play_evaluate_attitude`
+(`se_AI.txt:1233-1295`) computes `AI_play_attitude` = `AI_friendly` (culture
+match +50, religion match +50) minus `AI_hostile` (power-balance ratio +
+ideological distance×10 + core-province-claim overlap×20). **There is no
+`opinion` term anywhere in this formula** — an "attitude" score with zero
+input from the actual bilateral relationship history is exactly the kind of
+bizarre gap task #16 exists to fix. Directive: relations (opinion) becomes
+the **PRIMARY** term; diplomatic reputation and aggressive expansion are
+added as further primary-tier inputs; the existing culture/religion/
+ideology/power/core-claims terms are **confirmed to remain real, just
+demoted to secondary** (same principle as the war_assessment rework above).
+
+**Proven building blocks:**
+- `opinion = { target = X  value > N }` is a proven TRIGGER (boolean
+  threshold), used 6x in this codebase (`AI_svalues.txt:1723-1857`) — but
+  there is no proven way to read opinion as a raw numeric value inside a
+  script_value sum (checked this mod and both oracles — none found). This
+  looks like a genuine engine limitation (opinion is trigger-only), not a
+  mod gap. Same class of unprovable-from-script primitive as
+  `num_goods_produced` ([[imp19c-num-goods-produced-engine-internal]]).
+- Workaround: this mod's OWN `AI_svalues.txt:1723-1735` already builds a
+  numeric proxy from layered opinion thresholds (`if opinion>30 / else_if
+  opinion<0 / else_if opinion<-50`, applied as multipliers there). Reused
+  below as ADD amounts instead, to turn the boolean primitive into a banded
+  numeric contribution — the same proven idiom, different arithmetic role.
+- `has_aggressive_expansion` is proven as a bare numeric value inside a sum
+  (`WARSCORE_svalues.txt:96`, `subtract = has_aggressive_expansion`).
+- `diplomatic_reputation` is a real country stat (used mod-wide as a
+  MODIFIER key, e.g. `qing_governance_modifiers.txt`) — by the same pattern
+  as `stability`/`tyranny`/`legitimacy` (all proven usable bare in a sum
+  elsewhere in this exact formula family), it should be usable bare too,
+  though this specific stat's bare-value use is not independently confirmed
+  in this codebase — flag for a differential check before relying on it,
+  same discipline as any other unconfirmed-but-analogous primitive.
+
+**Proposed new formula shape:**
+```
+set_local_variable = {
+    name = AI_friendly
+    value = {
+        value = 0
+        # PRIMARY -- relations (opinion of instigator toward target),
+        # banded proxy per this codebase's own proven idiom.
+        if      = { limit = { opinion = { target = var:play_target_country  value > 100 } }  add = 80 }
+        else_if = { limit = { opinion = { target = var:play_target_country  value > 30  } }  add = 50 }
+        else_if = { limit = { opinion = { target = var:play_target_country  value > 0   } }  add = 20 }
+        # PRIMARY -- diplomatic reputation (instigator's own standing).
+        add = { value = var:play_instigator.diplomatic_reputation  multiply = 2 }
+        # SECONDARY -- existing terms, still real, demoted:
+        if = { limit = { var:play_target_country.religion = var:play_instigator.religion }  add = 50 }
+        if = { limit = { var:play_target_country.culture  = var:play_instigator.culture  }  add = 50 }
+    }
+}
+set_local_variable = {
+    name = AI_hostile
+    value = {
+        value = 0
+        # PRIMARY -- relations, hostile side of the same banded proxy.
+        if      = { limit = { opinion = { target = var:play_target_country  value < -100 } }  add = 80 }
+        else_if = { limit = { opinion = { target = var:play_target_country  value < -30  } }  add = 50 }
+        else_if = { limit = { opinion = { target = var:play_target_country  value < 0    } }  add = 20 }
+        # PRIMARY -- aggressive expansion (instigator's own AE makes it
+        # MORE willing to act hostile -- consistent with AE already being
+        # a "spent, might as well keep spending" infamy-adjacent signal
+        # elsewhere in this mod's AI logic, e.g. AI_svalues.txt:96).
+        add = { value = var:play_instigator.has_aggressive_expansion  multiply = 0.5 }
+        # SECONDARY -- existing terms, still real, demoted:
+        add = { value = var:AI_play_power_balance_instigator_root }
+        add = {
+            value = var:play_instigator.SPIRIT_traditionalism
+            subtract = var:play_target_country.SPIRIT_traditionalism
+            multiply = 10
+        }
+        var:play_target_area.area = {
+            every_area_province = {
+                limit = { is_core_of = var:play_instigator }
+                add = 20
+            }
+        }
+    }
+}
+set_variable = { name = AI_play_attitude  value = { add = local_var:AI_friendly  subtract = local_var:AI_hostile } }
+```
+
+**Judgment calls flagged for confirmation** (band thresholds/weights and
+whose stats to read):
+- Opinion bands (>100/>30/>0 and <-100/<-30/<0, magnitudes 80/50/20) are a
+  first guess at "primary-tier" scale, matching the war_assessment section's
+  own admission that dominant-term weighting needs a boot to confirm, not a
+  derived number.
+- Read as the INSTIGATOR's opinion of the TARGET (not the reverse) and the
+  INSTIGATOR's own diplomatic_reputation/aggressive_expansion (not the
+  target's) — matches the existing formula's convention that AI_hostile's
+  ideology and core-claims terms are already about the instigator's own
+  situation. Flag if the target's reputation/AE should matter instead or as
+  well.
+
 ## Proposed fix (SUPERSEDED — kept for record, see directive above)
 
 1. **Add an explicit reconciliation trigger**, e.g.
