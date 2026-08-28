@@ -85,6 +85,16 @@ agadir_crisis_type.1 = {
             target = scope:play_instigator
         }
 
+        # [rework 2026-08-28, task #16, REVERTED] this call was mistakenly repointed to
+        # the outcome dispatcher in an earlier pass. agadir_crisis_type.2 is NOT itself a
+        # war/back-down decision point -- it's a 3-way narrative hub (Make them leave /
+        # Back down / Exchange territory) whose "Make them leave" option (.2.a) defers the
+        # actual war decision to agadir_crisis_type.7. That repoint was ALSO tried and
+        # reverted (.7 turned out to be "Scope: Country, supporter of the play target" --
+        # an observer confronting a rival, not the instigator -- so it doesn't match the
+        # dispatcher's instigator-vs-target assumption either). Restored to fire .2
+        # directly, unchanged from before this rework. Only the .3.b -> .6 repoint below
+        # (agadir_crisis_type.6 is genuinely instigator-scoped) is actually live.
         DIPLOMACY_trigger_play_event = {
             pov = scope:diplomatic_play.var:play_instigator
             id = agadir_crisis_type.2 # Catcher snags the expedition en-route
@@ -321,6 +331,13 @@ agadir_crisis_type.2 = {
             remove_variable = agadir_rival
         }
 
+        # [rework 2026-08-28, task #16, REVERTED] briefly repointed this to the outcome
+        # dispatcher, then reverted: agadir_crisis_type.7 is "# Scope: Country, supporter
+        # of the play target" -- an OBSERVER deciding whether to confront a RIVAL power,
+        # not the instigator deciding on the target. The dispatcher's bucket logic and the
+        # 9 outcome events both assume the instigator-vs-target war_assessment/
+        # AI_play_attitude relationship; neither applies to this observer-vs-rival
+        # decision. Left firing .7 directly, unchanged from before this rework.
         DIPLOMACY_trigger_play_event = {
             pov = scope:diplomatic_play.var:agadir_rival
             id = agadir_crisis_type.7 # War or withdraw the gunboat
@@ -480,10 +497,28 @@ agadir_crisis_type.3 = {
             }
         }
 
-        DIPLOMACY_trigger_play_event = {
-            pov = scope:diplomatic_play.var:instigator
-            id = agadir_crisis_type.6 # Exchange rejected - war imminent
-            days = 0
+        # [rework 2026-08-28, task #16] repointed from agadir_crisis_type.6 to the 9-event
+        # outcome dispatcher -- .6 is genuinely "Scope: Country, play instigator", matching
+        # the dispatcher's assumption (unlike .2/.7 above, which were tried and reverted).
+        # Wrapped in scope:diplomatic_play (the dispatcher's first line is save_scope_as =
+        # diplomatic_play; called bare from this option's own root it would clobber the
+        # alias with the wrong scope). Also fixes a copied typo: var:instigator was never
+        # set anywhere (var:play_instigator is the real name) -- copied from a pre-existing
+        # latent typo in this event's own sibling "Accept" option, not introduced by this
+        # rework, but not worth propagating further.
+        # OPEN GAP, not yet resolved: agadir_crisis_type.6.b (the option this repoint
+        # supersedes) carried add_stability=-5, add_political_influence=-25, and
+        # POLITICS_upset_militarists={level=major} -- substantially more than this rework's
+        # generic Legitimacy-only back-down cost. That extra cost is NOT preserved anywhere
+        # in the 9 outcome events (they're shared across 5 different old call sites with
+        # different original costs, so they can't carry any one site's event-specific
+        # extras without a bigger dispatcher redesign that returns which outcome fired).
+        # Flagging rather than silently dropping it or guessing at a fix.
+        scope:diplomatic_play = {
+            DIPLOMACY_trigger_play_outcome_event = {
+                pov = scope:diplomatic_play.var:play_instigator
+                days = 0
+            }
         }
     }
 

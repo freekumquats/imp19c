@@ -1238,6 +1238,13 @@ AI_diplomatic_play_evaluate_attitude = {
 
 	# Called: When the diplomatic play begins
 	# Also every quarter
+
+	# [rework 2026-08-28, task #16, design/DESIGN_DIPLOMATIC_PLAY_REWORK.md] relations
+	# (opinion), diplomatic reputation, and aggressive expansion are now the PRIMARY
+	# terms; culture/religion match, power-balance, ideology, and core-claim overlap
+	# remain real but are demoted to SECONDARY. opinion is trigger-only in this engine
+	# (no proven numeric-value accessor) -- worked around by reusing this mod's own
+	# layered-threshold idiom (AI_svalues.txt:1723-1735) as banded ADD amounts.
 	$diplomatic_play$ = { save_scope_as = diplomatic_play }
 
 	scope:diplomatic_play = {
@@ -1245,6 +1252,15 @@ AI_diplomatic_play_evaluate_attitude = {
 			name = AI_friendly
 			value = {
 				value = 0
+				# PRIMARY -- relations (instigator's opinion of the target), banded.
+				var:play_instigator = {
+					if      = { limit = { opinion = { target = scope:diplomatic_play.var:play_target_country  value > 100 } }  add = 80 }
+					else_if = { limit = { opinion = { target = scope:diplomatic_play.var:play_target_country  value > 30  } }  add = 50 }
+					else_if = { limit = { opinion = { target = scope:diplomatic_play.var:play_target_country  value > 0   } }  add = 20 }
+				}
+				# PRIMARY -- diplomatic reputation (instigator's own standing).
+				add = { value = var:play_instigator.diplomatic_reputation  multiply = 2 }
+				# SECONDARY -- existing terms, still real, demoted.
 				if = {
 					limit = {
 						var:play_target_country.religion = var:play_instigator.religion
@@ -1264,6 +1280,16 @@ AI_diplomatic_play_evaluate_attitude = {
 			name = AI_hostile
 			value = {
 				value = 0
+				# PRIMARY -- relations, hostile side of the same banded proxy.
+				var:play_instigator = {
+					if      = { limit = { opinion = { target = scope:diplomatic_play.var:play_target_country  value < -100 } }  add = 80 }
+					else_if = { limit = { opinion = { target = scope:diplomatic_play.var:play_target_country  value < -30  } }  add = 50 }
+					else_if = { limit = { opinion = { target = scope:diplomatic_play.var:play_target_country  value < 0    } }  add = 20 }
+				}
+				# PRIMARY -- aggressive expansion (instigator's own AE makes it more
+				# willing to act hostile).
+				add = { value = var:play_instigator.has_aggressive_expansion  multiply = 0.5 }
+				# SECONDARY -- existing terms, still real, demoted.
 				add = {
 					value = var:AI_play_power_balance_instigator_root # Higher balance of power = likelier to be aggressive
 				}
@@ -1308,6 +1334,19 @@ AI_diplomatic_play_evaluate_war = {
 
 	# Called: When the diplomatic play begins
 	# Also every quarter
+
+	# [rework 2026-08-28, task #16, design/DESIGN_DIPLOMATIC_PLAY_REWORK.md] relative
+	# military strength (own forces + permanent allies + this play's supporters, both
+	# sides) is now the PRIMARY, dominant term. War exhaustion, treasury, and stability
+	# remain real but are demoted to SECONDARY. AI_play_attitude is REMOVED from this
+	# formula entirely (per user decision) -- it now answers a fully independent "do I
+	# like them" question, with no shared-input dilution against "can I win." Treasury
+	# is left UNCAPPED per explicit user decision, even though this can let treasury
+	# alone decide the sign at military parity -- confirmed accepted, not a bug (see
+	# the design doc's "RESOLVED by user decision" note). Do not touch this formula
+	# without checking that doc first; war_assessment is NOT display-only -- its 3
+	# display-bucket triggers (imp19c_diplomacy_triggers.txt) are ALSO read as
+	# ai_chance factor modifiers on real "Declare war"/"Back down" event options.
 	$diplomatic_play$ = { save_scope_as = diplomatic_play }
 
 	scope:diplomatic_play = {
@@ -1315,7 +1354,43 @@ AI_diplomatic_play_evaluate_war = {
 			name = AI_play_war_assessment
 			value = {
 				value = 0
-				subtract = { 
+				add = {
+					# PRIMARY -- relative military strength, instigator side vs. target
+					# side. "Side" = own forces + permanent allies + THIS PLAY's
+					# supporters (not just formal allies).
+					value = {
+						value = 0
+						add = var:play_instigator.num_of_cohorts
+						add = { value = var:play_instigator.num_of_ships  multiply = 0.1 }
+						add = { value = var:play_instigator.manpower       multiply = 0.05 }
+						var:play_instigator = {
+							every_allied_country = { add = num_of_cohorts }
+						}
+						every_in_list = {
+							variable = play_observers_support_instigator
+							add = { value = THIS.num_of_cohorts }
+							add = { value = THIS.num_of_ships  multiply = 0.1 }
+						}
+					}
+					subtract = {
+						value = 0
+						add = var:play_target_country.num_of_cohorts
+						add = { value = var:play_target_country.num_of_ships  multiply = 0.1 }
+						add = { value = var:play_target_country.manpower       multiply = 0.05 }
+						var:play_target_country = {
+							every_allied_country = { add = num_of_cohorts }
+						}
+						every_in_list = {
+							variable = play_observers_support_target
+							add = { value = THIS.num_of_cohorts }
+							add = { value = THIS.num_of_ships  multiply = 0.1 }
+						}
+					}
+					multiply = 15
+				}
+				# SECONDARY -- existing terms, still real, demoted: can no longer
+				# outweigh the primary military term on their own.
+				subtract = {
 					value = var:play_infamy_cost_war
 					multiply = var:play_infamy_cost_war
 					max = 100000
@@ -1323,11 +1398,6 @@ AI_diplomatic_play_evaluate_war = {
 				subtract = {
 					value = var:play_stability_cost_war
 					multiply = var:play_stability_cost_war
-					max = 100000
-				}
-				subtract = { # negative attitudes will encourage war
-					value = var:AI_play_attitude
-					multiply = scope:diplomatic_play.var:AI_play_power_balance_instigator_root
 					max = 100000
 				}
 				var:play_instigator = {
@@ -1351,22 +1421,7 @@ AI_diplomatic_play_evaluate_war = {
 					else = {
 						add = stability
 					}
-					# [task #6 fix 2026-08-26, recalibrated 2026-08-27] every other term in this
-					# formula is deliberately bounded (infamy/stability costs squared+capped at
-					# max=100000 as a CEILING, not their typical contribution; war_exhaustion terms
-					# likewise capped). treasury was the lone unbounded raw add, so any solvent
-					# instigator's score was dominated by treasury almost regardless of the other
-					# factors. Bounded using this mod's OWN observed "meaningful treasury" range
-					# (mission gate thresholds elsewhere in this codebase cluster 40-440; see
-					# design/DESIGN_WAR_ASSESSMENT_DISPLAY_FIX.md's Recalibration section for the
-					# evidence and the earlier, unverified "thousands-millions" claim this replaces).
-					# war_assessment (below) is NOT display-only - its 3 display-bucket triggers
-					# (imp19c_diplomacy_triggers.txt:8-22) are ALSO read as ai_chance factor=100
-					# modifiers on real "Declare war"/"Back down" event options (diplomatic_play_events.txt,
-					# send_settlers.txt, agadir_crisis_type.txt) - this bound is a real AI-behavior
-					# tuning constant, not a cosmetic display tweak. Do not delete war_assessment as
-					# dead code without checking the design doc first.
-					add = { value = treasury  min = -400  max = 400 }
+					add = treasury   # UNCAPPED, no min/max/multiply -- confirmed by user decision
 				}
 				var:play_target_country = {
 					add = {
@@ -1387,38 +1442,6 @@ AI_diplomatic_play_evaluate_war = {
 			}
 		}
 
-		# A war with many huge powers on both sides is more costly, less likely to go ahead
-		every_in_list = {
-			variable = play_observers_support_target
-			change_local_variable = {
-				name = AI_play_war_assessment
-				subtract = {
-					value = THIS.DIPLOMACY_power
-					multiply = 0.01
-				}
-			}
-		}
-		every_in_list = {
-			variable = play_observers_support_instigator
-			change_local_variable = {
-				name = AI_play_war_assessment
-				subtract = {
-					value = THIS.DIPLOMACY_power
-					multiply = 0.005
-				}
-			}
-		}
-
-		### DEBUG only - there is no reason to keep this variable
-		# [task #6 note 2026-08-26, corrected 2026-08-27] the comment above is STALE and WRONG:
-		# war_assessment IS authoritative for real decisions. It's read by the player-facing
-		# "War is likely"/"undecided"/"unlikely" display triggers (imp19c_diplomacy_triggers.txt:
-		# 8-22), and those SAME triggers are also used as ai_chance factor=100 modifiers on real
-		# "Declare war"/"Back down" event options (diplomatic_play_events.txt, send_settlers.txt,
-		# agadir_crisis_type.txt) - so this variable drives actual AI war/peace choices, not just
-		# text. Its only OTHER reader, AI_debug_test_war_all_diplomatic_plays, is dead code (never
-		# called) - that part of the original note was correct. Do not delete this set_variable as
-		# unused, and do not touch this formula without checking design/DESIGN_WAR_ASSESSMENT_DISPLAY_FIX.md.
 		set_variable = {
 			name = war_assessment
 			value = local_var:AI_play_war_assessment

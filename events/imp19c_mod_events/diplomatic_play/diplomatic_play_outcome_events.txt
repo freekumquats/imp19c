@@ -1,0 +1,441 @@
+########################################################################
+# diplomatic_play_outcome_events.txt — [task #16, design/DESIGN_DIPLOMATIC_PLAY_REWORK.md]
+# 3 war_assessment buckets x 3 AI_play_attitude buckets = 9 discrete outcome events, each
+# with its own static, fully-quantified tooltip (own-line #COLOR Name: sign N#! format,
+# per the task #4/#5/#8 convention) -- not one shared effect with live if/else surcharge
+# text. War-undecided borrows the war-likely/war-unlikely choice pairs (rows 7/9); the
+# war-undecided x attitude-neutral cell (row 8) gets its own third choice (spend to tip
+# the scales toward friendly, or do nothing).
+#
+# Namespace = diplomatic_play_outcome
+#   .1  Likely   x Friendly   -- Declare war / Back down
+#   .2  Likely   x Neutral    -- Declare war / Back down
+#   .3  Likely   x Hostile    -- Declare war / Back down
+#   .4  Unlikely x Friendly   -- Complete the play / Abort the play
+#   .5  Unlikely x Neutral    -- Complete the play / Abort the play
+#   .6  Unlikely x Hostile    -- Complete the play / Abort the play
+#   .7  Undecided x Friendly  -- borrows .4's choice pair and costs
+#   .8  Undecided x Neutral   -- Court favour (spend to tip attitude friendly) / Do nothing
+#   .9  Undecided x Hostile   -- borrows .3's choice pair and costs
+#
+# Costs and their attitude-scaling are the user's own directives (2026-08-28), not derived:
+# Declare war = baseline Stability -1/AE +3, +Stability -2/AE +3 more if the target is
+# friendly (betraying goodwill costs more), no surcharge if hostile. Back down = baseline
+# Legitimacy -3, +Legitimacy -4 more if the target is hostile (caving to a rival costs more
+# face), no surcharge if friendly. Complete the play = Opinion -10 (hindered_in_play),
+# +Opinion -100 more (betrayed_in_play) if hostile. Abort the play = no cost. All magnitudes
+# are first-guess judgment calls per the design doc, flagged there for a boot to confirm.
+########################################################################
+
+namespace = diplomatic_play_outcome
+
+# ======================================================================
+# .1  WAR LIKELY, TARGET FRIENDLY
+# ======================================================================
+diplomatic_play_outcome.1 = {
+	type = country_event
+	title = diplomatic_play_outcome.1.t
+	desc = diplomatic_play_outcome.1.desc
+	left_portrait = scope:foreign_minister
+	picture = naval_bay
+
+	immediate = {
+		LOG_line = { sys = DIPLO  msg = "EVENT diplomatic_play_outcome.1 (war likely, friendly)" }
+	}
+
+	option = { # Declare war
+		name = diplomatic_play_outcome.1.a
+		custom_tooltip = diplomatic_play_outcome.1.a.tt
+		ai_chance = {
+			modifier = { factor = 1 }
+			modifier = { factor = 10   scope:diplomatic_play = { var:war_assessment > 0    } }
+			modifier = { factor = 50   scope:diplomatic_play = { var:war_assessment > 200  } }
+			modifier = { factor = 200  scope:diplomatic_play = { var:war_assessment > 500  } }
+			modifier = { factor = 1000 scope:diplomatic_play = { var:war_assessment > 1000 } }
+		}
+		add_stability = -3
+		add_aggressive_expansion = 6
+		scope:diplomatic_play = {
+			DIPLOMACY_trigger_diplomatic_play_war = yes
+			AI_remove_diplomatic_play = yes
+		}
+	}
+	option = { # Back down
+		name = diplomatic_play_outcome.1.b
+		custom_tooltip = diplomatic_play_outcome.1.b.tt
+		ai_chance = {
+			modifier = { factor = 1 }
+			modifier = { factor = 10   scope:diplomatic_play = { var:war_assessment < 0     } }
+			modifier = { factor = 50   scope:diplomatic_play = { var:war_assessment < -200  } }
+			modifier = { factor = 200  scope:diplomatic_play = { var:war_assessment < -500  } }
+			modifier = { factor = 1000 scope:diplomatic_play = { var:war_assessment < -1000 } }
+		}
+		add_legitimacy = -3
+		scope:diplomatic_play = {
+			DIPLOMACY_progress_play = {
+				success = -25
+				progress = DIPLOMACY_play_progress_large
+			}
+		}
+	}
+}
+
+# ======================================================================
+# .2  WAR LIKELY, TARGET NEUTRAL
+# ======================================================================
+diplomatic_play_outcome.2 = {
+	type = country_event
+	title = diplomatic_play_outcome.2.t
+	desc = diplomatic_play_outcome.2.desc
+	left_portrait = scope:foreign_minister
+	picture = naval_bay
+
+	immediate = {
+		LOG_line = { sys = DIPLO  msg = "EVENT diplomatic_play_outcome.2 (war likely, neutral)" }
+	}
+
+	option = { # Declare war
+		name = diplomatic_play_outcome.2.a
+		custom_tooltip = diplomatic_play_outcome.2.a.tt
+		ai_chance = {
+			modifier = { factor = 1 }
+			modifier = { factor = 10   scope:diplomatic_play = { var:war_assessment > 0    } }
+			modifier = { factor = 50   scope:diplomatic_play = { var:war_assessment > 200  } }
+			modifier = { factor = 200  scope:diplomatic_play = { var:war_assessment > 500  } }
+			modifier = { factor = 1000 scope:diplomatic_play = { var:war_assessment > 1000 } }
+		}
+		add_stability = -1
+		add_aggressive_expansion = 3
+		scope:diplomatic_play = {
+			DIPLOMACY_trigger_diplomatic_play_war = yes
+			AI_remove_diplomatic_play = yes
+		}
+	}
+	option = { # Back down
+		name = diplomatic_play_outcome.2.b
+		custom_tooltip = diplomatic_play_outcome.2.b.tt
+		ai_chance = {
+			modifier = { factor = 1 }
+			modifier = { factor = 10   scope:diplomatic_play = { var:war_assessment < 0     } }
+			modifier = { factor = 50   scope:diplomatic_play = { var:war_assessment < -200  } }
+			modifier = { factor = 200  scope:diplomatic_play = { var:war_assessment < -500  } }
+			modifier = { factor = 1000 scope:diplomatic_play = { var:war_assessment < -1000 } }
+		}
+		add_legitimacy = -3
+		scope:diplomatic_play = {
+			DIPLOMACY_progress_play = {
+				success = -25
+				progress = DIPLOMACY_play_progress_large
+			}
+		}
+	}
+}
+
+# ======================================================================
+# .3  WAR LIKELY, TARGET HOSTILE
+# ======================================================================
+diplomatic_play_outcome.3 = {
+	type = country_event
+	title = diplomatic_play_outcome.3.t
+	desc = diplomatic_play_outcome.3.desc
+	left_portrait = scope:foreign_minister
+	picture = naval_bay
+
+	immediate = {
+		LOG_line = { sys = DIPLO  msg = "EVENT diplomatic_play_outcome.3 (war likely, hostile)" }
+	}
+
+	option = { # Declare war
+		name = diplomatic_play_outcome.3.a
+		custom_tooltip = diplomatic_play_outcome.3.a.tt
+		ai_chance = {
+			modifier = { factor = 1 }
+			modifier = { factor = 10   scope:diplomatic_play = { var:war_assessment > 0    } }
+			modifier = { factor = 50   scope:diplomatic_play = { var:war_assessment > 200  } }
+			modifier = { factor = 200  scope:diplomatic_play = { var:war_assessment > 500  } }
+			modifier = { factor = 1000 scope:diplomatic_play = { var:war_assessment > 1000 } }
+		}
+		add_stability = -1
+		add_aggressive_expansion = 3
+		scope:diplomatic_play = {
+			DIPLOMACY_trigger_diplomatic_play_war = yes
+			AI_remove_diplomatic_play = yes
+		}
+	}
+	option = { # Back down
+		name = diplomatic_play_outcome.3.b
+		custom_tooltip = diplomatic_play_outcome.3.b.tt
+		ai_chance = {
+			modifier = { factor = 1 }
+			modifier = { factor = 10   scope:diplomatic_play = { var:war_assessment < 0     } }
+			modifier = { factor = 50   scope:diplomatic_play = { var:war_assessment < -200  } }
+			modifier = { factor = 200  scope:diplomatic_play = { var:war_assessment < -500  } }
+			modifier = { factor = 1000 scope:diplomatic_play = { var:war_assessment < -1000 } }
+		}
+		add_legitimacy = -7
+		scope:diplomatic_play = {
+			DIPLOMACY_progress_play = {
+				success = -25
+				progress = DIPLOMACY_play_progress_large
+			}
+		}
+	}
+}
+
+# ======================================================================
+# .4  WAR UNLIKELY, TARGET FRIENDLY
+# ======================================================================
+diplomatic_play_outcome.4 = {
+	type = country_event
+	title = diplomatic_play_outcome.4.t
+	desc = diplomatic_play_outcome.4.desc
+	left_portrait = scope:foreign_minister
+	picture = naval_bay
+
+	immediate = {
+		LOG_line = { sys = DIPLO  msg = "EVENT diplomatic_play_outcome.4 (war unlikely, friendly)" }
+	}
+
+	option = { # Complete the play
+		name = diplomatic_play_outcome.4.a
+		custom_tooltip = diplomatic_play_outcome.4.a.tt
+		ai_chance = {
+			modifier = { factor = 10 }
+		}
+		add_opinion = { modifier = hindered_in_play  target = scope:diplomatic_play.var:play_target_country }
+		scope:diplomatic_play = {
+			DIPLOMACY_progress_play = {
+				success = 25
+				progress = DIPLOMACY_play_progress_large
+			}
+		}
+	}
+	option = { # Abort the play
+		name = diplomatic_play_outcome.4.b
+		custom_tooltip = diplomatic_play_outcome.4.b.tt
+		ai_chance = {
+			modifier = { factor = 1 }
+		}
+		scope:diplomatic_play = {
+			DIPLOMACY_progress_play = {
+				success = -25
+				progress = DIPLOMACY_play_progress_large
+			}
+		}
+	}
+}
+
+# ======================================================================
+# .5  WAR UNLIKELY, TARGET NEUTRAL
+# ======================================================================
+diplomatic_play_outcome.5 = {
+	type = country_event
+	title = diplomatic_play_outcome.5.t
+	desc = diplomatic_play_outcome.5.desc
+	left_portrait = scope:foreign_minister
+	picture = naval_bay
+
+	immediate = {
+		LOG_line = { sys = DIPLO  msg = "EVENT diplomatic_play_outcome.5 (war unlikely, neutral)" }
+	}
+
+	option = { # Complete the play
+		name = diplomatic_play_outcome.5.a
+		custom_tooltip = diplomatic_play_outcome.5.a.tt
+		ai_chance = {
+			modifier = { factor = 10 }
+		}
+		add_opinion = { modifier = hindered_in_play  target = scope:diplomatic_play.var:play_target_country }
+		scope:diplomatic_play = {
+			DIPLOMACY_progress_play = {
+				success = 25
+				progress = DIPLOMACY_play_progress_large
+			}
+		}
+	}
+	option = { # Abort the play
+		name = diplomatic_play_outcome.5.b
+		custom_tooltip = diplomatic_play_outcome.5.b.tt
+		ai_chance = {
+			modifier = { factor = 1 }
+		}
+		scope:diplomatic_play = {
+			DIPLOMACY_progress_play = {
+				success = -25
+				progress = DIPLOMACY_play_progress_large
+			}
+		}
+	}
+}
+
+# ======================================================================
+# .6  WAR UNLIKELY, TARGET HOSTILE
+# ======================================================================
+diplomatic_play_outcome.6 = {
+	type = country_event
+	title = diplomatic_play_outcome.6.t
+	desc = diplomatic_play_outcome.6.desc
+	left_portrait = scope:foreign_minister
+	picture = naval_bay
+
+	immediate = {
+		LOG_line = { sys = DIPLO  msg = "EVENT diplomatic_play_outcome.6 (war unlikely, hostile)" }
+	}
+
+	option = { # Complete the play
+		name = diplomatic_play_outcome.6.a
+		custom_tooltip = diplomatic_play_outcome.6.a.tt
+		ai_chance = {
+			modifier = { factor = 10 }
+		}
+		add_opinion = { modifier = hindered_in_play  target = scope:diplomatic_play.var:play_target_country }
+		add_opinion = { modifier = betrayed_in_play  target = scope:diplomatic_play.var:play_target_country }
+		scope:diplomatic_play = {
+			DIPLOMACY_progress_play = {
+				success = 25
+				progress = DIPLOMACY_play_progress_large
+			}
+		}
+	}
+	option = { # Abort the play
+		name = diplomatic_play_outcome.6.b
+		custom_tooltip = diplomatic_play_outcome.6.b.tt
+		ai_chance = {
+			modifier = { factor = 1 }
+		}
+		scope:diplomatic_play = {
+			DIPLOMACY_progress_play = {
+				success = -25
+				progress = DIPLOMACY_play_progress_large
+			}
+		}
+	}
+}
+
+# ======================================================================
+# .7  WAR UNDECIDED, TARGET FRIENDLY -- borrows .4's choice pair and costs
+# ======================================================================
+diplomatic_play_outcome.7 = {
+	type = country_event
+	title = diplomatic_play_outcome.7.t
+	desc = diplomatic_play_outcome.7.desc
+	left_portrait = scope:foreign_minister
+	picture = naval_bay
+
+	immediate = {
+		LOG_line = { sys = DIPLO  msg = "EVENT diplomatic_play_outcome.7 (war undecided, friendly)" }
+	}
+
+	option = { # Complete the play
+		name = diplomatic_play_outcome.7.a
+		custom_tooltip = diplomatic_play_outcome.7.a.tt
+		ai_chance = {
+			modifier = { factor = 10 }
+		}
+		add_opinion = { modifier = hindered_in_play  target = scope:diplomatic_play.var:play_target_country }
+		scope:diplomatic_play = {
+			DIPLOMACY_progress_play = {
+				success = 25
+				progress = DIPLOMACY_play_progress_large
+			}
+		}
+	}
+	option = { # Abort the play
+		name = diplomatic_play_outcome.7.b
+		custom_tooltip = diplomatic_play_outcome.7.b.tt
+		ai_chance = {
+			modifier = { factor = 1 }
+		}
+		scope:diplomatic_play = {
+			DIPLOMACY_progress_play = {
+				success = -25
+				progress = DIPLOMACY_play_progress_large
+			}
+		}
+	}
+}
+
+# ======================================================================
+# .8  WAR UNDECIDED, TARGET NEUTRAL -- Court favour (tip toward friendly) / Do nothing
+# ======================================================================
+diplomatic_play_outcome.8 = {
+	type = country_event
+	title = diplomatic_play_outcome.8.t
+	desc = diplomatic_play_outcome.8.desc
+	left_portrait = scope:foreign_minister
+	picture = naval_bay
+
+	immediate = {
+		LOG_line = { sys = DIPLO  msg = "EVENT diplomatic_play_outcome.8 (war undecided, neutral)" }
+	}
+
+	option = { # Court favour
+		name = diplomatic_play_outcome.8.a
+		custom_tooltip = diplomatic_play_outcome.8.a.tt
+		trigger = { treasury >= 200  political_influence >= 10 }
+		ai_chance = {
+			modifier = { factor = 5 }
+		}
+		add_treasury = -200
+		add_political_influence = -10
+		add_opinion = { modifier = helped_in_play  target = scope:diplomatic_play.var:play_target_country }
+	}
+	option = { # Do nothing
+		name = diplomatic_play_outcome.8.b
+		custom_tooltip = diplomatic_play_outcome.8.b.tt
+		ai_chance = {
+			modifier = { factor = 1 }
+		}
+	}
+}
+
+# ======================================================================
+# .9  WAR UNDECIDED, TARGET HOSTILE -- borrows .3's choice pair and costs
+# ======================================================================
+diplomatic_play_outcome.9 = {
+	type = country_event
+	title = diplomatic_play_outcome.9.t
+	desc = diplomatic_play_outcome.9.desc
+	left_portrait = scope:foreign_minister
+	picture = naval_bay
+
+	immediate = {
+		LOG_line = { sys = DIPLO  msg = "EVENT diplomatic_play_outcome.9 (war undecided, hostile)" }
+	}
+
+	option = { # Declare war
+		name = diplomatic_play_outcome.9.a
+		custom_tooltip = diplomatic_play_outcome.9.a.tt
+		ai_chance = {
+			modifier = { factor = 1 }
+			modifier = { factor = 10   scope:diplomatic_play = { var:war_assessment > 0    } }
+			modifier = { factor = 50   scope:diplomatic_play = { var:war_assessment > 200  } }
+			modifier = { factor = 200  scope:diplomatic_play = { var:war_assessment > 500  } }
+			modifier = { factor = 1000 scope:diplomatic_play = { var:war_assessment > 1000 } }
+		}
+		add_stability = -1
+		add_aggressive_expansion = 3
+		scope:diplomatic_play = {
+			DIPLOMACY_trigger_diplomatic_play_war = yes
+			AI_remove_diplomatic_play = yes
+		}
+	}
+	option = { # Back down
+		name = diplomatic_play_outcome.9.b
+		custom_tooltip = diplomatic_play_outcome.9.b.tt
+		ai_chance = {
+			modifier = { factor = 1 }
+			modifier = { factor = 10   scope:diplomatic_play = { var:war_assessment < 0     } }
+			modifier = { factor = 50   scope:diplomatic_play = { var:war_assessment < -200  } }
+			modifier = { factor = 200  scope:diplomatic_play = { var:war_assessment < -500  } }
+			modifier = { factor = 1000 scope:diplomatic_play = { var:war_assessment < -1000 } }
+		}
+		add_legitimacy = -7
+		scope:diplomatic_play = {
+			DIPLOMACY_progress_play = {
+				success = -25
+				progress = DIPLOMACY_play_progress_large
+			}
+		}
+	}
+}

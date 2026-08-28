@@ -469,6 +469,73 @@ DIPLOMACY_trigger_play_event = {
 	LOG_exit = { sys = DIPLO  fn = "DIPLOMACY_trigger_play_event"  result = OK }
 }
 
+DIPLOMACY_trigger_play_outcome_event = {
+	# Scope: Province. Same signature and scope-setup as DIPLOMACY_trigger_play_event
+	# above ($pov$, $days$), but instead of a literal $id$, picks and fires the matching
+	# one of the 9 diplomatic_play_outcome.N events for the current war_assessment x
+	# AI_play_attitude bucket. [task #16, design/DESIGN_DIPLOMATIC_PLAY_REWORK.md]
+	LOG_enter = { sys = DIPLO  fn = "DIPLOMACY_trigger_play_outcome_event" }
+
+	save_scope_as = diplomatic_play
+	var:play_target_country = {
+		save_scope_as = play_target_country
+	}
+	var:play_instigator = {
+		save_scope_as = play_instigator
+		if = {
+			limit = {
+				any_character = {
+					OR = {
+						has_office = secretary_r_foreign_affairs
+						has_office = office_foreign_minister
+						has_office = office_arbitrator
+					}
+				}
+			}
+			random_character = {
+				limit = {
+					OR = {
+						has_office = secretary_r_foreign_affairs
+						has_office = office_foreign_minister
+						has_office = office_arbitrator
+					}
+				}
+				save_scope_as = foreign_minister
+			}
+		}
+		else = {
+			ruler = {
+				save_scope_as = foreign_minister
+			}
+		}
+	}
+
+	# [fix, self-caught before review] the war_willing/attitude_* triggers are
+	# `# Scope: Province (diplomatic play)` (imp19c_diplomacy_triggers.txt) -- they must
+	# be evaluated HERE, at province scope (current scope, right after the
+	# save_scope_as = diplomatic_play above), NOT after entering $pov$ (a country). Only
+	# the leaf trigger_event call itself needs $pov$ scope.
+	if = {
+		limit = { DIPLOMACY_play_war_willing_trigger = yes }
+		if      = { limit = { DIPLOMACY_play_attitude_friendly_trigger = yes }  $pov$ = { save_scope_as = actor  trigger_event = { id = diplomatic_play_outcome.1  days = $days$ } } }
+		else_if = { limit = { DIPLOMACY_play_attitude_hostile_trigger = yes }   $pov$ = { save_scope_as = actor  trigger_event = { id = diplomatic_play_outcome.3  days = $days$ } } }
+		else    = { $pov$ = { save_scope_as = actor  trigger_event = { id = diplomatic_play_outcome.2  days = $days$ } } }
+	}
+	else_if = {
+		limit = { DIPLOMACY_play_war_not_willing_trigger = yes }
+		if      = { limit = { DIPLOMACY_play_attitude_friendly_trigger = yes }  $pov$ = { save_scope_as = actor  trigger_event = { id = diplomatic_play_outcome.4  days = $days$ } } }
+		else_if = { limit = { DIPLOMACY_play_attitude_hostile_trigger = yes }   $pov$ = { save_scope_as = actor  trigger_event = { id = diplomatic_play_outcome.6  days = $days$ } } }
+		else    = { $pov$ = { save_scope_as = actor  trigger_event = { id = diplomatic_play_outcome.5  days = $days$ } } }
+	}
+	else = {
+		# war considering (undecided)
+		if      = { limit = { DIPLOMACY_play_attitude_friendly_trigger = yes }  $pov$ = { save_scope_as = actor  trigger_event = { id = diplomatic_play_outcome.7  days = $days$ } } }
+		else_if = { limit = { DIPLOMACY_play_attitude_hostile_trigger = yes }   $pov$ = { save_scope_as = actor  trigger_event = { id = diplomatic_play_outcome.9  days = $days$ } } }
+		else    = { $pov$ = { save_scope_as = actor  trigger_event = { id = diplomatic_play_outcome.8  days = $days$ } } }
+	}
+	LOG_exit = { sys = DIPLO  fn = "DIPLOMACY_trigger_play_outcome_event"  result = OK }
+}
+
 DIPLOMACY_notify_player = {
 	# Scope: Any
 	# Function: Notify the player(s) of the event which has just occurred
