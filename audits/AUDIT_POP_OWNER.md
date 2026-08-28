@@ -509,6 +509,14 @@ memory [[imp19c-sobisonator-upstream-caution]]. LEFT UNTOUCHED accordingly:
     parse-line "Unexpected token" is a LOAD-ORDER artifact (scripted_lists parsed
     after script_values), NOT a real bug. Runs fine (game boots + ticks).
   - cultural_infatuation_modifiers.txt test_modifier custom_tooltip (Sobisonator stub).
+    UPDATE (2026-08-27, task #2, commit 1e9aa317e): this WAS later fixed — removed the
+    custom_tooltip wrapper. Not a reversal of the caution above: custom_tooltip is invalid
+    syntax inside a modifier definition (modifiers are flat stat tables; custom_tooltip
+    belongs in effect/trigger schemas), so the nested keys were being rejected as
+    "Unexpected token" — a genuine parse error, not an upstream design/value choice.
+    test_modifier is confirmed unreferenced anywhere in the mod, so the blast radius was
+    verified to be zero before fixing. Small, clearly-defined bugfix; independently
+    code-reviewed clean.
   - .asset scale/rotation (MIUNO gfx) — valid syntax (TI identical), load-order noise.
 
 FIXES APPLIED (all differential-proven real):
