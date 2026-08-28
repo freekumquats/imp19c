@@ -112,7 +112,138 @@ issue). It is a **missing reconciliation** problem: nothing checks
 whether the war-willingness conclusion and the attitude conclusion agree
 before either is shown or acted on.
 
-## Proposed fix
+## USER DIRECTIVE (2026-08-28): war_assessment rearchitected around military strength
+
+**This supersedes the "Proposed fix" section below** — the user's own diagnosis
+of the deeper problem: `war_assessment` currently has no direct term for "can
+I actually win this war." The only place relative strength appears at all is
+as a multiplier on the attitude term (`AI_play_power_balance_instigator_root`,
+itself diluted by economy/tech/subjects, not a military-only measure) — never
+a standalone assessment of comparative military strength. Directive: rebuild
+`war_assessment` so relative military strength is the **PRIMARY, dominant**
+term, with war exhaustion, treasury (**uncapped** — the ±400 bound from
+`DESIGN_WAR_ASSESSMENT_DISPLAY_FIX.md` is explicitly overridden here, not
+reused), and stability as **secondary** terms.
+
+**User confirmation received:** the existing terms (infamy/stability cost, war
+exhaustion, treasury, stability) are not being discarded — they remain real
+factors, just demoted to secondary. And relative military strength must
+include **supporters**, not just each side's own standing forces: both
+permanent allies AND this specific play's backers (the play can attract
+support from countries with no formal alliance at all).
+
+**Proven building blocks already in this codebase** (per the standing rule to
+reuse proven idioms, not invent new ones):
+- `AI_svalues.txt`'s peace-suing score (~line 2100-2115) already builds a
+  military-strength figure from `num_of_cohorts` (army) + `num_of_ships × 0.1`
+  (navy, weighted down — ships are pricier/rarer than cohorts) +
+  `every_allied_country { add = num_of_cohorts }` (allied strength counts).
+- `DIPLOMACY_power_from_military` (`DIPLOMACY_svalues.txt:106-119`) adds a
+  manpower-reserve term: `manpower × (0.2 + military_tech × 0.02 × 0.2)`
+  roughly — i.e. manpower matters, scaled up by military tech.
+- The CURRENT `war_assessment` formula already walks this specific play's
+  supporters via `every_in_list { variable = play_observers_support_target /
+  play_observers_support_instigator }` (`se_AI.txt` ~1375-1395) — but only
+  weighs each supporter by `THIS.DIPLOMACY_power × 0.01/0.005`, a token
+  fraction of a broad (non-military-only) power index. The rework reuses
+  this SAME proven list/iterator, but replaces that weak weighting with each
+  supporter's actual `num_of_cohorts`/`num_of_ships` — consistent with how
+  the ally term treats permanent allies.
+- Note: `every_allied_country` is the proven mod-wide iterator name (confirmed
+  6 uses, `se_AI.txt:1056`, `AI_svalues.txt:1741/1871/2114`, etc.) — there is
+  no proven `every_ally`; do not introduce it.
+
+**Proposed new formula shape** (military strength — own forces + permanent
+allies + this play's supporters, on both sides — as one dominant add/subtract
+pair, weighted well above every secondary term — exact weight is a tunable
+judgment call, flagged below):
+```
+value = 0
+add = {
+    # PRIMARY — relative military strength, instigator side vs. target side.
+    # "Side" = own forces + permanent allies + THIS PLAY's supporters.
+    value = {
+        value = 0
+        add = var:play_instigator.num_of_cohorts
+        add = { value = var:play_instigator.num_of_ships  multiply = 0.1 }
+        add = { value = var:play_instigator.manpower       multiply = 0.05 }
+        var:play_instigator = {
+            every_allied_country = { add = num_of_cohorts }
+        }
+        # this play's supporters on the instigator's side (not just formal allies)
+        every_in_list = {
+            variable = play_observers_support_instigator
+            add = { value = THIS.num_of_cohorts }
+            add = { value = THIS.num_of_ships  multiply = 0.1 }
+        }
+    }
+    subtract = {
+        value = 0
+        add = var:play_target_country.num_of_cohorts
+        add = { value = var:play_target_country.num_of_ships  multiply = 0.1 }
+        add = { value = var:play_target_country.manpower       multiply = 0.05 }
+        var:play_target_country = {
+            every_allied_country = { add = num_of_cohorts }
+        }
+        # this play's supporters on the target's side
+        every_in_list = {
+            variable = play_observers_support_target
+            add = { value = THIS.num_of_cohorts }
+            add = { value = THIS.num_of_ships  multiply = 0.1 }
+        }
+    }
+    multiply = <WEIGHT — tunable, needs to dominate the secondary terms below;
+                start high (e.g. 10-20x) and confirm via boot that war
+                frequency now tracks actual military balance, not treasury>
+}
+# SECONDARY terms — still real, still applied, but no longer able to
+# outweigh the primary military term on their own (per user confirmation):
+subtract = { value = var:play_infamy_cost_war     multiply = var:play_infamy_cost_war     max = 100000 }
+subtract = { value = var:play_stability_cost_war  multiply = var:play_stability_cost_war  max = 100000 }
+var:play_instigator = {
+    subtract = { value = has_war_exhaustion  multiply = 120  multiply = has_war_exhaustion  max = 100000 }
+    if    = { limit = { stability < 50 }  subtract = { value = 50  subtract = stability  multiply = 500  max = 100000 } }
+    else  = { add = stability }
+    add   = treasury   # UNCAPPED per this directive -- no min/max
+}
+var:play_target_country = {
+    add = { value = has_war_exhaustion  multiply = 60  max = 100000 }
+    subtract = stability
+}
+# truce veto and observer-support terms unchanged from the current formula.
+```
+
+**What happens to the attitude term:** the directive's factor list (military
+strength, war exhaustion, treasury, stability) does not mention attitude.
+Judgment call, flagged for confirmation: **removing `AI_play_attitude` from
+`war_assessment` entirely**, rather than keeping it as a demoted secondary
+term. This is not just an omission — it directly resolves task #15's original
+contradiction at its root, rather than just rebalancing it: `war_assessment`
+becomes purely "can I win, and can I afford to fight" (military + economic),
+while `AI_play_attitude` remains its own, fully independent "do I like them"
+signal. The two no longer read overlapping inputs through different
+transforms, so "War is likely" and "Talks are friendly" can still co-occur,
+but it stops being an artifact of shared-input dilution — it becomes two
+genuinely orthogonal questions, which is a coherent thing for two different
+texts to say. If this reading is wrong and attitude should stay in as a
+(smaller) secondary term instead, flag it and it can be re-added as one more
+`subtract` line without changing the rest of the shape.
+
+**Does not fix on its own:** the event-level `ai_chance` weighting problem
+found while tracing "what happens when both fire" (`send_settlers.1`/`.3`
+stacking attitude-friendly modifiers, including the likely copy-paste
+duplicate at `send_settlers.txt:145-150`, up to `×3000`/`×100` against a
+war-willing signal that only gets `×10`). Rebuilding `war_assessment` changes
+*what the war-willing trigger means*, but every event option's own `ai_chance`
+weights are separate numbers, set independently per event, and still need
+their own pass to reflect the new formula's intent (e.g. if military strength
+now dominates war_assessment, an event's "Declare war" option arguably
+deserves a bigger factor than the flat `×10`/`×100` patterns used today,
+proportional to how lopsided the military balance is — not just a boolean
+willing/not-willing switch). Flagging as the next step once the formula
+itself is confirmed, not bundled into this change.
+
+## Proposed fix (SUPERSEDED — kept for record, see directive above)
 
 1. **Add an explicit reconciliation trigger**, e.g.
    `DIPLOMACY_play_war_attitude_conflict_trigger` = "war_assessment
