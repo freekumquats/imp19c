@@ -714,11 +714,23 @@ QING_council_recompute = {
 		if = { limit = { has_variable = qing_opium_commissioner_marker } change_variable = { name = qing_pos_marker_ct  add = 1 } }
 		if = { limit = { has_variable = qing_court_artist }            change_variable = { name = qing_pos_marker_ct  add = 1 } }
 		if = { limit = { has_variable = qing_customs_ig_marker }       change_variable = { name = qing_pos_marker_ct  add = 1 } }
+		# [fix 2026-08-28, task #20] guard added: this read threw "Failed to fetch variable
+		# ... not being set" 5,850x/boot. The set_variable above is unconditional (always
+		# runs first in this block), so within ONE uninterrupted iteration this can't be
+		# unset -- the leading theory is QING_council_recompute being re-entered (a
+		# trampoline event calls it, then the original caller calls it again on the same
+		# tick) mid-iteration on the same character, so an inner call's remove_variable
+		# below strips the var before an outer call's own check reaches it. That timing
+		# question isn't resolvable from static script. This guard doesn't fix the
+		# reentrancy (a separate, larger cleanup, not applied here), but it stops the
+		# error flood regardless of root cause -- has_variable is a no-op when the var IS
+		# set (which it always is on an uninterrupted pass), so this changes nothing about
+		# the 1:1-violation LOG's own behavior.
 		if = {
-			limit = { var:qing_pos_marker_ct > 1 }
+			limit = { has_variable = qing_pos_marker_ct  var:qing_pos_marker_ct > 1 }
 			LOG_line = { sys = QING  msg = "1:1 VIOLATION — character holds MORE THAN ONE court position (count above); check appointment/enrol gates" }
 		}
-		remove_variable = qing_pos_marker_ct
+		if = { limit = { has_variable = qing_pos_marker_ct }  remove_variable = qing_pos_marker_ct }
 	}
 	set_variable = { name = qing_officialdom_corruption_target  value = 12 }
 	if = {
