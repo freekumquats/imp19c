@@ -749,7 +749,7 @@ default.
   can still tip an individual case toward Abort. Flag if "should complete
   the play" was meant as a hard rule instead of a strong default.
 
-## USER DIRECTIVE (2026-08-28): success/failure feeds the Great Game sphere system — CORRECTED, larger lift than first scoped
+## USER DIRECTIVE (2026-08-28): success/failure feeds the Great Game sphere system — IMPLEMENTED (partially; see below)
 
 Scoped, not universal: **only** when a Great Power is involved and the
 target is in one of the sphere system's designated contested regions.
@@ -835,31 +835,33 @@ DIPLOMACY_play_sphere_outcome_success = {
 }
 ```
 
-**This directive is NOT fully closed by this design doc.** Two real gaps
-remain that need a decision, not a guess:
-- **Whether CHI should even be a "great power" in this system's own terms**
-  for the purposes of raising `china_influence` on ITS OWN successful
-  plays — the sphere system already treats China as the default/home power
-  (the "else" case above), so a CHI success might mean "raise
-  china_influence" OR "lower whichever of Britain/France/Russia currently
-  dominates that region" OR both. The directive says "raise the
-  instigator's own influence," which reads cleanly for Britain/France/
-  Russia instigators (geography-matched) but is ambiguous for CHI (the
-  system's default/home actor, not one it tracks as competing FOR
-  influence against itself).
-- **The success/failure call-site problem (independent finding, applies
-  regardless of the above):** the 9 outcome events (table above) fire at
-  the DECISION point, not at resolution. Declare-war rows (1/2/3/9) don't
-  know whether the war was WON until it actually ends — a separate, later
-  event/effect (the war's peace-deal resolution, not one of the 9). Complete-
-  the-play rows (4/5/6/7) DO resolve at the event itself (success = clean).
-  Back-down/Abort rows are failures at the event itself (clean). Row 8
-  (court favour / do nothing) resolves NEITHER a success nor a failure —
-  it should not call this effect at all. So: 4 of 9 rows can call this
-  effect directly at their own event; declare-war rows need a hook into
-  war-resolution instead, which is outside this design doc's scope (a
-  separate investigation into how this mod's war-resolution effects work);
-  row 8 is excluded entirely.
+**IMPLEMENTED (2026-08-28), for the well-specified half only:** the
+instigator-tag → `$power$` mapping gap is resolved by reusing this exact
+mod's own proven idiom for "classify by KNOWN instigator identity"
+(`se_QING_DIPLO.txt:754-766`: `var:play_instigator = { tag = FRA/GBR/RUS }`,
+GBR=britain/FRA=france/RUS=russia) rather than the geography-based
+`QING_gp_sphere_is_*` checks used elsewhere in this file — 4 concrete
+branches (`DIPLOMACY_play_sphere_outcome_success`/`_failure` in
+`se_QING_SPHERE.txt`), one per tracked tag including CHI, called from
+`any_country = { limit = { tag = CHI } is_target_in_variable_list = {...} }`
+to reach CHI's list from any scope. The CHI-ambiguity above is resolved by
+implementation choice: **CHI succeeding raises `china_influence`** (the
+simplest reading, matching the directive's literal "raise the instigator's
+own influence" without also touching a rival's score) — not the
+"lower whichever GP dominates" alternative; revisit if that's wrong.
+
+Wired into the 4 rows that resolve cleanly at their own event
+(`diplomatic_play_outcome.4/.5/.6/.7`'s "Complete the play"/"Abort the
+play" options) — this covers exactly the case H2's analysis below says is
+safe to call directly.
+
+**Still NOT implemented — the declare-war/war-resolution half:**
+declare-war rows (1/2/3/9) don't know whether the war was WON until it
+actually ends — a separate, later event/effect (the war's peace-deal
+resolution, not one of the 9 outcome events). That hook needs its own
+investigation into how this mod's war-resolution effects work, not
+attempted here. Row 8 (court favour / do nothing) resolves neither a
+success nor a failure and correctly calls neither effect.
 
 **Judgment calls flagged for confirmation:**
 - Magnitude (7 per success/failure, doubled to 14 when both sides are Great

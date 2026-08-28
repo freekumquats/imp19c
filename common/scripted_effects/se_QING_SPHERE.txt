@@ -682,3 +682,114 @@ QING_sphere_subject_promote = {
 		}
 	}
 }
+
+# ======================================================================
+# DIPLOMACY_play_sphere_outcome_success / _failure — [task #16, design/
+# DESIGN_DIPLOMATIC_PLAY_REWORK.md] a Great Power's diplomatic play succeeding or
+# failing in one of the sphere system's contested states nudges ITS OWN tracked
+# influence there. Scope: diplomatic_play. Call from an option that resolves the
+# play cleanly at that option itself (currently: the "Complete the play"/"Abort the
+# play" options in diplomatic_play_outcome.4/.5/.6/.7 -- the "Declare war"/"Back down"
+# rows do not resolve success/failure until the war itself ends, a separate hook not
+# built here; not silently dropped, flagged as an open follow-up).
+#
+# Power identity is NOT geography-based like the rest of this file (QING_gp_sphere_is_*)
+# -- it is the INSTIGATOR's own tag, matching the proven tag-check idiom already used for
+# "classify a play by its KNOWN instigator identity" in se_QING_DIPLO.txt:754-766
+# (GBR=britain, FRA=france, RUS=russia). CHI is the 4th tracked power. Jomini macros are
+# parse-time text substitution, not a runtime variable, so this needs 4 concrete branches
+# (one per power) rather than one parameterized call -- matches how QING_sphere_gp_push
+# itself is already called 3 times with 3 literal `power=` values, not once.
+#
+# qing_sphere_states is owned by CHI (built via save_scope_as = sphere_owner in
+# QING_sphere_build_ring, always called with ROOT = CHI) -- reached here via any_country
+# filtered by tag, the standard Jomini "find a country by tag from any scope" idiom
+# (tag = X as a trigger is proven ubiquitously in this codebase).
+#
+# [fix, review-flagged -- the first draft was inert, three compounding scope bugs] (1)
+# play_target_area is a PROVINCE (se_QING_DIPLO.txt:372, imp19c_diplomacy_triggers.txt:81
+# "Scope: PROVINCE"), but qing_sphere_states holds STATES and the *_influence vars live on
+# states (QING_sphere_build_ring's state={} capture; QING_sphere_ensure_vars) -- bridged via
+# the proven .state accessor (se_DIPLOMACY.txt:1198: scope:play_target_area.state = {...}).
+# (2) any_country's body runs on CHI, not the play object -- var:play_target_area there
+# resolved on CHI (nothing), not on the play; must stay fully qualified
+# scope:diplomatic_play.var:play_target_area.state. (3) once inside
+# var:...area.state = {}, current scope is the target STATE, not the play object --
+# var:play_instigator/var:play_target_country there resolved on the state (nothing); must
+# also stay scope:diplomatic_play.var:play_instigator / .var:play_target_country throughout.
+# Added exists=var:play_instigator guards too (scope:diplomatic_play is a recycled
+# provobj whose vars aren't cleared between plays, se_QING_DIPLO.txt:647).
+# ======================================================================
+DIPLOMACY_play_sphere_outcome_success = {
+	if = {
+		limit = {
+			exists = var:play_instigator
+			var:play_instigator = { rank = great_power }
+			any_country = {
+				tag = CHI
+				is_target_in_variable_list = { name = qing_sphere_states  target = scope:diplomatic_play.var:play_target_area.state }
+			}
+		}
+		scope:diplomatic_play.var:play_target_area.state = {
+			if = {
+				limit = { scope:diplomatic_play.var:play_instigator = { tag = FRA } }
+				change_variable = { name = france_influence  add = 7 }
+				if = { limit = { scope:diplomatic_play.var:play_target_country = { rank = great_power } }  change_variable = { name = france_influence  add = 7 } }
+			}
+			else_if = {
+				limit = { scope:diplomatic_play.var:play_instigator = { tag = GBR } }
+				change_variable = { name = britain_influence  add = 7 }
+				if = { limit = { scope:diplomatic_play.var:play_target_country = { rank = great_power } }  change_variable = { name = britain_influence  add = 7 } }
+			}
+			else_if = {
+				limit = { scope:diplomatic_play.var:play_instigator = { tag = RUS } }
+				change_variable = { name = russia_influence  add = 7 }
+				if = { limit = { scope:diplomatic_play.var:play_target_country = { rank = great_power } }  change_variable = { name = russia_influence  add = 7 } }
+			}
+			else_if = {
+				limit = { scope:diplomatic_play.var:play_instigator = { tag = CHI } }
+				change_variable = { name = china_influence  add = 7 }
+				if = { limit = { scope:diplomatic_play.var:play_target_country = { rank = great_power } }  change_variable = { name = china_influence  add = 7 } }
+			}
+			# else: instigator is a Great Power by rank but not one of the 4 tracked tags
+			# -- this sphere system has no slot for it, no-op.
+			QING_sphere_clamp_state = yes
+		}
+	}
+}
+
+DIPLOMACY_play_sphere_outcome_failure = {
+	if = {
+		limit = {
+			exists = var:play_instigator
+			var:play_instigator = { rank = great_power }
+			any_country = {
+				tag = CHI
+				is_target_in_variable_list = { name = qing_sphere_states  target = scope:diplomatic_play.var:play_target_area.state }
+			}
+		}
+		scope:diplomatic_play.var:play_target_area.state = {
+			if = {
+				limit = { scope:diplomatic_play.var:play_instigator = { tag = FRA } }
+				change_variable = { name = france_influence  subtract = 7 }
+				if = { limit = { scope:diplomatic_play.var:play_target_country = { rank = great_power } }  change_variable = { name = france_influence  subtract = 7 } }
+			}
+			else_if = {
+				limit = { scope:diplomatic_play.var:play_instigator = { tag = GBR } }
+				change_variable = { name = britain_influence  subtract = 7 }
+				if = { limit = { scope:diplomatic_play.var:play_target_country = { rank = great_power } }  change_variable = { name = britain_influence  subtract = 7 } }
+			}
+			else_if = {
+				limit = { scope:diplomatic_play.var:play_instigator = { tag = RUS } }
+				change_variable = { name = russia_influence  subtract = 7 }
+				if = { limit = { scope:diplomatic_play.var:play_target_country = { rank = great_power } }  change_variable = { name = russia_influence  subtract = 7 } }
+			}
+			else_if = {
+				limit = { scope:diplomatic_play.var:play_instigator = { tag = CHI } }
+				change_variable = { name = china_influence  subtract = 7 }
+				if = { limit = { scope:diplomatic_play.var:play_target_country = { rank = great_power } }  change_variable = { name = china_influence  subtract = 7 } }
+			}
+			QING_sphere_clamp_state = yes
+		}
+	}
+}
