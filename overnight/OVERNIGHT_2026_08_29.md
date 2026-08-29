@@ -257,3 +257,95 @@ against the same mechanism.
 - No boot test run (out of scope for a script-only .txt change with no new
   syntax construct beyond an already-proven idiom); per the no-bisection /
   "guess, build, log" contract this is not treated as a blocker.
+
+---
+
+# Overnight 2026-08-29 (second fork) — Task #11 continued: province-window Diplomatic Plays panel also clipped
+
+This fork's worktree (`worktree-agent-a888ba3e432c0d3d1`) had drifted far
+behind `merge-overnight` (last common point was mid-July). Confirmed the
+worktree's one unique commit (`fe6c274ab`, a merge of two commits both
+already ancestors of `merge-overnight`) added nothing not already on
+`merge-overnight`, so `git reset --hard merge-overnight` was safe (no unique
+work lost) before starting. Flagging this since it's a bigger git operation
+than a normal task, even though no content was at risk.
+
+By the time this fork went to push, commit `86acb0428` (above) had already
+landed fixes for tasks #5, #10 and #11 — but its #11 fix addresses a
+*different* window (the Supranational "Diplomatic Plays" tab in
+`gui/imp19c_windows.gui`, using the `diplomatic_play_global_item` template).
+This fork had independently traced the same reported symptom (a clipped
+target-country name, e.g. "Russia") to a second, separate instance of the
+same card family: the **province window's** embedded "Diplomatic Plays"
+panel, which uses a different, smaller template — `diplomatic_play_item`
+(`gui/shared/gui_templates.gui`), confirmed via grep to be instantiated in
+exactly one place: `gui/province_window.gui`. Since the two fixes touch
+disjoint files with no line overlap, both are kept — this section only
+covers this fork's own change, task #5's overlapping edit to
+`gui/qing_zongli.gui` was dropped in favour of the already-landed one (see
+rebase note at the end).
+
+## Task #11 (province window instance) — Diplomatic Plays panel right side clipped
+
+**Files:** `gui/shared/gui_templates.gui` (`type diplomatic_play_item`, the
+per-play card template) and `gui/province_window.gui` (the embedded
+"Diplomatic Plays" panel, loc key `province_diplomatic_play_list`, inside the
+province window's diplomacy tab).
+
+**What it was:** The `diplomatic_play_item` card was a fixed 470px-wide card
+inside a `sub_header_v` container that was only 480px wide — only 10px of
+slack, which the vertical scrollbar ate into, clipping the card's rightmost
+column (the target-country flag + name + supporter-flag row — e.g. the last
+letter of "Russia" plus its supporter flags, per the reported screenshot).
+The diplomacy-tab `margin_widget` hosting that panel was 500px wide.
+
+**What I did:** Widened the card `470->490` (+4.3%) and its target-side
+(rightmost) column specifically — the "supporter panel" the task called out —
+from 90px to 110px on the country-name textbox, the "Supporters" label, and
+the supporter-flags `overlappingitembox`; left the col3 "Oppose" button at
+90px since its own text wasn't reported as clipped. Widened the containing
+`sub_header_v` `480->520` and the diplomacy-tab `margin_widget` `500->540`
+(content width `540 - margin(10+10) = 520`, exactly matching the
+`sub_header_v`) so the scrollbar no longer eats into the card's visible area.
+
+Verified arithmetic (confirmed by an independent code-review pass): card
+content = margin(5+5) + col1(100, bounded by its own `#Y Supporters`
+textbox, not the 90px name box) + spacing(5) + col2/title(250) + spacing(5) +
+col3(110, widened) = 480, inside the new 490-wide card, inside the 520-wide
+`sub_header_v` — 10px of genuine slack past the card, versus 10px that used
+to be entirely consumed by the scrollbar. Also confirmed the two-row,
+three-button goal-picker above this panel (150px x3 + spacing, ~462px per
+row) still fits comfortably inside the new 520px content width.
+
+## Review
+
+This diff (`gui/shared/gui_templates.gui`, `gui/province_window.gui`) was
+sent to an independent code-review subagent before commit (per the standing
+rule) with explicit instructions to check brace balance, arithmetic, and for
+any accidental unrelated corruption in these whitespace-sensitive `.gui`
+files. Verdict: PASS on both files — no brace imbalance, no overflow, no
+unrelated edits, comments accurate. Two non-blocking FYIs noted (pre-existing
+BOM on `province_window.gui`, present before this change; one comment calls a
+100px-wide column's ceiling "95" — conservative wording, not a bug) — no
+action needed on either.
+
+## Reconciliation with 86acb0428
+
+Task #5's edit to `gui/qing_zongli.gui` (button/wrapper/`max_width` widen)
+overlapped line-for-line with 86acb0428's own fix to the same button,
+already reviewed and pushed first. Kept 86acb0428's numbers (wrapper
+90->100, button 84->94, max_width 78->88) as-is on rebase; kept this fork's
+row-widget widen (468->482), which doesn't conflict and just adds a little
+extra margin around the already-fixed button. No duplicate #5 write-up
+retained above — see 86acb0428's own section for that fix.
+
+**Follow-up review advisory (resolved):** the second code-review pass flagged
+that widening the diplomacy-tab `margin_widget` (500->520 content width)
+shifts its horizontal flowcontainer sibling — the `province_colonization`
+`sub_header_v` at line 5199, `size = { 280 520 }` — by +40px absolute
+x-position, since that flowcontainer doesn't clip. Checked: that sibling has
+`enabled = no` / `visible = no` (pre-existing, unrelated TODO — "Should
+appear on a separate tab"), so it isn't currently rendered and the shift has
+no live visual effect. No change needed; noting for whoever eventually wires
+up that tab, since its layout will land 40px further right than before this
+fix.
