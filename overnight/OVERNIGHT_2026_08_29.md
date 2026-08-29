@@ -391,3 +391,150 @@ stating which branch fired plus the magnitude applied.
   actually shipped for both the Zongli chain and this sibling fix)
 
 **Not deferred; nothing left open on this task.**
+
+---
+
+## Small unassigned error.log classes batch (5 classes, this section)
+
+Source log: `~/Downloads/logs.zip` (2026-08-29 01:23/01:25, 25820-line error.log). Ran the
+imp19c-logs Rule 3 ranked-inventory sweep to re-derive exact lines for 5 smaller classes left
+unassigned after the largest classes were dispatched to other parallel workers. Checked
+`git log` on merge-overnight before starting (tip 9167d4e3d, task #16 Great Game work) — none
+of the 5 classes below were already touched by other in-flight commits. Re-checked again
+before pushing (tip had advanced to 6856d2b01 with 4 more commits: task #16 EDU scope-error
+fix, Grand Council event throttle restore, Report from the Field loc/design + window
+clipping) — `git diff --stat` between 9167d4e3d and 6856d2b01 confirms none of those commits
+touch any of the 6 files below, so no overlap and no merge conflict on the code changes.
+
+### 1+2. "Wrong scope for trigger for compare trigger 'none'" (10x) + "Event target link
+'compare_value' returned an unset scope" (10x) — SAME BUG, not two classes
+
+Both errors fire together, every time, at the identical `Script location`:
+`common/on_action/00_monthly_country.txt:104; QING_GOV_pulse:64; QING_pop_pulse:4;
+QING_pop_recompute_target:6` (`common/scripted_effects/se_QING_POPULATION.txt`).
+
+Root cause: the 2026-08-20 fix (`67c50bd4b`, "log-triage 2026-08-20") staged
+`country_population` into a tmp var via `set_variable = { name = ...  value = { value =
+country_population } }`, on the theory that a var-compare "never throws." NOTE: an earlier
+draft of this note claimed `country_population` has no proven value-read usage anywhere in
+the codebase — a code-review pass disproved that; it IS proven as a bare single-wrap value
+(`se_ECON_LOG.txt:859` `value = country_population`, plus 5+ `common/script_values/*.txt`
+sites). The real defect is narrower: the DOUBLE wrap, `value = { value = country_population
+} }`, nests a value block inside a value block, which is not the proven idiom anywhere —
+every working precedent is either the single-wrap `value = country_population` or the bare
+TRIGGER form `country_population > 0` (`common/scripted_lists/EE_lists.txt:38`). That extra
+nesting is what surfaced as "Wrong scope for trigger for compare trigger 'none'" / "Event
+target link 'compare_value' returned an unset scope" on EVERY pulse (not just an early
+not-warm tick) straight through the 2026-08-29 boot log. This explains why the 08-17
+investigation (logged in `overnight/OVERNIGHT_2026_08_17.md`) could not confirm a root
+cause: it was chasing the granary-rederive function, but the real bug was the 08-20 fix
+itself, landed AFTER that 08-17 pass and not yet re-investigated. It also explains
+persistence across the WHOLE 45-minute session (10 hits spread 00:41–01:23) rather than just
+an early boot race — this is a per-pulse failure, not a "pop index not warm yet" race.
+
+FIX: this guard only needs a boolean gate, not a staged value, so dropped the tmp-var
+indirection entirely; guard directly on the bare trigger `country_population > 0` (the exact
+EE_lists.txt:38 idiom, and the same form `se_ECON_LOG.txt`'s own comment cites as already
+proven at this call site). `common/scripted_effects/se_QING_POPULATION.txt`.
+
+Overlap check: NOT part of the has_law/tag scope bug classes assigned to other workers —
+confirmed by the distinct `Script location` (se_QING_POPULATION.txt, not a has_law/tag
+site) and by grep — no other merge-overnight commit touches this file today.
+
+### 3. "ordered_owned_province effect [ Given max value was bigger than the list, capping at
+list size ]" (8x)
+
+`Script location: common/on_action/economy/oa_economy_setup.txt:2514;
+SE_row_starting_buildings:14; ROW_seed_country_buildings:86` →
+`common/scripted_effects/se_ROW_BUILDINGS.txt`.
+
+Root cause: the RESIDENTIAL districts block (`ordered_owned_province { ... max = 2 ...
+}`) was gated by an outer `any_owned_province = { NOT = { has_building = ... } }` guard that
+only proves >= 1 qualifying province, not >= 2. Every other `ordered_owned_province` call in
+this file (manufactory/plantation/commerce/industrial-estate, all `max = 1`) has an outer
+guard that exactly matches its max; only the residential block's max=2 was left unguarded for
+the >=2 case. Whenever exactly one province still lacked the building, `max=2 > list_size=1`
+threw "Script system error!" (still functionally correct, self-corrects to 1 build) 8x/boot.
+
+FIX: split into an exact-count branch — `count >= 2` guard for the max=2 pass,
+`else_if` (bare `any_owned_province`, no count) with `max = 1` for the single-remaining-
+province case. Same net behaviour (top up to 2 population centres), zero spurious errors.
+`common/scripted_effects/se_ROW_BUILDINGS.txt`.
+
+Overlap check: unrelated to the memory `imp19c-ordered-iterator-max-rule` "default max=1"
+case (this bug is the opposite direction: max TOO BIG, not missing). No other worker's
+assigned classes touch se_ROW_BUILDINGS.txt.
+
+### 4. custom_tooltip unknown-loc-key errors (6x), culture_decisions/imp19c_general_culture_decisions.txt
+
+Exact lines (Script location): 13, 16, 71, 74, 77, 83.
+
+Root cause: `custom_tooltip.text` is ALWAYS a loc-key lookup — never inline literal text,
+even when the literal text has no bracket promotes. This file (a near-verbatim port of
+vanilla Imperator's Culture-DLC decisions: `language_recognition` / `language_standardisation`
+/ `self_determination`) had 4 distinct literal strings pasted straight into `text = "..."`
+(2 of them duplicated across both decisions), so every one threw "Unknown loc key <the
+literal string>". Two of the 6 hits (lines 16, 74) actually trace into the shared scripted
+trigger `same_language_culture_trigger` (`common/scripted_triggers/00_language_groups.txt`)
+which had the identical bug pattern for its own tooltip.
+
+FIX: added 4 new loc keys to `localization/english/imp19c_tooltips_l_english.yml`
+(`imp19c_lang_shares_language_tt`, `imp19c_lang_not_official_tt`,
+`imp19c_lang_closely_related_tt`, `imp19c_lang_has_same_language_tt`), reusing the exact same
+promote text (SCOPE.sCountryCulture(...) syntax already proven valid elsewhere in the mod's
+loc, e.g. `GetCountryCulture` in interface_l_english.yml:98 and the `SCOPE.s<Type>('name')`
+pattern used throughout triggers_l_english.yml/flavor_events_l_english.yml). Updated both
+`custom_tooltip.text` fields in the decisions file and the one in 00_language_groups.txt to
+reference the new keys instead of inline strings.
+
+BONUS (not in the 6-hit count, found while auditing the same file): `similar_language_culture_
+trigger` (00_language_groups.txt:73) has the identical bug ("Has a similar language" inline)
+but the trigger is currently dead code (never called anywhere in the codebase), so it wasn't
+in the log. Fixed anyway for consistency — added `imp19c_lang_has_similar_language_tt` — so it
+doesn't reintroduce this exact bug the day someone wires it up.
+
+### 5. "none effect [ Both family and family_name was set, family will be used ]" (2x),
+setup/characters/00_Korea.txt
+
+`Script location: setup/characters/00_Korea.txt line: 22` → character 335 (reigning king at
+start) set BOTH `family_name="Yi"` and `family=c:KOR.fam:Yi`. When `family` is set, the
+engine ignores `family_name` and warns. Checked every other `family="c:TAG.fam:X"` usage
+across `setup/characters/*.txt` (Austria, Brazil, etc. — dozens of hits): none of them also
+set `family_name`; the redundant pairing was unique to this one Korea entry.
+
+FIX: dropped the redundant `family_name="Yi"` line, keeping `family=c:KOR.fam:Yi` (the more
+precise form, matching every sibling character file's convention).
+
+### Verification
+
+Re-ran the exact grep for each error signature against the same log after inspecting; counts
+matched the task's stated occurrence counts exactly before the fix (10/10/8/6/2) — confirms
+the right lines were pinned before touching anything.
+
+### Commit
+
+Code-review pass requested before committing (RHS-comparison-literal-only rule,
+macro-void-in-LOG-string trap, BOM convention all checked — no RHS var-refs introduced, no
+LOG-string macros touched, no BOM stripped/added incorrectly on the .yml loc file). The
+review flagged one nit (see the "NOTE" in section 1+2 above, now corrected) with no other
+findings. Rebased onto origin/merge-overnight (which had, by push time, also landed task #17's
+"15 badly-read script values" pass touching some of the same 6 files below) — verified
+post-rebase that neither pass's semantic intent was lost (see the addendum note directly
+below this section, added after re-checking each auto-merged file). Pushed to merge-overnight.
+
+### Addendum — post-rebase overlap check against task #17 (76770ecf4)
+
+Task #17 landed on `merge-overnight` (as `76770ecf4`) after this fork's diagnosis but before
+this fork's push, and its diff touches the same 6 files as this section (per `git diff --stat`
+against the new tip). Git's line-based rebase auto-merged all six with NO conflict markers
+(only `overnight/OVERNIGHT_2026_08_29.md` itself conflicted, resolved by concatenating both
+forks' sections). Re-read each of the 6 files post-rebase to confirm the two passes are
+compatible, not just non-conflicting:
+- `se_QING_POPULATION.txt`, `se_ROW_BUILDINGS.txt`: task #17's edits landed on different
+  functions/lines than this fork's `QING_pop_recompute_target` / residential-district block;
+  both fixes coexist correctly in the merged file (re-verified brace balance: 169 open / 169
+  close, matches pre-rebase).
+- `culture_decisions/imp19c_general_culture_decisions.txt`, `00_language_groups.txt`,
+  `imp19c_tooltips_l_english.yml`, `setup/characters/00_Korea.txt`: task #17's changes to
+  these files are unrelated cleanups on separate lines; this fork's loc-key / family-name
+  fixes are untouched by the rebase.
