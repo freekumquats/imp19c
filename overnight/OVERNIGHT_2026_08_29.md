@@ -1205,3 +1205,147 @@ The review's 4 findings, all fixed:
 No other issues found: no remaining illegal scope syntax, no unbalanced
 quotes/broken escapes, no resurrected dead mechanics, no silently-dropped
 live options. Proceeding to commit + push.
+
+## Task #12 — "Support a Diplomatic Play" missing diplomatic-range limit
+
+Read `DIPLO_player_support_play` and `DIPLO_player_oppose_play`
+(`common/scripted_guis/EE_scripted_guis.txt`). Their `is_valid` blocks had
+NO reach check at all — only a political-influence check, a self/instigator
+check, and a not-already-resolved check. Any country anywhere on the map
+could Support or Oppose any play, with zero connection to it.
+
+The AI already has its own eligibility rule for the same decision:
+`se_AI.txt:764-787` only lets a country weigh in on a play if it is a
+global power (`DIPLOMACY_global_power_score > 100`) OR borders one of the
+two sides (`any_owned_province.any_neighbor_province.owner` = target or
+instigator). The player buttons should follow the same rule the AI follows,
+not a looser one. Added the identical `OR` gate to both `is_valid` blocks.
+
+No new svalue or magnitude — reused `DIPLOMACY_global_power_score` and the
+proven border-adjacency idiom verbatim. **Verdict: DONE**, no boot-only
+value to confirm.
+
+## Task #13 — explanatory tooltips for Balance of Power / Play progress / Play success chance
+
+Traced the three meters back to their formulas before writing a word of
+tooltip, so nothing is asserted that source doesn't back:
+- **Balance of Power** (`AI_svalues.txt:1-25`) = `AI_play_power_balance_instigator_root_percent`
+  = `(instigator_power / target_power) x 0.5`. It is NOT a 0-100% share —
+  50% means parity; it scales past 100% as one side dominates (capped at the
+  underlying ratio's own 90.01 ceiling, i.e. ~4500%). The old bare
+  `tooltip = "Balance of power"` gave zero hint of this; a player would read
+  "60%" as "60% of the power," which is wrong.
+- **Play progress** (`DIPLOMACY_svalues.txt:442-490`, `se_DIPLOMACY.txt`
+  `DIPLOMACY_progress_play`) advances via a monthly baseline tick PLUS
+  event-driven small/medium/large jumps, and can also regress. Confirmed
+  with source that no fixed completion date could ever be accurate — kept
+  the % display, wrote the tooltip to say plainly that it is not a countdown.
+- **Play success chance** (`se_DIPLOMACY.txt` `DIPLOMACY_complete_play`,
+  `DIPLOMACY_svalues.txt:649-667`) resolves at max progression against
+  `DIPLOMACY_play_success_floor` (25, fizzle) and `DIPLOMACY_play_success_decisive`
+  (60, full success), partial between. Tooltip states the two thresholds.
+
+Wrote 3 new loc keys (`play_balance_of_power_tt`, `play_progress_tt`,
+`play_success_chance_tt`) into `localization/english/imp19c_interface_l_english.yml`,
+following the mod's `#T Title#!` tooltip convention, and swapped all 6 bare
+literal `tooltip = "..."` strings across both diplomatic-play card types
+(`diplomatic_play_item` and `diplomatic_play_global_item`,
+`gui/shared/gui_templates.gui`) for the new keys.
+
+Separately, confirmed via `se_AI.txt:700-810` that the supporter-flag rows'
+visible cap (3 flags in the tight card's 110px box, 4 in the roomier
+global card's box) is a DISPLAY limit only — the underlying
+`play_observers_support_instigator`/`_target` variable lists have no size
+cap at all, so a play with many backers silently clips the rest with no
+indication more exist. Added 4 new counting script_values
+(`DIPLOMACY_play_supporters_{instigator,target}_overflow_{card,global}`,
+`common/script_values/DIPLOMACY_svalues.txt`, each `every_in_list{add=1}`
+minus the shown-slot count, floored at 0) and a conditionally-visible "+N"
+textbox next to all four supporter boxes, using the proven
+`GreaterThan_CFixedPoint(...)` visibility idiom already proven in
+`gui/province_window.gui:1643`. Also widened the two `diplomatic_play_global_item`
+supporter boxes 90px->150px (that card type is a plain `container` with no
+fixed size, unlike the tight `diplomatic_play_item` card which stays
+untouched at 490x220 per #11's own "little slack" warning).
+
+**Verdict: DONE.**
+
+## Task #14 — should the war/attitude buckets be probabilistic, or stay deterministic?
+
+This task asked whether task #16's war_assessment/AI_play_attitude
+bucket-routing rework (see `design/DESIGN_DIPLOMATIC_PLAY_REWORK.md`)
+should be reworked into a probability roll fed by `diplomatic_play_success`,
+since "Play success chance" sounded like it should be the thing deciding
+war outcomes too.
+
+Traced both systems in source and found they are NOT the same mechanic and
+were never meant to merge:
+- `diplomatic_play_success` / `diplomatic_play_progression` (vanilla-style,
+  `se_DIPLOMACY.txt` `DIPLOMACY_complete_play`) answer "how much of the
+  instigator's GOAL is achieved when the play resolves peacefully" — annex
+  a state, gain influence, etc.
+- `war_assessment` / `AI_play_attitude` (task #16's rework) answer a wholly
+  separate question: "does the instigator go to WAR over this play, and how
+  does the target react" — a later, independent decision branch (the nine
+  `diplomatic_play_outcome_events.txt` events), not a resolution of the
+  play's success score.
+
+`design/DESIGN_DIPLOMATIC_PLAY_REWORK.md` already has an "Alternatives
+considered and rejected" section that explicitly weighed merging these two
+scores into one and rejected it, after an adversarial review pass. Task
+#16's shipped design is deliberately deterministic (bucket-routed by
+military/attitude magnitude, with tiered `ai_chance` for the AI's own
+declare-war roll) rather than a single probability draw, and that design is
+already live and boot-tested (commits `d67ef1ed5`, `9167d4e3d`).
+
+**Decision: KEEP the existing architecture as-is.** Reopening an
+already-vetted, already-shipped feature to chase a naming/documentation
+complaint (task #13's tooltip gap) would be a large, risky change for no
+concrete new problem — exactly the kind of regression the design doc's own
+rejected-alternatives section already warned against. The real complaint
+behind task #13/#14 was that "Play success chance" is unexplained UI, not
+that the war/attitude logic is wrong; task #13's new tooltip fixes that.
+**Verdict: DONE (decision-only, no code change required).**
+
+### ASSUMPTIONS & GUESSES (tasks #12-#14)
+
+- **Task #13's four "+N" overflow textboxes were added without a boot to
+  confirm they fit vertically inside `diplomatic_play_item`'s FIXED
+  490x220 card.** That card's existing content (flag + name + 3 buttons +
+  label + flag-row) already appears to exceed 220px if summed literally,
+  which means the list-item layout is not a naive vertical sum (likely
+  clipped/overlapped by the list renderer) — could not verify without a
+  boot. The added textbox is only 20px tall and only rendered VISIBLE when
+  overflow > 0 (a play with more than 3 backing powers on one side), so the
+  worst case if it doesn't fit is a rare, minor visual clip, not a broken
+  card. Confirm on next boot; shrink/reposition if `error.log`/screenshots
+  show clipping.
+- **`DIPLOMACY_global_power_score > 100` reused verbatim from the AI's own
+  gate** (`se_AI.txt:764`) rather than inventing a new threshold for the
+  player buttons — deliberately kept identical so the player's reach
+  matches what the AI itself treats as "involved enough to weigh in."
+
+### Post-implementation code review — 2 findings, both fixed
+
+Dispatched a code-review pass on the combined #12/#13 diff before commit.
+2 findings, both fixed:
+1. **MEDIUM — `play_balance_of_power_tt` missing `.GetCountry`** on the
+   target-country read (`play_target_country` is a country-scope variable,
+   same as `play_instigator`, which the tooltip already read correctly with
+   `.GetCountry.GetName`) — the target's name would have rendered blank/
+   broken in the live tooltip. Fixed to match the instigator's form.
+2. **LOW — the two `diplomatic_play_item` (tight-card) overflow svalues
+   both subtracted a flat 3**, but the card's instigator supporter box is
+   90px and its target box is 110px (widened by #11) — different widths,
+   so a different flag count actually fits (flags are 30px + 5px spacing,
+   so floor(width/35): 90px fits 2, 110px fits 3). Split the shared
+   constant: `DIPLOMACY_play_supporters_instigator_overflow_card` now
+   subtracts 2, `_target_overflow_card` stays at 3. The two
+   `diplomatic_play_global_item` boxes are both 150px (fits 4 each) so
+   their svalues were already correct and untouched.
+
+No other issues found — the review independently re-verified the task
+#12 `ROOT.var:...` reach-gate idiom is a correct, proven equivalent of the
+AI's own `scope:diplomatic_play.var:...` form (not an RHS-comparison
+violation), and found no loc-scope syntax, YAML, or LOG-string hazards.
+Proceeding to commit + push.
