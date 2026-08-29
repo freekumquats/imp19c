@@ -235,6 +235,17 @@ QING_council_refill_vacant_seats = {
 # skill is what then MATTERS for effectiveness (QING_council_recompute), but a
 # well-rounded man is the sensible default pick when the throne fills a post.
 QING_council_autofill_office = {
+	# [fix task #7 2026-08-29] this function had NO se_LOG wiring at all, unlike every sibling
+	# council function in this file (QING_council_autofill/_recompute/_apply_band/...) — despite
+	# being the single most complex function here (two ordered_character draws + a mint fallback).
+	# Reported symptom (Minister of Works sitting vacant) could not be reproduced from a static
+	# read: every call site and every eligibility/exclusion check treats works identically to its
+	# 12 sibling offices (verified: boot mint at :91, backfill refill at :223, death-dispatch
+	# backfill at :2258, prune at :190, score at :617 — no works-specific branch exists anywhere).
+	# Wiring LOG_enter/exit/line here (closing the standing error-logging gap) so the next boot log
+	# shows directly whether works's draw finds nobody (pool exhaustion) or the mint itself silently
+	# no-ops, rather than guessing further from static analysis alone.
+	LOG_enter = { sys = QING  fn = "QING_council_autofill_office ($office$, source=$autofill_source$)" }
 	# [BT-appointment-redesign review-fix 2026-07-22] capture the COUNTRY from `this` (CHI in EVERY call
 	# path: the day-32 country_event, and inside QING_office_vacate_dispatch's `employer = {}` block). The
 	# created official's set_home_country below MUST use this saved country, NOT ROOT — on the runtime
@@ -253,6 +264,19 @@ QING_council_autofill_office = {
 	# flag-comparison shape a few lines below) is: seed once as a flag, then compare
 	# var:X = flag:literal.
 	set_variable = { name = qing_autofill_src  value = flag:$autofill_source$ }
+	# [fix task #2 2026-08-29] same flag-seed idiom, for the office itself: the BACKFILL draw
+	# below (never the boot mint, which is gender-neutral) had NO Women's Rights law-tier sex
+	# gate at all, unlike the player-facing picker (QING_char_gc_office_sex_eligible reads
+	# ROOT.var:qing_gc_picker_office_var -- set only by that GUI). A country whose Women's
+	# Rights law was still at a restrictive tier could have the AUTOFILL backfill draw seat an
+	# ineligible woman straight into a great office with no player click involved at all. Seed
+	# a dedicated var (NOT qing_gc_picker_office_var itself -- overwriting that shared var here
+	# would corrupt a concurrently-open player picker window filtering for a DIFFERENT office)
+	# on scope:qing_autofill_country, mirroring this same tier map inline in both draw branches
+	# below (ROOT is the dying/accused character on the runtime backfill paths, per this
+	# function's own header note, so the tier check must anchor on scope:qing_autofill_country
+	# like everything else here, not ROOT).
+	scope:qing_autofill_country = { set_variable = { name = qing_autofill_office_var  value = flag:$office$ } }
 	# [#352 F3/F8] prune a stale-set seat (holder dead / left CHI employ) before filling,
 	# so a var pointing at an invalid character does not read as "already filled" and block
 	# the autofill (the "1 Unassigned that Convene never cleared" boot-test bug).
@@ -318,6 +342,52 @@ QING_council_autofill_office = {
 						NOT = { has_office = office_physician }
 						NOT = { QING_char_holds_court_position = yes }
 						has_trait = $degree$
+						# [fix task #2 2026-08-29] Women's Rights law-tier sex gate, mirroring
+						# QING_char_gc_office_sex_eligible's tier map (qing_dynasty_triggers.txt) but
+						# re-anchored on scope:qing_autofill_country (seeded above) instead of ROOT/
+						# employer -- see this function's own header note on why every other check here
+						# does the same.
+						OR = {
+							is_female = no
+							QING_char_is_imperial_clan = yes
+							scope:qing_autofill_country = {
+								OR = {
+									AND = {
+										OR = {
+											var:qing_autofill_office_var = flag:censor
+											var:qing_autofill_office_var = flag:lifanyuan
+											var:qing_autofill_office_var = flag:chamberlain
+											var:qing_autofill_office_var = flag:zongli
+											var:qing_autofill_office_var = flag:grand_secretariat
+											var:qing_autofill_office_var = flag:guard_commandant
+										}
+										OR = {
+											has_law = women_limited_legal_rights
+											has_law = women_equal_legal_rights
+											has_law = womens_suffrage_law
+										}
+									}
+									AND = {
+										OR = {
+											var:qing_autofill_office_var = flag:personnel
+											var:qing_autofill_office_var = flag:revenue
+											var:qing_autofill_office_var = flag:rites
+											var:qing_autofill_office_var = flag:war
+											var:qing_autofill_office_var = flag:justice
+											var:qing_autofill_office_var = flag:works
+										}
+										OR = {
+											has_law = women_equal_legal_rights
+											has_law = womens_suffrage_law
+										}
+									}
+									AND = {
+										var:qing_autofill_office_var = flag:chancellor
+										has_law = womens_suffrage_law
+									}
+								}
+							}
+						}
 					}
 					order_by = combined_stats_council_svalue
 					max = 1
@@ -360,6 +430,52 @@ QING_council_autofill_office = {
 						NOT = { has_office = office_steward }
 						NOT = { has_office = office_physician }
 						NOT = { QING_char_holds_court_position = yes }
+						# [fix task #2 2026-08-29] see the hard-civil branch above for the full comment;
+						# same tier map, same scope:qing_autofill_country re-anchor. War and
+						# guard_commandant both draw through THIS branch (soft-martial) but are still
+						# sex-gated by law tier (war = upper, guard_commandant = lower), matching
+						# QING_char_gc_office_sex_eligible.
+						OR = {
+							is_female = no
+							QING_char_is_imperial_clan = yes
+							scope:qing_autofill_country = {
+								OR = {
+									AND = {
+										OR = {
+											var:qing_autofill_office_var = flag:censor
+											var:qing_autofill_office_var = flag:lifanyuan
+											var:qing_autofill_office_var = flag:chamberlain
+											var:qing_autofill_office_var = flag:zongli
+											var:qing_autofill_office_var = flag:grand_secretariat
+											var:qing_autofill_office_var = flag:guard_commandant
+										}
+										OR = {
+											has_law = women_limited_legal_rights
+											has_law = women_equal_legal_rights
+											has_law = womens_suffrage_law
+										}
+									}
+									AND = {
+										OR = {
+											var:qing_autofill_office_var = flag:personnel
+											var:qing_autofill_office_var = flag:revenue
+											var:qing_autofill_office_var = flag:rites
+											var:qing_autofill_office_var = flag:war
+											var:qing_autofill_office_var = flag:justice
+											var:qing_autofill_office_var = flag:works
+										}
+										OR = {
+											has_law = women_equal_legal_rights
+											has_law = womens_suffrage_law
+										}
+									}
+									AND = {
+										var:qing_autofill_office_var = flag:chancellor
+										has_law = womens_suffrage_law
+									}
+								}
+							}
+						}
 					}
 					order_by = combined_stats_council_svalue_martial
 					max = 1
@@ -379,12 +495,21 @@ QING_council_autofill_office = {
 				scope:qing_autofill_draw = { QING_office_appoint = { office = $office$ } }
 			}
 		}
+		# [fix task #7 2026-08-29] report the draw's outcome BEFORE the mint fallback runs, so a
+		# boot log shows whether a backfill vacancy is being filled by an existing courtier (draw
+		# succeeded) or is falling through to a freshly-minted official (draw found nobody, or this
+		# is the boot pass which never attempts a draw at all).
+		if = {
+			limit = { has_variable = qing_office_$office$_holder }
+			LOG_line = { sys = QING  msg = "$office$ seat filled by DRAW (source=$autofill_source$)" }
+		}
 		if = {
 			# fall through to the mint whenever the draw branch didn't just seat someone: the boot
 			# path (never attempted a draw) or a backfill draw that found nobody / read a stale scope.
 			limit = {
 				NOT = { has_variable = qing_office_$office$_holder }
 			}
+			LOG_line = { sys = QING  msg = "$office$ seat still vacant after draw (source=$autofill_source$) -- minting a fresh official" }
 			# [BT-appointment-redesign 2026-07-22] CREATE a purpose-built official for the vacant seat and
 			# assign him — do NOT draw an existing courtier. Assigning existing people is what caused the
 			# double-booking mess (autofill running more than once, or grabbing minted/court characters,
@@ -434,8 +559,18 @@ QING_council_autofill_office = {
 				set_home_country = scope:qing_autofill_country
 				QING_office_appoint = { office = $office$ }
 			}
+			LOG_line = { sys = QING  msg = "$office$ seat filled by MINT (source=$autofill_source$)" }
 		}
 	}
+	# [fix task #7 2026-08-29] if NEITHER branch above logged a fill and this exit still finds the
+	# seat vacant, the eligibility limit itself is rejecting every candidate for reasons this static
+	# read could not surface (e.g. a genuinely empty pool after all the exclusion clauses) -- the
+	# boot log's presence/absence of the two LOG_lines above pinpoints which side failed.
+	if = {
+		limit = { NOT = { has_variable = qing_office_$office$_holder } }
+		LOG_line = { sys = QING  msg = "$office$ EXIT STILL VACANT (source=$autofill_source$) -- neither draw nor mint filled it" }
+	}
+	LOG_exit = { sys = QING  fn = "QING_council_autofill_office ($office$)"  result = OK }
 }
 
 # ======================================================================
