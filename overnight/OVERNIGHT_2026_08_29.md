@@ -748,20 +748,64 @@ Researcher conflict specific to Self-Strengthening) was checked and found NO
 supporting code — `has_tech_office` is a bare vanilla trigger read-only everywhere in
 this mod, never granted by any Qing effect.
 
-Given static analysis is exhausted with no defect found, and
+Given static analysis is exhausted with no Works-SPECIFIC defect found, and
 `QING_council_autofill_office` — despite being the most complex function in this
 file — had NO se_LOG wiring at all (unlike every sibling council function), wired
 LOG_enter/exit and three LOG_line checkpoints (draw succeeded / falling to mint /
-still vacant at exit, each stamped with office+source) so the next boot log shows
-directly which branch is failing for works, rather than guessing further from static
-reading alone. This closes a genuine gap against the standing error-logging
-convention independent of whether it locates #7's root cause. **Not marked
-resolved** — needs a boot log to confirm or to pinpoint the actual failure branch.
+still vacant at exit, each stamped with office+source) so any future boot log shows
+directly which branch fires for works, closing a genuine gap against the standing
+error-logging convention regardless of the diagnosis below.
+
+**Root cause found on a second pass, re-reading the draw's own eligibility limit
+against `QING_char_holds_court_position`'s own header comment**
+(qing_dynasty_triggers.txt:271-274): that trigger deliberately does NOT test
+`has_variable = qing_office_held`, by design — so the PLAYER PICKER can still offer a
+sitting GC officer as a reshuffle target. But the AUTOFILL DRAW (a completely
+different call path, never player-initiated) inherited that same omission with no
+substitute check anywhere else in its limit — so nothing excluded a candidate who
+ALREADY holds a different great office from being drawn again for a second one.
+`QING_council_refill_vacant_seats` calls `QING_council_autofill_office` for all 13
+offices every pulse in one fixed sequence (chancellor, personnel, revenue, rites,
+war, justice, works, censor, lifanyuan, chamberlain, zongli, grand_secretariat,
+guard_commandant); ten of those (every civil office except war/guard_commandant)
+share the identical pool + `order_by = combined_stats_council_svalue` ranking. When
+two or more of these were simultaneously vacant in the same pulse, the single
+top-ranked candidate would be drawn and appointed to the FIRST vacant office in
+sequence, then drawn AGAIN (still ranked #1, still not excluded) for the NEXT vacant
+office later in the sequence — and `QING_office_appoint`'s own "already holds a
+different office, relieve him first" rule (its header comment, se_QING_COUNCIL.txt)
+would evict him from the seat this exact sweep gave him one call earlier, with no
+later call in the sweep ever revisiting that now-re-vacated seat. `works` sits
+mid-sequence, so any of the 4 civil offices called after it (censor, lifanyuan,
+chamberlain, zongli, grand_secretariat) could silently steal its freshly-drawn man
+every pulse this condition recurred — exactly matching "Works never stays filled."
+
+**Fix applied**: added `NOT = { has_variable = qing_office_held }` to both draw
+branches' (hard-civil and soft-martial) eligibility limit, right after the existing
+`has_any_office = no` vanilla-office exclusion. Scoped automatically to the backfill
+draw only (the boot mint path never reaches this branch at all, per the
+`autofill_source` gate already documented at this function's top) — a departing
+holder's own `qing_office_held` is already stripped by `QING_office_vacate` before
+this draw runs, so the exclusion only ever removes OTHER currently-serving officers
+from the pool, which is the intended behaviour (autofill should seat an unassigned
+courtier, not cannibalize a sibling seat).
+
+Not boot-verified (no boot test available in this worktree-isolated pass); the
+diagnostic LOG_line checkpoints already wired above will confirm on the next boot
+whether this closes the symptom, per the "ship the best-guess fix now, tune from the
+log after" overnight contract — this is not treated as a reason to withhold the fix.
 
 ## Adversarial self-review
 - Verified brace balance on both edited files before and after every edit
-  (se_QING_COUNCIL.txt: 1141/1141; QING_governance_actions.txt: unchanged from its
-  prior verified-balanced edit).
+  (se_QING_COUNCIL.txt: 1141/1141 after the diagnosis pass, 1143/1143 after the
+  cascade-eviction fix's two `NOT` blocks; QING_governance_actions.txt: unchanged
+  from its prior verified-balanced edit).
+- Considered whether excluding existing office-holders from the draw could ever
+  strand a seat with NO eligible candidate, forcing an unwanted mint when a
+  reshuffle-style draw was actually intended: no — the draw is backfill-only
+  (never runs at boot, where everyone is unassigned anyway), and the mint fallback
+  already exists specifically to cover an empty draw pool, so this is a no-op
+  safety net, not a new failure mode.
 - Task #6's vacancy check reads the holder var strictly before the `QING_office_
   appoint` call that overwrites it — confirmed by re-reading the macro's own
   definition (:1868 area), not just assumed from call order.
