@@ -61,6 +61,13 @@ QING_zongli_dispatch_diplomat = {
 # proven sibling shape this follows). Dedicated event-slot throttle (NOT the heavily
 # shared qing_gc_event_slot_used) so this doesn't get starved by the six other rollers
 # already contending for that slot.
+#
+# [task #10 2026-08-29] the roll now happens HERE, immediately, instead of inside the
+# event's own option — qing_zongli_dispatch.1 used to present a single vague "Hear the
+# report" choice whose random_list resolved silently with no visible outcome (the
+# custom_tooltip lines were preview-only text, never shown after the pick fired). The
+# outcome is decided up front and handed to the event purely as a notification, same
+# idiom as qing_march_unrest_outcome (qing_march.6, task #91).
 # ======================================================================
 QING_zongli_dispatch_pulse = {
 	save_scope_as = qing_zongli_dispatch_home
@@ -85,6 +92,35 @@ QING_zongli_dispatch_pulse = {
 		if = {
 			limit = { scope:qing_zongli_dispatch_home = { NOT = { has_variable = qing_zongli_dispatch_event_slot_used } } }
 			set_variable = { name = qing_zongli_dispatch_event_cd  days = 180 }
+			random_list = {
+				50 = {
+					# the base roll: an even chance, skewed by the charisma modifiers below.
+					modifier = {
+						factor = 2
+						scope:qing_dispatch_evt_diplomat = { charisma >= 8 }
+					}
+					modifier = {
+						factor = 0.5
+						scope:qing_dispatch_evt_diplomat = { charisma <= 3 }
+					}
+					scope:qing_dispatch_evt_play = { DIPLOMACY_modify_play_success = { amt = 8 } }
+					scope:qing_zongli_dispatch_home = { set_variable = { name = qing_zongli_dispatch_evt_outcome  value = flag:success } }
+					LOG_line = { sys = QING  msg = "zongli dispatch: diplomat's gambit pays off, success raised" }
+				}
+				50 = {
+					modifier = {
+						factor = 2
+						scope:qing_dispatch_evt_diplomat = { charisma <= 3 }
+					}
+					modifier = {
+						factor = 0.5
+						scope:qing_dispatch_evt_diplomat = { charisma >= 8 }
+					}
+					scope:qing_dispatch_evt_play = { DIPLOMACY_modify_play_success = { amt = -8 } }
+					scope:qing_zongli_dispatch_home = { set_variable = { name = qing_zongli_dispatch_evt_outcome  value = flag:failure } }
+					LOG_line = { sys = QING  msg = "zongli dispatch: diplomat stumbles, success lowered" }
+				}
+			}
 			scope:qing_zongli_dispatch_home = {
 				set_variable = { name = qing_zongli_dispatch_event_slot_used  value = 1 }
 				trigger_event = { id = qing_zongli_dispatch.1  days = { 5 15 } }

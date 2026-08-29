@@ -5,6 +5,13 @@
 # qing_dispatch_evt_diplomat (the working diplomat) and scope:qing_dispatch_evt_play
 # (the play provobj) already saved by the pulse. Design:
 # design/DESIGN_ZONGLI_DIPLOMAT_DISPATCH.md.
+#
+# [task #10 2026-08-29] qing_zongli_dispatch.1 is a pure outcome NOTIFICATION -- the
+# charisma-weighted roll runs in the pulse itself and hands the event a settled
+# qing_zongli_dispatch_evt_outcome flag (success/failure), read by desc's triggered_desc.
+# Previously the roll lived in this event's own option behind a single vague "Hear the
+# report" click, and the two outcome lines were custom_tooltip-only text that never
+# actually displayed once the pick fired -- the player got no result at all.
 ########################################################################
 
 namespace = qing_zongli_dispatch
@@ -12,14 +19,20 @@ namespace = qing_zongli_dispatch
 qing_zongli_dispatch.1 = {
 	type = country_event
 	title = "qing_zongli_dispatch.1.t"
-	desc = "qing_zongli_dispatch.1.desc"
+	desc = {
+		triggered_desc = { trigger = { var:qing_zongli_dispatch_evt_outcome = flag:success }  desc = "qing_zongli_dispatch.1.desc_success" }
+		triggered_desc = { trigger = { var:qing_zongli_dispatch_evt_outcome = flag:failure }  desc = "qing_zongli_dispatch.1.desc_failure" }
+	}
 	picture = council_country
 
 	left_portrait = scope:qing_dispatch_evt_diplomat
 
 	# re-check in the event's own trigger (the roll's gate can go stale over the days delay).
+	# [task #10 2026-08-29] the outcome is rolled up front in QING_zongli_dispatch_pulse now,
+	# not in this event's option -- this is a pure notification, same idiom as qing_march.6.
 	trigger = {
 		tag = CHI
+		has_variable = qing_zongli_dispatch_evt_outcome
 		exists = scope:qing_dispatch_evt_diplomat
 		exists = scope:qing_dispatch_evt_play
 		scope:qing_dispatch_evt_diplomat = { is_alive = yes  has_variable = qing_zongli_dispatched_marker }
@@ -32,36 +45,6 @@ qing_zongli_dispatch.1 = {
 
 	option = {
 		name = "qing_zongli_dispatch.1.a"
-		# a single acknowledgement option -- the diplomat's own skill decides the outcome below,
-		# not the player's choice (matches the user's "based on the diplomat's skills" framing).
-		random_list = {
-			50 = {
-				# the base roll: an even chance, skewed by the charisma modifiers below.
-				custom_tooltip = "qing_zongli_dispatch.1.a.good.tt"
-				modifier = {
-					factor = 2
-					scope:qing_dispatch_evt_diplomat = { charisma >= 8 }
-				}
-				modifier = {
-					factor = 0.5
-					scope:qing_dispatch_evt_diplomat = { charisma <= 3 }
-				}
-				scope:qing_dispatch_evt_play = { DIPLOMACY_modify_play_success = { amt = 8 } }
-				LOG_line = { sys = QING  msg = "zongli dispatch: diplomat's gambit pays off, success raised" }
-			}
-			50 = {
-				custom_tooltip = "qing_zongli_dispatch.1.a.bad.tt"
-				modifier = {
-					factor = 2
-					scope:qing_dispatch_evt_diplomat = { charisma <= 3 }
-				}
-				modifier = {
-					factor = 0.5
-					scope:qing_dispatch_evt_diplomat = { charisma >= 8 }
-				}
-				scope:qing_dispatch_evt_play = { DIPLOMACY_modify_play_success = { amt = -8 } }
-				LOG_line = { sys = QING  msg = "zongli dispatch: diplomat stumbles, success lowered" }
-			}
-		}
+		remove_variable = qing_zongli_dispatch_evt_outcome
 	}
 }
