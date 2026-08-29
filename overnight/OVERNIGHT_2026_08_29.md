@@ -257,3 +257,106 @@ against the same mechanism.
 - No boot test run (out of scope for a script-only .txt change with no new
   syntax construct beyond an already-proven idiom); per the no-bisection /
   "guess, build, log" contract this is not treated as a blocker.
+
+---
+
+# Overnight 2026-08-29 — Tasks #2/#6/#7: GC gender gate, Appoint cost, Works autofill
+
+## Task #2 — gender-eligibility bug + missing law-tooltip post lists
+
+Three separate gaps, all under the same Women's Rights law-tier eligibility model
+(`QING_char_gc_office_sex_eligible`, qing_dynasty_triggers.txt): LOWER tier (censor,
+lifanyuan, chamberlain, zongli, grand_secretariat, guard_commandant) needs
+`women_limited_legal_rights`+; UPPER tier (personnel, revenue, rites, war, justice,
+works) needs `women_equal_legal_rights`+; chancellor needs `womens_suffrage_law`;
+Imperial Clan women are exempt from all tiers.
+
+1. **GC autofill backfill draw had no sex gate at all.** The player-facing picker
+   already enforced the tier map, but `QING_council_autofill_office`'s own two
+   `ordered_character` draw branches (common/scripted_effects/se_QING_COUNCIL.txt)
+   had none — a country whose law was still at a restrictive tier could have the
+   death/departure backfill draw seat an ineligible woman into a great office with
+   no player click involved. Fixed by seeding a dedicated country-scope scratch var
+   (`qing_autofill_office_var`, NOT the shared picker var — reusing that would
+   corrupt a concurrently-open player picker session) and inlining the identical
+   tier-map OR-block into both draw branches, re-anchored on `scope:qing_autofill_
+   country` (this function's own established pattern, since ROOT is the dying/
+   accused character on the runtime backfill path, not CHI).
+2. **The four frontier/customs superintendency auto-picks had no sex gate either**
+   (Hoppo, Salt Commissioner, Caravan Superintendent, Opium Commissioner —
+   se_QING_CANTON/SALT/CARAVAN/OPIUM.txt). Each office's `_appoint` auto-pick
+   (used by boot-seed/backfill/rotate/AI callers, distinct from the player picker
+   list already gated by a prior fix) got the same LOWER-tier OR-gate. Each
+   office's periodic reconcile pulse also got a self-correcting eviction clause
+   (a woman holder whose country's law has since regressed below the tier, or who
+   was seated before the gate existed, is relieved and backfilled within the same
+   pulse — mirrors the existing double-book self-heal already proven for these
+   posts).
+3. **Law-tooltip post lists were missing.** The 4-tier `womens_law` option
+   (common/laws/00_social_laws.txt) gates office/exam eligibility across the whole
+   mod but never told the player WHICH posts a tier change opens or closes short of
+   reading script. Added `custom_tooltip` on `on_enact` for all four tiers, with new
+   loc keys in localization/english/laws_l_english.yml enumerating exactly which
+   offices/exams/superintendencies each tier unlocks.
+
+## Task #6 — GC Appoint charged the same PI as Replace
+
+`qing_gov_office_appoint_selected` (common/scripted_guis/QING_governance_actions.txt
+— confirmed via gui/imp19c_windows.gui:92 onclick grep as the only LIVE appoint
+action; the 12 individual `qing_gov_office_appoint_<office>` scripted_guis in the
+same file are dead/unreferenced legacy code from before the shared-picker redesign)
+charged a flat PI cost (chancellor 20, others 15) unconditionally on every
+appointment, with no distinction between filling a vacant seat (Appoint) and
+evicting a sitting minister (Replace). Fixed by folding a
+`has_variable = qing_office_$office$_holder` vacancy check — evaluated BEFORE the
+`QING_office_appoint` call, since that call is what sets the holder var to the new
+appointee — into each of the 13 existing per-office dispatch branches. PI is now
+only charged when a holder already existed at click time.
+
+## Task #7 — GC autofill not filling vacant Minister of Works
+
+Could not reproduce or locate a Works-specific defect via static analysis, despite
+an exhaustive pass: every call site in se_QING_COUNCIL.txt (boot mint, backfill
+refill_vacant_seats, death-dispatch backfill, prune_seat, prune_all_seats, score_office,
+relieve_double_booked_office) parametrizes works identically to its 12 sibling great
+offices — same domain (finesse, shared with personnel/revenue/censor), same degree
+(jinshi), same degree_hard flag, same exclusion clauses. Cross-file audit of every
+read/write of `qing_office_works_holder` repo-wide (se_QING_WORKS/CANAL/MINISTRY/
+SELFSTR.txt, qing_works_events.txt, FlavorEvents.txt, qing_war_events.txt,
+qing_personnel_events.txt, QING_works_ministry_panel.txt) found the variable is ONLY
+ever set/cleared by the generic `QING_office_appoint`/`QING_office_vacate` macros —
+no rogue file clears it directly. GUI row bindings (gui/government_view.gui lines
+3743-3963, the Works card) are structurally identical to its sibling justice/censor
+rows — datacontext, the FILLED/.IsSet visibility binding, and the VACANT/Not(.IsSet)
+binding all correctly reference `qing_office_works_holder`, not a copy-paste'd
+sibling var. A weak hypothesis (Works minister getting evicted via a has_tech_office/
+Researcher conflict specific to Self-Strengthening) was checked and found NO
+supporting code — `has_tech_office` is a bare vanilla trigger read-only everywhere in
+this mod, never granted by any Qing effect.
+
+Given static analysis is exhausted with no defect found, and
+`QING_council_autofill_office` — despite being the most complex function in this
+file — had NO se_LOG wiring at all (unlike every sibling council function), wired
+LOG_enter/exit and three LOG_line checkpoints (draw succeeded / falling to mint /
+still vacant at exit, each stamped with office+source) so the next boot log shows
+directly which branch is failing for works, rather than guessing further from static
+reading alone. This closes a genuine gap against the standing error-logging
+convention independent of whether it locates #7's root cause. **Not marked
+resolved** — needs a boot log to confirm or to pinpoint the actual failure branch.
+
+## Adversarial self-review
+- Verified brace balance on both edited files before and after every edit
+  (se_QING_COUNCIL.txt: 1141/1141; QING_governance_actions.txt: unchanged from its
+  prior verified-balanced edit).
+- Task #6's vacancy check reads the holder var strictly before the `QING_office_
+  appoint` call that overwrites it — confirmed by re-reading the macro's own
+  definition (:1868 area), not just assumed from call order.
+- Considered whether a same-seat "reshuffle" (reappointing the current holder to his
+  own office) would be miscategorized as Replace and charged PI unnecessarily — this
+  is unreachable through the live picker's own is_valid gate (a sitting holder is not
+  offered his own seat as a target), so not a real-world edge case worth a special
+  case.
+- No boot test available in this pass (worktree-isolated, static-analysis-only
+  session); per the no-bisection / "guess, build, log" contract this is not treated
+  as a blocker for tasks #2/#6, which are pure logic-gate additions matching proven
+  idioms already battle-tested elsewhere in this codebase.
