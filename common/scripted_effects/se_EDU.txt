@@ -195,29 +195,28 @@ EDU_set_t2_national_bonus_from_universities = {
 					}
 				}
 			}
-			# [logfix 2026-08-25, corrected 2026-08-26 task #17] the nested
-			# every_governorships->every_state_province iterator above leaves the
-			# value-block's current scope at PROVINCE (the deepest iterator scope), not
-			# the outer country scope this set_variable claims -- error.log: "has_law
-			# trigger [ Wrong scope for trigger: province, expected country ]" at
-			# EDU_svalues.txt:78 (EDU_university_national_bonus's bare has_law).
-			# The 2026-08-25 attempt used a dotted `owner.EDU_university_national_bonus`
-			# reference, which still left 1,234 occurrences of the SAME error in the next
-			# boot: a dotted scope-prefix on a script-value NAME only rescopes direct
-			# field access, it does NOT push a new root for TRIGGERS nested inside that
-			# value's own `if.limit` blocks (has_law stays evaluated at the stale
-			# PROVINCE scope regardless of the `owner.` prefix on the outer call). The
-			# proven fix in this codebase is the scope-change BLOCK form, not a dotted
-			# path — see DEMAND_svalues.txt's DEMAND_steel_ships (`owner = { value =
-			# num_of_ships ... } `) and this same file's EDU_university_bonus_total_province
-			# (`owner = { has_law = ... }`), both of which correctly re-root everything
-			# nested inside the block, not just the immediate field.
-			multiply = {
-				owner = {
-					value = EDU_university_national_bonus
-				}
-			}
 		}
+	}
+	# [logfix 2026-08-29, supersedes 2026-08-25/26 task #17 attempts] the 2026-08-26 fix
+	# wrapped this multiply in an owner={} block around EDU_university_national_bonus, but
+	# error.log from a boot AFTER that fix landed still shows ~1853 occurrences of both
+	# "has_law trigger [ Wrong scope for trigger: none, expected country ]" (EDU_svalues.txt:78,
+	# inside EDU_university_national_bonus) AND "Event target link 'owner' did not get a
+	# matching scope type. Expected 'province, state, governorship, legion', but got 'country'".
+	# The owner error explicitly reports the scope at that call as COUNTRY -- so this effect's
+	# own top-level scope (per its "Scope: Country" doc comment, and correctly entered via
+	# every_country in EDU_startup_effect/EDU_update_effect) was never actually wrong; wrapping
+	# it in owner={} was invalid *because* scope was already country, and everything nested
+	# inside that failing owner block (including EDU_university_national_bonus's has_law check)
+	# then evaluated in the resulting invalid ("none") scope -- one mistake explains both errors.
+	# Fix: don't rescope at all here. Moving the multiply to its own top-level change_variable
+	# (a sibling effect statement to set_variable above, not nested inside its value={}) also
+	# sidesteps any residual doubt about whether the every_governorships/every_state_province
+	# iterator leaves stale scope for a sibling arithmetic term inside that value block --
+	# this statement's scope is unambiguously this effect's own Country scope either way.
+	change_variable = {
+		name = EDU_national_t2_bonus_from_universities
+		multiply = EDU_university_national_bonus
 	}
 }
 
