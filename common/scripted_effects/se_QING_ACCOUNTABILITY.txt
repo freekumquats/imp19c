@@ -431,7 +431,18 @@ QING_acc_test_challenge = {
 		# do the two men actually clash? (transient friction, never stored per-pair)
 		QING_pair_friction = { a = scope:qing_acc_holder  b = scope:qing_acc_rival }
 		if = {
-			limit = { var:qing_pair_friction >= 45 }
+			limit = {
+				var:qing_pair_friction >= 45
+				# [gc-throttle fix 2026-08-29] share the quarterly court-event slot like every
+				# other GC/department system (standing rule, audits/SESSION_HANDOFF_2026_08_11.md).
+				# Missing this let a challenge stack in the SAME quarter as another court event.
+				NOT = { has_variable = qing_gc_event_slot_used }
+				# [gc-throttle fix 2026-08-29] per-office cooldown (mirrors the amban #60 per-subject
+				# cooldown pattern): without this the SAME office could re-queue a fresh challenge
+				# every ~90-day quarter indefinitely while the incumbent stayed weak, which is the
+				# root cause of "A Minister Called to Account" firing 3x in one week.
+				NOT = { has_variable = qing_acc_challenge_cd_$office$ }
+			}
 			# Pin the two combatants into DEDICATED scopes: the pulse keeps scoring the
 			# remaining offices (overwriting scope:qing_acc_holder / qing_acc_rival)
 			# before this delayed event fires, so the event must read these stable
@@ -440,6 +451,8 @@ QING_acc_test_challenge = {
 			scope:qing_acc_rival  = { save_scope_as = qing_acc_challenger }
 			set_variable = { name = qing_acc_challenge_office  value = flag:$office$ }
 			set_variable = { name = qing_acc_challenge_pending  value = 1 }
+			set_variable = { name = qing_gc_event_slot_used  value = 1 }  # [court-slot] claim on the fire path
+			set_variable = { name = qing_acc_challenge_cd_$office$  days = 365 }  # [gc-throttle fix] ~once/year per office
 			LOG_line = { sys = QING  msg = "accountability CHALLENGE: office $office$ — (svalue) rises against (friction)" }
 			trigger_event = { id = qing_accountability.1  days = { 2 9 } }
 		}

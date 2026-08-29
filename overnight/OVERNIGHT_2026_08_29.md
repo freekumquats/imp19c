@@ -133,3 +133,127 @@ reapplying the stale draft.
   `value={ every_governorships = {...} multiply = ... }` shapes) — that would mean this
   particular error's true cause is elsewhere in the chain (e.g. a corrupted/failed limit=
   evaluation on some governorship), not the multiply's rescoping at all.
+
+---
+
+# Overnight 2026-08-29 — Tasks #4/#9: Grand-Council event throttle
+
+## Task
+Two reports: "A Minister Called to Account" (qing_accountability.1) fired 3x in
+one week; "Clash at the Residency" (qing_amban.1) allegedly spamming (reported
+as a regression of a prior once-per-year fix). Instruction: treat this as ONE
+generic mechanism failure, not two one-off patches — diagnose the shared
+throttle, fix it generically, then verify every other Grand-Council-tied event
+against the same mechanism.
+
+## Diagnosis process
+1. Confirmed event IDs via loc: qing_accountability.1 ("A Minister Called to
+   Account"), qing_amban.1 ("Clash at the Residency").
+2. Found the documented STANDING RULE (audits/SESSION_HANDOFF_2026_08_11.md):
+   every Grand-Council/subordinate-bureaucracy event must share a single
+   country-scoped slot variable, `qing_gc_event_slot_used`, reset at the top
+   of the ~90-day `qing_mechanics_pulse_on_action` (common/on_action/
+   00_monthly_country.txt). Pattern: check `NOT has_variable` in the fire
+   path's limit, `set_variable ... = 1` ONLY on the branch that actually
+   fires (never in the pulse wrapper), so at most one court event fires
+   realm-wide per quarter.
+3. **Process error, caught and corrected**: my worktree branch had diverged
+   from `merge-overnight` at an earlier commit (`fe6c274ab` vs the real tip
+   `9167d4e3d`) — a shared-slot-and-cooldown-stripped `se_QING_AMBAN.txt` I
+   was reading was STALE, not the live file. Verified via
+   `git merge-base --is-ancestor` and `git fetch origin merge-overnight`,
+   then `git reset --hard origin/merge-overnight` (clean tree, safe) to get
+   onto the real current base, and re-ran the diagnosis from scratch.
+4. On the correct base: **qing_amban.1's throttle is fully intact and
+   correct** — `NOT has_variable qing_gc_event_slot_used` in the limit, a
+   730-day per-subject cooldown (`qing_amban_clash_cd`, task #60), and the
+   claim (`set_variable qing_gc_event_slot_used = 1`) only on the fire
+   branch, in `se_QING_AMBAN.txt`'s clash fire path. Only one
+   `trigger_event { id = qing_amban.1 }` call site exists in the whole repo.
+   **No fix needed here** — the "regression" was an artifact of reading the
+   wrong branch state, not a real bug.
+5. `se_QING_ACCOUNTABILITY.txt`'s `QING_acc_test_challenge` (the fire path for
+   qing_accountability.1) had NO participation in the shared slot at all, and
+   NO per-office cooldown. Its only gate was `qing_acc_challenge_pending`,
+   which only prevents >1 challenge PER CALL of `QING_accountability_pulse`
+   (i.e. per quarter) — it does not stop the SAME office from re-queuing a
+   fresh challenge every ~90-day quarter indefinitely while the incumbent
+   stays weak. This is the confirmed root cause of "A Minister Called to
+   Account" firing repeatedly.
+6. Per the "check every GC-tied event" mandate, audited every other pulse in
+   `QING_GOV_pulse`'s office-coupling family that calls `trigger_event`
+   directly: PERSONNEL (`qing_dept_cd_personnel`, correctly wired), WAR
+   (`qing_dept_cd_war` + `qing_warlord_review_cd`, correctly wired), REVENUE
+   (`qing_revenue_event_cooldown`, correctly wired), CANTON
+   (`qing_dept_cd_canton` + per-crisis cooldowns, correctly wired), WORKS
+   (`qing_works_event_cooldown`, correctly wired), HAREM (correctly wired).
+   CENSORATE and GREATGAME never call `trigger_event` directly — their
+   dramatic events (qing_censorate.*, qing_greatgame.*) are dispatched from
+   `QING_frontier_flavour_roll` in se_QING_DECLINE.txt, which claims the slot
+   BEFORE its inner random_list runs (documented BT-28 pattern) — confirmed
+   correctly wired, not a gap.
+7. **Second confirmed bug**: `se_QING_HOUSEHOLD.txt`'s
+   `QING_household_eunuch_event_roll` (fires qing_household.8/.9). Its own
+   header comment claims it "Shares the GC event slot via the standard
+   throttle," but the code never actually checked or claimed
+   `qing_gc_event_slot_used` — only its own dedicated 1460-day
+   (`qing_eunuch_event_cd`) cooldown gated it. This let a eunuch-intrigue
+   beat fire in the same quarter as another already-claimed court event
+   (dogpile), contradicting the comment's own stated intent. Confirmed real,
+   fixed to match the documented (but previously unimplemented) behaviour.
+
+## Fixes applied
+- `common/scripted_effects/se_QING_ACCOUNTABILITY.txt`, `QING_acc_test_challenge`:
+  added `NOT = { has_variable = qing_gc_event_slot_used }` and
+  `NOT = { has_variable = qing_acc_challenge_cd_$office$ }` to the fire-path
+  limit; added `set_variable = { name = qing_gc_event_slot_used value = 1 }`
+  and `set_variable = { name = qing_acc_challenge_cd_$office$ days = 365 }` on
+  the fire branch (claim-on-fire, matching every other correctly-wired
+  system). The per-office cooldown var name uses the same
+  `..._$office$` macro-substitution-in-a-variable-name idiom already proven
+  elsewhere in this same file (`qing_office_$office$_holder`, line 103).
+- `common/scripted_effects/se_QING_HOUSEHOLD.txt`,
+  `QING_household_eunuch_event_roll`: added
+  `NOT = { has_variable = qing_gc_event_slot_used }` to the fire-path limit
+  and `set_variable = { name = qing_gc_event_slot_used value = 1 }` on the
+  fire branch, restoring what the function's own comment already claimed it
+  did.
+- Existing `LOG_line` calls on both fire paths already log every successful
+  fire (static strings, `$office$`/`$param$`-style substitution inside a LOG
+  string is cosmetic-only per the log-string-macro standing rule, not
+  call-voiding) — no new LOG plumbing was needed; both fixes are additions
+  to existing, already-logged branches.
+
+## ASSUMPTIONS & GUESSES
+- **365-day cooldown for `qing_acc_challenge_cd_$office$`**: not directly
+  specified by the user. Chosen for "once per year" symmetry with the
+  amban's task-#60 per-subject pattern (which uses 730 days, ~2 years, for a
+  rarer/heavier subject-level event); accountability challenges are a
+  lighter-weight per-office beat, so a shorter 1-year window was judged
+  reasonable. If this is judged too frequent or too rare in play-testing, the
+  duration is isolated to this one line and can be tuned.
+- **Scope of "every GC-tied event"**: interpreted as the office-coupling
+  family explicitly named in `QING_GOV_pulse`'s own dispatch order (Personnel,
+  War, Revenue, Canton, Works, Household, Harem, Censorate, Accountability,
+  Amban, Great Game) plus the six flavour/foreign-spouse/officer-report
+  rollers already gated from `00_monthly_country.txt`. Did NOT re-audit the
+  entire ~70-file Qing event catalog (march, tribute, colonization arcs,
+  Japan, sphere-of-influence, etc.) — those are already covered by separate,
+  dedicated prior audits (design/DESIGN_QING_CROSSWIRING_ASSESSMENT.md,
+  design/DESIGN_QING_PACING_OVERHAUL.md) and are a larger, separately-scoped
+  concern than the two reported office-coupling bugs.
+- **qing_amban.1 required NO fix.** Confidence: high — verified against the
+  live `origin/merge-overnight` tip (9167d4e3d) after discovering and
+  correcting the stale-branch read, and confirmed only one call site exists
+  in the whole repo.
+
+## Verification
+- Read-only confirmation that the shared slot is reset exactly once per
+  ~90-day pulse (common/on_action/00_monthly_country.txt lines 74-88) and
+  that both new fire paths now claim it only on their fire branch, never
+  unconditionally.
+- Manually traced every `trigger_event` call site in the audited files listed
+  above; no other GC-tied fire path found missing the slot check.
+- No boot test run (out of scope for a script-only .txt change with no new
+  syntax construct beyond an already-proven idiom); per the no-bisection /
+  "guess, build, log" contract this is not treated as a blocker.
