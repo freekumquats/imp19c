@@ -538,3 +538,139 @@ compatible, not just non-conflicting:
   `imp19c_tooltips_l_english.yml`, `setup/characters/00_Korea.txt`: task #17's changes to
   these files are unrelated cleanups on separate lines; this fork's loc-key / family-name
   fixes are untouched by the rebase.
+
+---
+
+## Task #8: Full audit + fix of the "Invasion of Burma" mission tree
+
+### Where it lives, and the reframing
+
+Grepped `common/` for Burma / Shan States / Irrawaddy / Yunnan Base / Green Standard
+Marches / Manchu Banner Elite. The ONLY real hit is
+`common/missions/qing_himalaya_seasia_missions.txt` (mission `qing_himalaya_seasia_mission`),
+a combined Himalaya + Southeast-Asia tree with `qing_hs_burma` as one of ~19 tasks. **None**
+of the 5 named tasks (Shan States / Irrawaddy Road / Yunnan Base / Green Standard Marches /
+Manchu Banner Elite) existed anywhere in the repo before this task — the brief describes an
+end-state to build, not a diff against existing broken code. Design doc:
+`design/DESIGN_BURMA_MISSION_TREE_AUDIT.md` (drafted, adversarially reviewed by a
+general-purpose subagent, corrections resolved and appended to the same doc under
+"CORRECTIONS after adversarial review").
+
+Post-rebase onto `origin/merge-overnight`, the file had ALREADY grown 11 extra filler tasks
+(`qing_hs_maritime/coastal/bhutan/sikkim/ladakh/gorkha/assam/manipur/arakan/champa/tributary_court`)
+from two prior upstream-merge commits — every non-maritime one of these was pure padding
+(`allow` = bare gold/PI cost, `on_completion` = flat popularity, zero tie to the named
+country/territory). Folded into "audit every other task" scope.
+
+### What shipped
+
+1. **5 new tasks** forming the Burma campaign spine, all requiring only `qing_hs_lifanyuan`
+   except where noted:
+   - `qing_hs_burma_yunnan_base`: builds `fortress_building`+`military_depot_building`+
+     `qing_granary_building`+`arsenal_building` (300 gold/province) at 4 confirmed CHI-core
+     Yunnan provinces (2759 Yunnanfu, 723 Lingcang, 3919 Lucheng, 8725 Yuxi) = **1,200 gold**.
+     `set_city_status = city` applied to the 3 non-city ones first (depot/granary both gate on
+     `potential = { has_city_status = yes }`).
+   - `qing_hs_burma_green_standard` (requires yunnan_base): **2,000 gold**, raises real
+     Green Standard garrisons (size 6/4/4 at the 3 original Yunnan provinces) via
+     `SE_qing_raise_garrison { unit = qing_green_standard }`.
+   - `qing_hs_burma_banner_elite` (requires yunnan_base): **3,000 gold**, raises a real Eight
+     Banners detachment (size 5 at Yunnanfu) via `SE_qing_raise_garrison { unit = qing_eight_banners }`.
+   - `qing_hs_burma_shan_states`: **150 gold** + a REAL gate — `calc_true_if { amount >= 3 }`
+     over 5 `OR = { owns=X  any_subject={owns=X} }` checks on the 5 Burmese-aligned Shan
+     chiefdom capitals (KTG 2529, HSI 1552, MMT 9380, MPN 3752, MKN 9048). The 4 already
+     CHI-aligned Shan tributaries (CHH/MLM/TNI/LSU) are deliberately excluded.
+   - `qing_hs_burma_irrawaddy_road` (requires shan_states): **200 gold** + `owns = 4012`
+     (Monywa) AND `owns = 6562` (Mandalay), direct ownership (not subject-held).
+   - `qing_hs_burma` (final, existing id, requires all 5 above): **110 gold** (unchanged) +
+     `owns = 7675` (BUR's own capital, Hanthawaddy) replacing the old `exists = c:BUR`-only
+     gate (which was permanently true from turn 1 — the single worst offender in the brief).
+2. **Fixed a genuine pre-existing bug**: `qing_hs_himalaya_ring` claimed p:7347 for "Sikkim" —
+   that province is actually inside NEP's own `own_control_core`. Real SKK capital is p:6552.
+   Fixed, plus added a real `OR = { exists c:SKK  exists c:BHU }` gate (previously none).
+3. **`qing_hs_coastal`**: was a pure gold+modifier checkbox (treasury>=90, zero game-state
+   tie). Now builds real `qing_coastal_battery_building` (cost 120 each,
+   `potential = { is_coastal = yes ... }`) at 3 real coastal treaty ports already used
+   elsewhere in this mod's OOB (Canton 9298, Fuzhou 3651, Hangzhou 8120) — cost raised to
+   **360** (sum of real building costs).
+4. **`qing_hs_capstone`**: had NO cost at all before. Added **treasury >= 500**.
+5. **8 filler tasks + tributary_court**: each now gates on `exists = c:<TAG>` for its real
+   country (BHU/SKK/ASS/MNP/ARK/CPA; Ladakh has no independent tag, gated on `exists = p:2164`
+   instead; Gorkha ties to `exists = c:NEP`, since Gorkha = Nepal's ruling house, a naming
+   duplicate of `qing_hs_nepal` — documented, not restructured), and `on_completion` now does
+   real `FUNC_make_subject`/`add_claim` instead of a bare popularity grant.
+   `qing_hs_tributary_court` gates on `any_subject = { is_subject_type = sinosphere_tributary }`.
+6. Also added a real `exists = c:NEP` gate to `qing_hs_nepal` (previously missing, unlike its
+   siblings Vietnam/Burma/Siam which already had this pattern).
+7. New country modifiers added to `common/modifiers/qing_himalaya_seasia_modifiers.txt`:
+   `qing_hs_yunnan_forward_base`, `qing_hs_shan_tributary`, `qing_hs_irrawaddy_corridor` — all
+   reuse modifier-stat keys already proven elsewhere in the same file.
+8. Loc: 5 new task ids + DESC + tt, ~15 new `qing_hs_needs_*_tt` gate-tooltip keys
+   (`localization/english/qing_himalaya_seasia_l_english.yml`), and 4 new unit-name loc keys
+   for the raised garrisons (`localization/english/imp19c_units_l_english.yml`) — required
+   because `SE_qing_raise_garrison`'s `$name$` param must be a bare loc-key token, not a
+   quoted string (confirmed via a header comment in `imp19c_effects_legion_setup.txt`: quoted
+   multi-word strings lose their quotes on macro substitution and break the tokenizer).
+
+### Process followed
+
+Design doc -> adversarial review (general-purpose subagent) -> 5 BLOCKING findings resolved
+(canal-depot wrong region for Yunnan, dropped; depot/granary city-status gate, fixed with
+`set_city_status`; missing `$unit$` macro param on garrison calls, fixed with the confirmed
+real tokens `qing_green_standard`/`qing_eight_banners`; vacuous Canton-ownership coastal gate,
+replaced with a real building-construction task; the `qing_hs_ladakh`->`qing_hs_arakan`->
+`qing_hs_capstone` difficulty-escalation chain, accepted and documented as an intentional
+consequence of giving `qing_hs_burma` real teeth) -> implemented -> code-review pass
+dispatched on the diff (see notification when it lands) -> this log entry.
+
+### ASSUMPTIONS & GUESSES (invented numbers, no boot data to tune against)
+
+1. **Green Standard Marches / Manchu Banner Elite baseline cost**: no such task ever existed
+   to read a "current" value from. Used the tree's own filler-task tier (~20-30 gold/PI,
+   e.g. `qing_hs_bhutan`'s `political_influence >= 20`) as the stand-in "current cheap cost",
+   ×100 => 2,000 / 3,000. Purely a judgement call.
+2. **Shan States majority threshold = 3 of 5** capitals, not all 5 (too strict) or 1 (too
+   loose) — no boot data to tune against.
+3. **Yunnan Base = 4 provinces** (not 3): the extra province (8725, Yuxi) was added
+   specifically to clear a 4-digit total after the canal-depot building was dropped
+   (region-gated, wrong for Yunnan) during adversarial review — otherwise 3×300=900 would
+   fall short of "the thousands" the brief asked for.
+4. **Green Standard sizes 6/4/4, Banner Elite size 5**: chosen to echo (not copy) the boot
+   seed's own relative sizing convention; not derived from any specific historical source.
+5. **Coastal battery provinces (Canton/Fuzhou/Hangzhou)**: assumed `is_coastal = yes` for all
+   3 based on their established use as real treaty-port banner-garrison locations elsewhere
+   in the mod; not independently re-verified against the map's coastal flag.
+6. **All new treasury figures (1200/2000/3000/150/200/360/500) are unverified against actual
+   play-balance** — no boot log available for this file. Flagged for later tuning.
+7. **Ladakh has no independent country tag** in this setup (verified by grep for `LEH`/`LAD`);
+   kept as a province-only gate (`exists = p:2164`), matching the tree's own pre-existing
+   treatment of Ladakh in `qing_hs_himalaya_ring`.
+8. **Hanoi (p:3418) / TRH mismatch**: pre-existing, not introduced by this task — documented
+   with a code comment at `qing_hs_vietnam`'s Hanoi claim line, not fixed (out of scope).
+
+Committed to `merge-overnight` after rebasing onto the latest tip (verified `git config
+user.email` = `freekumquats@users.noreply.github.com` before committing).
+
+### Task #8 addendum: adversarial code-review verdict + post-review fixes
+
+Independent code-review agent reviewed the full diff (all 4 changed files) plus every
+externally-referenced token (tags, provinces, buildings, effects, loc keys) against the
+repo. **Verdict: no BLOCKING issues.** 4 non-blocking findings, resolved as follows:
+
+- MEDIUM (missing modifier loc for the 3 new modifiers) — FIXED: added name + `_desc`
+  keys for `qing_hs_yunnan_forward_base`/`qing_hs_shan_tributary`/`qing_hs_irrawaddy_corridor`
+  to `qing_himalaya_seasia_l_english.yml`.
+- LOW/cosmetic (loc said "Mone" for MPN, `00_default.txt` says "Mongpan") — FIXED in
+  `qing_hs_burma_shan_states_DESC`.
+- LOW (mission-raised garrisons don't get the boot-only `qing_garrison_supply` attrition
+  immunity stamp) — ACCEPTED, not fixed: fixing it would mean re-invoking the shared,
+  proven `SE_qing_stamp_garrison_supply` effect from mission code, risking a double
+  `add_unit_modifier` application on the ~26 existing OOB garrisons (dedup behaviour
+  unverified); the new garrisons sit at interior Yunnan provinces, not the ~0-food-surplus
+  frontier seats the supply fix targets, so impact is expected low. See design doc section 9.
+- LOW (unverified `is_coastal` at Hangzhou p:8120) — ACCEPTED as correct: same assumption
+  already logged as guess #5 above; not independently re-verifiable from text files (map
+  geometry primitive), and consistent with the mod's own existing Hangzhou coastal-garrison
+  lore/comments.
+
+Full reasoning logged in `design/DESIGN_BURMA_MISSION_TREE_AUDIT.md` section 9.
