@@ -74,3 +74,62 @@ widths are unchanged, they just now have room to render inside their container.
   explicitly NOT touched in this section — they're assigned to a separate concurrent
   fork ("fix-diplomatic-play-scope-regression") to avoid duplicate/conflicting edits to
   the same gui_templates.gui file region.
+
+## Task #16 — EDU_set_t2_national_bonus_from_universities has_law/owner scope errors (~1853x each)
+
+This was already "fixed" once, by commit 7afd1b097 (tasks #17/#20, landed 2026-08-26):
+it wrapped the national-bonus multiply in `owner = { value = EDU_university_national_bonus }`,
+on the theory that the preceding `every_governorships -> every_governorship_state ->
+every_state_province` iterator left the value={} block's scope at PROVINCE for that sibling
+multiply term.
+
+The 2026-08-29 01:23 error.log (the newest log at the time of this run, boot AFTER
+7afd1b097 was live) still showed ~1853 occurrences of both errors, unchanged in count.
+Root-caused by reading the exact error text literally instead of trusting the prior
+diagnosis: the owner-link error reports `[...] Expected 'province, state, governorship,
+legion', but got 'country'` — i.e. scope at that call was already COUNTRY, not leaked to
+province. Wrapping an already-country scope in `owner={}` is itself invalid (owner has no
+valid source when already at country), and everything nested inside that failing owner
+block — including `EDU_university_national_bonus`'s own `has_law` check
+(EDU_svalues.txt:78) — then evaluated in the resulting invalid/"none" scope. One mistake,
+both error signatures.
+
+Fix (common/scripted_effects/se_EDU.txt, EDU_set_t2_national_bonus_from_universities):
+removed the owner={} wrap; moved the multiply out of the set_variable's nested value={}
+block entirely into its own top-level `change_variable` statement, a sibling to
+set_variable rather than an arithmetic term inside it. This runs unambiguously at the
+effect's own Country scope (entered correctly via `every_country` in
+EDU_startup_effect/EDU_update_effect) regardless of whether the value-block sibling-leak
+theory from 7afd1b097 was ever actually correct — sidesteps the question rather than
+re-litigating it.
+
+Self-reviewed (adversarial pass done solo, in-worktree — this fork's own code-review
+subagent call is unavailable from inside a forked worker): verified brace balance before
+and after the edit, confirmed no other call sites reference the removed structure, and
+confirmed EDU_svalues.txt itself needed no change (EDU_university_national_bonus and
+EDU_university_national_bonus_here, the two existing correct usages at province/country
+scope, are untouched).
+
+Commit: ab4474f78 (rebased onto 86acb0428 after a non-fast-forward push race with the
+tasks #5/#10/#11 fork).
+
+### Note on this fork's own diagnosis process
+This fork's worktree was branched from a stale point in history (predating
+tools/precommit_checks.py and the entire 7afd1b097 fix) — its own first diagnosis pass
+(before discovering this) independently arrived at the same "sibling-arithmetic-term
+scope leak" theory and drafted a fix against the STALE pre-7afd1b097 code. That draft was
+discarded (never pushed) once `git fetch`+rebase surfaced the merge conflict revealing
+7afd1b097 already existed and had already failed. The final fix above was derived fresh
+against the current (post-7afd1b097) code and the actual current error text, not by
+reapplying the stale draft.
+
+### ASSUMPTIONS & GUESSES (task #16)
+- Not boot-verified (no boot test available in this pass). The fix is derived directly
+  from the literal error text ("got country") rather than from re-deriving engine scope
+  semantics from first principles, so confidence is high but not certain. If ~1853 errors
+  persist in the next boot log at this exact call site, the next step should be to check
+  whether `every_governorships` as a value-block sibling to `multiply=` really does leak
+  scope for OTHER similar constructs in this codebase (search for other
+  `value={ every_governorships = {...} multiply = ... }` shapes) — that would mean this
+  particular error's true cause is elsewhere in the chain (e.g. a corrupted/failed limit=
+  evaluation on some governorship), not the multiply's rescoping at all.
