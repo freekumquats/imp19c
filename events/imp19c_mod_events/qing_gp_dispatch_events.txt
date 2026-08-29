@@ -1,13 +1,20 @@
 ########################################################################
-# qing_gp_dispatch_events.txt — [fix 2026-08-24, user-requested] the delayed follow-up
-# report for a Great Game "Dispatch a Diplomat" mission (QING_gp_dispatch_diplomat,
-# se_QING_DIPLO.txt). Mirrors the Zongli play-dispatch report event
-# (qing_zongli_dispatch_events.txt / se_QING_ZONGLI_DISPATCH.txt) but resolves in ONE
-# shot rather than rolling indefinitely: a GP soothing errand is a single defined trip,
-# not an open-ended posting that lasts until a play resolves. Queued with scope:
-# qing_gp_dispatch_evt_diplomat (the working diplomat, carrying qing_zongli_dispatched_gp_power
-# — a flag = britain|france|russia recording which power's tension he is working) already
-# saved by QING_gp_dispatch_diplomat.
+# qing_gp_dispatch_events.txt — [fix 2026-08-24, user-requested; redesigned task #10
+# 2026-08-29] the delayed follow-up report for a Great Game "Dispatch a Diplomat" mission
+# (QING_gp_dispatch_diplomat, se_QING_DIPLO.txt). Mirrors the Zongli play-dispatch report
+# event (qing_zongli_dispatch_events.txt / se_QING_ZONGLI_DISPATCH.txt) and its precedent
+# qing_march_unrest_outcome (qing_march.6, task #91): the roll happens up front, the event
+# is a pure outcome NOTIFICATION whose desc branches via triggered_desc on a settled
+# qing_gp_dispatch_evt_outcome flag (success/failure), cleared by the event's own option.
+# Queued with scope:qing_gp_dispatch_evt_diplomat (the working diplomat, carrying
+# qing_zongli_dispatched_gp_power — a flag = britain|france|russia recording which power's
+# tension he is working) already saved by QING_gp_dispatch_diplomat.
+#
+# [task #10 2026-08-29] QING_gp_dispatch_diplomat now rolls the charisma-weighted 50/50
+# chance and applies the tension nudge ITSELF, before the event fires -- this event just
+# states which way it went. Replaces the old single qing_gp_dispatch.1 whose one option hid
+# a random_list AND whose loc used the invalid "[scope:...GetName]" prefix (renders literal
+# ERROR:[scope:...] in-game — the same bug class fixed on the Zongli play-dispatch report).
 ########################################################################
 
 namespace = qing_gp_dispatch
@@ -15,82 +22,35 @@ namespace = qing_gp_dispatch
 qing_gp_dispatch.1 = {
 	type = country_event
 	title = "qing_gp_dispatch.1.t"
-	desc = "qing_gp_dispatch.1.desc"
+	desc = {
+		triggered_desc = { trigger = { var:qing_gp_dispatch_evt_outcome = flag:success }  desc = "qing_gp_dispatch.1.desc_success" }
+		triggered_desc = { trigger = { var:qing_gp_dispatch_evt_outcome = flag:failure }  desc = "qing_gp_dispatch.1.desc_failure" }
+	}
 	picture = council_country
 
 	left_portrait = scope:qing_gp_dispatch_evt_diplomat
 
-	# re-check in the event's own trigger (the roll's gate can go stale over the days delay) --
-	# mirrors qing_zongli_dispatch.1's own re-check comment.
+	# re-check in the event's own trigger (the roll happened at dispatch time; this just gates
+	# whether the REPORT is still worth showing over the days-delay travel time).
 	trigger = {
 		tag = CHI
+		has_variable = qing_gp_dispatch_evt_outcome
 		exists = scope:qing_gp_dispatch_evt_diplomat
 		scope:qing_gp_dispatch_evt_diplomat = { is_alive = yes  has_variable = qing_zongli_dispatched_gp_power }
 	}
 
 	immediate = {
-		LOG_line = { sys = QING  msg = "EVENT qing_gp_dispatch.1 (Great Game diplomat's report)" }
-	}
-
-	option = {
-		name = "qing_gp_dispatch.1.a"
-		# a single acknowledgement option -- the diplomat's own charisma decides the outcome
-		# below, matching qing_zongli_dispatch.1's "based on the diplomat's skills" framing.
-		random_list = {
-			50 = {
-				custom_tooltip = "qing_gp_dispatch.1.a.good.tt"
-				modifier = {
-					factor = 2
-					scope:qing_gp_dispatch_evt_diplomat = { charisma >= 8 }
-				}
-				modifier = {
-					factor = 0.5
-					scope:qing_gp_dispatch_evt_diplomat = { charisma <= 3 }
-				}
-				if = {
-					limit = { scope:qing_gp_dispatch_evt_diplomat = { var:qing_zongli_dispatched_gp_power = flag:britain } }
-					QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = -6 }
-				}
-				else_if = {
-					limit = { scope:qing_gp_dispatch_evt_diplomat = { var:qing_zongli_dispatched_gp_power = flag:france } }
-					QING_DECLINE_nudge = { var = qing_gp_tension_france  amount = -6 }
-				}
-				else_if = {
-					limit = { scope:qing_gp_dispatch_evt_diplomat = { var:qing_zongli_dispatched_gp_power = flag:russia } }
-					QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = -6 }
-				}
-				LOG_line = { sys = QING  msg = "GP dispatch report: diplomat's follow-up lands well, tension eased further" }
-			}
-			50 = {
-				custom_tooltip = "qing_gp_dispatch.1.a.bad.tt"
-				modifier = {
-					factor = 2
-					scope:qing_gp_dispatch_evt_diplomat = { charisma <= 3 }
-				}
-				modifier = {
-					factor = 0.5
-					scope:qing_gp_dispatch_evt_diplomat = { charisma >= 8 }
-				}
-				if = {
-					limit = { scope:qing_gp_dispatch_evt_diplomat = { var:qing_zongli_dispatched_gp_power = flag:britain } }
-					QING_DECLINE_nudge = { var = qing_gp_tension_britain  amount = 6 }
-				}
-				else_if = {
-					limit = { scope:qing_gp_dispatch_evt_diplomat = { var:qing_zongli_dispatched_gp_power = flag:france } }
-					QING_DECLINE_nudge = { var = qing_gp_tension_france  amount = 6 }
-				}
-				else_if = {
-					limit = { scope:qing_gp_dispatch_evt_diplomat = { var:qing_zongli_dispatched_gp_power = flag:russia } }
-					QING_DECLINE_nudge = { var = qing_gp_tension_russia  amount = 6 }
-				}
-				LOG_line = { sys = QING  msg = "GP dispatch report: diplomat stumbles, tension partly rebounds" }
-			}
-		}
-		# the mission concludes with this single report -- release him, unlike the play-dispatch
+		LOG_line = { sys = QING  msg = "EVENT qing_gp_dispatch.1 (Great Game diplomat's report, outcome already resolved on dispatch)" }
+		# the mission concludes with this report -- release him, unlike the play-dispatch
 		# marker (which stays until the play itself resolves via AI_remove_diplomatic_play).
 		scope:qing_gp_dispatch_evt_diplomat = {
 			remove_variable = qing_zongli_dispatched_marker
 			remove_variable = qing_zongli_dispatched_gp_power
 		}
+	}
+
+	option = {
+		name = "qing_gp_dispatch.1.a"
+		remove_variable = qing_gp_dispatch_evt_outcome
 	}
 }

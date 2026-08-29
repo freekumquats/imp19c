@@ -133,7 +133,6 @@ reapplying the stale draft.
   `value={ every_governorships = {...} multiply = ... }` shapes) — that would mean this
   particular error's true cause is elsewhere in the chain (e.g. a corrupted/failed limit=
   evaluation on some governorship), not the multiply's rescoping at all.
-
 ---
 
 # Overnight 2026-08-29 — Tasks #4/#9: Grand-Council event throttle
@@ -349,3 +348,46 @@ appear on a separate tab"), so it isn't currently rendered and the shift has
 no live visual effect. No change needed; noting for whoever eventually wires
 up that tab, since its layout will land 40px further right than before this
 fix.
+
+---
+
+## Task #10 continued — GP-dispatch sibling fix (this fork)
+
+This fork independently picked up task #10 and reached the same diagnosis and the same
+`qing_march_unrest_outcome`/`qing_march.6` precedent as the section above (already merged as
+commit `86acb0428` by the time this fork tried to push) — so the Zongli-chain half of this
+work is superseded by, and identical in effect to, the section above; no changes made on top
+of it. Kept: an additional sibling bug this fork found by inspection that the section above
+did not touch.
+
+**Sibling bug: `qing_gp_dispatch` (Great Game "Dispatch a Diplomat" follow-up).**
+`events/imp19c_mod_events/qing_gp_dispatch_events.txt` / `se_QING_DIPLO.txt`'s
+`QING_gp_dispatch_diplomat` explicitly documents itself as mirroring the Zongli play-dispatch
+chain, and had copied the identical bug: `[scope:qing_gp_dispatch_evt_diplomat.GetName]` in loc
+(same invalid script-only `scope:` prefix rendering literal `ERROR:[scope:...]` text) and the
+same click-to-reveal `random_list`-in-option shape.
+
+Fixed to match the now-landed Zongli pattern exactly, for consistency: `QING_gp_dispatch_diplomat`
+now rolls the same 50/50-base, charisma-skewed weights immediately (±6 tension on
+`qing_gp_tension_$power$`, magnitude unchanged) and sets a `qing_gp_dispatch_evt_outcome` flag
+(`this` is already country scope throughout this effect — called `scope = country` from
+`QING_mechanics_actions.txt` — so no `save_scope_as` is needed) before firing a single
+`qing_gp_dispatch.1`. That event's `desc` branches via two `triggered_desc` blocks keyed on the
+flag, its `trigger` re-checks `has_variable = qing_gp_dispatch_evt_outcome` plus diplomat
+liveness, and its option (`"Understood"`) clears the flag — same shape as `qing_zongli_dispatch.1`
+and its `qing_march.6` precedent. Diplomat-marker teardown
+(`remove_variable = qing_zongli_dispatched_marker` / `qing_zongli_dispatched_gp_power`) stays in
+the event's own `immediate` (not hoisted into the dispatching effect), so the event's re-check
+trigger still holds when it fires 20-40 days later.
+
+Diagnostics: kept `LOG_line` calls (native `debug_log`, inherently -debug_mode-gated) on the roll
+stating which branch fired plus the magnitude applied.
+
+**Files touched (this fork, on top of `86acb0428`):**
+- `common/scripted_effects/se_QING_DIPLO.txt` (`QING_gp_dispatch_diplomat`)
+- `events/imp19c_mod_events/qing_gp_dispatch_events.txt`
+- `localization/english/qing_gp_dispatch_l_english.yml`
+- `design/DESIGN_ZONGLI_DIPLOMAT_DISPATCH.md` (addendum section 9, rewritten to describe what
+  actually shipped for both the Zongli chain and this sibling fix)
+
+**Not deferred; nothing left open on this task.**

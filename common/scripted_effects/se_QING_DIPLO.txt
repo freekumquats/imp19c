@@ -531,6 +531,16 @@ QING_gp_court_russia = {
 # [-16, -2] either side). A delayed follow-up report (qing_gp_dispatch.1, 20-40 days) then either
 # reinforces or partly undoes the easing, again charisma-weighted, and releases him.
 # $power$ = britain|france|russia (the tension-var suffix); $tag$ = GBR|FRA|RUS. Country scope (CHI).
+#
+# [task #10 2026-08-29 redesign, mirroring the fix landed on the Zongli play-dispatch
+# report (se_QING_ZONGLI_DISPATCH.txt / qing_zongli_dispatch.1)] The follow-up roll used
+# to happen on the click of qing_gp_dispatch.1's single "Hear the report" option -- a
+# report event whose desc was static/outcome-blind and whose loc used the invalid
+# "[scope:...GetName]" prefix (renders literal ERROR:[scope:...] in game). The roll now
+# resolves HERE, immediately, and hands qing_gp_dispatch.1 a settled
+# qing_gp_dispatch_evt_outcome flag (success/failure), read by desc's triggered_desc --
+# same idiom as qing_march_unrest_outcome (qing_march.6, task #91) and the now-fixed
+# qing_zongli_dispatch.1. The 20-40 day delay is kept as pure travel-time flavor.
 # ======================================================================
 QING_gp_dispatch_diplomat = {
 	QING_gp_init = yes
@@ -565,8 +575,31 @@ QING_gp_dispatch_diplomat = {
 			limit = { exists = c:$tag$ }
 			c:$tag$ = { add_opinion = { modifier = qing_gp_relation_opinion  target = ROOT } }
 		}
-		trigger_event = { id = qing_gp_dispatch.1  days = { 20 40 } }
 		LOG_line = { sys = QING  msg = "GP dispatch diplomat to $tag$ (sphere $power$, charisma-scaled)" }
+		# [task #10 2026-08-29] the follow-up roll resolves HERE (same 50/50 base + charisma-factor
+		# weights the old qing_gp_dispatch.1 option used) -- outcome decided before the report
+		# event fires, not by the player's click. This = country (CHI) throughout this effect
+		# (called scope=country from QING_mechanics_actions.txt), so the outcome flag is set
+		# directly, no save_scope_as needed. The diplomat marker/power-var are released inside
+		# the report event's own immediate (not here), so the event's re-check trigger
+		# (has_variable = qing_zongli_dispatched_gp_power) still holds when it fires days later.
+		random_list = {
+			50 = {
+				modifier = { factor = 2    scope:qing_gp_dispatch_evt_diplomat = { charisma >= 8 } }
+				modifier = { factor = 0.5  scope:qing_gp_dispatch_evt_diplomat = { charisma <= 3 } }
+				QING_DECLINE_nudge = { var = qing_gp_tension_$power$  amount = -6 }
+				set_variable = { name = qing_gp_dispatch_evt_outcome  value = flag:success }
+				LOG_line = { sys = QING  msg = "GP dispatch roll: SUCCESS branch fired for $tag$ (follow-up lands well), tension -6" }
+			}
+			50 = {
+				modifier = { factor = 2    scope:qing_gp_dispatch_evt_diplomat = { charisma <= 3 } }
+				modifier = { factor = 0.5  scope:qing_gp_dispatch_evt_diplomat = { charisma >= 8 } }
+				QING_DECLINE_nudge = { var = qing_gp_tension_$power$  amount = 6 }
+				set_variable = { name = qing_gp_dispatch_evt_outcome  value = flag:failure }
+				LOG_line = { sys = QING  msg = "GP dispatch roll: FAILURE branch fired for $tag$ (diplomat stumbles), tension +6" }
+			}
+		}
+		trigger_event = { id = qing_gp_dispatch.1  days = { 20 40 } }
 	}
 	# arm the per-power monthly cooldown (the scripted_gui gate reads it; cleared on the GOV pulse).
 	set_variable = { name = qing_gp_diplo_sent_$power$  value = 1 }

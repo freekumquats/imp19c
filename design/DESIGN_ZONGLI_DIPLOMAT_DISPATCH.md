@@ -415,3 +415,40 @@ both scope switches close) — was independently re-verified against on-disk cod
 correct with no further change.
 
 **Verdict: READY TO IMPLEMENT**, pending the user's go-ahead.
+
+## 9. Addendum (task #10, 2026-08-29) — report-event redesign
+
+As shipped, section 5.3's "ongoing skill-weighted event" put the `random_list` roll inside
+`qing_zongli_dispatch.1`'s single "Hear the report" option. This produced a screenshot-confirmed
+bug (`qing_zongli_dispatch.1.desc` used the invalid `[scope:qing_dispatch_evt_diplomat.GetName]`
+loc syntax — a scope saved by `save_scope_as` is read BARE in loc, never with the script-only
+`scope:` prefix) and a structural problem the user then asked to be redesigned: the event was a
+"useless click" — its desc never stated a concrete outcome, only a pre-click tooltip preview of
+what *might* happen, and the actual roll/effect application happened silently on the click with
+no follow-up report of which way it went.
+
+Fix (landed, commit `86acb0428`): `QING_zongli_dispatch_pulse` (se_QING_ZONGLI_DISPATCH.txt) now
+runs the same 50/50-base, charisma-skewed `random_list` itself, applies
+`DIPLOMACY_modify_play_success` immediately, and sets a country-scope
+`qing_zongli_dispatch_evt_outcome` flag (`flag:success`/`flag:failure`) before firing
+`qing_zongli_dispatch.1`. That single event stays the notification surface: its `trigger` requires
+`has_variable = qing_zongli_dispatch_evt_outcome`, its `desc` branches via two `triggered_desc`
+blocks keyed on that flag, and its one option (`"Understood"`) just `remove_variable`s it. This
+mirrors the codebase's existing proven idiom for exactly this shape, `qing_march_unrest_outcome` /
+`qing_march.6` (task #91) — resolve-then-flag-then-notify, one event, no second click. The 5-15
+day delay before the report event fires is kept as pure travel-time flavor; the mechanical outcome
+is locked in before the delay starts, not decided by the player's click.
+
+The identical bug/anti-pattern was found by inspection in the mirrored `qing_gp_dispatch.1` (Great
+Game "Dispatch a Diplomat" follow-up, se_QING_DIPLO.txt's `QING_gp_dispatch_diplomat`, which
+explicitly copied this event's original shape) — same invalid `[scope:...GetName]` loc syntax,
+same click-to-reveal `random_list`-in-option. Fixed the same way, for consistency with the now-
+landed Zongli pattern: `QING_gp_dispatch_diplomat` rolls the identical 50/50 + charisma-factor
+weights immediately (±6 tension on `qing_gp_tension_$power$`, magnitude unchanged), sets a
+`qing_gp_dispatch_evt_outcome` flag (`this` is already country scope throughout the effect, so no
+`save_scope_as` needed), and fires a single `qing_gp_dispatch.1` whose `desc` branches via
+`triggered_desc` the same way. Diplomat-marker teardown
+(`remove_variable = qing_zongli_dispatched_marker` / `qing_zongli_dispatched_gp_power`) stays in
+the event's own `immediate` (not hoisted into the dispatching effect), so the event's re-check
+trigger (`has_variable = qing_zongli_dispatched_gp_power`) still holds when it fires 20-40 days
+later.
