@@ -147,5 +147,50 @@ any gaps) to be logged in a follow-up entry once all 12 batches report back and 
 ## Task #5 — Laws sequence-restriction audit (all law groups)
 
 Dispatched to find the working Women's Rights precedent and extend the same adjacent-only
-law-change restriction to every other law group.
-**STATUS: IN PROGRESS as of this writing** — logged in a follow-up entry once complete.
+law-change restriction to every other law group. Found the precedent (Women's Rights,
+`00_social_laws.txt`, task #12) and the identical idiom already used a second time
+(succession_law, task #13): add `allow = { has_law = <preceding option> }` to every option
+after the first in an ordered group, merged with any pre-existing allow conditions.
+
+Audited all 10 files under `common/laws/`, 36 groups total, every option personally opened.
+Also caught that an EARLIER "task #13 audit" claiming a null result had been run against 5
+law files that don't even exist on this branch, and used the wrong screening criterion
+("pure no-downside ladders" instead of "any group with a defined order") — that null result
+was stale/wrong, redone from scratch.
+
+**Gated 20 more groups** (full list in commit `c147c76f1`). **Left 15 groups ungated** with
+reasons logged in the commit: several are categorical/lateral choices with no single-axis
+order (`oligarchy_type`, `judiciary_law`, `vote_count_law`, etc.), one is a 2-axis matrix
+(`non_tribal_land_law`), and two have only 2 options each (trivially adjacent already).
+
+Also fixed a real pre-existing brace bug found while auditing `00_administrative_laws.txt`
+(`legislative_monetary_policy` was nested inside `delegated_monetary_policy`'s body instead
+of being a sibling option).
+
+**Merge complication**: the agent's worktree had silently branched from a stale, diverged
+base (not `merge-overnight` tip) — same class of issue the Burma agent hit and self-corrected
+for; this one didn't notice. Cherry-picking its commit onto the real tip produced conflicts in
+3 files: `00_administrative_laws.txt` and `00_upper_house_laws.txt` (real content drift —
+current tip had newer modifier values/comments the stale base lacked) and `00_social_laws.txt`
+(a whole-file conflict caused purely by a CRLF-vs-LF mismatch between the stale base and
+current tip, not a real content conflict). Resolved all three by hand: recovered the current
+tip's clean version of each file, then manually re-applied the same substantive `allow`-block
+additions from the agent's diff, preserving every pre-existing modifier value/comment/on_enact
+block. Re-verified brace balance and line-ending consistency (no EOL churn) after resolution.
+
+**Post-merge code review, 3 findings**: (1) MEDIUM — `religious_law`'s new adjacency gates
+are largely redundant with its pre-existing `religion = secular` gates on the normal
+non-secular->secular path (the new `has_law` line isn't usually the deciding condition) —
+not a regression, but the commit's "clean ladder" framing didn't fit this group. Corrected
+the comment to describe the actual interaction honestly rather than re-model the group's
+religion-state logic (out of this task's scope). (2) LOW — a comment in
+`00_administrative_laws.txt` claimed a brace-bug fix that only applied to the agent's stale
+base, not to what actually landed on this branch — corrected. (3) LOW/informational —
+`constitutional_monarchy_laws`' ladder baseline (`symbolic_monarchy`) isn't the group's
+first-listed option (`no_monarchy`); pre-existing behavior, not introduced by this commit,
+noted but not touched (would need a setup-data check, out of scope).
+
+Commit `c147c76f1` (cherry-picked from the agent's `b1e68b826`) + review-fix commit, both
+committed as freekumquats, pushed to `merge-overnight`, verified via `git fetch` +
+`git log origin/merge-overnight`.
+**STATUS: DONE.**
