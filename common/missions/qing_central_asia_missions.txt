@@ -224,8 +224,11 @@ qing_central_asia_mission = {
 			custom_tooltip = qing_ca_begs_tt
 			# co-opting the begs presses the imperial claim over the Tarim oasis cities: claim
 			# every Turkestan-region province the Qing does not already hold (bounded, guarded).
+			# [audit-fix] dropped the stray "NOT = { owns = prev }" — owns takes a province-id literal,
+			# not a scope reference (RHS-comparison rule), and was redundant with the owner=ROOT check
+			# right beside it anyway.
 			every_province = {
-				limit = { is_in_region = Turkestan  NOT = { owns = prev }  NOT = { owner = ROOT } }
+				limit = { is_in_region = Turkestan  NOT = { owner = ROOT } }
 				add_claim = ROOT
 			}
 			current_ruler = { add_popularity = 10 }
@@ -297,11 +300,17 @@ qing_central_asia_mission = {
 		on_start = { add_treasury = -40  TREASURY_LOG_it = { amount = -40 } }
 		on_completion = {
 			custom_tooltip = qing_ca_border_tt
-			add_country_modifier = { name = qing_frontier_reclamation  duration = 7300 }
 			current_ruler = { add_popularity = 10 }
 			add_stability = 1
 			# [#234] the karun (卡倫) picket line made concrete: raise a frontier fort on the
 			# westernmost held frontier province (Fergana if held, else the Turkestan march).
+			# [audit-fix] qing_frontier_reclamation is a PROVINCE-scope modifier (local_monthly_food_
+			# modifier / local_tax_modifier / local_population_growth — see qing_settle_frontier_
+			# modifiers.txt; stamped elsewhere via every_owned_province + add_province_modifier, see
+			# QING_settle_reclaim_mongolia). The prior add_country_modifier call here put a province-
+			# keyed modifier on the COUNTRY scope, where none of its keys apply — dead code, same bug
+			# class as the Burma qing_burma_miasma scope mismatch. Fixed to stamp it on the same
+			# frontier province the fort is raised on.
 			if = {
 				limit = { any_owned_province = { is_in_region = Fergana  NOT = { has_building = qing_frontier_fort_building } } }
 				ordered_owned_province = {
@@ -309,6 +318,7 @@ qing_central_asia_mission = {
 					max = 1
 					limit = { is_in_region = Fergana  NOT = { has_building = qing_frontier_fort_building } }
 					add_building_level = qing_frontier_fort_building
+					save_scope_as = qing_ca_border_prov
 				}
 			}
 			else_if = {
@@ -318,7 +328,12 @@ qing_central_asia_mission = {
 					max = 1
 					limit = { is_in_region = Turkestan  NOT = { has_building = qing_frontier_fort_building } }
 					add_building_level = qing_frontier_fort_building
+					save_scope_as = qing_ca_border_prov
 				}
+			}
+			if = {
+				limit = { exists = scope:qing_ca_border_prov  NOT = { scope:qing_ca_border_prov = { has_province_modifier = qing_frontier_reclamation } } }
+				scope:qing_ca_border_prov = { add_province_modifier = { name = qing_frontier_reclamation  duration = 7300 } }
 			}
 			LOG_line = { sys = QING  msg = "MISSION task Central Asia frontier fixed" }
 		}
@@ -353,6 +368,9 @@ qing_central_asia_mission = {
 		}
 	}
 
+	# [audit-fix] made concrete: running down the remnant Dzungar bands genuinely eases the
+	# ethnic tension the conquest left behind — the proven QING_DECLINE_nudge idiom (se_QING_
+	# DECLINE, same one the Burma qing_burma_pacify task uses), not a flat popularity award.
 	qing_ca_dzungar_remnant = {
 		icon = qing_ca_dzungar_remnant
 		requires = { qing_ca_kazakh }
@@ -360,11 +378,19 @@ qing_central_asia_mission = {
 		on_start = { add_treasury = -55  TREASURY_LOG_it = { amount = -55 } }
 		on_completion = {
 			custom_tooltip = qing_ca_dzungar_remnant_tt
+			QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -3 }
 			current_ruler = { add_popularity = 11 }
-			LOG_line = { sys = QING  msg = "MISSION task qing_ca_dzungar_remnant" }
+			LOG_line = { sys = QING  msg = "MISSION task Central Asia Dzungar remnants run down, ethnic tension eased" }
 		}
 	}
 
+	# [audit-fix] made concrete: the 1771 return of the Torghut (Kalmyk) Mongols from the Volga
+	# was organized by Qianlong into new Mongol banner units under Ili's command — a REAL on-map
+	# unit raised at Huiyuan (p:3534, the Ili General's seat — same province the setup-time Ili
+	# Banner Garrison already sits in, see imp19c_effects_legion_setup.txt), via the proven
+	# SE_qing_raise_garrison idiom (no distinct "Mongol banner" unit type exists in this mod;
+	# qing_eight_banners is the proven vessel for a newly-bannered population, same choice the
+	# Burma tree makes for its Manchu Banner Elite task).
 	qing_ca_torghut = {
 		icon = qing_ca_torghut
 		requires = { qing_ca_khanates }
@@ -372,11 +398,16 @@ qing_central_asia_mission = {
 		on_start = { add_political_influence = -25 }
 		on_completion = {
 			custom_tooltip = qing_ca_torghut_tt
+			SE_qing_raise_garrison = { prov = p:3534  name = "Torghut Banner"  size = 3  unit = qing_eight_banners }
 			current_ruler = { add_popularity = 12 }
-			LOG_line = { sys = QING  msg = "MISSION task qing_ca_torghut" }
+			LOG_line = { sys = QING  msg = "MISSION task Central Asia Torghut Mongols banner raised at Huiyuan" }
 		}
 	}
 
+	# [audit-fix] made concrete: endows the real oasis bazaar at Kashgar (p:2700 — the westernmost
+	# frontier oasis, already the Kashgar Banner Garrison's seat, see imp19c_effects_legion_setup.txt)
+	# with the qing_oasis_bazaar_building (proven concrete object for "opening" a Silk-Road entrepôt;
+	# common/buildings/qing_fiscal_buildings.txt). Guarded on Qing ownership + not already built.
 	qing_ca_kashgar = {
 		icon = qing_ca_kashgar
 		requires = { qing_ca_ili_general }
@@ -384,11 +415,20 @@ qing_central_asia_mission = {
 		on_start = { add_treasury = -60  TREASURY_LOG_it = { amount = -60 } }
 		on_completion = {
 			custom_tooltip = qing_ca_kashgar_tt
+			if = {
+				limit = { exists = p:2700  p:2700 = { owner = ROOT  NOT = { has_building = qing_oasis_bazaar_building } } }
+				p:2700 = { add_building_level = qing_oasis_bazaar_building }
+			}
 			current_ruler = { add_popularity = 10 }
-			LOG_line = { sys = QING  msg = "MISSION task qing_ca_kashgar" }
+			LOG_line = { sys = QING  msg = "MISSION task Central Asia Kashgar oasis bazaar endowed" }
 		}
 	}
 
+	# [audit-fix] made concrete: Yarkand has no distinct province in this mod's map (it is folded
+	# into the same Tarim-basin entrepôt cluster as Kashgar/Aksu/Khotan — see qing_new_buildings_
+	# l_english.yml, qing_caravan_l_english.yml). Closest proven idiom: endow the oasis bazaar
+	# (same building as qing_ca_kashgar above) at the most-populous held Tarim-area province that
+	# doesn't already have one (is_in_area = Tarim, proven scope: se_QING_ILI.txt).
 	qing_ca_yarkand = {
 		icon = qing_ca_yarkand
 		requires = { qing_ca_begs }
@@ -396,11 +436,24 @@ qing_central_asia_mission = {
 		on_start = { add_treasury = -55  TREASURY_LOG_it = { amount = -55 } }
 		on_completion = {
 			custom_tooltip = qing_ca_yarkand_tt
+			if = {
+				limit = { any_owned_province = { is_in_area = Tarim  NOT = { has_building = qing_oasis_bazaar_building } } }
+				ordered_owned_province = {
+					order_by = total_population
+					max = 1
+					limit = { is_in_area = Tarim  NOT = { has_building = qing_oasis_bazaar_building } }
+					add_building_level = qing_oasis_bazaar_building
+				}
+			}
 			current_ruler = { add_popularity = 10 }
-			LOG_line = { sys = QING  msg = "MISSION task qing_ca_yarkand" }
+			LOG_line = { sys = QING  msg = "MISSION task Central Asia Yarkand caravan wealth brought under writ" }
 		}
 	}
 
+	# [audit-fix] made concrete: Khotan's jade rivers — retool the most-populous held Tarim-area
+	# province not already on gems to the real tradeable good (set_trade_goods = gems), the same
+	# idiom the Burma tree uses for its Kachin jade_mines task ("gems" is the closest real good to
+	# jade in common/trade_goods/*.txt).
 	qing_ca_khotan = {
 		icon = qing_ca_khotan
 		requires = { qing_ca_dzungar_remnant }
@@ -408,11 +461,24 @@ qing_central_asia_mission = {
 		on_start = { add_treasury = -60  TREASURY_LOG_it = { amount = -60 } }
 		on_completion = {
 			custom_tooltip = qing_ca_khotan_tt
+			if = {
+				limit = { any_owned_province = { is_in_area = Tarim  NOT = { trade_goods = gems } } }
+				ordered_owned_province = {
+					order_by = total_population
+					max = 1
+					limit = { is_in_area = Tarim  NOT = { trade_goods = gems } }
+					set_trade_goods = gems
+				}
+			}
 			current_ruler = { add_popularity = 10 }
-			LOG_line = { sys = QING  msg = "MISSION task qing_ca_khotan" }
+			LOG_line = { sys = QING  msg = "MISSION task Central Asia Khotan jade rivers pass to the throne" }
 		}
 	}
 
+	# [audit-fix] made concrete: presses KOK specifically into the tributary fold (the same
+	# FUNC_make_subject idiom QING_ca_embrace_khanates already uses for it, but as this task's own
+	# deliverable rather than only the parent qing_ca_khanates task's sweep — guarded existence +
+	# not-already-subject, a no-op if already embraced).
 	qing_ca_kokand = {
 		icon = qing_ca_kokand
 		requires = { qing_ca_torghut }
@@ -420,11 +486,15 @@ qing_central_asia_mission = {
 		on_start = { add_political_influence = -25 }
 		on_completion = {
 			custom_tooltip = qing_ca_kokand_tt
+			if = { limit = { exists = c:KOK  NOT = { c:KOK = { is_subject_of = ROOT } } }  FUNC_make_subject = { overlord = ROOT  target = c:KOK  type = sinosphere_tributary } }
 			current_ruler = { add_popularity = 10 }
-			LOG_line = { sys = QING  msg = "MISSION task qing_ca_kokand" }
+			LOG_line = { sys = QING  msg = "MISSION task Central Asia Kokand accepts the caravan accord" }
 		}
 	}
 
+	# [audit-fix] made concrete: opens the road to Bukhara by pressing BUK specifically into the
+	# tributary fold (same FUNC_make_subject idiom as qing_ca_kokand above; guarded, a no-op if
+	# already embraced by qing_ca_khanates).
 	qing_ca_bukhara = {
 		icon = qing_ca_bukhara
 		requires = { qing_ca_kashgar }
@@ -432,11 +502,16 @@ qing_central_asia_mission = {
 		on_start = { add_political_influence = -25 }
 		on_completion = {
 			custom_tooltip = qing_ca_bukhara_tt
+			if = { limit = { exists = c:BUK  NOT = { c:BUK = { is_subject_of = ROOT } } }  FUNC_make_subject = { overlord = ROOT  target = c:BUK  type = sinosphere_tributary } }
 			current_ruler = { add_popularity = 10 }
-			LOG_line = { sys = QING  msg = "MISSION task qing_ca_bukhara" }
+			LOG_line = { sys = QING  msg = "MISSION task Central Asia road to Bukhara opened" }
 		}
 	}
 
+	# [audit-fix] made concrete: holding the Tarbagatai passes onto the Kazakh steppe raises a
+	# real frontier fort on the most-populous held Turkestan-region province lacking one — the
+	# same qing_frontier_fort_building idiom qing_ca_border uses later in this tree (guarded so
+	# the two tasks never double-build the same province).
 	qing_ca_tarbagatai = {
 		icon = qing_ca_tarbagatai
 		requires = { qing_ca_yarkand }
@@ -444,11 +519,23 @@ qing_central_asia_mission = {
 		on_start = { add_treasury = -55  TREASURY_LOG_it = { amount = -55 } }
 		on_completion = {
 			custom_tooltip = qing_ca_tarbagatai_tt
+			if = {
+				limit = { any_owned_province = { is_in_region = Turkestan  NOT = { has_building = qing_frontier_fort_building } } }
+				ordered_owned_province = {
+					order_by = total_population
+					max = 1
+					limit = { is_in_region = Turkestan  NOT = { has_building = qing_frontier_fort_building } }
+					add_building_level = qing_frontier_fort_building
+				}
+			}
 			current_ruler = { add_popularity = 10 }
-			LOG_line = { sys = QING  msg = "MISSION task qing_ca_tarbagatai" }
+			LOG_line = { sys = QING  msg = "MISSION task Central Asia Tarbagatai passes held" }
 		}
 	}
 
+	# [audit-fix] made concrete: confirming the begs as the throne's officers genuinely eases the
+	# ethnic tension of alien rule over the oasis towns — same QING_DECLINE_nudge idiom as
+	# qing_ca_dzungar_remnant above, a distinct real state change from a flat popularity award.
 	qing_ca_muslim_begs = {
 		icon = qing_ca_muslim_begs
 		requires = { qing_ca_khotan }
@@ -456,11 +543,17 @@ qing_central_asia_mission = {
 		on_start = { add_political_influence = -20 }
 		on_completion = {
 			custom_tooltip = qing_ca_muslim_begs_tt
+			QING_DECLINE_nudge = { var = qing_ethnic_tension  amount = -2 }
 			current_ruler = { add_popularity = 10 }
-			LOG_line = { sys = QING  msg = "MISSION task qing_ca_muslim_begs" }
+			LOG_line = { sys = QING  msg = "MISSION task Central Asia Muslim begs confirmed, ethnic tension eased" }
 		}
 	}
 
+	# [audit-fix] made concrete: raises a REAL Manchu banner garrison at Aksu (p:2977 — the other
+	# proven Tarim oasis seat already carrying a Green Standard field officer from setup, see
+	# imp19c_effects_legion_setup.txt; adding an Eight Banners detachment on top is the same
+	# additive-garrison idiom the Burma tree uses for green_standard/manchu_bannermen), matching
+	# the literal "walled Manchu garrison cities" claim.
 	qing_ca_garrison_cities = {
 		icon = qing_ca_garrison_cities
 		requires = { qing_ca_kokand }
@@ -468,9 +561,10 @@ qing_central_asia_mission = {
 		on_start = { add_treasury = -70  TREASURY_LOG_it = { amount = -70 } }
 		on_completion = {
 			custom_tooltip = qing_ca_garrison_cities_tt
+			SE_qing_raise_garrison = { prov = p:2977  name = "Aksu Banner Garrison"  size = 3  unit = qing_eight_banners }
 			current_ruler = { add_popularity = 14 }
 			add_stability = 1
-			LOG_line = { sys = QING  msg = "MISSION task qing_ca_garrison_cities" }
+			LOG_line = { sys = QING  msg = "MISSION task Central Asia Aksu garrison city raised" }
 		}
 	}
 
