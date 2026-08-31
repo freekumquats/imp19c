@@ -144,6 +144,52 @@ scripted_effects/modifiers), not just prose-editing.
 **STATUS: IN PROGRESS as of this writing** — full results (files fixed / already-clean /
 any gaps) to be logged in a follow-up entry once all 12 batches report back and are merged.
 
+## Task #12 — scan ALL Qing mission trees for the same stub-task pattern, fix fully
+
+User follow-up after the Burma fix: check every other Qing mission tree (19 files under
+`common/missions/qing_*`) for the same pattern — a task that spends treasury/PI for nothing
+but ruler popularity while its tooltip claims a concrete outcome (unit/subject/claim/
+building/retool) the effect never delivers — and fix each stub with a real requirement AND
+a real outcome, not just a tooltip patch.
+
+Dispatched 4 parallel worktree-isolated agents, ~4-5 files each, each instructed to
+self-correct onto `origin/merge-overnight` if it found itself on a stale worktree base
+(two earlier agents this run hit that trap silently; this time it was made an explicit
+first step).
+
+- **Batch A** (Africa, Central Asia, Himalaya/SEA, India, Colonization): audited all ~5
+  trees; Colonization was already clean; fixed 4 tooltip/effect mismatches in Africa, 12
+  stubs in Central Asia (real garrisons, buildings, trade retool, tributaries, a frontier
+  fort, ethnic-tension nudges) plus a scope bug and an illegal RHS var-ref, 3 more stubs in
+  Himalaya/SEA beyond the already-fixed Burma tributary branch (new
+  `qing_hs_tributary_court` modifier), 13 stubs in India (bidirectional opinion diplomacy
+  with 8 princely states, 4 real claims, 2 tributaries, a real river-fleet unit). Committed
+  `3aecf7996` → cherry-picked clean as `576fd764d`. Review: dispatched, pending at time of
+  push (pushed anyway per the stacked-commit pattern; any finding gets a follow-up fix
+  commit, same as task #5's).
+- **Batch B** (Japan, pre-Perry Japan, Mexico, Nanyang): hit a background API error right
+  before its first commit; resumed, self-verified its own uncommitted edits survived
+  (Mexico's 16 tasks were genuinely already clean, not skipped by the crash — re-audited to
+  confirm), rebased onto a fresh branch off current `origin/merge-overnight`, and committed
+  cleanly. Fixed 11 stubs in Japan, 11 in pre-Perry Japan, 14 in Nanyang. Committed
+  `451587e49` → cherry-picked clean as `f5b474b26`. Review: dispatched, pending.
+- **Batch C** (New World, Open Japan, Reform, Self-Strengthening): New World and
+  Self-Strengthening already clean. Fixed 14 stubs in Open Japan (real claims on 8
+  provinces including 2 disclosed geographic proxies for two islands this map doesn't
+  model separately, real rivalry/accommodation diplomacy with 6 daimyo domains, wealth
+  grants) and 8 in Reform (a real bank building, reform-pressure/faction-balance wiring
+  matching the tree's own proven pattern, one corrected tooltip that had been overclaiming
+  a different task's effect). Committed `6435ddb3d` → cherry-picked clean as `f9f85e8d2`.
+  **Review: CLEAN** — one LOW non-blocking caveat (a building-grant potential-gate risk
+  shared with 4 pre-existing #234 grants, not a regression), no fixes needed.
+- **Batch D** (Settle Frontier, Summer Palace, Taiping, Treasure Fleet, Xinjiang): dispatched,
+  still running at time of writing.
+
+All 3 landed commits + the code-review dispatches pushed to `merge-overnight` as of
+`f5b474b26` (verified via `git fetch` + `git log origin/merge-overnight`).
+**STATUS: IN PROGRESS** — batch D and 2 of 3 reviews still outstanding; logged in a
+follow-up entry once everything lands (with fix commits for any review finding).
+
 ## Task #5 — Laws sequence-restriction audit (all law groups)
 
 Dispatched to find the working Women's Rights precedent and extend the same adjacent-only
