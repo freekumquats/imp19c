@@ -203,7 +203,15 @@ FUNC_governorship_country_pops_ratio = {
 			}
 		}
 	}
-	divide = owner.country_population
+	# [fix, task #6 2026-09-03] unguarded divide -- owner.country_population can be transiently
+	# 0 (e.g. a new/minor country before pop sync), Div/0ing the whole ratio to empty and
+	# cascading into every consumer (DEMAND_military_from_armies, JOBS_military_governorship,
+	# and everything downstream of those). Floored per this codebase's own established divide-
+	# guard idiom (se_GLOBALTRADE_split.txt, task #17 2026-08-29: "divide = { value = X  min = 1
+	# }"). error.log confirmed this exact Div/0 (INCOME_cache_governorship_military_supplies_
+	# demand -> INCOME_calculate_all_military_procurement_wealth_owed -> INCOME_calculate_and_
+	# distribute_military_procurement_wealth_owed) in two separate boots.
+	divide = { value = owner.country_population  min = 1 }
 }
 
 FUNC_governorship_ratio_upper_strata = {
@@ -408,7 +416,9 @@ FUNC_governorship_population_as_ratio_of_country = {
 	# Scope: Governorship
 	# Function: Get the % of the country's population living in this governorship
 	value = var:governorship_population
-	divide = owner.country_population
+	# [fix, task #6 2026-09-03] same unguarded-divide class as FUNC_governorship_country_pops_
+	# ratio above -- floored per the same established idiom.
+	divide = { value = owner.country_population  min = 1 }
 }
 
 FUNC_governorship_infrastructure_as_ratio_of_country = {
