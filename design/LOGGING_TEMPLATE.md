@@ -132,6 +132,21 @@ are likewise clean-keyed (the sys tag is literal there; only `$stage$` fuses, mi
 **Bottom line:** dynamic lines are readable and grep-key-clean; they still carry a cosmetic `$`
 per param. That is the ceiling. Do not try to eliminate the `$` — proven impossible.
 
+**CORRECTION 2026-09-03 — a LEADING `$param$` is NOT merely cosmetic, it is CALL-VOIDING.**
+Everything above holds when the `$param$` sits mid-string, after real literal text. It does
+NOT hold when the substitution is the FIRST thing inside the quotes. `se_QING_COUNCIL.txt` had
+four `LOG_line` calls shaped `msg = "$office$ seat filled by DRAW"` — `$office$` is the very
+first token after the opening `"`. Real boot evidence: 286×/boot,
+`Compiling source for LOG_line failed for unknown arguments: seat, by, (, )`. Mechanism: the
+"eats the one char before the param" rule eats the OPENING QUOTE ITSELF when the param is
+first — the string unquotes, and its own words (`seat`, `by`, `(`, `)`) leak out and get
+parsed as stray bareword arguments to the `LOG_line` call, which is why the compiler names
+them as "unknown arguments." Fix: **never let a `$param$` be the first character inside the
+quotes** — prepend any literal word (`msg = "seat $office$ filled by DRAW"` compiles and
+renders fine, cosmetic mangling only, per the rule above). This is now a MANDATORY checklist
+item (below) — checked by making sure every dynamic `LOG_*` string's first non-quote
+character is a letter/word, never `$`.
+
 ---
 
 ## Pre-commit checklist for any logging change (MANDATORY)
@@ -140,6 +155,10 @@ per param. That is the ceiling. Do not try to eliminate the `$` — proven impos
    pre-existing core `LOG_*` writers are the documented exception — they can't be clean, see below).
    `grep -n 'debug_log = "[^"]*\$'` your file to see every param line.
 2. **No `[` brackets in any `debug_log` string** (parsed as data-function syntax, mangles).
+2b. **For the core `LOG_*` writers' `$param$` strings (the one documented exception to #1):
+   the substitution must NEVER be the first character inside the quotes** — a leading
+   `$param$` eats the opening quote and voids the whole call ("unknown arguments", see
+   correction above), it is not just cosmetic. Prepend a literal word if needed.
 3. **No numeric render attempt** (`.GetValue`, `Multiply_CFixedPoint`, digit math). Use bands.
 4. **Every comparison RHS is a literal**, not `var:x` / a script_value.
 5. **Sentinel-guard staged svalues** (`> -999999999`) and give the empty case its own line.
