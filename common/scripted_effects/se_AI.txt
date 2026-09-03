@@ -1350,42 +1350,81 @@ AI_diplomatic_play_evaluate_war = {
 	$diplomatic_play$ = { save_scope_as = diplomatic_play }
 
 	scope:diplomatic_play = {
+		# [fix, 2026-09-03, user correction] the OLD primary term below was
+		# (instigator_side - target_side) * 15 -- a stronger instigator made
+		# war_assessment MORE positive, i.e. more "war likely." That models only
+		# "is the instigator confident it would win," not "will an actual fight
+		# happen" -- an actual war also needs the WEAKER side to be willing to
+		# resist rather than fold. A target facing a hopeless mismatch capitulates
+		# to the demand instead of fighting a war it cannot win; an instigator
+		# facing a stronger target doesn't attack at all (the old formula already
+		# got THIS half right, since a negative instigator-target gap already
+		# pushed war_assessment down). So military imbalance in EITHER direction
+		# should make war LESS likely, and war should be MOST likely when the two
+		# sides are roughly evenly matched (both confident enough to actually
+		# fight). Staged the raw signed gap into AI_play_power_diff, then the
+		# main formula penalizes its ABSOLUTE value (proven |x|=max(x,-x) idiom,
+		# se_BALANCE_HISTORY.txt's BALHIST_fold_abs: min = {value=X multiply=-1}
+		# raises the running value to max(X,-X) since `min` is Jomini's floor,
+		# not a ceiling), instead of rewarding the signed value directly.
+		set_local_variable = {
+			name = AI_play_power_diff
+			value = {
+				# relative military strength, instigator side vs. target side.
+				# "Side" = own forces + permanent allies + THIS PLAY's
+				# supporters (not just formal allies).
+				value = {
+					value = 0
+					add = var:play_instigator.num_of_cohorts
+					add = { value = var:play_instigator.num_of_ships  multiply = 0.1 }
+					add = { value = var:play_instigator.manpower       multiply = 0.05 }
+					var:play_instigator = {
+						every_allied_country = { add = num_of_cohorts }
+					}
+					every_in_list = {
+						variable = play_observers_support_instigator
+						add = { value = THIS.num_of_cohorts }
+						add = { value = THIS.num_of_ships  multiply = 0.1 }
+					}
+				}
+				subtract = {
+					value = 0
+					add = var:play_target_country.num_of_cohorts
+					add = { value = var:play_target_country.num_of_ships  multiply = 0.1 }
+					add = { value = var:play_target_country.manpower       multiply = 0.05 }
+					var:play_target_country = {
+						every_allied_country = { add = num_of_cohorts }
+					}
+					every_in_list = {
+						variable = play_observers_support_target
+						add = { value = THIS.num_of_cohorts }
+						add = { value = THIS.num_of_ships  multiply = 0.1 }
+					}
+				}
+			}
+		}
 		set_local_variable = {
 			name = AI_play_war_assessment
 			value = {
 				value = 0
-				add = {
-					# PRIMARY -- relative military strength, instigator side vs. target
-					# side. "Side" = own forces + permanent allies + THIS PLAY's
-					# supporters (not just formal allies).
-					value = {
-						value = 0
-						add = var:play_instigator.num_of_cohorts
-						add = { value = var:play_instigator.num_of_ships  multiply = 0.1 }
-						add = { value = var:play_instigator.manpower       multiply = 0.05 }
-						var:play_instigator = {
-							every_allied_country = { add = num_of_cohorts }
-						}
-						every_in_list = {
-							variable = play_observers_support_instigator
-							add = { value = THIS.num_of_cohorts }
-							add = { value = THIS.num_of_ships  multiply = 0.1 }
-						}
-					}
-					subtract = {
-						value = 0
-						add = var:play_target_country.num_of_cohorts
-						add = { value = var:play_target_country.num_of_ships  multiply = 0.1 }
-						add = { value = var:play_target_country.manpower       multiply = 0.05 }
-						var:play_target_country = {
-							every_allied_country = { add = num_of_cohorts }
-						}
-						every_in_list = {
-							variable = play_observers_support_target
-							add = { value = THIS.num_of_cohorts }
-							add = { value = THIS.num_of_ships  multiply = 0.1 }
-						}
-					}
+				subtract = {
+					# PRIMARY -- penalize the EXCESS of |instigator_side - target_side|
+					# beyond a 50-strength-point dead band, not the raw gap itself.
+					# [fix, review-flagged 2026-09-03] a bare |diff|*15 peaks exactly at
+					# diff=0 with no flat region -- it punished even a modest, ordinary
+					# military edge as heavily as a real mismatch (e.g. diff=20 alone
+					# already crossed the -300 "not willing" boundary). A dead band
+					# leaves any gap within it contested/roughly-even (no penalty,
+					# same as true parity); only a gap BEYOND it -- a genuine lopsided
+					# mismatch -- costs anything, and it costs the excess only, not the
+					# whole gap. 50 and 15 are both best-guess magnitudes (cohort-count
+					# gaps ran 150-399 in one real boot's diagnostic) -- needs a boot to
+					# confirm war frequency now tracks actual military balance, then
+					# re-tune both numbers.
+					value = local_var:AI_play_power_diff
+					min = { value = local_var:AI_play_power_diff  multiply = -1 }
+					subtract = 50
+					min = 0
 					multiply = 15
 				}
 				# SECONDARY -- existing terms, still real, demoted: can no longer

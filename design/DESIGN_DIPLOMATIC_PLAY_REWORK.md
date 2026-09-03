@@ -112,6 +112,58 @@ issue). It is a **missing reconciliation** problem: nothing checks
 whether the war-willingness conclusion and the attitude conclusion agree
 before either is shown or acted on.
 
+## CORRECTION (2026-09-03): the primary term rewarded the wrong shape
+
+The section immediately below shipped a primary term of
+`(instigator_side - target_side) * WEIGHT`, added to `war_assessment`. That
+means a STRONGER instigator produces a MORE positive score — read as "more
+war-likely." That is wrong: being confident you would win a war is not the
+same thing as a war actually happening. A real fight also needs the WEAKER
+side to be willing to resist rather than capitulate — a target facing a
+hopeless mismatch settles the demand instead of fighting a war it cannot
+win. The old shape only ever modeled the instigator's own confidence, never
+the target's incentive to fight back.
+
+**Fix implemented:** the primary term now penalizes the ABSOLUTE gap,
+`-|instigator_side - target_side| * WEIGHT`, not the signed gap. Parity
+(the two sides are evenly matched) is the LEAST-penalized configuration —
+war is most likely there, because both sides are confident enough to
+actually fight. Imbalance in EITHER direction — instigator much stronger
+OR target much stronger — pushes `war_assessment` down, toward "not
+willing," for two different, correct reasons: an instigator facing a
+stronger target doesn't attack (this half was already correct in the old
+shape, since a negative raw gap already suppressed the score); a target
+facing a much weaker instigator's demand, or an instigator facing a much
+weaker target, no longer reads as "very willing" from raw strength alone —
+the mismatch itself is now the thing being penalized, not rewarded.
+
+Implemented in `se_AI.txt`'s `AI_diplomatic_play_evaluate_war`: the raw
+signed gap is staged into a new local var (`AI_play_power_diff`), then the
+main formula subtracts its absolute value (`|x| = max(x, -x)`, the proven
+idiom already used by `se_BALANCE_HISTORY.txt`'s `BALHIST_fold_abs`:
+`min = { value = X  multiply = -1 }` raises the running value to
+`max(X, -X)`, since `min` is Jomini's floor, not a ceiling). Every
+secondary term (treasury, stability, war exhaustion, infamy/stability cost,
+the truce veto) is unchanged.
+
+**Refined (same session, review-flagged):** a bare `-|diff| * 15` peaks exactly
+at `diff = 0` with no flat region — it punished even a modest, ordinary
+military edge as heavily as a genuine mismatch (e.g. `diff = 20` alone
+already crosses the `-300` "not willing" display boundary on its own).
+Added a 50-strength-point dead band: only the EXCESS of `|diff|` beyond 50
+is penalized, so any gap within the band reads as "roughly contested,"
+same as true parity — a real fight only becomes unlikely once the mismatch
+is genuinely lopsided, not merely uneven. Both 50 (the band) and 15 (the
+weight) are best-guess magnitudes, not derived — needs a boot to confirm
+war frequency tracks actual military balance, then a re-tune of both.
+
+**Not yet revisited:** the tuning tables and `ai_chance` tier boundaries
+elsewhere in this doc (rows 1-9, the tier ladder in the "AI behavior" section
+below) were derived against the OLD signed-gap shape's expected value range.
+They need a fresh boot read against the new |gap|-penalty shape before
+re-tuning — flagging, not doing here, since this fix's scope is the formula
+shape itself, not a full re-tune of every dependent number.
+
 ## USER DIRECTIVE (2026-08-28): war_assessment rearchitected around military strength
 
 **This supersedes the "Proposed fix" section below** — the user's own diagnosis
