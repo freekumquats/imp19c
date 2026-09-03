@@ -112,6 +112,14 @@ def check_log_macro(path):
     # time; the only defect is the cosmetic mangling se_LOG.txt's own header already documents and
     # the project already tolerates for $sys$/$msg$ (one char eaten before the token, a stray
     # trailing '$' left over). Ugly, not broken — so '$' is a WARNING, not a fail.
+    #
+    # [2026-09-03 correction, task #6 log-triage] that mid-string tolerance does NOT extend to a
+    # LEADING '$param$' — a substitution as the very first character inside the quotes eats the
+    # OPENING QUOTE itself (the "eat the char before the param" rule applied to the quote mark),
+    # unquoting the string so its own words leak out as stray bareword arguments to the LOG_line
+    # call. Real boot evidence: se_QING_COUNCIL.txt's msg = "$office$ seat filled by DRAW" (four
+    # sites) compile-failed 286x/boot ("unknown arguments: seat, by, (, )"). This IS call-voiding,
+    # same severity as '#', not the cosmetic-only mid-string case. See design/LOGGING_TEMPLATE.md.
     for i, line in added_lines(path):
         if not LOGFN.search(line):
             continue
@@ -119,6 +127,8 @@ def check_log_macro(path):
             s = m.group(1)
             if "#" in s:
                 fails.append(f"[LOGMACRO] {path}:{i}: '#' inside a LOG string truncates the line at parse time: \"{s[:60]}\"")
+            elif s.startswith("$"):
+                fails.append(f"[LOGMACRO] {path}:{i}: LEADING '$param$' eats the opening quote and voids the whole call (not cosmetic — see design/LOGGING_TEMPLATE.md): \"{s[:60]}\"")
             elif "$" in s:
                 warns.append(f"[LOGMACRO] {path}:{i}: '$' inside a LOG string renders mangled but NOT voided (cosmetic only, see se_LOG.txt): \"{s[:60]}\"")
 
