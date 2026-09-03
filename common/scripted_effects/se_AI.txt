@@ -1447,17 +1447,39 @@ AI_diplomatic_play_evaluate_war = {
 			value = local_var:AI_play_war_assessment
 		}
 
-		# [log-fix 2026-08-31, user request] diagnostic dump of the military-strength primary
-		# term's real inputs, so a boot can confirm raised cohorts (incl. script-raised
+		# [log-fix 2026-09-02] the 2026-08-31 diagnostic below was BROKEN -- a fresh boot
+		# (logs.zip, Sep 2 01:02) showed every bracketed value rendering the literal word
+		# "ERROR:" instead of a number. Root cause: design/LOGGING_TEMPLATE.md's proven rule
+		# -- a debug_log/LOG_line string cannot render ANY [Scope.Func] bracket dynamic text
+		# at all ("[ROOT.MakeScope.GetVariable('x').GetValue] -> renders nothing", byte-proven
+		# from an earlier boot) -- was violated outright. Numeric values cannot be printed;
+		# replaced with the proven band-ladder pattern (fully literal strings, no brackets,
+		# no $param$) so a boot can actually confirm raised cohorts (incl. script-raised
 		# garrisons -- SE_qing_raise_garrison's create_unit output counts identically to any
-		# other army, per direct verification) are actually feeding this formula, and by how
-		# much, rather than trusting the static read alone.
+		# other army, per direct verification) are feeding this formula, and roughly how much.
 		set_variable = { name = AI_war_assess_log_instigator_cohorts  value = var:play_instigator.num_of_cohorts }
 		set_variable = { name = AI_war_assess_log_target_cohorts      value = var:play_target_country.num_of_cohorts }
-		LOG_line = {
-			sys = AI
-			msg = "war_assessment [diplomatic_play.GetVariable('play_instigator').GetCountry.GetTag] vs [diplomatic_play.GetVariable('play_target_country').GetCountry.GetTag]: instigator cohorts=[diplomatic_play.GetVariable('AI_war_assess_log_instigator_cohorts').GetValue|0] target cohorts=[diplomatic_play.GetVariable('AI_war_assess_log_target_cohorts').GetValue|0] final war_assessment=[diplomatic_play.GetVariable('war_assessment').GetValue|0]"
+		if =      { limit = { var:AI_war_assess_log_instigator_cohorts >= 400 }  debug_log = "IMP19C AI war_assessment: instigator cohorts >= 400" }
+		else_if = { limit = { var:AI_war_assess_log_instigator_cohorts >= 150 }  debug_log = "IMP19C AI war_assessment: instigator cohorts 150-399" }
+		else_if = { limit = { var:AI_war_assess_log_instigator_cohorts >= 50 }   debug_log = "IMP19C AI war_assessment: instigator cohorts 50-149" }
+		else_if = { limit = { var:AI_war_assess_log_instigator_cohorts >= 10 }   debug_log = "IMP19C AI war_assessment: instigator cohorts 10-49" }
+		else_if = { limit = { var:AI_war_assess_log_instigator_cohorts >= 1 }    debug_log = "IMP19C AI war_assessment: instigator cohorts 1-9" }
+		else =    { debug_log = "IMP19C AI war_assessment: instigator cohorts 0" }
+		if =      { limit = { var:AI_war_assess_log_target_cohorts >= 400 }  debug_log = "IMP19C AI war_assessment: target cohorts >= 400" }
+		else_if = { limit = { var:AI_war_assess_log_target_cohorts >= 150 }  debug_log = "IMP19C AI war_assessment: target cohorts 150-399" }
+		else_if = { limit = { var:AI_war_assess_log_target_cohorts >= 50 }   debug_log = "IMP19C AI war_assessment: target cohorts 50-149" }
+		else_if = { limit = { var:AI_war_assess_log_target_cohorts >= 10 }   debug_log = "IMP19C AI war_assessment: target cohorts 10-49" }
+		else_if = { limit = { var:AI_war_assess_log_target_cohorts >= 1 }    debug_log = "IMP19C AI war_assessment: target cohorts 1-9" }
+		else =    { debug_log = "IMP19C AI war_assessment: target cohorts 0" }
+		# sentinel guard: distinguishes a real value from a set-but-empty var (Div0/unset
+		# operand stores empty; has_variable is TRUE for it, so the value must be tested).
+		if = {
+			limit = { var:war_assessment > -999999999 }
+			if =      { limit = { var:war_assessment > 0 }     debug_log = "IMP19C AI war_assessment: WILLING (positive)" }
+			else_if = { limit = { var:war_assessment >= -300 } debug_log = "IMP19C AI war_assessment: CONSIDERING (-300..0)" }
+			else =    { debug_log = "IMP19C AI war_assessment: NOT WILLING (< -300)" }
 		}
+		else = { debug_log = "IMP19C AI war_assessment: EMPTY (Div0/unset operand)" }
 		remove_variable = AI_war_assess_log_instigator_cohorts
 		remove_variable = AI_war_assess_log_target_cohorts
 
