@@ -59,6 +59,18 @@ QING_canton_init = {
 	if = { limit = { NOT = { has_variable = qing_canton_last_yield } }  set_variable = { name = qing_canton_last_yield  value = 0 } }
 	if = { limit = { NOT = { has_variable = qing_canton_last_state } }  set_variable = { name = qing_canton_last_state  value = 0 } }   # [#426] state share of the yield (Revenue ledger)
 	if = { limit = { NOT = { has_variable = qing_canton_last_silver_in } }  set_variable = { name = qing_canton_last_silver_in  value = 0 } }   # [2026-08-06] Canton→reserve specie inflow last qtr, 千兩 (panel-safe first read)
+	# [feature task #7 2026-09-04] per-good qty/price/value snapshot vars (Canton Trade Goods window),
+	# seeded so the window renders 0s before the first pulse rather than reading an unset variable.
+	if = { limit = { NOT = { has_variable = qing_canton_qty_tea } }  set_variable = { name = qing_canton_qty_tea  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_canton_qty_silk } }  set_variable = { name = qing_canton_qty_silk  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_canton_qty_porcelain } }  set_variable = { name = qing_canton_qty_porcelain  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_canton_price_tea } }  set_variable = { name = qing_canton_price_tea  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_canton_price_silk } }  set_variable = { name = qing_canton_price_silk  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_canton_price_porcelain } }  set_variable = { name = qing_canton_price_porcelain  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_canton_value_tea } }  set_variable = { name = qing_canton_value_tea  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_canton_value_silk } }  set_variable = { name = qing_canton_value_silk  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_canton_value_porcelain } }  set_variable = { name = qing_canton_value_porcelain  value = 0 } }
+	if = { limit = { NOT = { has_variable = qing_canton_value_total } }  set_variable = { name = qing_canton_value_total  value = 0 } }
 	# the Hoppo's post ran on squeeze even at the zenith — seed a moderate baseline.
 	if = { limit = { NOT = { has_variable = qing_hoppo_squeeze } }      set_variable = { name = qing_hoppo_squeeze  value = 30 } }
 	# [#111a] seed the lagged FINESSE mirror to a NEUTRAL 7 (= no finesse lift) so the continuous
@@ -82,12 +94,40 @@ QING_canton_init = {
 }
 
 # ======================================================================
+# [review-fix M1/M2/M3 2026-09-04] REGIME MODIFIER RECONCILER — ensures qing_canton_trade_boom
+# / qing_canton_closed always match qing_canton_regime, called unconditionally every pulse
+# (NOT gated on the open+Guangzhou-held collection branch below). This is now the single
+# source of truth for these two modifiers: it fixes the default-held "open" state at 1763
+# boot never getting the boom (the law's on_enact never fires for a held default option),
+# it re-applies a permanent (duration=-1) modifier every quarter so it can never silently
+# expire, and it keeps ANY writer of the flag (the law, the qing_frontier.20 event, or a
+# future one) in sync even if that writer forgets to swap the modifiers itself. Both
+# modifiers are non-stacking (common/modifiers/qing_mechanics_modifiers.txt), so re-adding
+# one that is already present is a harmless no-op (just refreshes duration) -- the has_*
+# guards below only avoid redundant log noise, they are not required for correctness.
+# Scope: country (CHI).
+# ======================================================================
+QING_canton_reconcile_regime_modifiers = {
+	if = {
+		limit = { has_variable = qing_canton_regime  var:qing_canton_regime = flag:open }
+		if = { limit = { NOT = { has_country_modifier = qing_canton_trade_boom } }  add_country_modifier = { name = qing_canton_trade_boom  duration = -1 } }
+		if = { limit = { has_country_modifier = qing_canton_closed }  remove_country_modifier = qing_canton_closed }
+	}
+	else_if = {
+		limit = { has_variable = qing_canton_regime  var:qing_canton_regime = flag:closed }
+		if = { limit = { NOT = { has_country_modifier = qing_canton_closed } }  add_country_modifier = { name = qing_canton_closed  duration = -1 } }
+		if = { limit = { has_country_modifier = qing_canton_trade_boom }  remove_country_modifier = qing_canton_trade_boom }
+	}
+}
+
+# ======================================================================
 # QUARTERLY PULSE — the Canton customs collection. Called from QING_GOV_pulse. When the
 # regime is OPEN, compute the quarter's yield and split it emperor / state; drift the
 # Hoppo's squeeze; on a high squeeze, roll the Cohong-debt crisis. A CLOSED regime yields
 # nothing (the whole point of 閉關 is that the silver stops). Scope: country (CHI).
 # ======================================================================
 QING_canton_pulse = {
+	QING_canton_reconcile_regime_modifiers = yes
 	if = {
 		limit = {
 			has_variable = qing_canton_regime
@@ -112,6 +152,29 @@ QING_canton_pulse = {
 		change_variable = { name = qing_canton_yield_tmp  add = GOODS_national_production_tea }
 		change_variable = { name = qing_canton_yield_tmp  add = GOODS_national_production_silk }
 		change_variable = { name = qing_canton_yield_tmp  add = GOODS_national_production_porcelain }
+		# [feature task #7 2026-09-04] per-good snapshot of the three goods that actually feed the
+		# Canton yield above -- these three set_variable calls are the ONLY per-good breakdown that
+		# exists anywhere in the Canton system (the yield itself only ever sums them into one scalar).
+		# Snapshotted here, before the /8 scale-down and the port/customs-house/Hoppo multipliers, so
+		# the quantity column reads the empire's real national production, and the price column reads
+		# CHI's own realized unit price (country_unit_price_*, the same var the AI/DEMAND/WEALTH
+		# svalues already read) -- both feed the new "Canton Trade Goods" window (gui/qing_province_reports.gui).
+		set_variable = { name = qing_canton_qty_tea  value = GOODS_national_production_tea }
+		set_variable = { name = qing_canton_qty_silk  value = GOODS_national_production_silk }
+		set_variable = { name = qing_canton_qty_porcelain  value = GOODS_national_production_porcelain }
+		set_variable = { name = qing_canton_price_tea  value = 0 }
+		if = { limit = { has_variable = country_unit_price_tea }  set_variable = { name = qing_canton_price_tea  value = var:country_unit_price_tea } }
+		set_variable = { name = qing_canton_price_silk  value = 0 }
+		if = { limit = { has_variable = country_unit_price_silk }  set_variable = { name = qing_canton_price_silk  value = var:country_unit_price_silk } }
+		set_variable = { name = qing_canton_price_porcelain  value = 0 }
+		if = { limit = { has_variable = country_unit_price_porcelain }  set_variable = { name = qing_canton_price_porcelain  value = var:country_unit_price_porcelain } }
+		set_variable = { name = qing_canton_value_tea  value = { value = var:qing_canton_qty_tea  multiply = var:qing_canton_price_tea } }
+		set_variable = { name = qing_canton_value_silk  value = { value = var:qing_canton_qty_silk  multiply = var:qing_canton_price_silk } }
+		set_variable = { name = qing_canton_value_porcelain  value = { value = var:qing_canton_qty_porcelain  multiply = var:qing_canton_price_porcelain } }
+		set_variable = {
+			name = qing_canton_value_total
+			value = { value = var:qing_canton_value_tea  add = var:qing_canton_value_silk  add = var:qing_canton_value_porcelain }
+		}
 		change_variable = { name = qing_canton_yield_tmp  divide = 8 }
 		# [fix 2026-08-24] removed the "floor at 8 if below 8" clamp on user request, same reasoning as
 		# the 45 ceiling removed below: an arbitrary floor guaranteeing customs income regardless of how
@@ -509,6 +572,22 @@ QING_canton_pulse = {
 		remove_variable = qing_canton_state_tmp
 		LOG_line = { sys = QING  msg = "canton: customs collected (emperor 內帑 + state quota)" }
 		LOG_exit = { sys = QING  fn = "QING_canton_pulse"  result = OK }
+	}
+	# [review-fix L1 2026-09-04] when the regime is closed or Guangzhou is lost, the branch
+	# above never runs, so the last-open snapshot vars (yield/state/silver-in and the new
+	# per-good qty/price/value) would otherwise freeze and keep showing stale nonzero trade
+	# forever. Zero them here so the panels correctly read "no trade" while closed.
+	else = {
+		set_variable = { name = qing_canton_last_yield  value = 0 }
+		set_variable = { name = qing_canton_last_state  value = 0 }
+		set_variable = { name = qing_canton_last_silver_in  value = 0 }
+		set_variable = { name = qing_canton_qty_tea  value = 0 }
+		set_variable = { name = qing_canton_qty_silk  value = 0 }
+		set_variable = { name = qing_canton_qty_porcelain  value = 0 }
+		set_variable = { name = qing_canton_value_tea  value = 0 }
+		set_variable = { name = qing_canton_value_silk  value = 0 }
+		set_variable = { name = qing_canton_value_porcelain  value = 0 }
+		set_variable = { name = qing_canton_value_total  value = 0 }
 	}
 }
 

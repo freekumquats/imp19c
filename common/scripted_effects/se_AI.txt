@@ -1258,8 +1258,16 @@ AI_diplomatic_play_evaluate_attitude = {
 					else_if = { limit = { opinion = { target = scope:diplomatic_play.var:play_target_country  value > 30  } }  add = 50 }
 					else_if = { limit = { opinion = { target = scope:diplomatic_play.var:play_target_country  value > 0   } }  add = 20 }
 				}
-				# PRIMARY -- diplomatic reputation (instigator's own standing).
-				add = { value = var:play_instigator.diplomatic_reputation  multiply = 2 }
+				# [review-fix 2026-09-04, boot-confirmed] the PRIMARY "diplomatic reputation" term
+				# that used to sit here (add = var:play_instigator.diplomatic_reputation x2) was
+				# flagged at design time (design/DESIGN_DIPLOMATIC_PLAY_REWORK.md) as unconfirmed
+				# to be readable as a bare script_value -- diplomatic_reputation is proven mod-wide
+				# only as a MODIFIER key (a writable lever), never as something read back into a
+				# sum. A real boot's error.log now confirms it: "Cannot read as a script value" /
+				# "Badly read script value" x3 every time this function ran, silently dropping the
+				# term (AI_friendly ran short by this amount every evaluation, not a crash). Removed
+				# rather than guess at alternate syntax -- per imp19c-proven-code-rule, an unproven
+				# primitive that turns out broken gets dropped, not re-guessed.
 				# SECONDARY -- existing terms, still real, demoted.
 				if = {
 					limit = {
@@ -1290,21 +1298,45 @@ AI_diplomatic_play_evaluate_attitude = {
 				# willing to act hostile).
 				add = { value = var:play_instigator.has_aggressive_expansion  multiply = 0.5 }
 				# SECONDARY -- existing terms, still real, demoted.
+				# [fix task #2 2026-09-04] these three terms were left at their PRE-rework
+				# magnitudes when opinion/reputation were added as PRIMARY on top -- against
+				# the +-20 friendly/hostile threshold (DIPLOMACY_svalues.txt) they were never
+				# actually secondary: an ordinary government-type gap alone (ideology x10) or
+				# a routine core-province overlap (x20/province) could clear the hostile
+				# threshold several times over with neutral opinion and no real animosity, so
+				# a fresh play displayed "Talks have broken down" by default. Rescaled x10
+				# down (matching how war_assessment's own primary/secondary magnitudes were
+				# corrected the same day, design/DESIGN_DIPLOMATIC_PLAY_REWORK.md) so these
+				# terms only tip the balance when genuinely extreme, not on ordinary defaults.
 				add = {
 					value = var:AI_play_power_balance_instigator_root # Higher balance of power = likelier to be aggressive
+					multiply = 0.1
 				}
-				# Ideological differences
+				# Ideological differences. [review-fix M4 2026-09-04] this was a SIGNED difference:
+				# when the instigator was more progressive than the target, the term went negative
+				# and LOWERED hostility, contradicting "ideological differences raise hostility."
+				# Folded to |gap| via the proven abs idiom (|x|=max(x,-x), BALHIST_fold_abs,
+				# se_BALANCE_HISTORY.txt): min on a script_value is a FLOOR, so min of (-gap)
+				# raises the running value to the larger of gap and -gap.
 				add = {
-					value = scope:diplomatic_play.var:play_instigator.SPIRIT_traditionalism
-					subtract = scope:diplomatic_play.var:play_target_country.SPIRIT_traditionalism
-					multiply = 10
+					value = {
+						value = scope:diplomatic_play.var:play_instigator.SPIRIT_traditionalism
+						subtract = scope:diplomatic_play.var:play_target_country.SPIRIT_traditionalism
+					}
+					min = {
+						value = {
+							value = scope:diplomatic_play.var:play_instigator.SPIRIT_traditionalism
+							subtract = scope:diplomatic_play.var:play_target_country.SPIRIT_traditionalism
+						}
+						multiply = -1
+					}
 				}
 				var:play_target_area.area = {
 					every_area_province = {
 						limit = {
 							is_core_of = scope:diplomatic_play.var:play_instigator
 						}
-						add = 20
+						add = 2
 					}
 				}
 			}

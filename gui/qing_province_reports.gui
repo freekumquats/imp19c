@@ -814,7 +814,7 @@ base_sub_window = {
 						icon_and_text = {
 							size = { 90 24 }
 							blockoverride "Icon" { using = icon_treasury }
-							blockoverride "Text" { text = "[Character.GetWealth]" }
+							blockoverride "Text" { text = "[Character.GetWealth|0]" }
 							tooltip = "QING_CANTON_HOPPO_WEALTH_TT"
 						}
 					}
@@ -899,31 +899,10 @@ base_sub_window = {
 				}
 			}
 
-			# OPEN the Canton system (shown only while it is not already open)
-			text_button_square_highlighted = {
-				size = { 300 30 }
-				datacontext = "[GetScriptedGui('qing_action_canton_open')]"
-				visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-				blockoverride "Center_text" { text = "QING_ACTION_CANTON_OPEN_BTN"  max_width = 280 }
-				blockoverride "On_click" {
-					enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-					onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-				}
-				tooltip = "QING_ACTION_CANTON_OPEN_TT"
-			}
-
-			# CLOSE the Canton system (shown only while it is not already closed)
-			text_button_square_highlighted = {
-				size = { 300 30 }
-				datacontext = "[GetScriptedGui('qing_action_canton_close')]"
-				visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-				blockoverride "Center_text" { text = "QING_ACTION_CANTON_CLOSE_BTN"  max_width = 280 }
-				blockoverride "On_click" {
-					enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-					onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
-				}
-				tooltip = "QING_ACTION_CANTON_CLOSE_TT"
-			}
+			# [fix task #8 2026-09-04] removed the Open/Close the Canton Trade buttons here --
+			# qing_canton_regime_law (common/laws/00_qing_statutes_laws.txt) now covers the same
+			# open/closed toggle via the Laws tab, including the modifier swap the buttons used
+			# to apply directly (moved into that law's on_enact).
 			# [#389] ROTATE THE HOPPO (粵海關監督) — the proactive squeeze lever (shown while open)
 			# [#84] repointed to the candidate-list picker: the _button_pick scripted_gui stamps the office flag
 			# + refreshes the list; the second onclick opens the shared frontier picker window. Visibility still
@@ -940,59 +919,128 @@ base_sub_window = {
 				}
 				tooltip = "QING_ACTION_CANTON_ROTATE_HOPPO_TT"
 			}
-			# [#426] REVENUE SPLIT read-out + three share toggles (percent of the Canton yield to the
-			# emperor's privy purse 內帑 vs the state treasury 戶部). Shown while the system is open.
+			# [fix task #8 2026-09-04] removed the revenue-share read-out + 0%/50%/100% buttons
+			# here -- qing_canton_purse_law (common/laws/00_qing_statutes_laws.txt) already sets
+			# the same qing_canton_purse_share variable via the Laws tab (0/50/100, matching these
+			# three buttons exactly; no hidden side effect to carry over, unlike the open/close pair).
+
+			# [feature task #7 2026-09-04] open the Canton Trade Goods breakdown (per-good qty /
+			# price / value for tea, silk, porcelain -- the three goods the yield above sums).
+			text_button_square_highlighted = {
+				size = { 300 30 }
+				margin_top = 10
+				blockoverride "Center_text" { text = "QING_ACTION_CANTON_GOODS_WINDOW_BTN"  max_width = 280 }
+				blockoverride "On_click" {
+					onclick = "[ExecuteConsoleCommand('gui.createwidget gui/qing_province_reports.gui qing_canton_goods_window')]"
+				}
+				tooltip = "QING_ACTION_CANTON_GOODS_WINDOW_TT"
+			}
+		}
+	}
+}
+
+# ======================================================================
+# [feature task #7 2026-09-04] CANTON TRADE GOODS — per-good breakdown of the three real
+# export goods (tea/silk/porcelain, 茶/絲/瓷) that feed the Canton customs yield above.
+# Quantity = the empire's national production of that good (the same script value the yield
+# calc sums, se_QING_CANTON.txt QING_canton_pulse); Price = CHI's own realized unit price
+# (country_unit_price_*, the same var the AI/DEMAND/WEALTH svalues already read); Value =
+# quantity x price, snapshotted once per quarterly pulse alongside the yield itself. Opened
+# from the "Canton Trade Goods" button on qing_canton_window above.
+# ======================================================================
+base_sub_window = {
+	name = "qing_canton_goods_window"
+	size = { 460 340 }
+	position = { 420 200 }
+	movable = yes
+
+	blockoverride "Title_text" { text = "qing_canton_goods_window_title" }
+
+	blockoverride "White_buttons"
+	{
+		button_close = {
+			tooltip = "CLOSE"
+			onclick = "[ExecuteConsoleCommand('gui.ClearWidgets qing_canton_goods_window')]"
+		}
+	}
+
+	margin_widget = {
+		size = { 100% 100% }
+
+		vbox = {
+			parentanchor = hcenter
+			margin_top = 50
+			margin_bottom = 15
+			spacing = 6
+
+			# header row
 			flowcontainer = {
-				spacing = 8
-				# [#4] container-level visible guard preserved from #426 (row shown only while the
-				# Canton hoppo-rotation system is open) — the table reformat dropped it; restored here.
-				visible = "[GetScriptedGui('qing_action_canton_rotate_hoppo').IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-				textbox = {
-					size = { 300 20 }
-					using = BaseFontS
-					using = Default_FontColor
-					text = "QING_CANTON_SHARE_LABEL"
-					tooltip = "QING_CANTON_SHARE_TT"
-				}
-				textbox = {
-					size = { 60 20 }
-					using = BaseFontS
-					using = Default_FontColor
-					text = "[Player.MakeScope.GetVariable('qing_canton_purse_share').GetValue|0]"
-				}
+				spacing = 10
+				textbox = { size = { 130 20 }  using = BaseFontS  using = Default_FontColor  text = "QING_CANTON_GOODS_COL_GOOD" }
+				textbox = { size = { 90 20 }  using = BaseFontS  using = Default_FontColor  align = right  text = "QING_CANTON_GOODS_COL_QTY" }
+				textbox = { size = { 90 20 }  using = BaseFontS  using = Default_FontColor  align = right  text = "QING_CANTON_GOODS_COL_PRICE" }
+				textbox = { size = { 90 20 }  using = BaseFontS  using = Default_FontColor  align = right  text = "QING_CANTON_GOODS_COL_VALUE" }
 			}
-			text_button_square_highlighted = {
-				size = { 300 30 }
-				datacontext = "[GetScriptedGui('qing_action_canton_share_0')]"
-				visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-				blockoverride "Center_text" { text = "QING_ACTION_CANTON_SHARE_0_BTN"  max_width = 280 }
-				blockoverride "On_click" {
-					enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-					onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+
+			# tea row
+			flowcontainer = {
+				spacing = 10
+				tooltip = "QING_CANTON_GOODS_ROW_TT"
+				icon_and_text = {
+					size = { 130 24 }
+					blockoverride "Icon" { texture = "gfx/interface/icons/tradegoods/tea.dds" }
+					blockoverride "Text" { text = "tea" }
 				}
-				tooltip = "QING_ACTION_CANTON_SHARE_0_TT"
+				textbox = { size = { 90 24 }  using = BaseFontM  using = Default_FontColor  align = right  text = "[Player.MakeScope.GetVariable('qing_canton_qty_tea').GetValue|0]" }
+				textbox = { size = { 90 24 }  using = BaseFontM  using = Default_FontColor  align = right  text = "[Player.MakeScope.GetVariable('qing_canton_price_tea').GetValue|2]" }
+				textbox = { size = { 90 24 }  using = BaseFontM  using = Default_FontColor  align = right  text = "[Player.MakeScope.GetVariable('qing_canton_value_tea').GetValue|0]" }
 			}
-			text_button_square_highlighted = {
-				size = { 300 30 }
-				datacontext = "[GetScriptedGui('qing_action_canton_share_50')]"
-				visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-				blockoverride "Center_text" { text = "QING_ACTION_CANTON_SHARE_50_BTN"  max_width = 280 }
-				blockoverride "On_click" {
-					enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-					onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+
+			# silk row
+			flowcontainer = {
+				spacing = 10
+				tooltip = "QING_CANTON_GOODS_ROW_TT"
+				icon_and_text = {
+					size = { 130 24 }
+					blockoverride "Icon" { texture = "gfx/interface/icons/tradegoods/silk.dds" }
+					blockoverride "Text" { text = "silk" }
 				}
-				tooltip = "QING_ACTION_CANTON_SHARE_50_TT"
+				textbox = { size = { 90 24 }  using = BaseFontM  using = Default_FontColor  align = right  text = "[Player.MakeScope.GetVariable('qing_canton_qty_silk').GetValue|0]" }
+				textbox = { size = { 90 24 }  using = BaseFontM  using = Default_FontColor  align = right  text = "[Player.MakeScope.GetVariable('qing_canton_price_silk').GetValue|2]" }
+				textbox = { size = { 90 24 }  using = BaseFontM  using = Default_FontColor  align = right  text = "[Player.MakeScope.GetVariable('qing_canton_value_silk').GetValue|0]" }
 			}
-			text_button_square_highlighted = {
-				size = { 300 30 }
-				datacontext = "[GetScriptedGui('qing_action_canton_share_100')]"
-				visible = "[ScriptedGui.IsShown( GuiScope.SetRoot( Player.MakeScope ).End )]"
-				blockoverride "Center_text" { text = "QING_ACTION_CANTON_SHARE_100_BTN"  max_width = 280 }
-				blockoverride "On_click" {
-					enabled = "[ScriptedGui.IsValid( GuiScope.SetRoot( Player.MakeScope ).End )]"
-					onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( Player.MakeScope ).End )]"
+
+			# porcelain row
+			flowcontainer = {
+				spacing = 10
+				tooltip = "QING_CANTON_GOODS_ROW_TT"
+				icon_and_text = {
+					size = { 130 24 }
+					blockoverride "Icon" { texture = "gfx/interface/icons/tradegoods/porcelain.dds" }
+					blockoverride "Text" { text = "porcelain" }
 				}
-				tooltip = "QING_ACTION_CANTON_SHARE_100_TT"
+				textbox = { size = { 90 24 }  using = BaseFontM  using = Default_FontColor  align = right  text = "[Player.MakeScope.GetVariable('qing_canton_qty_porcelain').GetValue|0]" }
+				textbox = { size = { 90 24 }  using = BaseFontM  using = Default_FontColor  align = right  text = "[Player.MakeScope.GetVariable('qing_canton_price_porcelain').GetValue|2]" }
+				textbox = { size = { 90 24 }  using = BaseFontM  using = Default_FontColor  align = right  text = "[Player.MakeScope.GetVariable('qing_canton_value_porcelain').GetValue|0]" }
+			}
+
+			# total row
+			flowcontainer = {
+				spacing = 10
+				margin_top = 8
+				textbox = { size = { 130 24 }  using = BaseFontM  using = Default_FontColor  text = "QING_CANTON_GOODS_TOTAL_LABEL" }
+				textbox = { size = { 90 24 }  using = BaseFontM  using = Default_FontColor }
+				textbox = { size = { 90 24 }  using = BaseFontM  using = Default_FontColor }
+				textbox = { size = { 90 24 }  using = BaseFontM  using = Default_FontColor  align = right  text = "[Player.MakeScope.GetVariable('qing_canton_value_total').GetValue|0]" }
+			}
+
+			textbox = {
+				size = { 420 40 }
+				margin_top = 8
+				multiline = yes
+				using = BaseFontS
+				using = Default_FontColor
+				text = "qing_canton_goods_window_desc"
 			}
 		}
 	}
